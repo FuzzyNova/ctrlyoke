@@ -34,8 +34,7 @@ type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
 export class TerminalMessageHandlers {
   constructor(
     private readonly getUserFeedbackSink: () => UserFeedbackSink | undefined,
-    private readonly getPtyManager: () => PtyProcessManager | null =
-      getPtyProcessManager
+    private readonly getPtyManager: () => PtyProcessManager | null = getPtyProcessManager
   ) {}
 
   /**

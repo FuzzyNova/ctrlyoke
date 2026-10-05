@@ -388,7 +388,12 @@ suite("Secret command handlers", () => {
       secrets: ["A"],
       steps: [
         { name: "prompt step", prompt: "Use !B" },
-        { type: "script", name: "script step", script: "echo ok", secrets: ["C"] },
+        {
+          type: "script",
+          name: "script step",
+          script: "echo ok",
+          secrets: ["C"],
+        },
       ],
     };
     try {
@@ -413,9 +418,18 @@ suite("Secret command handlers", () => {
       assert.match(beforeApprovalError, /Secret grant "B".*not been approved/);
       assert.match(beforeApprovalError, /Secret grant "C".*not been approved/);
       assert.doesNotMatch(beforeApprovalError, /workflow scope/);
-      assert.match(beforeApprovalError, /Secret "A" is missing for scope "workflow"/);
-      assert.match(beforeApprovalError, /Secret "B" is missing for scope "prompt step"/);
-      assert.match(beforeApprovalError, /Secret "C" is missing for scope "script step"/);
+      assert.match(
+        beforeApprovalError,
+        /Secret "A" is missing for scope "workflow"/
+      );
+      assert.match(
+        beforeApprovalError,
+        /Secret "B" is missing for scope "prompt step"/
+      );
+      assert.match(
+        beforeApprovalError,
+        /Secret "C" is missing for scope "script step"/
+      );
 
       await trustStore.setDecisions("/workspace", ["A", "B", "C"], "allow");
       const afterApprovalIo = new TestIo();
@@ -427,9 +441,18 @@ suite("Secret command handlers", () => {
       );
       const afterApprovalError = afterApprovalIo.errors.join("\n");
       assert.strictEqual(afterApproval, 1);
-      assert.match(afterApprovalError, /Secret "A" is missing for scope "workflow"/);
-      assert.match(afterApprovalError, /Secret "B" is missing for scope "prompt step"/);
-      assert.match(afterApprovalError, /Secret "C" is missing for scope "script step"/);
+      assert.match(
+        afterApprovalError,
+        /Secret "A" is missing for scope "workflow"/
+      );
+      assert.match(
+        afterApprovalError,
+        /Secret "B" is missing for scope "prompt step"/
+      );
+      assert.match(
+        afterApprovalError,
+        /Secret "C" is missing for scope "script step"/
+      );
     } finally {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }

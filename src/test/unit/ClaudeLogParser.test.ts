@@ -62,10 +62,7 @@ suite("ClaudeLogParser", () => {
     const result = parser.extractResponse(events);
 
     assert.strictEqual(result.metadata.model, "claude-opus-4-6");
-    assert.strictEqual(
-      result.metadata.usage?.contextWindowUsedTokens,
-      151000
-    );
+    assert.strictEqual(result.metadata.usage?.contextWindowUsedTokens, 151000);
     assert.ok(
       result.events.some(
         (event) =>

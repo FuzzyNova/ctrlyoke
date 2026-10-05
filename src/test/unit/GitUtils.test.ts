@@ -158,11 +158,7 @@ suite("GitUtils.gitRefExists", function () {
       'process.stdout.write("EXTERNAL-DIFF-TOOL OUTPUT\\n");\n',
       "utf8"
     );
-    runGit([
-      "config",
-      "diff.external",
-      `node "${externalDiffPath}"`,
-    ]);
+    runGit(["config", "diff.external", `node "${externalDiffPath}"`]);
 
     await writeWorkspaceFile("tracked.txt", "staged change\n");
     runGit(["add", "tracked.txt"]);

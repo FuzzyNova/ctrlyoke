@@ -26,7 +26,7 @@ With no resident instance, `RunViewPublisher.bindClientToAddressedLineage`
 (~line 319) goes through `WorkflowOrchestrator.loadFreshInstanceAndReplay`
 (~line 1309). From there:
 
-1. `setViewedWorkflowId(client, N)` acknowledges with the *new* instance id `N`
+1. `setViewedWorkflowId(client, N)` acknowledges with the _new_ instance id `N`
    and a `null` address, which matches no tracked failure. The tracker matches
    failures by the failed instance's id or by run address.
 2. `instance.loadWorkingFile` emits a state change carrying the run's
@@ -49,7 +49,7 @@ that acknowledges a real change: have `adoptInstanceLineageAddress` call
 `setViewAddress`, or the same private helper, instead of writing the map
 directly. Starting a run (draft → run address) also passes through adoption.
 Acknowledging there is harmless, because a new run has no failure yet, but
-check it doesn't clear the failure of the *previous* run of the same lineage
+check it doesn't clear the failure of the _previous_ run of the same lineage
 unexpectedly, beyond the documented "a new run of the lineage starts" rule.
 Add a registry/orchestrator test that drives the real history-open order
 (fresh instance → `loadWorkingFile` state change → `deliverRunView`) and

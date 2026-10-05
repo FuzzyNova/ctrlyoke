@@ -502,8 +502,11 @@ export async function runHistorySearchRebuild(
         );
         documentCount += documents.length;
 
-        indexedRuns[hashPath(source.manifestPath)] =
-          await buildIndexedRunEntry(source, manifest, overCapCandidateCount);
+        indexedRuns[hashPath(source.manifestPath)] = await buildIndexedRunEntry(
+          source,
+          manifest,
+          overCapCandidateCount
+        );
 
         processedRuns += 1;
         if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {

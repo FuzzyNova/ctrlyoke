@@ -39,7 +39,7 @@ values that choose a program to run, which the original report did not list:
 
 Making these settings user-only was rejected because it breaks legitimate
 per-workspace use, such as per-repo shells and MCP servers. Instead, a
-workspace now only *requests* these values. Each one takes effect after the
+workspace now only _requests_ these values. Each one takes effect after the
 user approves that exact value for that workspace, mirroring
 `permissions.trustedExternalRoots`:
 

@@ -6,7 +6,7 @@
 
 ## Symptom
 
-1. **Output tab.** `activeOutputTabs` is read by the active workflow *instance id*.
+1. **Output tab.** `activeOutputTabs` is read by the active workflow _instance id_.
    `OutputSection.tsx` reads it that way, and every other writer uses that key
    too. `HistorySearchDrawer` and `CommitSection` ("View full output") write
    `setActiveOutputTab(<workflowKey>, OUTPUT)` instead, which creates a dead entry.

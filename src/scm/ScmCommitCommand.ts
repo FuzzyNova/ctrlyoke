@@ -27,9 +27,9 @@ function getGitInputBox(
     const gitExt =
       vscode.extensions.getExtension<GitExtension>("vscode.git")?.exports;
     const api = gitExt?.getAPI(1);
-    const repo = api?.repositories.find((r) =>
-      pathsEqual(r.rootUri.fsPath, cwd)
-    ) ?? (allowFallback ? api?.repositories[0] : undefined);
+    const repo =
+      api?.repositories.find((r) => pathsEqual(r.rootUri.fsPath, cwd)) ??
+      (allowFallback ? api?.repositories[0] : undefined);
     return repo?.inputBox;
   } catch {
     return undefined;

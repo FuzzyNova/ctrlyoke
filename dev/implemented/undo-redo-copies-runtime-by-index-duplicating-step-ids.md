@@ -38,7 +38,7 @@ step's `completedAt`/`sessionId`/`terminalStatus`.
 
 - **Path A:** when an incoming step's `_runtime` holds nothing but `stepId`,
   the code replaces its whole `_runtime` with `existingTopology.steps[index]._runtime`
-  — whatever step is on disk at the same *index* — without checking that it is
+  — whatever step is on disk at the same _index_ — without checking that it is
   the same step. The docstring says runtime is preserved only "when the
   incoming step is otherwise identical", but no such check exists.
 - **Path B:** `existingRuntime` is chosen by same index plus

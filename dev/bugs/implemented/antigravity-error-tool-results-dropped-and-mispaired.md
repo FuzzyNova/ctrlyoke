@@ -7,7 +7,7 @@
 ## Symptom
 
 When an agy tool call fails (e.g. an MCP validation error such as `post_note.text is
-required`), the dashboard shows it as successful, with the output of the *next* tool
+required`), the dashboard shows it as successful, with the output of the _next_ tool
 call. Every later tool call in that turn is shifted by one result, and the last call is
 left without a result. The wrong outputs also go into prior-context text.
 

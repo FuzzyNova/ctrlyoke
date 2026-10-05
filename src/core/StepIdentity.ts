@@ -98,8 +98,7 @@ export function ensureStepIds(
     steps
       .map((step) => step._runtime?.stepId)
       .filter(
-        (stepId): stepId is string =>
-          stepId !== undefined && stepId.length > 0
+        (stepId): stepId is string => stepId !== undefined && stepId.length > 0
       )
   );
   const identified = steps.map((step, index) => {

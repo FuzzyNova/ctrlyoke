@@ -505,8 +505,7 @@ export class TemplateManager {
   replaceVariables(content: string, variables: Record<string, string>): string {
     return content.replace(
       TEMPLATE_VARIABLE_PATTERN,
-      (placeholder, _typePrefix, name: string) =>
-        variables[name] ?? placeholder
+      (placeholder, _typePrefix, name: string) => variables[name] ?? placeholder
     );
   }
 

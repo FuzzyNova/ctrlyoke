@@ -8,7 +8,7 @@
 
 In a repo with repeated file names (monorepos: `package.json`, `README.md`,
 `index.ts`), an AI edit to a nested file is shown in the prompt-undo change list
-with the diff of a *different* file that has the same name at a shallower path,
+with the diff of a _different_ file that has the same name at a shallower path,
 and its undo instruction targets that other file. Clicking Undo reverse-patches
 the wrong file (for example the root `package.json`) and leaves the real AI edit
 in place. The genuinely changed shallower file also disappears from the tier-2
@@ -39,6 +39,6 @@ snapshot entry any event path suffix-matches.
 Resolve each event path to exactly one snapshot entry. Relativize absolute
 event paths against the run's workspace/execution root when the webview has it,
 and compare relative paths exactly. Where no root is available, pick the
-*longest* (most specific) suffix match rather than the first, and exclude a
+_longest_ (most specific) suffix match rather than the first, and exclude a
 snapshot entry from tier 2 only if it is the chosen match of some event. Add
 Vitest coverage under `src/ui/webview-react/test/` for the repro above.

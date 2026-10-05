@@ -5,25 +5,19 @@ import { resolveCliExecutionMode } from "../../cli/CliExecutionMode";
 
 suite("CliExecutionMode", () => {
   test("TTYs set the default mode and PTY capability", () => {
-    assert.deepStrictEqual(
-      resolveCliExecutionMode(true, true),
-      {
-        executionMode: EXECUTION_MODES.INTERACTIVE,
-        hostCanProvidePty: true,
-        supportsConcurrentInteractiveSessions: false,
-      }
-    );
+    assert.deepStrictEqual(resolveCliExecutionMode(true, true), {
+      executionMode: EXECUTION_MODES.INTERACTIVE,
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: false,
+    });
   });
 
   test("both missing TTYs set the headless default and disable PTY", () => {
-    assert.deepStrictEqual(
-      resolveCliExecutionMode(false, false),
-      {
-        executionMode: EXECUTION_MODES.HEADLESS,
-        hostCanProvidePty: false,
-        supportsConcurrentInteractiveSessions: false,
-      }
-    );
+    assert.deepStrictEqual(resolveCliExecutionMode(false, false), {
+      executionMode: EXECUTION_MODES.HEADLESS,
+      hostCanProvidePty: false,
+      supportsConcurrentInteractiveSessions: false,
+    });
   });
 
   test("no TTY clamps workflow modes by disabling the PTY capability", () => {

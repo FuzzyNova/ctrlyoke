@@ -21,11 +21,11 @@ describe("ErrorBoundary", () => {
       );
 
       expect(screen.getByText("could not render this event")).toBeTruthy();
-      expect(
-        screen.queryByText("ctrlyoke encountered an error.")
-      ).toBeNull();
+      expect(screen.queryByText("ctrlyoke encountered an error.")).toBeNull();
       expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[ErrorBoundary] Caught error: malformed persisted event")
+        expect.stringContaining(
+          "[ErrorBoundary] Caught error: malformed persisted event"
+        )
       );
     } finally {
       errorSpy.mockRestore();

@@ -1398,10 +1398,7 @@ suite("AntigravityLogParser", () => {
         );
         assert.deepStrictEqual(
           toolCalls.map(({ parameters }) => parameters),
-          [
-            { request: "first" },
-            { request: "second" },
-          ]
+          [{ request: "first" }, { request: "second" }]
         );
       });
     });

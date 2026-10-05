@@ -1713,12 +1713,14 @@ suite("WorkflowInstance eager working file creation", () => {
     };
     (instance.promptQueue as any).updateWorkingFileProperties = async () => {};
 
-    await instance.updateFinalStepInQueue(
-      { prompt: "updated final prompt" },
-      ["name"]
-    );
+    await instance.updateFinalStepInQueue({ prompt: "updated final prompt" }, [
+      "name",
+    ]);
 
-    assert.strictEqual((updatedFinalStep as any).prompt, "updated final prompt");
+    assert.strictEqual(
+      (updatedFinalStep as any).prompt,
+      "updated final prompt"
+    );
     assert.strictEqual((updatedFinalStep as any).name, undefined);
   });
 
@@ -4127,9 +4129,8 @@ suite("WorkflowInstance executeSeededRun", () => {
       let executionHistoryFilePath: string | undefined;
       let preparedAtTimelineInitialization = false;
       const outputHistoryManager = instance.getOutputHistoryManager();
-      const initializeRunAt = outputHistoryManager.initializeRunAt.bind(
-        outputHistoryManager
-      );
+      const initializeRunAt =
+        outputHistoryManager.initializeRunAt.bind(outputHistoryManager);
       (outputHistoryManager as any).initializeRunAt = async (
         ...args: unknown[]
       ) => {

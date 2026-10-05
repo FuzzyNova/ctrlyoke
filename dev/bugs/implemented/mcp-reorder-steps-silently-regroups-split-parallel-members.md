@@ -9,10 +9,10 @@
 Take a queue `[done, inflight(running), g1, g2, tail]`, where parallel group
 `G` covers indices 2..3. This was reproduced against a temporary run file:
 
-| `indices` sent | Effective result | MCP response |
-| --- | --- | --- |
+| `indices` sent           | Effective result              | MCP response                                                                                     |
+| ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------ |
 | `[2,4,3]` (g1, tail, g2) | unchanged `[…, g1, g2, tail]` | `changed:false` with the note "the step list already matched what you asked for", which is false |
-| `[3,4,2]` (g2, tail, g1) | `[…, g2, g1, tail]` | `success:true, changed:true`, although tail was not placed between the members |
+| `[3,4,2]` (g2, tail, g1) | `[…, g2, g1, tail]`           | `success:true, changed:true`, although tail was not placed between the members                   |
 
 ## Root Cause
 

@@ -9,15 +9,15 @@
 On Windows, these requests still get a 200 with the raw, unpatched `index.html` (or `favicon.svg`)
 from `express.static`, without a token:
 
-| Request | Status |
-| --- | --- |
-| `/INDEX~1.HTM` | 404 (blocked) |
-| `/./INDEX~1.HTM` | **200**, raw `index.html` |
-| `/a/../INDEX~1.HTM` | **200** |
-| `/.%5CINDEX~1.HTM` | **200** |
-| `/./index.html::$DATA` | **200** |
-| `/%5Cindex.html::$DATA` | **200** |
-| `/./favicon.svg::$DATA` | **200** |
+| Request                 | Status                    |
+| ----------------------- | ------------------------- |
+| `/INDEX~1.HTM`          | 404 (blocked)             |
+| `/./INDEX~1.HTM`        | **200**, raw `index.html` |
+| `/a/../INDEX~1.HTM`     | **200**                   |
+| `/.%5CINDEX~1.HTM`      | **200**                   |
+| `/./index.html::$DATA`  | **200**                   |
+| `/%5Cindex.html::$DATA` | **200**                   |
+| `/./favicon.svg::$DATA` | **200**                   |
 
 This is a follow-up to `hosted-index-html-ntfs-alias-bypasses-token.md` and
 `hosted-index-html-backslash-path-bypasses-token.md`. It is a partial regression from 1784413e1:

@@ -391,7 +391,8 @@ suite("OsCredentialStore", () => {
       runCommand: async () => ({
         exitCode: 1,
         stdout: "",
-        stderr: "security: SecKeychainSearchCopyNext: User interaction is not allowed.",
+        stderr:
+          "security: SecKeychainSearchCopyNext: User interaction is not allowed.",
       }),
     });
 

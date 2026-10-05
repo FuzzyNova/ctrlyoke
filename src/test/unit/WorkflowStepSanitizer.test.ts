@@ -257,7 +257,10 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
     }
 
     assert.deepStrictEqual(
-      sanitizeClipboardWorkflowStep({ prompt: "prompt", priorContext: { previous: 3 } }),
+      sanitizeClipboardWorkflowStep({
+        prompt: "prompt",
+        priorContext: { previous: 3 },
+      }),
       { prompt: "prompt", priorContext: { previous: 3 } }
     );
     assert.deepStrictEqual(

@@ -109,7 +109,10 @@ suite("PromptCompletionProvider", () => {
         language: "json",
         content: `{"prompt":"review ${trigger}"}`,
       });
-      const position = new vscode.Position(0, `{"prompt":"review ${trigger}`.length);
+      const position = new vscode.Position(
+        0,
+        `{"prompt":"review ${trigger}`.length
+      );
       const list = await provider.provideCompletionItems(
         document,
         position,

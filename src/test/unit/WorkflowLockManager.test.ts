@@ -75,7 +75,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
         runFilePath,
         JSON.stringify({
           steps: [{ prompt: "recover this run" }],
-          _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+          _runtime: {
+            currentIndex: 0,
+            executionState: EXECUTION_STATES.RUNNING,
+          },
         }),
         "utf8"
       );
@@ -94,7 +97,9 @@ suite("WorkflowLockManager stale-run recovery", () => {
         workspaceRoot,
         [malformedKey, recoverableKey]
       );
-      const recoveredRun = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+      const recoveredRun = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as {
         _runtime: { executionState: string };
       };
 

@@ -1,4 +1,4 @@
-# Stray authored ``` still re-activates condition output when the output itself contains a ``` fence
+# Stray authored `still re-activates condition output when the output itself contains a` fence
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/utils/FileReferenceParser.ts` (`maskFencedCodeBlocks` / `fenceLiteral`), `src/core/ConditionOutputRefs.ts`
@@ -9,8 +9,8 @@ only holds when the substituted value contains no backtick fence of its own.
 
 ## Symptom
 
-A prompt with an unpaired ``` in its authored text, and a `$endCondition:stdout` (or other
-condition-output) value that contains a ``` line, still has the value's text parsed for
+A prompt with an unpaired ``in its authored text, and a `$endCondition:stdout` (or other
+condition-output) value that contains a`` line, still has the value's text parsed for
 references. `@file`, `$previous` and `!SECRET` in script output expand or trigger secret grants.
 Script output that contains markdown fences is common, e.g. AI-generated text or test-tool output.
 
@@ -37,8 +37,8 @@ Run it through `substituteConditionOutputRefs` with the preparer's formatter
 
 ## Root Cause
 
-The authored ``` opens a masked block. The generated opener (a longer run with the `text` info
-string) is correctly not treated as a closer. But the value's own ``` line (length 3, which is at
+The authored ``opens a masked block. The generated opener (a longer run with the `text` info
+string) is correctly not treated as a closer. But the value's own`` line (length 3, which is at
 least the authored opener's length) closes the authored block. Everything after it in the value is
 unmasked, and the generated closing fence then opens a new block that never closes.
 

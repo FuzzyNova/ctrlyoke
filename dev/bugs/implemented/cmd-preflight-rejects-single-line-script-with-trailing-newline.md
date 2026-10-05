@@ -30,8 +30,8 @@ Running the same string through `cmd.exe /d /s /c` works fine.
 
 `MULTILINE_SCRIPT_NEWLINE = /\r\n?|\n/` (`ShellCatalog.ts` ~176) matches any
 newline, including a trailing one. `EndConditionEvaluator.isMultilineInlineScript`
-already uses the right rule: a script is multi-line only if a line *after the
-first* has non-whitespace content. The shared preflight doesn't use it.
+already uses the right rule: a script is multi-line only if a line _after the
+first_ has non-whitespace content. The shared preflight doesn't use it.
 
 ## Suggested Fix
 

@@ -122,7 +122,9 @@ describe("useFinalStepContextMenu", () => {
       "Disable final step",
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(3);
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
 
     for (const missing of [
       "Move Up",
@@ -202,22 +204,24 @@ describe("useFinalStepContextMenu", () => {
     expect(
       screen.getByRole("button", { name: "Copy Script" })
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
-      "title",
-      "Script steps have no AI session to reply to"
-    );
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toHaveAttribute("title", "Script steps have no AI session to reply to");
   });
 
   it("disables Reply to Step when the final step has no session ID", () => {
     render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
-      "title",
-      "This step has no session to resume yet"
-    );
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toHaveAttribute("title", "This step has no session to resume yet");
   });
 
   it("replies with the final-step session in read-only, running, and history views", () => {

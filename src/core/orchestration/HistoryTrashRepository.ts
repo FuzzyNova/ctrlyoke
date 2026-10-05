@@ -635,10 +635,7 @@ export class HistoryTrashRepository {
             // A marker we cannot read cannot establish that its owner is gone.
             continue;
           }
-          if (
-            typeof owner.pid !== "number" ||
-            typeof owner.host !== "string"
-          ) {
+          if (typeof owner.pid !== "number" || typeof owner.host !== "string") {
             continue;
           }
           if (owner.host === os.hostname() && isProcessAlive(owner.pid)) {
@@ -787,10 +784,7 @@ export class HistoryTrashRepository {
               path.join(
                 source,
                 path.basename(
-                  WorkflowPaths.descriptorPath(
-                    this.stateRoot,
-                    item.workflowKey
-                  )
+                  WorkflowPaths.descriptorPath(this.stateRoot, item.workflowKey)
                 )
               )
             )
@@ -815,7 +809,9 @@ export class HistoryTrashRepository {
           }
           const trashedDraftDir = path.join(
             source,
-            path.basename(WorkflowPaths.draftDir(this.stateRoot, item.workflowKey))
+            path.basename(
+              WorkflowPaths.draftDir(this.stateRoot, item.workflowKey)
+            )
           );
           const liveDraftDir = WorkflowPaths.draftDir(
             this.stateRoot,
@@ -834,10 +830,7 @@ export class HistoryTrashRepository {
       );
       // Include whole lineages whose descriptor was merged even if all runs
       // conflicted; otherwise include only lineages with a restored run.
-      if (
-        item.wholeLineage ||
-        result.restoredRuns > restoredRunsBeforeItem
-      ) {
+      if (item.wholeLineage || result.restoredRuns > restoredRunsBeforeItem) {
         result.restoredWorkflowKeys.push(item.workflowKey);
       }
       if (item.wholeLineage) result.restoredLineages += 1;

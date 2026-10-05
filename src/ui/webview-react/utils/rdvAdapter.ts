@@ -679,9 +679,7 @@ export function locateActiveDiffMatch(
 
     if (matchStart >= lineStart && matchStart < lineEnd) {
       const side: DiffSide =
-        line.type === DIFF_LINE_TYPES.REMOVED
-          ? DIFF_SIDES.OLD
-          : DIFF_SIDES.NEW;
+        line.type === DIFF_LINE_TYPES.REMOVED ? DIFF_SIDES.OLD : DIFF_SIDES.NEW;
       return {
         side,
         lineNumber:

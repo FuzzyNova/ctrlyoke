@@ -333,7 +333,13 @@ export function HistorySearchDrawer() {
     }, HISTORY_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [issueSearch, query, setHistorySearchListingId, setHistorySearchResults, trimmedQuery]);
+  }, [
+    issueSearch,
+    query,
+    setHistorySearchListingId,
+    setHistorySearchResults,
+    trimmedQuery,
+  ]);
 
   const navigateToResult = useCallback(
     (result: HistorySearchResult) => {
@@ -485,7 +491,13 @@ export function HistorySearchDrawer() {
         deepSearch,
         regexSearch
       ),
-    [deepSearch, historySearchFilters, listingWorkflowKey, regexSearch, trimmedQuery]
+    [
+      deepSearch,
+      historySearchFilters,
+      listingWorkflowKey,
+      regexSearch,
+      trimmedQuery,
+    ]
   );
   const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -524,7 +536,10 @@ export function HistorySearchDrawer() {
         listingId,
         limit: RESULT_LIMIT,
         offset,
-        filters: toHistorySearchFilters(historySearchFilters, listingWorkflowKey),
+        filters: toHistorySearchFilters(
+          historySearchFilters,
+          listingWorkflowKey
+        ),
         ...(deepSearch ? { deep: true } : {}),
         ...(regexSearch ? { regex: true } : {}),
       });

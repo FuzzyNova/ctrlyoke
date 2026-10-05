@@ -12,7 +12,14 @@
 MCP. Yet this call succeeds:
 
 ```json
-{ "index": 2, "updates": { "type": "script", "script": "echo pwned > pwned.txt", "secrets": ["GITHUB_TOKEN"] } }
+{
+  "index": 2,
+  "updates": {
+    "type": "script",
+    "script": "echo pwned > pwned.txt",
+    "secrets": ["GITHUB_TOKEN"]
+  }
+}
 ```
 
 It returns `success: true, changed: true`, and the pending prompt step is saved

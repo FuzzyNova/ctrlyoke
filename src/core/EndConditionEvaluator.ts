@@ -326,7 +326,10 @@ export class EndConditionEvaluator {
         };
       }
 
-      const comparison = await this.evaluateSuccess(normalizedResult, condition);
+      const comparison = await this.evaluateSuccess(
+        normalizedResult,
+        condition
+      );
 
       return {
         ...comparison,

@@ -21,17 +21,17 @@ No existing backlog doc covers this. `dev/backlog/` has no "reply", "follow-up" 
 
 ## Current state (what we build on)
 
-| Concern | Where | Notes |
-| --- | --- | --- |
-| Shared menu item builders | `src/ui/webview-react/utils/stepContextMenuItems.ts` | `buildStepCopyMenuItems` is used by both menus. The new builder goes next to it. |
-| Queue-step menu | `hooks/useStepContextMenu.tsx` → `openContextMenu(x, y, { step, deleteIndex, runtimeMeta, latestOutput, … })` | Called from `WorkflowStepsPanel.tsx` and `PromptChipRail.tsx`. |
-| Final-step menu | `hooks/useFinalStepContextMenu.tsx` | Called from the same two components. |
-| Editor state | `store/editorStore.ts`: `PropertyValues`, `PROPERTY_DEFAULTS`, `enterNewPromptMode`, `setProperties`, `preparePromptEditorForInsert` | `sessionId` is a `string` in the editor (`""` = blank). |
-| Step → editor mapping | `editorStore.enterEditMode` builds `propertiesFromData` inline | This is the authored mapping. The reply mapping is similar but works on *resolved* values (see §2). |
-| Property resolution | `resolveExecutionProperties()` in `src/types/ExecutionPropertyResolver.ts` | It is platform-neutral and already runs in the webview via `useCompatibilityDiagnostics`. The settings adapter `createDefaults(globalSettings)` and `toCoreWorkflow()` are private to that hook. |
-| What actually ran | `step._runtime` (`PromptRuntimeMetadata extends ExecutionProperties`) | `CliPromptRuntimeCoordinator` writes the actual `harness`, `model`, `executionMode`, `agent`, `skills`, `secrets` and `sessionId` on completion and on cancel. The webview mirror type in `WebviewMessageTypes.ts` (~l.393) declares only `harness`, `model` and `sessionId`. |
-| Session ID sources | `stepMetadataClipboard.ts` uses `latestOutput?.structured?.metadata?.sessionId ?? runtimeMeta?.sessionId` | `step._runtime.sessionId` is the persisted value. |
-| Session ID semantics | `sessionId` accepts a UUID string, a step number, or `SESSION_ID_SENTINELS.FINAL_STEP` | We copy the concrete ID, as requested (see §5). |
+| Concern                   | Where                                                                                                                                | Notes                                                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared menu item builders | `src/ui/webview-react/utils/stepContextMenuItems.ts`                                                                                 | `buildStepCopyMenuItems` is used by both menus. The new builder goes next to it.                                                                                                                                                                                              |
+| Queue-step menu           | `hooks/useStepContextMenu.tsx` → `openContextMenu(x, y, { step, deleteIndex, runtimeMeta, latestOutput, … })`                        | Called from `WorkflowStepsPanel.tsx` and `PromptChipRail.tsx`.                                                                                                                                                                                                                |
+| Final-step menu           | `hooks/useFinalStepContextMenu.tsx`                                                                                                  | Called from the same two components.                                                                                                                                                                                                                                          |
+| Editor state              | `store/editorStore.ts`: `PropertyValues`, `PROPERTY_DEFAULTS`, `enterNewPromptMode`, `setProperties`, `preparePromptEditorForInsert` | `sessionId` is a `string` in the editor (`""` = blank).                                                                                                                                                                                                                       |
+| Step → editor mapping     | `editorStore.enterEditMode` builds `propertiesFromData` inline                                                                       | This is the authored mapping. The reply mapping is similar but works on _resolved_ values (see §2).                                                                                                                                                                           |
+| Property resolution       | `resolveExecutionProperties()` in `src/types/ExecutionPropertyResolver.ts`                                                           | It is platform-neutral and already runs in the webview via `useCompatibilityDiagnostics`. The settings adapter `createDefaults(globalSettings)` and `toCoreWorkflow()` are private to that hook.                                                                              |
+| What actually ran         | `step._runtime` (`PromptRuntimeMetadata extends ExecutionProperties`)                                                                | `CliPromptRuntimeCoordinator` writes the actual `harness`, `model`, `executionMode`, `agent`, `skills`, `secrets` and `sessionId` on completion and on cancel. The webview mirror type in `WebviewMessageTypes.ts` (~l.393) declares only `harness`, `model` and `sessionId`. |
+| Session ID sources        | `stepMetadataClipboard.ts` uses `latestOutput?.structured?.metadata?.sessionId ?? runtimeMeta?.sessionId`                            | `step._runtime.sessionId` is the persisted value.                                                                                                                                                                                                                             |
+| Session ID semantics      | `sessionId` accepts a UUID string, a step number, or `SESSION_ID_SENTINELS.FINAL_STEP`                                               | We copy the concrete ID, as requested (see §5).                                                                                                                                                                                                                               |
 
 ## Design
 
@@ -45,11 +45,11 @@ disabled logic live in one place, just like the copy items.
 - Placement: its own group directly after the Copy items. It sits before the output
   filter items in both menus.
 - Disabled when:
-  - the step is a script step (`isScriptWorkflowStep`). Title: *"Script steps have no
-    AI session to reply to"*.
+  - the step is a script step (`isScriptWorkflowStep`). Title: _"Script steps have no
+    AI session to reply to"_.
   - no session ID can be found (the step hasn't run, it failed before a session
-    started, or the harness never reported one). Title: *"This step has no session to
-    resume yet"*.
+    started, or the harness never reported one). Title: _"This step has no session to
+    resume yet"_.
 - **Not** disabled for externally-managed or read-only workflows, running workflows,
   or history view. Reply only writes to the local new-prompt editor draft. Adding the
   draft to the queue goes through the editor's normal Add path, and that path already
@@ -65,23 +65,23 @@ Add a new pure util, `src/ui/webview-react/utils/replyToStep.ts`:
 
 ```ts
 export function buildReplyPropertyValues(input: {
-  step: PromptWorkflowStep;          // queue step or final step
+  step: PromptWorkflowStep; // queue step or final step
   sessionId: string;
   workflowProperties: WorkflowProperties;
   globalSettings: GlobalSettings;
-}): PropertyValues
+}): PropertyValues;
 ```
 
 Algorithm:
 
 1. **Resolve** the step with `resolveExecutionProperties(toCorePromptStep(step),
-   toCoreWorkflow(...), { defaults: createDefaults(globalSettings),
-   hostCanProvidePty: true })`. First move `createDefaults`, `toCoreWorkflow` and
+toCoreWorkflow(...), { defaults: createDefaults(globalSettings),
+hostCanProvidePty: true })`. First move `createDefaults`, `toCoreWorkflow` and
    `toCorePromptStep` out of `useCompatibilityDiagnostics.ts` into a shared webview
    util (e.g. `utils/coreWorkflowAdapter.ts`). Both callers then share one adapter
    (DRY). Do not write a second resolver.
 2. **Overlay `_runtime` where it records the actual executed value.** Resolution uses
-   *today's* workflow and settings, but the step may have run under older ones (the
+   _today's_ workflow and settings, but the step may have run under older ones (the
    settings changed, or the user is replying from history). `_runtime` wins for the
    fields it records: `harness`, `model`, `executionMode`, `agent`, `skills`,
    `secrets`. This matters most for harness and model: a session ID only resumes
@@ -89,7 +89,7 @@ Algorithm:
    `WebviewMessageTypes.ts` to declare the extra fields the core already sends
    (`executionMode`, `agent`, `skills`, `secrets`). Check that serialization actually
    passes them through to the webview.
-3. **Strip injected built-in skills.** In ctrlyoke-MCP *skill* mode, the resolver (and
+3. **Strip injected built-in skills.** In ctrlyoke-MCP _skill_ mode, the resolver (and
    so `_runtime.skills`) adds `MCP_SKILL_NAMES.TOOLS` / `.COORDINATION` to the list.
    Copying those back as explicit skills would pin them into the new step for good.
    Remove every `MCP_SKILL_NAMES` value before writing `skills`.
@@ -114,12 +114,12 @@ React.
 
 "Identical to resolved" applies to every field except one:
 
-| Field | Behaviour | Why |
-| --- | --- | --- |
-| `priorContext` | Explicit **None** (`NONE` keyword) | The resumed session already holds the earlier conversation. Injecting prior outputs again duplicates context and costs tokens. |
-| `endCondition` | Copy as resolved | It is usually the same validation gate the user wants on a follow-up. It is visible and easy to clear in the drawer. |
-| `preCondition` | Copy as resolved | Same reason as `endCondition`. |
-| `errorBehavior` | Copy as resolved | Same reason as `endCondition`. |
+| Field           | Behaviour                          | Why                                                                                                                            |
+| --------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `priorContext`  | Explicit **None** (`NONE` keyword) | The resumed session already holds the earlier conversation. Injecting prior outputs again duplicates context and costs tokens. |
+| `endCondition`  | Copy as resolved                   | It is usually the same validation gate the user wants on a follow-up. It is visible and easy to clear in the drawer.           |
+| `preCondition`  | Copy as resolved                   | Same reason as `endCondition`.                                                                                                 |
+| `errorBehavior` | Copy as resolved                   | Same reason as `endCondition`.                                                                                                 |
 
 ### 4. Editor behaviour on click
 
@@ -148,7 +148,7 @@ and a source label such as `Step 3` or `Final step`.
 
 If the user clicks Reply again while a reply is already active, **keep the original
 `previous` snapshot**. Only the properties and banner data change. Cancel always
-returns to the state from before the *first* reply, not to an earlier reply.
+returns to the state from before the _first_ reply, not to an earlier reply.
 
 ### 5. Reply banner in `EditorSection`
 

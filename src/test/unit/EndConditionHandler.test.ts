@@ -703,8 +703,14 @@ suite("EndConditionHandler", () => {
 
       assert.strictEqual(result.shouldContinue, true);
       assert.strictEqual(retryPrompts.length, retryLimit);
-      assert.match(retryPrompts[0] ?? "", /Expected:\n``` text\nexit code == ok/);
-      assert.match(retryPrompts[0] ?? "", /Script output:\n``` text\ninitial failure/);
+      assert.match(
+        retryPrompts[0] ?? "",
+        /Expected:\n``` text\nexit code == ok/
+      );
+      assert.match(
+        retryPrompts[0] ?? "",
+        /Script output:\n``` text\ninitial failure/
+      );
     }
   });
 
@@ -763,11 +769,23 @@ suite("EndConditionHandler", () => {
       undefined
     );
 
-    assert.deepStrictEqual(parseSecretReferences(plan.promptWithInstruction), []);
+    assert.deepStrictEqual(
+      parseSecretReferences(plan.promptWithInstruction),
+      []
+    );
     assert.deepStrictEqual(parseAtReferences(plan.promptWithInstruction), []);
-    assert.deepStrictEqual(parseGitChangeReferences(plan.promptWithInstruction), []);
-    assert.deepStrictEqual(parseInlinePriorContextRefs(plan.promptWithInstruction), []);
-    assert.deepStrictEqual(scanCtrlYokeSlashTokens(plan.promptWithInstruction), []);
+    assert.deepStrictEqual(
+      parseGitChangeReferences(plan.promptWithInstruction),
+      []
+    );
+    assert.deepStrictEqual(
+      parseInlinePriorContextRefs(plan.promptWithInstruction),
+      []
+    );
+    assert.deepStrictEqual(
+      scanCtrlYokeSlashTokens(plan.promptWithInstruction),
+      []
+    );
     assert.deepStrictEqual(plan.diagnostics, []);
   });
 

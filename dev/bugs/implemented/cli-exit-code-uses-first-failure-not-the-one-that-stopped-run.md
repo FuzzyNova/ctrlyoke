@@ -9,7 +9,7 @@
 If a step fails with `errorBehavior.onError: continue` and a later step then
 fails and stops the run, `ctrlyoke run --headless`:
 
-- exits with the exit code derived from the *continued* step, not the stopping
+- exits with the exit code derived from the _continued_ step, not the stopping
   one. A stopping harness-not-installed failure exits **1** instead of **3**,
   and a stopping timeout exits **1** instead of **4**.
 - reports the continued step in `--json` as the top-level `error.step` /

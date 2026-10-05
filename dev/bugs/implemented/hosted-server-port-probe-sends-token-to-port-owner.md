@@ -30,7 +30,7 @@ On a shared machine, any local user can do this.
 
 ## Root Cause
 
-Sibling detection authenticates the *caller* to the *listener*. It should
+Sibling detection authenticates the _caller_ to the _listener_. It should
 authenticate the listener to the caller without revealing the secret first.
 
 ## Suggested Fix

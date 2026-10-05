@@ -346,9 +346,8 @@ export class ScriptExecutionReporter {
     }
     // Completed stdout and stderr are each whole strings here. Redact each
     // independently before building client and persisted output records.
-    const safeEvaluationResult = secretRedactionService.redactValue(
-      evaluationResult
-    );
+    const safeEvaluationResult =
+      secretRedactionService.redactValue(evaluationResult);
     const outputText = sanitizeTerminalOutput(
       [safeEvaluationResult.stdout, safeEvaluationResult.stderr]
         .filter(Boolean)

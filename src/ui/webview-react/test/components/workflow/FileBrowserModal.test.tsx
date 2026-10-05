@@ -599,9 +599,7 @@ describe("FileBrowserModal — file mode", () => {
     render(<FileBrowserModal />);
 
     const matchingFile = await screen.findByText("x.prompt.md");
-    expect(
-      screen.getByRole("button", { name: /x\.prompt\.md/ })
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: /x\.prompt\.md/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: /a\.md/ })).toBeDisabled();
 
     await user.click(matchingFile);

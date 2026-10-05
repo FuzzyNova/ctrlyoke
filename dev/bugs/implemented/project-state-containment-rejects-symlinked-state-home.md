@@ -42,7 +42,7 @@ Compare like with like, and keep the containment guarantee:
 - Resolve the candidate's real location before comparing. For a project dir
   that may not exist yet, use `realpath` of its parent (which `initialize`
   creates with `ensurePrivateDirectory`) and append the basename.
-- Or compare the lexical candidate with the lexical root. A link *inside* the
+- Or compare the lexical candidate with the lexical root. A link _inside_ the
   projects root (the real escape vector) is already rejected separately by
   `rejectSymlinkProjectDirectory`.
 

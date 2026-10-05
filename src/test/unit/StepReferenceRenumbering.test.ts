@@ -19,7 +19,10 @@ suite("StepReferenceRenumbering", () => {
 
     assert.deepStrictEqual(result.refusals, []);
     assert.strictEqual((result.steps[3] as PromptStep).sessionId, 3);
-    assert.deepStrictEqual((result.steps[3] as PromptStep).priorContext, [1, 3]);
+    assert.deepStrictEqual(
+      (result.steps[3] as PromptStep).priorContext,
+      [1, 3]
+    );
   });
 
   test("renumbers references after a reorder", () => {
@@ -33,7 +36,10 @@ suite("StepReferenceRenumbering", () => {
     const result = renumberStepReferences(oldSteps, reordered);
 
     assert.strictEqual((result.steps[2] as PromptStep).sessionId, 2);
-    assert.deepStrictEqual((result.steps[2] as PromptStep).priorContext, [2, 1]);
+    assert.deepStrictEqual(
+      (result.steps[2] as PromptStep).priorContext,
+      [2, 1]
+    );
   });
 
   test("refuses removing a referenced target while the referencing step is unstarted", () => {
@@ -59,7 +65,10 @@ suite("StepReferenceRenumbering", () => {
 
     assert.deepStrictEqual(result.refusals, []);
     assert.strictEqual((result.steps[2] as PromptStep).sessionId, 2);
-    assert.deepStrictEqual((result.steps[2] as PromptStep).priorContext, [1, 2]);
+    assert.deepStrictEqual(
+      (result.steps[2] as PromptStep).priorContext,
+      [1, 2]
+    );
   });
 
   test("clears a removed session target and renumbers final-step references", () => {

@@ -232,10 +232,9 @@ suite("TemplateManager variable metadata", () => {
 
     test("extracts single-brace variables alongside runtime variables", () => {
       const tm = makeManager();
-      assert.deepStrictEqual(
-        tm.extractVariables("Use {{a}} and {b}"),
-        [{ name: "b" }]
-      );
+      assert.deepStrictEqual(tm.extractVariables("Use {{a}} and {b}"), [
+        { name: "b" },
+      ]);
     });
   });
 

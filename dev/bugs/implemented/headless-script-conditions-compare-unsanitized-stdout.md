@@ -12,12 +12,12 @@ normalizes CRLF to LF and strips ANSI codes, before comparing. The headless path
 (every non-interactive end condition, pre-condition, and script step) compares
 the raw stdout:
 
-| Script | Condition | Result | `actual` |
-| --- | --- | --- | --- |
-| pwsh `Write-Output 'build ok'; Write-Output 'tests ok'` | `stdout eq "build ok\ntests ok"` | fail | `"build ok\r\ntests ok"` |
-| same | `matches "ok\ntests"` | fail | |
-| cmd `echo a& echo b` | `contains "a\nb"` | fail | `"a\r\nb"` |
-| node printing `\x1b[32mPASS\x1b[39m` | `eq "PASS"` | fail | `"\u001b[32mPASS\u001b[39m"` |
+| Script                                                  | Condition                        | Result | `actual`                     |
+| ------------------------------------------------------- | -------------------------------- | ------ | ---------------------------- |
+| pwsh `Write-Output 'build ok'; Write-Output 'tests ok'` | `stdout eq "build ok\ntests ok"` | fail   | `"build ok\r\ntests ok"`     |
+| same                                                    | `matches "ok\ntests"`            | fail   |                              |
+| cmd `echo a& echo b`                                    | `contains "a\nb"`                | fail   | `"a\r\nb"`                   |
+| node printing `\x1b[32mPASS\x1b[39m`                    | `eq "PASS"`                      | fail   | `"\u001b[32mPASS\u001b[39m"` |
 
 This contradicts the docs, which say the comparison uses "the whole trimmed value,
 literally" (`docs/workflows/end-conditions.md`). The dashboard also shows the

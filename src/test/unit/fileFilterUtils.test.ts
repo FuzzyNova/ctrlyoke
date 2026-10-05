@@ -17,10 +17,7 @@ suite("fileFilterUtils", () => {
 
     test("expands one brace group into extensions", () => {
       assert.deepStrictEqual(
-        extractExtensionsFromGlobs([
-          "**/*.{md,txt}",
-          "**/*.{prompt.md,yaml}",
-        ]),
+        extractExtensionsFromGlobs(["**/*.{md,txt}", "**/*.{prompt.md,yaml}"]),
         ["md", "txt", "prompt.md", "yaml"]
       );
     });

@@ -2791,16 +2791,23 @@ export function createMessageHandlers(
   // SEARCH_HISTORY_RESULTS - Global history search matches
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_RESULTS] = (message) => {
-    const { results, query, offset, totalCount, countState, indexState, listingId } =
-      message as {
-        results: HistorySearchResult[];
-        query: string;
-        listingId: string;
-        offset?: number;
-        totalCount?: number;
-        countState?: "exact" | "atLeast";
-        indexState?: "ready" | "building" | "fallback";
-      };
+    const {
+      results,
+      query,
+      offset,
+      totalCount,
+      countState,
+      indexState,
+      listingId,
+    } = message as {
+      results: HistorySearchResult[];
+      query: string;
+      listingId: string;
+      offset?: number;
+      totalCount?: number;
+      countState?: "exact" | "atLeast";
+      indexState?: "ready" | "building" | "fallback";
+    };
     const uiStore = useUiStore.getState();
     // Compared trimmed: the store holds the raw input value, while a request
     // (and so the response echoing it back) always carries the trimmed query.
@@ -2830,16 +2837,23 @@ export function createMessageHandlers(
   // still be coming.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS] = (message) => {
-    const { results, query, offset, totalCount, countState, indexState, listingId } =
-      message as {
-        results: HistorySearchResult[];
-        query: string;
-        listingId: string;
-        offset?: number;
-        totalCount?: number;
-        countState?: "exact" | "atLeast";
-        indexState?: "ready" | "building" | "fallback";
-      };
+    const {
+      results,
+      query,
+      offset,
+      totalCount,
+      countState,
+      indexState,
+      listingId,
+    } = message as {
+      results: HistorySearchResult[];
+      query: string;
+      listingId: string;
+      offset?: number;
+      totalCount?: number;
+      countState?: "exact" | "atLeast";
+      indexState?: "ready" | "building" | "fallback";
+    };
     const uiStore = useUiStore.getState();
     // Same guard as the final response: a push that arrives after its query
     // was superseded (the user kept typing, or issued a new search) must not

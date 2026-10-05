@@ -236,7 +236,9 @@ suite("WorkflowInstanceRegistry", () => {
       queueExtensions: 0,
       definitionRevision: 1,
     } as QueueState;
-    const instance = Object.create(WorkflowInstance.prototype) as WorkflowInstance;
+    const instance = Object.create(
+      WorkflowInstance.prototype
+    ) as WorkflowInstance;
     Object.defineProperty(instance, "id", { value: "fresh-instance" });
     instance.getQueueState = () => loadedState;
     registry.getInstances().set(instance.id, instance);
@@ -254,14 +256,18 @@ suite("WorkflowInstanceRegistry", () => {
     registry.adoptInstanceLineageAddress(instance, loadedState);
     registry.setViewAddress("client-a", historyAddress);
 
-    assert.deepStrictEqual(tracker.buildSummary([]).unseenFailures, [
-      {
-        workflowId: "failed-instance",
-        workflowName: "Failed run",
-        workflowKey: failedAddress.workflowKey,
-        runRef: failedAddress.runRef,
-      },
-    ], "viewing a different lineage's run must not clear the failure");
+    assert.deepStrictEqual(
+      tracker.buildSummary([]).unseenFailures,
+      [
+        {
+          workflowId: "failed-instance",
+          workflowName: "Failed run",
+          workflowKey: failedAddress.workflowKey,
+          runRef: failedAddress.runRef,
+        },
+      ],
+      "viewing a different lineage's run must not clear the failure"
+    );
 
     registry.adoptInstanceLineageAddress(instance, {
       ...loadedState,

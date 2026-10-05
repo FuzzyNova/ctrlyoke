@@ -837,8 +837,7 @@ export class OpenCodeLogParser extends BaseLogParser {
 
 function getOpenCodeErrorMessage(error: unknown): string | undefined {
   const details = error as
-    | { name?: unknown; data?: { message?: unknown } }
-    | undefined;
+    { name?: unknown; data?: { message?: unknown } } | undefined;
   const message = details?.data?.message ?? details?.name;
   return typeof message === "string" && message.trim()
     ? message.trim()

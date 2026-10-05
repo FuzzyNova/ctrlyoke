@@ -61,7 +61,10 @@ suite("FileAccessPolicy", () => {
 
       assert.strictEqual(decision.allowed, true);
       assert.strictEqual(decision.reason, "trustedExternalRoot");
-      assert.strictEqual(decision.matchedRoot, path.resolve("C:/Users/natha/shared"));
+      assert.strictEqual(
+        decision.matchedRoot,
+        path.resolve("C:/Users/natha/shared")
+      );
     });
 
     test("does not widen a normalized Windows root to a sibling prefix", () => {

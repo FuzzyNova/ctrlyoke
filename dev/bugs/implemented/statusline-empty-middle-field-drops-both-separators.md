@@ -23,7 +23,7 @@ happens with `[model, "·", branch, "·", version]` outside a git repo:
 
 ## Root Cause
 
-The filter drops a literal whenever its nearest field before *or* its nearest
+The filter drops a literal whenever its nearest field before _or_ its nearest
 field after rendered empty. When an empty field sits between two non-empty
 fields, the literals on both sides of it meet that rule, so both are dropped.
 The design (`dev/implemented/STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md`) calls for
@@ -32,7 +32,7 @@ absence-aware separators that remove only the separator left dangling.
 
 ## Suggested Fix
 
-Treat the literal runs between consecutive *non-empty* fields as candidates and
+Treat the literal runs between consecutive _non-empty_ fields as candidates and
 keep exactly one run per gap: for example, keep the run directly before the next
 non-empty field, and drop leading/trailing runs that have no non-empty field on
 one side. Add tests for field·empty·field, empty·field, field·empty, and

@@ -149,7 +149,8 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         <div className="mt-1 pl-5 flex items-center gap-1.5 text-xs font-semibold text-warning-fg">
           <Icon name="refresh" className="text-xs" />
           <span>
-            Retry {retryState.currentRetry} of {formatRetryDenominator(retryState.maxRetries)}
+            Retry {retryState.currentRetry} of{" "}
+            {formatRetryDenominator(retryState.maxRetries)}
           </span>
         </div>
       )}

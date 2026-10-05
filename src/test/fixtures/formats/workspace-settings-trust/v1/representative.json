@@ -1,1 +1,7 @@
-{ "schemaVersion": 1, "decisions": { "workspace␟terminal.shellExecutable␟0123456789abcdef0123456789abcdef": "allow", "workspace␟defaults.hooks␟fedcba9876543210fedcba9876543210": "deny" } }
+{
+  "schemaVersion": 1,
+  "decisions": {
+    "workspace␟terminal.shellExecutable␟0123456789abcdef0123456789abcdef": "allow",
+    "workspace␟defaults.hooks␟fedcba9876543210fedcba9876543210": "deny"
+  }
+}

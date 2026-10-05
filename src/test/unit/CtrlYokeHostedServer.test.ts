@@ -137,7 +137,8 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
   });
 
   test("rejects unsafe hosted icon colors in HTML, manifest, and SVG", async () => {
-    const unsafeColor = '#000"><script>alert(document.location)</script><link x="';
+    const unsafeColor =
+      '#000"><script>alert(document.location)</script><link x="';
     configService.setCliOverlay({
       server: { iconBgColor: unsafeColor } as never,
     } as never);
@@ -146,7 +147,9 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
         const page = await sendGetRequest(port, `/?token=${token}`);
         assert.strictEqual(page.statusCode, 200);
         assert.ok(!page.body.includes(unsafeColor));
-        assert.ok(!page.body.includes("<script>alert(document.location)</script>"));
+        assert.ok(
+          !page.body.includes("<script>alert(document.location)</script>")
+        );
 
         const manifest = await sendGetRequest(
           port,
@@ -167,7 +170,9 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
   });
 
   test("falls back for non-string hosted icon colors", async () => {
-    configService.setCliOverlay({ server: { iconBgColor: 1 } as never } as never);
+    configService.setCliOverlay({
+      server: { iconBgColor: 1 } as never,
+    } as never);
     try {
       await withServer(async (_root, port, token) => {
         const page = await sendGetRequest(port, `/?token=${token}`);
@@ -411,9 +416,7 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
 
   test("closes a WebSocket that sends a frame over maxPayload", async () => {
     await withServer(async (port, token) => {
-      const ws = new WebSocket(
-        `ws://127.0.0.1:${port}/ws?token=${token}`
-      );
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`);
       await new Promise<void>((resolve, reject) => {
         ws.once("open", resolve);
         ws.once("error", reject);
@@ -624,34 +627,40 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
       const url = new URL(serverUrl);
-      const response = await new Promise<number | undefined>((resolve, reject) => {
-        const request = httpRequest(
-          {
-            hostname: "127.0.0.1",
-            port: Number(url.port),
-            path: "/api/workspace-viewer/file",
-            method: "PUT",
-            headers: {
-              "content-type": "application/json",
-              "content-length": 11 * 1024 * 1024,
+      const response = await new Promise<number | undefined>(
+        (resolve, reject) => {
+          const request = httpRequest(
+            {
+              hostname: "127.0.0.1",
+              port: Number(url.port),
+              path: "/api/workspace-viewer/file",
+              method: "PUT",
+              headers: {
+                "content-type": "application/json",
+                "content-length": 11 * 1024 * 1024,
+              },
             },
-          },
-          (res) => {
-            res.resume();
-            res.on("end", () => resolve(res.statusCode));
-          }
-        );
-        const timeout = setTimeout(
-          () => reject(new Error("Server waited for the unauthenticated body")),
-          5000
-        );
-        request.on("error", () => {});
-        request.on("close", () => clearTimeout(timeout));
-        request.write('{"path":"large.txt","content":"');
-      });
+            (res) => {
+              res.resume();
+              res.on("end", () => resolve(res.statusCode));
+            }
+          );
+          const timeout = setTimeout(
+            () =>
+              reject(new Error("Server waited for the unauthenticated body")),
+            5000
+          );
+          request.on("error", () => {});
+          request.on("close", () => clearTimeout(timeout));
+          request.write('{"path":"large.txt","content":"');
+        }
+      );
 
       assert.strictEqual(response, 401);
-      assert.strictEqual(fs.existsSync(path.join(workspaceRoot, "large.txt")), false);
+      assert.strictEqual(
+        fs.existsSync(path.join(workspaceRoot, "large.txt")),
+        false
+      );
     } finally {
       server.dispose();
       removeTempDir(workspaceRoot);
@@ -1038,9 +1047,8 @@ suite("CtrlYokeHostedServer feedback transport", () => {
       });
       await server.dispatchCompletionNotification(event);
 
-      const broadcastEvent = (
-        broadcastPayload as { event: { url?: string } }
-      ).event;
+      const broadcastEvent = (broadcastPayload as { event: { url?: string } })
+        .event;
       assert.strictEqual(broadcastEvent.url, server.publicUrl);
       assert.deepStrictEqual(pushedEvent, broadcastEvent);
     } finally {

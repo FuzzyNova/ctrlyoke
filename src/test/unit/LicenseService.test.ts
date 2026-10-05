@@ -111,8 +111,7 @@ class ManualRefreshTimer {
 
   async fireNext(): Promise<void> {
     const entry = this.entries.entries().next().value as
-      | [number, { callback: () => void; delay: number }]
-      | undefined;
+      [number, { callback: () => void; delay: number }] | undefined;
     assert.ok(entry, "expected a scheduled refresh timer");
     this.entries.delete(entry[0]);
     entry[1].callback();
@@ -787,10 +786,7 @@ suite("LicenseService", () => {
 
   test("retries a failed in-window checkout with the backoff timer", async () => {
     const secrets = new InMemorySecretStore();
-    await cache(
-      secrets,
-      await createLicenseFile({ issued: NOW - 25 * DAY })
-    );
+    await cache(secrets, await createLicenseFile({ issued: NOW - 25 * DAY }));
     await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
     const calls: RequestCall[] = [];
     const freshFile = await createLicenseFile({ issued: NOW });

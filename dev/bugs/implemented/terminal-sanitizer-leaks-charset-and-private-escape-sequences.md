@@ -9,12 +9,12 @@
 Script output that contains standard non-CSI escape sequences keeps printable
 fragments of them after sanitizing:
 
-| Input                         | Emitted by                                 | Sanitized result |
-| ----------------------------- | ------------------------------------------ | ---------------- |
+| Input                          | Emitted by                                 | Sanitized result |
+| ------------------------------ | ------------------------------------------ | ---------------- |
 | `ESC ( B` (designate G0 ASCII) | `tput sgr0` on xterm terminfo (`\e(B\e[m`) | `(B`             |
-| `ESC 7` / `ESC 8` (DECSC/RC)  | progress bars, `tput sc`/`tput rc`         | `7` / `8`        |
-| `ESC =` / `ESC >` (keypad)    | `tput smkx`/`rmkx`, curses programs        | `=` / `>`        |
-| `ESC c` (RIS, full reset)     | `reset`, some `clear` implementations      | `c`              |
+| `ESC 7` / `ESC 8` (DECSC/RC)   | progress bars, `tput sc`/`tput rc`         | `7` / `8`        |
+| `ESC =` / `ESC >` (keypad)     | `tput smkx`/`rmkx`, curses programs        | `=` / `>`        |
+| `ESC c` (RIS, full reset)      | `reset`, some `clear` implementations      | `c`              |
 
 The leftovers show in every surface that sanitizes: the dashboard's Bash/script
 rows and output find (`BashOutput.tsx`, `outputRows.ts`, `outputFind.ts`), the

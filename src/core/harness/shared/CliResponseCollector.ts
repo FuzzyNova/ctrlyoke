@@ -265,7 +265,9 @@ export class CliResponseCollector {
       return {
         kind: FAILURE_KINDS.PROCESS_EXIT,
         message:
-          parsedError || detail || `Process exited with code ${params.exitCode}`,
+          parsedError ||
+          detail ||
+          `Process exited with code ${params.exitCode}`,
       };
     }
 

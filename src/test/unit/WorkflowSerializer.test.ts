@@ -1925,53 +1925,56 @@ suite("WorkflowSerializer", () => {
     });
 
     test("restore refreshes views for the restored workflow keys", async () => {
-      await withWorkspace("ctrlyoke-restore-refresh-", async (workspaceRoot) => {
-        const repository = new WorkflowLineageRepository();
-        const lineage = await repository.createLineage(
-          workspaceRoot,
-          "wf-restore-refresh",
-          "Restore refresh"
-        );
-        const messages: any[] = [];
-        let refreshedKeys: readonly WorkflowKey[] = [];
-        try {
-          const serializer = createSerializer(
-            messages,
-            () => false,
-            async (keys, send, _clientId, preferLatestRunForDraft) => {
-              refreshedKeys = keys;
-              assert.strictEqual(preferLatestRunForDraft, true);
-              send({
-                type: MESSAGE_TYPES.RUN_VIEW_LOADED,
-                workflowKey: lineage.workflowKey,
-                runs: [{ runRef: "run-restored" }],
-              });
-            }
+      await withWorkspace(
+        "ctrlyoke-restore-refresh-",
+        async (workspaceRoot) => {
+          const repository = new WorkflowLineageRepository();
+          const lineage = await repository.createLineage(
+            workspaceRoot,
+            "wf-restore-refresh",
+            "Restore refresh"
           );
-          await serializer.handleRemoveWorkflowHistory({
-            workflowKey: lineage.workflowKey,
-            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-          });
-          const trashed = messages.find(
-            (message) => message.type === MESSAGE_TYPES.HISTORY_TRASHED
-          );
-          assert.ok(trashed);
-          messages.length = 0;
+          const messages: any[] = [];
+          let refreshedKeys: readonly WorkflowKey[] = [];
+          try {
+            const serializer = createSerializer(
+              messages,
+              () => false,
+              async (keys, send, _clientId, preferLatestRunForDraft) => {
+                refreshedKeys = keys;
+                assert.strictEqual(preferLatestRunForDraft, true);
+                send({
+                  type: MESSAGE_TYPES.RUN_VIEW_LOADED,
+                  workflowKey: lineage.workflowKey,
+                  runs: [{ runRef: "run-restored" }],
+                });
+              }
+            );
+            await serializer.handleRemoveWorkflowHistory({
+              workflowKey: lineage.workflowKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+            });
+            const trashed = messages.find(
+              (message) => message.type === MESSAGE_TYPES.HISTORY_TRASHED
+            );
+            assert.ok(trashed);
+            messages.length = 0;
 
-          await serializer.handleHistoryTrashAction(
-            HISTORY_TRASH_ACTIONS.RESTORE,
-            { entryId: trashed.entryId }
-          );
+            await serializer.handleHistoryTrashAction(
+              HISTORY_TRASH_ACTIONS.RESTORE,
+              { entryId: trashed.entryId }
+            );
 
-          assert.deepStrictEqual(refreshedKeys, [lineage.workflowKey]);
-          const loaded = messages.find(
-            (message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED
-          );
-          assert.deepStrictEqual(loaded.runs, [{ runRef: "run-restored" }]);
-        } finally {
-          await cleanUpStateRoot(workspaceRoot);
+            assert.deepStrictEqual(refreshedKeys, [lineage.workflowKey]);
+            const loaded = messages.find(
+              (message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED
+            );
+            assert.deepStrictEqual(loaded.runs, [{ runRef: "run-restored" }]);
+          } finally {
+            await cleanUpStateRoot(workspaceRoot);
+          }
         }
-      });
+      );
     });
 
     test("emptying Recently deleted needs its own phrase", async () => {

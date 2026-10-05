@@ -26,7 +26,7 @@ run will substitute.
 
 ## Root Cause
 
-`getFencedBlockRanges` uses the lazy regex ``/```[\s\S]*?```/g`` instead of the
+`getFencedBlockRanges` uses the lazy regex `/```[\s\S]*?```/g` instead of the
 fence-length-aware scan in `maskFencedCodeBlocks`.
 
 ## Suggested Fix

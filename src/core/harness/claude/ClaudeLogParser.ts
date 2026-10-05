@@ -393,11 +393,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
 
         // Extract model info
-        if (
-          event.message.model &&
-          !isSyntheticMessage &&
-          !model
-        ) {
+        if (event.message.model && !isSyntheticMessage && !model) {
           model = event.message.model;
         }
       }
@@ -594,9 +590,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   ): { used: number; size: number } | null {
     if (event.type === CLAUDE_EVENT_TYPES.ASSISTANT) {
       const assistantEvent = event as ClaudeProviderEvent;
-      if (
-        assistantEvent.message?.model === CLAUDE_MODEL_SENTINELS.SYNTHETIC
-      ) {
+      if (assistantEvent.message?.model === CLAUDE_MODEL_SENTINELS.SYNTHETIC) {
         return null;
       }
       const usage = assistantEvent.message?.usage;

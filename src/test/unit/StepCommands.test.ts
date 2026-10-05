@@ -148,9 +148,7 @@ suite("CLI step command handlers", () => {
     const commandContext = createStepCommandContext(workspaceRoot);
     await assert.rejects(
       () =>
-        commandContext.parseStepFile(
-          path.join(workspaceRoot, "missing.yaml")
-        ),
+        commandContext.parseStepFile(path.join(workspaceRoot, "missing.yaml")),
       /ENOENT/u
     );
 

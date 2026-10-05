@@ -153,12 +153,7 @@ suite("SecretResolver", () => {
     );
 
     decisions.set("WORKFLOW_TOKEN", "allow");
-    assertSecretGrantTrust(
-      ["WORKFLOW_TOKEN"],
-      "C:\\workspace",
-      [],
-      trustStore
-    );
+    assertSecretGrantTrust(["WORKFLOW_TOKEN"], "C:\\workspace", [], trustStore);
   });
 
   test("expands only granted process-map references and rejects prompt interpolation", () => {

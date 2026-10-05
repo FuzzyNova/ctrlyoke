@@ -12,11 +12,11 @@ file browser in which every file is dimmed and cannot be selected — including
 the files the filter was written for. This happens in both the VS Code webview
 and the hosted dashboard.
 
-| `fileFilter`            | Extracted         | `x.prompt.md` | `a.ctrlyoke.yaml` | `a.md` |
-| ----------------------- | ----------------- | ------------- | ----------------- | ------ |
-| `["**/*.prompt.md"]`    | `["prompt.md"]`   | no match      | no match          | no     |
-| `["**/*.ctrlyoke.yaml"]`| `["ctrlyoke.yaml"]`| no match     | no match          | no     |
-| `["**/*.{md,txt}"]`     | `["{md,txt}"]`    | no match      | no match          | no     |
+| `fileFilter`             | Extracted           | `x.prompt.md` | `a.ctrlyoke.yaml` | `a.md` |
+| ------------------------ | ------------------- | ------------- | ----------------- | ------ |
+| `["**/*.prompt.md"]`     | `["prompt.md"]`     | no match      | no match          | no     |
+| `["**/*.ctrlyoke.yaml"]` | `["ctrlyoke.yaml"]` | no match      | no match          | no     |
+| `["**/*.{md,txt}"]`      | `["{md,txt}"]`      | no match      | no match          | no     |
 
 `*.prompt.md` and `*.ctrlyoke.yaml` are ctrlyoke's own workflow file shapes, so
 a user-written template that asks for a workflow file hits this directly. The

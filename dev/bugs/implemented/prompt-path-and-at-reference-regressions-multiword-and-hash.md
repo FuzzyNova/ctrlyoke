@@ -18,6 +18,7 @@ Both are regressions from 0e7477717 (`fix: correct prompt reference parsing`).
    `CodeMirrorEditor` then send the path string to the AI as the prompt, and don't load the file.
    Names with one space (`./fix bug.md`) still work. The comment "Spaces within one path segment
    remain supported" only holds for a single space.
+
 2. **Unquoted `@` paths containing `#` are cut at the `#`.** `UNQUOTED_AT_REFERENCE_PATH` is
    `(?:[A-Za-z]:)?[^\s:#"]+`. The runtime parser used to accept `[^\s:]+`, so it has now picked up
    the decorator's `#` exclusion:
@@ -34,8 +35,8 @@ Call the pure functions directly (e.g. from a unit test):
 
 ```ts
 looksLikeFilePath("./My Documents/Fix It Now.prompt.md"); // false, expected true
-parseAtReferences("see @src/C#/a.cs");                    // path "src/C", expected "src/C#/a.cs"
-quoteReferencePath("src/C#/a.cs");                        // unquoted
+parseAtReferences("see @src/C#/a.cs"); // path "src/C", expected "src/C#/a.cs"
+quoteReferencePath("src/C#/a.cs"); // unquoted
 ```
 
 ## Root Cause
@@ -56,6 +57,7 @@ quoteReferencePath("src/C#/a.cs");                        // unquoted
    - newlines.
 
    Keep every example from both bug docs as a test, including the new multi-word path cases.
+
 2. Keep the `#` exclusion in the shared fragment, since the decoration relies on it. Make
    `quoteReferencePath` and `quoteReferenceField` quote any path containing a character the
    unquoted form can't carry (`/[\s:#"]/`, or better, derived from the same fragment).

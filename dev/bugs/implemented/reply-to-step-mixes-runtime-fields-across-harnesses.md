@@ -11,6 +11,7 @@ runtime-derived value from `step._runtime`, which that doc notes can describe th
 ## Symptom
 
 During or after a rerun under a different harness, the reply draft mixes harnesses. Example:
+
 - step `_runtime = { harness: "claude-cli", model: "opus", agent: "claude-agent", sessionId: "old-claude" }`
 - latest output metadata `{ sessionId: "new-codex", harness: "codex-cli" }`
 

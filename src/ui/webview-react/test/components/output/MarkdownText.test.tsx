@@ -475,7 +475,9 @@ describe("MarkdownText context references in replies", () => {
         lineEnd: 2,
       },
     ]);
-    expect(screen.getByText("bold", { selector: "strong" })).toBeInTheDocument();
+    expect(
+      screen.getByText("bold", { selector: "strong" })
+    ).toBeInTheDocument();
     expect(container.querySelector("code")).toHaveTextContent(
       "@src/__tests__/inline.ts"
     );

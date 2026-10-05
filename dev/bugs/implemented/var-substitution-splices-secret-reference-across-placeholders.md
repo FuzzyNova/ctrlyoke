@@ -7,7 +7,7 @@
 ## Symptom
 
 `VarSubstitutor.substitute` rejects a variable value that itself contains
-`${secret:`. It does not stop the *combined* output from forming one:
+`${secret:`. It does not stop the _combined_ output from forming one:
 
 - `substitute("X={{a}}{{b}}", { a: "${", b: "secret:GITHUB_TOKEN}" })` returns
   `X=${secret:GITHUB_TOKEN}` with no error.

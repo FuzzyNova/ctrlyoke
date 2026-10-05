@@ -136,11 +136,18 @@ suite("CliProcessManager teardown", () => {
 
     const unresponsiveScript =
       "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)";
-    const timedOutChild = manager.spawn(process.execPath, ["-e", unresponsiveScript], {
-      timeout: 200,
-    });
+    const timedOutChild = manager.spawn(
+      process.execPath,
+      ["-e", unresponsiveScript],
+      {
+        timeout: 200,
+      }
+    );
     await assert.rejects(timedOutChild, /Process timeout/);
-    const nextChild = manager.spawn(process.execPath, ["-e", unresponsiveScript]);
+    const nextChild = manager.spawn(process.execPath, [
+      "-e",
+      unresponsiveScript,
+    ]);
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 3500));
@@ -178,13 +185,21 @@ suite("CliProcessManager teardown", () => {
 
     const unresponsiveScript =
       "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)";
-    const firstChild = manager.spawn(process.execPath, ["-e", unresponsiveScript], {
-      timeout: 200,
-    });
+    const firstChild = manager.spawn(
+      process.execPath,
+      ["-e", unresponsiveScript],
+      {
+        timeout: 200,
+      }
+    );
     await assert.rejects(firstChild, /Process timeout/);
-    const secondChild = manager.spawn(process.execPath, ["-e", unresponsiveScript], {
-      timeout: 200,
-    });
+    const secondChild = manager.spawn(
+      process.execPath,
+      ["-e", unresponsiveScript],
+      {
+        timeout: 200,
+      }
+    );
     await assert.rejects(secondChild, /Process timeout/);
 
     await new Promise((resolve) => setTimeout(resolve, 3500));
@@ -195,7 +210,11 @@ suite("CliProcessManager teardown", () => {
       .filter((call) => call.signal === "SIGKILL")
       .map((call) => call.pid);
 
-    assert.strictEqual(termPids.length, 2, "both children should receive SIGTERM");
+    assert.strictEqual(
+      termPids.length,
+      2,
+      "both children should receive SIGTERM"
+    );
     assert.ok(
       termPids.every((pid) => killPids.includes(pid)),
       "closing the first child should not cancel the second child's SIGKILL"

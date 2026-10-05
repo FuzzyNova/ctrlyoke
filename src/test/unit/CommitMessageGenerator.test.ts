@@ -114,11 +114,7 @@ suite("CommitMessageGenerator", () => {
       await runGit(["add", "."]);
       await runGit(["commit", "-m", "initial"]);
 
-      await runGit([
-        "config",
-        "diff.external",
-        `node "${externalDiffPath}"`,
-      ]);
+      await runGit(["config", "diff.external", `node "${externalDiffPath}"`]);
       await fs.writeFile(path.join(cwd, "tracked.txt"), "staged change\n");
       await runGit(["add", "tracked.txt"]);
 
@@ -350,7 +346,9 @@ suite("CommitMessageGenerator", () => {
   });
 
   test("bounds an oversized untracked file by the diff budget", async () => {
-    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-large-untracked-"));
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-commit-large-untracked-")
+    );
     try {
       await execFileAsync("git", ["init"], { cwd });
       await fs.writeFile(

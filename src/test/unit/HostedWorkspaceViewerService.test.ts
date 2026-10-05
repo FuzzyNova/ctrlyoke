@@ -88,7 +88,10 @@ suite("HostedWorkspaceViewerService", function () {
         /invalid branch name/i
       );
 
-      assert.strictEqual(runGit(root, "branch", "--show-current"), branchBefore);
+      assert.strictEqual(
+        runGit(root, "branch", "--show-current"),
+        branchBefore
+      );
       assert.strictEqual(runGit(root, "branch", "--list", "attacker"), "");
     });
   });
@@ -115,7 +118,10 @@ suite("HostedWorkspaceViewerService", function () {
           new HostedWorkspaceViewerService(root).commit("Timed commit")
         );
         assert.strictEqual(runGit(root, "log", "-1", "--format=%s"), "Initial");
-        assert.strictEqual(runGit(root, "status", "--porcelain"), "M  file.txt");
+        assert.strictEqual(
+          runGit(root, "status", "--porcelain"),
+          "M  file.txt"
+        );
       } finally {
         restoreTimeouts();
       }
@@ -2586,7 +2592,10 @@ suite("HostedWorkspaceViewerService", function () {
       commitFile(root, "app.txt", "base app\n", "base");
       commitFile(root, "private-notes.txt", "base private\n", "private base");
       fs.writeFileSync(path.join(root, "app.txt"), "changed app\n");
-      fs.writeFileSync(path.join(root, "private-notes.txt"), "changed private\n");
+      fs.writeFileSync(
+        path.join(root, "private-notes.txt"),
+        "changed private\n"
+      );
 
       const result = await new HostedWorkspaceViewerService(root).getGitRefDiff(
         "~diff"

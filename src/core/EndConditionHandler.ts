@@ -28,10 +28,7 @@ import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { reportEndConditionEvaluated } from "../utils/TelemetryEvents";
 import { formatComparison } from "../utils/ScriptComparison";
-import {
-  fenceLiteral,
-  LITERAL_FENCE_INFO,
-} from "../utils/FileReferenceParser";
+import { fenceLiteral, LITERAL_FENCE_INFO } from "../utils/FileReferenceParser";
 
 /**
  * The `Expected:` / `Actual:` pair every end-condition failure message shows.

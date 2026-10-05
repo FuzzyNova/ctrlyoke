@@ -13,7 +13,10 @@
           "callID": "call_export_failed",
           "state": {
             "status": "error",
-            "input": { "filePath": "src/polled.ts", "content": "never written" },
+            "input": {
+              "filePath": "src/polled.ts",
+              "content": "never written"
+            },
             "error": "OpenCode export write failed"
           }
         }

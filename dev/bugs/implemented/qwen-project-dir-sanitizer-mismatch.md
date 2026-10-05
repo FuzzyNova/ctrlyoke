@@ -15,7 +15,7 @@ that fallback.
 
 ## Root Cause
 
-ctrlyoke lowercases the path unconditionally, turns only `: \ /` into `-`, and *deletes*
+ctrlyoke lowercases the path unconditionally, turns only `: \ /` into `-`, and _deletes_
 every other non-alphanumeric character. Qwen's `sanitizeCwd` (qwen 0.24.x) replaces
 every non-alphanumeric character with `-` and lowercases only on win32.
 

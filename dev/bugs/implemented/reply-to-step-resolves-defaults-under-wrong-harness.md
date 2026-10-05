@@ -9,7 +9,7 @@
 **Reply to Step** fills the new-prompt editor with explicit overrides for the step being
 replied to. The harness is the one the step actually ran with (`step._runtime.harness`).
 Every other harness-dependent value comes from `resolveExecutionProperties()`, which
-resolves against whichever harness *today's* step/workflow/settings choose. When those
+resolves against whichever harness _today's_ step/workflow/settings choose. When those
 two harnesses differ, the reply pins values that belong to the other harness:
 
 - `additionalArgs` comes from `defaults.additionalArgsByHarness[<resolved harness>]`
@@ -41,7 +41,7 @@ step's or workflow's authored harness is edited after the step ran.
 
 `buildReplyPropertyValues` (`replyToStep.ts` ~l.42-63) calls `resolveExecutionProperties`
 once with the step as authored, then replaces only the `harness` field with
-`_runtime.harness`. Every value the resolver chose *because of* the harness is left as it
+`_runtime.harness`. Every value the resolver chose _because of_ the harness is left as it
 was.
 
 The related session/harness pairing concern is confirmed. `getStepSessionId`

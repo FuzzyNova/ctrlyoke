@@ -52,8 +52,7 @@ export function parseHistoryTime(
     const utcDateTime =
       normalized.length === 10
         ? `${normalized}T${bound === "end" ? "23:59:59.999" : "00:00:00.000"}Z`
-        : normalized.includes("T") &&
-            !/(?:Z|[+-]\d{2}:\d{2})$/.test(normalized)
+        : normalized.includes("T") && !/(?:Z|[+-]\d{2}:\d{2})$/.test(normalized)
           ? `${normalized}Z`
           : normalized;
     const timestamp = Date.parse(utcDateTime);

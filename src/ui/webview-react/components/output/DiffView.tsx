@@ -313,12 +313,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       return Math.max(oldLines, newLines);
     }
     return 0;
-  }, [
-    externalHunks,
-    structuredPatchRender,
-    oldContent,
-    newContent,
-  ]);
+  }, [externalHunks, structuredPatchRender, oldContent, newContent]);
 
   const hasDiff = estimatedLineCount > 0;
 

@@ -967,7 +967,10 @@ suite("RunContinuationService addressed step mutations", () => {
     const before = await fs.readFile(runFilePath, "utf8");
     const repository = new WorkflowLineageRepository();
 
-    for (const order of [[2, 4, 3], [3, 4, 2]]) {
+    for (const order of [
+      [2, 4, 3],
+      [3, 4, 2],
+    ]) {
       await assert.rejects(
         RunContinuationService.reorderStepsAtRun(
           workspace,

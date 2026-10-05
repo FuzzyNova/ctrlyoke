@@ -8,7 +8,7 @@
 
 With "this workflow only" on, page 0 is requested with the workflow key captured
 when the search was issued (deliberately, so background view changes don't
-re-issue it). Later pages use the *current* `workflowKey`. If the displayed
+re-issue it). Later pages use the _current_ `workflowKey`. If the displayed
 workflow changes in the background, the requested-page set resets (the key is
 part of `listingId`) but page 0 stays on screen. Scrolling then merges workflow
 B's results at offsets ≥ page size into workflow A's list. The result handler only

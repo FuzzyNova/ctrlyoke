@@ -30,9 +30,7 @@ export interface CliRunSummaryProvider {
   getRunSummaries(workflowKey: WorkflowKey): Promise<RunSummary[]>;
 }
 
-export function createWorkflowLineageNotFoundError(
-  workflowKey: string
-): Error {
+export function createWorkflowLineageNotFoundError(workflowKey: string): Error {
   return new Error(
     `Workflow lineage "${workflowKey}" was not found. Run \`ctrlyoke history list\` to find a lineage key.`
   );
@@ -40,7 +38,10 @@ export function createWorkflowLineageNotFoundError(
 
 export interface CliWorkflowLineageProvider {
   listLineageKeys(workspaceRoot: string): Promise<WorkflowKey[]>;
-  listRunRefs(workspaceRoot: string, workflowKey: WorkflowKey): Promise<RunRef[]>;
+  listRunRefs(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<RunRef[]>;
   tryReadDescriptor(
     workspaceRoot: string,
     workflowKey: WorkflowKey

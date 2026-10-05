@@ -20,7 +20,7 @@ which have no content.
 
 ## Suggested Fix
 
-When `readOnly` arrives *with* a string `content`, load it and render the editor
+When `readOnly` arrives _with_ a string `content`, load it and render the editor
 read-only (no save, banner showing the reason). Keep the placeholder for responses
 without content. Check that the store/editor support a read-only-with-content state
 (e.g. the CodeMirror `readOnly` facet) and that Save is disabled. Add a Vitest.

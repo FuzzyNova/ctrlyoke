@@ -178,7 +178,10 @@ suite("CLI run-scoped command parser", () => {
       allowTool: [],
       denyTool: [],
     };
-    applyCliPropertyOverrides(workflow, buildCliPropertyOverrides(commonOptions));
+    applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides(commonOptions)
+    );
     assert.strictEqual(workflow.executionMode, "headless");
     assert.deepStrictEqual(workflow.toolPermissions, {
       allowedTools: ["workflow-tool"],
@@ -192,8 +195,7 @@ suite("CLI run-scoped command parser", () => {
 
   test("property help describes workflow scope and forceable names", () => {
     const runHelp = createRunProgram({})
-      .commands[0]
-      .helpInformation()
+      .commands[0].helpInformation()
       .replace(/\s+/gu, " ");
     const command = createProgram({});
     const rerunHelp = command.commands[0]
@@ -214,7 +216,10 @@ suite("CLI run-scoped command parser", () => {
       assert.ok(rerunHelp.includes(flag), `rerun help lists ${flag}`);
     }
     assert.match(runHelp, /--permission-mode.*workflow tool permission mode/u);
-    assert.doesNotMatch(runHelp, /overrides the defaults\.toolPermissions\.mode setting/u);
+    assert.doesNotMatch(
+      runHelp,
+      /overrides the defaults\.toolPermissions\.mode setting/u
+    );
   });
 
   test("parses append and continue only with explicit run targets", async () => {

@@ -156,11 +156,7 @@ export class McpServerNormalizer {
       const selectedFromRegistry = normalizedServers.some(
         (normalized) => normalized === server.config
       );
-      if (
-        selectedFromRegistry &&
-        hasUserLocation &&
-        !hasWorkspaceOverride
-      ) {
+      if (selectedFromRegistry && hasUserLocation && !hasWorkspaceOverride) {
         for (const name of [
           ...collectSecretInterpolationNames(server.config.env),
           ...collectSecretInterpolationNames(server.config.headers),

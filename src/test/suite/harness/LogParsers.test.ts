@@ -6077,9 +6077,8 @@ suite("OpenCodeLogParser", () => {
         () => undefined,
         async () => fixtureText
       );
-      const events = await parserWithExportRunner.readNewLines(
-        "ses_export_failed"
-      );
+      const events =
+        await parserWithExportRunner.readNewLines("ses_export_failed");
 
       assert.strictEqual(events.length, 1);
       assert.strictEqual(events[0].type, OPENCODE_EVENT_TYPES.TOOL_USE);

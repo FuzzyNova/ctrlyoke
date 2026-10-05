@@ -161,7 +161,9 @@ suite("CliRunSelector", () => {
         }
       );
       await assert.rejects(
-        fs.access(`${WorkflowPaths.descriptorPath(workspace, missingKey)}.lock`),
+        fs.access(
+          `${WorkflowPaths.descriptorPath(workspace, missingKey)}.lock`
+        ),
         { code: "ENOENT" }
       );
     } finally {

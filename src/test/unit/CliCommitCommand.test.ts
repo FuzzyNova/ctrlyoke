@@ -30,8 +30,16 @@ suite("CLI commit command", () => {
       runGit(["commit", "-m", "Initial commit"]);
       await fs.writeFile(path.join(cwd, "a.txt"), "staged a change\n", "utf8");
       runGit(["add", "a.txt"]);
-      await fs.writeFile(path.join(cwd, "b.txt"), "unstaged b change\n", "utf8");
-      await fs.writeFile(path.join(cwd, "c.txt"), "untracked c change\n", "utf8");
+      await fs.writeFile(
+        path.join(cwd, "b.txt"),
+        "unstaged b change\n",
+        "utf8"
+      );
+      await fs.writeFile(
+        path.join(cwd, "c.txt"),
+        "untracked c change\n",
+        "utf8"
+      );
 
       const realGenerator = new CommitMessageGenerator();
       let generatedDiff = "";
@@ -122,7 +130,9 @@ suite("CLI commit command", () => {
   });
 
   test("--all stages the repository root when invoked from a subdirectory", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cy-cli-commit-root-"));
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-cli-commit-root-")
+    );
     const subdir = path.join(root, "nested", "folder");
     const runGit = (args: string[]): string =>
       execFileSync("git", args, {
@@ -139,11 +149,19 @@ suite("CLI commit command", () => {
       runGit(["add", "root.txt"]);
       runGit(["commit", "-m", "Initial commit"]);
       await fs.writeFile(path.join(root, "root.txt"), "root change\n", "utf8");
-      await fs.writeFile(path.join(root, "nested.txt"), "nested change\n", "utf8");
+      await fs.writeFile(
+        path.join(root, "nested.txt"),
+        "nested change\n",
+        "utf8"
+      );
 
-      await new GitCommitter().commit("feat: include repository changes", subdir, {
-        addAll: true,
-      });
+      await new GitCommitter().commit(
+        "feat: include repository changes",
+        subdir,
+        {
+          addAll: true,
+        }
+      );
 
       const changedFiles = runGit(["show", "--format=", "--name-only"])
         .split(/\r?\n/)

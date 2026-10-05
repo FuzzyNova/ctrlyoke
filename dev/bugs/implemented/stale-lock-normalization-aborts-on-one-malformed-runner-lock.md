@@ -8,7 +8,7 @@
 
 At startup, if any lineage's `runner.json` has a missing or invalid `runRef`
 (hand-edited, partially written by an older build, or a lock from a newer
-ctrlyoke), crashed runs in *other* lineages are not normalized to `stopped`, and
+ctrlyoke), crashed runs in _other_ lineages are not normalized to `stopped`, and
 live runs owned by other hosts are not reported as active.
 
 ## Steps to Reproduce

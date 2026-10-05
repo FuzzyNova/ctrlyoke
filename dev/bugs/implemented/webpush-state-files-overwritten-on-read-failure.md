@@ -6,7 +6,7 @@
 
 ## Symptom
 
-Two read-modify-write paths treat *any* failure to read their file as "file does not exist":
+Two read-modify-write paths treat _any_ failure to read their file as "file does not exist":
 
 1. **VAPID keys.** `getOrCreateVapidKeys` catches every error from `readFile`,
    `JSON.parse`, and even the post-read `fsp.chmod`, then generates a new key pair and

@@ -15,9 +15,10 @@ import {
 
 suite("ScriptProcessRunner", () => {
   test("reports an unrequested signal death as a script failure", async () => {
-    class SignalledProcessManager
-      implements Pick<CliProcessManager, "spawn" | "cancel" | "dispose">
-    {
+    class SignalledProcessManager implements Pick<
+      CliProcessManager,
+      "spawn" | "cancel" | "dispose"
+    > {
       async spawn(
         _command: string,
         _args: string[],

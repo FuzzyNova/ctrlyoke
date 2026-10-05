@@ -67,9 +67,7 @@ import {
   GlobalWorkflowStatusService,
   MAX_GLOBAL_STATUS_RESULTS,
 } from "./core/orchestration/GlobalWorkflowStatusService";
-import {
-  deriveStepStatusesFromRuntime,
-} from "./utils/StepStatusDerivation";
+import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import {
   getReorderableStepIndices,
   RunContinuationService,

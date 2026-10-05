@@ -88,9 +88,8 @@ describe("useAttachmentTokenCount", () => {
       vi.advanceTimersByTime(250);
     });
 
-    const request = (
-      getVsCodeApi().postMessage as ReturnType<typeof vi.fn>
-    ).mock.calls[0][0] as { references: string[] };
+    const request = (getVsCodeApi().postMessage as ReturnType<typeof vi.fn>)
+      .mock.calls[0][0] as { references: string[] };
     expect(request.references).toHaveLength(1);
     const decoded = decodePriorContextTokenRef(request.references[0]);
     expect(decoded).not.toBeNull();

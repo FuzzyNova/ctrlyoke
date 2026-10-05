@@ -8,12 +8,12 @@
 
 `parseInlinePriorContextRefs` treats a keyword followed by `_` as a reference:
 
-| Input                 | Parsed                                     | Expected |
-| --------------------- | ------------------------------------------ | -------- |
-| `for f in $all_files` | `$all` (attaches every prior step output)  | nothing  |
-| `$previous_output`    | `$previous`                                | nothing  |
-| `$finalStep_1`        | `$finalStep`                               | nothing  |
-| `$step:1_x`           | `$step:1`                                  | nothing  |
+| Input                 | Parsed                                    | Expected |
+| --------------------- | ----------------------------------------- | -------- |
+| `for f in $all_files` | `$all` (attaches every prior step output) | nothing  |
+| `$previous_output`    | `$previous`                               | nothing  |
+| `$finalStep_1`        | `$finalStep`                              | nothing  |
+| `$step:1_x`           | `$step:1`                                 | nothing  |
 
 Shell or Python text pasted outside a fence silently pulls prior outputs into
 the prompt. The runtime, the editor chips, and the token counter all share this

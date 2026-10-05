@@ -7,7 +7,7 @@
 ## Symptom
 
 `claim_paths` grants a claim that overlaps a path another live participant
-already holds, as long as the caller itself holds some *other* claim that
+already holds, as long as the caller itself holds some _other_ claim that
 overlaps the new path and was recorded earlier. Both participants then appear
 to own the overlapping files, and the advisory board no longer warns the second
 agent away from them.

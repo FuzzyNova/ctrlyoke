@@ -16,10 +16,7 @@ export async function generateCommitMessageForChanges(
   cwd: string,
   options: CommitCommandOptions,
   instructions?: string
-): Promise<
-  | { diffResult: null }
-  | { diffResult: DiffResult; message: string }
-> {
+): Promise<{ diffResult: null } | { diffResult: DiffResult; message: string }> {
   const diffResult = await generator.getDiff(cwd, {
     includeUnstaged: options.all,
   });

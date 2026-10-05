@@ -202,7 +202,10 @@ suite("HistoryTrashRepository", () => {
     );
     assert.strictEqual(restoredDescriptor.latestRunRef, secondRun);
     assert.strictEqual(
-      await fs.readFile(WorkflowPaths.draftFilePath(workspace, workflowKey), "utf8"),
+      await fs.readFile(
+        WorkflowPaths.draftFilePath(workspace, workflowKey),
+        "utf8"
+      ),
       JSON.stringify({ name: "preserved draft" })
     );
   });
@@ -487,7 +490,10 @@ suite("HistoryTrashRepository", () => {
       entry.items.map((item) => item.workflowKey).sort(),
       [keyA, keyB].sort()
     );
-    assert.deepStrictEqual(await trash.list(30).then((items) => items.length), 1);
+    assert.deepStrictEqual(
+      await trash.list(30).then((items) => items.length),
+      1
+    );
     await trash.restore(entry.id);
     assert.deepStrictEqual(
       (await lineages.listLineageKeys(workspace)).sort(),

@@ -48,10 +48,7 @@ export {
 } from "./SegmentedTabBar";
 export { DrawerTabBar } from "./DrawerTabBar";
 export { DrawerRow } from "./DrawerRow";
-export {
-  PriorContextSelect,
-  type KeywordMode,
-} from "./PriorContextSelect";
+export { PriorContextSelect, type KeywordMode } from "./PriorContextSelect";
 export { formatPriorContextLabel } from "@utils/priorContext";
 export { LimitSelect } from "./LimitSelect";
 export { SkillsSelect } from "./SkillsSelect";

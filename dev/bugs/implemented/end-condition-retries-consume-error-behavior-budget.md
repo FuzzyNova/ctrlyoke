@@ -26,7 +26,7 @@ wrong attempt, and two attempts' history overlaps.
 ## Steps to Reproduce
 
 - **Symptom 1:** copy `re-sends an end-condition retry after a retry harness
-  failure` (`src/test/unit/WorkflowExecutor.test.ts` ~761) and remove its
+failure` (`src/test/unit/WorkflowExecutor.test.ts` ~761) and remove its
   `errorBehavior.maxRetries: 2`. The prompts sent become `["initial","retry"]`
   instead of `["initial","retry","retry"]`.
 - **Symptom 2:** in the unmodified test, record the history calls. The

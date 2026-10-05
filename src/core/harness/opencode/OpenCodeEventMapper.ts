@@ -203,7 +203,7 @@ export function mapOpenCodeToolPartToCliEvent(
                 }
               : isFailed
                 ? { success: false, output: error, error }
-              : undefined,
+                : undefined,
           },
         };
       }
@@ -223,7 +223,7 @@ export function mapOpenCodeToolPartToCliEvent(
               }
             : isFailed
               ? { success: false, output: error, error }
-            : undefined,
+              : undefined,
         },
       };
     }

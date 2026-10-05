@@ -5,9 +5,7 @@ export function normalizeReferencePath(pathValue: string): string {
 }
 
 export function quoteReferencePath(pathValue: string): string {
-  const unquotedPathPattern = new RegExp(
-    `^(?:${UNQUOTED_AT_REFERENCE_PATH})$`
-  );
+  const unquotedPathPattern = new RegExp(`^(?:${UNQUOTED_AT_REFERENCE_PATH})$`);
   // Keep drive-letter paths quoted even though the parser understands their
   // colon prefix. This is the established insertion format for absolute paths.
   return !/[\s:]/.test(pathValue) && unquotedPathPattern.test(pathValue)

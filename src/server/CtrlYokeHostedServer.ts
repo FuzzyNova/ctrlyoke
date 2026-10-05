@@ -914,11 +914,7 @@ export class CtrlYokeHostedServer
         return;
       }
       res.json({
-        proof: createServerIdentityProof(
-          this.token,
-          nonce,
-          this.workspaceRoot
-        ),
+        proof: createServerIdentityProof(this.token, nonce, this.workspaceRoot),
       });
     });
     // Serve static assets (CSS/JS/fonts) without token — they are not sensitive and
@@ -2052,11 +2048,7 @@ export class CtrlYokeHostedServer
   private serveColorizedSvg(svgPath: string, res: express.Response): void {
     try {
       const { bg, fg } = resolveHostedIconColors(configService.getAll().server);
-      const svg = colorizeSvg(
-        fs.readFileSync(svgPath, "utf8"),
-        bg,
-        fg
-      );
+      const svg = colorizeSvg(fs.readFileSync(svgPath, "utf8"), bg, fg);
       this.setNoStore(res);
       res.type("image/svg+xml").send(svg);
     } catch {
@@ -2162,9 +2154,8 @@ export class CtrlYokeHostedServer
 
     if (notificationSettings.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH) {
       try {
-        const result = await this.webPushService.sendNotification(
-          notificationEvent
-        );
+        const result =
+          await this.webPushService.sendNotification(notificationEvent);
         if (result.sent || result.removed || result.failed) {
           Log.debug(
             `[hosted-server] push notification ${event.id} sent=${result.sent} removed=${result.removed} failed=${result.failed}`

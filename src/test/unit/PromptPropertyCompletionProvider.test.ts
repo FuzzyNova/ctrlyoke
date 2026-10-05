@@ -158,9 +158,10 @@ suite("PromptPropertyCompletionProvider", () => {
     );
     assert.ok(result);
     assert.ok(
-      result.items.some((item) =>
-        (typeof item.label === "string" ? item.label : item.label.label) ===
-        "resumeSession"
+      result.items.some(
+        (item) =>
+          (typeof item.label === "string" ? item.label : item.label.label) ===
+          "resumeSession"
       )
     );
   });

@@ -37,7 +37,7 @@ hosted viewer service keeps its own 10 s constant and never got the fix.
 2. Enable the hosted server, open the hosted workspace viewer, stage a file,
    enter a message, and press Commit.
 3. After about 10 s the request fails with `Command failed: git ... commit -m
-   ...`. `git log` shows no new commit, and the file is still staged.
+...`. `git log` shows no new commit, and the file is still staged.
 
 ## Root Cause
 
@@ -55,7 +55,7 @@ the service uses it, mutating or not. The mutation-timeout policy in
 - Use it in the hosted service's `commit`, `push`, `pull`, `checkoutCommit`
   and `checkoutBranch`.
 - Keep the 10 s timeout for read-only queries (`status`, `branch
-  --show-current`, `rev-parse`, `cat-file`, diffs) and for single-path
+--show-current`, `rev-parse`, `cat-file`, diffs) and for single-path
   stage/unstage.
 - Prefer replacing the private `GIT_TIMEOUT_MS` with the exported
   `GIT_COMMAND_TIMEOUT_MS`, so the hosted service has no private copy of either

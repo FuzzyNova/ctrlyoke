@@ -749,8 +749,9 @@ export async function getWorkingTreeDiff(
   );
 
   const untrackedLines = parseGitPorcelainV1Z(statusOutput)
-    .filter(({ x, y, path: filePath }) =>
-      x === "?" && y === "?" && matchesPathspecs(filePath, pathspecs)
+    .filter(
+      ({ x, y, path: filePath }) =>
+        x === "?" && y === "?" && matchesPathspecs(filePath, pathspecs)
     )
     .map(({ path: filePath }) => filePath);
 
@@ -834,11 +835,9 @@ export async function getStashDiff(
         ...pathspecs,
       ]
     : ["-C", workspaceRoot, "stash", "show", "-p", stashRef];
-  const { stdout } = await execFileAsync(
-    "git",
-    args,
-    { timeout: GIT_TIMEOUT_MS }
-  );
+  const { stdout } = await execFileAsync("git", args, {
+    timeout: GIT_TIMEOUT_MS,
+  });
   return stdout;
 }
 

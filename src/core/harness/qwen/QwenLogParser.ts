@@ -37,10 +37,9 @@ import { QWEN_EVENT_TYPES, QWEN_TOOL_NAMES } from "./QwenProtocolConstants";
 
 /** Match Qwen's `sanitizeCwd` naming for directories under `~/.qwen/projects`. */
 export function sanitizeQwenProjectPath(projectPath: string): string {
-  return (process.platform === "win32" ? projectPath.toLowerCase() : projectPath).replace(
-    /[^a-zA-Z0-9]/g,
-    "-"
-  );
+  return (
+    process.platform === "win32" ? projectPath.toLowerCase() : projectPath
+  ).replace(/[^a-zA-Z0-9]/g, "-");
 }
 
 /**
