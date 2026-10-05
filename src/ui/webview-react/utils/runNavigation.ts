@@ -33,6 +33,26 @@ export function isDrillableRunNav(
   return runNav.runCount + (runNav.hasDraft ? 1 : 0) > 1;
 }
 
+/**
+ * Whether the displayed lineage shows a run identity (header badge, tab
+ * title suffix). Resolved from the lineage's own recent-workflow entry when
+ * known, falling back to the live run-summary count for a lineage not yet
+ * reflected in the recent list (e.g. a workflow just created this session).
+ */
+export function isDisplayedLineageDrillable(
+  address: WorkflowViewAddress,
+  recentWorkflows: ReadonlyArray<{
+    address: WorkflowViewAddress;
+    runNav?: WorkflowRunNavigationSummary;
+  }>,
+  runSummaries: RunSummary[]
+): boolean {
+  const runNav = recentWorkflows.find(
+    (w) => w.address.workflowKey === address.workflowKey
+  )?.runNav;
+  return runNav ? isDrillableRunNav(runNav) : runSummaries.length > 1;
+}
+
 /** "Run 1042" / "Draft", or their narrow "#1042" / "Draft" forms. */
 export function runNavIndicatorLabel(
   runNav: WorkflowRunNavigationSummary,

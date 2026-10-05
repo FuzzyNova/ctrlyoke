@@ -15,11 +15,12 @@
  */
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { applyRoute, isApplyingRoute } from "./applyRoute";
 import { useBrowserHistoryStore } from "./browserHistoryStore";
 import { deriveCurrentRoute } from "./navState";
-import { routeTitle } from "./navTitle";
+import { currentWorkflowTitle, routeTitle } from "./navTitle";
 import {
   parseRoute,
   serializeRoute,
@@ -36,8 +37,18 @@ function urlForRoute(route: Route): string {
   )}`;
 }
 
+/** The route the title was last computed for, so store updates that only
+ * change the workflow's name or run list can refresh it in place. */
+let titleRoute: Route = {};
+
 function updateTitle(route: Route): void {
-  document.title = routeTitle(route);
+  titleRoute = route;
+  const title = routeTitle(route, currentWorkflowTitle());
+  if (document.title !== title) document.title = title;
+}
+
+function refreshTitle(): void {
+  updateTitle(titleRoute);
 }
 
 /**
@@ -166,9 +177,13 @@ export function setupBrowserNavigation(): () => void {
     updateTitle(route);
   };
 
+  // The workflow's name and run list arrive after its address settles, and
+  // neither changes the route, so the title refreshes on every store update.
   const unsubscribers = [
     useUiStore.subscribe(handleStoreChange),
     useWorkspaceViewerStore.subscribe(handleStoreChange),
+    useUiStore.subscribe(refreshTitle),
+    useWorkflowStore.subscribe(refreshTitle),
   ];
   window.addEventListener("popstate", handlePopState);
 

@@ -40,7 +40,7 @@ import { useRunSummaryCacheStore } from "../../store/runSummaryCacheStore";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import {
   navigateToWorkflowAddress,
-  isDrillableRunNav,
+  isDisplayedLineageDrillable,
   viewedRunLabel,
 } from "../../utils/runNavigation";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
@@ -1535,16 +1535,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         : `run:${drilledWorkflow.workflowKey}:${displayedViewAddress.runRef}`
       : null;
 
-  // Badge visibility: the same drillable rule as the list's run indicator,
-  // resolved from the displayed lineage's own recent-workflow entry when
-  // known, falling back to the live run-summary count for a lineage not yet
-  // reflected in the recent list (e.g. a workflow just created this session).
-  const displayedRunNav = recentWorkflows.find(
-    (w) => w.address.workflowKey === displayedViewAddress?.workflowKey
-  )?.runNav;
-  const isDisplayedLineageDrillable = displayedRunNav
-    ? isDrillableRunNav(displayedRunNav)
-    : runSummaries.length > 1;
+  // Badge visibility: the same drillable rule as the list's run indicator.
+  const isDisplayedLineageRunVisible =
+    !!displayedViewAddress &&
+    isDisplayedLineageDrillable(
+      displayedViewAddress,
+      recentWorkflows,
+      runSummaries
+    );
 
   const workflowFilterControls = (
     <div className="flex min-w-0 items-start gap-2">
@@ -1704,7 +1702,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           {/* Run identity badge — third segment, only when the displayed
               lineage has more than one addressable target. A single-run
               lineage with no draft keeps exactly today's two-segment header. */}
-          {isDisplayedLineageDrillable && displayedViewAddress && (
+          {isDisplayedLineageRunVisible && displayedViewAddress && (
             <>
               <div
                 className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}

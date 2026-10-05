@@ -3,6 +3,7 @@ import { setupBrowserNavigation } from "@/navigation/browserNavigation";
 import { useBrowserHistoryStore } from "@/navigation/browserHistoryStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 let cleanup: (() => void) | null = null;
@@ -300,5 +301,23 @@ describe("setupBrowserNavigation", () => {
     expect(new URLSearchParams(window.location.search).get("file")).toBe(
       "src/a.ts"
     );
+  });
+
+  it("titles the tab with the workflow's name once it loads", () => {
+    useWorkflowStore.setState({ workflowName: null, fileName: null });
+    cleanup = setupBrowserNavigation();
+    expect(document.title).toBe("ctrlyoke");
+
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "release-notes" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+    });
+    useWorkflowStore.setState({
+      workflowName: "Release Notes",
+      fileName: "release-notes.ctrlyoke.yaml",
+    });
+    expect(document.title).toBe("Release Notes — ctrlyoke");
   });
 });
