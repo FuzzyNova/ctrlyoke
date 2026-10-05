@@ -5,7 +5,7 @@ These examples are intentionally small so you can adapt them quickly.
 ## Architecture review
 
 ```yaml
-harness: copilot-cli
+harness: codex-cli
 steps:
   - prompt: Explain the structure of @src/ and point out one coupling problem.
 ```

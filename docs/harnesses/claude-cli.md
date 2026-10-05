@@ -5,11 +5,10 @@ capability details and version-scoped evidence.
 
 `claude-cli` runs ctrlyoke workflows through Claude Code while keeping the same workflow file format used elsewhere.
 
-## Why use it
+## Good fit
 
-- Strong fit for multi-step conversational coding workflows
-- Good option when your team already standardizes on Claude Code
-- Supports the same script gating, session management, and queue features as the other CLI harnesses
+- Teams that already use Claude Code directly
+- Workflows that want the ctrlyoke queue, history, and script gating on top of Claude Code
 
 ## Example
 

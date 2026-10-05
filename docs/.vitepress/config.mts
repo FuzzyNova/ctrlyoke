@@ -4,7 +4,7 @@ const base = process.env.DOCS_BASE ?? "/docs/";
 
 export default defineConfig({
   title: "ctrlyoke",
-  description: "AI workflow automation for VS Code and the command line.",
+  description: "One workflow engine for every CLI coding agent.",
   base,
   cleanUrls: true,
   // Hand-written sections that scripts/generate-schema-docs.mjs inlines into

@@ -1,10 +1,8 @@
 import { HarnessIcon } from "@components/shared/HarnessIcon";
-import {
-  HARNESS_DISPLAY_NAMES,
-  SUPPORTED_HARNESSES,
-} from "@components/shared/HarnessDropdown";
+import { HARNESS_DISPLAY_NAMES } from "@components/shared/HarnessDropdown";
 import { useSettingsStore } from "@store/settingsStore";
 import { HARNESS_STATUS_STRINGS } from "@/types/messages";
+import { HARNESS_DISPLAY_ORDER } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 
 /**
@@ -14,7 +12,7 @@ import { Icon } from "../shared/Icon";
  */
 export function HarnessPreflightPanel() {
   const harnessStatus = useSettingsStore((state) => state.harnessStatus);
-  const statuses = SUPPORTED_HARNESSES.map((id) => harnessStatus[id]);
+  const statuses = HARNESS_DISPLAY_ORDER.map((id) => harnessStatus[id]);
   const isStillChecking = statuses.some(
     (status) => status?.status === HARNESS_STATUS_STRINGS.CHECKING
   );
@@ -38,7 +36,7 @@ export function HarnessPreflightPanel() {
         harnesses below, then sign in with that CLI before running a workflow.
       </p>
       <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-        {SUPPORTED_HARNESSES.map((harnessId) => {
+        {HARNESS_DISPLAY_ORDER.map((harnessId) => {
           const status = harnessStatus[harnessId];
           return (
             <li

@@ -4,8 +4,11 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import {
-  HARNESS_IDS,
+  AUTO_DETECT_HARNESS,
+  HARNESS_DISPLAY_ORDER,
   HARNESS_INFO,
+  INHERIT_DEFAULT_OPTION,
+  pickFirstAvailableHarness,
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import { useEffect, useState } from "react";
@@ -28,15 +31,6 @@ interface Props {
   onReset: (path: string) => void;
 }
 
-const CLI_HARNESSES: HarnessId[] = [
-  HARNESS_IDS.COPILOT_CLI,
-  HARNESS_IDS.CLAUDE_CLI,
-  HARNESS_IDS.CODEX_CLI,
-  HARNESS_IDS.OPENCODE_CLI,
-  HARNESS_IDS.QWEN_CLI,
-  HARNESS_IDS.ANTIGRAVITY_CLI,
-] as HarnessId[];
-
 const EMPTY_HIDDEN_VALUES: string[] = [];
 
 export function HarnessesSection({
@@ -50,6 +44,10 @@ export function HarnessesSection({
   const harnessColors = settings.settings.ui.harnessColors;
   const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
+  const harnessStatus = useSettingsStore((s) => s.harnessStatus);
+  const detectedHarness = pickFirstAvailableHarness(
+    (harnessId) => harnessStatus[harnessId]?.available === true
+  );
   const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
   const hideHarness = useUiStore((s) => s.hideDropdownOption);
   const unhideHarness = useUiStore((s) => s.unhideDropdownOption);
@@ -59,7 +57,7 @@ export function HarnessesSection({
   >(
     () =>
       Object.fromEntries(
-        CLI_HARNESSES.map((harnessId) => [
+        HARNESS_DISPLAY_ORDER.map((harnessId) => [
           harnessId,
           harnessColors.byHarness[harnessId] ??
             getHarnessStepColorPickerValue(harnessId),
@@ -70,7 +68,7 @@ export function HarnessesSection({
   useEffect(() => {
     setLocalHarnessColors(
       Object.fromEntries(
-        CLI_HARNESSES.map((harnessId) => [
+        HARNESS_DISPLAY_ORDER.map((harnessId) => [
           harnessId,
           harnessColors.byHarness[harnessId] ??
             getHarnessStepColorPickerValue(harnessId),
@@ -93,8 +91,19 @@ export function HarnessesSection({
         <HarnessDropdown
           id="harness-active"
           schemaPath="defaults.harness"
-          value={settings.settings.defaults.harness}
-          onChange={(value) => onUpdate("defaults.harness", value)}
+          value={settings.settings.defaults.harness || INHERIT_DEFAULT_OPTION}
+          onChange={(value) =>
+            onUpdate(
+              "defaults.harness",
+              value === INHERIT_DEFAULT_OPTION ? AUTO_DETECT_HARNESS : value
+            )
+          }
+          showDefault={true}
+          defaultLabel={
+            detectedHarness
+              ? `Auto-detect (${HARNESS_INFO[detectedHarness].name})`
+              : "Auto-detect (first installed)"
+          }
           showStatus={false}
           hiddenValues={hiddenHarnesses}
           onHideOption={(value) =>
@@ -117,7 +126,7 @@ export function HarnessesSection({
         These are used when no workflow-level override is set.
       </p>
       <div className="space-y-4">
-        {CLI_HARNESSES.map((harnessId) => {
+        {HARNESS_DISPLAY_ORDER.map((harnessId) => {
           const info = HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO];
           const currentModel =
             (models as Record<string, string | undefined>)[harnessId] ?? "";

@@ -5,6 +5,7 @@ import {
 } from "./CliWorkflowOption";
 import chalk from "chalk";
 import {
+  HARNESS_DISPLAY_ORDER,
   PERMISSION_MODES,
   SETTING_PATHS,
   isPermissionMode,
@@ -96,9 +97,9 @@ export function registerRunCommand(
         "-H, --harness <harness>",
         // No Commander default: an omitted flag must stay distinguishable from
         // an explicit one, so the workflow's own `harness` and the
-        // `defaults.harness` setting are not silently overridden by copilot-cli.
+        // `defaults.harness` setting are not silently overridden.
         workflowPropertyDescription(
-          "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli (default: the workflow's harness, then the defaults.harness setting)",
+          `AI harness: ${HARNESS_DISPLAY_ORDER.join(", ")} (default: the workflow's harness, then the defaults.harness setting, then the first installed harness)`,
           true
         )
       )

@@ -18,7 +18,6 @@ import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
 import {
   EXECUTION_STATES,
-  HARNESS_IDS,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
   RUNNER_IDS,
@@ -606,7 +605,7 @@ function getCliReportingWorkflow(
 function getCliPromptExecutionDetails(
   instance: WorkflowInstance,
   stepIndex: number,
-  defaults: Pick<ResolvedCliConfig, "harness" | "model">
+  defaults: { harness: HarnessId; model?: string }
 ): { harness?: HarnessId; model?: string } {
   const workflow = instance.promptQueue.getWorkflowFile();
   const step = instance.promptQueue.getState().steps[stepIndex];
@@ -616,7 +615,7 @@ function getCliPromptExecutionDetails(
       step?._runtime?.harness ??
       promptStep?.harness ??
       workflow.harness ??
-      (defaults.harness as HarnessId),
+      defaults.harness,
     model:
       step?._runtime?.model ??
       promptStep?.model ??
@@ -816,7 +815,6 @@ async function runCommand(
   } = resolveCliExecutionMode(!!process.stdout.isTTY, !!process.stdin.isTTY);
 
   const config: ResolvedCliConfig = {
-    harness: options.harness || HARNESS_IDS.COPILOT_CLI,
     model: options.model,
     cwd: workingDir,
     vars: options.var || {},
@@ -913,7 +911,11 @@ async function runCommand(
   registerCliAdapter(platform);
   const factory = new IntegrationFactory(platform, userFeedbackSink);
   // The default harness used only when neither a step nor the workflow names
-  // one. `run --harness` is applied to the workflow after it loads.
+  // one. `run --harness` is applied to the workflow after it loads, so the
+  // default needs no detection then.
+  if (!options.harness) {
+    await IntegrationFactory.detectDefaultHarness();
+  }
   const harness = ConfigurationUtils.getIntegrationMode();
 
   if (
@@ -2323,7 +2325,6 @@ async function validateCommand(
     const workingDir = process.cwd();
     Log.initializeCli(workingDir, false);
     const validationAdapter = new CliAdapter({
-      harness: HARNESS_IDS.COPILOT_CLI,
       cwd: workingDir,
 
       vars: {},
@@ -2721,6 +2722,9 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     CommitMessageGenerator,
     getMaxDiffSizeLabel,
   } = await import("./git/CommitMessageGenerator");
+  if (!ConfigurationUtils.getCommitHarness()) {
+    await IntegrationFactory.detectDefaultHarness();
+  }
   const generator = new CommitMessageGenerator(
     undefined,
     cliRunnerHostIdentity

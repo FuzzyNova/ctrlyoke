@@ -3,7 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HarnessesSection } from "@components/settings/HarnessesSection";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
+import {
+  AUTO_DETECT_HARNESS,
+  HARNESS_IDS,
+  HARNESS_STATUS_STRINGS,
+  MESSAGE_TYPES,
+  SETTING_SCOPES,
+} from "@root/types/DashboardConstants";
+import { useSettingsStore } from "@store/settingsStore";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
@@ -18,6 +25,51 @@ function settings(): FullGlobalSettings {
 describe("HarnessesSection defaults", () => {
   beforeEach(() => {
     vi.mocked(getVsCodeApi().postMessage).mockClear();
+    useSettingsStore.getState().resetSettings();
+  });
+
+  it("defaults to auto-detect, naming the first installed harness alphabetically", async () => {
+    const available = {
+      available: true,
+      status: HARNESS_STATUS_STRINGS.AVAILABLE,
+    };
+    useSettingsStore
+      .getState()
+      .setHarnessStatus(HARNESS_IDS.COPILOT_CLI, available);
+    useSettingsStore
+      .getState()
+      .setHarnessStatus(HARNESS_IDS.CODEX_CLI, available);
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    render(
+      <HarnessesSection
+        settings={settings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => undefined}
+      />
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: /Choose active harness/,
+    });
+    expect(trigger).toHaveTextContent("Auto-detect (Codex)");
+
+    await user.click(trigger);
+    await user.click(screen.getByRole("button", { name: /^Claude Code/ }));
+    expect(onUpdate).toHaveBeenLastCalledWith(
+      "defaults.harness",
+      HARNESS_IDS.CLAUDE_CLI
+    );
+
+    await user.click(trigger);
+    await user.click(
+      screen.getByRole("button", { name: /^Auto-detect \(Codex\)/ })
+    );
+    expect(onUpdate).toHaveBeenLastCalledWith(
+      "defaults.harness",
+      AUTO_DETECT_HARNESS
+    );
   });
 
   it("renders no usage data and sends no usage messages", () => {

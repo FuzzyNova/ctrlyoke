@@ -12,7 +12,6 @@ import {
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
-  HARNESS_IDS,
   CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   MAX_CONTENT_SIZE,
@@ -29,6 +28,7 @@ import {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
+import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { ctrlYokeToolFamilies } from "./CliProviderUtils";
 import {
   fenceLiteral,
@@ -150,7 +150,8 @@ export class CliPromptPreparer {
         `\n${fenceLiteral(value, LITERAL_FENCE_INFO, authoredText)}\n`
     );
     const originalPromptText = conditionOutputSubstitution.text;
-    const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
+    const harnessId =
+      resolvedProperties?.harness ?? ConfigurationUtils.getIntegrationMode();
     const ctrlyokeMcpModeDiagnostics =
       resolvedProperties?.ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL &&
       resolvedProperties !== undefined &&

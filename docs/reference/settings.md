@@ -146,11 +146,11 @@ Default execution properties applied to all new workflows (mirrors ExecutionProp
 
 ### `defaults.harness` {#defaults-harness}
 
-- **Type:** `"copilot-cli" | "claude-cli" | "codex-cli" | "opencode-cli" | "qwen-cli" | "antigravity-cli"`
-- **Default:** `"copilot-cli"`
+- **Type:** `"copilot-cli" | "claude-cli" | "codex-cli" | "opencode-cli" | "qwen-cli" | "antigravity-cli"` or `""`
+- **Default:** `""`
 - **Workflow field:** [`harness`](/reference/workflow-schema#execution-properties-harness) — a workflow or step value overrides this default
 
-The default harness to use for new workflows.
+The default harness for workflows and steps that do not name one. Empty = auto-detect: the first installed harness in alphabetical order (antigravity-cli, claude-cli, codex-cli, copilot-cli, opencode-cli, qwen-cli).
 
 ### `defaults.models` {#defaults-models}
 

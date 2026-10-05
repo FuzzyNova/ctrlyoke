@@ -1,6 +1,6 @@
 import { resolveExecutionProperties } from "@root/types/ExecutionPropertyResolver";
 import {
-  HARNESS_IDS,
+  isHarnessId,
   MCP_SKILL_NAMES,
   PRIOR_CONTEXT_KEYWORDS,
   type HarnessId,
@@ -19,12 +19,6 @@ import {
 } from "@utils/coreWorkflowAdapter";
 
 const MCP_SKILL_NAME_SET = new Set<string>(Object.values(MCP_SKILL_NAMES));
-const HARNESS_ID_SET = new Set<string>(Object.values(HARNESS_IDS));
-
-function isHarnessId(value: string): value is HarnessId {
-  return HARNESS_ID_SET.has(value);
-}
-
 export interface BuildReplyPropertyValuesInput {
   step: PromptStep;
   sessionId: string;

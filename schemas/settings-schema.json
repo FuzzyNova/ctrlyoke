@@ -56,9 +56,16 @@
       "additionalProperties": false,
       "properties": {
         "harness": {
-          "$ref": "workflow.json#/$defs/harnessId",
-          "description": "The default harness to use for new workflows.",
-          "default": "copilot-cli"
+          "anyOf": [
+            {
+              "$ref": "workflow.json#/$defs/harnessId"
+            },
+            {
+              "const": ""
+            }
+          ],
+          "description": "The default harness for workflows and steps that do not name one. Empty = auto-detect: the first installed harness in alphabetical order (antigravity-cli, claude-cli, codex-cli, copilot-cli, opencode-cli, qwen-cli).",
+          "default": ""
         },
         "models": {
           "type": "object",

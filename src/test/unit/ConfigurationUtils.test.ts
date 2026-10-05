@@ -10,9 +10,12 @@ import {
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
+  HARNESS_DISPLAY_ORDER,
+  HARNESS_IDS,
   PERMISSION_MODES,
   STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
+import { harnessAvailability } from "../../utils/HarnessAvailability";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
 
@@ -550,5 +553,53 @@ suite("ConfigurationUtils — cost settings", () => {
       makeBackend({ ui: { showCostEstimates: false } })
     );
     assert.strictEqual(ConfigurationUtils.shouldShowCostEstimates(), false);
+  });
+});
+
+suite("ConfigurationUtils — default harness", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+    harnessAvailability.reset();
+  });
+
+  test("auto-detects by default: the first installed harness in display order", () => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+    harnessAvailability.record(HARNESS_IDS.COPILOT_CLI, true);
+    harnessAvailability.record(HARNESS_IDS.CLAUDE_CLI, true);
+
+    assert.strictEqual(ConfigurationUtils.isDefaultHarnessAutoDetected(), true);
+    assert.strictEqual(
+      ConfigurationUtils.getIntegrationMode(),
+      HARNESS_IDS.CLAUDE_CLI
+    );
+  });
+
+  test("a configured harness wins over detection", () => {
+    configService.setUserBackend(
+      makeBackend({ defaults: { harness: HARNESS_IDS.QWEN_CLI } })
+    );
+    configService.setWorkspaceBackend(makeBackend({}));
+    harnessAvailability.record(HARNESS_IDS.CLAUDE_CLI, true);
+
+    assert.strictEqual(
+      ConfigurationUtils.isDefaultHarnessAutoDetected(),
+      false
+    );
+    assert.strictEqual(
+      ConfigurationUtils.getIntegrationMode(),
+      HARNESS_IDS.QWEN_CLI
+    );
+  });
+
+  test("falls back to the first harness in display order before detection", () => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+
+    assert.strictEqual(
+      ConfigurationUtils.getIntegrationMode(),
+      HARNESS_DISPLAY_ORDER[0]
+    );
   });
 });

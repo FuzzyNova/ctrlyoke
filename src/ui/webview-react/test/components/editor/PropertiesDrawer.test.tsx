@@ -16,6 +16,7 @@ import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DRAWER_PAGES } from "@/types/drawerPages";
 import {
   EXECUTION_MODES,
+  HARNESS_IDS,
   SECRET_REGISTRY_STATES,
   STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
@@ -210,6 +211,9 @@ describe("PropertiesDrawer execution mode", () => {
     useSettingsStore
       .getState()
       .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.HARNESS);
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("harness", HARNESS_IDS.COPILOT_CLI);
     renderHarnessDrawer();
 
     const color = screen.getByLabelText(/^Step Color, color:/);

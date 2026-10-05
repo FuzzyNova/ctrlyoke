@@ -15,6 +15,8 @@ import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import type { HarnessQuotaSnapshot } from "../types/UsageTypes";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { harnessAvailability } from "../utils/HarnessAvailability";
 
 /**
  * IntegrationFactory
@@ -65,6 +67,21 @@ export class IntegrationFactory {
       default:
         throw new Error(`Unknown harness: ${harness}`);
     }
+  }
+
+  /**
+   * Resolve an auto-detected (empty) `defaults.harness` in a host that does
+   * not detect harnesses on its own, i.e. the standalone CLI: run
+   * `--version` probes in display order until one harness is installed. A
+   * no-op when `defaults.harness` names a harness.
+   */
+  static async detectDefaultHarness(): Promise<void> {
+    if (!ConfigurationUtils.isDefaultHarnessAutoDetected()) {
+      return;
+    }
+    await harnessAvailability.detectFirstAvailable((harnessId) =>
+      IntegrationFactory.createCapabilityProvider(harnessId).checkAvailability()
+    );
   }
 
   /** Create a new Copilot CLI integration */

@@ -65,9 +65,10 @@ export function CommitSection({
   const hiddenHarnesses =
     hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? EMPTY_HIDDEN_VALUES;
 
-  // Resolve the effective harness for model discovery: explicit override or active global harness
-  const effectiveHarness =
-    (commit.harness as string) || settings.settings.defaults.harness;
+  // Resolve the effective harness for model discovery: explicit override or
+  // the effective (possibly auto-detected) default harness.
+  const defaultHarness = useSettingsStore((s) => s.globalSettings.harness);
+  const effectiveHarness = (commit.harness as string) || defaultHarness;
   const discoveredModels = getModelsForHarness(effectiveHarness as HarnessId);
   const currentModel = (commit.model as string) ?? "";
   const handleViewFullOutput = () => {

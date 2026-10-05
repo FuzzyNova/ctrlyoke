@@ -441,7 +441,7 @@ export class CopilotCliProvider implements ICliProvider {
    * initializeModelRegistry() is never called during extension activation).
    */
   private async validateAndGetModel(requestedModel?: string): Promise<string> {
-    const defaultModel = ConfigurationUtils.getCliModel();
+    const defaultModel = ConfigurationUtils.getCopilotCliModel();
 
     if (!requestedModel) {
       return defaultModel;

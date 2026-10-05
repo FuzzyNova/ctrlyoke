@@ -1,6 +1,6 @@
 # ctrlyoke
 
-ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity. Prompt, steer, automate, and revisit sessions with any supported harness: send a single prompt, or define a structured YAML/JSON/Markdown workflow and let the AI continue working unattended.
+ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity. Each CLI coding agent you run through ctrlyoke is a _harness_. Prompt, steer, automate, and revisit sessions with any supported harness: send a single prompt, or define a structured YAML/JSON/Markdown workflow and let the AI continue working unattended.
 
 ---
 
@@ -28,14 +28,14 @@ ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Cl
 
 | Harness ID        | Description                                                                           |
 | ----------------- | ------------------------------------------------------------------------------------- |
-| `copilot-cli`     | GitHub Copilot CLI — log file monitoring, session resumption (default)                |
+| `copilot-cli`     | GitHub Copilot CLI — log file monitoring, session resumption                          |
 | `claude-cli`      | Anthropic Claude Code CLI — JSON streaming, hook-based completion                     |
 | `codex-cli`       | OpenAI Codex CLI — JSONL events, notify hook                                          |
 | `opencode-cli`    | OpenCode CLI — JSONL events, config-file permissions                                  |
 | `qwen-cli`        | Qwen Code CLI — JSONL events, log-based session discovery                             |
 | `antigravity-cli` | Google Antigravity CLI — plain-text output, hook-based completion, MCP config support |
 
-Set the active harness in `.ctrlyoke/settings.json`:
+By default ctrlyoke uses the first installed harness in alphabetical order. To pick one, set it in `.ctrlyoke/settings.json`:
 
 ```json
 { "defaults": { "harness": "claude-cli" } }

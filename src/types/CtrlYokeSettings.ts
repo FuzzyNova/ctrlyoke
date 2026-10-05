@@ -1,4 +1,5 @@
 import {
+  AUTO_DETECT_HARNESS,
   BROWSER_NOTIFICATION_MODES,
   CODEX_APPROVAL_POLICIES,
   CODEX_SANDBOX_MODES,
@@ -108,7 +109,8 @@ export interface CtrlYokeGlobalSettings {
 
   // Defaults (mirrors executionProperties 1:1)
   defaults: {
-    harness: HarnessId;
+    /** Empty ({@link AUTO_DETECT_HARNESS}) means the first installed harness. */
+    harness: HarnessId | typeof AUTO_DETECT_HARNESS;
     models: Partial<Record<HarnessId, string>>;
     additionalArgs: Partial<Record<HarnessId, string>>;
     agent: string;
@@ -393,7 +395,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     includeFullDiffsInPriorContext: true,
   },
   defaults: {
-    harness: "copilot-cli",
+    harness: AUTO_DETECT_HARNESS,
     models: {
       "copilot-cli": "claude-sonnet-4.6",
       "claude-cli": "sonnet",

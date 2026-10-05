@@ -173,7 +173,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "defaults.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error.",
   "defaults.errorBehavior.retryDelaySec": "Delay before retrying, in seconds.",
   "defaults.executionMode": "Default execution mode for new workflows. 'interactive' spawns a live terminal (TUI) the user can steer; 'headless' runs in the background with output in the Output panel. Workflows and individual steps can override this.",
-  "defaults.harness": "The default harness to use for new workflows.",
+  "defaults.harness": "The default harness for workflows and steps that do not name one. Empty = auto-detect: the first installed harness in alphabetical order (antigravity-cli, claude-cli, codex-cli, copilot-cli, opencode-cli, qwen-cli).",
   "defaults.hooks": "User-defined hooks to run at various execution lifecycle points. A workspace-scope hook takes effect only after you approve that exact hook on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
   "defaults.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
   "defaults.hooks[].env": "Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.",
@@ -1289,7 +1289,8 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "codex-cli",
     "opencode-cli",
     "qwen-cli",
-    "antigravity-cli"
+    "antigravity-cli",
+    ""
   ],
   "defaults.hooks[].event": [
     "stop",

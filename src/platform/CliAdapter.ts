@@ -10,7 +10,6 @@ import { OsCredentialStore } from "./OsCredentialStore";
 import { resolvePackageRootFromEntry } from "../utils/CtrlyokeCliPath";
 
 export interface ResolvedCliConfig {
-  harness: string;
   model?: string;
   cwd?: string;
   /**

@@ -4,13 +4,13 @@ import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
 import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import {
-  HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
   MESSAGE_TYPES,
   type HarnessId,
   type HarnessStatusString,
 } from "../../types/messages";
 import {
+  HARNESS_DISPLAY_ORDER,
   INHERIT_DEFAULT_OPTION,
   USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
@@ -39,17 +39,6 @@ export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> =
       label,
     ])
   ) as Record<HarnessId, string>;
-
-// ─── Harness list ─────────────────────────────────────────────────────────────
-
-export const SUPPORTED_HARNESSES: HarnessId[] = [
-  HARNESS_IDS.ANTIGRAVITY_CLI,
-  HARNESS_IDS.CLAUDE_CLI,
-  HARNESS_IDS.CODEX_CLI,
-  HARNESS_IDS.COPILOT_CLI,
-  HARNESS_IDS.OPENCODE_CLI,
-  HARNESS_IDS.QWEN_CLI,
-];
 
 // The selected harness can never be hidden (canHide enforces this).
 const NON_HIDEABLE: HarnessId[] = [];
@@ -360,10 +349,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     h !== (value as HarnessId) && // never hide the selected item
     !isHiddenValue(h);
 
-  const totalHidden = SUPPORTED_HARNESSES.filter(isHiddenValue).length;
+  const totalHidden = HARNESS_DISPLAY_ORDER.filter(isHiddenValue).length;
 
   // ── Group renderer ────────────────────────────────────────────────────────
-  const renderGroup = (harnesses: HarnessId[]) =>
+  const renderGroup = (harnesses: readonly HarnessId[]) =>
     harnesses.map((harness) => {
       const hidden = isHiddenValue(harness);
       if (hidden && !showHidden) return null;
@@ -438,7 +427,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         </div>
       )}
 
-      {renderGroup(SUPPORTED_HARNESSES)}
+      {renderGroup(HARNESS_DISPLAY_ORDER)}
     </div>
   );
 

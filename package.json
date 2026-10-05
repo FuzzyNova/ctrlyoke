@@ -1,7 +1,7 @@
 {
   "name": "ctrlyoke",
   "displayName": "ctrlyoke",
-  "description": "One workflow engine for every AI coding CLI. Prompt, steer, automate, and revisit sessions across Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity — one message or a whole validated workflow.",
+  "description": "One workflow engine for every CLI coding agent. Prompt, steer, automate, and revisit sessions across Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity — one message or a whole validated workflow.",
   "version": "0.1.2",
   "publisher": "fuzzynova",
   "license": "SEE LICENSE IN LICENSE.md",

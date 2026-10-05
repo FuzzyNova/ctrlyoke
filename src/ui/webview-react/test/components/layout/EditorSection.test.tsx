@@ -279,6 +279,9 @@ describe("EditorSection", () => {
     useSettingsStore
       .getState()
       .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.HARNESS);
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("harness", HARNESS_IDS.COPILOT_CLI);
     render(<EditorSection />);
 
     const color = screen.getByLabelText("Step color");

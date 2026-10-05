@@ -18,6 +18,8 @@ import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
   CODEX_CLI_MODELS as CODEX_CLI_MODEL_LIST,
   ANTIGRAVITY_CLI_MODELS as ANTIGRAVITY_CLI_MODEL_LIST,
+  DEFAULT_MODELS,
+  HARNESS_DISPLAY_ORDER,
   PERMISSION_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
@@ -402,9 +404,11 @@ const CLAUDE_CLI_MODELS: ModelOption[] = [...CLAUDE_CLI_MODEL_LIST];
 const CODEX_CLI_MODELS: ModelOption[] = [...CODEX_CLI_MODEL_LIST];
 const ANTIGRAVITY_CLI_MODELS: ModelOption[] = [...ANTIGRAVITY_CLI_MODEL_LIST];
 
+// Placeholder until the host sends the effective (possibly auto-detected)
+// default harness.
 const initialGlobalSettings: GlobalSettings = {
-  harness: HARNESS_IDS.COPILOT_CLI as HarnessId,
-  model: "claude-sonnet-4.5",
+  harness: HARNESS_DISPLAY_ORDER[0],
+  model: DEFAULT_MODELS[HARNESS_DISPLAY_ORDER[0]],
   harnessDefaultModels: {},
   harnessDefaultAdditionalArgs: {},
   agent: "",

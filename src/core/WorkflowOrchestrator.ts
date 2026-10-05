@@ -43,6 +43,7 @@ import {
   ACTION_TYPES,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   HARNESS_IDS,
+  getHarnessDisplayName,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   RUNNER_IDS,
@@ -77,6 +78,7 @@ import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { harnessAvailability } from "../utils/HarnessAvailability";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
@@ -738,18 +740,29 @@ export class WorkflowOrchestrator {
       const installHint = integration.getInstallHint();
       this.disposableRegistry.add(
         integration.onDidChangeStatus((status) => {
+          const isDetectionResult =
+            status === HarnessStatus.Ready ||
+            status === HarnessStatus.Unavailable;
+          const previousDefault = ConfigurationUtils.getIntegrationMode();
+          if (isDetectionResult) {
+            // Recorded first: an auto-detected default harness follows it.
+            harnessAvailability.record(
+              harnessId,
+              status === HarnessStatus.Ready
+            );
+          }
           // Resolved per event: the default harness is a setting that can
           // change after construction.
-          if (integration === this.getDefaultIntegration()) {
+          if (
+            integration === this.getDefaultIntegration() ||
+            ConfigurationUtils.getIntegrationMode() !== previousDefault
+          ) {
             Log.trace(
-              `[WorkflowOrchestrator] Default harness ${harnessId} status changed to: ${status}`
+              `[WorkflowOrchestrator] Default harness ${ConfigurationUtils.getIntegrationMode()} after ${harnessId} status changed to: ${status}`
             );
             this.updateStatusBar();
           }
-          if (
-            status === HarnessStatus.Ready ||
-            status === HarnessStatus.Unavailable
-          ) {
+          if (isDetectionResult) {
             this.dashboardBroadcastHub.notifyHarnessAvailability(
               harnessId,
               status === HarnessStatus.Ready,
@@ -1427,17 +1440,11 @@ export class WorkflowOrchestrator {
     try {
       Log.debug("[WorkflowOrchestrator] WorkflowOrchestrator: Initializing...");
 
-      const integrationMode = ConfigurationUtils.getIntegrationMode();
-      const modeLabel =
-        {
-          [HARNESS_IDS.CLAUDE_CLI]: "Claude Code CLI",
-          [HARNESS_IDS.CODEX_CLI]: "Codex CLI",
-          [HARNESS_IDS.COPILOT_CLI]: "Copilot CLI",
-          [HARNESS_IDS.OPENCODE_CLI]: "OpenCode CLI",
-          [HARNESS_IDS.QWEN_CLI]: "Qwen Code CLI",
-          [HARNESS_IDS.ANTIGRAVITY_CLI]: "Antigravity CLI",
-        }[integrationMode] || "Copilot CLI";
-      Log.info(`[WorkflowOrchestrator] Default integration: ${modeLabel}`);
+      Log.info(
+        ConfigurationUtils.isDefaultHarnessAutoDetected()
+          ? "[WorkflowOrchestrator] Default integration: auto-detect (first installed harness)"
+          : `[WorkflowOrchestrator] Default integration: ${getHarnessDisplayName(ConfigurationUtils.getIntegrationMode())}`
+      );
 
       await Promise.all([
         this.copilotCliIntegration.initialize(),

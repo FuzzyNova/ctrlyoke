@@ -2,16 +2,17 @@
 
 ## Harness
 
-A **harness** is the execution strategy ctrlyoke uses to talk to an AI assistant CLI.
+Each CLI coding agent you run through ctrlyoke is a **harness**. ctrlyoke handles each one's
+invocation, sessions, permissions, MCP servers, and hooks, so the same workflow runs on any of them.
 
 ctrlyoke currently supports:
 
-- `copilot-cli`
+- `antigravity-cli`
 - `claude-cli`
 - `codex-cli`
+- `copilot-cli`
 - `opencode-cli`
 - `qwen-cli`
-- `antigravity-cli`
 
 ## Workflow
 

@@ -37,6 +37,7 @@ import {
   CONDITION_ACTIONS,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
+  AUTO_DETECT_HARNESS,
   HARNESS_IDS,
   NOTIFICATION_EVENT_MODES,
   PERMISSION_MODES,
@@ -75,7 +76,8 @@ const META_BINDINGS: Array<{
   {
     name: "harness IDs",
     rows: Object.values(HARNESS_OPTIONS_META),
-    paths: ["harness", "defaults.harness"],
+    // `defaults.harness` additionally accepts AUTO_DETECT_HARNESS; asserted below.
+    paths: ["harness"],
   },
   {
     name: "worktree modes",
@@ -417,9 +419,11 @@ suite("Schema UI metadata", () => {
     }
     assert.deepStrictEqual(
       [...Object.values(HARNESS_IDS)].sort(),
-      [
-        ...new Set(schemaValues(["harness", "defaults.harness"]).map(String)),
-      ].sort()
+      [...new Set(schemaValues(["harness"]).map(String))].sort()
+    );
+    assert.deepStrictEqual(
+      [...Object.values(HARNESS_IDS), AUTO_DETECT_HARNESS].sort(),
+      [...new Set(schemaValues(["defaults.harness"]).map(String))].sort()
     );
     assert.deepStrictEqual(
       [...Object.values(EXECUTION_MODES)].sort(),

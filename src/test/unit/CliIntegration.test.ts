@@ -503,7 +503,6 @@ suite("CliIntegration", () => {
       logParser: parser,
     });
     const platform = new CliAdapter({
-      harness: HARNESS_IDS.COPILOT_CLI,
       cwd: workspaceRoot,
 
       verbose: false,

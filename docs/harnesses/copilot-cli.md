@@ -3,13 +3,12 @@
 See the [generated compatibility matrix](/harnesses/compatibility) for
 capability details and version-scoped evidence.
 
-`copilot-cli` is the default ctrlyoke harness and the easiest place to start if you already use GitHub Copilot.
+`copilot-cli` runs ctrlyoke workflows through the GitHub Copilot CLI while keeping the same workflow file format used elsewhere.
 
-## Why use it
+## Good fit
 
-- First-class fit with ctrlyoke defaults
-- Good support for interactive terminal workflows
-- Natural choice if your team already authenticates with GitHub
+- Teams that already have a GitHub Copilot subscription and use the Copilot CLI
+- Workflows that want Copilot's model catalog behind the ctrlyoke queue, history, and script gating
 
 ## Typical setup
 

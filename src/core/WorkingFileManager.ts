@@ -18,7 +18,6 @@ import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   IN_FLIGHT_EXECUTION_STATES,
-  HARNESS_IDS,
   PROMPT_PROPERTIES,
   QUEUE_POSITION,
   WORKTREE_EDIT_KINDS,
@@ -2609,7 +2608,7 @@ export class WorkingFileManager {
           }
 
           if (!workingFile.model) {
-            workingFile.model = this.getDefaultModelForHarness(
+            workingFile.model = ConfigurationUtils.getModelForHarness(
               workingFile.harness
             );
             modified = true;
@@ -2694,29 +2693,5 @@ export class WorkingFileManager {
       }
     );
     return operation;
-  }
-
-  // ==================== Private Helpers ====================
-
-  /**
-   * Get default model for a given harness from settings
-   */
-  private getDefaultModelForHarness(harness: HarnessId): string {
-    switch (harness) {
-      case HARNESS_IDS.COPILOT_CLI:
-        return ConfigurationUtils.getCliModel();
-      case HARNESS_IDS.CLAUDE_CLI:
-        return ConfigurationUtils.getClaudeCliModel();
-      case HARNESS_IDS.CODEX_CLI:
-        return ConfigurationUtils.getCodexCliModel();
-      case HARNESS_IDS.OPENCODE_CLI:
-        return ConfigurationUtils.getOpenCodeCliModel();
-      case HARNESS_IDS.QWEN_CLI:
-        return ConfigurationUtils.getQwenCliModel();
-      case HARNESS_IDS.ANTIGRAVITY_CLI:
-        return ConfigurationUtils.getAntigravityCliModel();
-      default:
-        return ConfigurationUtils.getCliModel();
-    }
   }
 }

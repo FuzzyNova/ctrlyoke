@@ -32,7 +32,9 @@ ctrlyoke does not bundle AI assistants. It orchestrates harnesses that you alrea
 | `qwen-cli`        | Qwen Code CLI installed and configured          |
 | `antigravity-cli` | Antigravity CLI (`agy`) installed and signed in |
 
-Start with `copilot-cli` or `claude-cli` unless you already know you need another harness.
+Any one of them is enough to get started — use the harness you already have. If none is detected,
+the dashboard shows the install command for each. See [Harness overview](/harnesses/) for how
+they differ.
 
 ## Initialize a workspace
 

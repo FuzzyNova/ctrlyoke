@@ -43,6 +43,7 @@ import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/CtrlYokeTypes";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import { configService } from "../config/CtrlYokeConfigService";
+import { harnessAvailability } from "../utils/HarnessAvailability";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
 import { WebviewMessageRouter } from "./WebviewMessageRouter";
@@ -101,6 +102,7 @@ export class CtrlYokeWebviewProvider
   private hub?: DashboardBroadcastHub;
   private modelsLoadedDisposable?: { dispose(): void };
   private configServiceUnsubscribe?: () => void;
+  private harnessAvailabilityUnsubscribe?: () => void;
   private commitMessageGenerationUnsubscribe?: () => void;
   private licenseEntitlementSubscription?: { dispose(): void };
   private runningServerUrl?: string;
@@ -256,13 +258,19 @@ export class CtrlYokeWebviewProvider
     // Listen for file-based config changes (configService) to keep all clients in sync.
     // When the hub is available (after orchestrator init), broadcast to panel + all browser
     // tabs. Before the hub is wired up (early startup), fall back to panel-only.
-    this.configServiceUnsubscribe = configService.subscribe(() => {
+    const sendGlobalSettingsUpdate = (): void => {
       if (this.view) {
         this.settingsSync.sendGlobalSettingsUpdate(
           this.hub ? (msg) => this.hub!.postMessage(msg) : undefined
         );
       }
-    });
+    };
+    this.configServiceUnsubscribe = configService.subscribe(
+      sendGlobalSettingsUpdate
+    );
+    // An auto-detected default harness changes as detection results arrive.
+    this.harnessAvailabilityUnsubscribe =
+      harnessAvailability.onFirstAvailableChange(sendGlobalSettingsUpdate);
 
     this.commitMessageGenerationUnsubscribe =
       commitMessageGenerationTracker.subscribe((record) => {
@@ -1194,6 +1202,7 @@ export class CtrlYokeWebviewProvider
   public dispose(): void {
     this.modelsLoadedDisposable?.dispose();
     this.configServiceUnsubscribe?.();
+    this.harnessAvailabilityUnsubscribe?.();
     this.commitMessageGenerationUnsubscribe?.();
     this.licenseEntitlementSubscription?.dispose();
     this.cancelReconnectRetry();

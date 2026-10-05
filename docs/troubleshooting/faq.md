@@ -4,9 +4,9 @@
 
 The extension does, but the standalone `ctrlyoke` CLI does not.
 
-## Do I have to use Copilot?
+## Which harness do I need?
 
-No. ctrlyoke supports six harnesses: GitHub Copilot CLI (`copilot-cli`), Claude Code CLI (`claude-cli`), Codex CLI (`codex-cli`), OpenCode CLI (`opencode-cli`), Qwen Code CLI (`qwen-cli`), and Antigravity CLI (`antigravity-cli`). Copilot CLI is only the default; change it with the `defaults.harness` setting, a workflow's `harness`, or `ctrlyoke run --harness`.
+Any one of the six supported harnesses: GitHub Copilot CLI (`copilot-cli`), Claude Code CLI (`claude-cli`), Codex CLI (`codex-cli`), OpenCode CLI (`opencode-cli`), Qwen Code CLI (`qwen-cli`), or Antigravity CLI (`antigravity-cli`). Use whichever you already have. If you have not picked one, ctrlyoke uses the first installed harness in alphabetical order; choose one explicitly with the `defaults.harness` setting, a workflow's `harness`, or `ctrlyoke run --harness`, and mix harnesses across steps if you like.
 
 ## Can I run workflows in CI?
 

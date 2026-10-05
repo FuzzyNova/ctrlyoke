@@ -253,11 +253,11 @@ export class CommitMessageGenerator {
     const stagedCommand = gitDiffCommand("--cached");
     let stagedDiff = "";
     try {
-      const result = await execFileAsync(
-        "git",
-        gitDiffArgs("--cached"),
-        { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
-      );
+      const result = await execFileAsync("git", gitDiffArgs("--cached"), {
+        cwd,
+        encoding: "utf8",
+        maxBuffer: GIT_DIFF_MAX_BUFFER,
+      });
       stagedDiff = result.stdout;
       if (stagedDiff.trim() && !options.includeUnstaged) {
         const diff = truncateUtf8(stagedDiff, MAX_DIFF_BYTES);
@@ -288,7 +288,9 @@ export class CommitMessageGenerator {
       const bounded = truncateUtf8(part, remaining);
       diff += bounded;
       usedBytes += Buffer.byteLength(bounded, "utf8");
-      if (Buffer.byteLength(part, "utf8") > Buffer.byteLength(bounded, "utf8")) {
+      if (
+        Buffer.byteLength(part, "utf8") > Buffer.byteLength(bounded, "utf8")
+      ) {
         truncated = true;
       }
     };
@@ -318,7 +320,9 @@ export class CommitMessageGenerator {
             typeof error === "object" && error !== null && "stderr" in error
               ? String(error.stderr)
               : "";
-          if (!/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)) {
+          if (
+            !/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)
+          ) {
             throw error;
           }
           commands.push(gitDiffCommand());
@@ -365,7 +369,11 @@ export class CommitMessageGenerator {
       const { stdout: untrackedOut } = await execFileAsync(
         "git",
         ["ls-files", "--others", "--exclude-standard", "-z"],
-        { cwd: repositoryRoot, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
+        {
+          cwd: repositoryRoot,
+          encoding: "utf8",
+          maxBuffer: GIT_DIFF_MAX_BUFFER,
+        }
       );
       const untrackedFiles = parseGitNulSeparatedPaths(untrackedOut);
       includesUntrackedFiles = untrackedFiles.length > 0;
@@ -393,7 +401,10 @@ export class CommitMessageGenerator {
             continue;
           }
 
-          const fileBudget = Math.max(0, remaining - Buffer.byteLength(header, "utf8"));
+          const fileBudget = Math.max(
+            0,
+            remaining - Buffer.byteLength(header, "utf8")
+          );
           if (fileBudget === 0) {
             append(header);
             truncated = true;
@@ -465,7 +476,6 @@ export class CommitMessageGenerator {
       : "";
 
     const config: ResolvedCliConfig = {
-      harness,
       model,
       cwd,
       vars: {},
@@ -611,7 +621,10 @@ export class CommitMessageGenerator {
 
       const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
       if (resolvedWorkflowKey && existingWorkflowKey === undefined) {
-        await writeCommitMessageLineageKey(roots.stateRoot, resolvedWorkflowKey);
+        await writeCommitMessageLineageKey(
+          roots.stateRoot,
+          resolvedWorkflowKey
+        );
       }
 
       // Captured directly from the integration rather than read back from a

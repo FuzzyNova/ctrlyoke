@@ -292,7 +292,7 @@ These are important supporting benefits even when they do not lead the page:
 ## Suggested homepage narrative
 
 1. **Badge:** VS Code Extension, placed directly above the headline.
-2. **Hero:** One workflow engine for every AI coding CLI.
+2. **Hero:** One workflow engine for every CLI coding agent.
 3. **Subhead:** Prompt, steer, automate, and revisit every AI coding session — one message or a whole workflow.
 4. **Harness strip:** Show the supported harnesses early as proof of breadth.
 5. **Three primary promises:** One prompt language; one rich output view; one reusable toolkit.
@@ -318,7 +318,7 @@ This order corrects the impression that users must first become YAML workflow au
 - Qualify remote claims with **“when hosted access is configured.”** Network reachability depends on the selected bind address, TLS, and the user's LAN or remote-access setup.
 - Avoid unverified exclusivity claims such as **“the only tool”** or **“no other VS Code extension.”** The spell-check joke can keep its personality without making an absolute competitive claim.
 - Use **harness** for the AI execution strategy. Reserve **provider** for VS Code API concepts.
-- **CLI vs. harness:** Use **"AI coding CLI"** in the primary hero tagline and other headline-scale copy where scope precision matters most — it makes the CLI-only, no-GUI-harness boundary explicit without extra qualification. Use **"harness"** everywhere else (body copy, feature descriptions, campaign lines) — it is the established, more specific product term and is still accurate since every current harness is a CLI. Do not treat this as a wholesale terminology swap; only the tagline changed.
+- **CLI vs. harness:** Use **"CLI coding agent"** in the primary hero tagline and other headline-scale copy where scope precision matters most — it makes the CLI-only, no-GUI-harness boundary explicit without extra qualification. Use **"harness"** everywhere else (body copy, feature descriptions, campaign lines) — it is the established, more specific product term and is still accurate since every current harness is a CLI. Do not treat this as a wholesale terminology swap; only the tagline changed. Where a public page first moves from "coding agent" to "harness", bridge the two with **"Each CLI coding agent you run through ctrlyoke is a harness."** Avoid phrasings like "ctrlyoke calls them harnesses", which make the term sound like a renaming rather than a definition.
 
 ## Product evidence map
 

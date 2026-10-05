@@ -616,7 +616,7 @@ suite("PropertyResolver Tests", () => {
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      // Should default to ConfigurationUtils.getCliModel() for CopilotCli
+      // Should default to ConfigurationUtils.getCopilotCliModel() for CopilotCli
       assert.ok(resolved.model); // Model should be defined
     });
   });

@@ -1,6 +1,6 @@
 # Quick start
 
-This walkthrough gets a basic workflow running with the current schema and the default `copilot-cli` harness.
+This walkthrough gets a basic workflow running with whichever supported harness you have installed.
 
 ## 1. Open the ctrlyoke panel
 
@@ -13,9 +13,6 @@ Command Palette → ctrlyoke: Open ctrlyoke Panel
 Create `hello.ctrlyoke.yaml` in your workspace:
 
 ```yaml
-harness: copilot-cli
-model: claude-sonnet-4.6
-
 steps:
   - name: inspect
     prompt: |
@@ -28,6 +25,11 @@ steps:
       Based on the summary, propose the three most valuable
       next improvements for the project.
 ```
+
+The file has no `harness` line, so it runs on your default harness: the **Default harness**
+setting in ctrlyoke Settings (`defaults.harness`), or, while that is left on **Auto-detect**, the
+first installed harness in alphabetical order. To pin a workflow to one harness, add a root-level `harness:` with any
+supported ID, such as `claude-cli`, `codex-cli`, or `copilot-cli`.
 
 ## 3. Load it into the panel
 

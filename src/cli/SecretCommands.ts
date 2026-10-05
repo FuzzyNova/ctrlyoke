@@ -25,7 +25,6 @@ import {
 import {
   SECRET_REGISTRY_STATES,
   EXECUTION_MODES,
-  HARNESS_IDS,
   SETTING_SCOPES,
   TRUST_DECISIONS,
   type SettingWriteScope,
@@ -71,7 +70,6 @@ export function createCliSecretCommandDependencies(
 ): SecretCommandDependencies {
   const secretStore = new OsCredentialStore();
   const config: ResolvedCliConfig = {
-    harness: HARNESS_IDS.COPILOT_CLI,
     cwd: workspaceRoot,
 
     verbose: false,

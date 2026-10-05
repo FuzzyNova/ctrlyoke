@@ -17,7 +17,7 @@ ctrlyoke drives whichever AI CLI tool you have installed. You need at least one:
 | `qwen-cli`        | Qwen Code CLI                                |
 | `antigravity-cli` | `agy` (Google Antigravity CLI)               |
 
-The default harness is `copilot-cli`. Change it in **ctrlyoke Settings** inside the dashboard, or set it per-workflow (see below).
+Use whichever one you already have. If you have not picked one, ctrlyoke uses the first installed harness in alphabetical order. Pick a specific default harness in **ctrlyoke Settings** inside the dashboard, or set it per-workflow with a root-level `harness:` field.
 
 ---
 
@@ -95,8 +95,6 @@ As produces a copy rather than a reusable template.
 Create a file ending in `.ctrlyoke.yaml` anywhere in your workspace:
 
 ```yaml
-harness: copilot-cli
-
 steps:
   - name: analyze
     prompt: |

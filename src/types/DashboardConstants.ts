@@ -1231,6 +1231,37 @@ export const HARNESS_IDS = {
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
 
+/**
+ * Every harness in alphabetical order. ctrlyoke favours no harness: pickers
+ * list them in this order, and an auto-detected default harness is the first
+ * one in this order that is installed.
+ */
+export const HARNESS_DISPLAY_ORDER: readonly HarnessId[] = [
+  HARNESS_IDS.ANTIGRAVITY_CLI,
+  HARNESS_IDS.CLAUDE_CLI,
+  HARNESS_IDS.CODEX_CLI,
+  HARNESS_IDS.COPILOT_CLI,
+  HARNESS_IDS.OPENCODE_CLI,
+  HARNESS_IDS.QWEN_CLI,
+];
+
+const HARNESS_ID_SET: ReadonlySet<string> = new Set(Object.values(HARNESS_IDS));
+
+/** Whether `value` names one of the supported harnesses. */
+export function isHarnessId(value: unknown): value is HarnessId {
+  return typeof value === "string" && HARNESS_ID_SET.has(value);
+}
+
+/** `defaults.harness` value meaning "use the first installed harness". */
+export const AUTO_DETECT_HARNESS = "" as const;
+
+/** The first harness in {@link HARNESS_DISPLAY_ORDER} that `isAvailable` accepts. */
+export function pickFirstAvailableHarness(
+  isAvailable: (harnessId: HarnessId) => boolean
+): HarnessId | undefined {
+  return HARNESS_DISPLAY_ORDER.find(isAvailable);
+}
+
 /** Harnesses whose global statusline can be managed by ctrlyoke. */
 export const STATUS_LINE_HARNESS_IDS = {
   CLAUDE: HARNESS_IDS.CLAUDE_CLI,

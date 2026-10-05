@@ -29,6 +29,8 @@ import {
   CAPABILITIES_FILE,
   SETTING_PATHS,
   PERMISSION_MODES,
+  HARNESS_DISPLAY_ORDER,
+  isHarnessId,
   type StatusLineHarnessId,
   type HarnessId,
   type ContextResolutionFailureMode,
@@ -38,6 +40,7 @@ import {
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { isUnlimited } from "./LimitUtils";
+import { harnessAvailability } from "./HarnessAvailability";
 import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
@@ -362,12 +365,23 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get the default harness from settings
+   * Get the effective default harness: the `defaults.harness` setting, or when
+   * it is empty (auto-detect), the first installed harness in display order.
+   * Before any harness has been found installed this is the first harness in
+   * display order, which cannot run either; the dashboard's preflight panel
+   * and the CLI's availability errors explain what to install.
    */
   getIntegrationMode(): HarnessId {
-    const mode = configService.get(CONFIG_KEYS.DEFAULTS).harness as HarnessId;
-    const validIds = Object.values(HARNESS_IDS) as HarnessId[];
-    return validIds.includes(mode) ? mode : HARNESS_IDS.COPILOT_CLI;
+    const configured = configService.get(CONFIG_KEYS.DEFAULTS).harness;
+    if (isHarnessId(configured)) {
+      return configured;
+    }
+    return harnessAvailability.getFirstAvailable() ?? HARNESS_DISPLAY_ORDER[0];
+  },
+
+  /** Whether `defaults.harness` is empty, so the default harness is auto-detected. */
+  isDefaultHarnessAutoDetected(): boolean {
+    return !isHarnessId(configService.get(CONFIG_KEYS.DEFAULTS).harness);
   },
 
   /**
@@ -553,9 +567,9 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get the default CLI model (Copilot CLI)
+   * Get the default Copilot CLI model
    */
-  getCliModel(): string {
+  getCopilotCliModel(): string {
     return (
       configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.COPILOT_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.COPILOT_CLI]
@@ -569,7 +583,7 @@ export const ConfigurationUtils = {
   getModelForHarness(harness: HarnessId): string {
     switch (harness) {
       case HARNESS_IDS.COPILOT_CLI:
-        return ConfigurationUtils.getCliModel();
+        return ConfigurationUtils.getCopilotCliModel();
       case HARNESS_IDS.CLAUDE_CLI:
         return ConfigurationUtils.getClaudeCliModel();
       case HARNESS_IDS.CODEX_CLI:
@@ -580,9 +594,6 @@ export const ConfigurationUtils = {
         return ConfigurationUtils.getAntigravityCliModel();
       case HARNESS_IDS.QWEN_CLI:
         return ConfigurationUtils.getQwenCliModel();
-      default:
-        // Fallback to Copilot CLI model
-        return ConfigurationUtils.getCliModel();
     }
   },
 
@@ -778,9 +789,7 @@ export const ConfigurationUtils = {
    * passes no permission flags and the harness uses its own configuration.
    */
   getCliToolPermissions(): PermissionMode {
-    return (
-      getDefaultCliToolPermissionConfig()?.mode ?? PERMISSION_MODES.NONE
-    );
+    return getDefaultCliToolPermissionConfig()?.mode ?? PERMISSION_MODES.NONE;
   },
 
   /**

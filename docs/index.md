@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: ctrlyoke
-  text: AI workflow automation for VS Code and the command line
+  text: One workflow engine for every CLI coding agent
   tagline: Run structured multi-step AI workflows, validate the result with scripts, and keep working across harnesses without rewriting your prompts.
   actions:
     - theme: brand
@@ -20,7 +20,7 @@ features:
   - title: One workflow format
     details: Write workflows in YAML, JSON, or simple Markdown prompts. The same schema works across the extension and the standalone CLI.
   - title: Six harnesses
-    details: Switch between Copilot CLI, Claude CLI, Codex CLI, OpenCode CLI, Qwen CLI, and Antigravity CLI.
+    details: Each CLI coding agent you run through ctrlyoke is a harness. Switch between Antigravity CLI, Claude Code, Codex CLI, Copilot CLI, OpenCode, and Qwen Code.
   - title: Validation and retries
     details: Gate prompts with end conditions, pre-conditions, and script steps so workflows can stop, continue, or retry based on real project output.
   - title: Stateful execution
