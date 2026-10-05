@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-05 by Claude Code while adding harness version floors
 - **Area:** `src/core/harness/antigravity/AntigravityCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit; every harness now shows its vendor installer for the host OS, and Antigravity's is Google's `install.sh`/`install.ps1`
 
 ## Symptom
 

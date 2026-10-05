@@ -65,8 +65,15 @@ export interface HarnessConfig {
   /** Short name for VS Code terminal tab (e.g., "Claude", "Copilot", "Codex") */
   terminalName: string;
 
-  /** Installation hint when CLI not found */
+  /** Installation hint when CLI not found, for this host OS (`installHintFor`) */
   installHint: string;
+
+  /**
+   * npm package that publishes this CLI, when there is one. It is not the
+   * recommended install (see `installHint`); `scripts/harness-version-floors.mjs`
+   * reads its publish dates to suggest a support-window minimum.
+   */
+  npmPackage?: string;
 
   /**
    * Supported CLI version window, enforced once at detection by

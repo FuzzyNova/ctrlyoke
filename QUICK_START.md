@@ -8,16 +8,16 @@ ctrlyoke automates AI coding assistants — Copilot CLI, Claude Code, Codex, Ope
 
 ctrlyoke drives whichever AI CLI tool you have installed. You need at least one:
 
-| Harness           | CLI Tool                                     |
-| ----------------- | -------------------------------------------- |
-| `copilot-cli`     | `copilot` (`npm install -g @github/copilot`) |
-| `claude-cli`      | `claude` (Claude Code CLI)                   |
-| `codex-cli`       | `codex` (OpenAI Codex CLI)                   |
-| `opencode-cli`    | `opencode`                                   |
-| `qwen-cli`        | Qwen Code CLI                                |
-| `antigravity-cli` | `agy` (Google Antigravity CLI)               |
+| Harness           | CLI Tool                       |
+| ----------------- | ------------------------------ |
+| `copilot-cli`     | `copilot` (GitHub Copilot CLI) |
+| `claude-cli`      | `claude` (Claude Code CLI)     |
+| `codex-cli`       | `codex` (OpenAI Codex CLI)     |
+| `opencode-cli`    | `opencode`                     |
+| `qwen-cli`        | Qwen Code CLI                  |
+| `antigravity-cli` | `agy` (Google Antigravity CLI) |
 
-Use whichever one you already have. If you have not picked one, ctrlyoke uses the first installed harness in alphabetical order. Pick a specific default harness in **ctrlyoke Settings** inside the dashboard, or set it per-workflow with a root-level `harness:` field.
+Each harness page under `docs/harnesses/` gives its install commands for macOS, Linux, and Windows. Use whichever one you already have. If you have not picked one, ctrlyoke uses the first installed harness in alphabetical order. Pick a specific default harness in **ctrlyoke Settings** inside the dashboard, or set it per-workflow with a root-level `harness:` field.
 
 ---
 

@@ -10,9 +10,29 @@ capability details and version-scoped evidence.
 - Teams that already have a GitHub Copilot subscription and use the Copilot CLI
 - Workflows that want Copilot's model catalog behind the ctrlyoke queue, history, and script gating
 
+## Install
+
+Install the GitHub Copilot CLI with GitHub's installer:
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://gh.io/copilot-install | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+winget install GitHub.Copilot
+```
+
+Homebrew (`brew install copilot-cli`) and npm (`npm install -g @github/copilot`) also work. Windows needs PowerShell 6 or newer.
+
+See [GitHub's install guide](https://github.com/github/copilot-cli#installation) for other install methods.
+
 ## Typical setup
 
-1. Install the GitHub Copilot CLI (`npm install -g @github/copilot`)
+1. Install the GitHub Copilot CLI (see [Install](#install))
 2. Authenticate it
 3. Set ctrlyoke's harness to `copilot-cli`
 4. Optionally pick a model override in your workflow or settings

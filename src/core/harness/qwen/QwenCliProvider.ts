@@ -1,6 +1,7 @@
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -136,7 +137,13 @@ export class QwenCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.QWEN_CLI,
     displayName: "Qwen Code CLI",
     terminalName: "Qwen Code",
-    installHint: "Install via: npm install -g @qwen-code/qwen-code",
+    installHint: installHintFor({
+      posix:
+        "curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash",
+      windows:
+        "irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1 | iex",
+    }),
+    npmPackage: "@qwen-code/qwen-code",
     versionPolicy: {
       minimum: "0.14.1",
       recommended: "0.24.4",

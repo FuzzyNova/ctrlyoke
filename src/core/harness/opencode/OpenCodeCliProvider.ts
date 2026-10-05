@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -142,7 +143,13 @@ export class OpenCodeCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.OPENCODE_CLI,
     displayName: "OpenCode CLI",
     terminalName: "OpenCode",
-    installHint: "Install via: npm install -g opencode-ai",
+    installHint: installHintFor({
+      posix: "curl -fsSL https://opencode.ai/install | bash",
+      // opencode has no native Windows installer script; of its Windows
+      // options (Scoop, Chocolatey, npm), npm needs no extra package manager.
+      windows: "npm install -g opencode-ai",
+    }),
+    npmPackage: "opencode-ai",
     versionPolicy: {
       minimum: "1.3.16",
       recommended: "1.18.34",

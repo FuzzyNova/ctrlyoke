@@ -1,5 +1,6 @@
 import * as path from "path";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HOOK_CONFIG_TYPES,
   INotificationMonitor,
@@ -188,7 +189,12 @@ export class CodexCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.CODEX_CLI,
     displayName: "Codex CLI",
     terminalName: "Codex",
-    installHint: "Install via: npm install -g @openai/codex",
+    installHint: installHintFor({
+      posix: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+      windows:
+        'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
+    }),
+    npmPackage: "@openai/codex",
     versionPolicy: {
       minimum: "0.119.0",
       recommended: "0.157.0",

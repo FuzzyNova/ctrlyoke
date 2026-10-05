@@ -7,8 +7,9 @@ shape first: multi-step workflows use `steps`, not `prompts`.
 
 ## "… unavailable. Install via: …"
 
-The harness CLI could not be found. The message names the harness and its install command, for
-example `Install via: npm install -g @anthropic-ai/claude-code`. Install it, make sure it is on
+The harness CLI could not be found. The message names the harness and its vendor's install command
+for your operating system, for example `Install via: irm https://claude.ai/install.ps1 | iex` on
+Windows. Each [harness page](/harnesses/compatibility) lists the other install methods. Install it, make sure it is on
 the `PATH` that VS Code (or your terminal) sees, and sign in with the harness CLI once before
 running a workflow. After changing `PATH`, restart VS Code so the extension host picks it up. The
 standalone CLI exits with code `3` in this case.

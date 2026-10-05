@@ -33,7 +33,7 @@ Update to the latest versions of the CLI tools ctrlyoke integrates with:
 
 #### Copilot CLI
 
-Copilot CLI uses a native installer (not npm). Use the built-in update command:
+Use the built-in update command, which works however the CLI was installed:
 
 ```bash
 # Check current version
@@ -45,31 +45,32 @@ copilot update
 
 #### Claude Code CLI
 
-Claude Code uses a native installer (not npm). Use the built-in upgrade command:
+Use the built-in update command (native installs also update themselves in the background):
 
 ```bash
 # Check current version
 claude --version
 
 # Update to latest
-claude upgrade
+claude update
 ```
 
 #### Codex CLI
 
-Codex CLI is an npm package:
+Use the built-in update command; it runs `npm install -g @openai/codex@latest` itself for an npm
+install:
 
 ```bash
 # Check current version
 codex --version
 
 # Update to latest
-npm install -g @openai/codex
+codex update
 ```
 
 #### Qwen CLI
 
-Qwen CLI is an npm package (`@qwen-code/qwen-code`):
+Qwen CLI is installed from npm (`@qwen-code/qwen-code`) on the development machine:
 
 ```bash
 # Check current version
@@ -79,14 +80,14 @@ qwen --version
 npm install -g @qwen-code/qwen-code@latest
 ```
 
-**Note**: `qwen update` only _checks_ for an update and prints the npm install
-command above — it does not install the update itself (confirmed 2026-09-15).
-Run the `npm install -g` command directly rather than relying on `qwen update`
-to apply the change.
+**Note**: for an npm install, `qwen update` only _checks_ for an update and prints the npm
+install command above — it does not install the update itself (confirmed 2026-09-15). Run the
+`npm install -g` command directly. `qwen update` does install the update for a copy installed by
+Qwen's standalone installer.
 
 #### OpenCode CLI
 
-OpenCode CLI is an npm package:
+Use the built-in upgrade command, which works however the CLI was installed:
 
 ```bash
 # Check current version
@@ -98,7 +99,8 @@ opencode upgrade
 
 #### Antigravity CLI
 
-Antigravity CLI is an npm package:
+Antigravity CLI comes from Google's native installer (it is not on npm). Use the built-in update
+command:
 
 ```bash
 # Check current version
@@ -456,7 +458,7 @@ npm run chores -- --task check-all
 - `sync-model-pricing` - Re-download the models.dev registry snapshot used to price every
   harness's models (see section 2d)
 - `update-clis` - Update CLI tools (copilot, claude, codex, qwen, opencode, antigravity)
-  via their native updaters
+  via their built-in updaters (npm for Qwen)
 - `check-clis` - Check installed CLI tool versions
 - `update-deps` - Update and audit dependencies
 - `check-all` - Run all checks (lint, format, tests)

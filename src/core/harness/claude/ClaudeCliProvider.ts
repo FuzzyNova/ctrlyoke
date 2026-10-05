@@ -2,6 +2,7 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -147,7 +148,11 @@ export class ClaudeCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.CLAUDE_CLI,
     displayName: "Claude Code CLI",
     terminalName: "Claude",
-    installHint: "Install via: npm install -g @anthropic-ai/claude-code",
+    installHint: installHintFor({
+      posix: "curl -fsSL https://claude.ai/install.sh | bash",
+      windows: "irm https://claude.ai/install.ps1 | iex",
+    }),
+    npmPackage: "@anthropic-ai/claude-code",
     versionPolicy: {
       minimum: "2.1.94",
       recommended: "2.1.289",

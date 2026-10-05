@@ -164,12 +164,11 @@ async function checkCliUpdates() {
   console.log();
   logInfo("To update CLIs:");
   logInfo("  - Copilot CLI:     copilot update");
-  logInfo("  - Claude CLI:      claude upgrade");
-  logInfo("  - Codex CLI:       npm install -g @openai/codex");
+  logInfo("  - Claude CLI:      claude update");
+  logInfo("  - Codex CLI:       codex update");
   logInfo("  - Qwen CLI:        npm install -g @qwen-code/qwen-code@latest");
   logInfo("  - OpenCode CLI:    opencode upgrade");
   logInfo("  - Antigravity CLI: agy update");
-  logWarning("Copilot and Claude use native installers, not npm");
 }
 
 /**
@@ -203,21 +202,21 @@ async function updateClis() {
   if (claudeInstalled) {
     logInfo("Updating Claude Code CLI...");
     try {
-      await runCommand("claude", ["upgrade"]);
+      await runCommand("claude", ["update"]);
       logSuccess("Claude Code CLI updated");
     } catch {
-      logWarning("Claude CLI upgrade may have failed");
+      logWarning("Claude CLI update may have failed");
     }
   }
 
   console.log();
 
-  // Codex CLI - still npm
+  // Codex CLI - native updater; runs npm itself for an npm install
   const codexInstalled = await checkCliInstalled("codex", "Codex CLI");
   if (codexInstalled) {
-    logInfo("Updating Codex CLI via npm...");
+    logInfo("Updating Codex CLI...");
     try {
-      await runCommand("npm", ["install", "-g", "@openai/codex"]);
+      await runCommand("codex", ["update"]);
       logSuccess("Codex CLI updated");
     } catch {
       logWarning("Codex CLI update failed");
@@ -226,8 +225,8 @@ async function updateClis() {
 
   console.log();
 
-  // Qwen CLI - npm package; `qwen update` only checks and prints the npm
-  // command below rather than installing it, so install directly instead.
+  // Qwen CLI - for an npm install, `qwen update` only checks and prints the
+  // npm command below rather than installing it, so install directly instead.
   const qwenInstalled = await checkCliInstalled("qwen", "Qwen CLI");
   if (qwenInstalled) {
     logInfo("Updating Qwen CLI via npm...");

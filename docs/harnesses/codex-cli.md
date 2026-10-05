@@ -10,9 +10,29 @@ capability details and version-scoped evidence.
 - Teams already using Codex in local or CI workflows
 - Workflows that benefit from Codex-specific sandbox and approval controls
 
+## Install
+
+Install the Codex CLI with OpenAI's installer:
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+```
+
+Homebrew (`brew install --cask codex`) and npm (`npm install -g @openai/codex`) also work.
+
+See [the Codex README](https://github.com/openai/codex#quickstart) for other install methods.
+
 ## Notes
 
-- Install the Codex CLI (`npm install -g @openai/codex`) and sign in before selecting this harness.
+- Sign in with `codex` once before selecting this harness.
 - Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` / `deniedTools` are **not enforced** on this harness. The permission `mode` maps to Codex flags:
   - `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox`
   - `allowAll` → `--sandbox workspace-write --ask-for-approval on-request`

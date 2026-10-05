@@ -35,11 +35,6 @@ function parseWindowMonths(argv) {
   return months;
 }
 
-/** The npm package named by a provider's `npm install -g <pkg>` install hint. */
-function npmPackageFromInstallHint(installHint) {
-  return installHint.match(/npm install -g (\S+)/)?.[1];
-}
-
 async function firstReleaseSince(packageName, cutoff) {
   const response = await fetch(
     `https://registry.npmjs.org/${packageName.replace("/", "%2F")}`
@@ -89,11 +84,10 @@ async function main() {
   );
   for (const harnessId of Object.values(HARNESS_IDS)) {
     const provider = IntegrationFactory.createCapabilityProvider(harnessId);
-    const { displayName, installHint, versionPolicy } = provider.config;
-    const packageName = npmPackageFromInstallHint(installHint);
-    const window = packageName
-      ? await firstReleaseSince(packageName, cutoff)
-      : { error: "no npm package in installHint; choose by hand" };
+    const { displayName, npmPackage, versionPolicy } = provider.config;
+    const window = npmPackage
+      ? await firstReleaseSince(npmPackage, cutoff)
+      : { error: "not published to npm; choose by hand" };
     const installed = assessHarnessVersion(
       await provider.getVersion().catch(() => undefined),
       versionPolicy

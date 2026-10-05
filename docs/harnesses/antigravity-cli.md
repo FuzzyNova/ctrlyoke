@@ -18,9 +18,29 @@ steps:
   - prompt: Update the implementation and run the focused tests.
 ```
 
-Notes:
+## Install
 
-- Install and authenticate `agy` before selecting this harness.
+Install `agy` with Google's installer. It is not published to npm.
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://antigravity.google/cli/install.ps1 | iex
+```
+
+From Windows CMD, run `curl -fsSL https://antigravity.google/cli/install.cmd -o install.cmd && install.cmd && del install.cmd` instead.
+
+See [the Antigravity CLI docs](https://antigravity.google/docs/cli-overview) for other install methods.
+
+## Notes
+
+- Authenticate with `agy` once before selecting this harness.
 - ctrlyoke requires `agy` 1.1.12 or newer.
 - Permissions are coarse modes only: `dangerouslyAllowAll` passes `--dangerously-skip-permissions`, `custom` passes `--sandbox`, and `allowAll` passes nothing, so `agy` applies its own approval behavior. `allowedTools` / `deniedTools` are not enforced, and MCP servers cannot be filtered per tool. Image references are not attached.
 - Only the `preToolUse`, `postToolUse`, `sessionStart`, and `stop` hook events fire; `userPromptSubmit`, `permissionRequest`, `notification`, and `error` do not.

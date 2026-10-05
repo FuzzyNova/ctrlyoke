@@ -7,6 +7,7 @@ import {
   HarnessConfig,
   type CliExecutionSidecarDeps,
 } from "../shared/interfaces/ICliProvider";
+import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HOOK_CONFIG_TYPES,
   INotificationMonitor,
@@ -122,7 +123,10 @@ export class AntigravityCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
     displayName: "Antigravity CLI",
     terminalName: "Antigravity",
-    installHint: "Install via: npm install -g @google/antigravity-cli",
+    installHint: installHintFor({
+      posix: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+      windows: "irm https://antigravity.google/cli/install.ps1 | iex",
+    }),
     versionPolicy: {
       // agy has no public release history to derive a support window from.
       // 1.1.12 is where every tool result became "GENERIC", the transcript

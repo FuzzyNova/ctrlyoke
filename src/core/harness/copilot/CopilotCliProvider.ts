@@ -2,6 +2,7 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -119,7 +120,11 @@ export class CopilotCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.COPILOT_CLI,
     displayName: "GitHub Copilot CLI",
     terminalName: "Copilot",
-    installHint: "Install via: npm install -g @github/copilot",
+    installHint: installHintFor({
+      posix: "curl -fsSL https://gh.io/copilot-install | bash",
+      windows: "winget install GitHub.Copilot",
+    }),
+    npmPackage: "@github/copilot",
     versionPolicy: {
       minimum: "1.0.19",
       recommended: "1.0.92",
