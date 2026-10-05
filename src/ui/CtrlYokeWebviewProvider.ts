@@ -68,6 +68,7 @@ import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
 import type { UserInteractionPort } from "./UserInteractionPort";
 import type { LicenseService } from "../license/LicenseService";
 import type { ContextMenuPromptEditorInsertSink } from "../completions/ContextMenuReferenceCommands";
+import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -1104,14 +1105,9 @@ export class CtrlYokeWebviewProvider
    */
   public notifyHarnessAvailability(
     harnessId: HarnessId,
-    available: boolean,
-    installHint: string
+    report: HarnessAvailabilityReport
   ): void {
-    this.settingsSync.notifyHarnessAvailability(
-      harnessId,
-      available,
-      installHint
-    );
+    this.settingsSync.notifyHarnessAvailability(harnessId, report);
   }
 
   /**

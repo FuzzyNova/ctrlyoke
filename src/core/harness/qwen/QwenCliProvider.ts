@@ -137,6 +137,11 @@ export class QwenCliProvider implements ICliProvider {
     displayName: "Qwen Code CLI",
     terminalName: "Qwen Code",
     installHint: "Install via: npm install -g @qwen-code/qwen-code",
+    versionPolicy: {
+      minimum: "0.14.1",
+      recommended: "0.24.4",
+      updateCommand: "npm install -g @qwen-code/qwen-code@latest",
+    },
     shouldStreamHeadlessOutput: true,
 
     // Qwen uses log file monitoring for completion detection in interactive mode

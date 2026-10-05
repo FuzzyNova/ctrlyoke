@@ -28,6 +28,7 @@ import type {
   HarnessUsageSnapshot,
   WorkspaceStatsSnapshot,
 } from "../types/UsageTypes";
+import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 
 export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 
@@ -121,11 +122,10 @@ export class DashboardBroadcastHub
 
   notifyHarnessAvailability(
     harnessId: HarnessId,
-    available: boolean,
-    installHint: string
+    report: HarnessAvailabilityReport
   ): void {
     for (const client of this.clients) {
-      client.notifyHarnessAvailability(harnessId, available, installHint);
+      client.notifyHarnessAvailability(harnessId, report);
     }
   }
 

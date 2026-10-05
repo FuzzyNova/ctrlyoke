@@ -8,6 +8,7 @@ import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
+import { HarnessStatus } from "../../core/HarnessIntegration";
 import {
   CLI_EVENT_TYPES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
@@ -16,6 +17,7 @@ import {
 } from "../../types/DashboardConstants";
 import {
   HARNESS_IDS,
+  HARNESS_VERSION_STATUSES,
   PERMISSION_MODES,
   PROMPT_DIAGNOSTIC_CODES,
 } from "../../types/DashboardConstants";
@@ -39,7 +41,10 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
-import { MockHarnessIntegration } from "../helpers/mockHarness";
+import {
+  MockHarnessIntegration,
+  TEST_VERSION_POLICY,
+} from "../helpers/mockHarness";
 
 class MockVsCodePlatform
   implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
@@ -104,6 +109,7 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
       displayName: "Test CLI",
       terminalName: "Test",
       installHint: "",
+      versionPolicy: TEST_VERSION_POLICY,
       shouldStreamHeadlessOutput: false,
     },
     parseHeadlessStdout: () => [],
@@ -402,6 +408,75 @@ suite("CliIntegration", () => {
       integration.getDetailedStatus().message,
       "❌ Test CLI unavailable. Install via: npm install -g test-cli. Then sign in with the CLI before running a workflow."
     );
+  });
+
+  suite("version policy", () => {
+    const versionPolicy = {
+      minimum: "1.4.0",
+      recommended: "1.9.0",
+      updateCommand: "test-cli update",
+    };
+    const createVersionedIntegration = (version: string | undefined) =>
+      createHeadlessIntegration({
+        config: {
+          displayName: "Test CLI",
+          installHint: "Install via: npm install -g test-cli",
+          versionPolicy,
+        } as ICliProvider["config"],
+        checkAvailability: async () => true,
+        getVersion: async () => version,
+      });
+
+    test("refuses a CLI below the minimum with update guidance, not install guidance", async () => {
+      const integration = createVersionedIntegration("test-cli 1.3.9");
+
+      await integration.initialize();
+
+      assert.strictEqual(integration.isIntegrationAvailable(), false);
+      assert.strictEqual(
+        integration.getInitializationStatus(),
+        HarnessStatus.Unavailable
+      );
+      assert.strictEqual(
+        integration.getDetailedStatus().message,
+        "❌ Test CLI 1.3.9 is older than the minimum supported version 1.4.0. Update with: test-cli update"
+      );
+      assert.deepStrictEqual(integration.getAvailabilityReport(), {
+        available: false,
+        installHint: "Install via: npm install -g test-cli",
+        version: {
+          status: HARNESS_VERSION_STATUSES.UNSUPPORTED,
+          installedVersion: "1.3.9",
+          minimumVersion: "1.4.0",
+          recommendedVersion: "1.9.0",
+          updateCommand: "test-cli update",
+        },
+      });
+    });
+
+    test("runs a CLI below the recommended version and reports it as outdated", async () => {
+      const integration = createVersionedIntegration("1.5.0");
+
+      await integration.initialize();
+
+      assert.strictEqual(integration.isIntegrationAvailable(), true);
+      assert.strictEqual(
+        integration.getAvailabilityReport().version?.status,
+        HARNESS_VERSION_STATUSES.OUTDATED
+      );
+    });
+
+    test("does not lock out a CLI whose version output cannot be parsed", async () => {
+      const integration = createVersionedIntegration("unexpected banner");
+
+      await integration.initialize();
+
+      assert.strictEqual(integration.isIntegrationAvailable(), true);
+      assert.strictEqual(
+        integration.getAvailabilityReport().version?.status,
+        HARNESS_VERSION_STATUSES.UNKNOWN
+      );
+    });
   });
 
   test("should keep last result snapshot in sync after headless execution", async () => {
@@ -994,6 +1069,7 @@ suite("CliIntegration", () => {
         displayName: "Qwen Code CLI",
         terminalName: "Qwen Code",
         installHint: "",
+        versionPolicy: TEST_VERSION_POLICY,
         shouldStreamHeadlessOutput: false,
       },
       planCliArgs: async () => ({
@@ -1048,6 +1124,7 @@ suite("CliIntegration", () => {
           displayName: harness.terminalName,
           terminalName: harness.terminalName,
           installHint: "",
+          versionPolicy: TEST_VERSION_POLICY,
           shouldStreamHeadlessOutput: false,
         },
         planCliArgs: async () => ({
@@ -1092,6 +1169,7 @@ suite("CliIntegration", () => {
         displayName: "Claude Code CLI",
         terminalName: "Claude",
         installHint: "",
+        versionPolicy: TEST_VERSION_POLICY,
         shouldStreamHeadlessOutput: false,
       },
       planCliArgs: async () => ({

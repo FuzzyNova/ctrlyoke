@@ -15,6 +15,7 @@ import {
   HARNESS_IDS,
   HOSTED_CONNECTION_LIVENESS,
   HARNESS_STATUS_STRINGS,
+  HARNESS_VERSION_STATUSES,
   MESSAGE_TYPES,
   BROWSER_NOTIFICATION_MODES,
 } from "../../types/DashboardConstants";
@@ -738,11 +739,10 @@ suite("HostedServerMessageFactory", () => {
 
   test("creates harness updates in the webview message shape", () => {
     assert.deepStrictEqual(
-      createHostedHarnessStatusUpdate(
-        HARNESS_IDS.CODEX_CLI,
-        true,
-        codexInstallHint
-      ),
+      createHostedHarnessStatusUpdate(HARNESS_IDS.CODEX_CLI, {
+        available: true,
+        installHint: codexInstallHint,
+      }),
       {
         type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
         data: {
@@ -756,6 +756,27 @@ suite("HostedServerMessageFactory", () => {
         },
       }
     );
+  });
+
+  test("carries the version assessment so the dashboard can show update guidance", () => {
+    const version = {
+      status: HARNESS_VERSION_STATUSES.UNSUPPORTED,
+      installedVersion: "0.100.0",
+      minimumVersion: "0.119.0",
+      recommendedVersion: "0.157.0",
+      updateCommand: "codex update",
+    };
+    const update = createHostedHarnessStatusUpdate(HARNESS_IDS.CODEX_CLI, {
+      available: false,
+      installHint: codexInstallHint,
+      version,
+    });
+    assert.deepStrictEqual(update.data.harnessStatus[HARNESS_IDS.CODEX_CLI], {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+      installHint: codexInstallHint,
+      version,
+    });
   });
 });
 

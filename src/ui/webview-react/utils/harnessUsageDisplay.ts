@@ -9,8 +9,10 @@ import type {
 } from "@root/types/UsageTypes";
 import {
   HARNESS_STATUS_STRINGS,
-  type HarnessStatusString,
+  HARNESS_VERSION_STATUSES,
+  type HarnessStatusInfo,
 } from "../types/messages";
+import { formatHarnessVersionGuidance } from "@root/utils/HarnessVersion";
 import { formatFutureTime, formatTimestamp } from "./time";
 
 /**
@@ -118,20 +120,41 @@ export function getHarnessUsageDisplay(
   };
 }
 
-export interface HarnessAvailabilityStatus {
-  status: HarnessStatusString;
-  available?: boolean;
-  installHint?: string;
-}
+/** The subset of a harness status the availability surfaces read. */
+export type HarnessAvailabilityStatus = Pick<
+  HarnessStatusInfo,
+  "status" | "installHint" | "version"
+> & { available?: boolean };
 
-/** Human phrase for a harness's install/availability state. Undefined when the state is unknown. */
+/**
+ * Human phrase for a harness's install/availability state. Undefined when the
+ * state is unknown. A CLI below the supported minimum gets its update command
+ * instead of an install command, and one below the recommended version stays
+ * "Available" with the same update guidance appended.
+ */
 export function getHarnessAvailabilityPhrase(
   status: HarnessAvailabilityStatus | undefined
 ): string | undefined {
   if (!status) return undefined;
   if (status.status === HARNESS_STATUS_STRINGS.CHECKING) return "Checking…";
-  if (status.available === false) return status.installHint ?? "Not available";
-  return "Available";
+  const versionGuidance = formatHarnessVersionGuidance(
+    "Installed version",
+    status.version
+  );
+  if (status.available === false) {
+    return versionGuidance ?? status.installHint ?? "Not available";
+  }
+  return versionGuidance ? `Available — ${versionGuidance}` : "Available";
+}
+
+/** True when the harness runs but is older than its recommended version. */
+export function isHarnessVersionOutdated(
+  status: HarnessAvailabilityStatus | undefined
+): boolean {
+  return (
+    status?.available !== false &&
+    status?.version?.status === HARNESS_VERSION_STATUSES.OUTDATED
+  );
 }
 
 /**

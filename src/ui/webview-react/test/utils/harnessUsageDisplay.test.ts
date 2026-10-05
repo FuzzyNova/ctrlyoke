@@ -2,12 +2,18 @@ import { describe, it, expect } from "vitest";
 import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
+  HARNESS_STATUS_STRINGS,
+  HARNESS_VERSION_STATUSES,
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
 } from "@root/types/DashboardConstants";
 import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
-import { getHarnessUsageDisplay } from "@utils/harnessUsageDisplay";
+import {
+  getHarnessAvailabilityPhrase,
+  getHarnessUsageDisplay,
+  isHarnessVersionOutdated,
+} from "@utils/harnessUsageDisplay";
 
 function snapshot(
   windows: HarnessUsageSnapshot["quota"]["windows"],
@@ -233,5 +239,52 @@ describe("getHarnessUsageDisplay", () => {
     expect(display.quotaPhrase).toMatch(
       /^63% 5-hour, resets .+ \| 10% 7-day, resets .+ \(updated .+\)$/
     );
+  });
+});
+
+describe("getHarnessAvailabilityPhrase version guidance", () => {
+  const version = (
+    status: (typeof HARNESS_VERSION_STATUSES)[keyof typeof HARNESS_VERSION_STATUSES]
+  ) => ({
+    status,
+    installedVersion: "1.0.10",
+    minimumVersion: "1.0.19",
+    recommendedVersion: "1.0.92",
+    updateCommand: "copilot update",
+  });
+
+  it("gives an unsupported CLI its update command instead of the install command", () => {
+    expect(
+      getHarnessAvailabilityPhrase({
+        status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+        available: false,
+        installHint: "Install via: npm install -g @github/copilot",
+        version: version(HARNESS_VERSION_STATUSES.UNSUPPORTED),
+      })
+    ).toBe(
+      "Installed version 1.0.10 is older than the minimum supported version 1.0.19. Update with: copilot update"
+    );
+  });
+
+  it("keeps an outdated CLI available and appends the update guidance", () => {
+    const status = {
+      status: HARNESS_STATUS_STRINGS.AVAILABLE,
+      available: true,
+      version: version(HARNESS_VERSION_STATUSES.OUTDATED),
+    };
+    expect(isHarnessVersionOutdated(status)).toBe(true);
+    expect(getHarnessAvailabilityPhrase(status)).toBe(
+      "Available — Installed version 1.0.10 is older than the recommended version 1.0.92; some features may not work. Update with: copilot update"
+    );
+  });
+
+  it("keeps the install command for a CLI that is not installed", () => {
+    expect(
+      getHarnessAvailabilityPhrase({
+        status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+        available: false,
+        installHint: "Install via: npm install -g @github/copilot",
+      })
+    ).toBe("Install via: npm install -g @github/copilot");
   });
 });

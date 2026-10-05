@@ -16,10 +16,14 @@ import type {
   HarnessCapabilityFacts,
   HarnessCapabilityRegistrySnapshot,
   HarnessCapabilityDescriptor,
-  HarnessVersionRange,
   InstalledHarnessCapabilities,
 } from "../types/CompatibilityTypes";
 import { IntegrationFactory } from "./IntegrationFactory";
+import {
+  versionSatisfies,
+  type HarnessVersionPolicy,
+} from "../utils/HarnessVersion";
+import { detectHarness } from "./harness/shared/HarnessDetection";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 
 export const HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1;
@@ -37,6 +41,7 @@ export interface HarnessCapabilityDocumentationFacts {
     readonly harnessId: HarnessId;
     readonly displayName: string;
     readonly capabilities: HarnessCapabilityFacts;
+    readonly versionPolicy: HarnessVersionPolicy;
   }[];
 }
 
@@ -53,12 +58,6 @@ export interface HarnessCapabilityRegistryOptions {
   readonly sources?: Partial<Record<HarnessId, HarnessCapabilitySource>>;
   readonly sourceFactory?: (harnessId: HarnessId) => HarnessCapabilitySource;
   readonly enabledDomains?: readonly CapabilityDomain[];
-}
-
-interface ParsedVersion {
-  major: number;
-  minor: number;
-  patch: number;
 }
 
 const HARNESS_ID_LIST = Object.values(HARNESS_IDS) as HarnessId[];
@@ -170,6 +169,7 @@ export class HarnessCapabilityRegistry {
           harnessId,
           displayName: provider.config.displayName,
           capabilities: provider.capabilities,
+          versionPolicy: provider.config.versionPolicy,
         };
       }),
     };
@@ -207,10 +207,9 @@ export class HarnessCapabilityRegistry {
   private async detectInstalledCapabilities(
     source: HarnessCapabilitySource
   ): Promise<InstalledHarnessCapabilities> {
-    const available = await source.provider.checkAvailability();
-    const version = available
-      ? await source.provider.getVersion?.()
-      : undefined;
+    const detection = await detectHarness(source.provider);
+    const available = detection.available;
+    const version = detection.rawVersion;
     const facts = source.provider.capabilities;
     const descriptor = {
       harnessId: source.provider.config.harnessId,
@@ -426,101 +425,4 @@ function findCapabilityLeaves(
     }
   }
   return declarations;
-}
-
-function parseVersion(version: string): ParsedVersion | undefined {
-  const match = version.match(/(?:^|[^\d])(\d+)\.(\d+)(?:\.(\d+))?/);
-  if (!match) {
-    return undefined;
-  }
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3] ?? 0),
-  };
-}
-
-function compareVersions(left: ParsedVersion, right: ParsedVersion): number {
-  return (
-    left.major - right.major ||
-    left.minor - right.minor ||
-    left.patch - right.patch
-  );
-}
-
-type VersionComparator = ">" | ">=" | "<" | "<=" | "=" | "";
-
-const VERSION_COMPARATORS: Record<
-  VersionComparator,
-  (comparison: number) => boolean
-> = {
-  ">": (comparison) => comparison > 0,
-  ">=": (comparison) => comparison >= 0,
-  "<": (comparison) => comparison < 0,
-  "<=": (comparison) => comparison <= 0,
-  "=": (comparison) => comparison === 0,
-  "": (comparison) => comparison === 0,
-};
-
-function satisfiesComparator(
-  version: ParsedVersion,
-  operator: string,
-  target: ParsedVersion
-): boolean {
-  const comparison = compareVersions(version, target);
-  return operator in VERSION_COMPARATORS
-    ? VERSION_COMPARATORS[operator as VersionComparator](comparison)
-    : false;
-}
-
-/** Small semver-range evaluator for the declaration ranges used by the registry. */
-export function versionSatisfies(
-  installedVersion: string,
-  range: HarnessVersionRange
-): boolean {
-  const version = parseVersion(installedVersion);
-  if (!version) {
-    return false;
-  }
-
-  return range.split("||").some((alternative) => {
-    const expression = alternative.trim();
-    if (!expression || expression === "*" || expression.toLowerCase() === "x") {
-      return true;
-    }
-
-    if (expression.startsWith("^") || expression.startsWith("~")) {
-      const operator = expression[0];
-      const target = parseVersion(expression.slice(1));
-      if (!target) {
-        return false;
-      }
-      const upper =
-        operator === "^"
-          ? target.major > 0
-            ? { major: target.major + 1, minor: 0, patch: 0 }
-            : target.minor > 0
-              ? { major: 0, minor: target.minor + 1, patch: 0 }
-              : { major: 0, minor: 0, patch: target.patch + 1 }
-          : { major: target.major, minor: target.minor + 1, patch: 0 };
-      return (
-        compareVersions(version, target) >= 0 &&
-        compareVersions(version, upper) < 0
-      );
-    }
-
-    return expression.split(/\s+/).every((token) => {
-      const match = token.match(/^(>=|<=|>|<|=)?\s*(\d+(?:\.\d+){0,2}|[xX*])$/);
-      if (!match) {
-        return false;
-      }
-      if (/^[xX*]$/.test(match[2])) {
-        return true;
-      }
-      const target = parseVersion(match[2]);
-      return target
-        ? satisfiesComparator(version, match[1] ?? "", target)
-        : false;
-    });
-  });
 }

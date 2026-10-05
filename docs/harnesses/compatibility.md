@@ -75,6 +75,23 @@ Applies to **Antigravity**: Per Server Tool Filtering.
   Simplify the value, or choose a harness that supports it, when a cell is
   not ✅.
 
+## Supported versions
+
+ctrlyoke is tested against the latest release of each harness CLI and supports
+releases from roughly the past six months. A CLI older than **Minimum** is
+treated as unavailable: the dashboard and `ctrlyoke run` show its update
+command instead of running it. A CLI older than **Recommended** still runs, but
+the harness picker marks it with a warning because newer features (for example
+context-window or usage indicators) may be missing. These floors move forward
+with each ctrlyoke release, so keeping harness CLIs up to date is the expected
+setup.
+
+|  | Copilot | Claude Code | Codex | OpenCode | Qwen Code | Antigravity |
+| --- | --- | --- | --- | --- | --- | --- |
+| Minimum | 1.0.19 | 2.1.94 | 0.119.0 | 1.3.16 | 0.14.1 | 1.1.12 |
+| Recommended | 1.0.92 | 2.1.289 | 0.157.0 | 1.18.34 | 0.24.4 | 1.2.17 |
+| Update | `copilot update` | `claude update` | `codex update` | `opencode upgrade` | `npm install -g @qwen-code/qwen-code@latest` | `agy update` |
+
 ## Verified versions
 
 Each claim is backed by evidence for a harness version range. Installed

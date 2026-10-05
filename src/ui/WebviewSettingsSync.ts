@@ -95,6 +95,8 @@ import {
   notifyUserFeedback,
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
+import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
+import { toHarnessStatusInfo } from "../core/harness/shared/HarnessDetection";
 
 /**
  * Harness availability status
@@ -530,16 +532,9 @@ export class WebviewSettingsSync {
    */
   notifyHarnessAvailability(
     harnessId: HarnessId,
-    available: boolean,
-    installHint: string
+    report: HarnessAvailabilityReport
   ): void {
-    this.harnessStatus[harnessId] = {
-      available,
-      status: available
-        ? HARNESS_STATUS_STRINGS.AVAILABLE
-        : HARNESS_STATUS_STRINGS.UNAVAILABLE,
-      installHint,
-    };
+    this.harnessStatus[harnessId] = toHarnessStatusInfo(report);
     this.sendHarnessStatusUpdate();
     void this.sendHarnessCapabilitySnapshot(this.postMessage, harnessId);
   }

@@ -39,7 +39,7 @@ const GENERATED_HEADER =
 
 /** @typedef {{ fidelity: string, mechanism: string, verification?: { kind: string, reference: string, basis: string, verifiedVersions: string[] }, caveatCode?: string }} CapabilityDeclaration */
 
-function installVscodeStub() {
+export function installVscodeStub() {
   // Provider construction is the existing registry's static, no-I/O seam, but
   // its compiled dependency graph also contains VS Code-only utility imports.
   // Keep the docs generator portable by supplying a host-neutral module while
@@ -381,6 +381,23 @@ function buildVersionTable(facts) {
   ].join("\n");
 }
 
+function buildSupportedVersionTable(facts) {
+  const row = (label, pick) =>
+    tableRow([label, ...facts.harnesses.map((harness) => pick(harness))]);
+  return [
+    tableRow([
+      "",
+      ...facts.harnesses.map(({ displayName }) =>
+        shortHarnessName(displayName)
+      ),
+    ]),
+    tableDivider(facts.harnesses.length, "---"),
+    row("Minimum", ({ versionPolicy }) => versionPolicy.minimum),
+    row("Recommended", ({ versionPolicy }) => versionPolicy.recommended),
+    row("Update", ({ versionPolicy }) => `\`${versionPolicy.updateCommand}\``),
+  ].join("\n");
+}
+
 export function buildCompatibilityDocumentation(facts, compatibilityTypes) {
   const presentation = fidelityPresentation(compatibilityTypes.fidelities);
   const { notes, noteByCell } = buildNotes(
@@ -424,6 +441,19 @@ ${buildNotesSection(facts, notes)}
 - The notes share their wording with author-time and preflight diagnostics.
   Simplify the value, or choose a harness that supports it, when a cell is
   not ✅.
+
+## Supported versions
+
+ctrlyoke is tested against the latest release of each harness CLI and supports
+releases from roughly the past six months. A CLI older than **Minimum** is
+treated as unavailable: the dashboard and \`ctrlyoke run\` show its update
+command instead of running it. A CLI older than **Recommended** still runs, but
+the harness picker marks it with a warning because newer features (for example
+context-window or usage indicators) may be missing. These floors move forward
+with each ctrlyoke release, so keeping harness CLIs up to date is the expected
+setup.
+
+${buildSupportedVersionTable(facts)}
 
 ## Verified versions
 

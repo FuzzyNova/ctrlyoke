@@ -143,6 +143,11 @@ export class OpenCodeCliProvider implements ICliProvider {
     displayName: "OpenCode CLI",
     terminalName: "OpenCode",
     installHint: "Install via: npm install -g opencode-ai",
+    versionPolicy: {
+      minimum: "1.3.16",
+      recommended: "1.18.34",
+      updateCommand: "opencode upgrade",
+    },
     shouldStreamHeadlessOutput: true,
 
     // OpenCode uses a TypeScript plugin system for interactive completion detection

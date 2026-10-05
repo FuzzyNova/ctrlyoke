@@ -2336,6 +2336,20 @@ export const HARNESS_STATUS_STRINGS = {
   UNAVAILABLE: "unavailable",
 } as const;
 
+/**
+ * Where a detected harness CLI version sits against that harness's
+ * `HarnessConfig.versionPolicy`. `UNSUPPORTED` (below the minimum) makes the
+ * harness unavailable; `OUTDATED` (below the recommended version) only warns;
+ * `UNKNOWN` means the CLI answered but its version could not be parsed, which
+ * never blocks.
+ */
+export const HARNESS_VERSION_STATUSES = {
+  SUPPORTED: "supported",
+  OUTDATED: "outdated",
+  UNSUPPORTED: "unsupported",
+  UNKNOWN: "unknown",
+} as const;
+
 // ============================================================================
 // QUEUE POSITION - Position values for appending prompts to queue
 // ============================================================================
@@ -4375,6 +4389,8 @@ export type CliOutputMetadataKey =
   (typeof CLI_OUTPUT_METADATA_KEYS)[keyof typeof CLI_OUTPUT_METADATA_KEYS];
 export type HarnessStatusString =
   (typeof HARNESS_STATUS_STRINGS)[keyof typeof HARNESS_STATUS_STRINGS];
+export type HarnessVersionStatus =
+  (typeof HARNESS_VERSION_STATUSES)[keyof typeof HARNESS_VERSION_STATUSES];
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
 export type RunnerId = (typeof RUNNER_IDS)[keyof typeof RUNNER_IDS];
 export type PriorContextKeyword =

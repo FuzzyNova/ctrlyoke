@@ -4,7 +4,7 @@ import {
   HARNESS_STATUS_STRINGS,
   EXECUTION_MODES,
   type HarnessId,
-  type HarnessStatusString,
+  type HarnessStatusInfo,
   type PriorContext,
   type ExecutionMode,
   type ToolPermissionMode,
@@ -81,15 +81,8 @@ export interface SkillOption {
   description?: string;
 }
 
-/**
- * Harness status information
- */
-export interface HarnessStatus {
-  available: boolean;
-  status: HarnessStatusString;
-  message?: string;
-  installHint?: string;
-}
+/** Harness status information (shape owned by WebviewMessageTypes). */
+export type HarnessStatus = HarnessStatusInfo;
 
 export interface DevBuildState {
   isBuilding: boolean;

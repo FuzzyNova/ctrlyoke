@@ -11,7 +11,7 @@ import {
 import { PromptQueue } from "../../core/PromptQueue";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
-import { MockPlatform } from "../helpers/mockHarness";
+import { MockPlatform, TEST_VERSION_POLICY } from "../helpers/mockHarness";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import {
   EXECUTION_MODES,
@@ -43,6 +43,7 @@ function createProvider(): ICliProvider {
       displayName: "Test CLI",
       terminalName: "Test",
       installHint: "",
+      versionPolicy: TEST_VERSION_POLICY,
       shouldStreamHeadlessOutput: false,
     },
     notificationMonitor: {

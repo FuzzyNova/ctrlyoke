@@ -16,6 +16,7 @@ import type { UserFeedbackSink } from "./UserFeedbackSink";
 import type { HarnessQuotaSnapshot } from "../types/UsageTypes";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { detectHarness } from "./harness/shared/HarnessDetection";
 import { harnessAvailability } from "../utils/HarnessAvailability";
 
 /**
@@ -79,8 +80,13 @@ export class IntegrationFactory {
     if (!ConfigurationUtils.isDefaultHarnessAutoDetected()) {
       return;
     }
-    await harnessAvailability.detectFirstAvailable((harnessId) =>
-      IntegrationFactory.createCapabilityProvider(harnessId).checkAvailability()
+    await harnessAvailability.detectFirstAvailable(
+      async (harnessId) =>
+        (
+          await detectHarness(
+            IntegrationFactory.createCapabilityProvider(harnessId)
+          )
+        ).available
     );
   }
 

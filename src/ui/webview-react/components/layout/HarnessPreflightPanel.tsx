@@ -1,14 +1,18 @@
 import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { HARNESS_DISPLAY_NAMES } from "@components/shared/HarnessDropdown";
 import { useSettingsStore } from "@store/settingsStore";
-import { HARNESS_STATUS_STRINGS } from "@/types/messages";
+import {
+  HARNESS_STATUS_STRINGS,
+  HARNESS_VERSION_STATUSES,
+} from "@/types/messages";
 import { HARNESS_DISPLAY_ORDER } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 
 /**
  * Non-blocking first-run guidance shown after every supported CLI has been
- * checked and none are available. Install commands originate with each CLI
- * provider and arrive with the existing harness-status payload.
+ * checked and none are available. Install and update commands originate with
+ * each CLI provider and arrive with the existing harness-status payload; a CLI
+ * that is installed but below its supported minimum shows its update command.
  */
 export function HarnessPreflightPanel() {
   const harnessStatus = useSettingsStore((state) => state.harnessStatus);
@@ -32,12 +36,15 @@ export function HarnessPreflightPanel() {
         <p className="font-medium">No AI harness CLI is available</p>
       </div>
       <p className="mt-1 text-description-fg">
-        ctrlyoke runs an installed AI coding CLI. Install one of the supported
-        harnesses below, then sign in with that CLI before running a workflow.
+        ctrlyoke runs an installed AI coding CLI. Install or update one of the
+        supported harnesses below, then sign in with that CLI before running a
+        workflow.
       </p>
       <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {HARNESS_DISPLAY_ORDER.map((harnessId) => {
           const status = harnessStatus[harnessId];
+          const isUnsupported =
+            status?.version?.status === HARNESS_VERSION_STATUSES.UNSUPPORTED;
           return (
             <li
               key={harnessId}
@@ -47,8 +54,17 @@ export function HarnessPreflightPanel() {
               <span className="shrink-0 text-xs font-medium">
                 {HARNESS_DISPLAY_NAMES[harnessId]}
               </span>
-              <code className="min-w-0 truncate text-xxs text-description-fg">
-                {status?.installHint ?? "Installation command unavailable"}
+              <code
+                className="min-w-0 truncate text-xxs text-description-fg"
+                title={
+                  isUnsupported
+                    ? `${status?.version?.installedVersion} is below the supported minimum ${status?.version?.minimumVersion}`
+                    : undefined
+                }
+              >
+                {isUnsupported
+                  ? status?.version?.updateCommand
+                  : (status?.installHint ?? "Installation command unavailable")}
               </code>
             </li>
           );

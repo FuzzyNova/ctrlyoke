@@ -106,6 +106,7 @@ import {
 } from "../utils/MemoryDiagnostics";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
+import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
@@ -471,12 +472,9 @@ export class CtrlYokeHostedServer
 
   notifyHarnessAvailability(
     harnessId: HarnessId,
-    available: boolean,
-    installHint: string
+    report: HarnessAvailabilityReport
   ): void {
-    this.broadcast(
-      createHostedHarnessStatusUpdate(harnessId, available, installHint)
-    );
+    this.broadcast(createHostedHarnessStatusUpdate(harnessId, report));
     void this.publishHarnessCapabilitySnapshot(harnessId);
   }
 

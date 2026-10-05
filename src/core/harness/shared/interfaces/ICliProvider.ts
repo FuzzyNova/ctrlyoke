@@ -11,6 +11,7 @@ export type {
   PreparedMutation,
 } from "./PreparedMutation";
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
+import type { HarnessVersionPolicy } from "../../../../utils/HarnessVersion";
 import type {
   HookEvent,
   PromptFile,
@@ -66,6 +67,12 @@ export interface HarnessConfig {
 
   /** Installation hint when CLI not found */
   installHint: string;
+
+  /**
+   * Supported CLI version window, enforced once at detection by
+   * `CliIntegration.initialize()`. Below `minimum` the harness is unavailable.
+   */
+  versionPolicy: HarnessVersionPolicy;
 
   /** Whether to stream headless output in real-time */
   shouldStreamHeadlessOutput: boolean;

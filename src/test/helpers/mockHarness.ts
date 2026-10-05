@@ -10,6 +10,7 @@ import {
   HARNESS_IDS,
   type HarnessId,
 } from "../../types/DashboardConstants";
+import type { HarnessVersionPolicy } from "../../utils/HarnessVersion";
 
 /**
  * Shared no-op test doubles for driving workflow execution without any real
@@ -170,3 +171,10 @@ export class MockIntegrationFactory extends IntegrationFactory {
     );
   }
 }
+
+/** Permissive `HarnessConfig.versionPolicy` for provider test doubles. */
+export const TEST_VERSION_POLICY: HarnessVersionPolicy = {
+  minimum: "0.0.0",
+  recommended: "0.0.0",
+  updateCommand: "test-cli update",
+};

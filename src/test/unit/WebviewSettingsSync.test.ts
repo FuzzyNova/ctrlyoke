@@ -599,11 +599,10 @@ suite("WebviewSettingsSync", () => {
         () => undefined
       );
 
-      sync.notifyHarnessAvailability(
-        HARNESS_IDS.CODEX_CLI,
-        false,
-        codexInstallHint
-      );
+      sync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, {
+        available: false,
+        installHint: codexInstallHint,
+      });
 
       const update = messages.find(
         (message) => message.type === MESSAGE_TYPES.HARNESS_STATUS_UPDATE
@@ -711,7 +710,10 @@ suite("WebviewSettingsSync", () => {
           () => {},
           () => undefined
         );
-        sync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, true, "");
+        sync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, {
+          available: true,
+          installHint: "",
+        });
 
         let writtenCapabilities: CapabilitiesFile | undefined;
         for (let attempt = 0; attempt < 20; attempt++) {

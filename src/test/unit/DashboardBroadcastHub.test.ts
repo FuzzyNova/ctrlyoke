@@ -7,6 +7,7 @@ import {
 import type { WorkflowSummary } from "../../types/CtrlYokeTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { HarnessId } from "../../types/DashboardConstants";
+import type { HarnessAvailabilityReport } from "../../types/WebviewMessageTypes";
 
 suite("DashboardBroadcastHub", () => {
   test("forwards parallelGroups to registered clients", () => {
@@ -30,8 +31,7 @@ suite("DashboardBroadcastHub", () => {
       ) => undefined,
       notifyHarnessAvailability: (
         _harnessId: HarnessId,
-        _available: boolean,
-        _installHint: string
+        _report: HarnessAvailabilityReport
       ) => undefined,
       postMessage: (_message: unknown) => undefined,
       updateStepsExtended: (

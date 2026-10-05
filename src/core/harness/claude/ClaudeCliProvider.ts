@@ -148,6 +148,11 @@ export class ClaudeCliProvider implements ICliProvider {
     displayName: "Claude Code CLI",
     terminalName: "Claude",
     installHint: "Install via: npm install -g @anthropic-ai/claude-code",
+    versionPolicy: {
+      minimum: "2.1.94",
+      recommended: "2.1.289",
+      updateCommand: "claude update",
+    },
     shouldStreamHeadlessOutput: true,
 
     // Claude uses Stop hook for reliable completion detection in interactive mode

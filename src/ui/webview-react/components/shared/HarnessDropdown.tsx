@@ -24,6 +24,8 @@ import {
   formatHarnessUsageTooltip,
   getHarnessAvailabilityPhrase,
   getHarnessUsageDisplay,
+  isHarnessVersionOutdated,
+  type HarnessAvailabilityStatus,
 } from "@utils/harnessUsageDisplay";
 import { Icon } from "./Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
@@ -57,11 +59,21 @@ const STATUS_COLORS: Record<HarnessStatusString, string> = {
   unavailable: "bg-indicator-error",
 };
 
-const StatusIndicator: React.FC<{ status: HarnessStatusString }> = ({
+/** Available, but older than the recommended version. */
+const OUTDATED_STATUS_COLOR = "bg-severity-warning";
+
+const StatusIndicator: React.FC<{ status: HarnessAvailabilityStatus }> = ({
   status,
 }) => (
   <span
-    className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_COLORS[status] ?? STATUS_COLORS.checking}`}
+    data-harness-status={
+      isHarnessVersionOutdated(status) ? "outdated" : status.status
+    }
+    className={`w-2 h-2 rounded-full flex-shrink-0 ${
+      isHarnessVersionOutdated(status)
+        ? OUTDATED_STATUS_COLOR
+        : (STATUS_COLORS[status.status] ?? STATUS_COLORS.checking)
+    }`}
   />
 );
 
@@ -74,14 +86,7 @@ interface HarnessRowProps {
   isHidden: boolean;
   showStatus: boolean;
   narrow: boolean;
-  harnessStatus?: Record<
-    string,
-    {
-      status: HarnessStatusString;
-      available?: boolean;
-      installHint?: string;
-    }
-  >;
+  harnessStatus?: Record<string, HarnessAvailabilityStatus>;
   canHideRow: boolean;
   onSelect: (h: HarnessId) => void;
   onHide?: (h: HarnessId) => void;
@@ -122,7 +127,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           {usageDisplay.percentOnly}
         </span>
       )}
-      <StatusIndicator status={status.status} />
+      <StatusIndicator status={status} />
     </span>
   );
 
@@ -223,14 +228,7 @@ export interface HarnessDropdownProps {
   /** Show availability status dots. Default true. Pass false in PropertiesDrawer. */
   showStatus?: boolean;
   /** Required when showStatus is true. */
-  harnessStatus?: Record<
-    string,
-    {
-      status: HarnessStatusString;
-      available?: boolean;
-      installHint?: string;
-    }
-  >;
+  harnessStatus?: Record<string, HarnessAvailabilityStatus>;
   hiddenValues?: string[];
   onHideOption?: (value: string) => void;
   onUnhideOption?: (value: string) => void;
@@ -465,10 +463,12 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     value === INHERIT_DEFAULT_OPTION || value === BULK_MIXED_OPTION
       ? { omit: true as const }
       : value;
-  const unavailableHint =
-    !triggerStatus?.available &&
-    triggerStatus?.status !== HARNESS_STATUS_STRINGS.CHECKING
-      ? (triggerStatus?.installHint ?? "Harness is not available")
+  const triggerStatusHint =
+    triggerStatus &&
+    (isHarnessVersionOutdated(triggerStatus) ||
+      (!triggerStatus.available &&
+        triggerStatus.status !== HARNESS_STATUS_STRINGS.CHECKING))
+      ? getHarnessAvailabilityPhrase(triggerStatus)
       : undefined;
 
   return (
@@ -501,7 +501,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
               : schemaTitle(
                   schemaPath,
                   triggerSchemaValue,
-                  triggerTitle ?? unavailableHint
+                  triggerTitle ?? triggerStatusHint
                 )
           }
           className="cy-select-trigger cy-dropdown-row flex-1 min-w-0"
@@ -524,7 +524,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
                 {triggerUsageDisplay.percentOnly}
               </span>
             )}
-            {triggerStatus && <StatusIndicator status={triggerStatus.status} />}
+            {triggerStatus && <StatusIndicator status={triggerStatus} />}
             <Icon
               name={`chevron-${isOpen ? "up" : "down"}`}
               className="text-xxs"

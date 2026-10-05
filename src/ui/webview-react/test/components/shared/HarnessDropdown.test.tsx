@@ -8,6 +8,7 @@ import {
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
   HARNESS_STATUS_STRINGS,
+  HARNESS_VERSION_STATUSES,
   MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
 import { HarnessPreflightPanel } from "@components/layout/HarnessPreflightPanel";
@@ -289,5 +290,68 @@ describe("HarnessDropdown", () => {
       screen.getByText("No AI harness CLI is available")
     ).toBeInTheDocument();
     expect(screen.getByText("Install codex-cli")).toBeInTheDocument();
+  });
+
+  it("flags an outdated harness with a warning dot and update guidance", () => {
+    const { container } = render(
+      <HarnessDropdown
+        value={HARNESS_IDS.COPILOT_CLI}
+        onChange={vi.fn()}
+        harnessStatus={{
+          [HARNESS_IDS.COPILOT_CLI]: {
+            available: true,
+            status: HARNESS_STATUS_STRINGS.AVAILABLE,
+            version: {
+              status: HARNESS_VERSION_STATUSES.OUTDATED,
+              installedVersion: "1.0.50",
+              minimumVersion: "1.0.19",
+              recommendedVersion: "1.0.92",
+              updateCommand: "copilot update",
+            },
+          },
+        }}
+      />
+    );
+
+    expect(
+      container.querySelector('[data-harness-status="outdated"]')
+    ).not.toBeNull();
+    expect(
+      screen.getByTitle(
+        "Available — Installed version 1.0.50 is older than the recommended version 1.0.92; some features may not work. Update with: copilot update property: harness = copilot-cli"
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("shows the update command in preflight for a CLI below the minimum", () => {
+    useSettingsStore.setState({
+      harnessStatus: Object.fromEntries(
+        Object.values(HARNESS_IDS).map((id) => [
+          id,
+          {
+            available: false,
+            status: "unavailable",
+            installHint: `Install ${id}`,
+            ...(id === HARNESS_IDS.CODEX_CLI
+              ? {
+                  version: {
+                    status: HARNESS_VERSION_STATUSES.UNSUPPORTED,
+                    installedVersion: "0.100.0",
+                    minimumVersion: "0.119.0",
+                    recommendedVersion: "0.157.0",
+                    updateCommand: "codex update",
+                  },
+                }
+              : {}),
+          },
+        ])
+      ) as typeof originalHarnessStatus,
+    });
+
+    render(<HarnessPreflightPanel />);
+
+    expect(screen.getByText("codex update")).toBeInTheDocument();
+    expect(screen.queryByText("Install codex-cli")).toBeNull();
+    expect(screen.getByText("Install claude-cli")).toBeInTheDocument();
   });
 });

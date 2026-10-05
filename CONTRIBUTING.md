@@ -49,6 +49,7 @@ Files under `schemas/archive/` stay published forever so old `$schema` links kee
 
 Releases are tag-driven, not branch-driven — `main` stays trunk, and a `vX.Y.Z` tag is what actually ships:
 
+0. Refresh the harness CLI support window: `npm run harness:version-floors`, update each provider's `config.versionPolicy`, delete code that only served versions below the new minimums, and regenerate the docs. The full procedure is in [`dev/reference/HARNESS_VERSION_SUPPORT.md`](dev/reference/HARNESS_VERSION_SUPPORT.md).
 1. One commit that bumps `package.json#version` and renames `CHANGELOG.md`'s `## [Unreleased]` heading to `## [X.Y.Z] - <date>`, moving its contents under the new heading.
 2. Tag that commit: `git tag -a vX.Y.Z -m "vX.Y.Z"` and `git push origin vX.Y.Z`.
 3. `.github/workflows/release.yml` picks up the tag, verifies it matches `package.json#version`, packages and publishes the VSIX to the Marketplace, and creates a GitHub Release with the matching `CHANGELOG.md` section attached.

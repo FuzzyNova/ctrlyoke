@@ -51,7 +51,9 @@ import {
   type WorktreeManagementAction,
   type WorkflowFileFormat,
   type StepColorMode,
+  type HarnessStatusString,
 } from "./DashboardConstants";
+import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
 import type {
   ErrorBehavior,
   WorkflowSummary,
@@ -549,15 +551,7 @@ export interface InitMessageData {
   };
   workflowProperties: Record<string, any>;
   modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
-  harnessStatus: Record<
-    string,
-    {
-      available: boolean;
-      status: string;
-      message?: string;
-      installHint?: string;
-    }
-  >;
+  harnessStatus: Record<string, HarnessStatusInfo>;
   coordinationScope?: CoordinationScopeSnapshot;
   availableAgents: Array<{
     name: string;
@@ -997,20 +991,33 @@ export interface ModelOptionsUpdateMessage {
 }
 
 /**
+ * What a detected harness integration publishes about itself (extension side).
+ * `installHint` and `version.updateCommand` come from the provider, so no
+ * dashboard surface keeps its own copy of a harness command.
+ */
+export interface HarnessAvailabilityReport {
+  available: boolean;
+  installHint: string;
+  /** Absent until a CLI is found; an unavailable CLI has no version. */
+  version?: HarnessVersionAssessment;
+}
+
+/** One harness's status as the dashboard receives it. */
+export interface HarnessStatusInfo {
+  available: boolean;
+  status: HarnessStatusString;
+  message?: string;
+  installHint?: string;
+  version?: HarnessVersionAssessment;
+}
+
+/**
  * Harness status update message (extension -> webview)
  */
 export interface HarnessStatusUpdateMessage {
   type: typeof MESSAGE_TYPES.HARNESS_STATUS_UPDATE;
   data: {
-    harnessStatus: Record<
-      string,
-      {
-        available: boolean;
-        status: string;
-        message?: string;
-        installHint?: string;
-      }
-    >;
+    harnessStatus: Record<string, HarnessStatusInfo>;
   };
 }
 

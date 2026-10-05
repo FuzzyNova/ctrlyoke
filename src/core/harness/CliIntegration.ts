@@ -55,6 +55,7 @@ import type {
 import type { HarnessQuotaSnapshot } from "../../types/UsageTypes";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
+import { detectHarness } from "./shared/HarnessDetection";
 import {
   CliExecutionSession,
   type CliExecutionSessionSnapshot,
@@ -81,6 +82,11 @@ import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { SETTINGS_JSON_INSTALL_KIND_WRITTEN } from "./shared/SettingsJsonMcpTracker";
 import { resolveSecretEnvironment } from "../../utils/SecretResolver";
 import { type RunSecretRedactor } from "../../utils/SecretRedactionService";
+import {
+  formatHarnessVersionGuidance,
+  type HarnessVersionAssessment,
+} from "../../utils/HarnessVersion";
+import type { HarnessAvailabilityReport } from "../../types/WebviewMessageTypes";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -212,6 +218,8 @@ export class CliIntegration extends HarnessIntegration {
 
   /** Prevents repeating the same headless permission warning in one run. */
   private headlessPermissionWarningShown = false;
+  /** Detected CLI version against `config.versionPolicy`; set by initialize(). */
+  private versionAssessment: HarnessVersionAssessment | undefined;
 
   /**
    * Create a new CLI integration with the specified CLI provider.
@@ -1775,32 +1783,41 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
-   * Initialize CLI by checking availability via provider.checkAvailability().
+   * Detect the CLI and enforce its supported version window (see
+   * `detectHarness`). A CLI below the minimum is reported unavailable with
+   * update guidance rather than install guidance.
    */
   async initialize(): Promise<void> {
     this.initializationStatus = HarnessStatus.Initializing;
     this.statusChangeEmitter.fire(HarnessStatus.Initializing);
 
     try {
-      const available = await this.provider.checkAvailability();
-
-      if (available) {
-        // Get version if provider supports it
-        let versionInfo = "";
-        if (this.provider.getVersion) {
-          const version = await this.provider.getVersion();
-          versionInfo = version ? `: ${version}` : "";
-        }
-
-        Log.debug(
-          `[CliIntegration] ${this.provider.config.displayName} available${versionInfo}`
-        );
-        this.isAvailable = true;
-        this.initializationStatus = HarnessStatus.Ready;
-        this.statusChangeEmitter.fire(HarnessStatus.Ready);
-      } else {
+      const detection = await detectHarness(this.provider);
+      if (!detection.version) {
         this.handleInitializationError("command_failed", "CLI not available");
+        return;
       }
+
+      this.versionAssessment = detection.version;
+      const { displayName } = this.provider.config;
+      const versionGuidance = formatHarnessVersionGuidance(
+        displayName,
+        detection.version
+      );
+      if (versionGuidance) {
+        Log.warn(`[CliIntegration] ${versionGuidance}`);
+      }
+      if (!detection.available) {
+        this.markUnavailable();
+        return;
+      }
+
+      Log.debug(
+        `[CliIntegration] ${displayName} available${detection.rawVersion ? `: ${detection.rawVersion}` : ""}`
+      );
+      this.isAvailable = true;
+      this.initializationStatus = HarnessStatus.Ready;
+      this.statusChangeEmitter.fire(HarnessStatus.Ready);
     } catch (error) {
       this.handleInitializationError("exception", error);
     }
@@ -1813,9 +1830,8 @@ export class CliIntegration extends HarnessIntegration {
     _type: "command_failed" | "exception",
     error: unknown
   ): void {
-    this.isAvailable = false;
-    this.initializationStatus = HarnessStatus.Unavailable;
-    this.statusChangeEmitter.fire(HarnessStatus.Unavailable);
+    this.versionAssessment = undefined;
+    this.markUnavailable();
 
     Log.error(
       `[CliIntegration] ${this.provider.config.displayName} not available`,
@@ -1862,12 +1878,22 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Return the provider-owned installation guidance for dashboard surfaces.
-   * Keeping this on the integration prevents UI code from duplicating
-   * provider-specific install commands.
+   * Availability plus the provider-owned install command and version verdict,
+   * as published to dashboard surfaces. Keeping this on the integration
+   * prevents UI code from duplicating provider-specific commands.
    */
-  getInstallHint(): string {
-    return this.provider.config.installHint;
+  getAvailabilityReport(): HarnessAvailabilityReport {
+    return {
+      available: this.isAvailable,
+      installHint: this.provider.config.installHint,
+      ...(this.versionAssessment ? { version: this.versionAssessment } : {}),
+    };
+  }
+
+  private markUnavailable(): void {
+    this.isAvailable = false;
+    this.initializationStatus = HarnessStatus.Unavailable;
+    this.statusChangeEmitter.fire(HarnessStatus.Unavailable);
   }
 
   override getDetailedStatus() {
@@ -1922,7 +1948,14 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private getUnavailableGuidance(): string {
-    return `❌ ${this.provider.config.displayName} unavailable. ${this.getInstallHint()}. Then sign in with the CLI before running a workflow.`;
+    const { displayName, installHint } = this.provider.config;
+    const versionGuidance = formatHarnessVersionGuidance(
+      displayName,
+      this.versionAssessment
+    );
+    return versionGuidance
+      ? `❌ ${versionGuidance}`
+      : `❌ ${displayName} unavailable. ${installHint}. Then sign in with the CLI before running a workflow.`;
   }
 
   // ============================================================

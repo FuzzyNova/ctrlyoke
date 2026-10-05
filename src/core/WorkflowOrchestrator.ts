@@ -737,7 +737,6 @@ export class WorkflowOrchestrator {
       [HARNESS_IDS.ANTIGRAVITY_CLI, this.antigravityCliIntegration],
     ];
     for (const [harnessId, integration] of allIntegrations) {
-      const installHint = integration.getInstallHint();
       this.disposableRegistry.add(
         integration.onDidChangeStatus((status) => {
           const isDetectionResult =
@@ -765,8 +764,7 @@ export class WorkflowOrchestrator {
           if (isDetectionResult) {
             this.dashboardBroadcastHub.notifyHarnessAvailability(
               harnessId,
-              status === HarnessStatus.Ready,
-              installHint
+              integration.getAvailabilityReport()
             );
           }
         })

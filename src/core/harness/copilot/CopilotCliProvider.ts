@@ -120,6 +120,11 @@ export class CopilotCliProvider implements ICliProvider {
     displayName: "GitHub Copilot CLI",
     terminalName: "Copilot",
     installHint: "Install via: npm install -g @github/copilot",
+    versionPolicy: {
+      minimum: "1.0.19",
+      recommended: "1.0.92",
+      updateCommand: "copilot update",
+    },
     shouldStreamHeadlessOutput: true,
 
     // Copilot uses sessionEnd hook for reliable completion detection in interactive mode

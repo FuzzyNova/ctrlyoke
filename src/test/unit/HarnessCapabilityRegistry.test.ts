@@ -27,6 +27,7 @@ import type {
   HarnessCapabilityFacts,
   PermissionCapabilityDescriptor,
 } from "../../types/CompatibilityTypes";
+import { TEST_VERSION_POLICY } from "../helpers/mockHarness";
 
 const HARNESS_ID_LIST = Object.values(HARNESS_IDS) as HarnessId[];
 type CapabilityProvider = HarnessCapabilitySource["provider"];
@@ -67,6 +68,7 @@ class StubProvider implements CapabilityProvider {
       displayName: harnessId,
       terminalName: harnessId,
       installHint: "",
+      versionPolicy: TEST_VERSION_POLICY,
       shouldStreamHeadlessOutput: false,
     };
     this.toolPermissionMapper = mapper;

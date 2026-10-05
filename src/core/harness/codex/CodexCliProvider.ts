@@ -189,6 +189,11 @@ export class CodexCliProvider implements ICliProvider {
     displayName: "Codex CLI",
     terminalName: "Codex",
     installHint: "Install via: npm install -g @openai/codex",
+    versionPolicy: {
+      minimum: "0.119.0",
+      recommended: "0.157.0",
+      updateCommand: "codex update",
+    },
     shouldStreamHeadlessOutput: true,
 
     // Codex uses hooks system for reliable completion detection in interactive mode

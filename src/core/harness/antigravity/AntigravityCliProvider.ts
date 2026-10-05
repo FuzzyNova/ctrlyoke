@@ -82,14 +82,6 @@ const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
   caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
 } as const;
 
-/**
- * agy's transcript format changed to type every tool result "GENERIC"
- * (no more per-tool `RUN_COMMAND`/`VIEW_FILE`/`CODE_ACTION`/etc. types),
- * confirmed present in 1.1.12. `AntigravityLogParser`/`AntigravityToolEventBuilder`
- * target that shape; older CLIs are not supported.
- */
-const ANTIGRAVITY_MIN_VERSION = "1.1.12";
-
 type AntigravityHookGroup = Record<
   "PreToolUse" | "PostToolUse" | "PreInvocation" | "PostInvocation" | "Stop",
   unknown[] | null
@@ -131,6 +123,14 @@ export class AntigravityCliProvider implements ICliProvider {
     displayName: "Antigravity CLI",
     terminalName: "Antigravity",
     installHint: "Install via: npm install -g @google/antigravity-cli",
+    versionPolicy: {
+      // agy has no public release history to derive a support window from.
+      // 1.1.12 is where every tool result became "GENERIC", the transcript
+      // shape AntigravityLogParser/AntigravityToolEventBuilder target.
+      minimum: "1.1.12",
+      recommended: "1.2.17",
+      updateCommand: "agy update",
+    },
     shouldStreamHeadlessOutput: true,
     usesInteractiveNotificationMonitor: true,
   };
@@ -660,11 +660,12 @@ export class AntigravityCliProvider implements ICliProvider {
     return [...this.statusLineSnapshotPaths];
   }
 
+  /**
+   * `agy` is available when it reports a version. The version floor itself is
+   * enforced by the shared `config.versionPolicy` check in CliIntegration.
+   */
   async checkAvailability(): Promise<boolean> {
-    const version = await this.getVersion();
-    return version
-      ? this.compareVersions(version, ANTIGRAVITY_MIN_VERSION) >= 0
-      : false;
+    return (await this.getVersion()) !== undefined;
   }
 
   async getVersion(): Promise<string | undefined> {
@@ -966,18 +967,5 @@ export class AntigravityCliProvider implements ICliProvider {
     const hooksPath = this.getGlobalHooksPath();
     await fs.mkdir(path.dirname(hooksPath), { recursive: true });
     await fs.writeFile(hooksPath, JSON.stringify(hooks, null, 2), "utf8");
-  }
-
-  private compareVersions(a: string, b: string): number {
-    const aParts = a.split(".").map((part) => Number.parseInt(part, 10) || 0);
-    const bParts = b.split(".").map((part) => Number.parseInt(part, 10) || 0);
-    const length = Math.max(aParts.length, bParts.length);
-    for (let i = 0; i < length; i += 1) {
-      const diff = (aParts[i] ?? 0) - (bParts[i] ?? 0);
-      if (diff !== 0) {
-        return diff;
-      }
-    }
-    return 0;
   }
 }
