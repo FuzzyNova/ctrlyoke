@@ -806,7 +806,9 @@ export const HOSTED_ICON_PATHS = {
 /** The hosted server's public TLS-certificate download (no token required). */
 export const HOSTED_CERT_DOWNLOAD = {
   PATH: "/cert",
-  FILENAME: "ctrlyoke.cer",
+  // `.crt`, not `.cer`: Android maps CONTENT_TYPE to `.crt` and appends it to
+  // any name whose extension maps elsewhere, saving `ctrlyoke.cer.crt`.
+  FILENAME: "ctrlyoke.crt",
   // The type Android's "Install a certificate → CA certificate" file picker
   // filters on, and the one that triggers iOS's profile-install prompt.
   CONTENT_TYPE: "application/x-x509-ca-cert",

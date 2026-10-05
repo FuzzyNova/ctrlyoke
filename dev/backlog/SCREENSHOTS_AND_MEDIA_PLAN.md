@@ -239,7 +239,7 @@ Each item: what to capture, what prep it needs, where it's used.
       covers much of #3 in motion form.
   - **The Android install recording:** the same flow's Chrome equivalent — scan the QR code → the URL
     opens in Chrome → proceed past the certificate warning → Settings → Download certificate (saved
-    to Downloads as `ctrlyoke.cer`) → install it from Android Settings → Security & privacy → More
+    to Downloads as `ctrlyoke.crt`) → install it from Android Settings → Security & privacy → More
     security settings → Encryption & credentials → Install a certificate → CA certificate (since
     Android 11, tapping the downloaded file does not install a CA cert; the path varies by maker) →
     reopen Chrome so the warning is gone → tap Chrome's install affordance (this varies: an
