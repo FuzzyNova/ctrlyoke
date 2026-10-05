@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { detectPlatform, formatShortcut } from "@utils/platform";
+import { detectPlatform, formatShortcut, isIosDevice } from "@utils/platform";
 import { UI_PLATFORMS } from "@root/types/DashboardConstants";
 
 function mockNavigator(platform: string, userAgent: string) {
@@ -56,5 +56,45 @@ describe("formatShortcut", () => {
   it("leaves non-Ctrl parts untouched on macOS", () => {
     mockNavigator("MacIntel", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)");
     expect(formatShortcut("Shift", "Ctrl", "Enter")).toBe("Shift+Cmd+Enter");
+  });
+});
+
+// jsdom doesn't implement navigator.maxTouchPoints, so define it per test.
+function mockMaxTouchPoints(value: number) {
+  Object.defineProperty(window.navigator, "maxTouchPoints", {
+    value,
+    configurable: true,
+  });
+}
+
+describe("isIosDevice", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(window.navigator, "maxTouchPoints");
+  });
+
+  it("detects iPhone from the user agent", () => {
+    mockNavigator(
+      "iPhone",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X)"
+    );
+    expect(isIosDevice()).toBe(true);
+  });
+
+  it("detects iPadOS Safari, which reports desktop macOS but has touch", () => {
+    mockNavigator("MacIntel", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)");
+    mockMaxTouchPoints(5);
+    expect(isIosDevice()).toBe(true);
+  });
+
+  it("does not flag a desktop Mac or Android", () => {
+    mockNavigator("MacIntel", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)");
+    mockMaxTouchPoints(0);
+    expect(isIosDevice()).toBe(false);
+    mockNavigator(
+      "Linux armv8l",
+      "Mozilla/5.0 (Linux; Android 14; SM-X710) Chrome/141.0"
+    );
+    expect(isIosDevice()).toBe(false);
   });
 });

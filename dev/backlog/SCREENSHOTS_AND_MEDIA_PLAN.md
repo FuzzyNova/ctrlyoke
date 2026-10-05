@@ -238,9 +238,13 @@ Each item: what to capture, what prep it needs, where it's used.
       then driving the running workflow from the phone. As a desktop-plus-phone composite it also
       covers much of #3 in motion form.
   - **The Android install recording:** the same flow's Chrome equivalent — scan the QR code → the URL
-    opens in Chrome → tap Chrome's install affordance (this varies: an address-bar install icon, the ⋮
-    menu's "Install app" / "Add to Home screen" item, or a custom in-app install banner, depending on
-    Android/Chrome version and whether the page fires `beforeinstallprompt`) → open the installed app
+    opens in Chrome → proceed past the certificate warning → Settings → Download certificate (saved
+    to Downloads as `ctrlyoke.cer`) → install it from Android Settings → Security & privacy → More
+    security settings → Encryption & credentials → Install a certificate → CA certificate (since
+    Android 11, tapping the downloaded file does not install a CA cert; the path varies by maker) →
+    reopen Chrome so the warning is gone → tap Chrome's install affordance (this varies: an
+    address-bar install icon, the ⋮ menu's "Install app" / "Add to Home screen" item, or a custom
+    in-app install banner, depending on Android/Chrome version and whether the page fires `beforeinstallprompt`) → open the installed app
     from the home screen/app drawer and see/take control of the same running workflow. Unlike iOS,
     this one may stay mostly video: the install affordance varies by device and Chrome version, so a
     short clip plus "it may look like X or Y" text can beat stills of a single variant.

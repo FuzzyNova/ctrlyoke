@@ -4,7 +4,7 @@ import { useUiStore } from "@store/uiStore";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { downloadTextFile } from "@utils/diff";
+import { downloadTextFile } from "@utils/download";
 import { CONTENT_PREVIEW_LANGUAGES } from "@root/types/DashboardConstants";
 import { Icon } from "./Icon";
 

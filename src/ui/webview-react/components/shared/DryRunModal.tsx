@@ -47,7 +47,7 @@ import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useCompatibilityDiagnostics } from "@hooks/useCompatibilityDiagnostics";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
-import { downloadTextFile } from "@utils/diff";
+import { downloadTextFile } from "@utils/download";
 import {
   buildStepTimeline,
   STEP_TIMELINE_ENTRY_KINDS,

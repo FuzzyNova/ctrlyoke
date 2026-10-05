@@ -3,6 +3,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import {
+  HOSTED_CERT_DOWNLOAD,
   LICENSE_UI,
   MESSAGE_TYPES,
   SETTING_PATHS,
@@ -25,6 +26,9 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import appIconSvg from "../../../../../images/ctrlyoke-app-icon.svg?raw";
 import { Icon } from "../shared/Icon";
+import { downloadBlob } from "@utils/download";
+import { WebviewLog } from "@utils/logger";
+import { isIosDevice } from "@utils/platform";
 
 function buildIconPreviewDataUrl(bgColor: string, fgColor: string): string {
   const svg = appIconSvg
@@ -201,12 +205,12 @@ export function ServerSection({
   const certDownloadUrl = useMemo(() => {
     if (!server.tls?.enabled) return null;
     if (isStandalone) {
-      return `${window.location.origin}/cert`;
+      return `${window.location.origin}${HOSTED_CERT_DOWNLOAD.PATH}`;
     }
     if (!displayUrl) return null;
     try {
       const u = new URL(displayUrl);
-      u.pathname = "/cert";
+      u.pathname = HOSTED_CERT_DOWNLOAD.PATH;
       u.search = "";
       return u.toString();
     } catch {
@@ -215,13 +219,42 @@ export function ServerSection({
   }, [server.tls?.enabled, displayUrl]);
 
   // Standalone (browser) only: the cert's own /cert endpoint is same-origin
-  // there, so a throwaway link triggers a normal browser download.
-  const handleDownloadCert = useCallback(() => {
+  // there. iOS needs a real link to /cert, because that navigation is what
+  // shows its profile-install prompt. Other platforms fetch the bytes in-page
+  // and save them from a blob, because Chrome on Android pauses a link
+  // download from a server whose certificate isn't trusted yet. That is
+  // always the case here, since the user is downloading the cert in order to
+  // trust it. The in-page fetch reuses the page's own "proceed anyway"
+  // exception, and a blob download makes no second network request.
+  const handleDownloadCert = useCallback(async () => {
     if (!certDownloadUrl) return;
-    const link = document.createElement("a");
-    link.href = certDownloadUrl;
-    link.download = "ctrlyoke.cer";
-    link.click();
+    const downloadViaLink = () => {
+      const link = document.createElement("a");
+      link.href = certDownloadUrl;
+      link.download = HOSTED_CERT_DOWNLOAD.FILENAME;
+      link.click();
+    };
+    if (isIosDevice()) {
+      downloadViaLink();
+      return;
+    }
+    try {
+      const response = await fetch(certDownloadUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const bytes = await response.arrayBuffer();
+      downloadBlob(
+        HOSTED_CERT_DOWNLOAD.FILENAME,
+        new Blob([bytes], { type: HOSTED_CERT_DOWNLOAD.CONTENT_TYPE })
+      );
+    } catch (error) {
+      WebviewLog.warn(
+        "[ServerSection] In-page certificate fetch failed; falling back to a direct link",
+        error
+      );
+      downloadViaLink();
+    }
   }, [certDownloadUrl]);
 
   // VS Code panel only: the webview can't drive an HTTP download through the
@@ -741,7 +774,7 @@ export function ServerSection({
                       success={certDownloadFlash}
                       onClick={handleDownloadCertInPanel}
                       disabled={!licenseAccess.hasRemoteAccess}
-                      title="Save the server certificate for manual installation on iOS"
+                      title="Save the server certificate to install on a phone or tablet"
                     />
                   )}
                 </div>
@@ -801,18 +834,8 @@ export function ServerSection({
                   : " in your user ctrlyoke folder."}{" "}
                 Browsers will show a warning on first visit — click proceed to
                 continue. Changes take effect on server restart.
-                <br />
-                <strong>iOS Safari:</strong> depending on iOS version, it may be
-                necessary to download the cert and install it via{" "}
-                <em>Settings → General → VPN &amp; Device Management</em>, then
-                enable full trust under{" "}
-                <em>
-                  Settings → General → About → Certificate Trust Settings →
-                  Enable Full Trust For Root Certificates
-                </em>
-                . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
-                didn&apos;t appear).
               </p>
+              <CertInstallHelp />
             </div>
           )}
         </fieldset>
@@ -827,9 +850,9 @@ export function ServerSection({
           <ActionButton
             label="Download certificate"
             icon="download"
-            onClick={handleDownloadCert}
+            onClick={() => void handleDownloadCert()}
             disabled={!licenseAccess.hasRemoteAccess}
-            title="Download the server certificate for manual installation on iOS"
+            title="Download the server certificate to install on this device"
           />
           {!licenseAccess.hasRemoteAccess && (
             <p className="mt-2 text-xs text-description-fg">
@@ -844,20 +867,42 @@ export function ServerSection({
               </a>
             </p>
           )}
-          <p className="text-xs text-description-fg italic mt-2">
-            <strong>iOS Safari:</strong> depending on iOS version, it may be
-            necessary to download the cert and install it via{" "}
-            <em>Settings → General → VPN &amp; Device Management</em>, then
-            enable full trust under{" "}
-            <em>
-              Settings → General → About → Certificate Trust Settings → Enable
-              Full Trust For Root Certificates
-            </em>
-            . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
-            didn&apos;t appear).
-          </p>
+          <CertInstallHelp className="mt-2" />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Per-platform steps for trusting the downloaded server certificate. */
+function CertInstallHelp({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`text-xs text-description-fg italic space-y-1 ${className}`}
+    >
+      <p>
+        <strong>iOS Safari:</strong> depending on iOS version, it may be
+        necessary to download the cert and install it via{" "}
+        <em>Settings → General → VPN &amp; Device Management</em>, then enable
+        full trust under{" "}
+        <em>
+          Settings → General → About → Certificate Trust Settings → Enable Full
+          Trust For Root Certificates
+        </em>
+        . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
+        didn&apos;t appear).
+      </p>
+      <p>
+        <strong>Android Chrome:</strong> download the cert, then install it from{" "}
+        <em>
+          Settings → Security &amp; privacy → More security settings →
+          Encryption &amp; credentials → Install a certificate → CA certificate
+        </em>{" "}
+        and pick <code>{HOSTED_CERT_DOWNLOAD.FILENAME}</code> from Downloads
+        (menu names vary by manufacturer; search Settings for &quot;CA
+        certificate&quot;). Tapping the downloaded file doesn&apos;t install it.
+        Close and reopen Chrome afterwards.
+      </p>
     </div>
   );
 }

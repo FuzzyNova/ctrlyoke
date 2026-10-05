@@ -17,7 +17,7 @@ import {
 import { DiffFileHistoryList } from "@components/diff/DiffFileHistoryList";
 import { DiffRefDiffList } from "@components/diff/DiffRefDiffList";
 import { usePagedGitRefDiff } from "@hooks/usePagedGitRefDiff";
-import { downloadTextFile } from "@utils/diff";
+import { downloadTextFile } from "@utils/download";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 import type { DiffFileCardProps } from "@components/diff/DiffFileCard";

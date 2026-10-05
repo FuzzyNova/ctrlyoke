@@ -803,6 +803,15 @@ export const HOSTED_ICON_PATHS = {
   APPLE_TOUCH_ICON_PNG: `/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
 } as const;
 
+/** The hosted server's public TLS-certificate download (no token required). */
+export const HOSTED_CERT_DOWNLOAD = {
+  PATH: "/cert",
+  FILENAME: "ctrlyoke.cer",
+  // The type Android's "Install a certificate → CA certificate" file picker
+  // filters on, and the one that triggers iOS's profile-install prompt.
+  CONTENT_TYPE: "application/x-x509-ca-cert",
+} as const;
+
 // ============================================================================
 // COMPLETION NOTIFICATION KINDS - Structured completion event categories
 // ============================================================================

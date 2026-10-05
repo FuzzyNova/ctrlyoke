@@ -19,7 +19,7 @@ import type {
   WorkspaceCommitInfo,
   WorkspaceGitRefDiffEntry,
 } from "@root/types/HostedWorkspaceViewerTypes";
-import { downloadTextFile } from "@utils/diff";
+import { downloadTextFile } from "@utils/download";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 
@@ -63,7 +63,7 @@ vi.mock("@components/shared", async (importOriginal) => {
   };
 });
 
-vi.mock("@utils/diff", () => ({
+vi.mock("@utils/download", () => ({
   downloadTextFile: vi.fn(),
 }));
 

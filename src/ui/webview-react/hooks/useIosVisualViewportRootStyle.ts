@@ -1,14 +1,6 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import { isEditableElement, isEditableElementFocused } from "@utils/domFocus";
-
-function isIosWebKitBrowser(): boolean {
-  const platform = navigator.platform;
-  const userAgent = navigator.userAgent;
-  return (
-    /iPad|iPhone|iPod/.test(userAgent) ||
-    (platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
+import { isIosDevice } from "@utils/platform";
 
 export type IosVisualViewportRootStyle = CSSProperties & {
   "--safe-area-bottom"?: string;
@@ -38,7 +30,7 @@ export function useIosVisualViewportRootStyle(
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
-    if (!isMobile || !isIosWebKitBrowser() || !visualViewport) {
+    if (!isMobile || !isIosDevice() || !visualViewport) {
       setRootStyle({});
       return;
     }

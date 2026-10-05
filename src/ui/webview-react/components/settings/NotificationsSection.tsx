@@ -18,6 +18,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
+import { isIosDevice } from "@utils/platform";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { CustomSelect } from "../shared/CustomSelect";
@@ -58,11 +59,10 @@ export function NotificationsSection({
   const browserModeEnabled =
     notif.browser.mode !== BROWSER_NOTIFICATION_MODES.NEVER;
   const needsHttps = browserModeEnabled && !server.tls.enabled;
-  const isIos = /iP(hone|ad)/.test(navigator.userAgent);
   const isIosHomeScreenApp =
     (window.navigator as Navigator & { standalone?: boolean }).standalone ===
       true || window.matchMedia("(display-mode: standalone)").matches;
-  const iosBlocksBrowserNotifications = isIos && !isIosHomeScreenApp;
+  const iosBlocksBrowserNotifications = isIosDevice() && !isIosHomeScreenApp;
 
   useEffect(() => {
     if (!browserModeEnabled || !isStandalone) {

@@ -27,6 +27,7 @@ import {
   NETWORK_INTERFACE_FAMILIES,
   TRUST_DECISIONS,
   getEffectiveParallelGroupWidth,
+  HOSTED_CERT_DOWNLOAD,
 } from "../types/DashboardConstants";
 import type {
   CapabilitiesFile,
@@ -1749,7 +1750,7 @@ export class WebviewSettingsSync {
     try {
       const certBytes = await fs.readFile(certPath);
       const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file("ctrlyoke.cer"),
+        defaultUri: vscode.Uri.file(HOSTED_CERT_DOWNLOAD.FILENAME),
         filters: {
           "Certificate Files": ["cer", "crt", "pem"],
           "All Files": ["*"],

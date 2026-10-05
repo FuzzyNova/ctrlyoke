@@ -40,6 +40,7 @@ import {
   LICENSE_UI,
   HOSTED_ICON_FILES,
   HOSTED_ICON_PATHS,
+  HOSTED_CERT_DOWNLOAD,
   HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
@@ -926,7 +927,7 @@ export class CtrlYokeHostedServer
     });
     // Cert download — no token required so iOS users can fetch and install it
     // before the WebSocket handshake can succeed. The cert is a public key only.
-    this.app.get("/cert", (_req, res) => {
+    this.app.get(HOSTED_CERT_DOWNLOAD.PATH, (_req, res) => {
       if (!this.tlsCertPath) {
         this.sendNotFoundPage(
           res,
@@ -940,10 +941,10 @@ export class CtrlYokeHostedServer
       try {
         const cert = fs.readFileSync(this.tlsCertPath);
         this.setNoStore(res);
-        res.setHeader("Content-Type", "application/x-x509-ca-cert");
+        res.setHeader("Content-Type", HOSTED_CERT_DOWNLOAD.CONTENT_TYPE);
         res.setHeader(
           "Content-Disposition",
-          'attachment; filename="ctrlyoke.cer"'
+          `attachment; filename="${HOSTED_CERT_DOWNLOAD.FILENAME}"`
         );
         res.send(cert);
       } catch {
