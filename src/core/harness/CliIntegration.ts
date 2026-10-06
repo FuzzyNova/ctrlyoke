@@ -4,7 +4,7 @@ import {
   createNoWorktreeExecutionWorkspace,
   PlatformAdapter,
 } from "../../platform/PlatformAdapter";
-import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
+import type { DisposableRegistry } from "../HostPorts";
 import {
   mapSourceDefinitionPathToExecution,
   resolveEffectiveAbsoluteReferences,
@@ -225,7 +225,7 @@ export class CliIntegration extends HarnessIntegration {
    * Create a new CLI integration with the specified CLI provider.
    *
    * @param cliProvider The CLI provider instance (encapsulates all CLI-specific logic)
-   * @param platform Platform adapter (VS Code or standalone CLI)
+   * @param platform Platform adapter providing workspace and runtime capabilities
    */
   constructor(
     cliProvider: ICliProvider,
@@ -237,14 +237,10 @@ export class CliIntegration extends HarnessIntegration {
     ) => void,
     executionWorkspace: ExecutionWorkspace = createNoWorktreeExecutionWorkspace(
       platform
-    )
+    ),
+    disposableRegistry?: DisposableRegistry
   ) {
-    // Pass ExtensionContext to base class if available (VS Code context) for subscription management
-    const vsCtx =
-      "getExtensionContext" in platform
-        ? (platform as VsCodeAdapter).getExtensionContext()
-        : undefined;
-    super(vsCtx, registerWithContext);
+    super(disposableRegistry, registerWithContext);
     this.platform = platform;
     this.provider = cliProvider;
     this.executionWorkspace = executionWorkspace;
@@ -1047,7 +1043,7 @@ export class CliIntegration extends HarnessIntegration {
         getWorkspaceRoot: () => this.getExecutionRoot(),
         getWorkspaceRoots: () => this.getExecutionWorkspaceRoots(),
         getExtensionPath: () => this.platform.getExtensionPath(),
-        isVsCodeContext: () => this.isVsCodeContext(),
+        interactiveTerminal: this.platform.interactiveTerminal,
         isCancelling: () => this.isCancelling,
         setFailureReason: (reason) => this.setFailureReason(reason),
       },
@@ -1612,21 +1608,6 @@ export class CliIntegration extends HarnessIntegration {
         workingFilePersistence: workflowContext?.workingFilePersistence,
       });
     session.updateParsedOutput(persistedOutput);
-  }
-
-  /**
-   * Returns true when running inside a VS Code extension context.
-   *
-   * Uses the presence of `getExtensionContext` on the platform adapter as a
-   * lightweight discriminator — only VsCodeAdapter exposes that method.
-   * CliAdapter does not, so `"getExtensionContext" in this.platform` is false.
-   *
-   * This lets CliIntegration choose between:
-   *  - VS Code interactive path: PTY session via PtyProcessManager
-   *  - CLI interactive path: spawn() with stdio:'inherit'
-   */
-  private isVsCodeContext(): boolean {
-    return "getExtensionContext" in this.platform;
   }
 
   /**

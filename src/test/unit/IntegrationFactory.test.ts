@@ -1,3 +1,4 @@
+import { INTERACTIVE_TERMINAL_MODES } from "../../types/DashboardConstants";
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
@@ -5,7 +6,8 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { HarnessId } from "../../types/DashboardConstants";
 
 const platform: PlatformAdapter = {
-  getWorkspaceRoot: () => "",
+  interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
+    getWorkspaceRoot: () => "",
   getWorkspaceRoots: () => [],
   getNamedWorkspaceRoots: () => [],
   getExtensionPath: () => "",

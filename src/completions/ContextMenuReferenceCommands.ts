@@ -19,7 +19,7 @@ import {
 } from "./CompletionHelpers";
 import { writeOutputSnapshotAttachment } from "../ui/OutputSnapshotService";
 import type { OutputCaptureEntry } from "./OutputCaptureCache";
-import { confirmExternalFileTrust } from "../ui/ExternalFileTrustPrompt";
+import { confirmExternalFileTrust } from "../ui/ExternalRootsApproval";
 import type { UserInteractionPort } from "../ui/UserInteractionPort";
 import { NullUserInteractionPort } from "../ui/UserInteractionPort";
 import { getVsCodeTrustedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot";

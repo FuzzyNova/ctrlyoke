@@ -17,6 +17,8 @@ import {
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
+import { VsCodeDashboardHostActions } from "./platform/VsCodeDashboardHostActions";
+import { TemplateManager } from "./core/TemplateManager";
 import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
 import {
   initializeVsCodeLogging,
@@ -83,8 +85,10 @@ import {
 } from "./config/FileConfigBackend";
 import { NotificationManager } from "./ui/NotificationManager";
 import {
-  confirmExternalFileTrustAndOpen,
   promptBatchApprovalForPendingWorkspaceExternalRoots,
+} from "./ui/ExternalRootsApproval";
+import {
+  confirmExternalFileTrustAndOpen,
   type FileOpenTarget,
 } from "./ui/ExternalFileTrustPrompt";
 import { ScmCommitCommand } from "./scm/ScmCommitCommand";
@@ -227,7 +231,9 @@ export async function activate(context: vscode.ExtensionContext) {
             .then(() =>
               promptBatchApprovalForPendingWorkspaceExternalRoots(
                 getVsCodeWorkspaceRoot(),
-                webviewProvider.getUserInteractionPort()
+                webviewProvider.getUserInteractionPort(),
+                undefined,
+                () => vscode.workspace.isTrusted
               )
             )
             .catch((error) => {
@@ -363,6 +369,11 @@ export async function activate(context: vscode.ExtensionContext) {
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
     webviewProvider = new CtrlYokeWebviewProvider(
       context,
+      new TemplateManager(
+        context.extensionPath,
+        () => getVsCodeWorkspaceFolder()?.uri.fsPath,
+        platform
+      ),
       vscodeUserFeedbackSink,
       licenseService
     );
@@ -384,7 +395,9 @@ export async function activate(context: vscode.ExtensionContext) {
         .then(() =>
           promptBatchApprovalForPendingWorkspaceExternalRoots(
             getVsCodeWorkspaceRoot(),
-            webviewProvider.getUserInteractionPort()
+            webviewProvider.getUserInteractionPort(),
+            undefined,
+            () => vscode.workspace.isTrusted
           )
         )
         .catch((error) => {
@@ -462,6 +475,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarSink);
     workflowOrchestrator = new WorkflowOrchestrator({
       platform,
+      dashboardHostActions: new VsCodeDashboardHostActions(),
       workspaceFolderPathResolver: () => getVsCodeWorkspaceFolder()?.uri.fsPath,
       dashboardProvider: webviewProvider,
       userFeedbackSink,

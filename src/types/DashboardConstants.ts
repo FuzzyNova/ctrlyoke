@@ -12,6 +12,21 @@ import {
   ANTIGRAVITY_CLI_MODELS as MC_ANTIGRAVITY_CLI_MODELS,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
+
+/** Host capability describing where interactive harness terminals are shown. */
+export const INTERACTIVE_TERMINAL_MODES = {
+  EMBEDDED_PTY: "embedded-pty",
+  INHERIT_STDIO: "inherit-stdio",
+} as const;
+export type InteractiveTerminalMode =
+  (typeof INTERACTIVE_TERMINAL_MODES)[keyof typeof INTERACTIVE_TERMINAL_MODES];
+
+/** Outcomes returned by host actions invoked from shared workflow code. */
+export const DASHBOARD_ACTION_RESULT_STATUSES = {
+  OPENED: "opened",
+  UNSUPPORTED: "unsupported",
+  FAILED: "failed",
+} as const;
 import { formatUsageWindowLabel as formatSharedUsageWindowLabel } from "../utils/StatuslineFormat";
 import type { ParallelGroupDefinition } from "./CtrlYokeTypes";
 

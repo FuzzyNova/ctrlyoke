@@ -32,7 +32,7 @@ import type {
   ParallelGroupDefinition,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import { TemplateManager } from "../core/TemplateManager";
+import type { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { onModelsLoaded } from "../utils/ModelRegistry";
@@ -161,11 +161,10 @@ export class CtrlYokeWebviewProvider
 
   constructor(
     private readonly context: vscode.ExtensionContext,
+    templateManager: TemplateManager,
     nativeFeedbackSink?: UserFeedbackSink,
     licenseService?: LicenseService
   ) {
-    const templateManager = new TemplateManager(context);
-
     // Bind postMessage to use the view reference
     const postMessage = (message: any) => this.postMessage(message);
     const getOrchestrator = () => this.workflowOrchestrator;

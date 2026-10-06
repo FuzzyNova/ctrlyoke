@@ -1,3 +1,4 @@
+import { INTERACTIVE_TERMINAL_MODES } from "../types/DashboardConstants";
 import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
@@ -38,7 +39,8 @@ suite("EndConditionEvaluator Tests", () => {
     // Create a minimal mock PlatformAdapter for testing
     workspaceRoot = makeTempDir("ctrlyoke-evaluator-");
     const mockPlatform: PlatformAdapter = {
-      getWorkspaceRoot: () => workspaceRoot,
+      interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
+    getWorkspaceRoot: () => workspaceRoot,
       getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
       getNamedWorkspaceRoots: () => [],
       getExtensionPath: () => "",
@@ -810,7 +812,8 @@ suite("EndConditionEvaluator Tests", () => {
       };
       const executionEvaluator = new EndConditionEvaluator(
         {
-          getWorkspaceRoot: () => workspaceRoot,
+          interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
+    getWorkspaceRoot: () => workspaceRoot,
           getWorkspaceRoots: () => [workspaceRoot],
           getNamedWorkspaceRoots: () => [],
           getExtensionPath: () => "",

@@ -5,6 +5,7 @@ import * as jsYaml from "js-yaml";
 import { suite, teardown, test } from "mocha";
 import { TemplateManager } from "../../core/TemplateManager";
 import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
+import { MockPlatform } from "../helpers/mockHarness";
 import { EXECUTION_PROPERTY_KEYS } from "../../types/CtrlYokeTypes";
 import {
   makeTempDir as createTempDir,
@@ -16,7 +17,11 @@ import {
 // manager with a stub context and reach the methods via `as any` to unit-test the
 // variable metadata model without needing a workspace or file system.
 function makeManager(): any {
-  return new TemplateManager({} as never);
+  return new TemplateManager(
+    process.cwd(),
+    () => process.cwd(),
+    new MockPlatform()
+  );
 }
 
 const tempDirs: string[] = [];

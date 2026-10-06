@@ -1,6 +1,7 @@
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import type { SecretStore } from "./SecretStore";
+import type { InteractiveTerminalMode } from "../types/DashboardConstants";
 
 /**
  * Abstraction layer for platform-specific APIs.
@@ -10,6 +11,8 @@ import type { SecretStore } from "./SecretStore";
  * importing the `vscode` module directly.
  */
 export interface PlatformAdapter {
+  /** Where an interactive harness TUI is hosted. */
+  readonly interactiveTerminal: InteractiveTerminalMode;
   /** Encrypted managed-secret storage for runtime resolution. */
   getSecretStore?(): SecretStore;
   /**
@@ -65,30 +68,6 @@ export interface PlatformAdapter {
    */
   getExtensionPath(): string;
 
-  /**
-   * Optional: Open a text file in the current environment.
-   * VS Code: opens editor tab for the file
-   * CLI: usually unsupported (undefined)
-   */
-  openTextFile?(filePath: string): Promise<void>;
-
-  /**
-   * Optional: Focus the dashboard/output panel.
-   * VS Code: executes "ctrlyoke.focusDashboard" command
-   * CLI: no-op (undefined)
-   */
-  focusDashboard?(): void;
-
-  /**
-   * Optional: Returns true when running inside a VS Code extension context.
-   * VS Code: true
-   * CLI: undefined (falsy)
-   *
-   * Used by CliIntegration to decide whether to create a vscode.Terminal
-   * (VS Code interactive path) or spawn a child process with stdio:inherit
-   * (CLI interactive path).
-   */
-  isVsCode?(): boolean;
 }
 
 /**

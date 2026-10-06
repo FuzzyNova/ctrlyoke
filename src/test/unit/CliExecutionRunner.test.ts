@@ -3,6 +3,8 @@ import { suite, teardown, test } from "mocha";
 import {
   CTRLYOKE_ENV_VARS,
   FAILURE_KINDS,
+  INTERACTIVE_TERMINAL_MODES,
+  type InteractiveTerminalMode,
 } from "../../types/DashboardConstants";
 import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
@@ -93,7 +95,7 @@ function createRunner(options?: {
   discoverSessionLog?: () => Promise<string | null>;
   writeToCurrentPtySession?: (text: string) => boolean;
   isCancelling?: boolean;
-  isVsCodeContext?: boolean;
+  interactiveTerminal?: InteractiveTerminalMode;
   /** How the standalone TUI ends on its own; unset, it runs until terminated. */
   standaloneExit?: InteractiveExitResult;
   collectedHeadlessResponse?: {
@@ -107,12 +109,15 @@ function createRunner(options?: {
   let observedHeadlessEnv: Record<string, string> | undefined;
   let observedStandaloneEnv: Record<string, string> | undefined;
   let standaloneTerminations = 0;
+  let embeddedPtyStarts = 0;
+  let inheritedStdioStarts = 0;
   const provider = createProvider(options);
 
   const runner = new CliExecutionRunner({
     provider,
     transportCoordinator: {
       startStandaloneInteractiveProcess: async (_args, _prompt, env) => {
+        inheritedStdioStarts++;
         observedStandaloneEnv = env;
         let settle: (exit: InteractiveExitResult) => void = () => {};
         const exit = new Promise<InteractiveExitResult>((resolve) => {
@@ -133,6 +138,7 @@ function createRunner(options?: {
         };
       },
       startInteractiveProcess: async () => {
+        embeddedPtyStarts++;
         failureTracker.capturePtyExit(0, []);
       },
       executeHeadless: async (_args, _prompt, _tempFiles, callback, env) => {
@@ -179,7 +185,8 @@ function createRunner(options?: {
     runtimeState: {
       getWorkspaceRoot: () => process.cwd(),
       getExtensionPath: () => process.cwd(),
-      isVsCodeContext: () => options?.isVsCodeContext ?? true,
+      interactiveTerminal:
+        options?.interactiveTerminal ?? INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
       isCancelling: () => options?.isCancelling ?? false,
       setFailureReason: (reason: string) => {
         failureReason = reason;
@@ -199,10 +206,45 @@ function createRunner(options?: {
     getHeadlessEnv: () => observedHeadlessEnv,
     getStandaloneEnv: () => observedStandaloneEnv,
     getStandaloneTerminations: () => standaloneTerminations,
+    getEmbeddedPtyStarts: () => embeddedPtyStarts,
+    getInheritedStdioStarts: () => inheritedStdioStarts,
   };
 }
 
 suite("CliExecutionRunner", () => {
+  test("selects the interactive path from the host capability", async () => {
+    for (const [interactiveTerminal, expectedPath] of [
+      [INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY, "pty"],
+      [INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO, "stdio"],
+    ] as const) {
+      // This capability object has no VS Code identity or ExtensionContext.
+      const host = { interactiveTerminal };
+      const counters = createRunner({
+        interactiveTerminal: host.interactiveTerminal,
+        supportsSessionStart: false,
+        ...(expectedPath === "stdio"
+          ? { standaloneExit: { exitCode: 1, terminatedByManager: false } }
+          : {}),
+        waitForSessionStart: async () => ({
+          completed: false,
+          error: "not started",
+        }),
+      });
+      await counters.runner.executeInteractive(
+        new CliExecutionSession({ prompt: { prompt: "capability test" } }),
+        []
+      );
+      assert.strictEqual(
+        counters.getEmbeddedPtyStarts() > 0,
+        expectedPath === "pty"
+      );
+      assert.strictEqual(
+        counters.getInheritedStdioStarts() > 0,
+        expectedPath === "stdio"
+      );
+    }
+  });
+
   test("should flag PTY exit while waiting for SessionStart", async () => {
     let cancelObserved = false;
     const { runner, failureTracker, getFailureReason } = createRunner({
@@ -484,7 +526,7 @@ suite("CliExecutionRunner", () => {
     test("records the session log's response, events and usage", async () => {
       const { runner, getStandaloneEnv, getStandaloneTerminations } =
         createRunner({
-          isVsCodeContext: false,
+          interactiveTerminal: INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO,
           supportsSessionStart: false,
           discoverSessionLog: async () => "session.jsonl",
         });
@@ -550,7 +592,7 @@ suite("CliExecutionRunner", () => {
     // Codex 0.156 exits 1 ("stdin is not a terminal") without ever running.
     test("fails when the TUI exits before the session starts", async () => {
       const { runner, failureTracker, getFailureReason } = createRunner({
-        isVsCodeContext: false,
+        interactiveTerminal: INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO,
         supportsSessionStart: false,
         discoverSessionLog: () => new Promise(() => {}),
         standaloneExit: { exitCode: 1, terminatedByManager: false },
@@ -572,7 +614,7 @@ suite("CliExecutionRunner", () => {
 
     test("names a harness that could not be launched", async () => {
       const { runner, failureTracker, getFailureReason } = createRunner({
-        isVsCodeContext: false,
+        interactiveTerminal: INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO,
         supportsSessionStart: false,
         discoverSessionLog: () => new Promise(() => {}),
         standaloneExit: {
@@ -603,7 +645,7 @@ suite("CliExecutionRunner", () => {
     test("ends the TUI when the log monitor reports a harness error", async () => {
       const { runner, failureTracker, getStandaloneTerminations } =
         createRunner({
-          isVsCodeContext: false,
+          interactiveTerminal: INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO,
           supportsSessionStart: false,
           discoverSessionLog: async () => "session.jsonl",
         });

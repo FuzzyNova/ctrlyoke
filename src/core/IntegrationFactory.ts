@@ -18,6 +18,7 @@ import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { detectHarness } from "./harness/shared/HarnessDetection";
 import { harnessAvailability } from "../utils/HarnessAvailability";
+import type { DisposableRegistry } from "./HostPorts";
 
 /**
  * IntegrationFactory
@@ -43,7 +44,8 @@ export class IntegrationFactory {
     protected readonly userFeedbackSink?: UserFeedbackSink,
     protected readonly onProviderUsageUpdate?: (
       quota: HarnessQuotaSnapshot
-    ) => void
+    ) => void,
+    protected readonly disposableRegistry?: DisposableRegistry
   ) {}
 
   /**
@@ -102,7 +104,8 @@ export class IntegrationFactory {
       registerWithContext,
       this.userFeedbackSink,
       this.onProviderUsageUpdate,
-      executionWorkspace
+      executionWorkspace,
+      this.disposableRegistry
     );
   }
 
@@ -118,7 +121,8 @@ export class IntegrationFactory {
       registerWithContext,
       this.userFeedbackSink,
       this.onProviderUsageUpdate,
-      executionWorkspace
+      executionWorkspace,
+      this.disposableRegistry
     );
   }
 
@@ -134,7 +138,8 @@ export class IntegrationFactory {
       registerWithContext,
       this.userFeedbackSink,
       this.onProviderUsageUpdate,
-      executionWorkspace
+      executionWorkspace,
+      this.disposableRegistry
     );
   }
 
@@ -150,7 +155,8 @@ export class IntegrationFactory {
       registerWithContext,
       this.userFeedbackSink,
       this.onProviderUsageUpdate,
-      executionWorkspace
+      executionWorkspace,
+      this.disposableRegistry
     );
   }
 
@@ -166,7 +172,8 @@ export class IntegrationFactory {
       registerWithContext,
       this.userFeedbackSink,
       this.onProviderUsageUpdate,
-      executionWorkspace
+      executionWorkspace,
+      this.disposableRegistry
     );
   }
 
@@ -182,7 +189,8 @@ export class IntegrationFactory {
       registerWithContext,
       this.userFeedbackSink,
       this.onProviderUsageUpdate,
-      executionWorkspace
+      executionWorkspace,
+      this.disposableRegistry
     );
   }
 

@@ -15,7 +15,10 @@ import {
   userSecretKey,
   workspaceSecretKeyForRoot,
 } from "../../platform/SecretKey";
-import { SETTING_SCOPES } from "../../types/DashboardConstants";
+import {
+  INTERACTIVE_TERMINAL_MODES,
+  SETTING_SCOPES,
+} from "../../types/DashboardConstants";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import {
   checkSecretsCommand,
@@ -56,6 +59,7 @@ class InMemorySecretStore implements SecretStore {
 }
 
 class TestPlatform implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   constructor(private readonly store: SecretStore) {}
 
   getSecretStore(): SecretStore {

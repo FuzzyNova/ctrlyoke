@@ -1,11 +1,12 @@
 # VS Code Dependency Decoupling Plan
 
-**Status (2026-10-06):** In progress; Phase 2 is complete and ready to
-continue at Phase 3. Done so far:
+**Status (2026-10-06):** In progress; Phases 0–3 are complete and ready to
+continue at Phase 4. Done so far:
 
 - Phase 0 (dependency guards).
 - Phase 1 (host composition).
 - Phase 2 (Node watcher and remaining watcher sites).
+- Phase 3 (command/domain split and adapter cleanup).
 - Every prerequisite from
   [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md).
 - An early pass that removed `vscode` from the runtime graphs of the
@@ -229,19 +230,20 @@ baselines in the same commit.
 | Direct `show*Message` in reusable code                                       |               63 | **0** (`directMessage.reusable`)                                               |
 | Direct `show*Message` in boundary files                                      |               49 | 46 across 8 allowlisted files (`directMessage.boundary`)                       |
 | Adapter-mediated host UI (`platform.log/warn/error/showProgress/showChoice`) |               19 | **0** (`adapterUi`); the methods are deleted from `PlatformAdapter`            |
-| `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | 2 (`vscodeImportersReachableFromOrchestrator`)                                 |
+| `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | **0** (`vscodeImportersReachableFromOrchestrator`)                             |
 | Direct `vscode` imports in `WorkflowOrchestrator.ts` / `WorkflowInstance.ts` |            1 / 0 | 0 / 0                                                                          |
-| `new VsCodeAdapter` outside `extension.ts`                                   |                6 | 1, in `TemplateManager.ts` (`coreVsCodeAdapterConstructions`)                  |
+| `new VsCodeAdapter` outside `extension.ts`                                   |                6 | **0** (`coreVsCodeAdapterConstructions`)                                       |
 | Production `createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`    |                7 | 1 (`ScriptCommandCompletionHelpers`, Stage 5a)                                 |
 | `src/cli.ts` / `src/mcp-server.ts` runtime graph loads `vscode`              |              yes | **no**, enforced statically. The esbuild shim alias is still present (Phase 8) |
 
-These two files are still reachable from the orchestrator and still import
-`vscode`:
+Phase 3 removed the last `vscode` import reachable from the orchestrator.
+`WorkflowCommandHandler` uses `DashboardHostActions`, and the orchestrator
+imports external-root approvals from `ExternalRootsApproval.ts`.
 
 | File                                                              | Owning phase / stage |
 | ----------------------------------------------------------------- | -------------------- |
-| `src/core/orchestration/WorkflowCommandHandler.ts`                | Phase 3 / Stage 2    |
-| `src/ui/ExternalFileTrustPrompt.ts`                               | Phase 3 / Stage 2    |
+| `src/core/orchestration/WorkflowCommandHandler.ts`                | Host-neutral through `DashboardHostActions` |
+| `src/ui/ExternalRootsApproval.ts`                                  | Host-neutral approval and trust decisions |
 
 ### Lesson that still applies: a `vscode`-free import list is not a host-neutral one
 
@@ -260,11 +262,9 @@ holds:
   have no path to host UI except through an injected port whose headless
   behavior is defined.
 
-The same blind spot shows up in a new form in Phase 3: `CliIntegration`
-selects the PTY path with `"getExtensionContext" in this.platform`. The check
-compiles cleanly, but under any non-VS Code adapter, including the future
-standalone server's, it would send interactive steps to `stdio: inherit`
-instead of the dashboard terminal.
+Phase 3 replaced that host-identity check with the explicit
+`interactiveTerminal` capability. A non-VS Code host with an embedded
+dashboard PTY now selects the PTY path, while the CLI selects inherited stdio.
 
 ## Inventory (re-audited 2026-10-06)
 
@@ -278,6 +278,8 @@ Node path needs it.
 | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/extension.ts`                                                                                                                        | composition root; 19 direct `show*Message`; commands; trust/folder events | Keep. The license-command policy violations were fixed on 2026-09-11. Its unused `?? 3000` hosted-port fallback disagrees with the `server.port` default of 4747, so Stage 7a removes it when server options move into one place. |
 | `src/platform/VsCode*.ts` (`Adapter`, `FileWatcher`, `LogOutputChannel`, `SecretStore`, `UserFeedbackSink`, `WorkspaceRoot`, `Telemetry`) | implementations of project ports                                          | Keep as the explicit implementation boundary.                                                                                                                                                                                     |
+| `src/platform/VsCodeDashboardHostActions.ts`                                                                                              | dashboard focus and native target opening                                  | Keep as the VS Code implementation of `DashboardHostActions`.                                                                                                                                                                    |
+| `src/ui/ExternalFileTrustPrompt.ts`                                                                                                        | native editor and Explorer opening                                         | Keep as the VS Code opener; trust decisions live in `ExternalRootsApproval.ts`.                                                                                                                                                   |
 | `src/completions/ContextMenuReferenceCommands.ts`, `WorkspaceReferencePaths.ts`                                                           | Explorer/SCM/editor context menus; `executeDocumentSymbolProvider`        | Keep. The symbol lookup can switch to `VsCodeSymbolIndex` (Phase 6) but stays extension-only.                                                                                                                                     |
 | `src/completions/PromptCompletionProvider.ts`, `PromptLinkProvider.ts`, `PromptPropertyCompletionProvider.ts`                             | VS Code editor language features                                          | Keep. After Phase 6 they become thin adapters over the Node completion core.                                                                                                                                                      |
 | `src/ui/CtrlyokeCliCommands.ts`, `src/ui/NativeOutputCaptureCommand.ts`, `src/scm/ScmCommitCommand.ts`, `src/dev/DevCommands.ts`          | command registration, terminals, active editor                            | Keep.                                                                                                                                                                                                                             |
@@ -290,9 +292,9 @@ Node path needs it.
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/core/orchestration/ExternalRunWatchSession.ts`                            | `createFileSystemWatcher` ×3 (`:156`, `:284`, `:343`). `ExternalRunWatchCoordinator.ts:542` constructs it without a factory, even though the coordinator already holds one.                                                                                                                                                      | 2 / 1         | Pass the coordinator's `FileWatcherFactory` through.                                                                                                                                                                                                                                                                 |
 | `src/core/orchestration/ExecutionRootCoordinationWatchSession.ts`              | `createFileSystemWatcher` ×1 (`:79`). `WorkflowOrchestrator.ts:4906` constructs it without a factory.                                                                                                                                                                                                                            | 2 / 1         | Pass the orchestrator's factory through.                                                                                                                                                                                                                                                                             |
-| `src/ui/ExternalFileTrustPrompt.ts`                                            | The trust UI is already on `UserInteractionPort`, so there are 0 `show*Message` calls. What remains: `openResolvedTarget` (`executeCommand` ×3, `openTextDocument`, `showTextDocument` ×3) and `workspace.isTrusted` (`:244`). The orchestrator imports this file only for `promptBatchApprovalForPendingWorkflowExternalRoots`. | 3 / 2         | Split it in two. A host-neutral `ExternalRootsApproval.ts` gets the batch approval and trust decision, taking a `UserInteractionPort` and an `isWorkspaceTrusted` predicate. `openResolvedTarget` stays in the VS Code file as the VS Code `openWorkspaceTarget` host action.                                        |
-| `src/core/orchestration/WorkflowCommandHandler.ts` (96 lines)                  | `executeCommand("ctrlyoke.dashboard.focus")`, `openTextDocument`/`showTextDocument`, `ViewColumn`. Feedback already goes through the injected sink.                                                                                                                                                                              | 3 / 2         | `DashboardHostActions.focusDashboard` and `openWorkspaceTarget`.                                                                                                                                                                                                                                                     |
-| `src/core/TemplateManager.ts`                                                  | `ExtensionContext` constructor parameter and field, `new VsCodeAdapter(context)` (the last core construction), `vscode.WorkspaceFolder` return type. `CtrlYokeWebviewProvider` constructs it.                                                                                                                                    | 3 / 2         | Take `extensionPath`, a workspace-root resolver, and the injected platform. Each composition root builds it once.                                                                                                                                                                                                    |
+| `src/ui/ExternalFileTrustPrompt.ts`                                            | Native file/selection opening via `vscode` editor and Explorer APIs.                                                                                                                                                | Done / Phase 3 | Trust decisions and pending-root approval moved to `ExternalRootsApproval.ts`; this file owns `openResolvedTarget` and the VS Code trust-and-open command wrapper.                                                                                                                                                    |
+| `src/core/orchestration/WorkflowCommandHandler.ts` (96 lines)                  | No host API imports; receives `DashboardHostActions`.                                                                                                                                                               | Done / Phase 3 | Focus and prompt-file opening go through the injected `focusDashboard` and `openWorkspaceTarget` actions.                                                                                                                                                                                                           |
+| `src/core/TemplateManager.ts`                                                  | No VS Code dependency; receives explicit extension path, workspace-root resolver, and `PlatformAdapter`.                                                                                                            | Done / Phase 3 | The extension composition root constructs and injects the instance into `CtrlYokeWebviewProvider`.                                                                                                                                                                                                                  |
 | `src/ui/WebviewMessageRouter.ts` (2,787 lines)                                 | 16 `executeCommand` calls, `workspaceFolders` ×2, `EXPORT_CONTENT_PREVIEW` open/show document, 5 worktree-management `show*Message` calls (boundary-allowlisted), `VsCodeWorkspaceRoot` imports.                                                                                                                                 | 4 / 3         | See the call-site table in "Dashboard host actions".                                                                                                                                                                                                                                                                 |
 | `src/ui/WebviewSettingsSync.ts`                                                | `workspaceFolders` ×6, `showOpenDialog` (external-root browse, the OS-picker carve-out), `showSaveDialog` (certificate), `executeCommand` ×3 (enable/disable server, regenerate token), and TLS CA generation (`:1640-1728`) rooted at `getVsCodeWorkspaceRoot()`.                                                               | 5 / 4         | Inject roots. Add a `HostedServerControl` port (`enable?`, `disable?`, `regenerateToken`). Extract a host-neutral `ServerCertificateService` that both this handler and `ctrlyoke server --https` call. Put the save dialog behind `selectWorkspacePath`, falling back to the existing `/cert` download in browsers. |
 | `src/ui/WorkflowSerializer.ts`                                                 | `workspaceFolders` ×11, `showOpenDialog` ×2, `showSaveDialog`, open/show document, `vscode.Memento` (last export/browse directories), `Uri`. 0 `show*Message`.                                                                                                                                                                   | 5 / 4         | Inject roots. Replace `Memento` with `KeyValueStore` (which gains `get`). Use the `selectWorkspacePath` and `openWorkspaceTarget` host actions.                                                                                                                                                                      |
@@ -355,13 +357,14 @@ a small capability port instead. Most ports already exist in
 
 ### `PlatformAdapter`
 
-Current members (2026-10-06): `getSecretStore?`, `getConfig?`,
-`getWorkspaceRoot`, `getWorkspaceRoots`, `getApprovedExternalFileRoots?`,
-`getNamedWorkspaceRoots`, `getExtensionPath`, `openTextFile?`,
-`focusDashboard?`, `isVsCode?`. The five UI methods (`log`, `warn`, `error`,
+Current members (2026-10-06): required `interactiveTerminal`,
+`getWorkspaceRoot`, `getWorkspaceRoots`, `getNamedWorkspaceRoots`,
+`getExtensionPath`; optional `getSecretStore`, `getConfig`, and
+`getApprovedExternalFileRoots`. `openTextFile`, `focusDashboard`, and
+`isVsCode` have been removed. The five UI methods (`log`, `warn`, `error`,
 `showProgress`, `showChoice`) were deleted on 2026-08-02.
 
-Phase 3 makes these changes:
+Phase 3 made these changes:
 
 - **Delete `isVsCode?()`.** Only `VsCodeAdapter` implements it, and nothing
   calls it.
@@ -607,11 +610,11 @@ baseline can't go stale.
 
 | Guard                                                                 | Root / scope                                                            | Baseline (2026-10-06) | Goes to 0 at             |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------: | ------------------------ |
-| `vscodeImportersReachableFromOrchestrator` (explicit allowlist)       | `WorkflowOrchestrator.ts`, value imports only (`import type` erased)    |                     2 | Stage 2                  |
+| `vscodeImportersReachableFromOrchestrator` (explicit allowlist)       | `WorkflowOrchestrator.ts`, value imports only (`import type` erased)    |                     0 | —                        |
 | `orchestratorDirectVsCodeImports`                                     | `WorkflowOrchestrator.ts`                                               |                     0 | —                        |
 | `orchestratorVsCodeConstructorParams`                                 | orchestrator constructor                                                |                     0 | —                        |
 | `workflowInstanceDirectVsCodeImports`                                 | `WorkflowInstance.ts`                                                   |                     0 | —                        |
-| `coreVsCodeAdapterConstructions`                                      | `src/core/**`                                                           |                     1 | Stage 2                  |
+| `coreVsCodeAdapterConstructions`                                      | `src/core/**`                                                           |                     0 | —                        |
 | `adapterUi` (`platform.log/warn/error/showProgress/showChoice`)       | all production code                                                     |                     0 | —                        |
 | `directMessage.reusable` / `.boundary` (`vscode.window.show*Message`) | all production code; 8-file boundary allowlist                          |                0 / 46 | boundary → 41 at Stage 3 |
 | `webviewToast`                                                        | webview toast call sites outside the host-aware dispatcher              |                     1 | —                        |
@@ -799,6 +802,9 @@ remove them.
 
 ### Phase 3 — Command/domain split and adapter cleanup (Staging Stage 2)
 
+**DONE 2026-10-06 — Phase 3 complete.** `WorkflowOrchestrator` reaches no
+`vscode` imports, and `src/core/**` constructs no `VsCodeAdapter`.
+
 1. Split `ExternalFileTrustPrompt.ts`:
    - Move `promptBatchApprovalForPendingWorkflowExternalRoots`, the
      pending-root helpers, and the trust decision into a host-neutral
@@ -806,21 +812,21 @@ remove them.
      an `isWorkspaceTrusted` predicate in place of `workspace.isTrusted`.
    - `openResolvedTarget` stays in the VS Code file and becomes that host's
      `openWorkspaceTarget`.
-   - The orchestrator imports only the new module.
+   - The orchestrator imports only the new module. **Done.**
 2. Define `DashboardHostActions` in `src/core/HostPorts.ts`, starting with
    `focusDashboard` and `openWorkspaceTarget`. Add it to
    `WorkflowOrchestratorDependencies` and move `WorkflowCommandHandler` onto
-   it.
+   it. **Done.**
 3. Refactor `TemplateManager` to take `extensionPath`, a workspace-root
    resolver, and the injected platform. `CtrlYokeWebviewProvider` (Stage 6:
    `DashboardApplication`) receives the instance instead of building it from
-   `ExtensionContext`. `coreVsCodeAdapterConstructions` drops to 0.
+   `ExtensionContext`. `coreVsCodeAdapterConstructions` drops to 0. **Done.**
 4. `PlatformAdapter` changes:
    - Delete `isVsCode` and `openTextFile`.
    - Move `focusDashboard` to host actions and update `WorkflowOrchestrator`
-     and `WorkflowExecutor`.
+     and `WorkflowExecutor`. **Done.**
    - Add `interactiveTerminal`, replacing `CliIntegration.isVsCodeContext()`
-     and `runtimeState.isVsCodeContext` (see "Capability Boundaries").
+     and `runtimeState.isVsCodeContext` (see "Capability Boundaries"). **Done.**
 5. Keep VS Code `InputBox`, `QuickPick`, native documents, and post-operation
    actions in thin command facades in `extension.ts`. `TemplateImporter`'s
    share of this item disappeared when the file was deleted.

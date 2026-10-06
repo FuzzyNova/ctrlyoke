@@ -6,7 +6,6 @@ import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { suite, test, setup, teardown } from "mocha";
-import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import { HarnessStatus } from "../../core/HarnessIntegration";
 import {
@@ -14,6 +13,7 @@ import {
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
+  INTERACTIVE_TERMINAL_MODES,
 } from "../../types/DashboardConstants";
 import {
   HARNESS_IDS,
@@ -32,7 +32,6 @@ import {
   createNoWorktreeExecutionWorkspace,
   PlatformAdapter,
 } from "../../platform/PlatformAdapter";
-import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import type { McpServerConfig, PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { InteractiveInjectContext } from "../../core/harness/shared/CliExecutionRunner";
@@ -46,9 +45,8 @@ import {
   TEST_VERSION_POLICY,
 } from "../helpers/mockHarness";
 
-class MockVsCodePlatform
-  implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
-{
+class MockVsCodePlatform implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   constructor(private readonly workspaceRoot = process.cwd()) {}
 
   getWorkspaceRoot(): string {
@@ -67,9 +65,6 @@ class MockVsCodePlatform
     return process.cwd();
   }
 
-  getExtensionContext(): vscode.ExtensionContext {
-    return { subscriptions: [] } as unknown as vscode.ExtensionContext;
-  }
 }
 
 class TestCliIntegration extends CliIntegration {

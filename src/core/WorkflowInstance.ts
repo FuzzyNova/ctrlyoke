@@ -196,7 +196,7 @@ import {
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { ExternalRunWatchInstance } from "./orchestration/ExternalRunWatchCoordinator";
 import type { RunLifecycleInstancePort } from "./orchestration/RunLifecycleService";
-import type { FileWatcherFactory } from "./HostPorts";
+import type { DashboardHostActions, FileWatcherFactory } from "./HostPorts";
 import type { RunViewPublisherInstance } from "./orchestration/RunViewPublisher";
 import {
   buildTerminalEndedMessage,
@@ -577,7 +577,8 @@ export class WorkflowInstance
     runnerHostIdentity?: RunnerHostIdentity,
     /** Host file watcher for the working file; headless hosts poll instead. */
     fileWatcherFactory?: FileWatcherFactory,
-    private readonly workflowSessionIdFromOverride: boolean = false
+    private readonly workflowSessionIdFromOverride: boolean = false,
+    private readonly dashboardHostActions?: DashboardHostActions
   ) {
     const resolvedRunnerHostIdentity = runnerHostIdentity ?? {
       runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
@@ -708,7 +709,9 @@ export class WorkflowInstance
       this.endConditionHandler,
       this.endConditionEvaluator,
       this.platform,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      undefined,
+      this.dashboardHostActions
     );
     this.promptFileLoader = new PromptFileLoader(
       this.promptFileParser,
@@ -4191,7 +4194,9 @@ export class WorkflowInstance
       this.endConditionHandler,
       this.endConditionEvaluator,
       this.platform,
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      undefined,
+      this.dashboardHostActions
     );
   }
 

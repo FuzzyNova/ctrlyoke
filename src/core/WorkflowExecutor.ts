@@ -1,5 +1,6 @@
 import * as path from "path";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
+import type { DashboardHostActions } from "./HostPorts";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
   PromptStep,
@@ -520,7 +521,8 @@ export class WorkflowExecutor {
     private readonly secretGrantTrustStore: Pick<
       SecretGrantsTrustStore,
       "getDecision"
-    > = secretGrantsTrustStore
+    > = secretGrantsTrustStore,
+    private readonly dashboardHostActions?: Pick<DashboardHostActions, "focusDashboard">
   ) {
     this.scriptExecutionReporter = new ScriptExecutionReporter(
       endConditionEvaluator
@@ -4951,7 +4953,7 @@ export class WorkflowExecutor {
 
   private async showDashboard(): Promise<void> {
     try {
-      this.platform.focusDashboard?.();
+      this.dashboardHostActions?.focusDashboard?.();
     } catch (error) {
       Log.error("[WorkflowExecutor] Could not focus dashboard panel:", error);
     }

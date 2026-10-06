@@ -6,7 +6,7 @@ import { afterEach, suite, test } from "mocha";
 import {
   confirmExternalFileTrust,
   type ExternalFileTrustContext,
-} from "../../ui/ExternalFileTrustPrompt";
+} from "../../ui/ExternalRootsApproval";
 import type {
   ChoiceRequest,
   UserInteractionPort,

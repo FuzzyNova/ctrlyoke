@@ -1,6 +1,40 @@
 import type { HarnessStatus } from "./HarnessIntegration";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
-import type { HarnessId } from "../types/DashboardConstants";
+import {
+  DASHBOARD_ACTION_RESULT_STATUSES,
+  type HarnessId,
+} from "../types/DashboardConstants";
+
+/** Result of asking the host to perform a UI action. */
+export type ActionResult =
+  | { status: typeof DASHBOARD_ACTION_RESULT_STATUSES.OPENED }
+  | {
+      status: typeof DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED;
+      message?: string;
+    }
+  | {
+      status: typeof DASHBOARD_ACTION_RESULT_STATUSES.FAILED;
+      message: string;
+    };
+
+/** A resolved workspace target to open in the host's editor. */
+export interface WorkspaceOpenTarget {
+  readonly path: string;
+  readonly isDirectory?: boolean;
+  readonly startLine?: number;
+  readonly endLine?: number;
+  readonly openAsText?: boolean;
+  readonly viewColumn?: number;
+  readonly workflowSourcePath?: string;
+}
+
+/** Host UI actions used by shared orchestration and dashboard services. */
+export interface DashboardHostActions {
+  /** Open a file or selection in the host's editor. */
+  openWorkspaceTarget(target: WorkspaceOpenTarget): Promise<ActionResult>;
+  /** Focus the dashboard when this host provides one. */
+  focusDashboard?(): void;
+}
 
 export interface HarnessDetailedStatus {
   initializationStatus: HarnessStatus;

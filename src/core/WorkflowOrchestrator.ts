@@ -62,6 +62,7 @@ import {
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import type {
+  DashboardHostActions,
   DisposableRegistry,
   FileWatcherFactory,
   KeyValueStore,
@@ -147,7 +148,7 @@ import {
   type DashboardClient,
 } from "../ui/DashboardBroadcastHub";
 import { promptBatchApprovalForPendingWorkspaceSecretGrants } from "../ui/SecretGrantsTrustPrompt";
-import { promptBatchApprovalForPendingWorkflowExternalRoots } from "../ui/ExternalFileTrustPrompt";
+import { promptBatchApprovalForPendingWorkflowExternalRoots } from "../ui/ExternalRootsApproval";
 import {
   NullUserInteractionPort,
   type UserInteractionPort,
@@ -227,6 +228,7 @@ interface WorkflowReplayOptions {
 
 export interface WorkflowOrchestratorDependencies {
   platform: PlatformAdapter;
+  dashboardHostActions: DashboardHostActions;
   /**
    * Resolves the workspace folder path. The orchestrator samples this once
    * during construction to preserve the previous workspace-folder semantics.
@@ -319,6 +321,9 @@ export class WorkflowOrchestrator {
       },
       get fileWatcherFactory() {
         return orchestrator.fileWatcherFactory;
+      },
+      get dashboardHostActions() {
+        return orchestrator.dashboardHostActions;
       },
       get panelClientId() {
         return orchestrator.PANEL_CLIENT_ID;
@@ -567,6 +572,7 @@ export class WorkflowOrchestrator {
   private readonly integrationFactory: IntegrationFactory;
   private readonly compatibilityRegistry: HarnessCapabilityRegistry;
   private readonly platform: PlatformAdapter;
+  private readonly dashboardHostActions: DashboardHostActions;
   private readonly statusBarSink?: StatusBarSink;
   private readonly disposableRegistry: DisposableRegistry;
   private readonly fileWatcherFactory: FileWatcherFactory;
@@ -635,6 +641,7 @@ export class WorkflowOrchestrator {
 
   constructor(dependencies: WorkflowOrchestratorDependencies) {
     this.platform = dependencies.platform;
+    this.dashboardHostActions = dependencies.dashboardHostActions;
     this.statusBarSink = dependencies.statusBarSink;
     this.disposableRegistry = dependencies.disposableRegistry;
     this.fileWatcherFactory = dependencies.fileWatcherFactory;
@@ -695,7 +702,8 @@ export class WorkflowOrchestrator {
     this.integrationFactory = new IntegrationFactory(
       this.platform,
       this.userFeedbackSink,
-      this.harnessUsageService?.getProviderUsageIngestPort()
+      this.harnessUsageService?.getProviderUsageIngestPort(),
+      this.disposableRegistry
     );
     this.compatibilityRegistry = new HarnessCapabilityRegistry();
 
@@ -720,6 +728,7 @@ export class WorkflowOrchestrator {
     );
     this.endConditionEvaluator = new EndConditionEvaluator(this.platform);
     this.workflowCommandHandler = new WorkflowCommandHandler(
+      this.dashboardHostActions,
       this.userFeedbackSink
     );
 
@@ -2606,7 +2615,9 @@ export class WorkflowOrchestrator {
           workspaceRoot,
           workflowSourcePath,
           requestedRoots,
-          port
+          port,
+          undefined,
+          this.workspaceTrustPredicate
         );
         pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
           ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
@@ -4705,7 +4716,7 @@ export class WorkflowOrchestrator {
       const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
       await this.createWorkflowForClient(panelSend, this.PANEL_CLIENT_ID);
       await this.getActiveInstance().restoreWorkflowFromWorkingFile(filePath);
-      this.platform.focusDashboard?.();
+      this.dashboardHostActions.focusDashboard?.();
       Log.info(
         `[WorkflowOrchestrator] Resumed session from working file: ${filePath}`
       );

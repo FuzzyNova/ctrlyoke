@@ -54,14 +54,12 @@ const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 // those capabilities are injected by extension.ts, and its workspace-folder
 // resolver is now injected as a path callback. Its runner watcher is now
 // supplied by the FileWatcherFactory port.
-// Shrunk from 8 to 4 when the CLI runtime graph was decoupled, then from 4 to
-// 2 by moving both remaining watcher sessions behind FileWatcherFactory.
-const vscodeImportersReachableFromOrchestrator = 2;
+// Shrunk from 8 to 4 when the CLI runtime graph was decoupled, from 4 to 2 by
+// moving both watcher sessions behind FileWatcherFactory, then to 0 by
+// extracting host actions and external-root approvals.
+const vscodeImportersReachableFromOrchestrator = 0;
 
-const vscodeImporterFilesReachableFromOrchestrator = [
-  "src/core/orchestration/WorkflowCommandHandler.ts",
-  "src/ui/ExternalFileTrustPrompt.ts",
-] as const;
+const vscodeImporterFilesReachableFromOrchestrator = [] as const;
 
 // Phase 1 item 9 removes the orchestrator's direct vscode import.
 const orchestratorDirectVsCodeImports = 0;
@@ -73,9 +71,8 @@ const orchestratorVsCodeConstructorParams = 0;
 // Already clean; this guard prevents WorkflowInstance.ts from regressing.
 const workflowInstanceDirectVsCodeImports = 0;
 
-// Shrunk from 7 to 1: six orchestrator constructions moved to the extension
-// composition root; TemplateManager remains for Phase 3.
-const coreVsCodeAdapterConstructions = 1;
+// TemplateManager now receives the extension path and injected platform.
+const coreVsCodeAdapterConstructions = 0;
 
 interface SourceAuditSite {
   file: string;

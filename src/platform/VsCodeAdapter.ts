@@ -10,6 +10,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { SecretStore } from "./SecretStore";
 import { VsCodeSecretStore } from "./VsCodeSecretStore";
+import { INTERACTIVE_TERMINAL_MODES } from "../types/DashboardConstants";
 
 /**
  * VS Code implementation of PlatformAdapter.
@@ -17,6 +18,7 @@ import { VsCodeSecretStore } from "./VsCodeSecretStore";
  * Used exclusively in the VS Code extension context.
  */
 export class VsCodeAdapter implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   private readonly secretStore: SecretStore;
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -51,31 +53,4 @@ export class VsCodeAdapter implements PlatformAdapter {
     return this.context.extensionPath;
   }
 
-  async openTextFile(filePath: string): Promise<void> {
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(filePath)
-    );
-    await vscode.window.showTextDocument(doc);
-  }
-
-  focusDashboard(): void {
-    vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
-  }
-
-  /**
-   * Returns true to signal this is a VS Code extension context.
-   * Used by CliIntegration to choose the VS Code terminal path over
-   * the spawn-with-stdio:inherit CLI path.
-   */
-  isVsCode(): boolean {
-    return true;
-  }
-
-  /**
-   * Returns the underlying ExtensionContext for VS Code-only code
-   * (WorkflowOrchestrator, terminal creation, etc.)
-   */
-  getExtensionContext(): vscode.ExtensionContext {
-    return this.context;
-  }
 }

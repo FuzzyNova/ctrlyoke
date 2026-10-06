@@ -133,6 +133,9 @@ function createTestOrchestrator(
 ): WorkflowOrchestrator {
   const orchestrator = new WorkflowOrchestrator({
     platform: new MockPlatform(os.tmpdir()),
+    dashboardHostActions: {
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
+    },
     workspaceFolderPathResolver: () => undefined,
     userFeedbackSink: new TestUserFeedbackSink(),
     runnerHostIdentity: TEST_RUNNER_HOST_IDENTITY,
@@ -676,8 +679,9 @@ suite("WorkflowOrchestrator session command facade", () => {
         calls.push(`restore:${selectedPath}`);
       },
     });
-    internal.platform = {
+    internal.dashboardHostActions = {
       focusDashboard: () => calls.push("focus"),
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
     };
 
     await orchestrator.resumeSessionFromWorkingFile(filePath);
