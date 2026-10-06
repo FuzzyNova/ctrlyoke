@@ -70,6 +70,7 @@ import {
   type CodeMirrorEditorMode,
   type CompletionTrigger,
 } from "@root/types/DashboardConstants";
+import { COMPLETION_KIND_ICONS } from "@root/types/SymbolKindConstants";
 import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
@@ -182,7 +183,7 @@ interface ExtensionCompletionItem {
   rank?: number;
   /**
    * Explicit codicon name overriding the kind-derived icon below (see
-   * PlainCompletionItem.icon in CompletionHelpers.ts for why this exists —
+   * PlainCompletionItem.icon in CompletionCore.ts for why this exists —
    * some atomic reference kinds share a CompletionItemKind but need distinct
    * icons matching their chip). Must name a key in SYMBOL_ICON_COLORS.
    */
@@ -208,54 +209,6 @@ type OutputCapturePickHandler = (
 
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
-
-// Maps VS Code CompletionItemKind values to the codicon that best represents
-// them — the single source shared by the completions dropdown (built from a
-// live item's `kind`) and atomic reference chips (resolved asynchronously for
-// #sym: refs; see symbolIconCacheKey/createContextReferenceLintExtension).
-// Every name here ships in @vscode/codicons' codicon.css (checked against the
-// pinned package version) — don't add one without verifying it exists there.
-//
-// CompletionItemKind only has a couple of free values, not enough to give
-// secrets/prior-context/condition-output/skill/mcp completions their own
-// entries without colliding with a kind some other provider already uses for
-// its real meaning (e.g. Keyword is shared by prior-context AND skill
-// completions). Those providers set `item.icon` instead (see
-// PlainCompletionItem.icon in CompletionHelpers.ts) to bypass this map
-// entirely — see the `type` computation in buildCodeMirrorCompletionResult.
-//
-// kind 10 (Unit) is repurposed: getSelectionCompletions() (extension host)
-// assigns it to the "current selection" item specifically because Unit is
-// otherwise unused by any provider, giving that entry a stable,
-// collision-free marker distinct from git (~) completions, which use
-// Reference (17).
-const COMPLETION_KIND_ICONS: Record<number, string> = {
-  0: "symbol-text", // Text
-  1: "symbol-method", // Method
-  2: "symbol-function", // Function
-  3: "symbol-constructor", // Constructor
-  4: "symbol-field", // Field
-  5: "symbol-variable", // Variable
-  6: "symbol-class", // Class
-  7: "symbol-interface", // Interface
-  8: "symbol-module", // Module (also covers collapsed Namespace/Package)
-  9: "symbol-property", // Property (also covers collapsed Key)
-  10: "list-selection", // Unit — repurposed marker for the selection completion
-  11: "symbol-value", // Value (also covers collapsed String/Number/Boolean/Array/Object/Null)
-  12: "symbol-enum", // Enum
-  13: "symbol-keyword", // Keyword
-  14: "symbol-snippet", // Snippet
-  15: "symbol-color", // Color
-  16: "symbol-file", // File
-  17: "source-control", // Reference — branch completions (~ git refs set their own icon)
-  18: "folder", // Folder
-  19: "symbol-enum-member", // EnumMember
-  20: "symbol-constant", // Constant
-  21: "symbol-struct", // Struct
-  22: "symbol-event", // Event
-  23: "symbol-operator", // Operator
-  24: "symbol-type-parameter", // TypeParameter
-};
 
 function shouldBypassCodeMirrorFiltering(
   request: PendingCompletionRequest | null

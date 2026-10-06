@@ -13,10 +13,8 @@ import {
 } from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
-import {
-  getOutputChannelSlug,
-  mapSymbolKindToReferenceKind,
-} from "./CompletionHelpers";
+import { getOutputChannelSlug } from "./CompletionHelpers";
+import { mapSymbolKindToReferenceKind } from "./CompletionCore";
 import { writeOutputSnapshotAttachment } from "../ui/OutputSnapshotService";
 import type { OutputCaptureEntry } from "./OutputCaptureCache";
 import { confirmExternalFileTrust } from "../ui/ExternalRootsApproval";

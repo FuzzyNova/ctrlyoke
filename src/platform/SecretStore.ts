@@ -6,10 +6,10 @@
  * their own key prefixes.
  */
 export interface SecretStore {
-  get(key: string): Thenable<string | undefined>;
-  store(key: string, value: string): Thenable<void>;
-  delete(key: string): Thenable<void>;
-  keys(): Thenable<string[]>;
+  get(key: string): PromiseLike<string | undefined>;
+  store(key: string, value: string): PromiseLike<void>;
+  delete(key: string): PromiseLike<void>;
+  keys(): PromiseLike<string[]>;
 }
 
 /** Raised when the host has no usable encrypted credential-store backend. */

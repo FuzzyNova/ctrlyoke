@@ -154,7 +154,7 @@ type RefreshOutcome = "refreshed" | "skipped" | "failed-in-window";
 
 export interface LicenseTrialStateStore {
   get<T>(key: string): T | undefined;
-  update(key: string, value: unknown): Thenable<void>;
+  update(key: string, value: unknown): PromiseLike<void>;
 }
 
 interface LicenseCertificate {

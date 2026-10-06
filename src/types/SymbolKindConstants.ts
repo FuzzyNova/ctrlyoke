@@ -31,3 +31,32 @@ export const SYMBOL_KIND_ICONS: Record<string, string> = {
   operator: "symbol-operator",
   "type-parameter": "symbol-type-parameter",
 };
+
+/** Codicons used by the webview completion dropdown for project completion kinds. */
+export const COMPLETION_KIND_ICONS: Record<number, string> = {
+  0: "symbol-text",
+  1: "symbol-method",
+  2: "symbol-function",
+  3: "symbol-constructor",
+  4: "symbol-field",
+  5: "symbol-variable",
+  6: "symbol-class",
+  7: "symbol-interface",
+  8: "symbol-module",
+  9: "symbol-property",
+  10: "list-selection",
+  11: "symbol-value",
+  12: "symbol-enum",
+  13: "symbol-keyword",
+  14: "symbol-snippet",
+  15: "symbol-color",
+  16: "symbol-file",
+  17: "source-control",
+  18: "folder",
+  19: "symbol-enum-member",
+  20: "symbol-constant",
+  21: "symbol-struct",
+  22: "symbol-event",
+  23: "symbol-operator",
+  24: "symbol-type-parameter",
+};

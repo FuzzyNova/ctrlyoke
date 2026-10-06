@@ -1,4 +1,4 @@
-import type { PlainCompletionItem } from "./CompletionHelpers";
+import type { PlainCompletionItem } from "./CompletionCore";
 import {
   CTRLYOKE_BUILTIN_MCP_SERVER_INFO,
   McpRegistryFileManager,

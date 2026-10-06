@@ -134,12 +134,11 @@ names the guard or test that proves it, not just the code change.
     injected roots and the watcher factory.
   - **5b done:** `CompletionCore`, the `SymbolIndex` and `EditorContextSource`
     ports with their VS Code implementations, and the golden tests.
-  - **5c (added in review):** delete the pre-core completion
-    implementations that 5b left in `CompletionHelpers.ts` (production
-    already calls `CompletionCore`; the copies survive only through
-    `CompletionHelpers.test.ts`), move their test coverage onto
-    `CompletionCore`, and make the `#sym:` golden exercise
-    `VsCodeSymbolIndex`'s kind conversion.
+  - **5c done:** deleted the pre-core completion implementations from
+    `CompletionHelpers.ts`, moved their behavioral coverage onto
+    `CompletionCore.test.ts` using fake workspaces, and made the `#sym:`
+    golden exercise the shared dashboard icon mapping and
+    `VsCodeSymbolIndex`'s VS Code-to-LSP kind conversion.
 - **Phase 5 of the LSP plan (the navigation-only VS Code provider backend) is
   dropped.** It isn't scheduled. The reasoning is in that plan's resolved open
   questions.

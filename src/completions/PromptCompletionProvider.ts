@@ -32,7 +32,7 @@ type TriggerChar = "@" | "#" | "~" | "$" | "!";
  * - #sym:symbolName           → Symbol reference (planned)
  */
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {
-  // No local cache - using shared cache from CompletionHelpers
+  // No local cache - using the shared CompletionCore cache
 
   constructor(
     private readonly getSecretRegistry?: () => SecretRegistryService | undefined

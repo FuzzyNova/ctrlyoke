@@ -44,12 +44,29 @@ export interface PlainCompletionItem {
   label: string;
   kind: number;
   insertText: string;
+  /**
+   * Set only on output-capture completion items; the picker resolves it via
+   * the output snapshot save command.
+   */
   captureId?: string;
   detail?: string;
   documentation?: string;
   sortText?: string;
   filterText?: string;
+  /**
+   * 0-based position in this response's fuzzy relevance ranking (see
+   * FuzzyRanking.ts). A response containing ranked items is shown by the
+   * webview dropdown in the order sent, with no client-side filtering or
+   * re-sorting, so every other item in that response must already match.
+   */
   rank?: number;
+  /**
+   * Explicit codicon name overriding the webview dropdown's default
+   * kind-derived icon. It must name an icon supported by the atomic-reference
+   * icon/color map and should match the icon of the reference it inserts.
+   * VS Code's native IntelliSense has no per-item custom icon support, so its
+   * adapter uses `kind` instead.
+   */
   icon?: string;
 }
 
@@ -282,22 +299,44 @@ export class CompletionCore {
   ): Promise<PlainCompletionItem[]> {
     const entries = await this.pathEntries();
     const filter = normalizeReferencePath(query)
-      .replace(/^\.\/?/, "")
+      .replace(/^\.\.?\//, "")
+      .replace(/^\//, "")
       .toLowerCase();
+    const hasPath = filter.includes("/");
+    const endsInSlash = filter.endsWith("/");
+    const parent = hasPath
+      ? (endsInSlash
+          ? filter.slice(0, -1)
+          : filter.slice(0, filter.lastIndexOf("/"))
+        ).replace(/\/+$/, "")
+      : "";
+    const child =
+      hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
     const selected = entries.filter(
       (entry) =>
         entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
         PROMPT_EXTENSIONS.some((ext) =>
           entry.relativePath.toLowerCase().endsWith(ext)
         ) &&
-        (!filter || fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter))
+        (!filter ||
+          (hasPath
+            ? entry.parent.toLowerCase() === parent &&
+              (!child || fuzzyMatches(entry.name, child))
+            : fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter)))
     );
-    const ranked = filter
-      ? rankByFuzzyQuery(filter, selected, [
-          (e) => e.name,
-          (e) => e.relativePath,
-        ])
-      : selected;
+    const shouldRank = Boolean(child || (filter && !hasPath));
+    const ranked = child
+      ? rankByFuzzyQuery(child, selected, [(e) => e.name])
+      : filter && !hasPath
+        ? rankByFuzzyQuery(filter, selected, [
+            (e) => e.name,
+            (e) => e.relativePath,
+          ])
+        : [...selected].sort((a, b) =>
+            `${a.relativePath.split("/").length}_${a.relativePath}`.localeCompare(
+              `${b.relativePath.split("/").length}_${b.relativePath}`
+            )
+          );
     return ranked.slice(0, 200).map((entry, rank) => {
       const insertPath = this.workspace.isMultiRoot()
         ? entry.relativePath
@@ -308,11 +347,11 @@ export class CompletionCore {
         insertText: insertPath,
         detail: entry.parent === "." ? "Root" : entry.parent,
         documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
-        sortText: filter
+        sortText: shouldRank
           ? String(rank).padStart(6, "0")
           : `${entry.relativePath.split("/").length}_${entry.relativePath}`,
         filterText: `${entry.name} ${entry.relativePath}`,
-        ...(filter ? { rank } : {}),
+        ...(shouldRank ? { rank } : {}),
       };
     });
   }

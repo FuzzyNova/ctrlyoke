@@ -1,4 +1,4 @@
-import type { PlainCompletionItem } from "./CompletionHelpers";
+import type { PlainCompletionItem } from "./CompletionCore";
 import { listLocalBranches } from "../utils/GitUtils";
 import { COMPLETION_ITEM_KINDS } from "../types/DashboardConstants";
 
