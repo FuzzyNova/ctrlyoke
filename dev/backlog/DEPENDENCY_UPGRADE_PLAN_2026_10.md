@@ -210,14 +210,37 @@ installed.
 
 ---
 
+## G. TypeScript 5.9 → 6.0 — done 2026-10-06
+
+`typescript` 6.0.3; `@typescript-eslint/eslint-plugin` and `/parser` ranges
+raised to `^8.71.1` (already installed; 8.71 supports `<6.1.0`). The expected
+cleanup pass turned out to be empty: F's `module: node20` already removed the
+deprecated `node10` resolver, and nothing else we set (`baseUrl`,
+`esModuleInterop: false`, `target: ES5`, `downlevelIteration`, …) is
+deprecated. Extension, webview, and `netlify/` all typecheck with zero errors,
+lint is clean, and `npm test` passes (all three suites).
+
+- **`types` now defaults to `[]`.** Nothing broke only because `@types/node`
+  was being dragged in by `/// <reference types="node" />` lines in express's
+  and vite's typings. Both `tsconfig.json` and
+  `src/ui/webview-react/tsconfig.json` now list `"types": ["node"]`
+  explicitly. Other `@types` packages (`vscode`, `mocha`, `react`, …) are
+  reached through real imports and need no entry; a future globals-only
+  `@types` package does.
+- Webview `lib` dropped `DOM.Iterable`, which TS 6 folds into `DOM`.
+- The TS compiler-API scripts are unaffected: `find-dead-methods.mjs --json`
+  output is byte-identical under 5.9.3 and 6.0.3, and `find-hardcoded-strings`
+  and `check-a11y-names` pass.
+
+---
+
 ## Other majors available (no vulnerabilities — upgrade opportunistically)
 
 All of these are compatible with our `>=22.12.0` Node floor.
 
-| Package      | Current → Latest | prod/dev | Risk    | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------ | ---------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `typescript` | 5.9 → 6.0        | dev      | High    | Carried over. `@typescript-eslint` 8.71 supports `>=4.8.4 <6.1.0`, so **6.0 is unblocked**. Expect new strictness errors and deprecations — dedicated typecheck-cleanup pass.                                                                                                                                                                                                                       |
-| `typescript` | 6.0 → 7.0        | dev      | Blocked | TS 7 is the native (Go) compiler and is now `latest` on npm. Blocked on `@typescript-eslint` support, and on our use of the TS compiler JS API in `scripts/find-dead-methods.mjs`, `scripts/find-hardcoded-strings.mjs`, `scripts/check-a11y-names.mjs`, `src/test/unit/SourceAuditCounters.test.ts`, and `src/ui/webview-react/test/components/settings/settingsCatalog.test.ts`. Go to 6.0 first. |
+| Package      | Current → Latest | prod/dev | Risk    | Notes                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------ | ---------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typescript` | 6.0 → 7.0        | dev      | Blocked | TS 7 is the native (Go) compiler and is now `latest` on npm. Blocked on `@typescript-eslint` support, and on our use of the TS compiler JS API in `scripts/find-dead-methods.mjs`, `scripts/find-hardcoded-strings.mjs`, `scripts/check-a11y-names.mjs`, `src/test/unit/SourceAuditCounters.test.ts`, and `src/ui/webview-react/test/components/settings/settingsCatalog.test.ts`. 6.0 is done (see G). |
 
 ---
 
@@ -242,5 +265,5 @@ All of these are compatible with our `>=22.12.0` Node floor.
    jest-dom#742 ships.
 6. ~~**F** — `chalk` 6, `gpt-tokenizer` 4, `vscode-jsonrpc` 9~~ — done, with
    the root `tsconfig.json` moved to `module: node20`.
-7. **TypeScript 6.0** dedicated pass. TypeScript 7 stays parked until the
+7. ~~**G** — TypeScript 6.0~~ — done. TypeScript 7 stays parked until the
    tooling supports it.
