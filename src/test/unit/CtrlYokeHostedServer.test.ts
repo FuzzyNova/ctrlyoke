@@ -345,11 +345,11 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-websocket-");
     let connectionObserved = false;
     const webviewProvider = {
-      postMessage: () => {
+      requestThemeCapture: () => {
         connectionObserved = true;
       },
-      unregisterBrowserClient: () => undefined,
-      routeExternalMessage: async () => undefined,
+      disconnectClient: () => undefined,
+      routeClientMessage: async () => undefined,
     };
     const server = new CtrlYokeHostedServer(
       new DashboardBroadcastHub(),

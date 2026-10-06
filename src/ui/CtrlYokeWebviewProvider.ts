@@ -32,27 +32,16 @@ import type {
   ParallelGroupDefinition,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import type { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
-import { onModelsLoaded } from "../utils/ModelRegistry";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
-import type { UserFeedbackSink } from "../core/UserFeedbackSink";
 import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/CtrlYokeTypes";
-import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
-import { configService } from "../config/CtrlYokeConfigService";
-import { harnessAvailability } from "../utils/HarnessAvailability";
-import { WebviewSettingsSync } from "./WebviewSettingsSync";
-import { WorkflowSerializer } from "./WorkflowSerializer";
-import {
-  WebviewMessageRouter,
-  type WebviewRouterHostDependencies,
-} from "./WebviewMessageRouter";
-import { HistorySearchService } from "../core/orchestration/HistorySearchService";
-import type { IDashboardProvider } from "./IDashboardProvider";
-import type { IDashboardSink } from "../types/IDashboardSink";
+import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
+import type { WebviewSettingsSync } from "./WebviewSettingsSync";
+import type { WorkflowSerializer } from "./WorkflowSerializer";
+import type { WebviewMessageRouter } from "./WebviewMessageRouter";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
   WorkflowViewAddress,
@@ -60,24 +49,15 @@ import type {
   CoordinationScopeSnapshot,
 } from "../types/CtrlYokeTypes";
 import type { PostMessageFn } from "./WebviewSettingsSync";
-import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
+import type { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { retryWithBackoff } from "../utils/RetryUtils";
-import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
-import { VsCodeAdapter } from "../platform/VsCodeAdapter";
-import { VsCodeKeyValueStore } from "../platform/VsCodeKeyValueStore";
-import {
-  getVsCodeWorkspaceRoot,
-  getVsCodeNamedWorkspaceRoots,
-  getVsCodeTrustedWorkspaceRoots,
-} from "../platform/VsCodeWorkspaceRoot";
-import { DASHBOARD_ACTION_RESULT_STATUSES } from "../types/DashboardConstants";
-import { SecretRegistryService } from "./SecretRegistryService";
-import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
+import type { SecretRegistryService } from "./SecretRegistryService";
+import type { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
 import type { UserInteractionPort } from "./UserInteractionPort";
-import type { LicenseService } from "../license/LicenseService";
 import type { ContextMenuPromptEditorInsertSink } from "../completions/ContextMenuReferenceCommands";
 import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
+import type { DashboardApplication } from "./DashboardApplication";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -86,19 +66,11 @@ export type { CliOutput } from "../types/WebviewMessageTypes";
 export type { HarnessStatus } from "./WebviewSettingsSync";
 
 /**
- * Unified ctrlyoke WebviewViewProvider (React UI)
- *
- * Lifecycle & HTML generation, public update API, and coordination hub.
- * Message routing delegated to WebviewMessageRouter.
- * Settings/config management delegated to WebviewSettingsSync.
- * Save/export/template/history delegated to WorkflowSerializer.
+ * VS Code panel transport for the shared dashboard application.
+ * Owns HTML generation, panel READY/reconnect, and queued editor inserts.
  */
 export class CtrlYokeWebviewProvider
-  implements
-    vscode.WebviewViewProvider,
-    IDashboardProvider,
-    IDashboardSink,
-    ContextMenuPromptEditorInsertSink
+  implements vscode.WebviewViewProvider, ContextMenuPromptEditorInsertSink
 {
   private view?: vscode.WebviewView;
   private _pendingActiveWorkflowId: string | undefined;
@@ -108,13 +80,7 @@ export class CtrlYokeWebviewProvider
   // captures the session value at launch; a stale closure exits immediately when
   // the captured value no longer matches the field.
   private reconnectRetrySession = 0;
-  private outputHistoryManager?: OutputHistoryManager;
   private hub?: DashboardBroadcastHub;
-  private modelsLoadedDisposable?: { dispose(): void };
-  private configServiceUnsubscribe?: () => void;
-  private harnessAvailabilityUnsubscribe?: () => void;
-  private commitMessageGenerationUnsubscribe?: () => void;
-  private licenseEntitlementSubscription?: { dispose(): void };
   private runningServerUrl?: string;
   private runningServerAvailableIps: string[] = [];
   private runningServerPortFallback?: ServerPortFallbackInfo;
@@ -131,6 +97,7 @@ export class CtrlYokeWebviewProvider
   private readyPageLoadId: string | undefined;
   private readonly pendingPromptEditorInsertQueue: PromptEditorInsertRequest[] =
     [];
+  private readonly dashboardApplication: DashboardApplication;
 
   // Delegate classes
   private readonly settingsSync: WebviewSettingsSync;
@@ -138,7 +105,6 @@ export class CtrlYokeWebviewProvider
   private readonly router: WebviewMessageRouter;
   private readonly secretRegistry: SecretRegistryService;
   private readonly interactionPort: WebviewUserInteractionPort;
-  private readonly historySearchService = new HistorySearchService();
   // IDashboardSink message shapes are single-sourced here. Pure sink methods
   // delegate to it; methods with extra VS Code logic call it then do more work.
   private readonly sink = new PostMessageDashboardSink((msg) =>
@@ -170,159 +136,14 @@ export class CtrlYokeWebviewProvider
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    templateManager: TemplateManager,
-    nativeFeedbackSink?: UserFeedbackSink,
-    licenseService?: LicenseService,
-    hostDependencies?: WebviewRouterHostDependencies
+    application: DashboardApplication
   ) {
-    // Bind postMessage to use the view reference
-    const postMessage = (message: any) => this.postMessage(message);
-    const getOrchestrator = () => this.workflowOrchestrator;
-    const getOutputHistoryManager = () => this.outputHistoryManager;
-    this.secretRegistry = new SecretRegistryService({
-      secretStore: new VsCodeAdapter(context).getSecretStore(),
-      getWorkspaceRoot: getVsCodeWorkspaceRoot,
-    });
-    this.interactionPort = new WebviewUserInteractionPort(
-      postMessage,
-      () => this.panelReady && !!this.view
-    );
-
-    // Create delegate classes
-    this.settingsSync = new WebviewSettingsSync(
-      postMessage,
-      getOrchestrator,
-      () => this.getDevStatus(),
-      undefined,
-      licenseService
-        ? async () => {
-            const entitlement = await licenseService.getEntitlement();
-            return {
-              isPro: await licenseService.isPro(),
-              hasRemoteAccess: await licenseService.hasRemoteAccess(),
-              trialEndsAt: await licenseService.getRemoteAccessTrialEndsAt(),
-              source: entitlement.source ?? null,
-              expiresAt: entitlement.expiresAt,
-              isEnterprise: entitlement.isEnterprise ?? false,
-            };
-          }
-        : undefined,
-      {
-        getWorkspaceRoot:
-          hostDependencies?.getWorkspaceRoot ?? (() => undefined),
-        getNamedRoots: hostDependencies?.getNamedRoots ?? (() => []),
-        selectWorkspacePath: hostDependencies?.actions.selectWorkspacePath
-          ? hostDependencies.actions.selectWorkspacePath.bind(
-              hostDependencies.actions
-            )
-          : undefined,
-        serverControl: hostDependencies?.serverControl,
-      }
-    );
-    this.licenseEntitlementSubscription =
-      licenseService?.onDidChangeEntitlement(() => {
-        void this.settingsSync.sendLicenseAccessUpdate(
-          this.hub ? (msg) => this.hub!.postMessage(msg) : undefined
-        );
-      });
-    this.serializer = new WorkflowSerializer(
-      postMessage,
-      templateManager,
-      getOrchestrator,
-      getOutputHistoryManager,
-      new VsCodeKeyValueStore(context.workspaceState),
-      {
-        actions: hostDependencies?.actions ?? {
-          openWorkspaceTarget: async () => ({
-            status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
-          }),
-        },
-        getWorkspaceRoot: () =>
-          vscode.workspace.workspaceFolders?.length
-            ? getVsCodeWorkspaceRoot()
-            : undefined,
-        getNamedRoots:
-          hostDependencies?.getNamedRoots ?? getVsCodeNamedWorkspaceRoots,
-        getTrustedRoots:
-          hostDependencies?.getTrustedRoots ?? getVsCodeTrustedWorkspaceRoots,
-      }
-    );
-    this.router = new WebviewMessageRouter(
-      postMessage,
-      this.settingsSync,
-      this.serializer,
-      getOrchestrator,
-      this.historySearchService,
-      {
-        handleClearWorkflow: () => this.handleClearWorkflow(),
-        updateWorkflowName: (name: string) => this.updateWorkflowName(name),
-        handleDevAction: (action, scopedPostMessage) =>
-          this.handleDevAction(action, scopedPostMessage),
-        handleDevStatusRequest: (scopedPostMessage) =>
-          this.sendDevStatus(scopedPostMessage),
-        handleNativeFeedback: (feedback) =>
-          nativeFeedbackSink?.notify(feedback),
-        handleUxSnapshot: (payload, workspaceRoot, scopedPostMessage) =>
-          this.handleUxSnapshot(payload, workspaceRoot, scopedPostMessage),
-        resolveImageWebviewUri: (absolutePath: string) =>
-          this.view
-            ? this.view.webview
-                .asWebviewUri(vscode.Uri.file(absolutePath))
-                .toString()
-            : undefined,
-        getServerUrl: () => this.runningServerUrl,
-        getAvailableIps: () => this.runningServerAvailableIps,
-        getPortFallback: () => this.runningServerPortFallback,
-        getBindAddressFallback: () => this.runningServerBindAddressFallback,
-        onPanelReady: (pageLoadId) => this.handlePanelReady(pageLoadId),
-        handleBatchApprovalResponse: (id, result) =>
-          this.interactionPort.handleResponse(id, result ?? undefined),
-        handleChoiceResponse: (id, value) =>
-          this.interactionPort.handleChoiceResponse(id, value),
-      },
-      this.secretRegistry,
-      licenseService,
-      hostDependencies
-    );
-
-    // Listen for model registry updates
-    this.modelsLoadedDisposable = onModelsLoaded(() => {
-      if (this.view) {
-        this.settingsSync.sendModelOptionsUpdate();
-      }
-    });
-
-    // Listen for file-based config changes (configService) to keep all clients in sync.
-    // When the hub is available (after orchestrator init), broadcast to panel + all browser
-    // tabs. Before the hub is wired up (early startup), fall back to panel-only.
-    const sendGlobalSettingsUpdate = (): void => {
-      if (this.view) {
-        this.settingsSync.sendGlobalSettingsUpdate(
-          this.hub ? (msg) => this.hub!.postMessage(msg) : undefined
-        );
-      }
-    };
-    this.configServiceUnsubscribe = configService.subscribe(
-      sendGlobalSettingsUpdate
-    );
-    // An auto-detected default harness changes as detection results arrive.
-    this.harnessAvailabilityUnsubscribe =
-      harnessAvailability.onFirstAvailableChange(sendGlobalSettingsUpdate);
-
-    this.commitMessageGenerationUnsubscribe =
-      commitMessageGenerationTracker.subscribe((record) => {
-        this.postMessage({
-          type: MESSAGE_TYPES.COMMIT_MESSAGE_GENERATION_UPDATED,
-          record,
-        });
-      });
-
-    // Discover available agents and skills in background
-    this.settingsSync.discoverAgents();
-    this.settingsSync.discoverSkills();
-
-    // Harness availability is driven by WorkflowOrchestrator via notifyHarnessAvailability()
-    // (subscribes to onDidChangeStatus on all integrations — single source of truth).
+    this.dashboardApplication = application;
+    this.settingsSync = application.settingsSync;
+    this.serializer = application.serializer;
+    this.router = application.router;
+    this.secretRegistry = application.secretRegistry;
+    this.interactionPort = application.interactionPort;
   }
 
   /**
@@ -381,10 +202,9 @@ export class CtrlYokeWebviewProvider
         this.readyPageLoadId = undefined;
         this.view = undefined;
       }
-      this.router.disposeClient(PANEL_CLIENT_ID);
+      this.dashboardApplication.disposePanelClient();
       this.resolvePanelReadyWaiters();
       this.cancelReconnectRetry();
-      this.interactionPort.disposeAllPending();
     });
 
     this.startPanelReconnectRecovery(webviewView);
@@ -1077,6 +897,7 @@ export class CtrlYokeWebviewProvider
    */
   public setWorkflowOrchestrator(manager: WorkflowOrchestrator): void {
     this.workflowOrchestrator = manager;
+    this.dashboardApplication.setWorkflowOrchestrator(manager);
   }
 
   /**
@@ -1107,7 +928,40 @@ export class CtrlYokeWebviewProvider
   }
 
   public async routeMessage(message: any): Promise<void> {
+    if (this.dashboardApplication) {
+      await this.dashboardApplication.routeClientMessage(message, (reply) =>
+        this.postMessage(reply)
+      );
+      return;
+    }
     await this.router.route(message);
+  }
+
+  public isPanelReady(): boolean {
+    return this.panelReady && !!this.view;
+  }
+
+  public resolveImageWebviewUri(absolutePath: string): string | undefined {
+    return this.view
+      ? this.view.webview.asWebviewUri(vscode.Uri.file(absolutePath)).toString()
+      : undefined;
+  }
+
+  public getRunningServerUrl(): string | undefined {
+    return this.runningServerUrl;
+  }
+
+  public getRunningServerAvailableIps(): string[] {
+    return this.runningServerAvailableIps;
+  }
+
+  public getRunningServerPortFallback(): ServerPortFallbackInfo | undefined {
+    return this.runningServerPortFallback;
+  }
+
+  public getRunningServerBindAddressFallback():
+    BindAddressFallbackInfo | undefined {
+    return this.runningServerBindAddressFallback;
   }
 
   public async routeExternalMessage(
@@ -1115,6 +969,14 @@ export class CtrlYokeWebviewProvider
     postMessage: PostMessageFn,
     clientTag?: string
   ): Promise<void> {
+    if (this.dashboardApplication) {
+      await this.dashboardApplication.routeClientMessage(
+        message,
+        postMessage,
+        clientTag
+      );
+      return;
+    }
     await this.router.route(message, { postMessage, clientTag });
   }
 
@@ -1122,7 +984,7 @@ export class CtrlYokeWebviewProvider
    * Set OutputHistoryManager reference (called after construction)
    */
   public setOutputHistoryManager(manager: OutputHistoryManager): void {
-    this.outputHistoryManager = manager;
+    this.dashboardApplication.setOutputHistoryManager(manager);
   }
 
   /**
@@ -1131,6 +993,7 @@ export class CtrlYokeWebviewProvider
    */
   public setHub(hub: DashboardBroadcastHub): void {
     this.hub = hub;
+    this.dashboardApplication.setHub(hub);
   }
 
   /**
@@ -1170,6 +1033,7 @@ export class CtrlYokeWebviewProvider
     cb: ((vars: Record<string, string>) => void) | undefined
   ): void {
     this.router.setThemeVarsCapturedCallback(cb);
+    this.dashboardApplication?.router.setThemeVarsCapturedCallback(cb);
   }
 
   /**
@@ -1232,15 +1096,9 @@ export class CtrlYokeWebviewProvider
    * Dispose resources
    */
   public dispose(): void {
-    this.modelsLoadedDisposable?.dispose();
-    this.configServiceUnsubscribe?.();
-    this.harnessAvailabilityUnsubscribe?.();
-    this.commitMessageGenerationUnsubscribe?.();
-    this.licenseEntitlementSubscription?.dispose();
     this.cancelReconnectRetry();
-    this.router.disposeClient(PANEL_CLIENT_ID);
+    this.dashboardApplication.dispose();
     this.resolvePanelReadyWaiters();
-    this.interactionPort.disposeAllPending();
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -1252,7 +1110,7 @@ export class CtrlYokeWebviewProvider
     this.reconnectRetrySession++;
   }
 
-  private handlePanelReady(pageLoadId: string | undefined): boolean {
+  public handlePanelReady(pageLoadId: string | undefined): boolean {
     this.cancelReconnectRetry();
     // A READY carrying the same pageLoadId as the one already accepted is the
     // in-page duplicate (BootstrapApp's early READY vs. App.tsx's later one) —
@@ -1313,7 +1171,7 @@ export class CtrlYokeWebviewProvider
     return nonce;
   }
 
-  private async getDevStatus(): Promise<DevStatus | undefined> {
+  public async getDevStatus(): Promise<DevStatus | undefined> {
     if (!IS_DEV_MODE) {
       return undefined;
     }
@@ -1343,7 +1201,7 @@ export class CtrlYokeWebviewProvider
     };
   }
 
-  private async sendDevStatus(postMessage: PostMessageFn): Promise<void> {
+  public async sendDevStatus(postMessage: PostMessageFn): Promise<void> {
     const dev = await this.getDevStatus();
     if (!dev) {
       postMessage({
@@ -1357,7 +1215,7 @@ export class CtrlYokeWebviewProvider
     postMessage({ type: MESSAGE_TYPES.DEV_STATUS, dev });
   }
 
-  private async handleDevAction(
+  public async handleDevAction(
     action: DevDashboardAction,
     postMessage: PostMessageFn
   ): Promise<void> {
@@ -1405,7 +1263,7 @@ export class CtrlYokeWebviewProvider
    * saved path. Gated on IS_DEV_MODE so the write path (and DevCommands import)
    * is dead-code-eliminated from production builds, mirroring handleDevAction.
    */
-  private async handleUxSnapshot(
+  public async handleUxSnapshot(
     payload: { markdown: string; png?: string },
     workspaceRoot: string,
     postMessage: PostMessageFn
@@ -1435,11 +1293,11 @@ export class CtrlYokeWebviewProvider
   }
 
   public getSecretRegistryService(): SecretRegistryService {
-    return this.secretRegistry;
+    return this.dashboardApplication?.secretRegistry ?? this.secretRegistry;
   }
 
   public getUserInteractionPort(): UserInteractionPort {
-    return this.interactionPort;
+    return this.dashboardApplication?.interactionPort ?? this.interactionPort;
   }
 
   public async awaitPanelReady(): Promise<void> {

@@ -13,6 +13,7 @@ import {
 } from "./completions/CompletionHelpers";
 import { ContextMenuReferenceCommands } from "./completions/ContextMenuReferenceCommands";
 import { CtrlYokeWebviewProvider } from "./ui/CtrlYokeWebviewProvider";
+import { DashboardApplication } from "./ui/DashboardApplication";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeWorkspaceFolder,
@@ -128,6 +129,7 @@ interface ScmSourceControlCommandArgument {
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
+let dashboardApplication: DashboardApplication;
 let licenseService: LicenseService;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let memoryWatchdog: MemoryWatchdog | undefined;
@@ -373,40 +375,78 @@ export async function activate(context: vscode.ExtensionContext) {
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
     const dashboardHostActions = new VsCodeDashboardHostActions();
     const fileWatcherFactory = new VsCodeFileWatcherFactory();
-    webviewProvider = new CtrlYokeWebviewProvider(
-      context,
-      new TemplateManager(
-        context.extensionPath,
-        () => getVsCodeWorkspaceFolder()?.uri.fsPath,
-        platform
-      ),
-      vscodeUserFeedbackSink,
+    const templateManager = new TemplateManager(
+      context.extensionPath,
+      () => getVsCodeWorkspaceFolder()?.uri.fsPath,
+      platform
+    );
+    const webviewHostDependencies = {
+      actions: dashboardHostActions,
+      serverControl: new VsCodeHostedServerControl(),
+      getWorkspaceRoot: () =>
+        vscode.workspace.workspaceFolders?.length
+          ? getVsCodeWorkspaceRoot()
+          : undefined,
+      getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
+      fileWatcherFactory,
+      completionCore: getCompletionCore(),
+      getNamedRoots: () => {
+        const roots = getVsCodeNamedWorkspaceRoots();
+        if (roots.length === 0) return [];
+        const workspaceRoot = getVsCodeWorkspaceRoot();
+        const primary = roots.find((root) => root.fsPath === workspaceRoot);
+        return [
+          {
+            name: primary?.name ?? path.basename(workspaceRoot),
+            fsPath: workspaceRoot,
+          },
+          ...roots.filter((root) => root.fsPath !== workspaceRoot),
+        ];
+      },
+    };
+    dashboardApplication = new DashboardApplication({
+      templateManager,
+      postMessage: (message) => webviewProvider.postMessage(message),
+      isPanelReady: () => webviewProvider.isPanelReady(),
+      resolveImageWebviewUri: (absolutePath) =>
+        webviewProvider.resolveImageWebviewUri(absolutePath),
+      getServerUrl: () => webviewProvider.getRunningServerUrl(),
+      getAvailableIps: () => webviewProvider.getRunningServerAvailableIps(),
+      getPortFallback: () => webviewProvider.getRunningServerPortFallback(),
+      getBindAddressFallback: () =>
+        webviewProvider.getRunningServerBindAddressFallback(),
+      keyValueStore: new VsCodeKeyValueStore(context.workspaceState),
+      secretStore: platform.getSecretStore(),
+      getWorkspaceRoot: webviewHostDependencies.getWorkspaceRoot,
+      getSecretWorkspaceRoot: getVsCodeWorkspaceRoot,
+      getNamedRoots: webviewHostDependencies.getNamedRoots,
+      getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
+      actions: dashboardHostActions,
+      serverControl: webviewHostDependencies.serverControl,
+      nativeFeedbackSink: vscodeUserFeedbackSink,
       licenseService,
-      {
-        actions: dashboardHostActions,
-        serverControl: new VsCodeHostedServerControl(),
-        getWorkspaceRoot: () =>
-          vscode.workspace.workspaceFolders?.length
-            ? getVsCodeWorkspaceRoot()
-            : undefined,
-        getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
+      hostDependencies: {
         fileWatcherFactory,
         completionCore: getCompletionCore(),
-        getNamedRoots: () => {
-          const roots = getVsCodeNamedWorkspaceRoots();
-          if (roots.length === 0) return [];
-          const workspaceRoot = getVsCodeWorkspaceRoot();
-          const primary = roots.find((root) => root.fsPath === workspaceRoot);
-          return [
-            {
-              name: primary?.name ?? path.basename(workspaceRoot),
-              fsPath: workspaceRoot,
-            },
-            ...roots.filter((root) => root.fsPath !== workspaceRoot),
-          ];
-        },
-      }
+      },
+      onPanelReady: (pageLoadId) =>
+        webviewProvider.handlePanelReady(pageLoadId),
+      handleClearWorkflow: () => webviewProvider.handleClearWorkflow(),
+      updateWorkflowName: (name) => webviewProvider.updateWorkflowName(name),
+      handleDevAction: (action, post) =>
+        webviewProvider.handleDevAction(action, post),
+      sendDevStatus: (post) => webviewProvider.sendDevStatus(post),
+      handleUxSnapshot: (payload, root, post) =>
+        webviewProvider.handleUxSnapshot(payload, root, post),
+      getDevStatus: () => webviewProvider.getDevStatus(),
+      notifyActiveWorkflowChanged: (workflowId) =>
+        webviewProvider.notifyActiveWorkflowChanged(workflowId),
+    });
+    webviewProvider = new CtrlYokeWebviewProvider(
+      context,
+      dashboardApplication
     );
+    dashboardApplication.start();
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
         "ctrlyoke.dashboard",
@@ -507,7 +547,7 @@ export async function activate(context: vscode.ExtensionContext) {
       platform,
       dashboardHostActions,
       workspaceFolderPathResolver: () => getVsCodeWorkspaceFolder()?.uri.fsPath,
-      dashboardProvider: webviewProvider,
+      dashboardProvider: dashboardApplication,
       userFeedbackSink,
       runnerHostIdentity,
       fileWatcherFactory,
@@ -1623,7 +1663,7 @@ function registerCommands(
       try {
         hostedServer = new CtrlYokeHostedServer(
           hub,
-          webviewProvider,
+          dashboardApplication,
           () => workflowOrchestrator,
           port,
           workspaceRoot,

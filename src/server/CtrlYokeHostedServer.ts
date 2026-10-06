@@ -14,6 +14,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { DashboardClientEndpoint } from "../ui/DashboardClientEndpoint";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
@@ -34,7 +35,6 @@ import type {
   UserFeedbackMessage,
 } from "../types/WebviewMessageTypes";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
-import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import {
   BROWSER_NOTIFICATION_MODES,
   LICENSE_UI,
@@ -273,7 +273,7 @@ export class CtrlYokeHostedServer
 
   constructor(
     private hub: DashboardBroadcastHub,
-    private webviewProvider: CtrlYokeWebviewProvider,
+    private dashboardClient: DashboardClientEndpoint,
     private readonly getOrchestrator: () => WorkflowOrchestrator,
     private port: number,
     private workspaceRoot: string,
@@ -2243,8 +2243,8 @@ export class CtrlYokeHostedServer
               `[hosted-server] WebSocket READY clientId=${clientTag} afterMs=${Date.now() - connectedAt} preferredViewAddress=${JSON.stringify(msg.preferredViewAddress ?? null)}`
             );
           }
-          void this.webviewProvider
-            .routeExternalMessage(msg, send, clientTag)
+          void this.dashboardClient
+            .routeClientMessage(msg, send, clientTag)
             .catch((error) => {
               Log.warn(
                 `[hosted-server] routeExternalMessage failed for ${clientTag}: ${error}`
@@ -2278,7 +2278,7 @@ export class CtrlYokeHostedServer
           `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} terminationCause=${terminationCause ?? "peer-or-network"} remainingCount=${this.connections.size} clientStillConnected=${clientStillConnected}`
         );
         if (!clientStillConnected) {
-          this.webviewProvider.unregisterBrowserClient(clientTag);
+          this.dashboardClient.disconnectClient?.(clientTag);
         }
       });
       ws.on("error", (error) => {
@@ -2473,9 +2473,7 @@ export class CtrlYokeHostedServer
       );
     }
     // Request a fresh capture so any theme-change since last capture is picked up.
-    this.webviewProvider.postMessage({
-      type: MESSAGE_TYPES.CAPTURE_THEME_VARS,
-    });
+    this.dashboardClient.requestThemeCapture?.();
     // NOTE: We intentionally do NOT inject a server-side synthetic READY here.
     // Browser-client registration belongs to standalone-shim.js: it sends READY
     // when the socket opens, buffers replay messages, then flushes them only

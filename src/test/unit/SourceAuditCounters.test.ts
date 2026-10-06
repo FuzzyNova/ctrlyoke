@@ -697,6 +697,20 @@ suite("SourceAuditCounters", () => {
     });
   }
 
+  for (const entry of [
+    "src/ui/DashboardApplication.ts",
+    "src/server/CtrlYokeHostedServer.ts",
+  ]) {
+    test(`${entry} never loads vscode at runtime`, function () {
+      this.timeout(60_000);
+      assert.deepStrictEqual(
+        collectVscodeLoadsReachableFrom(repoRoot, entry),
+        [],
+        `${entry} reaches code that loads vscode. Keep the shared dashboard application and server host-neutral.`
+      );
+    });
+  }
+
   test("PromptEditorSupportService never loads vscode at runtime", function () {
     this.timeout(60_000);
     assert.deepStrictEqual(

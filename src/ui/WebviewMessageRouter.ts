@@ -289,7 +289,14 @@ export class WebviewMessageRouter {
       getNamedRoots: () => [],
     }
   ) {
-    this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
+    this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator, () => {
+      const namedWorkspaceRoots = this.hostDependencies.getNamedRoots();
+      const executionRoot =
+        this.hostDependencies.getWorkspaceRoot?.() ??
+        namedWorkspaceRoots[0]?.fsPath ??
+        process.cwd();
+      return { executionRoot, namedWorkspaceRoots };
+    });
     this.mutationCoordinator = new WorkflowMutationCoordinator(getOrchestrator);
     this.promptEditorSupport = new PromptEditorSupportService(
       () => this.getWorkspaceRoot(),

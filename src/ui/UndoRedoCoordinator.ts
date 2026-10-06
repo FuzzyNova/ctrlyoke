@@ -29,10 +29,6 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
-import {
-  getVsCodeNamedWorkspaceRoots,
-  getVsCodeWorkspaceRoot,
-} from "../platform/VsCodeWorkspaceRoot";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
@@ -69,10 +65,7 @@ interface CurrentWorkspaceRoots {
 export class UndoRedoCoordinator {
   constructor(
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
-    private readonly getCurrentWorkspaceRoots: () => CurrentWorkspaceRoots = () => ({
-      executionRoot: getVsCodeWorkspaceRoot(),
-      namedWorkspaceRoots: getVsCodeNamedWorkspaceRoots(),
-    })
+    private readonly getCurrentWorkspaceRoots: () => CurrentWorkspaceRoots
   ) {}
 
   async handleUndoPromptChanges(

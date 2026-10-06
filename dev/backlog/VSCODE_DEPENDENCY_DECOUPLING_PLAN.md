@@ -1,7 +1,7 @@
 # VS Code Dependency Decoupling Plan
 
-**Status (2026-10-06):** In progress; Phases 0–3 and Phase 4's router
-sub-stages 3a and 3b plus Phase 5 items 2–5 and Phase 6 are complete. Continue at Stage 6.
+**Status (2026-10-06):** Track A complete. Phases 0–3, Phase 4, Phase 5
+items 2–5, and Phase 6 are complete; continue with standalone Stage 7a.
 Done so far:
 
 - Phase 0 (dependency guards).
@@ -290,7 +290,8 @@ Node path needs it.
 | `src/completions/PromptCompletionProvider.ts`, `PromptLinkProvider.ts`, `PromptPropertyCompletionProvider.ts`                             | VS Code editor language features                                          | Keep. After Phase 6 they become thin adapters over the Node completion core.                                                                                                                                                      |
 | `src/ui/CtrlyokeCliCommands.ts`, `src/ui/NativeOutputCaptureCommand.ts`, `src/scm/ScmCommitCommand.ts`, `src/dev/DevCommands.ts`          | command registration, terminals, active editor                            | Keep.                                                                                                                                                                                                                             |
 | `src/ui/StatusBarManager.ts`, `src/ui/NotificationManager.ts`                                                                             | status bar, native completion notifications                               | Keep as optional sinks.                                                                                                                                                                                                           |
-| `src/ui/CtrlYokeWebviewProvider.ts`                                                                                                       | `WebviewView`, `asWebviewUri`, panel lifecycle                            | Keep as the VS Code **view transport**. Today it is also the only place that builds the dashboard application. Phase 4 moves that role into `DashboardApplication`.                                                               |
+| `src/ui/CtrlYokeWebviewProvider.ts`                                                                                                       | `WebviewView`, `asWebviewUri`, panel lifecycle                            | Keep as the VS Code view transport: HTML, nonce, panel READY/reconnect, theme capture, and queued prompt-editor inserts. Shared routing and dashboard services live in `DashboardApplication`.                                      |
+| `src/ui/DashboardApplication.ts`                                                                                                         | No VS Code imports; composes shared router, delegates, secret registry, interaction port, history search, and browser-client cleanup | Done / Phase 4 | Implements `DashboardClientEndpoint`; constructed in `extension.ts` from host services, actions, and the injected `TemplateManager`.                                                                                         |
 
 ### Reusable code that still depends on VS Code
 
@@ -627,10 +628,11 @@ baseline can't go stale.
 | `directMessage.reusable` / `.boundary` (`vscode.window.show*Message`) | all production code; 7-file boundary allowlist                          |                0 / 41 | Stage 3 complete |
 | `webviewToast`                                                        | webview toast call sites outside the host-aware dispatcher              |                     1 | —                        |
 | CLI/MCP runtime graph loads `vscode`                                  | `src/cli.ts`, `src/mcp-server.ts`, including package `require()` graphs |                  `[]` | —                        |
+| Dashboard/server runtime graph loads `vscode`                         | `src/ui/DashboardApplication.ts`, `src/server/CtrlYokeHostedServer.ts`  |                  `[]` | Stage 6 complete          |
 
 New guards are added by the stage that makes them true:
 
-- **Stage 6** adds `src/ui/DashboardApplication.ts` and
+- **Stage 6 added** `src/ui/DashboardApplication.ts` and
   `src/server/CtrlYokeHostedServer.ts` as roots that must reach no `vscode`
   load.
 - **Stage 7a** adds `src/cli/ServerCommand.ts`.
@@ -844,8 +846,8 @@ remove them.
 
 ### Phase 4 — Host-neutral router and dashboard application (Staging Stages 3 and 6)
 
-**Status (2026-10-06):** Router Stage 3 (3a and 3b) is complete; the
-dashboard-application half is Stage 6.
+**Status (2026-10-06):** Complete. Router Stage 3 and the dashboard
+application Stage 6 are done.
 
 **Router half (Stage 3):**
 
@@ -864,19 +866,19 @@ dashboard-application half is Stage 6.
    methods. Every host-native message produces a typed `unsupported` reply;
    direct orchestration and two-client worktree reply scoping are covered.
 
-**Application half (Stage 6, after Phases 5 and 6 make the delegates
+**Application half (Stage 6, after Phases 5 and 6 made the delegates
 host-neutral):**
 
-5. Extract `src/ui/DashboardApplication.ts` from `CtrlYokeWebviewProvider`. It
+5. **Done.** Extract `src/ui/DashboardApplication.ts` from `CtrlYokeWebviewProvider`. It
    owns the router, delegates, secret registry, interaction port, history
    search, and client registry, and implements `DashboardClientEndpoint`.
-6. `CtrlYokeWebviewProvider` keeps only the VS Code view lifecycle: HTML,
+6. **Done.** `CtrlYokeWebviewProvider` owns the VS Code view lifecycle: HTML,
    nonce, `asWebviewUri`, panel READY/reconnect, and theme capture. It
    forwards messages to the application.
-7. `CtrlYokeHostedServer` takes a `DashboardClientEndpoint` instead of
+7. **Done.** `CtrlYokeHostedServer` takes a `DashboardClientEndpoint` instead of
    `CtrlYokeWebviewProvider`. Theme recapture goes through
    `requestThemeCapture?`.
-8. Preserve `WebviewClientContext` reply scoping and READY/replay semantics.
+8. **Done.** Preserve `WebviewClientContext` reply scoping and READY/replay semantics.
    The existing two-tab scoping tests must pass unchanged.
 
 Don't add a parallel `WebSocketMessageRouter`, and don't copy handlers into a
@@ -1082,10 +1084,10 @@ None remain open. All of them were resolved by 2026-10-06:
   and 5).
 - `PlatformAdapter` has no `isVsCode`, `openTextFile`, or `focusDashboard`;
   `interactiveTerminal` is explicit (Stage 2).
-- `WebviewMessageRouter`, its delegates, and `DashboardApplication` have no
+- **DONE — Stage 6:** `WebviewMessageRouter`, its delegates, and `DashboardApplication` have no
   direct VS Code commands, window, workspace, URI, `Memento`, or editor
   dependencies (Stages 3–6).
-- One `DashboardApplication` and one `CtrlYokeHostedServer` class serve the
+- **DONE — Stage 6:** One `DashboardApplication` and one `CtrlYokeHostedServer` class serve the
   VS Code panel, the VS Code-hosted browser, and the standalone browser
   (Stages 6 and 7a).
 - Node composition uses one root without fabricating VS Code workspace
