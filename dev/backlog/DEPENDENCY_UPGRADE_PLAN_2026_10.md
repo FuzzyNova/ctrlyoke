@@ -62,7 +62,7 @@ went 11 → 10; `chokidar@3` stays in the tree via Tailwind 3 until B lands.
 
 ---
 
-## B. Tailwind CSS 3 → 4 — done 2026-10-05 (visual QA pending)
+## B. Tailwind CSS 3 → 4 — done 2026-10-05, visually inspected 2026-10-06
 
 `tailwindcss` 4.3, `@tailwindcss/vite` 4.3, and `eslint-plugin-tailwindcss` 4.4;
 `autoprefixer`, `postcss` (now only transitive), `postcss.config.js`, and
@@ -92,7 +92,7 @@ in C remains).
   `(hover: hover)` media gate (phone row actions), class-based `dark:`, default
   border color, placeholder color, and `:disabled { cursor: default }`.
 
-**Rendering that changes** — check these in the visual pass:
+**Rendering that changes** (checked in the visual pass):
 
 - Opacity modifiers on `var()` colors now apply. v3 generated no CSS for them, so
   ~45 classes that were silent no-ops (`bg-editor-bg/90`, `bg-list-hover-bg/50`,
@@ -107,8 +107,8 @@ in C remains).
   zeroed their sibling gap had the redundant `m-0` removed.
 - **Browser floor:** Safari 16.4+ / Chrome 111+ / Firefox 128+. Fine for the VS
   Code webview; the hosted dashboard on phones now needs iOS 16.4+.
-- QA still to do: visual pass in the VS Code webview and the hosted browser,
-  light/dark/high-contrast. `npm test` passes (all three suites).
+- Visual QA passed (2026-10-06): no regressions found. `npm test` passes (all
+  three suites).
 
 ---
 
@@ -234,8 +234,8 @@ All of these are compatible with our `>=22.12.0` Node floor.
 
 1. **`npm update`** for minor/patch, full `npm test`.
 2. **A** — replace `vite-plugin-static-copy`. Small, unblocked.
-3. ~~**B** — Tailwind 4 + `eslint-plugin-tailwindcss` 4~~ — done; visual QA
-   pending. `npm audit` now shows only the KaTeX finding.
+3. ~~**B** — Tailwind 4 + `eslint-plugin-tailwindcss` 4~~ — done and visually
+   inspected. `npm audit` now shows only the KaTeX finding.
 4. ~~**D** — mermaid 12~~ — done and visually inspected. **C** waits on
    mermaid#8216.
 5. ~~**E** — vitest 5 + jest-dom 7~~ — done; drop the type shim when
