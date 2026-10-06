@@ -34,7 +34,5 @@
       "@icons/*": ["../icons/*"]
     }
   },
-  "include": ["./**/*.ts", "./**/*.tsx"],
-  "exclude": ["vite.config.ts", "build/**"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["./**/*.ts", "./**/*.tsx"]
 }
