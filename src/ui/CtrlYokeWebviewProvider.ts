@@ -1334,7 +1334,7 @@ export class CtrlYokeWebviewProvider
       return;
     }
 
-    const { handleDevDashboardAction } = await import("../dev/DevCommands");
+    const { handleDevDashboardAction } = await import("../dev/DevCommands.js");
     const broadcastAwarePostMessage: PostMessageFn = (message) => {
       if (
         message &&
@@ -1382,7 +1382,7 @@ export class CtrlYokeWebviewProvider
       return;
     }
 
-    const { writeUxSnapshot } = await import("../dev/DevCommands");
+    const { writeUxSnapshot } = await import("../dev/DevCommands.js");
     const result = await writeUxSnapshot(
       payload.markdown,
       payload.png,

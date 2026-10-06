@@ -186,17 +186,38 @@ installed.
 
 ---
 
+## F. chalk 6, gpt-tokenizer 4, vscode-jsonrpc 9 — done 2026-10-06
+
+- **`gpt-tokenizer` 4.0.0:** the only break is dropped UMD bundles. `encode()`
+  output is token-for-token identical to 3.4.0 (checked on `README.md` and
+  `src/cli.ts`), and special tokens like `<|endoftext|>` still throw.
+- **`chalk` 6.0.1:** Node 22 floor, which we already require. It also dropped the
+  top-level `types` field and now resolves its types only through `exports`.
+- **`vscode-jsonrpc` 9.0.3:** `CopilotQuotaClient`'s APIs
+  (`createMessageConnection`, stream reader/writer, `sendRequest`,
+  `ErrorCodes`) are unchanged; the package is now `exports`-only.
+- **Root `tsconfig.json`: `module: commonjs` → `node20`.** `commonjs` implied
+  the legacy `node10` resolver, which ignores `exports`, so `tsc` couldn't find
+  chalk's or vscode-jsonrpc's types. `node20` uses Node's real resolution and
+  still emits CommonJS. Side effect: `tsc` now emits a lazy `import()` as native
+  `import()` instead of `require()`. The five relative lazy imports
+  (`src/cli.ts` ×3, `CtrlYokeWebviewProvider.ts` ×2) gained the `.js` extension
+  Node's resolver requires, and esbuild still inlines them (no relative
+  `import()` is left in `out/cli.js`, `out/extension.js`, or
+  `out/mcp-server.js`). This also removes the `node10` resolver ahead of the
+  TypeScript 6 pass.
+- `npm test` passes (all three suites).
+
+---
+
 ## Other majors available (no vulnerabilities — upgrade opportunistically)
 
 All of these are compatible with our `>=22.12.0` Node floor.
 
-| Package          | Current → Latest | prod/dev | Risk     | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
-| ---------------- | ---------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chalk`          | 5.6 → 6.0        | prod     | Low      | CLI output coloring. Node ≥22.                                                                                                                                                                                                                                                                                                                                                                      |
-| `gpt-tokenizer`  | 3.4 → 4.0        | prod     | Low–Mod  | Token counting; check for API/encoding-name changes and verify counts in the existing tests.                                                                                                                                                                                                                                                                                                        |
-| `vscode-jsonrpc` | 8.2 → 9.0        | prod     | Moderate | Check every import site for protocol/API changes before bumping.                                                                                                                                                                                                                                                                                                                                    |
-| `typescript`     | 5.9 → 6.0        | dev      | High     | Carried over. `@typescript-eslint` 8.71 supports `>=4.8.4 <6.1.0`, so **6.0 is unblocked**. Expect new strictness errors and deprecations — dedicated typecheck-cleanup pass.                                                                                                                                                                                                                       |
-| `typescript`     | 6.0 → 7.0        | dev      | Blocked  | TS 7 is the native (Go) compiler and is now `latest` on npm. Blocked on `@typescript-eslint` support, and on our use of the TS compiler JS API in `scripts/find-dead-methods.mjs`, `scripts/find-hardcoded-strings.mjs`, `scripts/check-a11y-names.mjs`, `src/test/unit/SourceAuditCounters.test.ts`, and `src/ui/webview-react/test/components/settings/settingsCatalog.test.ts`. Go to 6.0 first. |
+| Package      | Current → Latest | prod/dev | Risk    | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------ | ---------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typescript` | 5.9 → 6.0        | dev      | High    | Carried over. `@typescript-eslint` 8.71 supports `>=4.8.4 <6.1.0`, so **6.0 is unblocked**. Expect new strictness errors and deprecations — dedicated typecheck-cleanup pass.                                                                                                                                                                                                                       |
+| `typescript` | 6.0 → 7.0        | dev      | Blocked | TS 7 is the native (Go) compiler and is now `latest` on npm. Blocked on `@typescript-eslint` support, and on our use of the TS compiler JS API in `scripts/find-dead-methods.mjs`, `scripts/find-hardcoded-strings.mjs`, `scripts/check-a11y-names.mjs`, `src/test/unit/SourceAuditCounters.test.ts`, and `src/ui/webview-react/test/components/settings/settingsCatalog.test.ts`. Go to 6.0 first. |
 
 ---
 
@@ -218,7 +239,8 @@ All of these are compatible with our `>=22.12.0` Node floor.
 4. ~~**D** — mermaid 12~~ — done and visually inspected. **C** waits on
    mermaid#8216.
 5. ~~**E** — vitest 5 + jest-dom 7~~ — done; drop the type shim when
-   jest-dom#742 ships. Next: `chalk`, `gpt-tokenizer`, `vscode-jsonrpc` one at
-   a time.
-6. **TypeScript 6.0** dedicated pass. TypeScript 7 stays parked until the
+   jest-dom#742 ships.
+6. ~~**F** — `chalk` 6, `gpt-tokenizer` 4, `vscode-jsonrpc` 9~~ — done, with
+   the root `tsconfig.json` moved to `module: node20`.
+7. **TypeScript 6.0** dedicated pass. TypeScript 7 stays parked until the
    tooling supports it.

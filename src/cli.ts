@@ -2192,7 +2192,7 @@ async function validateCommand(
   }
 
   try {
-    const { PromptFileParser } = await import("./core/PromptFileParser");
+    const { PromptFileParser } = await import("./core/PromptFileParser.js");
     const parser = new PromptFileParser();
     const result = await parser.parsePromptFile(resolvedFile);
     if (!result) {
@@ -2721,7 +2721,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     CommitMessageGenerationError,
     CommitMessageGenerator,
     getMaxDiffSizeLabel,
-  } = await import("./git/CommitMessageGenerator");
+  } = await import("./git/CommitMessageGenerator.js");
   if (!ConfigurationUtils.getCommitHarness()) {
     await IntegrationFactory.detectDefaultHarness();
   }
@@ -2795,7 +2795,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     process.exit(CLI_USAGE_EXIT_CODE);
   }
 
-  const { GitCommitter } = await import("./git/GitCommitter");
+  const { GitCommitter } = await import("./git/GitCommitter.js");
   const committer = new GitCommitter();
   try {
     const result = await commitGeneratedChanges(
