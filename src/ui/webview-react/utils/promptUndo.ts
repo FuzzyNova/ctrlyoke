@@ -172,9 +172,9 @@ function normalizePath(path: string): string {
 }
 
 function isAbsolutePath(path: string): boolean {
-  return (
-    path.startsWith("/") || /^[a-z]:\//i.test(path) || path.startsWith("//")
-  );
+  // Normalize separators first: Windows CLI events report `C:\dev\...`.
+  const normalizedPath = path.replace(/\\/g, "/");
+  return normalizedPath.startsWith("/") || /^[a-z]:\//i.test(normalizedPath);
 }
 
 function relativizeToWorkspace(

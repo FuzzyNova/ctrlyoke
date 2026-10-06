@@ -253,6 +253,22 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
+  it("matches a backslash Windows event path to its snapshot entry under a workspace root", () => {
+    const output = makeCliOutput([makeFileWriteEvent("C:\\repo\\src\\new.ts")]);
+    const snapshot = makeSnapshot([makeCreatedSnap("src/new.ts")]);
+    const candidates = buildUndoCandidatesForOutputs(
+      [output],
+      snapshot,
+      "c:\\repo"
+    );
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
+      instruction: { path: "src/new.ts", action: UNDO_FILE_ACTIONS.DELETE },
+    });
+  });
+
   it("FILE_WRITE-only step captures content and provides an added diff", () => {
     const output = makeCliOutput([
       makeFileWriteEvent("src/new.ts", { content: "created content" }),
