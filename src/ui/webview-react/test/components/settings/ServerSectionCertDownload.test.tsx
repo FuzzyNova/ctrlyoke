@@ -118,4 +118,19 @@ describe("ServerSection certificate download (hosted browser)", () => {
     expect(link.download).toBe(HOSTED_CERT_DOWNLOAD.FILENAME);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("skips the QR code step on the device itself", () => {
+    render(
+      <ServerSection
+        activeScope={SETTING_SCOPES.USER}
+        settings={createTlsSettings()}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+    expect(
+      screen.queryByRole("img", { name: "the QR code button" })
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText(/above/).length).toBeGreaterThan(0);
+  });
 });

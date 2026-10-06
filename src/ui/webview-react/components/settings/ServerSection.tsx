@@ -1,4 +1,11 @@
-import { useRef, useState, useEffect, useMemo, useCallback } from "react";
+import {
+  useRef,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  type ReactNode,
+} from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
@@ -26,6 +33,7 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import appIconSvg from "../../../../../images/ctrlyoke-app-icon.svg?raw";
 import { Icon } from "../shared/Icon";
+import { QrCode } from "lucide-react";
 import { downloadBlob } from "@utils/download";
 import { WebviewLog } from "@utils/logger";
 import { isIosDevice } from "@utils/platform";
@@ -427,16 +435,7 @@ export function ServerSection({
                 aria-label="Show QR code to open on your phone"
                 className="shrink-0 text-description-fg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M0 0h7v7H0V0zm1 1v5h5V1H1zm1 1h3v3H2V2zM9 0h7v7H9V0zm1 1v5h5V1h-5zm1 1h3v3h-3V2zM0 9h7v7H0V9zm1 1v5h5v-5H1zm1 1h3v3H2v-3zm10-1h1v1h-1v-1zm0 2h1v1h-1v-1zm-2 0h1v1h-1v-1zm2 2h1v1h-1v-1zm-2 0h1v1h-1v-1zm4-4h1v1h-1v-1zm0 2h1v1h-1v-1zm0 2h1v1h-1v-1zm-2-4h1v1h-1v-1z" />
-                </svg>
+                <QrCode size={16} aria-hidden="true" />
               </button>
             </div>
             {!licenseAccess.hasRemoteAccess && (
@@ -835,7 +834,7 @@ export function ServerSection({
                 Browsers will show a warning on first visit — click proceed to
                 continue. Changes take effect on server restart.
               </p>
-              <CertInstallHelp />
+              <CertInstallHelp onDevice={false} />
             </div>
           )}
         </fieldset>
@@ -867,42 +866,163 @@ export function ServerSection({
               </a>
             </p>
           )}
-          <CertInstallHelp className="mt-2" />
+          <CertInstallHelp onDevice className="mt-2" />
         </div>
       )}
     </div>
   );
 }
 
-/** Per-platform steps for trusting the downloaded server certificate. */
-function CertInstallHelp({ className = "" }: { className?: string }) {
+/** A menu path or button name inside the italic help text, set upright so
+ * the thing to tap stands out from the explanation around it. */
+function MenuPath({ children }: { children: ReactNode }) {
+  return <span className="not-italic text-foreground">{children}</span>;
+}
+
+/** A titled list of help items: numbered steps, or bullets for alternatives. */
+function HelpSteps({
+  title,
+  bulleted = false,
+  children,
+}: {
+  title: string;
+  bulleted?: boolean;
+  children: ReactNode;
+}) {
+  const List = bulleted ? "ul" : "ol";
+  return (
+    <div>
+      <p className="font-semibold">{title}</p>
+      <List
+        className={`${bulleted ? "list-disc" : "list-decimal"} pl-5 space-y-0.5`}
+      >
+        {children}
+      </List>
+    </div>
+  );
+}
+
+/**
+ * The opening steps every platform shares: get ctrlyoke open on the device,
+ * then download the cert there. From the VS Code panel that starts with the
+ * QR code; on the device itself the download button sits just above.
+ */
+function CertDownloadSteps({
+  onDevice,
+  afterDownload,
+}: {
+  onDevice: boolean;
+  afterDownload?: ReactNode;
+}) {
+  if (onDevice) {
+    return (
+      <li>
+        Tap <MenuPath>Download certificate</MenuPath> above{afterDownload}.
+      </li>
+    );
+  }
+  return (
+    <>
+      <li>
+        Select{" "}
+        <QrCode
+          size={12}
+          role="img"
+          aria-label="the QR code button"
+          className="inline align-[-2px] not-italic text-foreground"
+        />{" "}
+        next to the server link above to show the QR code, then scan it with the
+        device&apos;s camera to open ctrlyoke in its browser.
+      </li>
+      <li>
+        On the device, open <MenuPath>Global Settings → Server</MenuPath> and
+        tap <MenuPath>Download certificate</MenuPath>
+        {afterDownload}.
+      </li>
+    </>
+  );
+}
+
+/** Per-platform steps for trusting the downloaded server certificate and
+ * installing the dashboard as an app. `onDevice` is true in the browser
+ * dashboard, which is already open on the phone or tablet being set up. */
+function CertInstallHelp({
+  onDevice,
+  className = "",
+}: {
+  onDevice: boolean;
+  className?: string;
+}) {
   return (
     <div
-      className={`text-xs text-description-fg italic space-y-1 ${className}`}
+      className={`text-xs text-description-fg italic space-y-2 ${className}`}
     >
-      <p>
-        <strong>iOS Safari:</strong> depending on iOS version, it may be
-        necessary to download the cert and install it via{" "}
-        <em>Settings → General → VPN &amp; Device Management</em>, then enable
-        full trust under{" "}
-        <em>
-          Settings → General → About → Certificate Trust Settings → Enable Full
-          Trust For Root Certificates
-        </em>
-        . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
-        didn&apos;t appear).
-      </p>
-      <p>
-        <strong>Android Chrome:</strong> download the cert, then install it from{" "}
-        <em>
-          Settings → Security &amp; privacy → More security settings →
-          Encryption &amp; credentials → Install a certificate → CA certificate
-        </em>{" "}
-        and pick <code>{HOSTED_CERT_DOWNLOAD.FILENAME}</code> from Downloads
-        (menu names vary by manufacturer; search Settings for &quot;CA
-        certificate&quot;). Tapping the downloaded file doesn&apos;t install it.
-        Close and reopen Chrome afterwards.
-      </p>
+      <HelpSteps title="iPhone / iPad (Safari, iOS 18.2+)">
+        <CertDownloadSteps
+          onDevice={onDevice}
+          afterDownload={
+            <>
+              , then <MenuPath>Allow</MenuPath>
+            </>
+          }
+        />
+        <li>
+          Install the profile:{" "}
+          <MenuPath>Settings → General → VPN &amp; Device Management</MenuPath>.
+        </li>
+        <li>
+          Turn on full trust for <em>ctrlyoke Local CA</em>:{" "}
+          <MenuPath>
+            Settings → General → About → Certificate Trust Settings
+          </MenuPath>
+          . Easy to miss, and required.
+        </li>
+      </HelpSteps>
+      <HelpSteps title="Android (Chrome)">
+        <CertDownloadSteps onDevice={onDevice} />
+        <li>
+          Install it from the Settings app (tapping the downloaded file
+          won&apos;t):{" "}
+          <MenuPath>
+            Settings → Security &amp; privacy → More security settings
+          </MenuPath>
+          , then:
+          <ul className="list-disc pl-5">
+            <li>
+              Samsung:{" "}
+              <MenuPath>Install from device storage → CA certificate</MenuPath>
+            </li>
+            <li>
+              Pixel and most others:{" "}
+              <MenuPath>
+                Encryption &amp; credentials → Install a certificate → CA
+                certificate
+              </MenuPath>
+            </li>
+          </ul>
+          Not there? Search Settings for &quot;CA certificate&quot;.
+        </li>
+        <li>
+          Tap <MenuPath>Install anyway</MenuPath> and pick{" "}
+          <MenuPath>{HOSTED_CERT_DOWNLOAD.FILENAME}</MenuPath>.
+        </li>
+        <li>
+          Fully quit Chrome (swipe every window away in Recent apps) and reopen
+          it. Until then it still treats the cert as untrusted.
+        </li>
+      </HelpSteps>
+      <HelpSteps title="Install the app" bulleted>
+        <li>
+          Android: Chrome&apos;s{" "}
+          <MenuPath>⋮ → Install and create shortcut → Install</MenuPath> (older
+          versions: <MenuPath>Install app</MenuPath>).{" "}
+          <MenuPath>Create shortcut</MenuPath> only opens a Chrome tab.
+        </li>
+        <li>
+          iPhone / iPad: Safari&apos;s{" "}
+          <MenuPath>Share → Add to Home Screen</MenuPath>.
+        </li>
+      </HelpSteps>
     </div>
   );
 }

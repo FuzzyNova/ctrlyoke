@@ -169,4 +169,25 @@ describe("ServerSection", () => {
       expect.anything()
     );
   });
+
+  it("starts the cert install help with the QR code step in the panel", () => {
+    const settings = createSettings("0.0.0.0");
+    settings.settings.server = {
+      ...settings.settings.server,
+      tls: { ...settings.settings.server.tls, enabled: true },
+    };
+    render(
+      <ServerSection
+        activeScope={SETTING_SCOPES.USER}
+        settings={settings}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    // One QR step per platform list (iOS and Android).
+    expect(
+      screen.getAllByRole("img", { name: "the QR code button" })
+    ).toHaveLength(2);
+  });
 });
