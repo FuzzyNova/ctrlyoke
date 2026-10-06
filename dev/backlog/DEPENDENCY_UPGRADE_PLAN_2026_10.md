@@ -134,7 +134,7 @@ than adding an `overrides` pin.
 
 ---
 
-## D. mermaid 11 → 12 — done 2026-10-05 (visual QA pending)
+## D. mermaid 11 → 12 — done 2026-10-05, visually inspected 2026-10-06
 
 `mermaid` 12.1.0. We only call `initialize({ startOnLoad, theme })` and
 `render()` (`MarkdownText.tsx`), so of 12.0's four breaking changes,
@@ -153,8 +153,13 @@ that do:
   VS Code webview is unaffected.
 - Does not change the KaTeX finding (see C). `npm test` passes (all three
   suites).
-- QA still to do: flowchart, sequence, class, and state diagrams in the
-  webview, light/dark/high-contrast, plus Copy and PNG export.
+- Visual QA passed (2026-10-06): every diagram type, KaTeX math labels, and
+  the 12.1 error diagram (now shows the real parse error) render correctly.
+  One known ELK quirk, upstream rather than ours: two labelled edges running
+  in opposite directions between the same neighbours (`A -- pass --> B` plus
+  `B -- next pass --> C`, routed through the same gap) can get their labels
+  drawn on top of each other. A diagram can opt out with `layout: dagre` in
+  its front matter.
 
 ---
 
@@ -189,7 +194,7 @@ All of these are compatible with our `>=22.12.0` Node floor.
 2. **A** — replace `vite-plugin-static-copy`. Small, unblocked.
 3. ~~**B** — Tailwind 4 + `eslint-plugin-tailwindcss` 4~~ — done; visual QA
    pending. `npm audit` now shows only the KaTeX finding.
-4. ~~**D** — mermaid 12~~ — done; visual QA pending. **C** waits on
+4. ~~**D** — mermaid 12~~ — done and visually inspected. **C** waits on
    mermaid#8216.
 5. **vitest 5 + jest-dom 7** together; then `chalk`, `gpt-tokenizer`,
    `vscode-jsonrpc` one at a time.
