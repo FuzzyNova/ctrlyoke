@@ -1,11 +1,9 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
-import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
-import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { getCtrlYokeUserTemplateDir } from "../utils/HarnessDirectoryUtils";
 import {
   RETRY_PROMPT_PLACEHOLDERS,
@@ -118,7 +116,7 @@ interface ParsedTemplateMeta {
  * - Creates workflow files from templates
  */
 export class TemplateManager {
-  private context: vscode.ExtensionContext;
+  private readonly extensionPath: string;
   private readonly promptFileParser: PromptFileParser;
 
   // Ordered list of built-in template IDs. "blank" is special-cased (generated, no file).
@@ -133,9 +131,13 @@ export class TemplateManager {
     "spec-driven-loop",
   ] as const;
 
-  constructor(context: vscode.ExtensionContext) {
-    this.context = context;
-    this.promptFileParser = new PromptFileParser(new VsCodeAdapter(context));
+  constructor(
+    extensionPath: string,
+    private readonly workspaceRootResolver: () => string | undefined,
+    platform: PlatformAdapter
+  ) {
+    this.extensionPath = extensionPath;
+    this.promptFileParser = new PromptFileParser(platform);
   }
 
   /**
@@ -262,8 +264,8 @@ export class TemplateManager {
   /**
    * Get the workspace folder for the current workspace
    */
-  private getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-    return getVsCodeWorkspaceFolder();
+  private getWorkspaceRoot(): string | undefined {
+    return this.workspaceRootResolver();
   }
 
   /**
@@ -271,7 +273,7 @@ export class TemplateManager {
    */
   private getBuiltInTemplatesPath(): string {
     return path.join(
-      this.context.extensionPath,
+      this.extensionPath,
       "out",
       "templates",
       "workflows"
@@ -282,10 +284,10 @@ export class TemplateManager {
    * Get the custom templates directory in the workspace
    */
   private getCustomTemplatesPath(): string | null {
-    const workspaceFolder = this.getWorkspaceFolder();
-    if (!workspaceFolder) return null;
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) return null;
     return path.join(
-      workspaceFolder.uri.fsPath,
+      workspaceRoot,
       PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMPLATES_DIR
     );
@@ -547,8 +549,8 @@ export class TemplateManager {
     templateId: string,
     variables: Record<string, string>
   ): Promise<PromptFile> {
-    const workspaceFolder = this.getWorkspaceFolder();
-    if (!workspaceFolder) {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
       throw new Error("No workspace folder available");
     }
 
@@ -588,7 +590,7 @@ export class TemplateManager {
     // relative `@file` references to the workspace root — there is no real
     // source file for a template-created workflow.
     const contentPath = path.join(
-      workspaceFolder.uri.fsPath,
+      workspaceRoot,
       "template-workflow.ctrlyoke.json"
     );
     return this.promptFileParser.validateAndNormalize(parsed, contentPath);

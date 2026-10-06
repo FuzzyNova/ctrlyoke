@@ -8,6 +8,44 @@ import {
   getScriptCommandCompletions,
   parseScriptCompletionContext,
 } from "../../completions/ScriptCommandCompletionHelpers";
+import type {
+  Disposable,
+  FileWatcher,
+  FileWatcherFactory,
+  NamedRoot,
+} from "../../core/HostPorts";
+
+class TestFileWatcher implements FileWatcher {
+  readonly changed: ((filePath: string) => void)[] = [];
+  readonly created: ((filePath: string) => void)[] = [];
+  readonly deleted: ((filePath: string) => void)[] = [];
+  onDidCreate(listener: (filePath: string) => void): Disposable {
+    this.created.push(listener);
+    return { dispose: () => undefined };
+  }
+  onDidChange(listener: (filePath: string) => void): Disposable {
+    this.changed.push(listener);
+    return { dispose: () => undefined };
+  }
+  onDidDelete(listener: (filePath: string) => void): Disposable {
+    this.deleted.push(listener);
+    return { dispose: () => undefined };
+  }
+  dispose(): void {}
+}
+
+class TestFileWatcherFactory implements FileWatcherFactory {
+  readonly created: {
+    basePath: string;
+    glob: string;
+    watcher: TestFileWatcher;
+  }[] = [];
+  create(basePath: string, glob: string): FileWatcher {
+    const watcher = new TestFileWatcher();
+    this.created.push({ basePath, glob, watcher });
+    return watcher;
+  }
+}
 
 suite("ScriptCommandCompletionHelpers", () => {
   const roots: string[] = [];
@@ -34,6 +72,23 @@ suite("ScriptCommandCompletionHelpers", () => {
       await fs.writeFile(path.join(root, "package.json"), packageJson, "utf8");
     }
     return root;
+  }
+
+  function getCompletions(
+    root: string | undefined,
+    text: string,
+    position: number,
+    fileWatcherFactory?: FileWatcherFactory
+  ) {
+    const roots: readonly NamedRoot[] = root
+      ? [{ name: path.basename(root), fsPath: root }]
+      : [];
+    return getScriptCommandCompletions(
+      roots,
+      text,
+      position,
+      fileWatcherFactory
+    );
   }
 
   test("finds the replacement range for every documented segment shape", () => {
@@ -72,7 +127,7 @@ suite("ScriptCommandCompletionHelpers", () => {
       })
     );
 
-    const npmRun = await getScriptCommandCompletions(root, "npm run te", 10);
+    const npmRun = await getCompletions(root, "npm run te", 10);
     assert.deepStrictEqual(npmRun.map((item) => item.insertText).sort(), [
       "test",
       "test:ui",
@@ -87,7 +142,7 @@ suite("ScriptCommandCompletionHelpers", () => {
       ["yarn run ", 9],
     ] as const) {
       const context = parseScriptCompletionContext(command, position);
-      const suggestions = await getScriptCommandCompletions(
+      const suggestions = await getCompletions(
         root,
         command,
         position
@@ -99,45 +154,68 @@ suite("ScriptCommandCompletionHelpers", () => {
       );
     }
 
-    const npm = await getScriptCommandCompletions(root, "npm ", 4);
+    const npm = await getCompletions(root, "npm ", 4);
     assert.ok(npm.some((item) => item.insertText === "npm test"));
     assert.ok(npm.some((item) => item.insertText === "npm run build"));
 
-    const pnpm = await getScriptCommandCompletions(root, "pnpm ", 5);
+    const pnpm = await getCompletions(root, "pnpm ", 5);
     assert.ok(pnpm.some((item) => item.insertText === "pnpm build"));
-    const yarn = await getScriptCommandCompletions(root, "yarn ", 5);
+    const yarn = await getCompletions(root, "yarn ", 5);
     assert.ok(yarn.some((item) => item.insertText === "yarn test"));
   });
 
   test("falls back to static commands without a workspace folder", async () => {
-    const items = await getScriptCommandCompletions(undefined, "", 0);
+    const items = await getCompletions(undefined, "", 0);
     assert.ok(items.some((item) => item.insertText === "git status"));
     assert.ok(items.some((item) => item.insertText === "Test-Path "));
   });
 
   test("falls back to static commands when package.json is missing", async () => {
     const root = await createWorkspace();
-    const items = await getScriptCommandCompletions(root, "", 0);
+    const items = await getCompletions(root, "", 0);
     assert.ok(items.some((item) => item.insertText === "npm install"));
     assert.ok(items.some((item) => item.insertText === "git status"));
   });
 
   test("ignores malformed package.json", async () => {
     const root = await createWorkspace("{ not valid json");
-    const items = await getScriptCommandCompletions(root, "", 0);
+    const items = await getCompletions(root, "", 0);
     assert.ok(items.some((item) => item.insertText === "ls"));
     assert.ok(!items.some((item) => item.insertText === "npm run test"));
   });
 
   test("keeps package-manager base commands for an empty scripts object", async () => {
     const root = await createWorkspace(JSON.stringify({ scripts: {} }));
-    const items = await getScriptCommandCompletions(root, "npm ", 4);
+    const items = await getCompletions(root, "npm ", 4);
     assert.ok(items.some((item) => item.insertText === "npm install"));
     assert.ok(items.some((item) => item.insertText === "npm run "));
   });
 
+  test("watches package.json under injected roots and invalidates cached scripts", async () => {
+    const root = await createWorkspace(
+      JSON.stringify({ scripts: { old: "old" } })
+    );
+    const factory = new TestFileWatcherFactory();
+    await getCompletions(root, "npm run ", 8, factory);
+    assert.strictEqual(factory.created.length, 1);
+    assert.strictEqual(
+      factory.created[0].basePath,
+      path.resolve(root)
+    );
+    assert.strictEqual(factory.created[0].glob, "**/package.json");
+
+    await fs.writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ scripts: { fresh: "fresh" } }),
+      "utf8"
+    );
+    factory.created[0].watcher.changed[0](path.join(root, "package.json"));
+    const refreshed = await getCompletions(root, "npm run ", 8, factory);
+    assert.ok(refreshed.some((item) => item.insertText === "fresh"));
+  });
+
   test("deprioritizes destructive commands", async () => {
-    const items = await getScriptCommandCompletions(undefined, "", 0);
+    const items = await getCompletions(undefined, "", 0);
     const safe = items.find((item) => item.insertText === "git status");
     const destructive = items.find((item) => item.insertText === "git clean ");
     assert.ok(safe?.sortText);

@@ -13,16 +13,15 @@ import {
 } from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
-import {
-  getOutputChannelSlug,
-  mapSymbolKindToReferenceKind,
-} from "./CompletionHelpers";
+import { getOutputChannelSlug } from "./CompletionHelpers";
+import { mapSymbolKindToReferenceKind } from "./CompletionCore";
 import { writeOutputSnapshotAttachment } from "../ui/OutputSnapshotService";
 import type { OutputCaptureEntry } from "./OutputCaptureCache";
-import { confirmExternalFileTrust } from "../ui/ExternalFileTrustPrompt";
+import { confirmExternalFileTrust } from "../ui/ExternalRootsApproval";
 import type { UserInteractionPort } from "../ui/UserInteractionPort";
 import { NullUserInteractionPort } from "../ui/UserInteractionPort";
 import { getVsCodeTrustedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot";
+import { VsCodeSymbolIndex } from "../platform/VsCodeSymbolIndex";
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
@@ -314,21 +313,28 @@ export class ContextMenuReferenceCommands {
   }
 
   private async tryBuildSymbolReference(
-    uri: vscode.Uri,
+    _uri: vscode.Uri,
     lineNumber: number,
     referencePath: string
   ): Promise<string | undefined> {
     try {
-      const symbols = (await vscode.commands.executeCommand(
-        "vscode.executeDocumentSymbolProvider",
-        uri
-      )) as vscode.DocumentSymbol[] | undefined;
+      const symbols = await new VsCodeSymbolIndex().documentSymbols(
+        referencePath
+      );
       if (!symbols?.length) {
         return undefined;
       }
 
-      const targetLine = lineNumber - 1;
-      const symbol = this.findInnermostSymbolAtLine(symbols, targetLine);
+      const targetLine = lineNumber;
+      const symbol = symbols
+        .filter(
+          (candidate) =>
+            targetLine >= candidate.startLine && targetLine <= candidate.endLine
+        )
+        .sort(
+          (left, right) =>
+            left.endLine - left.startLine - (right.endLine - right.startLine)
+        )[0];
       if (!symbol) {
         return undefined;
       }
@@ -336,8 +342,8 @@ export class ContextMenuReferenceCommands {
       return buildSymbolReference(
         referencePath,
         symbol.name,
-        symbol.range.start.line + 1,
-        symbol.range.end.line + 1,
+        symbol.startLine,
+        symbol.endLine,
         mapSymbolKindToReferenceKind(symbol.kind)
       );
     } catch (error) {
@@ -347,28 +353,6 @@ export class ContextMenuReferenceCommands {
       );
       return undefined;
     }
-  }
-
-  private findInnermostSymbolAtLine(
-    symbols: vscode.DocumentSymbol[],
-    targetLine: number
-  ): vscode.DocumentSymbol | undefined {
-    for (const symbol of symbols) {
-      if (
-        targetLine < symbol.range.start.line ||
-        targetLine > symbol.range.end.line
-      ) {
-        continue;
-      }
-
-      const childMatch = this.findInnermostSymbolAtLine(
-        symbol.children,
-        targetLine
-      );
-      return childMatch ?? symbol;
-    }
-
-    return undefined;
   }
 
   private extractScmResourceUris(args: unknown[]): vscode.Uri[] {

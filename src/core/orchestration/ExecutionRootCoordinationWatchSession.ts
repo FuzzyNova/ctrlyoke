@@ -1,5 +1,5 @@
 import * as path from "path";
-import * as vscode from "vscode";
+import type { Disposable, FileWatcherFactory } from "../HostPorts";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { CoordinationScopeSnapshot } from "../../types/CtrlYokeTypes";
 import { Log } from "../../utils/Log";
@@ -55,10 +55,8 @@ export async function readCoordinationScopeSnapshot(
 }
 
 /** Watches board.jsonl and coalesces bursts into at most leading + trailing refreshes. */
-export class ExecutionRootCoordinationWatchSession
-  implements vscode.Disposable
-{
-  private readonly disposables: vscode.Disposable[] = [];
+export class ExecutionRootCoordinationWatchSession implements Disposable {
+  private readonly disposables: Disposable[] = [];
   private timer: ReturnType<typeof setTimeout> | undefined;
   private throttleStartedAt = 0;
   private pending = false;
@@ -67,16 +65,16 @@ export class ExecutionRootCoordinationWatchSession
   constructor(
     private readonly executionRoot: string,
     private readonly onUpdate: (snapshot: CoordinationScopeSnapshot) => void,
+    private readonly fileWatcherFactory: FileWatcherFactory,
     private readonly readSnapshot: CoordinationScopeReader = readCoordinationScopeSnapshot
   ) {}
 
   async start(): Promise<void> {
     const scope = await resolveCoordinationBoardScope(this.executionRoot);
-    const pattern = new vscode.RelativePattern(
+    const watcher = this.fileWatcherFactory.create(
       path.dirname(scope.boardPath),
       path.basename(scope.boardPath)
     );
-    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
     this.disposables.push(
       watcher,
       watcher.onDidChange(() => this.notifyBoardChanged()),

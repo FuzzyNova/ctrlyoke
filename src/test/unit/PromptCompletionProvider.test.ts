@@ -1,5 +1,7 @@
 import * as assert from "assert";
 import * as path from "path";
+import * as fs from "fs/promises";
+import * as os from "os";
 import * as vscode from "vscode";
 import { afterEach, suite, test } from "mocha";
 import { PromptCompletionProvider } from "../../completions/PromptCompletionProvider";
@@ -27,6 +29,7 @@ suite("PromptCompletionProvider", () => {
   const originalFindFiles = vscode.workspace.findFiles;
   const originalAsRelativePath = vscode.workspace.asRelativePath;
   const originalVisibleTextEditors = vscode.window.visibleTextEditors;
+  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
   const originalExecuteCommand = vscode.commands.executeCommand;
   const originalShouldRespectGitignore =
     ConfigurationUtils.shouldRespectGitignoreForCompletions;
@@ -45,6 +48,10 @@ suite("PromptCompletionProvider", () => {
       configurable: true,
       value: originalVisibleTextEditors,
     });
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      value: originalWorkspaceFolders,
+    });
     Object.defineProperty(vscode.commands, "executeCommand", {
       configurable: true,
       value: originalExecuteCommand,
@@ -56,7 +63,15 @@ suite("PromptCompletionProvider", () => {
   test("JSON prompt completions escape quoted paths for @, #selection, and #sym", async () => {
     clearFilesCache();
     ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
-    const root = path.join(path.sep, "workspace");
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "completion-provider-")
+    );
+    await fs.mkdir(path.join(root, "my dir"), { recursive: true });
+    await fs.writeFile(path.join(root, "my dir", "a.md"), "hello");
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      value: [{ uri: vscode.Uri.file(root), name: "workspace", index: 0 }],
+    });
     const fileUri = vscode.Uri.file(path.join(root, "my dir", "a.md"));
     Object.defineProperty(vscode.workspace, "findFiles", {
       configurable: true,
@@ -147,5 +162,6 @@ suite("PromptCompletionProvider", () => {
       ),
       "symbol completion should escape path and name quotes for JSON"
     );
+    await fs.rm(root, { recursive: true, force: true });
   });
 });

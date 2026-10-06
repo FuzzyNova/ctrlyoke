@@ -4,6 +4,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
+import { NodeFileWatcherFactory } from "../../platform/NodeFileWatcher";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   RunRef,
@@ -64,7 +65,8 @@ suite("ExternalRunWatchSession", () => {
       observer,
       () => {},
       () => {},
-      () => {}
+      () => {},
+      new NodeFileWatcherFactory()
     );
 
     assert.strictEqual(
@@ -86,7 +88,8 @@ suite("ExternalRunWatchSession", () => {
       observer,
       () => {},
       () => {},
-      () => {}
+      () => {},
+      new NodeFileWatcherFactory()
     );
 
     assert.strictEqual(session.getAndUpdateLastKnownOutputCount(0, 3), 0);
@@ -138,7 +141,8 @@ suite("ExternalRunWatchSession", () => {
           updateSteps = steps;
         },
         () => {},
-        () => {}
+        () => {},
+        new NodeFileWatcherFactory()
       );
       await (
         session as unknown as { handleWorkingFileChange: () => Promise<void> }
@@ -192,7 +196,8 @@ suite("ExternalRunWatchSession", () => {
           update = summary as Record<string, unknown>;
         },
         () => {},
-        () => {}
+        () => {},
+        new NodeFileWatcherFactory()
       );
       await (
         session as unknown as { handleWorkingFileChange: () => Promise<void> }
@@ -237,7 +242,8 @@ suite("ExternalRunWatchSession", () => {
         () => undefined,
         () => {
           finished += 1;
-        }
+        },
+        new NodeFileWatcherFactory()
       );
       await (
         session as unknown as { handleWorkingFileChange: () => Promise<void> }
@@ -298,7 +304,8 @@ suite("ExternalRunWatchSession", () => {
         () => undefined,
         () => {
           finished += 1;
-        }
+        },
+        new NodeFileWatcherFactory()
       );
 
       await fs.writeFile(

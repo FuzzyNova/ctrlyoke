@@ -719,6 +719,9 @@ export function createMessageHandlers(
   };
 
   handlers[MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT] = (message) => {
+    if (message.error) {
+      notifyUser(message.error, USER_FEEDBACK_SEVERITY.ERROR);
+    }
     if (message.requestId) {
       useSettingsStore.getState().setWorktreeActionResult(message.requestId, {
         success: Boolean(message.success),
@@ -2106,6 +2109,8 @@ export function createMessageHandlers(
         message.error ?? "Unable to open folder",
         USER_FEEDBACK_SEVERITY.WARNING
       );
+    } else if (message.path) {
+      useWorkspaceViewerStore.getState().openToDirectory(message.path);
     }
   };
 
@@ -2266,6 +2271,11 @@ export function createMessageHandlers(
       ref,
     });
   };
+
+  // Host-native actions are not available in the browser. The browser already
+  // selects its own file-browser/editor/diff surface before sending these
+  // messages; acknowledge the scoped result without changing that flow.
+  handlers[MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT] = () => {};
 
   // --------------------------------------------------------------------------
   // MCP_CONFIG_PREVIEW_RESULT

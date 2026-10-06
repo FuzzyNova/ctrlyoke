@@ -1,3 +1,4 @@
+import { INTERACTIVE_TERMINAL_MODES } from "../../types/DashboardConstants";
 import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -22,7 +23,8 @@ suite("EndConditionEvaluator.createSampleScript", () => {
       path.join(os.tmpdir(), "ctrlyoke-create-script-")
     );
     const platform: PlatformAdapter = {
-      getWorkspaceRoot: () => workspaceRoot,
+      interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
+    getWorkspaceRoot: () => workspaceRoot,
       getWorkspaceRoots: () => [workspaceRoot],
       getNamedWorkspaceRoots: () => [],
       getExtensionPath: () => path.resolve(__dirname, "../../.."),

@@ -1,8 +1,11 @@
-import * as vscode from "vscode";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
+import {
+  DASHBOARD_ACTION_RESULT_STATUSES,
+  USER_FEEDBACK_SEVERITY,
+} from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
+import type { DashboardHostActions } from "../HostPorts";
 
 /**
  * WorkflowCommandHandler
@@ -14,7 +17,10 @@ import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
  * - Opening current prompt file
  */
 export class WorkflowCommandHandler {
-  constructor(private readonly userFeedbackSink?: UserFeedbackSink) {}
+  constructor(
+    private readonly hostActions: DashboardHostActions,
+    private readonly userFeedbackSink?: UserFeedbackSink
+  ) {}
 
   /**
    * Open ctrlyoke panel/dashboard
@@ -22,7 +28,7 @@ export class WorkflowCommandHandler {
   async openPanel(): Promise<void> {
     // Focus the ctrlyoke dashboard panel
     try {
-      await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
+      this.hostActions.focusDashboard?.();
     } catch (error) {
       Log.error(
         "[WorkflowCommandHandler] Failed to focus ctrlyoke dashboard:",
@@ -73,19 +79,17 @@ export class WorkflowCommandHandler {
    */
   private async openPromptFile(filePath: string): Promise<void> {
     try {
-      const document = await vscode.workspace.openTextDocument(filePath);
-
-      if (ConfigurationUtils.shouldOpenPromptsInSecondGroup()) {
-        // Open in second editor group (right side) to keep main code visible
-        await vscode.window.showTextDocument(document, {
-          viewColumn: vscode.ViewColumn.Two,
-          preview: false,
-          preserveFocus: false,
-        });
-      } else {
-        // Open in active editor (default VS Code behavior)
-        await vscode.window.showTextDocument(document);
-      }
+      const result = await this.hostActions.openWorkspaceTarget({
+        path: filePath,
+        openAsText: true,
+        ...(ConfigurationUtils.shouldOpenPromptsInSecondGroup()
+          ? { viewColumn: 2 }
+          : {}),
+      });
+      if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.FAILED)
+        throw new Error(result.message);
+      if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED)
+        throw new Error(result.message ?? "Opening files is not supported by this host.");
     } catch (error) {
       Log.error(
         "[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:",

@@ -1,377 +1,26 @@
 import * as assert from "assert";
-import * as fs from "fs/promises";
-import * as os from "os";
-import * as path from "path";
-import { execFileSync } from "child_process";
-import { suite, setup, teardown, test } from "mocha";
 import * as vscode from "vscode";
+import { suite, test, setup, teardown } from "mocha";
 import {
-  CAPTURING_OUTPUT_PLACEHOLDER,
-  WORKSPACE_ENTRY_KINDS,
-} from "../../types/DashboardConstants";
-import {
-  clearFilesCache,
-  getGitChangeCompletions,
-  getFileCompletions,
-  getHashCompletions,
-  getHashSelectionCompletions,
-  getPathSuggestions,
-  getPromptFileCompletions,
-  getCtrlYokeSlashCompletions,
-  clearSlashTokenCompletionCache,
-  findDocumentSymbolByNameAndRange,
-  findWorkspaceSymbolByUriNameAndRange,
-  mapSymbolKindToReferenceKind,
-  getSecretCompletions,
-  getPriorContextCompletions,
+  getOutputChannelSlug,
   toVSCodeCompletionItem,
 } from "../../completions/CompletionHelpers";
 import {
-  GIT_CHANGE_KINDS,
-  RETRY_PROMPT_PLACEHOLDERS,
-  SCRIPT_OUTPUT_SOURCES,
+  clearSlashTokenCompletionCache,
+  getCtrlYokeSlashCompletions,
+} from "../../completions/SlashTokenCompletionHelpers";
+import type { PlainCompletionItem } from "../../completions/CompletionCore";
+import {
+  CAPTURING_OUTPUT_PLACEHOLDER,
   VSCODE_COMMANDS,
 } from "../../types/DashboardConstants";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { SYMBOL_KIND_ICONS } from "../../types/SymbolKindConstants";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
-import { outputCaptureCache } from "../../completions/OutputCaptureCache";
 
-const COMMIT_SKILL_NAME = "commit";
-
-suite("CompletionHelpers git change completions", function () {
-  let workspaceRoot: string;
-
-  function runGit(args: string[]): string {
-    return execFileSync("git", args, {
-      cwd: workspaceRoot,
-      encoding: "utf8",
-      stdio: "pipe",
-    }).trim();
-  }
-
-  setup(async () => {
-    workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "cy-git-completions-")
-    );
-    runGit(["init"]);
-    runGit(["config", "user.name", "Completion Author"]);
-    runGit(["config", "user.email", "completion@example.com"]);
-    await fs.writeFile(path.join(workspaceRoot, "initial.txt"), "initial\n");
-    runGit(["add", "initial.txt"]);
-    runGit(["commit", "-m", "unrelated commit subject"]);
-  });
-
-  teardown(async () => {
-    await fs.rm(workspaceRoot, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 50,
-    });
-  });
-
-  test("keeps a recent commit available when filtering by its hash", async () => {
-    const hash = runGit(["rev-parse", "HEAD"]);
-    const items = await getGitChangeCompletions(
-      workspaceRoot,
-      hash.slice(0, 8)
-    );
-    const commitItems = items.filter((item) => item.insertText === hash);
-
-    assert.strictEqual(commitItems.length, 1);
-    assert.match(commitItems[0].filterText ?? "", new RegExp(hash.slice(0, 8)));
-  });
-
-  test("gives each git reference kind the icon its chip renders with", async () => {
-    await fs.writeFile(path.join(workspaceRoot, "initial.txt"), "changed\n");
-    runGit(["stash"]);
-    const hash = runGit(["rev-parse", "HEAD"]);
-
-    const items = await getGitChangeCompletions(workspaceRoot, "");
-    const iconFor = (insertText: string) =>
-      items.find((item) => item.insertText === insertText)?.icon;
-
-    assert.strictEqual(iconFor(GIT_CHANGE_KINDS.DIFF), "git-branch-changes");
-    assert.strictEqual(
-      iconFor(GIT_CHANGE_KINDS.STAGED),
-      "git-branch-staged-changes"
-    );
-    assert.strictEqual(iconFor(`${GIT_CHANGE_KINDS.STASH}:0`), "git-stash");
-    assert.strictEqual(iconFor(hash), "git-commit");
-  });
-
-  test("keeps recent commits available when filtering by author", async () => {
-    const hash = runGit(["rev-parse", "HEAD"]);
-    const items = await getGitChangeCompletions(
-      workspaceRoot,
-      "Completion Author"
-    );
-
-    assert.ok(items.some((item) => item.insertText === hash));
-  });
-
-  test("resolves a hash filter outside the recent-commit cache", async () => {
-    const olderHash = runGit(["rev-parse", "HEAD"]);
-    for (let index = 0; index < 50; index++) {
-      runGit(["commit", "--allow-empty", "-m", `later commit ${index}`]);
-    }
-
-    const items = await getGitChangeCompletions(
-      workspaceRoot,
-      olderHash.slice(0, 8)
-    );
-
-    assert.ok(items.some((item) => item.insertText === olderHash));
-  });
-});
-
-suite("CompletionHelpers", () => {
-  const originalFindFiles = vscode.workspace.findFiles;
-  const originalAsRelativePath = vscode.workspace.asRelativePath;
-  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
-  const originalVisibleTextEditors = vscode.window.visibleTextEditors;
-  const originalShouldRespectGitignore =
-    ConfigurationUtils.shouldRespectGitignoreForCompletions;
-
-  test("returns secret names only and never a secret value", () => {
-    const items = getSecretCompletions(
-      ["ZETA_TOKEN", "ALPHA_TOKEN", "ZETA_TOKEN"],
-      "token"
-    );
-
-    assert.deepStrictEqual(
-      items.map(({ label, insertText }) => ({ label, insertText })),
-      [
-        { label: "ALPHA_TOKEN", insertText: "ALPHA_TOKEN" },
-        { label: "ZETA_TOKEN", insertText: "ZETA_TOKEN" },
-      ]
-    );
-    assert.ok(items.every((item) => !("value" in item)));
-  });
-
-  test("offers condition-output completions and filters them fuzzily", () => {
-    const items = getPriorContextCompletions("");
-    const conditionItems = items.filter((item) =>
-      [
-        SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-        SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-      ].some((phase) => item.label.startsWith(`${phase}:`))
-    );
-    const expectedLabels = [
-      SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-      SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-    ].flatMap((phase) =>
-      Object.values(RETRY_PROMPT_PLACEHOLDERS).map(
-        (field) => `${phase}:${field}`
-      )
-    );
-
-    assert.deepStrictEqual(
-      conditionItems.map((item) => item.label),
-      expectedLabels
-    );
-    assert.ok(conditionItems.every((item) => item.detail?.includes("script")));
-    assert.deepStrictEqual(
-      getPriorContextCompletions("endcondition:exit").map((item) => item.label),
-      [
-        `${SCRIPT_OUTPUT_SOURCES.END_CONDITION}:${RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE}`,
-      ]
-    );
-  });
-
-  // Install fake visible editors whose selections drive getHashSelectionCompletions.
-  function mockSelections(
-    selections: Array<{
-      relativePath: string;
-      startLine: number;
-      endLine: number;
-      text?: string;
-    }>
-  ): void {
-    const workspaceRoot = path.join(os.tmpdir(), "ctrlyoke-completion-helpers");
-    const pathByFsPath = new Map<string, string>();
-    const editors = selections.map((sel) => {
-      const uri = vscode.Uri.file(
-        path.join(workspaceRoot, sel.relativePath.replace(/\//g, path.sep))
-      );
-      pathByFsPath.set(uri.fsPath, sel.relativePath);
-      const selection = {
-        isEmpty: false,
-        start: { line: sel.startLine - 1 },
-        end: { line: sel.endLine - 1 },
-      };
-      return {
-        selection,
-        document: {
-          uri,
-          getText: () => sel.text ?? "",
-        },
-      };
-    });
-
-    Object.defineProperty(vscode.workspace, "asRelativePath", {
-      value: (uri: vscode.Uri) => pathByFsPath.get(uri.fsPath) ?? uri.fsPath,
-      configurable: true,
-    });
-    Object.defineProperty(vscode.window, "visibleTextEditors", {
-      value: editors,
-      configurable: true,
-    });
-  }
-
-  function mockWorkspaceFiles(relativePaths: string[]): void {
-    const workspaceRoot = path.join(os.tmpdir(), "ctrlyoke-completion-helpers");
-    const pathByFsPath = new Map<string, string>();
-    const files = relativePaths.map((relativePath) => {
-      const uri = vscode.Uri.file(
-        path.join(workspaceRoot, relativePath.replace(/\//g, path.sep))
-      );
-      pathByFsPath.set(uri.fsPath, relativePath);
-      return uri;
-    });
-
-    Object.defineProperty(vscode.workspace, "findFiles", {
-      value: async () => files,
-      configurable: true,
-    });
-    Object.defineProperty(vscode.workspace, "asRelativePath", {
-      value: (uri: vscode.Uri, includeWorkspaceFolder?: boolean) => {
-        const relativePath = pathByFsPath.get(uri.fsPath) ?? uri.fsPath;
-        return includeWorkspaceFolder
-          ? `ctrlyoke/${relativePath}`
-          : relativePath;
-      },
-      configurable: true,
-    });
-  }
-
-  function mockOutputEditors(
-    editors: Array<{
-      channel: string;
-      text: string;
-      startLine?: number;
-      endLine?: number;
-    }>
-  ): void {
-    const outputEditors = editors.map((editor) => ({
-      selection: {
-        isEmpty: editor.startLine === undefined,
-        start: { line: (editor.startLine ?? 1) - 1 },
-        end: { line: (editor.endLine ?? editor.startLine ?? 1) - 1 },
-      },
-      document: {
-        uri: vscode.Uri.parse(`output:${editor.channel}`),
-        getText: () => editor.text,
-      },
-    }));
-
-    Object.defineProperty(vscode.workspace, "asRelativePath", {
-      value: (uri: vscode.Uri) =>
-        uri.scheme === "output" ? uri.path : uri.fsPath,
-      configurable: true,
-    });
-    Object.defineProperty(vscode.window, "visibleTextEditors", {
-      value: outputEditors,
-      configurable: true,
-    });
-  }
-
-  setup(() => {
-    clearFilesCache();
-    ConfigurationUtils.shouldRespectGitignoreForCompletions = (() =>
-      false) as typeof ConfigurationUtils.shouldRespectGitignoreForCompletions;
-  });
-
-  teardown(() => {
-    clearFilesCache();
-    Object.defineProperty(vscode.workspace, "findFiles", {
-      value: originalFindFiles,
-      configurable: true,
-    });
-    Object.defineProperty(vscode.workspace, "asRelativePath", {
-      value: originalAsRelativePath,
-      configurable: true,
-    });
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      value: originalWorkspaceFolders,
-      configurable: true,
-    });
-    Object.defineProperty(vscode.window, "visibleTextEditors", {
-      value: originalVisibleTextEditors,
-      configurable: true,
-    });
-    ConfigurationUtils.shouldRespectGitignoreForCompletions =
-      originalShouldRespectGitignore;
-  });
-
-  test("maps every SymbolKind enum member to a renderer vocabulary key", () => {
-    const symbolKinds = Object.values(vscode.SymbolKind).filter(
-      (value): value is vscode.SymbolKind => typeof value === "number"
-    );
-
-    assert.strictEqual(symbolKinds.length, 26);
-    for (const symbolKind of symbolKinds) {
-      const referenceKind = mapSymbolKindToReferenceKind(symbolKind);
-      assert.ok(referenceKind, `missing kind name for ${symbolKind}`);
-      assert.ok(
-        Object.prototype.hasOwnProperty.call(SYMBOL_KIND_ICONS, referenceKind),
-        `renderer map does not contain ${referenceKind}`
-      );
-    }
-  });
-
-  test("matches @ completions against the typed directory and child prefix", async () => {
-    mockWorkspaceFiles([
-      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-      "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
-      "src/ui/webview-react/components/editor/commands/CommandPalette.tsx",
-      "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
-    ]);
-
-    const items = await getFileCompletions(
-      "src/ui/webview-react/components/editor/Co"
-    );
-    const labels = items.map((item) => item.label);
-
-    assert.ok(labels.includes("commands/"));
-    assert.ok(labels.includes("CodeMirrorEditor.tsx"));
-    assert.ok(labels.includes("CodeMirrorTheme.ts"));
-    assert.ok(!labels.includes("CommandPalette.tsx"));
-    assert.ok(!labels.includes("WorkflowFilePickerModal.tsx"));
-  });
-
-  test("captures visible output channels for @ completions", async () => {
-    mockWorkspaceFiles([]);
-    mockOutputEditors([{ channel: "agenthost", text: "latest output" }]);
-
-    const items = await getFileCompletions("");
-    const item = items.find(
-      (candidate) => candidate.label === "agenthost (Output)"
-    );
-
-    assert.ok(item);
-    assert.strictEqual(item.insertText, CAPTURING_OUTPUT_PLACEHOLDER);
-    assert.ok(item.captureId);
-    assert.ok(!item.insertText.includes("agenthost"));
-    const vscodeItem = toVSCodeCompletionItem(item, "@");
-    assert.strictEqual(vscodeItem.insertText, CAPTURING_OUTPUT_PLACEHOLDER);
-    assert.deepStrictEqual(vscodeItem.command, {
-      command: VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,
-      title: "Resolve output capture",
-      arguments: [item.captureId],
-    });
-    assert.deepStrictEqual(outputCaptureCache.take(item.captureId), {
-      text: "latest output",
-      channel: "agenthost",
-      range: undefined,
-    });
-  });
-
-  test("does not attach a native command to ordinary completions", () => {
+suite("CompletionHelpers VS Code adapters", () => {
+  test("converts an ordinary item without attaching a capture command", () => {
     const item = toVSCodeCompletionItem(
       {
         label: "README.md",
@@ -380,520 +29,52 @@ suite("CompletionHelpers", () => {
       },
       "@"
     );
-
+    assert.strictEqual(item.label, "README.md");
     assert.strictEqual(item.command, undefined);
   });
 
-  test("ranks @ completions fuzzily against a basename-only query", async () => {
-    mockWorkspaceFiles([
-      "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
-      "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
-      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-    ]);
-
-    const items = await getFileCompletions("cme");
-
-    assert.strictEqual(items[0]?.label, "CodeMirrorEditor.tsx");
-    assert.deepStrictEqual(
-      items.map((item) => item.rank),
-      items.map((_, index) => index)
-    );
-  });
-
-  test("matches @ completions with gaps across camelCase words", async () => {
-    mockWorkspaceFiles([
-      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-      "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
-    ]);
-
-    const labels = (await getFileCompletions("codeeditor")).map(
-      (item) => item.label
-    );
-
-    assert.deepStrictEqual(labels, ["CodeMirrorEditor.tsx"]);
-  });
-
-  test("ranks @ completions before truncating, so the best match survives the cap", async () => {
-    // 600 weak path-only matches that sort ahead of the real one by path.
-    const noise = Array.from(
-      { length: 600 },
-      (_, index) => `aaa/editor-fixtures/case${index}.ts`
-    );
-    mockWorkspaceFiles([
-      ...noise,
-      "zzz/ui/components/editor/CodeMirrorEditor.tsx",
-    ]);
-
-    const items = await getFileCompletions("codemirroreditor");
-
-    assert.strictEqual(items[0]?.label, "CodeMirrorEditor.tsx");
-  });
-
-  test("ranks @ completions fuzzily within the typed directory segment", async () => {
-    mockWorkspaceFiles([
-      "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
-      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-      "src/ui/webview-react/components/editor/commands/CommandPalette.tsx",
-    ]);
-
-    const items = await getFileCompletions(
-      "src/ui/webview-react/components/editor/cme"
-    );
-    const labels = items.map((item) => item.label);
-
-    assert.strictEqual(labels[0], "CodeMirrorEditor.tsx");
-    assert.ok(!labels.includes("commands/"));
-    assert.ok(!labels.includes("CommandPalette.tsx"));
-  });
-
-  suite("# symbol completions", () => {
-    const originalExecuteCommand = vscode.commands.executeCommand;
-    const symbolUri = vscode.Uri.file(
-      path.join(os.tmpdir(), "ctrlyoke-completion-helpers", "src", "hooks.ts")
-    );
-
-    function symbol(name: string, line: number, containerName = "") {
-      return new vscode.SymbolInformation(
-        name,
-        vscode.SymbolKind.Function,
-        containerName,
-        new vscode.Location(symbolUri, new vscode.Range(line, 0, line + 2, 0))
-      );
-    }
-
-    // Mimic tsserver's navto for an all-lowercase query: a contiguous,
-    // case-insensitive substring match only.
-    function mockWorkspaceSymbols(
-      symbols: vscode.SymbolInformation[]
-    ): string[] {
-      const queries: string[] = [];
-      Object.defineProperty(vscode.commands, "executeCommand", {
-        configurable: true,
-        value: ((command: string, query: string) => {
-          if (command !== "vscode.executeWorkspaceSymbolProvider") {
-            return originalExecuteCommand(command, query);
-          }
-          queries.push(query);
-          return Promise.resolve(
-            symbols.filter(
-              (candidate) =>
-                query.length > 0 &&
-                `${candidate.containerName}.${candidate.name}`
-                  .toLowerCase()
-                  .includes(query.toLowerCase())
-            )
-          );
-        }) as typeof originalExecuteCommand,
-      });
-      return queries;
-    }
-
-    teardown(() => {
-      Object.defineProperty(vscode.commands, "executeCommand", {
-        configurable: true,
-        value: originalExecuteCommand,
-      });
-    });
-
-    test("finds gapped camelCase symbols the provider only returns for the short prefix", async () => {
-      mockSelections([]);
-      const queries = mockWorkspaceSymbols([
-        symbol("useCallbackRef", 1),
-        symbol("useFinalStepContextMenu", 10),
-        symbol("useContextPct", 20),
-      ]);
-
-      const items = await getHashCompletions("usecontext");
-      const labels = items.map((item) => item.label);
-
-      assert.deepStrictEqual(queries.sort(), ["use", "usecontext"]);
-      assert.ok(labels.includes("useFinalStepContextMenu"));
-      assert.ok(labels.includes("useContextPct"));
-      assert.ok(!labels.includes("useCallbackRef"));
-      assert.deepStrictEqual(
-        items.map((item) => item.rank),
-        items.map((_, index) => index)
-      );
-    });
-
-    test("keeps provider matches for the full query that fuzzy ranking cannot see", async () => {
-      mockSelections([]);
-      mockWorkspaceSymbols([symbol("member", 1, "Container")]);
-
-      const labels = (await getHashCompletions("Container.member")).map(
-        (item) => item.label
-      );
-
-      assert.deepStrictEqual(labels, ["member"]);
-    });
-
-    test("filters the selection item against the query", async () => {
-      mockSelections([
-        { relativePath: "src/foo.ts", startLine: 10, endLine: 20 },
-      ]);
-      mockWorkspaceSymbols([]);
-
-      assert.strictEqual((await getHashCompletions("usecontext")).length, 0);
-      assert.strictEqual((await getHashCompletions("sel")).length, 1);
+  test("converts captured output items to the resolver command", () => {
+    const plain: PlainCompletionItem = {
+      label: "agenthost (Output)",
+      kind: vscode.CompletionItemKind.File,
+      insertText: CAPTURING_OUTPUT_PLACEHOLDER,
+      captureId: "capture-1",
+    };
+    const item = toVSCodeCompletionItem(plain, "@");
+    assert.strictEqual(item.insertText, CAPTURING_OUTPUT_PLACEHOLDER);
+    assert.deepStrictEqual(item.command, {
+      command: VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,
+      title: "Resolve output capture",
+      arguments: ["capture-1"],
     });
   });
 
-  test("matches lone prompt-file path completions against the typed directory and child prefix", async () => {
-    mockWorkspaceFiles([
-      "prompts/seed.prompt.md",
-      "prompts/setup.prompt.md",
-      "prompts/sub/section.prompt.md",
-      "docs/seed.md",
-    ]);
-
-    const items = await getPromptFileCompletions("./prompts/se");
-    const labels = items.map((item) => item.label).sort();
-
-    assert.deepStrictEqual(labels, ["seed.prompt.md", "setup.prompt.md"]);
-  });
-
-  test("matches lone prompt-file path completions fuzzily against the typed child name", async () => {
-    mockWorkspaceFiles([
-      "prompts/seed.prompt.md",
-      "prompts/setup.prompt.md",
-      "prompts/sub/section.prompt.md",
-    ]);
-
-    const items = await getPromptFileCompletions("./prompts/stpm");
-    const labels = items.map((item) => item.label);
-
-    assert.deepStrictEqual(labels, ["setup.prompt.md"]);
-  });
-
-  test("uses the folder-qualified path for standalone prompts in multi-root workspaces", async () => {
-    const workspaceRoot = path.join(os.tmpdir(), "ctrlyoke-completion-helpers");
-    mockWorkspaceFiles([".ctrlyoke/prompts/current.prompt.md"]);
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      value: [
-        {
-          name: "ctrlyoke",
-          uri: vscode.Uri.file(workspaceRoot),
-          index: 0,
-        },
-        {
-          name: "other",
-          uri: vscode.Uri.file(path.join(os.tmpdir(), "other")),
-          index: 1,
-        },
-      ],
+  test("uses the workspace relative path as an output channel slug", () => {
+    const document = {
+      uri: vscode.Uri.file("/workspace/logs/agent.log"),
+    } as vscode.TextDocument;
+    const original = vscode.workspace.asRelativePath;
+    Object.defineProperty(vscode.workspace, "asRelativePath", {
       configurable: true,
+      value: () => "logs/agent.log",
     });
-
-    const items = await getPromptFileCompletions(
-      "ctrlyoke/.ctrlyoke/prompts/cu"
-    );
-
-    assert.strictEqual(
-      items[0]?.insertText,
-      "ctrlyoke/.ctrlyoke/prompts/current.prompt.md"
-    );
-  });
-
-  test("getHashSelectionCompletions returns the active selection with a top-bubbled sortText", () => {
-    mockSelections([
-      {
-        relativePath: "src/foo.ts",
-        startLine: 10,
-        endLine: 20,
-        text: "const x = 1;",
-      },
-    ]);
-
-    const items = getHashSelectionCompletions();
-
-    assert.strictEqual(items.length, 1);
-    assert.strictEqual(items[0].insertText, "selection:src/foo.ts:10-20");
-    // Prefixed with "0_" so selections bubble above the "1_" symbol items in
-    // the merged getHashCompletions result.
-    assert.ok(items[0].sortText?.startsWith("0_"));
-    // Unit is otherwise unused by any provider here, giving clients a
-    // collision-free marker distinct from git (~) completions (Reference).
-    assert.strictEqual(items[0].kind, vscode.CompletionItemKind.Unit);
-    assert.strictEqual(items[0].captureId, undefined);
-  });
-
-  test("captures output selections while keeping the selection completion label", () => {
-    mockOutputEditors([
-      {
-        channel: "agenthost",
-        text: "line 17\nline 18",
-        startLine: 17,
-        endLine: 18,
-      },
-      { channel: "other", text: "not selected" },
-    ]);
-
-    const items = getHashSelectionCompletions();
-
-    assert.strictEqual(items.length, 1);
-    assert.strictEqual(items[0].label, "selection: agenthost (lines 17-18)");
-    assert.strictEqual(items[0].insertText, CAPTURING_OUTPUT_PLACEHOLDER);
-    assert.ok(items[0].captureId);
-    assert.ok(!items[0].insertText.includes("#selection:"));
-    assert.deepStrictEqual(outputCaptureCache.take(items[0].captureId), {
-      text: "line 17\nline 18",
-      channel: "agenthost",
-      range: { startLine: 17, endLine: 18 },
-    });
-  });
-
-  test("getHashSelectionCompletions returns nothing when there is no selection", () => {
-    mockSelections([]);
-
-    assert.deepStrictEqual(getHashSelectionCompletions(), []);
-  });
-
-  suite("getPathSuggestions", () => {
-    test("suggests the same-directory file the typed basename collapsed onto (token-collapse bug)", async () => {
-      mockWorkspaceFiles([
-        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-        "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
-        "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
-      ]);
-
-      const suggestions = await getPathSuggestions(
-        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsxfoo",
-        WORKSPACE_ENTRY_KINDS.FILE
-      );
-
-      assert.strictEqual(
-        suggestions[0],
-        "@src/ui/webview-react/components/editor/CodeMirrorEditor.tsx"
-      );
-    });
-
-    test("suggests the same-directory completion for a truncated basename", async () => {
-      mockWorkspaceFiles([
-        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-        "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
-      ]);
-
-      const suggestions = await getPathSuggestions(
-        "src/ui/webview-react/components/editor/CodeMirrorEdi",
-        WORKSPACE_ENTRY_KINDS.FILE
-      );
-
-      // CodeMirrorEditor.tsx is a prefix match (tier 0); CodeMirrorTheme.ts is
-      // neither a prefix nor a fuzzy match of "CodeMirrorEdi", so it's excluded.
-      assert.deepStrictEqual(suggestions, [
-        "@src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-      ]);
-    });
-
-    test("ranks a same-directory near-match above an exact-basename match elsewhere", async () => {
-      mockWorkspaceFiles(["src/a/Button.tsx", "src/z/Button.ts"]);
-
-      const suggestions = await getPathSuggestions(
-        "src/a/Button.ts",
-        WORKSPACE_ENTRY_KINDS.FILE
-      );
-
-      // Same dir + prefix (tier 0) beats exact basename in another dir (tier 2).
-      assert.strictEqual(suggestions[0], "@src/a/Button.tsx");
-    });
-
-    test("falls back to an exact-basename match elsewhere when the typed directory is wrong (moved file)", async () => {
-      mockWorkspaceFiles([
-        "src/ui/components/CodeMirrorEditor.tsx",
-        "src/unrelated/Other.ts",
-      ]);
-
-      const suggestions = await getPathSuggestions(
-        "src/old/path/CodeMirrorEditor.tsx",
-        WORKSPACE_ENTRY_KINDS.FILE
-      );
-
-      assert.deepStrictEqual(suggestions, [
-        "@src/ui/components/CodeMirrorEditor.tsx",
-      ]);
-    });
-
-    test("suggests a directory for a mistyped @directory reference", async () => {
-      mockWorkspaceFiles([
-        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
-      ]);
-
-      const suggestions = await getPathSuggestions(
-        "src/ui/webview-react/components/edito/",
-        WORKSPACE_ENTRY_KINDS.DIRECTORY
-      );
-
-      assert.ok(
-        suggestions.includes("@src/ui/webview-react/components/editor/")
-      );
-    });
-
-    test("returns no suggestions when nothing resembles the typed basename", async () => {
-      mockWorkspaceFiles(["src/a/Alpha.ts", "src/b/Beta.ts"]);
-
-      const suggestions = await getPathSuggestions(
-        "src/c/Zzzzz.md",
-        WORKSPACE_ENTRY_KINDS.FILE
-      );
-
-      assert.deepStrictEqual(suggestions, []);
-    });
-
-    test("caps the number of suggestions at maxResults", async () => {
-      mockWorkspaceFiles([
-        "src/a/Report1.ts",
-        "src/a/Report2.ts",
-        "src/a/Report3.ts",
-        "src/a/Report4.ts",
-      ]);
-
-      const suggestions = await getPathSuggestions(
-        "src/a/Report",
-        WORKSPACE_ENTRY_KINDS.FILE,
-        3
-      );
-
-      assert.strictEqual(suggestions.length, 3);
-    });
-  });
-});
-
-suite("findDocumentSymbolByNameAndRange", () => {
-  function makeSymbol(
-    name: string,
-    startLine: number,
-    endLine: number,
-    kind: vscode.SymbolKind = vscode.SymbolKind.Method,
-    children: vscode.DocumentSymbol[] = []
-  ): vscode.DocumentSymbol {
-    return {
-      name,
-      kind,
-      children,
-      range: {
-        start: { line: startLine - 1 },
-        end: { line: endLine - 1 },
-      },
-    } as vscode.DocumentSymbol;
-  }
-
-  test("finds a top-level symbol by exact name and 1-based line range", () => {
-    const symbols = [makeSymbol("foo", 5, 10), makeSymbol("bar", 12, 20)];
-
-    const match = findDocumentSymbolByNameAndRange(symbols, "bar", 12, 20);
-
-    assert.strictEqual(match?.name, "bar");
-  });
-
-  test("finds a nested symbol inside children", () => {
-    const method = makeSymbol("method", 3, 4);
-    const parent = makeSymbol("Outer", 1, 10, vscode.SymbolKind.Class, [
-      method,
-    ]);
-
-    const match = findDocumentSymbolByNameAndRange([parent], "method", 3, 4);
-
-    assert.strictEqual(match, method);
-  });
-
-  test("does not match a same-named symbol with a different line range", () => {
-    const symbols = [makeSymbol("foo", 5, 10)];
-
-    assert.strictEqual(
-      findDocumentSymbolByNameAndRange(symbols, "foo", 5, 11),
-      undefined
-    );
-  });
-
-  test("returns undefined when nothing matches", () => {
-    assert.strictEqual(
-      findDocumentSymbolByNameAndRange([], "missing", 1, 2),
-      undefined
-    );
-  });
-});
-
-suite("findWorkspaceSymbolByUriNameAndRange", () => {
-  const uriA = vscode.Uri.file("/workspace/src/a.ts");
-  const uriB = vscode.Uri.file("/workspace/src/b.ts");
-
-  function makeSymbolInformation(
-    name: string,
-    uri: vscode.Uri,
-    startLine: number,
-    endLine: number,
-    kind: vscode.SymbolKind = vscode.SymbolKind.Field
-  ): vscode.SymbolInformation {
-    return {
-      name,
-      kind,
-      containerName: "",
-      location: {
-        uri,
-        range: {
-          start: { line: startLine - 1 },
-          end: { line: endLine - 1 },
-        },
-      },
-    } as vscode.SymbolInformation;
-  }
-
-  // This is the fallback path for #sym: references whose completion item came
-  // from getSymbolCompletions() (executeWorkspaceSymbolProvider), which can
-  // surface symbols — deeply nested object keys, CSS custom properties inside
-  // a JS style object, etc. — that executeDocumentSymbolProvider's per-file
-  // outline never includes, so findDocumentSymbolByNameAndRange alone can
-  // never resolve them.
-  test("finds a symbol by exact uri, name, and 1-based line range", () => {
-    const symbols = [
-      makeSymbolInformation("--safe-area-bottom", uriA, 80, 80),
-      makeSymbolInformation("--safe-area-top", uriA, 82, 82),
-    ];
-
-    const match = findWorkspaceSymbolByUriNameAndRange(
-      symbols,
-      uriA,
-      "--safe-area-bottom",
-      80,
-      80
-    );
-
-    assert.strictEqual(match?.name, "--safe-area-bottom");
-  });
-
-  test("does not match the same name/range in a different file", () => {
-    const symbols = [makeSymbolInformation("foo", uriB, 5, 10)];
-
-    assert.strictEqual(
-      findWorkspaceSymbolByUriNameAndRange(symbols, uriA, "foo", 5, 10),
-      undefined
-    );
-  });
-
-  test("does not match a same-named symbol with a different line range", () => {
-    const symbols = [makeSymbolInformation("foo", uriA, 5, 10)];
-
-    assert.strictEqual(
-      findWorkspaceSymbolByUriNameAndRange(symbols, uriA, "foo", 5, 11),
-      undefined
-    );
-  });
-
-  test("returns undefined when nothing matches", () => {
-    assert.strictEqual(
-      findWorkspaceSymbolByUriNameAndRange([], uriA, "missing", 1, 2),
-      undefined
-    );
+    try {
+      assert.strictEqual(getOutputChannelSlug(document), "logs/agent.log");
+    } finally {
+      Object.defineProperty(vscode.workspace, "asRelativePath", {
+        configurable: true,
+        value: original,
+      });
+    }
   });
 });
 
 suite("slash-token completions", () => {
   const originalDiscoverSkills = SkillDiscovery.discoverSkills;
   const originalReadAll = McpRegistryFileManager.prototype.readAll;
-
   const skills: SkillInfo[] = [
     {
-      name: COMMIT_SKILL_NAME,
+      name: "commit",
       displayName: "Commit",
       path: "/skills/commit/SKILL.md",
       description: "Create a focused commit",
@@ -926,22 +107,20 @@ suite("slash-token completions", () => {
     SkillDiscovery.discoverSkills = async () => skills;
     McpRegistryFileManager.prototype.readAll = async () => managedServers;
   });
-
   teardown(() => {
     clearSlashTokenCompletionCache();
     SkillDiscovery.discoverSkills = originalDiscoverSkills;
     McpRegistryFileManager.prototype.readAll = originalReadAll;
   });
 
-  test("merges discovered skills with registry servers for the bare slash trigger", async () => {
+  test("merges skills and registry servers for the bare slash trigger", async () => {
     const items = await getCtrlYokeSlashCompletions("/workspace", "/");
-
     assert.deepStrictEqual(
       items.map((item) => item.label),
-      [COMMIT_SKILL_NAME, "ctrlyoke", "playwright", "review"]
+      ["commit", "ctrlyoke", "playwright", "review"]
     );
     assert.strictEqual(
-      items.find((item) => item.label === COMMIT_SKILL_NAME)?.detail,
+      items.find((item) => item.label === "commit")?.detail,
       "ctrlyoke skill · workspace · Create a focused commit"
     );
     assert.strictEqual(
@@ -950,7 +129,7 @@ suite("slash-token completions", () => {
     );
   });
 
-  test("always includes the built-in ctrlyoke MCP server even though it is never a registry entry", async () => {
+  test("always offers the built-in ctrlyoke MCP server", async () => {
     const bareItems = await getCtrlYokeSlashCompletions(
       "/workspace",
       "/ctrlyoke"
@@ -959,49 +138,38 @@ suite("slash-token completions", () => {
       bareItems.map((item) => item.label),
       ["ctrlyoke"]
     );
-    assert.strictEqual(bareItems[0].insertText, "/mcp:ctrlyoke");
-
-    const mcpItems = await getCtrlYokeSlashCompletions(
+    const items = await getCtrlYokeSlashCompletions(
       "/workspace",
       "/mcp:ctrlyoke"
     );
     assert.deepStrictEqual(
-      mcpItems.map((item) => item.label),
+      items.map((item) => item.label),
       ["ctrlyoke"]
     );
+    assert.strictEqual(items[0].insertText, "/mcp:ctrlyoke");
   });
 
-  test("filters skills and MCP servers by their explicit namespace", async () => {
+  test("filters skill and MCP namespaces by substring", async () => {
     const skillItems = await getCtrlYokeSlashCompletions(
       "/workspace",
       "/skill:c"
     );
-    const mcpItems = await getCtrlYokeSlashCompletions("/workspace", "/mcp:p");
-
-    assert.deepStrictEqual(
-      skillItems.map((item) => item.label),
-      [COMMIT_SKILL_NAME]
+    const serverItems = await getCtrlYokeSlashCompletions(
+      "/workspace",
+      "/mcp:play"
     );
     assert.deepStrictEqual(
-      mcpItems.map((item) => item.label),
-      ["playwright"]
+      skillItems.map((item) => item.insertText),
+      ["/skill:commit"]
     );
-    assert.strictEqual(skillItems[0].insertText, "/skill:commit");
-    assert.strictEqual(mcpItems[0].insertText, "/mcp:playwright");
-  });
-
-  test("filters merged skills and MCP servers by substring once typing continues past the bare slash", async () => {
-    const items = await getCtrlYokeSlashCompletions("/workspace", "/play");
-
     assert.deepStrictEqual(
-      items.map((item) => item.label),
-      ["playwright"]
+      serverItems.map((item) => item.insertText),
+      ["/mcp:playwright"]
     );
   });
 
-  test("matches merged results anywhere in the name, not just as a prefix", async () => {
+  test("matches merged results anywhere in the name", async () => {
     const items = await getCtrlYokeSlashCompletions("/workspace", "/wright");
-
     assert.deepStrictEqual(
       items.map((item) => item.label),
       ["playwright"]
@@ -1011,7 +179,6 @@ suite("slash-token completions", () => {
   test("does not depend on a selected harness", async () => {
     const first = await getCtrlYokeSlashCompletions("/workspace", "/");
     const second = await getCtrlYokeSlashCompletions("/workspace", "/");
-
     assert.deepStrictEqual(
       first.map(({ label, insertText, detail }) => ({
         label,

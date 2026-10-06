@@ -8,6 +8,7 @@ import { PromptStep } from "../../types/CtrlYokeTypes";
 import {
   FAILURE_KINDS,
   HARNESS_IDS,
+  INTERACTIVE_TERMINAL_MODES,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import type { HarnessVersionPolicy } from "../../utils/HarnessVersion";
@@ -29,6 +30,7 @@ export type SendOutcome = {
 };
 
 export class MockPlatform implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   constructor(private readonly workspaceRoot: string = process.cwd()) {}
 
   getConfig<T>(_key: string, defaultValue: T): T {

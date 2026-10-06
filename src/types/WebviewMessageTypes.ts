@@ -23,6 +23,7 @@ import {
   AnyTargetId,
   PromptEditorInsertMode,
   MESSAGE_TYPES,
+  DASHBOARD_ACTION_RESULT_STATUSES,
   SEARCH_HISTORY_ERROR_CODES,
   TRUST_DECISIONS,
   STATUS_MESSAGE_SEVERITY,
@@ -35,6 +36,7 @@ import {
   type UndoFileAction,
   type CompletionNotificationSeverity,
   type UserFeedbackSeverity,
+  type DashboardHostAction,
   type EndConditionScriptType,
   type HookEvent,
   type McpTransport,
@@ -108,7 +110,7 @@ import type {
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { ScriptCompletionItem } from "../completions/ScriptCommandCompletionHelpers";
 import type { PermissionCompletionItem } from "../completions/PermissionListCompletionHelpers";
-import type { PlainCompletionItem } from "../completions/CompletionHelpers";
+import type { PlainCompletionItem } from "../completions/CompletionCore";
 import type { HarnessFlagCompletion } from "../core/harness/shared/HarnessFlagCompletionProvider";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
@@ -1605,9 +1607,19 @@ export interface SyncNamedWorktreeMessage {
 /** Extension -> Webview: round-trip result for a worktree management action, sync, or refresh request. */
 export interface WorktreeManagementActionResultMessage {
   type: typeof MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT;
-  requestId: string;
+  requestId?: string;
   success: boolean;
   message: string;
+  error?: string;
+}
+
+/** Extension -> Webview: outcome of a host-native dashboard action. */
+export interface DashboardHostActionResultMessage {
+  type: typeof MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT;
+  action: DashboardHostAction;
+  status: (typeof DASHBOARD_ACTION_RESULT_STATUSES)[keyof typeof DASHBOARD_ACTION_RESULT_STATUSES];
+  message?: string;
+  requestId?: string;
 }
 
 /**
@@ -2929,6 +2941,8 @@ export interface OpenHarnessDirMessage {
 export interface OpenHarnessDirResultMessage {
   type: typeof MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT;
   success: boolean;
+  /** Browser fallback target when the host cannot reveal a directory in the OS. */
+  path?: string;
   error?: string;
 }
 
@@ -3051,6 +3065,7 @@ export type IncomingMessage =
   | GlobalSettingsLoadedMessage
   | WorktreeManagementStateMessage
   | WorktreeManagementActionResultMessage
+  | DashboardHostActionResultMessage
   | WorkspaceWorktreeOwnershipMessage
   | GlobalSettingUpdatedMessage
   | LicenseMachinesUpdatedMessage

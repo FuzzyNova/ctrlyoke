@@ -1,5 +1,4 @@
-import * as vscode from "vscode";
-import type { PlainCompletionItem } from "./CompletionHelpers";
+import type { PlainCompletionItem } from "./CompletionCore";
 import {
   CTRLYOKE_BUILTIN_MCP_SERVER_INFO,
   McpRegistryFileManager,
@@ -8,6 +7,7 @@ import { SkillDiscovery, type SkillInfo } from "../utils/SkillDiscovery";
 import type { ManagedMcpServer } from "../types/WebviewMessageTypes";
 import {
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  COMPLETION_ITEM_KINDS,
   type CtrlYokeSlashTokenKind,
 } from "../types/DashboardConstants";
 
@@ -173,7 +173,7 @@ function createSkillTokenCompletions(
       commandType: "ctrlyokeSkill",
       skillName: skill.name,
       label: skill.name,
-      kind: vscode.CompletionItemKind.Keyword,
+      kind: COMPLETION_ITEM_KINDS.KEYWORD,
       insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.SKILL)}${skill.name}`,
       detail: description
         ? `ctrlyoke skill · ${source} · ${description}`
@@ -213,7 +213,7 @@ function createMcpTokenCompletions(
       commandType: "ctrlyokeMcpServer",
       mcpServerName: server.id,
       label: server.id,
-      kind: vscode.CompletionItemKind.Module,
+      kind: COMPLETION_ITEM_KINDS.MODULE,
       insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.MCP)}${server.id}`,
       detail: formatMcpDetail(server),
       filterText: server.id,
@@ -231,7 +231,7 @@ function createBuiltinCtrlYokeMcpCompletion(): McpTokenCompletionItem {
     commandType: "ctrlyokeMcpServer",
     mcpServerName: id,
     label: id,
-    kind: vscode.CompletionItemKind.Module,
+    kind: COMPLETION_ITEM_KINDS.MODULE,
     insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.MCP)}${id}`,
     detail: `ctrlyoke MCP server (built-in) · ${CTRLYOKE_BUILTIN_MCP_SERVER_INFO.description}`,
     documentation: CTRLYOKE_BUILTIN_MCP_SERVER_INFO.description,

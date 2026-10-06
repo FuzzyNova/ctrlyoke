@@ -598,7 +598,8 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       },
       (reason) => {
         this.handleExternalRunFinished(workflowId, workingFilePath, reason);
-      }
+      },
+      this.host.fileWatcherFactory
     );
 
     this.externalRunSessions.set(workflowId, {

@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -13,7 +12,6 @@ import {
   PERMISSION_MODES,
   MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
-  VSCODE_COMMANDS,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
   STATUS_LINE_HARNESS_IDS,
@@ -24,11 +22,16 @@ import {
   isStatusLineHarnessId,
   type StatusLineHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
-  NETWORK_INTERFACE_FAMILIES,
+  HOSTED_CERT_DOWNLOAD,
+  PATH_SELECTION_KINDS,
   TRUST_DECISIONS,
   getEffectiveParallelGroupWidth,
-  HOSTED_CERT_DOWNLOAD,
 } from "../types/DashboardConstants";
+import type {
+  DashboardHostActions,
+  HostedServerControl,
+  NamedRoot,
+} from "../core/HostPorts";
 import type {
   CapabilitiesFile,
   CapabilitiesModel,
@@ -65,11 +68,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import {
-  getVsCodeWorkspaceRoot,
-  getVsCodeWorkspaceFolder,
-  isMultiRootWorkspace,
-} from "../platform/VsCodeWorkspaceRoot";
+import { ServerCertificateService } from "../server/ServerCertificateService";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
 import type { AgentInfo } from "../utils/AgentDiscovery";
@@ -125,6 +124,13 @@ type StatuslineManagerFactory = (
 ) => StatuslineManagerLike;
 
 type LicenseAccessFactory = () => Promise<LicenseAccessState>;
+
+export interface WebviewSettingsSyncHost {
+  readonly getWorkspaceRoot: () => string | undefined;
+  readonly getNamedRoots: () => readonly NamedRoot[];
+  readonly selectWorkspacePath?: DashboardHostActions["selectWorkspacePath"];
+  readonly serverControl?: HostedServerControl;
+}
 
 const REMOTE_TLS_SETTING_KEYS = [
   CONFIG_KEYS.SERVER_TLS_ENABLED,
@@ -198,7 +204,12 @@ export class WebviewSettingsSync {
     private readonly getStatuslineManager: StatuslineManagerFactory = (
       harnessId
     ) => StatuslineManager.forHarness(harnessId),
-    private readonly getLicenseAccess?: LicenseAccessFactory
+    private readonly getLicenseAccess?: LicenseAccessFactory,
+    private readonly host: WebviewSettingsSyncHost = {
+      getWorkspaceRoot: () => undefined,
+      getNamedRoots: () => [],
+    },
+    private readonly certificateService = new ServerCertificateService()
   ) {}
 
   private licenseAccess: LicenseAccessState = {
@@ -224,7 +235,7 @@ export class WebviewSettingsSync {
   async discoverAgents(): Promise<void> {
     try {
       this.availableAgents = await AgentDiscovery.discoverAgents(
-        getVsCodeWorkspaceFolder()?.uri.fsPath
+        this.host.getWorkspaceRoot()
       );
 
       this.sendAgentsUpdate();
@@ -239,7 +250,7 @@ export class WebviewSettingsSync {
   async discoverSkills(): Promise<void> {
     try {
       this.availableSkills = await SkillDiscovery.discoverSkills(
-        getVsCodeWorkspaceFolder()?.uri.fsPath
+        this.host.getWorkspaceRoot()
       );
 
       this.sendSkillsUpdate();
@@ -773,12 +784,8 @@ export class WebviewSettingsSync {
   private async writeCapabilities(
     modelOptions: Record<string, CapabilitiesModel[]>
   ): Promise<void> {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-      return;
-    }
-
-    const workspaceRoot = getVsCodeWorkspaceRoot();
+    const workspaceRoot = this.host.getWorkspaceRoot();
+    if (!workspaceRoot) return;
     const capabilitiesPath = path.join(
       workspaceRoot,
       PATH_CONSTANTS.CTRLYOKE_DIR,
@@ -867,9 +874,7 @@ export class WebviewSettingsSync {
         ),
     };
 
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : "";
+    const workspaceRoot = this.host.getWorkspaceRoot() ?? "";
 
     return {
       harness,
@@ -912,7 +917,7 @@ export class WebviewSettingsSync {
       showCostEstimates: ConfigurationUtils.shouldShowCostEstimates(),
       stepColorMode: ConfigurationUtils.getStepColorMode(),
       harnessColors: ConfigurationUtils.getHarnessColorSettings(),
-      isMultiRoot: isMultiRootWorkspace(),
+      isMultiRoot: this.host.getNamedRoots().length > 1,
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
       defaultPreCondition: ConfigurationUtils.getDefaultPreCondition() ?? null,
@@ -936,10 +941,11 @@ export class WebviewSettingsSync {
 
   /** Return the canonical absolute `.runs` directory shown by the settings UI. */
   private getResolvedRunHistoryPath(): string | null {
-    if (!vscode.workspace.workspaceFolders?.length) {
+    const workspaceRoot = this.host.getWorkspaceRoot();
+    if (!workspaceRoot) {
       return null;
     }
-    return WorkflowPaths.runsRoot(getVsCodeWorkspaceRoot());
+    return WorkflowPaths.runsRoot(workspaceRoot);
   }
 
   /**
@@ -1124,7 +1130,7 @@ export class WebviewSettingsSync {
           sources,
           externalFileRootsByScope: this.buildExternalFileRootsByScope(),
           runHistoryPath: this.getResolvedRunHistoryPath(),
-          isMultiRoot: isMultiRootWorkspace(),
+          isMultiRoot: this.host.getNamedRoots().length > 1,
           licenseAccess: this.licenseAccess,
         },
         commitMessageGeneration: commitMessageGenerationTracker.getLastRecord(),
@@ -1224,7 +1230,9 @@ export class WebviewSettingsSync {
     }
 
     try {
-      await manager.uninstall(getVsCodeWorkspaceRoot(), restoreCustomCommand);
+      const workspaceRoot = this.host.getWorkspaceRoot();
+      if (!workspaceRoot) throw new Error("No workspace root is available.");
+      await manager.uninstall(workspaceRoot, restoreCustomCommand);
     } catch (error) {
       let rollbackError: unknown;
       if (configDisabled) {
@@ -1465,17 +1473,13 @@ export class WebviewSettingsSync {
     workflowIdentity?: WorkflowExternalRootIdentity,
     clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
-    const uris = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      canSelectFolders: true,
-      canSelectFiles: false,
+    const newRoot = await this.host.selectWorkspacePath?.({
+      kind: PATH_SELECTION_KINDS.FOLDER,
       title: "Select External File Root",
     });
-    if (!uris || uris.length === 0) {
+    if (!newRoot) {
       return;
     }
-
-    const newRoot = uris[0].fsPath;
     if (workflowIdentity) {
       const orchestrator = this.getOrchestrator();
       const workflow = orchestrator
@@ -1556,9 +1560,7 @@ export class WebviewSettingsSync {
     if (roots.length === 0) {
       return;
     }
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = this.host.getWorkspaceRoot();
     const orchestrator = this.getOrchestrator();
     const workflowSourcePath =
       orchestrator &&
@@ -1589,12 +1591,12 @@ export class WebviewSettingsSync {
     if (
       scope !== CONFIG_SCOPE.WORKSPACE ||
       roots.length === 0 ||
-      !vscode.workspace.workspaceFolders?.length
+      !this.host.getWorkspaceRoot()
     ) {
       return;
     }
     await externalRootsTrustStore.setDecisions(
-      ExternalRootsTrustStore.canonicalizeRoot(getVsCodeWorkspaceRoot()),
+      ExternalRootsTrustStore.canonicalizeRoot(this.host.getWorkspaceRoot()!),
       roots,
       decision
     );
@@ -1603,8 +1605,9 @@ export class WebviewSettingsSync {
   private buildExternalFileRootsByScope() {
     const { user, workspace } =
       ConfigurationUtils.getTrustedExternalRootsByScope();
-    const workspaceIdentity = vscode.workspace.workspaceFolders?.length
-      ? ExternalRootsTrustStore.canonicalizeRoot(getVsCodeWorkspaceRoot())
+    const workspaceRoot = this.host.getWorkspaceRoot();
+    const workspaceIdentity = workspaceRoot
+      ? ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
       : undefined;
 
     return {
@@ -1619,19 +1622,17 @@ export class WebviewSettingsSync {
   }
 
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {
-    await vscode.commands.executeCommand(VSCODE_COMMANDS.ENABLE_SERVER);
+    await this.host.serverControl?.enable?.();
   }
 
   async handleDisableServer(_postMessage: PostMessageFn): Promise<void> {
-    await vscode.commands.executeCommand(VSCODE_COMMANDS.DISABLE_SERVER);
+    await this.host.serverControl?.disable?.();
   }
 
   async handleRegenerateServerToken(
     _postMessage: PostMessageFn
   ): Promise<void> {
-    await vscode.commands.executeCommand(
-      VSCODE_COMMANDS.REGENERATE_SERVER_TOKEN
-    );
+    await this.host.serverControl?.regenerateToken?.();
   }
 
   async handleGenerateServerCert(
@@ -1644,84 +1645,41 @@ export class WebviewSettingsSync {
       return;
     }
     const baseDir =
-      scope === CONFIG_SCOPE.USER ? homedirFn() : getVsCodeWorkspaceRoot();
+      scope === CONFIG_SCOPE.USER ? homedirFn() : this.host.getWorkspaceRoot();
+    if (!baseDir)
+      throw new Error(
+        "No workspace root is available for certificate generation."
+      );
     const certsDir = path.join(
       baseDir,
       PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.CERTS_DIR
     );
-    await fs.mkdir(certsDir, { recursive: true });
-
     const bindAddress =
       configService.get(CONFIG_KEYS.SERVER)?.bindAddress ?? "127.0.0.1";
-    const lanIps: string[] =
+    const certificate = await this.certificateService.generate(
+      certsDir,
       bindAddress === "0.0.0.0"
-        ? Object.values(os.networkInterfaces())
-            .flat()
-            .filter(
-              (iface): iface is os.NetworkInterfaceInfo =>
-                !!iface &&
-                iface.family === NETWORK_INTERFACE_FAMILIES.IPV4 &&
-                !iface.internal
-            )
-            .map((iface) => iface.address)
-        : [];
-
-    const { generate } = await import("selfsigned");
-    const notBeforeDate = new Date();
-    const notAfterDate = new Date(notBeforeDate);
-    notAfterDate.setDate(notAfterDate.getDate() + 365);
-
-    const pems = await generate(
-      [{ name: "commonName", value: "ctrlyoke Local CA" }],
-      {
-        notBeforeDate,
-        notAfterDate,
-        keySize: 2048,
-        algorithm: "sha256",
-        extensions: [
-          // Must be CA:TRUE for iOS to show this cert under
-          // Settings > General > About > Certificate Trust Settings.
-          // Without this extension iOS treats it as a leaf cert and
-          // never offers the "Enable Full Trust" toggle.
-          { name: "basicConstraints", cA: true, critical: true },
-          {
-            name: "keyUsage",
-            keyCertSign: true,
-            digitalSignature: true,
-            nonRepudiation: true,
-            keyEncipherment: true,
-            dataEncipherment: true,
-            critical: true,
-          },
-          { name: "extKeyUsage", serverAuth: true },
-          {
-            name: "subjectAltName",
-            altNames: [
-              { type: 2, value: "localhost" },
-              { type: 7, ip: "127.0.0.1" },
-              ...lanIps.map((ip) => ({ type: 7 as const, ip })),
-            ],
-          },
-        ],
-      }
     );
 
-    const certPath = path.join(certsDir, "cert.pem");
-    const keyPath = path.join(certsDir, "key.pem");
-    await fs.writeFile(certPath, pems.cert, "utf8");
-    await fs.writeFile(keyPath, pems.private, "utf8");
-
-    await configService.set(CONFIG_KEYS.SERVER_TLS_CERT_PATH, certPath, scope);
-    await configService.set(CONFIG_KEYS.SERVER_TLS_KEY_PATH, keyPath, scope);
+    await configService.set(
+      CONFIG_KEYS.SERVER_TLS_CERT_PATH,
+      certificate.certPath,
+      scope
+    );
+    await configService.set(
+      CONFIG_KEYS.SERVER_TLS_KEY_PATH,
+      certificate.keyPath,
+      scope
+    );
     await this.handleGlobalSettingsLoadRequest(postMessage);
 
     this.emitMessage(
       {
         type: MESSAGE_TYPES.SERVER_CERT_GENERATED,
-        generatedAt: notBeforeDate.toISOString(),
-        expiresAt: notAfterDate.toISOString(),
-        sans: ["localhost", "127.0.0.1", ...lanIps],
+        generatedAt: certificate.generatedAt.toISOString(),
+        expiresAt: certificate.expiresAt.toISOString(),
+        sans: certificate.sans,
       },
       postMessage
     );
@@ -1749,14 +1707,17 @@ export class WebviewSettingsSync {
 
     try {
       const certBytes = await fs.readFile(certPath);
-      const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file(HOSTED_CERT_DOWNLOAD.FILENAME),
+      const selectedPath = await this.host.selectWorkspacePath?.({
+        kind: PATH_SELECTION_KINDS.SAVE,
+        defaultPath: HOSTED_CERT_DOWNLOAD.FILENAME,
         filters: {
           "Certificate Files": ["cer", "crt", "pem"],
           "All Files": ["*"],
         },
       });
-      if (!uri) {
+      // Browser clients download from the hosted server's /cert endpoint.
+      if (!this.host.selectWorkspacePath) return;
+      if (!selectedPath) {
         this.emitMessage(
           { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: false },
           postMessage
@@ -1764,7 +1725,7 @@ export class WebviewSettingsSync {
         return;
       }
 
-      await fs.writeFile(uri.fsPath, certBytes);
+      await fs.writeFile(selectedPath, certBytes);
       this.emitMessage(
         { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: true },
         postMessage

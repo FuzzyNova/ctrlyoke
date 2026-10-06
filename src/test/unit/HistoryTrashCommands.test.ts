@@ -68,8 +68,15 @@ suite("CLI history trash commands", () => {
     await fs.rm(path.dirname(WorkflowPaths.runsRoot(workspace)), {
       recursive: true,
       force: true,
+      maxRetries: 5,
+      retryDelay: 100,
     });
-    await fs.rm(workspace, { recursive: true, force: true });
+    await fs.rm(workspace, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   });
 
   test("list prints each entry with its id, and --json is machine readable", async () => {

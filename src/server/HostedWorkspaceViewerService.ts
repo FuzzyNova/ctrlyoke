@@ -113,6 +113,7 @@ import {
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
 import { streamFileLines } from "../utils/TextLines";
+import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
 import {
   REDACTION_MARKER,
   secretRedactionService,
@@ -162,14 +163,6 @@ export class RedactionMarkerSaveError extends Error {
     this.name = "RedactionMarkerSaveError";
   }
 }
-const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  "out",
-  "coverage",
-]);
 
 interface NonTextDiffSources {
   baseRef: string;
@@ -245,11 +238,6 @@ interface SearchCandidate {
 
 interface SearchContentScan {
   matches: WorkspaceSearchContentMatch[];
-  truncated: boolean;
-}
-
-interface SearchWalkResult {
-  files: string[];
   truncated: boolean;
 }
 
@@ -914,7 +902,12 @@ export class HostedWorkspaceViewerService {
         relativeFiles = [...new Set([...trackedFiles, ...ignoredFiles])];
       }
     } catch {
-      const walked = await this.walkSearchFiles(rootPath, startedAt);
+      const walked = await walkSearchFiles(
+        rootPath,
+        startedAt,
+        this.searchMaxFiles,
+        SEARCH_MAX_DURATION_MS
+      );
       relativeFiles = walked.files;
       truncated = walked.truncated;
     }
@@ -930,55 +923,6 @@ export class HostedWorkspaceViewerService {
       });
     }
     return { candidates, truncated };
-  }
-
-  /** Bounded non-git fallback walk. Symlinks are not followed. */
-  private async walkSearchFiles(
-    rootPath: string,
-    startedAt: number
-  ): Promise<SearchWalkResult> {
-    const root = path.resolve(rootPath);
-    const pending = [root];
-    const files: string[] = [];
-    let truncated = false;
-
-    while (pending.length > 0 && files.length < this.searchMaxFiles) {
-      if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
-        truncated = true;
-        break;
-      }
-      const directory = pending.pop();
-      if (!directory) break;
-      let entries: fs.Dirent[];
-      try {
-        entries = await fs.promises.readdir(directory, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-
-      for (const entry of entries) {
-        if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
-          truncated = true;
-          break;
-        }
-        if (files.length >= this.searchMaxFiles) {
-          truncated = true;
-          break;
-        }
-        if (
-          entry.isDirectory() &&
-          !SEARCH_FALLBACK_SKIP_DIRECTORIES.has(entry.name)
-        ) {
-          pending.push(path.join(directory, entry.name));
-        } else if (entry.isFile()) {
-          files.push(path.relative(root, path.join(directory, entry.name)));
-        }
-      }
-    }
-    if (files.length >= this.searchMaxFiles && pending.length > 0) {
-      truncated = true;
-    }
-    return { files, truncated };
   }
 
   private async isSearchFileWithinTrustedRoots(

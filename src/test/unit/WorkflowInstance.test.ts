@@ -28,7 +28,8 @@ import {
   STATUS_MESSAGE_SEVERITY,
   WORKTREE_MODES,
   type HarnessId,
-} from "../../types/DashboardConstants";
+
+  INTERACTIVE_TERMINAL_MODES,} from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
@@ -102,6 +103,7 @@ async function initTestRun(
 }
 
 class MockPlatform implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   getConfig<T>(_key: string, defaultValue: T): T {
     return defaultValue;
   }

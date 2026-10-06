@@ -237,7 +237,7 @@ both carry is satisfied by that promotion rather than blocking them.
    `history relink` ship with the P0 storage move, and the Node-only runtime
    graph is the shared foundation for `ctrlyoke server`.
    ([plans](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md),
-   [decoupling](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md))
+   [decoupling](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md))
 
 ### P2 — Strategic differentiators
 
@@ -490,7 +490,7 @@ criteria matter more than speculative dates.
 | [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                                       | P2                                                                  |
 | [`MCP_OUTPUT_PAGING_PLAN.md`](../backlog/MCP_OUTPUT_PAGING_PLAN.md)                                           | P2                                                                  |
 | [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                             | Shipped                                                             |
-| [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)                     | P1 (foundation for standalone server)                               |
+| [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)                 | Shipped 2026-10-06 (shim retirement moved to standalone plan)       |
 | [`RUN_EXPORT_PLAN.md`](../backlog/RUN_EXPORT_PLAN.md)                                                         | P2 (ships with redaction)                                           |
 | [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                         | P2                                                                  |
 | [`HARNESS_USAGE_TRACKING_PLAN.md`](../implemented/HARNESS_USAGE_TRACKING_PLAN.md)                             | P2                                                                  |

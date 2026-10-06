@@ -38,15 +38,7 @@ import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 import { CliProviderUtils } from "./harness/shared/CliProviderUtils";
-
-/**
- * Minimal container for VS Code-style disposable subscriptions.
- * Avoids importing the `vscode` module in the shared core, which must also
- * compile into the standalone CLI bundle (where `vscode` is not available).
- */
-interface SubscriptionContainer {
-  readonly subscriptions: Array<{ dispose(): void }>;
-}
+import type { DisposableRegistry } from "./HostPorts";
 
 /** A single context item ready for XML serialization by insertPriorContext. */
 export type PriorContextItem = {
@@ -183,7 +175,6 @@ export abstract class HarnessIntegration {
   private static readonly SAFE_CHARS_PATTERN =
     /^[a-zA-Z0-9\s.,!?:;\-_()@#/\\~]*$/;
 
-  protected context: SubscriptionContainer | undefined;
   protected isAvailable: boolean = false;
   protected workflowStep: number = 0;
   protected totalSteps: number = 0;
@@ -281,29 +272,27 @@ export abstract class HarnessIntegration {
   }
 
   constructor(
-    context: SubscriptionContainer | undefined,
+    disposableRegistry: DisposableRegistry | undefined,
     registerWithContext: boolean = true
   ) {
-    this.context = context;
-
-    // Detector singletons register with context so VS Code disposes them on deactivation.
+    // Detector singletons register with the host registry for deactivation cleanup.
     // Execution integrations (per-run, short-lived) skip registration and are disposed
     // manually in startWorkflowExecution's finally block to avoid leaking into subscriptions.
-    if (context && registerWithContext) {
-      context.subscriptions.push(this.statusChangeEmitter);
-      context.subscriptions.push(this.responseCompleteEmitter);
-      context.subscriptions.push(this.streamingChunkEmitter);
-      context.subscriptions.push(this.streamingEventsEmitter);
-      context.subscriptions.push(this.contextWindowUpdateEmitter);
-      context.subscriptions.push(this.promptReadyEmitter);
-      context.subscriptions.push(this.notificationEventEmitter);
-      context.subscriptions.push(this.sessionActivityResumedEmitter);
+    if (disposableRegistry && registerWithContext) {
+      disposableRegistry.add(this.statusChangeEmitter);
+      disposableRegistry.add(this.responseCompleteEmitter);
+      disposableRegistry.add(this.streamingChunkEmitter);
+      disposableRegistry.add(this.streamingEventsEmitter);
+      disposableRegistry.add(this.contextWindowUpdateEmitter);
+      disposableRegistry.add(this.promptReadyEmitter);
+      disposableRegistry.add(this.notificationEventEmitter);
+      disposableRegistry.add(this.sessionActivityResumedEmitter);
     }
   }
 
   /**
    * Dispose all event emitters owned by this integration.
-   * Called automatically by VS Code for detector singletons (via context.subscriptions).
+   * Called by the host's disposable registry for detector singletons.
    * Called manually for execution integrations after each workflow run.
    */
   dispose(): void {

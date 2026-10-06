@@ -7,6 +7,8 @@ import {
   CTRLYOKE_ENV_VARS,
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
+  INTERACTIVE_TERMINAL_MODES,
+  type InteractiveTerminalMode,
 } from "../../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
@@ -72,7 +74,7 @@ export interface CliExecutionRunnerDeps {
     getWorkspaceRoots?: () => readonly string[];
     getApprovedExternalRoots?: () => readonly string[];
     getExtensionPath: () => string;
-    isVsCodeContext: () => boolean;
+    interactiveTerminal: InteractiveTerminalMode;
     isCancelling: () => boolean;
     setFailureReason: (reason: string) => void;
   };
@@ -588,7 +590,9 @@ export class CliExecutionRunner {
     session: CliExecutionSession,
     resolvedCommand?: CliResolvedCommand
   ): Promise<{ success: boolean; sessionId?: string }> {
-    const standalone = !this.deps.runtimeState.isVsCodeContext();
+    const usesInheritedStdio =
+      this.deps.runtimeState.interactiveTerminal ===
+      INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO;
 
     // Hoisted so the `finally` block below can always stop it — an exception
     // thrown between start() and the previous inline stop() calls (e.g. from
@@ -629,7 +633,7 @@ export class CliExecutionRunner {
           : null;
       hookMonitor?.start();
 
-      if (standalone) {
+      if (usesInheritedStdio) {
         standaloneProcess =
           await this.deps.transportCoordinator.startStandaloneInteractiveProcess(
             args,
@@ -674,7 +678,7 @@ export class CliExecutionRunner {
       // Capture context for potential inject-mode follow-up prompts. A
       // standalone TUI is ended after every turn, so it leaves nothing to
       // inject into.
-      const injectContext: InteractiveInjectContext | undefined = standalone
+      const injectContext: InteractiveInjectContext | undefined = usesInheritedStdio
         ? undefined
         : {
             logPath: discovery.logPath,
@@ -704,7 +708,7 @@ export class CliExecutionRunner {
     } catch (error) {
       Log.error("[CliExecutionRunner] Interactive execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
-      if (standalone) {
+      if (usesInheritedStdio) {
         return { success: false };
       }
       throw error;

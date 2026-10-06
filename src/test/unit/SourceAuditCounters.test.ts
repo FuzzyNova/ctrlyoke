@@ -14,7 +14,9 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
     // Shrank from 49 to 46: the host-neutral trusted roots approval flow
     // moved ExternalFileTrustPrompt.ts's three direct show*Message calls
     // behind UserInteractionPort too.
-    boundary: 46,
+    // Shrank from 46 to 41: Stage 3b removed five router worktree notices;
+    // routine success notices were dropped and failures now use scoped replies.
+    boundary: 41,
     reusable: 0,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",
@@ -24,7 +26,6 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
       "src/scm/ScmCommitCommand.ts",
       "src/ui/ExternalFileTrustPrompt.ts",
       "src/ui/NotificationManager.ts",
-      "src/ui/WebviewMessageRouter.ts",
     ] as readonly string[],
   },
   adapterUi: 0,
@@ -54,17 +55,12 @@ const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 // those capabilities are injected by extension.ts, and its workspace-folder
 // resolver is now injected as a path callback. Its runner watcher is now
 // supplied by the FileWatcherFactory port.
-// Shrunk from 8 to 4: the files the standalone CLI also loads (Log,
-// ModelRegistry, AttachmentBuilders, PromptFileWatcher) were decoupled so the
-// CLI runtime graph never loads vscode; see the src/cli.ts guard below.
-const vscodeImportersReachableFromOrchestrator = 4;
+// Shrunk from 8 to 4 when the CLI runtime graph was decoupled, from 4 to 2 by
+// moving both watcher sessions behind FileWatcherFactory, then to 0 by
+// extracting host actions and external-root approvals.
+const vscodeImportersReachableFromOrchestrator = 0;
 
-const vscodeImporterFilesReachableFromOrchestrator = [
-  "src/core/orchestration/ExecutionRootCoordinationWatchSession.ts",
-  "src/core/orchestration/ExternalRunWatchSession.ts",
-  "src/core/orchestration/WorkflowCommandHandler.ts",
-  "src/ui/ExternalFileTrustPrompt.ts",
-] as const;
+const vscodeImporterFilesReachableFromOrchestrator = [] as const;
 
 // Phase 1 item 9 removes the orchestrator's direct vscode import.
 const orchestratorDirectVsCodeImports = 0;
@@ -76,9 +72,8 @@ const orchestratorVsCodeConstructorParams = 0;
 // Already clean; this guard prevents WorkflowInstance.ts from regressing.
 const workflowInstanceDirectVsCodeImports = 0;
 
-// Shrunk from 7 to 1: six orchestrator constructions moved to the extension
-// composition root; TemplateManager remains for Phase 3.
-const coreVsCodeAdapterConstructions = 1;
+// TemplateManager now receives the extension path and injected platform.
+const coreVsCodeAdapterConstructions = 0;
 
 interface SourceAuditSite {
   file: string;
@@ -702,6 +697,32 @@ suite("SourceAuditCounters", () => {
     });
   }
 
+  for (const entry of [
+    "src/ui/DashboardApplication.ts",
+    "src/server/CtrlYokeHostedServer.ts",
+  ]) {
+    test(`${entry} never loads vscode at runtime`, function () {
+      this.timeout(60_000);
+      assert.deepStrictEqual(
+        collectVscodeLoadsReachableFrom(repoRoot, entry),
+        [],
+        `${entry} reaches code that loads vscode. Keep the shared dashboard application and server host-neutral.`
+      );
+    });
+  }
+
+  test("PromptEditorSupportService never loads vscode at runtime", function () {
+    this.timeout(60_000);
+    assert.deepStrictEqual(
+      collectVscodeLoadsReachableFrom(
+        repoRoot,
+        "src/ui/PromptEditorSupportService.ts"
+      ),
+      [],
+      "PromptEditorSupportService reaches code that loads vscode. Keep completions behind injected host ports."
+    );
+  });
+
   test("holds the orchestrator direct VS Code boundary baselines", function () {
     assertShrinkOnlyCount(
       "Orchestrator direct vscode import",
@@ -721,6 +742,38 @@ suite("SourceAuditCounters", () => {
       collectDirectVscodeImports(repoRoot, "src/core/WorkflowInstance.ts"),
       workflowInstanceDirectVsCodeImports
     );
+  });
+
+  test("shared UI services stay outside the VS Code boundary", function () {
+    for (const file of [
+      "src/ui/WorkflowSerializer.ts",
+      "src/ui/WebviewSettingsSync.ts",
+      "src/ui/PromptEditorSupportService.ts",
+      "src/ui/HarnessFileMessageService.ts",
+    ]) {
+      const source = getParsedProductionSources(repoRoot).find(
+        (candidate) => candidate.relativeFile === file
+      );
+      assert.ok(source, `${file} was not found`);
+      const forbidden: string[] = [];
+      function visit(node: ts.Node): void {
+        if (
+          ts.isImportDeclaration(node) &&
+          ts.isStringLiteral(node.moduleSpecifier) &&
+          (node.moduleSpecifier.text === "vscode" ||
+            node.moduleSpecifier.text.endsWith("VsCodeWorkspaceRoot"))
+        ) {
+          forbidden.push(node.moduleSpecifier.text);
+        }
+        ts.forEachChild(node, visit);
+      }
+      visit(source.sourceFile);
+      assert.deepStrictEqual(
+        forbidden,
+        [],
+        `${file} imports a VS Code boundary`
+      );
+    }
   });
 
   test("holds the core VS Code adapter construction baseline", function () {

@@ -8,6 +8,7 @@ import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { SecretStore } from "./SecretStore";
 import { OsCredentialStore } from "./OsCredentialStore";
 import { resolvePackageRootFromEntry } from "../utils/CtrlyokeCliPath";
+import { INTERACTIVE_TERMINAL_MODES } from "../types/DashboardConstants";
 
 export interface ResolvedCliConfig {
   model?: string;
@@ -48,6 +49,7 @@ export interface ResolvedCliConfig {
  * Used by the standalone ctrlyoke CLI binary.
  */
 export class CliAdapter implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO;
   private readonly secretStore: SecretStore;
 
   constructor(
@@ -112,6 +114,4 @@ export class CliAdapter implements PlatformAdapter {
       typeof __filename !== "undefined" ? __filename : process.cwd()
     );
   }
-
-  // focusDashboard is intentionally not implemented (no dashboard in CLI)
 }

@@ -1,3 +1,4 @@
+import { INTERACTIVE_TERMINAL_MODES } from "../../types/DashboardConstants";
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
@@ -49,6 +50,7 @@ class InMemorySecretStore implements SecretStore {
 function platformWith(store: SecretStore): PlatformAdapter {
   return {
     getSecretStore: () => store,
+    interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
     getWorkspaceRoot: () => "C:\\workspace",
     getWorkspaceRoots: () => ["C:\\workspace"],
     getNamedWorkspaceRoots: () => [],

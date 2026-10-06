@@ -55,6 +55,7 @@ import { useTerminalStore } from "@store/terminalStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
 import { useHistoryTrashStore } from "@store/historyTrashStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
@@ -1265,6 +1266,23 @@ describe("USER_FEEDBACK", () => {
 // ---------------------------------------------------------------------------
 
 describe("OPEN_HARNESS_DIR_RESULT", () => {
+  it("opens the workspace viewer at the directory when OS reveal is unsupported", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT, {
+        success: true,
+        path: ".claude/skills",
+      });
+    });
+
+    expect(useWorkspaceViewerStore.getState().isOpen).toBe(true);
+    expect(useWorkspaceViewerStore.getState().pendingNavigation).toEqual({
+      type: "directory",
+      dirPath: ".claude/skills",
+    });
+  });
+
   it("uses native panel feedback when the folder could not be opened", () => {
     renderHook(() => useMessageHandler());
 
@@ -2837,6 +2855,39 @@ describe("WORKFLOW_ACTION_FAILED feedback host routing", () => {
       }
     }
   );
+});
+
+describe("WORKTREE_MANAGEMENT_ACTION_RESULT error feedback", () => {
+  it("surfaces scoped worktree errors through the host-aware feedback path", async () => {
+    vi.resetModules();
+    window.__ctrlyokeStandalone = true;
+
+    try {
+      const [{ createMessageHandlers }, { useUiStore }] = await Promise.all([
+        import("@hooks/useMessageHandler"),
+        import("@store/uiStore"),
+      ]);
+      useUiStore.getState().resetUi();
+
+      act(() => {
+        createMessageHandlers()[
+          MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT
+        ]({
+          success: false,
+          message: "Worktree action failed.",
+          error: "Worktree action failed.",
+        });
+      });
+
+      expect(useUiStore.getState().toastQueue).toHaveLength(1);
+      expect(useUiStore.getState().toastQueue[0]).toMatchObject({
+        message: "Worktree action failed.",
+        severity: USER_FEEDBACK_SEVERITY.ERROR,
+      });
+    } finally {
+      window.__ctrlyokeStandalone = false;
+    }
+  });
 });
 
 describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {

@@ -38,9 +38,9 @@ export class FileLockUnavailableError extends Error {
         `a previous lock file at this path that was deleted but not yet ` +
         `released (Windows keeps such a file "delete-pending" and refuses ` +
         `every open until that handle closes). Closing that process, or ` +
-        `rebooting, clears it.`,
-      { cause }
+        `rebooting, clears it.`
     );
+    (this as Error & { cause?: unknown }).cause = cause;
     this.name = "FileLockUnavailableError";
     this.code = code;
   }

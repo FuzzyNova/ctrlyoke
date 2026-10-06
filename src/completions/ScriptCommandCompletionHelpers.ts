@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as vscode from "vscode";
+import type { FileWatcherFactory, NamedRoot } from "../core/HostPorts";
 import { Log } from "../utils/Log";
 
 /** Completion item shape used by the single-line script field. */
@@ -414,20 +414,33 @@ const STATIC_CANDIDATES: CompletionCandidate[] = [
 ];
 
 const packageScriptsCache = new Map<string, ScriptRecord[]>();
-let packageJsonWatcher: vscode.FileSystemWatcher | undefined;
+const watchedRootsByFactory = new WeakMap<FileWatcherFactory, Set<string>>();
 
-function ensurePackageJsonWatcher(): void {
-  if (packageJsonWatcher) {
-    return;
+function ensurePackageJsonWatchers(
+  roots: readonly NamedRoot[],
+  fileWatcherFactory?: FileWatcherFactory
+): void {
+  if (!fileWatcherFactory) return;
+  let watchedRoots = watchedRootsByFactory.get(fileWatcherFactory);
+  if (!watchedRoots) {
+    watchedRoots = new Set<string>();
+    watchedRootsByFactory.set(fileWatcherFactory, watchedRoots);
   }
-  packageJsonWatcher =
-    vscode.workspace.createFileSystemWatcher("**/package.json");
-  const invalidate = (uri: vscode.Uri): void => {
-    packageScriptsCache.delete(path.resolve(uri.fsPath));
-  };
-  packageJsonWatcher.onDidChange(invalidate);
-  packageJsonWatcher.onDidCreate(invalidate);
-  packageJsonWatcher.onDidDelete(invalidate);
+  for (const root of roots) {
+    const normalizedRoot = path.resolve(root.fsPath);
+    if (watchedRoots.has(normalizedRoot)) continue;
+    watchedRoots.add(normalizedRoot);
+    const watcher = fileWatcherFactory.create(
+      normalizedRoot,
+      "**/package.json"
+    );
+    const invalidate = (filePath: string): void => {
+      packageScriptsCache.delete(path.resolve(filePath));
+    };
+    watcher.onDidChange(invalidate);
+    watcher.onDidCreate(invalidate);
+    watcher.onDidDelete(invalidate);
+  }
 }
 
 /** Clear package-script cache state; intended for tests and workspace resets. */
@@ -509,10 +522,6 @@ async function readPackageScripts(
   return scripts;
 }
 
-function resolveWorkspaceRoot(workspaceRoot?: string): string | undefined {
-  return workspaceRoot || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-}
-
 function packageCandidates(scripts: ScriptRecord[]): CompletionCandidate[] {
   const candidates: CompletionCandidate[] = [];
   for (const script of scripts) {
@@ -584,13 +593,14 @@ function deduplicateCandidates(
  * root) and are never executed.
  */
 export async function getScriptCommandCompletions(
-  workspaceRoot: string | undefined,
+  roots: readonly NamedRoot[],
   text: string,
-  position: number
+  position: number,
+  fileWatcherFactory?: FileWatcherFactory
 ): Promise<ScriptCommandCompletionItem[]> {
-  ensurePackageJsonWatcher();
+  ensurePackageJsonWatchers(roots, fileWatcherFactory);
   const context = parseScriptCompletionContext(text, position);
-  const root = resolveWorkspaceRoot(workspaceRoot);
+  const root = roots[0]?.fsPath;
   const scripts = root
     ? await readPackageScripts(path.join(root, "package.json"))
     : [];

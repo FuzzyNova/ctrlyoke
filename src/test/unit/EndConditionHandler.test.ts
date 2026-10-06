@@ -28,7 +28,8 @@ import {
   FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
   HARNESS_IDS,
-} from "../../types/DashboardConstants";
+
+  INTERACTIVE_TERMINAL_MODES,} from "../../types/DashboardConstants";
 import type { StatusMessageSeverity } from "../../types/DashboardConstants";
 import {
   parseAtReferences,
@@ -39,6 +40,7 @@ import { parseSecretReferences } from "../../utils/SecretReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../../utils/CtrlYokeSlashTokens";
 
 class MockPlatform implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   getConfig<T>(_key: string, defaultValue: T): T {
     return defaultValue;
   }

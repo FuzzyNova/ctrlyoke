@@ -1,6 +1,90 @@
 import type { HarnessStatus } from "./HarnessIntegration";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
-import type { HarnessId } from "../types/DashboardConstants";
+import {
+  DASHBOARD_ACTION_RESULT_STATUSES,
+  PATH_SELECTION_KINDS,
+  type HarnessId,
+} from "../types/DashboardConstants";
+
+/** Result of asking the host to perform a UI action. */
+export type ActionResult =
+  | { status: typeof DASHBOARD_ACTION_RESULT_STATUSES.OPENED }
+  | {
+      status: typeof DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED;
+      message?: string;
+    }
+  | {
+      status: typeof DASHBOARD_ACTION_RESULT_STATUSES.FAILED;
+      message: string;
+    };
+
+/** A resolved workspace target to open in the host's editor. */
+export interface WorkspaceOpenTarget {
+  readonly path: string;
+  readonly isDirectory?: boolean;
+  readonly startLine?: number;
+  readonly endLine?: number;
+  readonly openAsText?: boolean;
+  readonly viewColumn?: number;
+  readonly workflowSourcePath?: string;
+}
+
+/** Content rendered in a host-owned preview document. */
+export interface ContentPreview {
+  readonly content: string;
+  readonly language: string;
+}
+
+/** Native picker requested by a dashboard operation. */
+export interface PathSelectionRequest {
+  readonly kind: (typeof PATH_SELECTION_KINDS)[keyof typeof PATH_SELECTION_KINDS];
+  readonly title?: string;
+  readonly openLabel?: string;
+  readonly fileExtensions?: readonly string[];
+  readonly defaultPath?: string;
+  readonly filters?: Readonly<Record<string, readonly string[]>>;
+}
+
+/** Inputs to a native source-control diff view. */
+export interface GitDiffRequest {
+  readonly kind: "change" | "worktree";
+  readonly workspaceRoot?: string;
+  readonly ref?: string;
+  readonly sourceCheckoutRoot?: string;
+  readonly baseCommit?: string;
+  readonly branchName?: string;
+}
+
+/** A workspace root's stable display name and filesystem path. */
+export interface NamedRoot {
+  readonly name: string;
+  readonly fsPath: string;
+}
+
+/** Host UI actions used by shared orchestration and dashboard services. */
+export interface DashboardHostActions {
+  /** Open a file or selection in the host's editor. */
+  openWorkspaceTarget(target: WorkspaceOpenTarget): Promise<ActionResult>;
+  openContentPreview?(content: ContentPreview): Promise<ActionResult>;
+  selectWorkspacePath?(
+    request: PathSelectionRequest
+  ): Promise<string | undefined>;
+  revealOutput?(): Promise<void>;
+  /** Focus the dashboard when this host provides one. */
+  focusDashboard?(): void;
+  openFolderWindow?(absolutePath: string): Promise<ActionResult>;
+  openGitDiff?(request: GitDiffRequest): Promise<ActionResult>;
+  revealInOs?(absolutePath: string): Promise<ActionResult>;
+  browseMcpGallery?(): Promise<void>;
+  reloadHost?(): Promise<void>;
+}
+
+/** Controls the lifetime and access token of the hosted dashboard server. */
+export interface HostedServerControl {
+  enable?(): Promise<void>;
+  disable?(): Promise<void>;
+  regenerateToken?(): Promise<void>;
+}
 
 export interface HarnessDetailedStatus {
   initializationStatus: HarnessStatus;
@@ -25,6 +109,7 @@ export interface DisposableRegistry {
 
 /** Minimal asynchronous key/value storage used by shared orchestration code. */
 export interface KeyValueStore {
+  get<T>(key: string): T | undefined;
   update(key: string, value: unknown): Promise<void>;
 }
 

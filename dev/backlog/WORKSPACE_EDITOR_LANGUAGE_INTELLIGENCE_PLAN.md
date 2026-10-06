@@ -27,7 +27,7 @@ server class. Two pieces run earlier:
   Phase 8 uses this plan's `SymbolIndex` port with `RegexSymbolIndex`. The
   one-off `LspSymbolClient` is not built. `LspSymbolIndex` (phase 7b here)
   later upgrades standalone `#` through the same port.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
   the managed language-server host must stay in the Node-only graph. Phase 6
   item 4 of that plan is where `VsCodeSymbolIndex` and the completion core
   land.
@@ -541,10 +541,9 @@ Staging numbers refer to
 6. **Harness export + `DiagnosticsSource` port** (**Stage 17**, coordinated
    with `VSCODE_LSP_MCP_PLAN.md`; see "Harness side" item 3).
 7. **`SymbolIndex` port**, split across three stages:
-   - **7a. Port, `VsCodeSymbolIndex`, SymbolKind numbering conversion, and
-     callers moved onto the port.** Lands inside decoupling **Stage 5**,
-     which builds the Node completion core that needs this seam. It doesn't
-     change behavior in VS Code.
+   - **Done — 7a (2026-10-06).** `SymbolIndex`, `VsCodeSymbolIndex`, the
+     one-time SymbolKind numbering conversion, and callers moved onto the
+     port landed in decoupling **Stage 5b**. VS Code behavior is preserved.
    - **7-regex. `RegexSymbolIndex`.** Ships with standalone **Stage 9** as
      standalone v1's `#` source.
    - **7b. `LspSymbolIndex`.** **Stage 16**, wired by the standalone

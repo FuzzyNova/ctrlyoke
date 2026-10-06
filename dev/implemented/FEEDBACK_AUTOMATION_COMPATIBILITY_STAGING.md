@@ -112,7 +112,7 @@ Two consequences worth naming up front:
    constant, rendered queue, transport, sink, and reusable-call migration are
    shipped; all six action-bearing Phase 4 holds are now resolved in Stage F.
 2. **The adapter-UI baseline of 19 in
-   [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
+   [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
    Phase 0 is exactly right** (18 + 1). That number is still accurate and can be
    committed as the counter's baseline without re-deriving it.
 
@@ -180,7 +180,7 @@ first; the three bugs can land in any order.
 #### A.1 — freeze the baselines
 
 Land the two **shrink-only counters** from
-[`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
+[`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
 Phase 0 items 3 and 6 — the direct `show*Message` counter (initial baseline 63
 reusable / 53 boundary) and the adapter-UI counter (initial baseline 19).
 

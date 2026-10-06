@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { HarnessFileMessageService } from "../../ui/HarnessFileMessageService";
+import { HarnessFileManager } from "../../utils/HarnessFileManager";
 import { createWebviewClientContext } from "../../ui/WebviewClientContext";
 import {
   HARNESS_FILE_TYPES,
@@ -43,7 +44,9 @@ suite("HarnessFileMessageService", () => {
       path.join(os.tmpdir(), "cy-harnessfiles-")
     );
     posted = [];
-    service = new HarnessFileMessageService(() => workspaceRoot);
+    service = new HarnessFileMessageService(() => workspaceRoot, {
+      revealInOs: async () => ({ status: "opened" }),
+    });
     await fs.mkdir(sourceSkillPath(), { recursive: true });
     await fs.writeFile(
       path.join(sourceSkillPath(), "SKILL.md"),
@@ -204,5 +207,31 @@ suite("HarnessFileMessageService", () => {
       "success",
       "type",
     ]);
+  });
+
+  test("unsupported OS reveal returns the directory for the browser viewer", async () => {
+    const targetDirectory = HarnessFileManager.getTargetDir(
+      harnessId,
+      workspaceRoot,
+      skillType,
+      scope
+    );
+    await fs.mkdir(targetDirectory, { recursive: true });
+    service = new HarnessFileMessageService(() => workspaceRoot, {
+      revealInOs: async () => ({ status: "unsupported" }),
+    });
+
+    await service.handleOpenHarnessDir(ctx(), {
+      type: MESSAGE_TYPES.OPEN_HARNESS_DIR,
+      harnessId,
+      fileType: skillType,
+      scope,
+    });
+
+    assert.deepStrictEqual(lastResult(), {
+      type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
+      success: true,
+      path: path.relative(workspaceRoot, targetDirectory).replace(/\\/g, "/"),
+    });
   });
 });

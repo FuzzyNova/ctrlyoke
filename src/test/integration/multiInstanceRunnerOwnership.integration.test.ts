@@ -196,7 +196,10 @@ function createHost(
     // dashboard alongside the summary update, so the double needs this too.
     updateStepStatus: () => undefined,
   };
-  internal.workspaceState = { update: async () => undefined };
+  internal.workspaceState = {
+    get: () => undefined,
+    update: async () => undefined,
+  };
   internal.lineageRepository = {
     listLineageKeys: async () => [WORKFLOW_KEY],
     pruneStaleStagingDirs: async () => undefined,

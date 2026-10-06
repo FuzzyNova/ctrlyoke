@@ -1,3 +1,4 @@
+import { INTERACTIVE_TERMINAL_MODES } from "../../types/DashboardConstants";
 import * as assert from "assert";
 import * as os from "os";
 import * as path from "path";
@@ -9,6 +10,7 @@ import {
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 
 class RecordingPlatform implements PlatformAdapter {
+  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   readonly approvedRootArguments: Array<string | undefined> = [];
 
   constructor(

@@ -12,6 +12,59 @@ import {
   ANTIGRAVITY_CLI_MODELS as MC_ANTIGRAVITY_CLI_MODELS,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
+
+/** Host capability describing where interactive harness terminals are shown. */
+export const INTERACTIVE_TERMINAL_MODES = {
+  EMBEDDED_PTY: "embedded-pty",
+  INHERIT_STDIO: "inherit-stdio",
+} as const;
+
+export type InteractiveTerminalMode =
+  (typeof INTERACTIVE_TERMINAL_MODES)[keyof typeof INTERACTIVE_TERMINAL_MODES];
+
+/** Outcomes returned by host actions invoked from shared workflow code. */
+export const DASHBOARD_ACTION_RESULT_STATUSES = {
+  OPENED: "opened",
+  UNSUPPORTED: "unsupported",
+  FAILED: "failed",
+} as const;
+
+/** Stable action identifiers used in scoped host-action replies. */
+export const DASHBOARD_HOST_ACTIONS = {
+  SELECT_FILE: "selectFile",
+  APPEND_FILE: "appendFile",
+  EDIT_FILE: "editFile",
+  SHOW_OUTPUT: "showOutput",
+  OPEN_GIT_CHANGE: "openGitChange",
+  OPEN_WORKTREE: "openWorktree",
+  VIEW_WORKTREE_DIFF: "viewWorktreeDiff",
+  EXPORT_CONTENT_PREVIEW: "exportContentPreview",
+  OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser",
+  ACTIVATE_OFFLINE_PRO: "activateOfflinePro",
+  RELOAD_WINDOW: "reloadWindow",
+  OPEN_WORKTREE_OWNER: "openWorktreeOwner",
+} as const;
+export type DashboardHostAction =
+  (typeof DASHBOARD_HOST_ACTIONS)[keyof typeof DASHBOARD_HOST_ACTIONS];
+
+/** Native workspace-path chooser modes used by dashboard host actions. */
+export const PATH_SELECTION_KINDS = {
+  FILE: "file",
+  FOLDER: "folder",
+  SAVE: "save",
+} as const;
+
+/** User-facing titles shared by path-selection requests and VS Code pickers. */
+export const PATH_SELECTION_TITLES = {
+  LOAD_WORKFLOW: "Select a prompt file to load",
+  APPEND_WORKFLOW: "Select a prompt file to append to queue",
+  IMPORT_OFFLINE_LICENSE: "Import Pro License File",
+} as const;
+
+/** URI scheme names used by platform adapters. */
+export const URI_SCHEMES = {
+  FILE: "file",
+} as const;
 import { formatUsageWindowLabel as formatSharedUsageWindowLabel } from "../utils/StatuslineFormat";
 import type { ParallelGroupDefinition } from "./CtrlYokeTypes";
 
@@ -20,6 +73,42 @@ export const WORKFLOW_FILE_FORMATS = {
   YAML: "yaml",
   JSON: "json",
 } as const;
+
+/** Completion kinds shared by host-neutral helpers and dashboard clients. */
+export const COMPLETION_ITEM_KINDS = {
+  TEXT: 0,
+  METHOD: 1,
+  FUNCTION: 2,
+  CONSTRUCTOR: 3,
+  FIELD: 4,
+  VARIABLE: 5,
+  CLASS: 6,
+  INTERFACE: 7,
+  SYMBOL_MODULE: 8,
+  MODULE: 9,
+  PROPERTY: 9,
+  UNIT: 10,
+  VALUE: 11,
+  ENUM: 12,
+  SNIPPET: 14,
+  COLOR: 15,
+  FILE: 16,
+  REFERENCE: 18,
+  GENERIC_REFERENCE: 17,
+  KEYWORD: 14,
+  FOLDER: 18,
+  ENUM_MEMBER: 19,
+  CONSTANT: 20,
+  STRUCT: 21,
+  EVENT: 22,
+  OPERATOR: 23,
+  TYPE_PARAMETER: 24,
+  USER: 25,
+  ISSUE: 26,
+} as const;
+
+export type ProjectCompletionItemKind =
+  (typeof COMPLETION_ITEM_KINDS)[keyof typeof COMPLETION_ITEM_KINDS];
 
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
@@ -409,6 +498,7 @@ export const MESSAGE_TYPES = {
   WORKTREE_MANAGEMENT_ACTION: "worktreeManagementAction",
   SYNC_NAMED_WORKTREE: "syncNamedWorktree", // Webview -> Extension: two-way merge a named worktree's branch with the source checkout's current branch
   WORKTREE_MANAGEMENT_ACTION_RESULT: "worktreeManagementActionResult", // Extension -> Webview: round-trip result for a worktree management action/sync, correlated by the requestId the webview sent
+  DASHBOARD_HOST_ACTION_RESULT: "dashboardHostActionResult", // Extension -> Webview: scoped native-host action outcome
   OPEN_WORKTREE_OWNER: "openWorktreeOwner",
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
   // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens
@@ -4543,6 +4633,7 @@ export const VSCODE_COMMANDS = {
   MERGE_WORKTREE: "ctrlyoke.mergeWorktree",
   MANAGE_WORKTREES: "ctrlyoke.manageWorktrees",
   OPEN_WORKTREE_OWNER: "ctrlyoke.openWorktreeOwner",
+  SELECT_PROMPT_FILE: "ctrlyoke.selectPromptFile",
   OPEN_PANEL: "ctrlyoke.openPanel",
   OPEN_UNSEEN_FAILED_RUN: "ctrlyoke.openUnseenFailedRun",
   RETRY_HARNESS_DETECTION: "ctrlyoke.retryHarnessDetection",

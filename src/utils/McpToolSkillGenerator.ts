@@ -56,16 +56,14 @@ function substituteStaticPathPlaceholders(
   }
 
   return staticContent
-    .replaceAll(MCP_SERVER_PATH_PLACEHOLDER, () => context.mcpServerPath)
-    .replaceAll(WORKSPACE_PATH_PLACEHOLDER, () => context.workspaceRoot)
-    .replaceAll(
-      WORKING_FILE_PATH_PLACEHOLDER,
-      () => context.workingFilePath ?? WORKING_FILE_PATH_PLACEHOLDER
-    )
-    .replaceAll(
-      COMMIT_OUTPUT_PATH_PLACEHOLDER,
-      () => context.commitOutputPath ?? COMMIT_OUTPUT_PATH_PLACEHOLDER
-    );
+    .split(MCP_SERVER_PATH_PLACEHOLDER)
+    .join(context.mcpServerPath)
+    .split(WORKSPACE_PATH_PLACEHOLDER)
+    .join(context.workspaceRoot)
+    .split(WORKING_FILE_PATH_PLACEHOLDER)
+    .join(context.workingFilePath ?? WORKING_FILE_PATH_PLACEHOLDER)
+    .split(COMMIT_OUTPUT_PATH_PLACEHOLDER)
+    .join(context.commitOutputPath ?? COMMIT_OUTPUT_PATH_PLACEHOLDER);
 }
 
 function renderParameters(schema: McpToolInputSchema): string {
