@@ -4,6 +4,7 @@ import {
   ExecutionRootCoordinationWatchSession,
   COORDINATION_BOARD_CHANGE_THROTTLE_MS,
 } from "../../core/orchestration/ExecutionRootCoordinationWatchSession";
+import { NodeFileWatcherFactory } from "../../platform/NodeFileWatcher";
 import type { CoordinationScopeSnapshot } from "../../types/CtrlYokeTypes";
 
 const snapshot: CoordinationScopeSnapshot = {
@@ -24,6 +25,7 @@ suite("ExecutionRootCoordinationWatchSession", () => {
       () => {
         broadcasts += 1;
       },
+      new NodeFileWatcherFactory(),
       async () => snapshot
     );
 

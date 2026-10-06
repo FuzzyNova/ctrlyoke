@@ -374,17 +374,7 @@ suite("external watcher patterns", () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-watcher-patterns-")
     );
-    const originalCreateFileSystemWatcher =
-      vscode.workspace.createFileSystemWatcher;
-    const patterns: vscode.RelativePattern[] = [];
-
-    Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-      configurable: true,
-      value: (pattern: vscode.GlobPattern) => {
-        patterns.push(pattern as vscode.RelativePattern);
-        return createFakeWatcher();
-      },
-    });
+    const watcherFactory = new RecordingFileWatcherFactory();
 
     try {
       const workflowKey = "watch-patterns" as WorkflowKey;
@@ -403,7 +393,8 @@ suite("external watcher patterns", () => {
         observer,
         () => undefined,
         () => undefined,
-        () => undefined
+        () => undefined,
+        watcherFactory
       );
 
       await session.start();
@@ -419,7 +410,7 @@ suite("external watcher patterns", () => {
         runRef
       );
       assert.deepStrictEqual(
-        patterns.map((pattern) => pattern.pattern),
+        watcherFactory.watchers.map((watcher) => watcher.glob),
         [
           path.basename(workingFilePath),
           path.basename(lockPath),
@@ -427,17 +418,21 @@ suite("external watcher patterns", () => {
         ]
       );
       assert.ok(
-        pathsEqual(getBasePath(patterns[0]), path.dirname(workingFilePath))
+        pathsEqual(
+          watcherFactory.watchers[0].basePath,
+          path.dirname(workingFilePath)
+        )
       );
-      assert.ok(pathsEqual(getBasePath(patterns[1]), path.dirname(lockPath)));
       assert.ok(
-        pathsEqual(getBasePath(patterns[2]), path.dirname(manifestPath))
+        pathsEqual(watcherFactory.watchers[1].basePath, path.dirname(lockPath))
+      );
+      assert.ok(
+        pathsEqual(
+          watcherFactory.watchers[2].basePath,
+          path.dirname(manifestPath)
+        )
       );
     } finally {
-      Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-        configurable: true,
-        value: originalCreateFileSystemWatcher,
-      });
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });

@@ -4906,7 +4906,8 @@ export class WorkflowOrchestrator {
     const session = new ExecutionRootCoordinationWatchSession(
       executionRoot,
       (snapshot) =>
-        this.dashboardBroadcastHub.notifyCoordinationScopeUpdated(snapshot)
+        this.dashboardBroadcastHub.notifyCoordinationScopeUpdated(snapshot),
+      this.fileWatcherFactory
     );
     sessions.set(key, session);
     void session.start().catch((error) => {

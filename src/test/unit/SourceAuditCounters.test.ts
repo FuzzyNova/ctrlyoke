@@ -54,14 +54,11 @@ const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 // those capabilities are injected by extension.ts, and its workspace-folder
 // resolver is now injected as a path callback. Its runner watcher is now
 // supplied by the FileWatcherFactory port.
-// Shrunk from 8 to 4: the files the standalone CLI also loads (Log,
-// ModelRegistry, AttachmentBuilders, PromptFileWatcher) were decoupled so the
-// CLI runtime graph never loads vscode; see the src/cli.ts guard below.
-const vscodeImportersReachableFromOrchestrator = 4;
+// Shrunk from 8 to 4 when the CLI runtime graph was decoupled, then from 4 to
+// 2 by moving both remaining watcher sessions behind FileWatcherFactory.
+const vscodeImportersReachableFromOrchestrator = 2;
 
 const vscodeImporterFilesReachableFromOrchestrator = [
-  "src/core/orchestration/ExecutionRootCoordinationWatchSession.ts",
-  "src/core/orchestration/ExternalRunWatchSession.ts",
   "src/core/orchestration/WorkflowCommandHandler.ts",
   "src/ui/ExternalFileTrustPrompt.ts",
 ] as const;

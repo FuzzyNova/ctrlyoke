@@ -1,6 +1,6 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import type { Disposable, FileWatcherFactory } from "../HostPorts";
 import {
   WorkflowSummary,
   WorkflowTokenTotals,
@@ -56,8 +56,8 @@ export type ExternalRunWatchFinishReason =
  */
 const WORKING_FILE_CHANGE_THROTTLE_MS = 150;
 
-export class ExternalRunWatchSession implements vscode.Disposable {
-  private disposables: vscode.Disposable[] = [];
+export class ExternalRunWatchSession implements Disposable {
+  private disposables: Disposable[] = [];
   private heartbeatPollInterval: ReturnType<typeof setInterval> | undefined;
   private finished = false;
   /** stepIndex → last number of outputs sent to the dashboard for that step */
@@ -94,7 +94,8 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     /**
      * Called when the external run has finished or ownership changed.
      */
-    private readonly onFinished: (reason: ExternalRunWatchFinishReason) => void
+    private readonly onFinished: (reason: ExternalRunWatchFinishReason) => void,
+    private readonly fileWatcherFactory: FileWatcherFactory
   ) {
     this.manifestPath = WorkflowPaths.manifestPath(
       workspaceFolderPath,
@@ -149,11 +150,10 @@ export class ExternalRunWatchSession implements vscode.Disposable {
 
   private setupWorkingFileWatcher(): void {
     const targetPath = this.workingFilePath;
-    const pattern = new vscode.RelativePattern(
-      vscode.Uri.file(path.dirname(targetPath)),
+    const watcher = this.fileWatcherFactory.create(
+      path.dirname(targetPath),
       path.basename(targetPath)
     );
-    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this.disposables.push(
       watcher.onDidChange(() => {
@@ -277,11 +277,10 @@ export class ExternalRunWatchSession implements vscode.Disposable {
       this.workflowKey
     );
 
-    const pattern = new vscode.RelativePattern(
-      vscode.Uri.file(path.dirname(targetPath)),
+    const watcher = this.fileWatcherFactory.create(
+      path.dirname(targetPath),
       path.basename(targetPath)
     );
-    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     const validateLock = (): void => {
       void this.validateCurrentLock();
@@ -336,11 +335,10 @@ export class ExternalRunWatchSession implements vscode.Disposable {
       `[ExternalRunWatchSession] watching run: ${this.workflowKey}/${this.runRef}`
     );
     const targetPath = this.manifestPath;
-    const pattern = new vscode.RelativePattern(
-      vscode.Uri.file(path.dirname(targetPath)),
+    const watcher = this.fileWatcherFactory.create(
+      path.dirname(targetPath),
       path.basename(targetPath)
     );
-    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this.disposables.push(
       watcher.onDidChange(() => {

@@ -1,10 +1,11 @@
 # VS Code Dependency Decoupling Plan
 
-**Status (2026-10-06):** In progress and ready to continue at Phase 2. Done so
-far:
+**Status (2026-10-06):** In progress; Phase 2 is complete and ready to
+continue at Phase 3. Done so far:
 
 - Phase 0 (dependency guards).
 - Phase 1 (host composition).
+- Phase 2 (Node watcher and remaining watcher sites).
 - Every prerequisite from
   [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md).
 - An early pass that removed `vscode` from the runtime graphs of the
@@ -228,19 +229,17 @@ baselines in the same commit.
 | Direct `show*Message` in reusable code                                       |               63 | **0** (`directMessage.reusable`)                                               |
 | Direct `show*Message` in boundary files                                      |               49 | 46 across 8 allowlisted files (`directMessage.boundary`)                       |
 | Adapter-mediated host UI (`platform.log/warn/error/showProgress/showChoice`) |               19 | **0** (`adapterUi`); the methods are deleted from `PlatformAdapter`            |
-| `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | 4 (`vscodeImportersReachableFromOrchestrator`)                                 |
+| `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | 2 (`vscodeImportersReachableFromOrchestrator`)                                 |
 | Direct `vscode` imports in `WorkflowOrchestrator.ts` / `WorkflowInstance.ts` |            1 / 0 | 0 / 0                                                                          |
 | `new VsCodeAdapter` outside `extension.ts`                                   |                6 | 1, in `TemplateManager.ts` (`coreVsCodeAdapterConstructions`)                  |
-| Production `createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`    |                7 | 5 (see Phase 2)                                                                |
+| Production `createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`    |                7 | 1 (`ScriptCommandCompletionHelpers`, Stage 5a)                                 |
 | `src/cli.ts` / `src/mcp-server.ts` runtime graph loads `vscode`              |              yes | **no**, enforced statically. The esbuild shim alias is still present (Phase 8) |
 
-These four files are still reachable from the orchestrator and still import
+These two files are still reachable from the orchestrator and still import
 `vscode`:
 
 | File                                                              | Owning phase / stage |
 | ----------------------------------------------------------------- | -------------------- |
-| `src/core/orchestration/ExternalRunWatchSession.ts`               | Phase 2 / Stage 1    |
-| `src/core/orchestration/ExecutionRootCoordinationWatchSession.ts` | Phase 2 / Stage 1    |
 | `src/core/orchestration/WorkflowCommandHandler.ts`                | Phase 3 / Stage 2    |
 | `src/ui/ExternalFileTrustPrompt.ts`                               | Phase 3 / Stage 2    |
 
@@ -409,8 +408,9 @@ interface FileWatcherFactory {
 }
 ```
 
-- `VsCodeFileWatcherFactory` (`src/platform/VsCodeFileWatcher.ts`) is the
-  only implementation today. `extension.ts` constructs it and threads it
+- `VsCodeFileWatcherFactory` (`src/platform/VsCodeFileWatcher.ts`) and
+  `NodeFileWatcherFactory` (`src/platform/NodeFileWatcher.ts`) implement the
+  port. `extension.ts` constructs the VS Code implementation and threads it
   through the orchestrator → `WorkflowInstanceRegistry` → `WorkflowInstance` →
   `PromptFileWatcher`, and into `ExternalRunWatchCoordinator`, which now owns
   the `runner.json` watcher.
@@ -430,10 +430,8 @@ interface FileWatcherFactory {
     each caller would have to re-derive rename handling.
 - Callers receive normalized absolute string paths. Watcher ownership and
   disposal are explicit.
-- Five production sites still call `vscode.workspace.createFileSystemWatcher`
-  directly: `ExternalRunWatchSession` ×3 and
-  `ExecutionRootCoordinationWatchSession` ×1 (Phase 2), and
-  `ScriptCommandCompletionHelpers` ×1 (Phase 6).
+- One production site still calls `vscode.workspace.createFileSystemWatcher`
+  directly: `ScriptCommandCompletionHelpers` ×1 (Phase 6 / Stage 5a).
 - With no factory (`ctrlyoke run`), `PromptFileWatcher` polls. That stays the
   CLI's behavior. The standalone server injects the chokidar factory.
 
@@ -586,7 +584,7 @@ how those map, so the history still reads correctly:
 | 0         | Dependency guards                        | Done                                                                                            |
 | 1, 4, 9   | Toast queue, feedback port, interactions | Done (`BROWSER_USER_FEEDBACK_PLAN.md`)                                                          |
 | 2         | Host composition                         | Done, 2026-09-17                                                                                |
-| 3         | Watcher factory                          | Staging Stage 1                                                                                 |
+| 3         | Watcher factory                          | Done, 2026-10-06                                                                                |
 | 5         | Command UI/domain split                  | Staging Stage 2                                                                                 |
 | 6         | Reusable router                          | The client-scoped half is done. The router half is Stage 3, and the application half is Stage 6 |
 | 7         | Shared UI services                       | Staging Stage 4                                                                                 |
@@ -609,7 +607,7 @@ baseline can't go stale.
 
 | Guard                                                                 | Root / scope                                                            | Baseline (2026-10-06) | Goes to 0 at             |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------: | ------------------------ |
-| `vscodeImportersReachableFromOrchestrator` (explicit allowlist)       | `WorkflowOrchestrator.ts`, value imports only (`import type` erased)    |                     4 | Stage 2                  |
+| `vscodeImportersReachableFromOrchestrator` (explicit allowlist)       | `WorkflowOrchestrator.ts`, value imports only (`import type` erased)    |                     2 | Stage 2                  |
 | `orchestratorDirectVsCodeImports`                                     | `WorkflowOrchestrator.ts`                                               |                     0 | —                        |
 | `orchestratorVsCodeConstructorParams`                                 | orchestrator constructor                                                |                     0 | —                        |
 | `workflowInstanceDirectVsCodeImports`                                 | `WorkflowInstance.ts`                                                   |                     0 | —                        |
@@ -765,14 +763,15 @@ and allow standalone tests to miss hidden construction.
 
 ### Phase 2 — Node watcher and the remaining watcher sites (Staging Stage 1)
 
-**Ready to implement.** The port and the VS Code implementation already exist.
+**Done 2026-10-06.** Both watcher implementations and the shared contract
+suite are in place; the remaining direct VS Code watcher belongs to Phase 6.
 
-1. Re-add `chokidar@^5` and implement `NodeFileWatcherFactory` in
+1. **Done.** Re-add `chokidar@^5` and implement `NodeFileWatcherFactory` in
    `src/platform/NodeFileWatcher.ts`. `basePath` + `glob` map to a chokidar
    watch on `basePath`, filtered by `minimatch` against the base-relative,
    forward-slash path. Use `ignoreInitial: true`. Emit absolute paths.
 2. ~~Inject the factory into `PromptFileWatcher`.~~ **Done 2026-10-04.**
-3. Inject the factory into `ExternalRunWatchSession` (three watchers). Its
+3. **Done.** Inject the factory into `ExternalRunWatchSession` (three watchers). Its
    constructor at `ExternalRunWatchCoordinator.ts:542` passes the factory the
    coordinator already holds. Also inject it into
    `ExecutionRootCoordinationWatchSession` (one watcher, constructed at
@@ -780,7 +779,7 @@ and allow standalone tests to miss hidden construction.
 4. ~~Replace the orchestrator `runner.json` watcher.~~ **Done 2026-09-17**
    (Phase 1 item 9). It now lives in
    `ExternalRunWatchCoordinator.ts:296-312`.
-5. Add one contract suite that runs against both factories:
+5. **Done.** Add one contract suite that runs against both factories:
    - create, change, and delete;
    - a `writeFileAtomic` temp-file + rename reported as a create or change of
      the target, never as a delete;
@@ -790,7 +789,7 @@ and allow standalone tests to miss hidden construction.
    The VS Code half runs in the extension-host suite, and the Node half in
    unit tests.
 
-6. Lower `vscodeImportersReachableFromOrchestrator` to 2 and remove both
+6. **Done.** Lower `vscodeImportersReachableFromOrchestrator` to 2 and remove both
    sessions from the allowlist.
 
 Keep the runner watcher's polling fallback (`pollRunnerJsonDiscovery`) and its
