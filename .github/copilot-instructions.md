@@ -62,13 +62,14 @@ A headless agent with no `F5`/Stop button can launch and cleanly close that dev 
 
 ### Testing
 
-| Command                    | Purpose                                                                         |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| `npm test`                 | Run all tests (extension + UI)                                                  |
-| `npm run test:ui`          | Run React dashboard UI tests only                                               |
-| `npm run test:harness`     | Run harness integration tests (NEVER CALL THIS UNLESS EXPLICITLY TOLD TO DO SO) |
-| `npm run test:coverage`    | Extension-host coverage report (`coverage/extension/index.html`)                |
-| `npm run test:ui:coverage` | React dashboard coverage report (`src/ui/webview-react/coverage/index.html`)    |
+| Command                           | Purpose                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------- |
+| `npm test`                        | Run all tests (extension + UI)                                                    |
+| `npm run test:ui`                 | Run React dashboard UI tests only                                                 |
+| `npm run test:harness`            | Run harness integration tests (NEVER CALL THIS UNLESS EXPLICITLY TOLD TO DO SO)   |
+| `npm run test:coverage`           | Both coverage reports below, then regenerates `dev/backlog/TESTING_GAPS.md`       |
+| `npm run test:extension:coverage` | Extension-host coverage report only (`coverage/extension/index.html`)             |
+| `npm run test:ui:coverage`        | React dashboard coverage report only (`src/ui/webview-react/coverage/index.html`) |
 
 NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow (30+ minutes). Never run this command unless explicitly told to do so. Use `npm test` which invokes all extension, integration, and UI tests, but does not run the harness tests.
 
