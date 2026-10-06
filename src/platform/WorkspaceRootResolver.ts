@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import {
   isPathWithinAnyDirectory,
@@ -224,8 +225,9 @@ export function mapSourceDefinitionPathToExecution(
 }
 
 /**
- * Resolve a reference path against exactly one lexical base without touching
- * the filesystem. A leading `./` or `../` requires a known workflow-file
+ * Resolve a reference path against exactly one lexical base. The only
+ * filesystem probe is the single-root `<rootname>/…` disambiguation in
+ * `resolveWorkspaceOrNamedPath`. A leading `./` or `../` requires a known workflow-file
  * location; it throws instead of falling back to the workspace because that
  * fallback can silently select the wrong file. Callers should surface the
  * error as an unresolvable reference, just as they do for blocked references.
@@ -274,23 +276,48 @@ function resolveWorkspaceOrNamedPath(
   }
 
   const normalized = referencePath.replace(/\\/g, "/");
-  const firstSlash = normalized.indexOf("/");
-  if (namedRoots.length > 1 && firstSlash > 0) {
-    const firstSegment = normalized.slice(0, firstSlash);
-    const rest = normalized.slice(firstSlash + 1);
-    const match = findNamedRootBySegment(firstSegment, namedRoots);
-    if (match) {
-      return {
-        absolutePath: path.resolve(match.fsPath, rest),
-        base: REFERENCE_PATH_BASES.NAMED_ROOT,
-      };
-    }
-  }
-
-  return {
+  const workspaceResolution: ReferencePathResolution = {
     absolutePath: path.resolve(primaryRoot, normalized),
     base: REFERENCE_PATH_BASES.WORKSPACE,
   };
+  const firstSlash = normalized.indexOf("/");
+  if (namedRoots.length === 0 || firstSlash <= 0) {
+    return workspaceResolution;
+  }
+
+  const match = findNamedRootBySegment(
+    normalized.slice(0, firstSlash),
+    namedRoots
+  );
+  if (!match) {
+    return workspaceResolution;
+  }
+  const namedResolution: ReferencePathResolution = {
+    absolutePath: path.resolve(match.fsPath, normalized.slice(firstSlash + 1)),
+    base: REFERENCE_PATH_BASES.NAMED_ROOT,
+  };
+  if (namedRoots.length > 1) {
+    return namedResolution;
+  }
+
+  // Single root: a `<rootname>/…` prefix is ambiguous with a same-named
+  // subdirectory (Django's `mysite/mysite/`, Python's `requests/requests/`).
+  // Decide by layout, not by which file is named: when that subdirectory
+  // exists the prefix always means it, so a missing file reports "not found"
+  // rather than silently attaching a root-level namesake. Otherwise the
+  // prefix names the root itself, so a reference authored in a multi-root
+  // workspace keeps resolving when the same folder is opened on its own.
+  return isDirectory(path.resolve(primaryRoot, normalized.slice(0, firstSlash)))
+    ? workspaceResolution
+    : namedResolution;
+}
+
+function isDirectory(candidate: string): boolean {
+  try {
+    return fs.statSync(candidate).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /**

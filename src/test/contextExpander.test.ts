@@ -108,6 +108,25 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.deepStrictEqual(result.skippedReferences, []);
     });
 
+    test("single-root folder-name prefix attaches the root's file when no same-named subdirectory exists", async () => {
+      const root = freshWorkspace();
+      const rootName = path.basename(root);
+      const filePath = path.join(root, "docs", "plan.md");
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, "# Plan\n");
+
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        namedRoots: [{ name: rootName, fsPath: root }],
+      });
+      const result = await expander.expandContextSplit(
+        `Review @${rootName}/docs/plan.md`
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      assert.deepStrictEqual(result.skippedReferences, []);
+    });
+
     test("puts full-file @path ref into directFileRefs as absolute path", async () => {
       const root = freshWorkspace();
       // Create an actual file to reference

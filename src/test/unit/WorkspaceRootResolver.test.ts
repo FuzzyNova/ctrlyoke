@@ -285,6 +285,73 @@ suite("WorkspaceRootResolver Tests", () => {
       }
     });
 
+    test("single-root folder-name prefix resolves against the root when no same-named subdirectory holds the file", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-single-root-named-")
+      );
+      try {
+        const rootName = path.basename(tempRoot);
+        const rootFile = path.join(tempRoot, "src", "index.ts");
+        await fs.mkdir(path.dirname(rootFile), { recursive: true });
+        await fs.writeFile(rootFile, "export {};\n");
+
+        assert.deepStrictEqual(
+          resolveReferencePath(`${rootName}/src/index.ts`, {
+            primaryRoot: tempRoot,
+            namedRoots: [{ name: rootName, fsPath: tempRoot }],
+          }),
+          { absolutePath: rootFile, base: "namedRoot" }
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("single-root same-named subdirectory owns the prefix even when the file is only at the root", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-single-root-subdir-owns-")
+      );
+      try {
+        const rootName = path.basename(tempRoot);
+        await fs.mkdir(path.join(tempRoot, rootName));
+        await fs.writeFile(path.join(tempRoot, "settings.py"), "ROOT = 1\n");
+
+        assert.deepStrictEqual(
+          resolveReferencePath(`${rootName}/settings.py`, {
+            primaryRoot: tempRoot,
+            namedRoots: [{ name: rootName, fsPath: tempRoot }],
+          }),
+          {
+            absolutePath: path.join(tempRoot, rootName, "settings.py"),
+            base: "workspace",
+          }
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("single-root folder-name prefix names the root for a missing file when no same-named subdirectory exists", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-single-root-missing-")
+      );
+      try {
+        const rootName = path.basename(tempRoot);
+        assert.deepStrictEqual(
+          resolveReferencePath(`${rootName}/does-not-exist.ts`, {
+            primaryRoot: tempRoot,
+            namedRoots: [{ name: rootName, fsPath: tempRoot }],
+          }),
+          {
+            absolutePath: path.join(tempRoot, "does-not-exist.ts"),
+            base: "namedRoot",
+          }
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
     test("multi-root folder-name prefix still resolves against the named root", async () => {
       const tempRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-multi-root-prefix-")
