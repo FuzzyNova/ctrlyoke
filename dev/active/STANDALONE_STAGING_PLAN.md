@@ -111,6 +111,28 @@ names the guard or test that proves it, not just the code change.
 
 ## Notes
 
+- **Track A session split (2026-10-06).** Stages 3, 4, and 5 are each too
+  large for one session, so they run as sub-stages in this order. Each
+  sub-stage commits on its own, and the parent stage's "done when" applies
+  once its last sub-stage lands.
+  - **3a:** define the full `DashboardHostActions`, add the VS Code
+    implementation, and move every host-native router call site (every row
+    except run/pause/resume/stop, `MERGE_WORKTREE`, and the five worktree
+    `show*Message` calls) onto it, with `unsupported` replies.
+  - **3b:** extract the run/pause/resume/stop and merge command bodies into
+    shared orchestrator methods, convert the five worktree `show*Message`
+    calls to scoped replies, and drop the router's `vscode` import.
+  - **4a:** `KeyValueStore.get`, `WorkflowSerializer`, and
+    `HarnessFileMessageService`.
+  - **4b:** `WebviewSettingsSync`, `ServerCertificateService`,
+    `HostedServerControl`, and `PromptEditorSupportService`'s own direct
+    `vscode`/`VsCodeWorkspaceRoot` uses (it still reaches `vscode` through
+    `CompletionHelpers` until Stage 5b).
+  - **5a:** split `FileSystemUtils`, add `COMPLETION_ITEM_KINDS`, extract the
+    shared search walker, and move `ScriptCommandCompletionHelpers` onto
+    injected roots and the watcher factory.
+  - **5b:** `CompletionCore`, the `SymbolIndex` and `EditorContextSource`
+    ports with their VS Code implementations, and the golden tests.
 - **Phase 5 of the LSP plan (the navigation-only VS Code provider backend) is
   dropped.** It isn't scheduled. The reasoning is in that plan's resolved open
   questions.
