@@ -259,7 +259,10 @@ Start these after real launch feedback and the P1 safety contracts exist.
    ([plan](../backlog/EXECUTION_GUARDRAILS_PLAN.md))
 4. **Standalone server** — reuse the shipped hosted dashboard without requiring
    VS Code. The hosted server is implemented; `ctrlyoke server` is not.
-   ([plan](../active/STANDALONE_SERVER_PLAN.md))
+   Sequenced after the remaining decoupling work, and followed by browser
+   workspace-editor language intelligence.
+   ([plan](../active/STANDALONE_SERVER_PLAN.md),
+   [staging](../active/STANDALONE_STAGING_PLAN.md))
 5. **Workflow scheduling** — use the existing global execution limits and
    secrets. Keep the decided orchestrator-bound model; ctrlyoke must be running.
    ([plan](../backlog/WORKFLOW_SCHEDULING_PLAN.md))
@@ -467,38 +470,40 @@ criteria matter more than speculative dates.
 
 ### Prioritized backlog
 
-| Plan                                                                                                    | Priority                                                            |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                               | P2 (reduced scope)                                                  |
-| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P0/P1 compatibility phases complete; retained as the closure record |
-| [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                       | P0                                                                  |
-| [`USER_SCOPED_RUN_HISTORY_PLAN.md`](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md)                     | **P0** (one-way door)                                               |
-| [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                             | **P0** (one-way door; was P1)                                       |
-| [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md)                                     | P1                                                                  |
-| [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)                 | P1                                                                  |
-| [`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md)                                           | P1 (phases 1–2)                                                     |
-| [`NOTIFICATION_HOOK_EVENT_PLAN.md`](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md)                         | P1                                                                  |
-| [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../implemented/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)         | P1                                                                  |
-| [`WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md)                                       | P2                                                                  |
-| [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                     | P2                                                                  |
-| [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)                                      | P2                                                                  |
-| [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                                 | P2                                                                  |
-| [`MCP_OUTPUT_PAGING_PLAN.md`](../backlog/MCP_OUTPUT_PAGING_PLAN.md)                                     | P2                                                                  |
-| [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                       | Shipped                                                             |
-| [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)               | P1 (foundation for standalone server)                               |
-| [`RUN_EXPORT_PLAN.md`](../backlog/RUN_EXPORT_PLAN.md)                                                   | P2 (ships with redaction)                                           |
-| [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                   | P2                                                                  |
-| [`HARNESS_USAGE_TRACKING_PLAN.md`](../implemented/HARNESS_USAGE_TRACKING_PLAN.md)                       | P2                                                                  |
-| [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md)                                                     | P2                                                                  |
-| [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md)               | P2                                                                  |
-| [`SKILL_SLASH_COMMANDS_PLAN.md`](../backlog/SKILL_SLASH_COMMANDS_PLAN.md)                               | **P0** namespace reservation only; P3 for the feature               |
-| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](../backlog/SCRIPT_FIELD_COMPLETIONS_PLAN.md)                       | P3                                                                  |
-| [`QUICK_PICKER_IMPROVEMENTS_PLAN.md`](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md)                     | P3                                                                  |
-| [`HARNESS_SESSION_IMPORT_PLAN.md`](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)                           | P3                                                                  |
-| [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md)                                             | P3                                                                  |
-| [`CLINE_INTEGRATION_PLAN.md`](../backlog/CLINE_INTEGRATION_PLAN.md)                                     | P3                                                                  |
-| [`VSCODE_LM_API_FEATURES.md`](../backlog/VSCODE_LM_API_FEATURES.md)                                     | P3                                                                  |
-| [`VSCODE_TESTING_E2E_MCP.md`](../backlog/VSCODE_TESTING_E2E_MCP.md)                                     | P3 engineering                                                      |
+| Plan                                                                                                          | Priority                                                            |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                                     | P2 (reduced scope)                                                  |
+| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)       | P0/P1 compatibility phases complete; retained as the closure record |
+| [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                             | P0                                                                  |
+| [`USER_SCOPED_RUN_HISTORY_PLAN.md`](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md)                           | **P0** (one-way door)                                               |
+| [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                                   | **P0** (one-way door; was P1)                                       |
+| [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md)                                           | P1                                                                  |
+| [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)                       | P1                                                                  |
+| [`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md)                                                 | P1 (phases 1–2)                                                     |
+| [`NOTIFICATION_HOOK_EVENT_PLAN.md`](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md)                               | P1                                                                  |
+| [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../implemented/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)               | P1                                                                  |
+| [`WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md)                                             | P2                                                                  |
+| [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                           | P2                                                                  |
+| [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)                                            | P2                                                                  |
+| [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md)                                          | P2 (sequences decoupling → standalone → language intelligence)      |
+| [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md) | P2 (after standalone server)                                        |
+| [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                                       | P2                                                                  |
+| [`MCP_OUTPUT_PAGING_PLAN.md`](../backlog/MCP_OUTPUT_PAGING_PLAN.md)                                           | P2                                                                  |
+| [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                             | Shipped                                                             |
+| [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)                     | P1 (foundation for standalone server)                               |
+| [`RUN_EXPORT_PLAN.md`](../backlog/RUN_EXPORT_PLAN.md)                                                         | P2 (ships with redaction)                                           |
+| [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                         | P2                                                                  |
+| [`HARNESS_USAGE_TRACKING_PLAN.md`](../implemented/HARNESS_USAGE_TRACKING_PLAN.md)                             | P2                                                                  |
+| [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md)                                                           | P2                                                                  |
+| [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md)                     | P2                                                                  |
+| [`SKILL_SLASH_COMMANDS_PLAN.md`](../backlog/SKILL_SLASH_COMMANDS_PLAN.md)                                     | **P0** namespace reservation only; P3 for the feature               |
+| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](../backlog/SCRIPT_FIELD_COMPLETIONS_PLAN.md)                             | P3                                                                  |
+| [`QUICK_PICKER_IMPROVEMENTS_PLAN.md`](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md)                           | P3                                                                  |
+| [`HARNESS_SESSION_IMPORT_PLAN.md`](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)                                 | P3                                                                  |
+| [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md)                                                   | P3                                                                  |
+| [`CLINE_INTEGRATION_PLAN.md`](../backlog/CLINE_INTEGRATION_PLAN.md)                                           | P3                                                                  |
+| [`VSCODE_LM_API_FEATURES.md`](../backlog/VSCODE_LM_API_FEATURES.md)                                           | P3                                                                  |
+| [`VSCODE_TESTING_E2E_MCP.md`](../backlog/VSCODE_TESTING_E2E_MCP.md)                                           | P3 engineering                                                      |
 
 ### Operational references
 

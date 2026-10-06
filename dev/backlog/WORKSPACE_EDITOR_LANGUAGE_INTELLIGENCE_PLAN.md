@@ -1,19 +1,36 @@
 # Workspace Editor Language Intelligence Plan
 
-**Status (2026-09-24):** Proposed. Not started.
+**Status (2026-10-06):** Proposed, decided, and ready to implement in
+sequence. Not started. Every code reference was re-audited against `src/` on
+2026-10-06, and every open question is resolved. Phase 5, the VS Code provider
+backend, is **dropped**.
+
+**Sequencing:**
+[`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md) is the
+authoritative order. Most of this plan runs **after** the standalone server
+(Track C, Stages 12–17), so the `/ws/lsp` socket is added once, to the shared
+server class. Two pieces run earlier:
+
+- **Phase 0** (save conflicts) is independent Stage I1. It can land at any
+  time and must land before the standalone release.
+- **Phase 7a** (the `SymbolIndex` port and `VsCodeSymbolIndex`) lands inside
+  decoupling Stage 5. **`RegexSymbolIndex` ships with standalone v1**
+  (Stage 9).
 
 **Related plans:**
 
-- [`VSCODE_LSP_MCP_PLAN.md`](./VSCODE_LSP_MCP_PLAN.md) — diagnostics end-condition
-  gate and harness-facing IDE MCP. This plan narrows its harness scope (see
-  "Harness side" below) and gives its diagnostics gate a host-neutral source.
-- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md) — Phase 8's
-  "Symbol Completions" (the regex heuristic and the optional `LspSymbolClient`) is
-  superseded by the `SymbolIndex` port in this plan. The regex heuristic survives
-  only as the fallback when no language server is available.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
-  — the VS Code provider backend below is an extension-only boundary; the managed
-  server host must stay in the Node-only graph.
+- [`VSCODE_LSP_MCP_PLAN.md`](./VSCODE_LSP_MCP_PLAN.md): the diagnostics
+  end-condition gate and the harness-facing IDE MCP. This plan narrows its
+  harness scope (see "Harness side" below) and gives its diagnostics gate a
+  host-neutral source.
+- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md): its
+  Phase 8 uses this plan's `SymbolIndex` port with `RegexSymbolIndex`. The
+  one-off `LspSymbolClient` is not built. `LspSymbolIndex` (phase 7b here)
+  later upgrades standalone `#` through the same port.
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
+  the managed language-server host must stay in the Node-only graph. Phase 6
+  item 4 of that plan is where `VsCodeSymbolIndex` and the completion core
+  land.
 
 ## Problem
 
@@ -31,6 +48,9 @@ diagnostics) during a step.
    Node process.** It is reached through `WorkspaceViewerModal` and reads/writes
    through `hostedApi.ts` → `/api/workspace-viewer/*` → `HostedWorkspaceViewerService`.
    The VS Code panel does not use it; there, links open the native editor.
+   Every entry point is gated on `isStandalone`
+   (`window.__ctrlyokeStandalone`, set by `standalone-shim.js` for any
+   browser client). No setting enables it inside the VS Code panel.
    Today that Node process is the extension host, so the VS Code API is available.
    In the future standalone server (`ctrlyoke server`) it is not.
 2. **VS Code's `vscode.execute*Provider` commands resolve a URI to VS Code's own
@@ -44,21 +64,34 @@ diagnostics) during a step.
 4. **Language servers run workspace code.** tsserver loads tsconfig plugins,
    rust-analyzer runs `build.rs` and proc macros, and gopls runs `go list`.
    Spawning one is a trust decision.
-5. **The project already has most of the building blocks:** `vscode-jsonrpc` (used by
-   `CopilotQuotaClient.ts`), `ws` plus a token-gated hosted server
-   (`CtrlYokeHostedServer.ts`, dashboard socket on `/ws`), Windows `.cmd` launcher
-   resolution (`CliLauncherResolver.ts`), an `isWorkspaceTrusted` predicate on the
-   orchestrator, and the import/export UX pattern of `McpManagerSection.tsx`.
+5. **The project already has most of the building blocks:**
+   - `vscode-jsonrpc ^9` (used by `CopilotQuotaClient.ts`).
+   - `ws` plus a token-gated hosted server (`CtrlYokeHostedServer.ts`). It
+     uses `noServer: true` and authenticates in an `upgrade` handler that
+     currently returns 404 for every path except `/ws`, so a second path is
+     one branch in that handler.
+   - Windows `.cmd` launcher resolution (`resolveCliCommand` in
+     `src/core/harness/shared/CliLauncherResolver.ts`).
+   - An `isWorkspaceTrusted` predicate on the orchestrator.
+   - Secret redaction for hosted responses (`SecretRedactionMiddleware.ts`,
+     `secretRedactionService`).
+   - The import/export UX pattern of `McpManagerSection.tsx`: scan, import,
+     and a `FlyoutActionDropdown` "Save" export over `EXPORT_TARGET_IDS`.
+6. **The viewer redacts secrets.** `HostedWorkspaceViewerService.readFile`
+   returns secret-bearing files redacted and read-only. `saveFile` refuses
+   content containing the redaction marker. A language server reads the real
+   file from disk, so its replies (hover, completion, references previews) can
+   contain values the browser was never sent.
 
 ## Options considered
 
-| Option                                                                                                                                      | Verdict                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **A. VS Code provider bridge only** (`vscode.execute*Provider` behind a host API)                                                           | Rejected as the **only** answer. Zero install and reuses the user's extensions, but it only works while VS Code is the host, so it is dead in standalone. It also cannot serve completion or rename against an unsaved browser buffer (fact 2). Keep it as a fallback backend (see below).                         |
-| **A′. VS Code bridge that mirrors the browser buffer into VS Code's `TextDocument`** (apply a `WorkspaceEdit`, save with `document.save()`) | Rejected. The hidden VS Code document becomes dirty, there is no clean API to revert a document that isn't the active editor, saves race with `HostedWorkspaceViewerService.saveFile`'s atomic rename ("file is newer" conflicts), and dirty-document prompts appear on the desktop for edits made on a phone.     |
-| **B. ctrlyoke-managed language servers** (host spawns real LSP servers; browser speaks LSP through a host proxy)                            | **Chosen as the primary path.** One implementation works in the VS Code-hosted server and in standalone. Full fidelity (completion and rename on unsaved buffers, since the proxy owns document sync). The cost is duplicate memory next to VS Code's own tsserver and an install story; both are mitigated below. |
-| **C. Browser-only intelligence** (CodeMirror language packages, TS in a web worker)                                                         | Rejected as a general answer. Useful for single-file JS/TS niceties, but it cannot see `node_modules`, the project config, or other languages.                                                                                                                                                                     |
-| **D. Build a ctrlyoke LSP MCP for harnesses**                                                                                               | Rejected. This space is already crowded, and harnesses are gaining native LSP support. See "Harness side".                                                                                                                                                                                                         |
+| Option                                                                                                                                      | Verdict                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. VS Code provider bridge only** (`vscode.execute*Provider` behind a host API)                                                           | Rejected as the **only** answer. Zero install and reuses the user's extensions, but it only works while VS Code is the host, so it is dead in standalone. It also cannot serve completion or rename against an unsaved browser buffer (fact 2). A navigation-only fallback was considered and **dropped on 2026-10-06** (see Open Question 1). |
+| **A′. VS Code bridge that mirrors the browser buffer into VS Code's `TextDocument`** (apply a `WorkspaceEdit`, save with `document.save()`) | Rejected. The hidden VS Code document becomes dirty, there is no clean API to revert a document that isn't the active editor, saves race with `HostedWorkspaceViewerService.saveFile`'s atomic rename ("file is newer" conflicts), and dirty-document prompts appear on the desktop for edits made on a phone.                                 |
+| **B. ctrlyoke-managed language servers** (host spawns real LSP servers; browser speaks LSP through a host proxy)                            | **Chosen as the primary path.** One implementation works in the VS Code-hosted server and in standalone. Full fidelity (completion and rename on unsaved buffers, since the proxy owns document sync). The cost is duplicate memory next to VS Code's own tsserver and an install story; both are mitigated below.                             |
+| **C. Browser-only intelligence** (CodeMirror language packages, TS in a web worker)                                                         | Rejected as a general answer. Useful for single-file JS/TS niceties, but it cannot see `node_modules`, the project config, or other languages.                                                                                                                                                                                                 |
+| **D. Build a ctrlyoke LSP MCP for harnesses**                                                                                               | Rejected. This space is already crowded, and harnesses are gaining native LSP support. See "Harness side".                                                                                                                                                                                                                                     |
 
 ## Decision
 
@@ -68,25 +101,24 @@ diagnostics) during a step.
 Browser (WorkspaceFileEditor)
   CodeMirror LSP client extension (per language server session)
     ↕ WebSocket /ws/lsp?server=<sessionId>  (token-gated, same rules as /ws)
-ctrlyoke Node host (extension host today, standalone later)
-  LanguageIntelligenceHost
+ctrlyoke Node host (extension host or `ctrlyoke server`; one shared server class)
+  LanguageIntelligenceHost         (src/server/lsp/, Node-only graph)
     ├── LspSessionProxy            — per-browser-connection LSP endpoint:
     │     answers `initialize` from cached server capabilities, rewrites
     │     request ids, ref-counts didOpen/didClose per URI, fans out
     │     publishDiagnostics, translates viewer paths ⇄ file:// URIs,
-    │     enforces workspace-root containment on every URI in and out
-    └── backends (chosen per language, per root)
-          ├── ManagedLanguageServerBackend (Node-only; primary)
-          │     spawns the configured server over stdio via vscode-jsonrpc,
-          │     lazy start on first open, idle shutdown, crash restart w/ backoff
-          └── VsCodeProviderBackend (extension-only; fallback)
-                LSP facade over vscode.execute*Provider for navigation only
+    │     enforces workspace-root containment on every URI in and out,
+    │     redacts secrets in every message sent to the browser
+    └── ManagedLanguageServerBackend
+          spawns the configured server over stdio via vscode-jsonrpc,
+          lazy start on first open, idle shutdown, global cap,
+          crash restart w/ backoff
 ```
 
-Using the protocol itself as the browser↔host contract means we do not invent a
-parallel `WORKSPACE_EDITOR_HOVER`/`..._REFERENCES` message family. The same browser
-client code works against either backend, and the managed backend becomes a proxy
-rather than a translator.
+Using the protocol itself as the browser↔host contract means we don't invent a
+parallel `WORKSPACE_EDITOR_HOVER`/`..._REFERENCES` message family. The managed
+backend is a proxy rather than a translator. A future second backend could sit
+behind the same protocol without any browser changes.
 
 ### Why a separate `/ws/lsp` socket rather than the dashboard `/ws`
 
@@ -96,27 +128,13 @@ socket would mix it into `WebviewMessageRouter` and READY/replay semantics that 
 does not need. A second `WebSocketServer` path on the same HTTP server reuses the
 token check and TLS unchanged.
 
-### VS Code provider backend: navigation only
+### VS Code provider backend: dropped (2026-10-06)
 
-When the host is the extension and no managed server is configured for a language,
-`VsCodeProviderBackend` advertises only:
-
-- `textDocument/definition`, `typeDefinition`, `implementation`, `references`,
-  `hover`, and `documentSymbol`; `workspace/symbol`;
-- diagnostics pushed from `vscode.languages.onDidChangeDiagnostics`, not from the
-  browser buffer.
-
-The facade tracks the browser's last-saved text per URI and maps positions from the
-current buffer back to saved coordinates through the change set. If a position maps
-into text that doesn't exist on disk yet, the request returns an empty result
-instead of a wrong one. Results are mapped forward the same way. This backend never
-advertises completion, rename, signature help, or formatting. The settings UI shows
-this plainly ("Navigation via VS Code; install a language server for completion and
-rename").
-
-This is the "zero-install" tier that the original `VSCODE_LSP_MCP_PLAN.md` intuition
-wanted. The difference is that it sits behind the same protocol boundary as the full
-tier instead of being the whole design.
+An earlier revision planned a navigation-only `VsCodeProviderBackend`: an LSP
+facade over `vscode.execute*Provider`, with positions mapped from the unsaved
+buffer back to its saved baseline. It is **not built**. See Open Question 1.
+If real usage ever justifies a zero-install tier, it can be added later behind
+the same `/ws/lsp` protocol without changing the browser.
 
 ### Managed servers: configuration and installation
 
@@ -138,9 +156,16 @@ never `package.json`. It separates **what a server is** (its definition) from
   // Selection: language → server id (or false to disable), plus per-server
   // workspace/configuration settings.
   "use": { "typescript": "vtsls", "python": "pyright", "markdown": false },
-  "settings": { "pyright": { "python.analysis.typeCheckingMode": "strict" } }
+  "settings": { "pyright": { "python.analysis.typeCheckingMode": "strict" } },
+  // Lifecycle (user scope only — see Open Question 3).
+  "idleShutdownMinutes": 10,
+  "maxRunning": 4
 }
 ```
+
+`idleShutdownMinutes` and `maxRunning` govern machine resources, so they are
+user-scope settings. Add both to `WORKSPACE_FORBIDDEN_SETTING_ROOTS` in
+`CtrlYokeConfigService.ts` rather than inventing a new rule.
 
 **Workspace scope can choose a server without being able to run arbitrary
 commands.** Workspace scope may always set `use` and `settings`. `use` can only
@@ -201,6 +226,23 @@ scope" mental model instead of inventing a new one.
   to while someone actually has the hosted editor open.
 - **One server per (server id, workspace root)**, shared across browser tabs
   through `LspSessionProxy`.
+- **Global cap:** at most `maxRunning` servers (default 4) per host.
+  - When the cap is hit, the host stops the least recently used server that
+    has **no open documents**.
+  - If every running server has open documents, the new language gets no
+    session. The editor keeps its plain CodeMirror behavior, the settings
+    section shows "limit reached", and `#` falls back to `RegexSymbolIndex`
+    for that language.
+  - The host never stops a server that has an open document.
+- **Secret redaction on the way out:**
+  - Every message `LspSessionProxy` sends to the browser goes through
+    `secretRedactionService.redactValue`, the same boundary the hosted HTTP
+    responses use (fact 6).
+  - The proxy never sends `didOpen` for a file the viewer served redacted and
+    read-only, so the language server never receives the redaction marker as
+    buffer text.
+  - Edits from rename or code actions that would write into such a file are
+    rejected.
 - **Trust gate:** never spawn in an untrusted workspace (`isWorkspaceTrusted`,
   which defaults to `true` headlessly the same way the orchestrator's does). In
   standalone, spawning follows the server's own trust setting.
@@ -246,8 +288,17 @@ matches two VS Code windows on one file.
 - **"This file has been modified. Reload?"** A successful save broadcasts a
   `WORKSPACE_FILE_CHANGED` dashboard message (path, new `modifiedAt`, originating
   client id). Changes from outside ctrlyoke (a harness, git, another editor) come
-  from the watcher-factory port in `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` Phase 2.
-  Every other tab with that file open reacts:
+  from the existing `FileWatcherFactory` port (`src/core/HostPorts.ts`). The VS
+  Code-hosted server can use `VsCodeFileWatcherFactory` today. Standalone uses
+  the chokidar implementation from decoupling Phase 2 (staging Stage 1).
+  - Watch only files open in some tab: one watcher per open path,
+    ref-counted. Don't watch the whole tree.
+  - The same broadcast also refreshes that file's directory in any open
+    explorer. Today the explorer refreshes only after its own operations or a
+    manual refresh.
+  - Tree entries already carry `modifiedAt` (`stat.mtimeMs`), so the file
+    response reuses the same field and units.
+    Every other tab with that file open reacts:
   - no unsaved edits: reload silently and keep the cursor and scroll position;
   - unsaved edits: show a non-blocking banner, "This file changed on disk.
     Reload / Compare / Keep mine". "Keep mine" means the next save goes through
@@ -270,15 +321,23 @@ without warning. They can ship ahead of phase 1.
   symbol UI. Send those two requests through the same client and render them with
   our own picker. `@marimo-team/codemirror-languageserver` is the maintained
   fallback if a gap shows up.
+- Re-verify `@codemirror/lsp-client`'s peer ranges against the installed
+  `@codemirror/state` 6.7.x and `@codemirror/view` 6.43.x when installing.
+  All `@codemirror/*` packages live in the root `package.json`; the webview
+  has no separate one.
 - `WorkspaceFileEditor` gets one optional extension slot built from a
   `useLanguageIntelligence(filePath)` hook. The hook asks the host which session
   (if any) serves the file, opens `/ws/lsp`, and returns CodeMirror extensions.
   With no session the editor behaves exactly as it does today.
-- Ctrl/Cmd-click already means "open ctrlyoke reference link" in this editor
-  (`createWorkspaceReferenceClickHandlerExtension`). Go to definition must not
-  steal that gesture on `.cm-link` spans. Use F12 and the context menu for
-  definition, and keep Ctrl/Cmd-click on links as it is.
-- Cross-file navigation reuses `workspaceViewerStore.openToFile(path, line)`.
+- This editor already uses two gestures to open a ctrlyoke reference link
+  (`createWorkspaceReferenceClickHandlerExtension`): Ctrl/Cmd-click, and on
+  touch a short tap (under 500 ms and 10 px) on a `.cm-link` span. Go to
+  definition must not steal either gesture on `.cm-link` spans. Use F12 and
+  the context menu for definition, and keep both link gestures as they are.
+  On a phone, the context menu is the only way to reach definition.
+- Cross-file navigation reuses
+  `workspaceViewerStore.openToFile(path, startLine?, endLine?)`. Pass the LSP
+  range's lines, converting from 0-based to 1-based.
 - "Find all references" results render as a panel in the workspace viewer. Each
   row uses the existing `path#L10-L12` reference formatting, so a result can also
   be sent to a workflow as context.
@@ -288,19 +347,35 @@ without warning. They can ship ahead of phase 1.
 
 ## `#` symbol completions in the prompt editor (standalone)
 
-`CodeMirrorEditor.tsx`'s `#` trigger (the progressive flow: a `partial` response
-with files first, then symbols) gets its symbols from the host, not the browser.
-Today three host call sites depend on VS Code for symbols:
+`CodeMirrorEditor.tsx`'s `#` trigger gets its items from the host, not the
+browser:
 
-| Call site                                                                          | Uses                                                                   | Purpose                                                     |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `CompletionHelpers.getSymbolCompletions` → `CompletionHelpers.getWorkspaceSymbols` | `vscode.executeWorkspaceSymbolProvider`                                | `#sym:` completion items                                    |
-| `CompletionHelpers.findSymbolKindForReference`                                     | `executeDocumentSymbolProvider`, then `executeWorkspaceSymbolProvider` | the symbol-kind icon on an already-inserted `#sym:` chip    |
-| `ContextMenuReferenceCommands.ts`                                                  | `executeDocumentSymbolProvider`                                        | VS Code editor context menu (a boundary file; stays native) |
+1. `REQUEST_COMPLETIONS` goes to
+   `PromptEditorSupportService.handleCompletionRequest`.
+2. When the VS Code host has editor selections, it first sends a
+   `COMPLETIONS_RESPONSE` with `partial: true` containing **only those
+   selections** (`getHashSelectionCompletions`).
+3. It then sends the final response: selections plus workspace symbols
+   (`getHashCompletions`, the exported entry point).
 
-In standalone none of these exist. `STANDALONE_SERVER_PLAN.md` Phase 8 planned a
-regex heuristic plus an optional one-off `LspSymbolClient`. This plan replaces both
-with one port served by the same language-server host:
+`#` never returns files. Standalone has no host editor, so its `#` response
+is symbols only. Today these host call sites depend on VS Code for symbols:
+
+| Call site (`src/completions/CompletionHelpers.ts` unless noted)                                                                        | Uses                                                                   | Purpose                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `getHashCompletions` (exported) → `getSymbolCompletions` → `getWorkspaceSymbolCandidates` → `getWorkspaceSymbols` (all module-private) | `vscode.executeWorkspaceSymbolProvider`                                | `#sym:` completion items                                    |
+| `findSymbolKindForReference(uri: vscode.Uri, …)` (exported; called by `PromptEditorSupportService.validateContextReference`)           | `executeDocumentSymbolProvider`, then `executeWorkspaceSymbolProvider` | the symbol-kind icon on an already-inserted `#sym:` chip    |
+| `ContextMenuReferenceCommands.ts` `tryBuildSymbolReference`                                                                            | `executeDocumentSymbolProvider`                                        | VS Code editor context menu (a boundary file; stays native) |
+
+`getWorkspaceSymbolCandidates` issues the full query plus a 3-character
+prefix query and deduplicates the results. That strategy compensates for
+providers that match strictly, so it belongs **above** the port, in the
+completion core, where every index benefits from it.
+
+In standalone none of these exist. Earlier revisions of
+`STANDALONE_SERVER_PLAN.md` planned a regex heuristic plus a one-off
+`LspSymbolClient`. This plan replaces both with one port that has three
+implementations:
 
 ```typescript
 interface SymbolIndex {
@@ -325,31 +400,47 @@ interface IndexedSymbol {
 }
 ```
 
-- **Implementations.** `VsCodeSymbolIndex` (extension-only) wraps the two execute
-  commands exactly as today, so VS Code-panel behavior doesn't change.
-  `LspSymbolIndex` (Node-only) issues `workspace/symbol` and
-  `textDocument/documentSymbol` through `LanguageIntelligenceHost`, fans out to
-  every running or startable server for the workspace, merges the results, and
-  applies `maxResults`. `RegexSymbolIndex` is Phase 8's heuristic, kept only as
-  the fallback for languages with no available server. The composition root picks
-  one per host. Standalone uses the LSP index with regex fallback per language.
+- **Implementations, in delivery order:**
+  1. **`VsCodeSymbolIndex`** (extension-only). It wraps the two execute
+     commands exactly as today, so VS Code behavior doesn't change. It lands
+     in decoupling Stage 5.
+  2. **`RegexSymbolIndex`** (Node-only). It lands in staging Stage 9 and is
+     standalone v1's `#` source.
+     - It scans source files by extension (TS/JS, Python, Go, Rust, Java,
+       C#, and C/C++ patterns) and caches results per file by `mtime`.
+     - `endLine` comes from bracket matching in brace languages and from
+       indentation in Python. When no end is found, `endLine = startLine`.
+     - After the LSP stages it stays as the per-language fallback.
+  3. **`LspSymbolIndex`** (Node-only). It lands in staging Stage 16.
+     - It issues `workspace/symbol` and `textDocument/documentSymbol` through
+       `LanguageIntelligenceHost`.
+     - It fans out to every running or startable server for the workspace,
+       within the global cap.
+     - It merges the results and applies `maxResults`.
+
+  The composition root picks one index per host: VS Code-hosted uses
+  `VsCodeSymbolIndex` (Open Question 2). Standalone uses the LSP index,
+  falling back to the regex index per language.
+
 - **The callers become host-neutral.** `getSymbolCompletions` and
   `findSymbolKindForReference` take a `SymbolIndex` instead of calling
-  `vscode.commands`, and they build `#sym:` values from `IndexedSymbol`. This is
-  part of `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` Phase 6 item 4 (the Node-capable
-  completion index), and this plan supplies its symbol half.
+  `vscode.commands`, and they build `#sym:` values from `IndexedSymbol`.
+  `findSymbolKindForReference` takes a viewer path instead of a `vscode.Uri`.
+  This is `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` Phase 6 item 4 (the
+  Node-capable completion core), and this plan supplies its symbol half.
 - **SymbolKind numbering.** `vscode.SymbolKind` is 0-based and LSP `SymbolKind` is
   1-based (`File` is 0 in VS Code and 1 in LSP). `mapSymbolKindToCompletionKind`
-  and `mapSymbolKindToReferenceKind` currently take `vscode.SymbolKind`. Convert
+  (module-private) and `mapSymbolKindToReferenceKind` (exported, also used by
+  `ContextMenuReferenceCommands.ts`) currently take `vscode.SymbolKind`. Convert
   to the project-owned LSP numbering in `VsCodeSymbolIndex`, once, and change the
   mappers to take `LspSymbolKind`. Converting anywhere else gives off-by-one icons
   and reference kinds.
 - **Servers must be warm for `#`.** Starting on file open only (see "Lifecycle")
   is not enough, because `#` in the prompt editor doesn't open a workspace file.
   The first `#` query starts the servers selected for the workspace's detected
-  languages (by root markers). The files part of the progressive response is
-  unaffected, and symbols arrive in the second part when the servers are ready.
-  Idle shutdown counts `#` queries as activity.
+  languages (by root markers), within the global cap. Until a language's
+  server is ready, that query answers from `RegexSymbolIndex`, so the first `#`
+  is never empty. Idle shutdown counts `#` queries as activity.
 - **tsserver only searches loaded projects.** `typescript-language-server`/`vtsls`
   answer `workspace/symbol` from projects that some opened document has loaded.
   With no file open, results are empty. On start, the host opens one anchor
@@ -389,65 +480,127 @@ is far ahead of anything we would ship. Instead:
    uses the managed backend's pull diagnostics. That makes `kind: "diagnostics"`
    work in standalone and CLI runs too. That plan's Phase 3 (a `ctrlyoke-ide` MCP)
    should be re-evaluated against harness-native LSP before it is built.
+   As of 2026-10-06 none of `VSCODE_LSP_MCP_PLAN.md` is implemented. Its
+   Phase 1 is a ROADMAP P1 item that doesn't depend on this plan. **Whoever
+   builds it first defines `DiagnosticsSource` with the VS Code
+   implementation**, so this plan's phase 6 only adds the Node implementation.
 
 ## Implementation phases
 
-0. **Save conflicts and reload banner** (independent of LSP, can ship first):
-   `modifiedAt`/`baseModifiedAt`, 409 on stale save, `WORKSPACE_FILE_CHANGED`
-   broadcast, and the reload/compare banner in `WorkspaceFileEditor`.
-1. **Protocol spine.** `/ws/lsp` socket on `CtrlYokeHostedServer`, then
-   `LanguageIntelligenceHost` + `LspSessionProxy` (id rewriting, didOpen
-   ref-counting, URI ⇄ viewer-path translation, containment). Then the
-   `useLanguageIntelligence` hook and a CodeMirror client wired into
-   `WorkspaceFileEditor`. Tests: proxy unit tests with a fake stdio server. A
-   two-client test proves that ids don't collide, that a request from the
-   non-synced tab triggers a full-text resync first, and that diagnostics reach
-   only the tab whose buffer they describe.
-2. **Managed backend.** `languageServers` schema (`definitions`/`use`/`settings`
-   in `schemas/settings-schema.json` + `CtrlYokeSettings.ts`), workspace-definition
-   approval via the batch-approval modal, built-in defaults table, PATH/tool-dir
-   resolution, spawn/idle/restart lifecycle, trust gate. This delivers completion, hover,
-   definition, references, rename, signature help, formatting, and diagnostics.
-3. **Editor UX.** Context menu items, references panel, rename confirmation for
-   multi-file edits, F12 binding, capability gating.
-4. **Language Servers settings section.** Status per server
-   (running/idle/missing), npm one-click install into the tool dir, install hints
-   for native servers, scan/import from cclsp and harness-native configs.
-5. **VS Code provider backend.** Navigation-only fallback with saved-baseline
-   position mapping, for extension-hosted sessions with no managed server.
-6. **Harness export + `DiagnosticsSource` port** (coordinated with
-   `VSCODE_LSP_MCP_PLAN.md`).
-7. **`SymbolIndex` port.** `VsCodeSymbolIndex` first, with the SymbolKind
-   numbering conversion and the callers moved onto the port. This is behavior-neutral
-   in VS Code and can land any time after phase 2. Then `LspSymbolIndex` +
-   `RegexSymbolIndex`, wired by the standalone composition root (standalone Phase 8).
-   Tests: a golden test that each index produces identical `#sym:` insert text and
-   icons for the same fixture symbols.
+Staging numbers refer to
+[`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md).
 
-Phases 0–4 and the Node half of phase 7 are host-neutral, so standalone gets them
-for free once `ctrlyoke server` exists. Phase 5 and `VsCodeSymbolIndex` are
-extension-only.
+0. **Save conflicts and reload banner** (independent; **Stage I1**). This can
+   ship first, and it must ship before the standalone release.
+   - `modifiedAt` on `WorkspaceFileResponse`.
+   - `baseModifiedAt` on `WorkspaceFileSaveRequest`.
+   - The save response returns the new `modifiedAt`.
+   - The `PUT /api/workspace-viewer/file` route maps a stale save to 409.
+     Today it maps errors only to 403/400/500.
+   - `WORKSPACE_FILE_CHANGED` broadcast from saves, and from per-open-file
+     watchers through `FileWatcherFactory`.
+   - The reload/compare banner in `WorkspaceFileEditor`, and explorer
+     directory refresh.
+1. **Protocol spine** (**Stage 12**, after the shared server class from
+   Stage 7a).
+   - A `/ws/lsp` branch in the server's `upgrade` handler, with the same
+     token check.
+   - `LanguageIntelligenceHost` + `LspSessionProxy` in `src/server/lsp/`: id
+     rewriting, didOpen ref-counting, URI ⇄ viewer-path translation,
+     containment, and outbound secret redaction.
+   - The `useLanguageIntelligence` hook and a CodeMirror client wired into
+     `WorkspaceFileEditor`.
+   - Tests: proxy unit tests with a fake stdio server. A two-client test
+     proves that ids don't collide, that a request from the non-synced tab
+     triggers a full-text resync first, and that diagnostics reach only the
+     tab whose buffer they describe. A redaction test proves that a secret
+     value in a fake server's hover never reaches the client.
+   - Add `src/server/lsp/` to the Node-only guard roots.
+2. **Managed backend** (**Stage 13**).
+   - The `languageServers` schema (`definitions`, `use`, `settings`,
+     `idleShutdownMinutes`, `maxRunning`) in `schemas/settings-schema.json` +
+     `CtrlYokeSettings.ts`, followed by `npm run schema:update`.
+   - Workspace-definition approval through `UserInteractionPort.requestBatchApproval`
+     (the `SecretGrantsTrustPrompt.ts` pattern).
+   - Built-in defaults table; PATH/tool-dir resolution through
+     `resolveCliCommand`.
+   - Spawn/idle/cap/restart lifecycle and the trust gate.
+
+   This delivers completion, hover, definition, references, rename, signature
+   help, formatting, and diagnostics.
+
+3. **Editor UX** (**Stage 14**). Context menu items, the references panel,
+   rename confirmation for multi-file edits, F12, and capability gating.
+4. **Language Servers settings section** (**Stage 15**).
+   - Status per server: running, idle, missing, or limit reached.
+   - npm one-click install into the tool dir.
+   - Install hints for native servers.
+   - Scan/import from cclsp and harness-native configs.
+5. ~~**VS Code provider backend.**~~ **Dropped 2026-10-06.** See Open
+   Question 1.
+6. **Harness export + `DiagnosticsSource` port** (**Stage 17**, coordinated
+   with `VSCODE_LSP_MCP_PLAN.md`; see "Harness side" item 3).
+7. **`SymbolIndex` port**, split across three stages:
+   - **7a. Port, `VsCodeSymbolIndex`, SymbolKind numbering conversion, and
+     callers moved onto the port.** Lands inside decoupling **Stage 5**,
+     which builds the Node completion core that needs this seam. It doesn't
+     change behavior in VS Code.
+   - **7-regex. `RegexSymbolIndex`.** Ships with standalone **Stage 9** as
+     standalone v1's `#` source.
+   - **7b. `LspSymbolIndex`.** **Stage 16**, wired by the standalone
+     composition root, with the regex index as the per-language fallback.
+   - Tests: a golden test that each index produces identical `#sym:` insert
+     text and icons for the same fixture symbols.
+
+Phases 0–4 and phase 7b are host-neutral, so they work identically in the VS
+Code-hosted server and in `ctrlyoke server`. `VsCodeSymbolIndex` is the only
+extension-only piece.
 
 ## Open questions
 
-1. **Should phase 5 (the VS Code fallback) exist at all?** Deliberately left open
-   (2026-09-24). If one-click npm install covers TS/JS, Python, JSON/CSS/HTML,
-   YAML, and Bash, the navigation-only VS Code tier may not justify its
-   position-mapping complexity. Decide after phase 4, using real usage.
-2. **In VS Code-hosted mode, should `#` symbols ever come from managed servers?**
-   The default is no: `VsCodeSymbolIndex` is free and already warm there. Revisit
-   only if VS Code's results prove worse for some language.
-3. **Idle-shutdown default and a global cap** on concurrent servers (memory on
-   small machines and phones-driving-a-laptop setups). Warm-on-`#` makes this
-   matter more in standalone.
+All resolved on 2026-10-06:
+
+1. **Should phase 5 (the VS Code fallback) exist at all? No. Dropped.**
+   - The workspace editor runs only in browsers, and a browser connected to
+     the VS Code-hosted server gets managed servers exactly like standalone.
+     So the fallback would serve only users who are _in VS Code_, _using the
+     browser editor_, _with no language server installed_. That is the
+     smallest audience of any phase.
+   - In return it would cost the hardest code in the plan: position mapping
+     between the unsaved buffer and the saved baseline, which is correct only
+     for navigation, and a second capability matrix to explain in the UI.
+   - Phase 4's one-click npm install covers TS/JS, Python, JSON/CSS/HTML,
+     YAML, and Bash.
+
+   Revisit only if real usage shows hosted-browser users without servers
+   asking for navigation. The `/ws/lsp` protocol boundary means it could be
+   added later without browser changes.
+
+2. **In VS Code-hosted mode, should `#` symbols ever come from managed
+   servers? No.** `VsCodeSymbolIndex` is free, already warm, and serves the
+   VS Code panel as well, which never talks to managed servers. Starting a
+   duplicate tsserver for `#` would double memory for no gain. Revisit per
+   language only if VS Code's results prove worse.
+3. **Idle-shutdown default and a global cap.** `idleShutdownMinutes: 10` and
+   `maxRunning: 4`.
+   - Both are user-scope settings, since they govern machine resources.
+   - Eviction picks the least recently used server with no open documents.
+     A server with open documents is never stopped.
+   - Warm-on-`#` respects the cap and answers from `RegexSymbolIndex` until a
+     server is ready.
+
+   The default of 4 covers a typical polyglot repo (TS + Python + JSON/YAML +
+   one more) while bounding memory. tsserver alone is often 300–800 MB, and
+   phones are driving laptops in this scenario.
 
 Resolved on 2026-09-24:
 
-- **Two tabs on one file:** best effort, both editable, with resync on tab switch,
-  plus save-conflict detection and a reload banner. Read-only was rejected.
+- **Two tabs on one file:** best effort and both editable, with a resync on
+  tab switch, plus save-conflict detection and a reload banner. Read-only was
+  rejected.
 - **Workspace-scope commands:** workspaces select servers freely (`use`,
-  `settings`). Workspace-declared `definitions` need one-time user approval, keyed
-  on a hash of their executable fields.
+  `settings`). Workspace-declared `definitions` need one-time user approval,
+  keyed on a hash of their executable fields.
 
 ## Research notes
 
