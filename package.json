@@ -778,7 +778,10 @@
   ],
   "overrides": {
     "brace-expansion": "^5.0.8",
-    "mocha": "$mocha"
+    "mocha": "$mocha",
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    }
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",

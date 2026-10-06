@@ -258,6 +258,18 @@ RCE plus base-path bypass) and refreshing the lockfile (`sharp`, `devalue`,
 
 ---
 
+## I. `legacy-peer-deps` removed — done 2026-10-06
+
+The root `.npmrc`'s `legacy-peer-deps=true` existed for vitepress 1.x needing
+vite 7, which stopped applying once we moved to vitepress 2 alpha (vite 8). The
+only conflict it was still hiding was `eslint-plugin-jsx-a11y` 6.10.2 (the latest
+release), which declares `eslint` only up to `^9`. That is now a scoped root
+`overrides` entry, `"eslint-plugin-jsx-a11y": { "eslint": "$eslint" }`, so
+installs resolve peers strictly again. The resolved tree is unchanged. **Drop
+the override** once jsx-a11y releases with eslint 10 support.
+
+---
+
 ## Other majors available (no vulnerabilities — upgrade opportunistically)
 
 All of these are compatible with our `>=22.12.0` Node floor.
@@ -292,3 +304,5 @@ All of these are compatible with our `>=22.12.0` Node floor.
 7. ~~**G** — TypeScript 6.0~~ — done. TypeScript 7 stays parked until the
    tooling supports it.
 8. ~~**H** — `landing/` audit and upgrades~~ — done; `npm audit` clean.
+9. ~~**I** — drop `legacy-peer-deps`~~ — done; drop the jsx-a11y override when
+   it supports eslint 10.
