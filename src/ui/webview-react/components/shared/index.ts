@@ -1,6 +1,11 @@
 export { Button } from "./Button";
 export { Icon, type IconProps } from "./Icon";
 export {
+  LucideIcon,
+  type LucideIconProps,
+  type LucideIconSize,
+} from "./LucideIcon";
+export {
   keyValueMapObjectToString,
   keyValueMapStringToObject,
   findLiteralCredentialEnvKeys,

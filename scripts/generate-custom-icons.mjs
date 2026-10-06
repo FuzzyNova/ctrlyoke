@@ -72,7 +72,7 @@ function svgToDataUri(svgContent) {
 
 /**
  * Generate icon class name from filename
- * Example: append-next.svg -> icon-append-next
+ * Example: generate-commit-message.svg -> icon-generate-commit-message
  */
 function getIconClassName(filename) {
   const name = path.basename(filename, ".svg");
@@ -200,8 +200,10 @@ function generateCustomIcons() {
 
     // Show usage example
     console.log("📖 Usage:");
-    console.log('   <i class="custom-icon icon-append"></i>');
-    console.log('   <i class="custom-icon icon-append icon-small"></i>');
+    console.log('   <i class="custom-icon icon-generate-commit-message"></i>');
+    console.log(
+      '   <i class="custom-icon icon-generate-commit-message icon-large"></i>'
+    );
     console.log();
   }
 }

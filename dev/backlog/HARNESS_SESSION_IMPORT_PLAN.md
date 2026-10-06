@@ -303,10 +303,13 @@ Add a fourth dropdown option in `WorkflowControls.tsx` (`dropdownOptions`):
 {
   label: "Import from Harness Session…",
   value: "import-session",
-  icon: <i className="custom-icon icon-import-session" />,
+  icon: <LucideIcon icon={Import} />,
   onClick: handleImportSession,
 }
 ```
+
+`Import` is the `lucide-react` export, rendered through the shared `LucideIcon` wrapper
+like the file options next to it.
 
 `handleImportSession` opens a new modal (both webview and standalone) rather than a VS
 Code quick-pick, because the list is rich (harness badge, first prompt, turn count,

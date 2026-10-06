@@ -33,6 +33,7 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import appIconSvg from "../../../../../images/ctrlyoke-app-icon.svg?raw";
 import { Icon } from "../shared/Icon";
+import { LucideIcon } from "../shared/LucideIcon";
 import { QrCode } from "lucide-react";
 import { downloadBlob } from "@utils/download";
 import { WebviewLog } from "@utils/logger";
@@ -435,7 +436,7 @@ export function ServerSection({
                 aria-label="Show QR code to open on your phone"
                 className="shrink-0 text-description-fg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <QrCode size={16} aria-hidden="true" />
+                <LucideIcon icon={QrCode} />
               </button>
             </div>
             {!licenseAccess.hasRemoteAccess && (
@@ -925,11 +926,11 @@ function CertDownloadSteps({
     <>
       <li>
         Select{" "}
-        <QrCode
+        <LucideIcon
+          icon={QrCode}
           size={12}
-          role="img"
           aria-label="the QR code button"
-          className="inline align-[-2px] not-italic text-foreground"
+          className="align-[-2px] not-italic text-foreground"
         />{" "}
         next to the server link above to show the QR code, then scan it with the
         device&apos;s camera to open ctrlyoke in its browser.

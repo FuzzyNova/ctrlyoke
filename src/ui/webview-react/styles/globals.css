@@ -1066,6 +1066,17 @@ button .codicon {
   vertical-align: text-bottom;
 }
 
+/* Lucide icons (LucideIcon.tsx) sit in a line exactly like a .codicon: an
+   inline-block box that never shrinks, aligned like a codicon in buttons. */
+.cy-lucide-icon {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+button .cy-lucide-icon {
+  vertical-align: text-bottom;
+}
+
 /* ============================================================================
    Status banners
    ============================================================================

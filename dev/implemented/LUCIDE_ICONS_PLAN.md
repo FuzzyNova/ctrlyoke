@@ -1,7 +1,11 @@
 # Lucide Icons Plan
 
 **Created:** October 6, 2026
-**Status:** Backlog. Replacement icons picked (step 2); ready to implement.
+**Status:** Implemented (October 6, 2026). The wrapper is `components/shared/LucideIcon.tsx`
+with a 1.25px non-scaling stroke (`nonScalingStroke`, which replaced the now-deprecated
+`absoluteStrokeWidth`). That weight was chosen by reasoning rather than the side-by-side theme
+comparison step 1 asks for, so check it against codicons in light, dark and high-contrast themes
+and adjust `LUCIDE_STROKE_WIDTH` if needed.
 
 ## Context
 

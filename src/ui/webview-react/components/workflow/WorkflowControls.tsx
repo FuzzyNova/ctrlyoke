@@ -18,7 +18,9 @@ import {
   WORKFLOW_FILE_PICKER_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { FilePlusCorner, ListEnd, NotepadTextDashed } from "lucide-react";
 import { Icon } from "../shared/Icon";
+import { LucideIcon } from "../shared/LucideIcon";
 
 interface WorkflowControlsProps {
   /** Additional className for styling */
@@ -141,13 +143,13 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     {
       label: "New From Template...",
       value: "from-template",
-      icon: <i className="custom-icon icon-from-template" />,
+      icon: <LucideIcon icon={NotepadTextDashed} />,
       onClick: handleFromTemplate,
     },
     {
       label: "Load from File...",
       value: "load-file",
-      icon: <i className="custom-icon icon-load-from-file" />,
+      icon: <LucideIcon icon={FilePlusCorner} />,
       onClick: handleLoadFile,
     },
     {
@@ -155,7 +157,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         ? "Append and Continue from File..."
         : "Queue from File...",
       value: "queue-file",
-      icon: <i className="custom-icon icon-queue-from-file" />,
+      icon: <LucideIcon icon={ListEnd} />,
       onClick: handleQueueFile,
       disabled:
         !hasQueue || isViewingDeletedWorkflow || isSystemGeneratedWorkflow,
