@@ -295,7 +295,10 @@ export class WebviewMessageRouter {
       () => this.getWorkspaceRoot(),
       getOrchestrator,
       (absolutePath) => this.callbacks.resolveImageWebviewUri?.(absolutePath),
-      secretRegistry
+      secretRegistry,
+      this.hostDependencies.actions,
+      this.hostDependencies.getNamedRoots,
+      this.hostDependencies.getTrustedRoots ?? (() => [])
     );
     this.harnessFiles = new HarnessFileMessageService(
       () => this.getWorkspaceRoot(),
@@ -2964,4 +2967,7 @@ export interface WebviewRouteOptions {
 export interface WebviewRouterHostDependencies {
   readonly actions: DashboardHostActions;
   readonly getNamedRoots: () => NamedRoot[];
+  readonly getTrustedRoots?: () => readonly string[];
+  readonly getWorkspaceRoot?: () => string | undefined;
+  readonly serverControl?: import("../core/HostPorts").HostedServerControl;
 }

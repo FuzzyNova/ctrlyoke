@@ -45,6 +45,20 @@ import {
 } from "../../core/harness/shared/StatuslineManager";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 
+function nodeSettingsHost(
+  workspaceRoot?: string,
+  selectWorkspacePath?: (request: any) => Promise<string | undefined>
+) {
+  return {
+    getWorkspaceRoot: () => workspaceRoot,
+    getNamedRoots: () =>
+      workspaceRoot
+        ? [{ name: path.basename(workspaceRoot), fsPath: workspaceRoot }]
+        : [],
+    selectWorkspacePath,
+  };
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeOrchestrator(
@@ -143,7 +157,9 @@ suite("WebviewSettingsSync", () => {
             throw new Error(`missing fake manager for ${harnessId}`);
           }
           return manager;
-        }
+        },
+        undefined,
+        nodeSettingsHost(process.cwd())
       );
       return sync;
     }
@@ -654,7 +670,6 @@ suite("WebviewSettingsSync", () => {
     });
 
     test("writes a capabilities file readable by the MCP server", async () => {
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
       const originalWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
       const workspaceRoot = tempDir("capabilities-contract");
       await ensureMcpStorageInitialized(workspaceRoot);
@@ -701,14 +716,14 @@ suite("WebviewSettingsSync", () => {
         );
         process.env.CTRLYOKE_WORKING_FILE = runFilePath;
         await fs.mkdir(path.dirname(capabilitiesPath), { recursive: true });
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: [{ uri: vscode.Uri.file(workspaceRoot) }],
-          configurable: true,
-        });
 
         const sync = new WebviewSettingsSync(
           () => {},
-          () => undefined
+          () => undefined,
+          undefined,
+          undefined,
+          undefined,
+          nodeSettingsHost(workspaceRoot)
         );
         sync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, {
           available: true,
@@ -768,10 +783,6 @@ suite("WebviewSettingsSync", () => {
         } else {
           process.env.CTRLYOKE_WORKING_FILE = originalWorkingFile;
         }
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
       }
     });
   });
@@ -1081,17 +1092,11 @@ suite("WebviewSettingsSync", () => {
 
       const originalGet = configService.get.bind(configService);
       const originalSet = configService.set.bind(configService);
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
-
       const workspaceRoot = tempDir("workspace-root");
       const setCalls: Array<{ key: string; value: unknown; scope: string }> =
         [];
 
       try {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: [{ uri: vscode.Uri.file(workspaceRoot) }],
-          configurable: true,
-        });
         configService.get = ((key: string) =>
           key === CONFIG_KEYS.SERVER
             ? { bindAddress: "127.0.0.1" }
@@ -1111,22 +1116,21 @@ suite("WebviewSettingsSync", () => {
             isPro: true,
             hasRemoteAccess: true,
             trialEndsAt: null,
-          })
+          }),
+          nodeSettingsHost(workspaceRoot)
         );
 
         hideGlobalNavigator();
         await sync.handleGenerateServerCert(postMessage, "workspace");
 
-        // Use the URI's fsPath so drive-letter casing matches what the implementation sees.
-        const workspaceFsPath = vscode.Uri.file(workspaceRoot).fsPath;
         const expectedCertPath = path.join(
-          workspaceFsPath,
+          workspaceRoot,
           ".ctrlyoke",
           "certs",
           "cert.pem"
         );
         const expectedKeyPath = path.join(
-          workspaceFsPath,
+          workspaceRoot,
           ".ctrlyoke",
           "certs",
           "key.pem"
@@ -1151,10 +1155,6 @@ suite("WebviewSettingsSync", () => {
           "workspace-scoped cert generation should save paths under the workspace .ctrlyoke/certs directory and persist them to workspace settings"
         );
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
         configService.get = originalGet;
         configService.set = originalSet;
       }
@@ -2312,7 +2312,11 @@ suite("WebviewSettingsSync external root decisions", () => {
 
       const sync = new WebviewSettingsSync(
         () => {},
-        () => undefined
+        () => undefined,
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(workspaceRoot, async () => newRoot)
       );
       sync.handleGlobalSettingsLoadRequest = async () => {};
       await sync.handleBrowseAndAddExternalRoot("workspace");
@@ -2320,16 +2324,14 @@ suite("WebviewSettingsSync external root decisions", () => {
       assert.deepStrictEqual(writes, [
         [
           CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS,
-          [vscode.Uri.file(newRoot).fsPath],
+          [newRoot],
           "workspace",
         ],
       ]);
       assert.deepStrictEqual(decisions, [
         [
-          ExternalRootsTrustStore.canonicalizeRoot(
-            vscode.Uri.file(workspaceRoot).fsPath
-          ),
-          [vscode.Uri.file(newRoot).fsPath],
+          ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
+          [newRoot],
           TRUST_DECISIONS.ALLOW,
         ],
       ]);
@@ -2384,7 +2386,11 @@ suite("WebviewSettingsSync external root decisions", () => {
             ) => {
               updatedRoots = [...roots];
             },
-          }) as any
+          }) as any,
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(workspaceRoot, async () => newRoot)
       );
       sync.sendWorkflowPropertiesToSettings = async () => {};
 
@@ -2398,17 +2404,14 @@ suite("WebviewSettingsSync external root decisions", () => {
         "panel"
       );
 
-      assert.deepStrictEqual(updatedRoots, [
-        inheritedRoot,
-        vscode.Uri.file(newRoot).fsPath,
-      ]);
+      assert.deepStrictEqual(updatedRoots, [inheritedRoot, newRoot]);
       assert.deepStrictEqual(decisions, [
         [
           ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
             workspaceRoot,
             `${workspaceRoot}\\workflow.json`
           ),
-          [vscode.Uri.file(newRoot).fsPath],
+          [newRoot],
           TRUST_DECISIONS.ALLOW,
         ],
       ]);
@@ -2465,7 +2468,11 @@ suite("WebviewSettingsSync external root decisions", () => {
             ) => {
               updatedRoots = [...roots];
             },
-          }) as any
+          }) as any,
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(workspaceRoot, async () => newRoot)
       );
       sync.sendWorkflowPropertiesToSettings = async () => {};
 
@@ -2479,10 +2486,7 @@ suite("WebviewSettingsSync external root decisions", () => {
         "panel"
       );
 
-      assert.deepStrictEqual(updatedRoots, [
-        approvedWorkspaceRoot,
-        vscode.Uri.file(newRoot).fsPath,
-      ]);
+      assert.deepStrictEqual(updatedRoots, [approvedWorkspaceRoot, newRoot]);
     } finally {
       ConfigurationUtils.getTrustedExternalRootsByScope = originalGetRoots;
       externalRootsTrustStore.getApprovedRoots = originalGetApprovedRoots;
@@ -2520,7 +2524,11 @@ suite("WebviewSettingsSync external root decisions", () => {
 
       const sync = new WebviewSettingsSync(
         () => {},
-        () => undefined
+        () => undefined,
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(workspaceRoot)
       );
       sync.handleGlobalSettingsLoadRequest = async () => {};
       await sync.handleUpdateGlobalSetting(
@@ -2532,9 +2540,7 @@ suite("WebviewSettingsSync external root decisions", () => {
 
       assert.deepStrictEqual(decisions, [
         [
-          ExternalRootsTrustStore.canonicalizeRoot(
-            vscode.Uri.file(workspaceRoot).fsPath
-          ),
+          ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
           [newRoot],
           TRUST_DECISIONS.ALLOW,
         ],
@@ -2568,7 +2574,11 @@ suite("WebviewSettingsSync external root decisions", () => {
 
       const sync = new WebviewSettingsSync(
         () => {},
-        () => undefined
+        () => undefined,
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(workspaceRoot)
       );
       sync.handleGlobalSettingsLoadRequest = async () => {};
       await sync.handleUpdateExternalRootDecision(
@@ -2579,9 +2589,7 @@ suite("WebviewSettingsSync external root decisions", () => {
 
       assert.deepStrictEqual(decisions, [
         [
-          ExternalRootsTrustStore.canonicalizeRoot(
-            vscode.Uri.file(workspaceRoot).fsPath
-          ),
+          ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
           [root],
           TRUST_DECISIONS.ALLOW,
         ],

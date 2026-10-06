@@ -1,6 +1,6 @@
 # Standalone Server Staging Plan
 
-**Status (2026-10-06):** Stages 1, 2, 3, and 4a are complete; continue at Stage 4b.
+**Status (2026-10-06):** Stages 1–4 are complete; continue at Stage 5a.
 This document only sets the order of work. It contains no design. The design lives
 in the three plans below, and this file arranges their remaining work into
 stages that can each be shipped on their own. All four documents were

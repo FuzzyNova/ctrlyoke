@@ -251,6 +251,21 @@ export async function findSymbolKindForReference(
   }
 }
 
+/** Resolve the kind for a dashboard reference without exposing VS Code URIs to its host-neutral service. */
+export function findSymbolKindForReferencePath(
+  filePath: string,
+  symbolName: string,
+  startLine: number,
+  endLine: number
+): Promise<vscode.CompletionItemKind | undefined> {
+  return findSymbolKindForReference(
+    vscode.Uri.file(filePath),
+    symbolName,
+    startLine,
+    endLine
+  );
+}
+
 async function findSymbolKindViaDocumentSymbols(
   uri: vscode.Uri,
   symbolName: string,

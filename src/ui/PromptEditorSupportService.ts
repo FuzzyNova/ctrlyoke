@@ -1,14 +1,10 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import {
-  getVsCodeWorkspaceRoot,
-  getVsCodeTrustedWorkspaceRoots,
-  getVsCodeNamedWorkspaceRoots,
-} from "../platform/VsCodeWorkspaceRoot";
+import type { DashboardHostActions } from "../core/HostPorts";
 import {
   ATOMIC_REFERENCE_KINDS,
+  DASHBOARD_ACTION_RESULT_STATUSES,
   MESSAGE_TYPES,
   HARNESS_IDS,
   type HarnessId,
@@ -42,11 +38,8 @@ import {
 } from "../completions/ContextReferenceBuilder";
 import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
-import {
-  openResolvedTarget,
-  confirmExternalFileTrustAndOpen,
-  type FileOpenTarget,
-} from "./ExternalFileTrustPrompt";
+import { type FileOpenTarget } from "./ExternalFileTrustPrompt";
+import { confirmExternalFileTrust } from "./ExternalRootsApproval";
 import { NullUserInteractionPort } from "./UserInteractionPort";
 import {
   resolveReferencePath,
@@ -76,7 +69,7 @@ import {
   getPriorContextCompletions,
   getSecretCompletions,
   getCtrlYokeSlashCompletions,
-  findSymbolKindForReference,
+  findSymbolKindForReferencePath,
   getPathSuggestions,
   type PlainCompletionItem,
 } from "../completions/CompletionHelpers";
@@ -232,14 +225,34 @@ export class PromptEditorSupportService {
     private readonly resolveImageWebviewUri: (
       absolutePath: string
     ) => string | undefined,
-    private readonly secretRegistry?: SecretRegistryService
+    private readonly secretRegistry?: SecretRegistryService,
+    private readonly hostActions?: Pick<
+      DashboardHostActions,
+      "openWorkspaceTarget" | "openContentPreview"
+    >,
+    private readonly getNamedRoots: () => readonly ResolverWorkspaceFolder[] = () => [],
+    private readonly getTrustedRoots: () => readonly string[] = () => []
   ) {}
 
   private getTrustedWorkspaceRoots(): string[] {
     return [
-      ...getVsCodeTrustedWorkspaceRoots(),
+      ...this.getTrustedRoots(),
+      ...(this.getWorkspaceRoot() ? [this.getWorkspaceRoot()] : []),
       ...runtimeTrustedRootRegistry.getRoots(),
     ];
+  }
+
+  private async openWorkspaceTarget(target: FileOpenTarget): Promise<void> {
+    const result = await this.hostActions?.openWorkspaceTarget(target);
+    if (
+      !result ||
+      result.status === DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED
+    ) {
+      throw new Error("Opening workspace targets is unavailable in this host.");
+    }
+    if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.FAILED) {
+      throw new Error(result.message);
+    }
   }
 
   private getOwnStateRoots(workspaceRoot: string): string[] {
@@ -290,7 +303,8 @@ export class PromptEditorSupportService {
     seq: number
   ): Promise<void> {
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot =
+        this.getNamedRoots()[0]?.fsPath ?? this.getWorkspaceRoot();
       const items = await getScriptCommandCompletions(
         workspaceRoot,
         text,
@@ -386,9 +400,7 @@ export class PromptEditorSupportService {
     seq: number
   ): Promise<void> {
     try {
-      const repoRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
+      const repoRoot = this.getWorkspaceRoot() || undefined;
       const items = await getBranchCompletions(repoRoot, filterText);
       ctx.emit({
         type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
@@ -450,14 +462,12 @@ export class PromptEditorSupportService {
     } else if (trigger === "#") {
       return await getHashCompletions(prefix.substring(1)); // Remove #
     } else if (trigger === "~") {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : "";
+      const workspaceRoot = this.getWorkspaceRoot();
       return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
     } else if (trigger === "$") {
       return getPriorContextCompletions(prefix.substring(1)); // Remove $
     } else if (trigger === "!") {
-      if (!vscode.workspace.workspaceFolders?.length || !this.secretRegistry) {
+      if (!this.getWorkspaceRoot() || !this.secretRegistry) {
         return [];
       }
       const names = await this.secretRegistry.getCompletionNames();
@@ -481,9 +491,7 @@ export class PromptEditorSupportService {
     seq?: number,
     _address?: unknown
   ): Promise<void> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : null;
+    const workspaceRoot = this.getWorkspaceRoot() || null;
     const trustedRoots = workspaceRoot
       ? this.getTrustedWorkspaceRoots()
       : undefined;
@@ -495,7 +503,7 @@ export class PromptEditorSupportService {
       : undefined;
     const resolver = new PromptFileResolver({
       workspaceRoot: workspaceRoot ?? undefined,
-      namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : [],
+      namedRoots: workspaceRoot ? this.getNamedRoots() : [],
       trustedRoots,
       ownStateRoots,
       approvedExternalRoots: workspaceIdentity
@@ -581,14 +589,14 @@ export class PromptEditorSupportService {
     filePath: string
   ): Promise<void> {
     try {
-      if (!vscode.workspace.workspaceFolders?.length) {
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
         throw new Error("No workspace folder open");
       }
-      const workspaceRoot = getVsCodeWorkspaceRoot();
       const ownStateRoots = this.getOwnStateRoots(workspaceRoot);
       const resolver = new PromptFileResolver({
         workspaceRoot,
-        namedRoots: getVsCodeNamedWorkspaceRoots(),
+        namedRoots: this.getNamedRoots(),
         trustedRoots: this.getTrustedWorkspaceRoots(),
         ownStateRoots,
         approvedExternalRoots:
@@ -616,7 +624,7 @@ export class PromptEditorSupportService {
         path: resolvedPath,
         openAsText: true,
         viewColumn: ConfigurationUtils.shouldOpenPromptsInSecondGroup()
-          ? vscode.ViewColumn.Two
+          ? 2
           : undefined,
       };
       const decision = evaluateFileAccess(resolvedPath, {
@@ -625,7 +633,7 @@ export class PromptEditorSupportService {
         approvedExternalRoots,
       });
       if (!decision.allowed) {
-        await confirmExternalFileTrustAndOpen(target, {
+        const approved = await confirmExternalFileTrust(target.path, {
           port: ctx.interactionPort ?? new NullUserInteractionPort(),
           workspaceRoot,
           workflowSourcePath:
@@ -639,9 +647,10 @@ export class PromptEditorSupportService {
             );
           },
         });
+        if (approved) await this.openWorkspaceTarget(target);
         return;
       }
-      await openResolvedTarget(target);
+      await this.openWorkspaceTarget(target);
     } catch (error) {
       Log.error(
         "[PromptEditorSupportService] Error opening prompt file:",
@@ -822,7 +831,7 @@ export class PromptEditorSupportService {
       );
       const resolved = resolveReferencePath(message.relativePath, {
         primaryRoot: workspaceRoot,
-        namedRoots: getVsCodeNamedWorkspaceRoots(),
+        namedRoots: this.getNamedRoots(),
         sourceDefinitionDir,
       }).absolutePath;
       if (!isPathWithinAnyDirectory(resolved, trustedRoots)) {
@@ -881,10 +890,8 @@ export class PromptEditorSupportService {
     }>,
     seq?: number
   ): Promise<void> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : null;
-    const namedRoots = getVsCodeNamedWorkspaceRoots();
+    const workspaceRoot = this.getWorkspaceRoot() || null;
+    const namedRoots = [...this.getNamedRoots()];
     const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
       ctx,
       workspaceRoot ? this.getTrustedWorkspaceRoots() : undefined
@@ -1006,10 +1013,12 @@ export class PromptEditorSupportService {
       }
 
       try {
-        const document = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(pathValidation.resolvedPath)
+        const documentText = await fs.promises.readFile(
+          pathValidation.resolvedPath,
+          "utf8"
         );
-        if (endLine > document.lineCount) {
+        const lineCount = documentText.split(/\r\n|\r|\n/).length;
+        if (endLine > lineCount) {
           return {
             exists: false,
             message:
@@ -1025,8 +1034,8 @@ export class PromptEditorSupportService {
           // Best-effort: the reference text itself carries no kind, only a
           // live completion item does. A miss here (renamed/moved symbol,
           // no provider) just leaves the icon at its generic fallback.
-          const symbolKind = await findSymbolKindForReference(
-            document.uri,
+          const symbolKind = await findSymbolKindForReferencePath(
+            pathValidation.resolvedPath,
             reference.symbolName,
             startLine,
             endLine
@@ -1168,13 +1177,13 @@ export class PromptEditorSupportService {
     lineEnd?: number
   ): Promise<void> {
     try {
-      if (!vscode.workspace.workspaceFolders?.length) {
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
         Log.warn("[PromptEditorSupportService] No workspace folder open");
         return;
       }
-      const workspaceRoot = getVsCodeWorkspaceRoot();
       const trustedRoots = this.getTrustedWorkspaceRoots();
-      const namedRoots = getVsCodeNamedWorkspaceRoots();
+      const namedRoots = this.getNamedRoots();
       const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
         ctx,
         trustedRoots
@@ -1207,7 +1216,6 @@ export class PromptEditorSupportService {
         namedRoots,
         sourceDefinitionDir,
       }).absolutePath;
-      const targetUri = vscode.Uri.file(resolvedFsPath);
 
       const workspaceIdentity =
         ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
@@ -1216,13 +1224,13 @@ export class PromptEditorSupportService {
         ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
           workspaceIdentity
         );
-      const decision = evaluateFileAccess(targetUri.fsPath, {
+      const decision = evaluateFileAccess(resolvedFsPath, {
         workspaceRoots: trustedRoots,
         ownStateRoots,
         approvedExternalRoots,
       });
       const target: FileOpenTarget = {
-        path: targetUri.fsPath,
+        path: resolvedFsPath,
         isDirectory,
         startLine: lineStart,
         endLine: lineEnd,
@@ -1232,7 +1240,7 @@ export class PromptEditorSupportService {
         Log.warn(
           `[PromptEditorSupportService] Blocked dashboard request to open path outside every trusted root: ${relativePath}`
         );
-        await confirmExternalFileTrustAndOpen(target, {
+        const approved = await confirmExternalFileTrust(target.path, {
           port: ctx.interactionPort ?? new NullUserInteractionPort(),
           workspaceRoot,
           workflowSourcePath:
@@ -1246,10 +1254,11 @@ export class PromptEditorSupportService {
             );
           },
         });
+        if (approved) await this.openWorkspaceTarget(target);
         return;
       }
 
-      await openResolvedTarget(target);
+      await this.openWorkspaceTarget(target);
     } catch (error) {
       Log.error("[PromptEditorSupportService] Error opening file:", error);
       ctx.emit({
@@ -1280,7 +1289,7 @@ export class PromptEditorSupportService {
       );
       return;
     }
-    await openResolvedTarget({ path: filePath });
+    await this.openWorkspaceTarget({ path: filePath });
   }
 
   async handleOpenSkill(
@@ -1300,7 +1309,7 @@ export class PromptEditorSupportService {
       return;
     }
 
-    await openResolvedTarget({ path: skill.path });
+    await this.openWorkspaceTarget({ path: skill.path });
   }
 
   /** Build the prior-context XML preview without opening it in an editor. */
@@ -1356,11 +1365,20 @@ export class PromptEditorSupportService {
     const content = await this.buildPriorContextContent(ctx, ref, stepCount);
 
     try {
-      const doc = await vscode.workspace.openTextDocument({
+      const result = await this.hostActions?.openContentPreview?.({
         content,
         language: "xml",
       });
-      await vscode.window.showTextDocument(doc, { preview: true });
+      if (
+        !result ||
+        result.status !== DASHBOARD_ACTION_RESULT_STATUSES.OPENED
+      ) {
+        throw new Error(
+          result?.status === DASHBOARD_ACTION_RESULT_STATUSES.FAILED
+            ? result.message
+            : "Preview is unavailable"
+        );
+      }
     } catch (error) {
       Log.warn(
         "[PromptEditorSupportService] handleOpenPriorContext: failed to open document",
@@ -1376,9 +1394,7 @@ export class PromptEditorSupportService {
     ctx: WebviewClientContext,
     references: string[]
   ): Promise<void> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = this.getWorkspaceRoot() || undefined;
     if (!workspaceRoot || !references || references.length === 0) {
       ctx.emit({
         type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
@@ -1397,7 +1413,7 @@ export class PromptEditorSupportService {
         workspaceIdentity
       ),
     ];
-    const namedRoots = getVsCodeNamedWorkspaceRoots();
+    const namedRoots = [...this.getNamedRoots()];
     const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
       ctx,
       trustedRoots

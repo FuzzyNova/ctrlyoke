@@ -79,6 +79,13 @@ export interface DashboardHostActions {
   reloadHost?(): Promise<void>;
 }
 
+/** Controls the lifetime and access token of the hosted dashboard server. */
+export interface HostedServerControl {
+  enable?(): Promise<void>;
+  disable?(): Promise<void>;
+  regenerateToken?(): Promise<void>;
+}
+
 export interface HarnessDetailedStatus {
   initializationStatus: HarnessStatus;
   isReady: boolean;

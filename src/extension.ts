@@ -14,10 +14,12 @@ import {
   getVsCodeWorkspaceRoot,
   getVsCodeWorkspaceFolder,
   getVsCodeNamedWorkspaceRoots,
+  getVsCodeTrustedWorkspaceRoots,
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
 import { VsCodeDashboardHostActions } from "./platform/VsCodeDashboardHostActions";
+import { VsCodeHostedServerControl } from "./platform/VsCodeHostedServerControl";
 import { VsCodeKeyValueStore } from "./platform/VsCodeKeyValueStore";
 import { TemplateManager } from "./core/TemplateManager";
 import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
@@ -378,6 +380,12 @@ export async function activate(context: vscode.ExtensionContext) {
       licenseService,
       {
         actions: dashboardHostActions,
+        serverControl: new VsCodeHostedServerControl(),
+        getWorkspaceRoot: () =>
+          vscode.workspace.workspaceFolders?.length
+            ? getVsCodeWorkspaceRoot()
+            : undefined,
+        getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
         getNamedRoots: () => {
           const roots = getVsCodeNamedWorkspaceRoots();
           if (roots.length === 0) return [];

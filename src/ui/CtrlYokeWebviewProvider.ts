@@ -206,7 +206,18 @@ export class CtrlYokeWebviewProvider
               isEnterprise: entitlement.isEnterprise ?? false,
             };
           }
-        : undefined
+        : undefined,
+      {
+        getWorkspaceRoot:
+          hostDependencies?.getWorkspaceRoot ?? (() => undefined),
+        getNamedRoots: hostDependencies?.getNamedRoots ?? (() => []),
+        selectWorkspacePath: hostDependencies?.actions.selectWorkspacePath
+          ? hostDependencies.actions.selectWorkspacePath.bind(
+              hostDependencies.actions
+            )
+          : undefined,
+        serverControl: hostDependencies?.serverControl,
+      }
     );
     this.licenseEntitlementSubscription =
       licenseService?.onDidChangeEntitlement(() => {
@@ -230,8 +241,10 @@ export class CtrlYokeWebviewProvider
           vscode.workspace.workspaceFolders?.length
             ? getVsCodeWorkspaceRoot()
             : undefined,
-        getNamedRoots: getVsCodeNamedWorkspaceRoots,
-        getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
+        getNamedRoots:
+          hostDependencies?.getNamedRoots ?? getVsCodeNamedWorkspaceRoots,
+        getTrustedRoots:
+          hostDependencies?.getTrustedRoots ?? getVsCodeTrustedWorkspaceRoots,
       }
     );
     this.router = new WebviewMessageRouter(

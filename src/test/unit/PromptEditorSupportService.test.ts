@@ -2,7 +2,6 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import * as vscode from "vscode";
 import { PromptEditorSupportService } from "../../ui/PromptEditorSupportService";
 import { createWebviewClientContext } from "../../ui/WebviewClientContext";
 import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
@@ -16,30 +15,14 @@ import { pathsEqual } from "../../utils/PathCasing";
 
 suite("PromptEditorSupportService", () => {
   let workspaceRoot: string;
-  let originalWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
 
   setup(async () => {
     workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-editor-support-")
     );
-    originalWorkspaceFolders = vscode.workspace.workspaceFolders;
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      configurable: true,
-      value: [
-        {
-          uri: vscode.Uri.file(workspaceRoot),
-          name: "test-workspace",
-          index: 0,
-        },
-      ],
-    });
   });
 
   teardown(async () => {
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      configurable: true,
-      value: originalWorkspaceFolders,
-    });
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   });
 
@@ -246,40 +229,21 @@ suite("PromptEditorSupportService", () => {
 
   test("emits empty script items when the completion source fails", async () => {
     const emitted: unknown[] = [];
-    const originalDescriptor = Object.getOwnPropertyDescriptor(
-      vscode.workspace,
-      "workspaceFolders"
-    );
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      configurable: true,
-      get: () => {
+    const service = new PromptEditorSupportService(
+      () => {
         throw new Error("workspace lookup failed");
       },
-    });
-
-    try {
-      const service = new PromptEditorSupportService(
-        () => workspaceRoot,
-        () => undefined,
-        () => undefined
-      );
-      await service.handleScriptCompletionRequest(
-        createWebviewClientContext("test-client", (message) => {
-          emitted.push(message);
-        }),
-        "npm ",
-        4,
-        102
-      );
-    } finally {
-      if (originalDescriptor) {
-        Object.defineProperty(
-          vscode.workspace,
-          "workspaceFolders",
-          originalDescriptor
-        );
-      }
-    }
+      () => undefined,
+      () => undefined
+    );
+    await service.handleScriptCompletionRequest(
+      createWebviewClientContext("test-client", (message) => {
+        emitted.push(message);
+      }),
+      "npm ",
+      4,
+      102
+    );
 
     const response = emitted[0] as {
       type: string;

@@ -718,6 +718,38 @@ suite("SourceAuditCounters", () => {
     );
   });
 
+  test("shared UI services stay outside the VS Code boundary", function () {
+    for (const file of [
+      "src/ui/WorkflowSerializer.ts",
+      "src/ui/WebviewSettingsSync.ts",
+      "src/ui/PromptEditorSupportService.ts",
+      "src/ui/HarnessFileMessageService.ts",
+    ]) {
+      const source = getParsedProductionSources(repoRoot).find(
+        (candidate) => candidate.relativeFile === file
+      );
+      assert.ok(source, `${file} was not found`);
+      const forbidden: string[] = [];
+      function visit(node: ts.Node): void {
+        if (
+          ts.isImportDeclaration(node) &&
+          ts.isStringLiteral(node.moduleSpecifier) &&
+          (node.moduleSpecifier.text === "vscode" ||
+            node.moduleSpecifier.text.endsWith("VsCodeWorkspaceRoot"))
+        ) {
+          forbidden.push(node.moduleSpecifier.text);
+        }
+        ts.forEachChild(node, visit);
+      }
+      visit(source.sourceFile);
+      assert.deepStrictEqual(
+        forbidden,
+        [],
+        `${file} imports a VS Code boundary`
+      );
+    }
+  });
+
   test("holds the core VS Code adapter construction baseline", function () {
     assertShrinkOnlyCount(
       "Core VsCodeAdapter construction",
