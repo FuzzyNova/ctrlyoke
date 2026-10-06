@@ -49,13 +49,16 @@ alone does: `vite-plugin-static-copy`'s latest release (4.1.1) still depends on
 
 ---
 
-## A. Drop `vite-plugin-static-copy` — low risk, do first
+## A. Drop `vite-plugin-static-copy` — done 2026-10-05
 
-| Package                   | Change | prod/dev | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vite-plugin-static-copy` | remove | dev      | Used only in `src/ui/webview-react/vite.config.ts` to copy a fixed list of files at build time (dictionaries, `typo.js`, codicon CSS/TTF, generated custom-icon CSS, hosted icons). We use none of its watch/dev-server features. Replace with a small Vite plugin that copies the same targets in `closeBundle`/`generateBundle` using `fs.cp` plus Node 22's `fs.glob` (or `tinyglobby`, already in the tree). Preserve the `stripBase` layouts exactly — verify by diffing the webview `dist/` file list before and after. |
-
-Not blocked on anything and removes one of the two remaining `braces` paths.
+Replaced by the in-repo `src/ui/webview-react/build/staticCopyPlugin.ts`: a
+target is a file (copied into `dest` under its own name) or a directory (its
+contents copied recursively), so the old glob + `stripBase` options are gone. It
+copies in `writeBundle`, registers sources as watch files for
+`vite build --watch`, and serves the same paths from the `dev:webview` server.
+Verified: the non-bundle files in `out/ui/webview-react/` are byte-identical to
+the old plugin's output (14 files), and the dev server serves them. `npm audit`
+went 11 → 10; `chokidar@3` stays in the tree via Tailwind 3 until B lands.
 
 ---
 

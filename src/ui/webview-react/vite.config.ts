@@ -1,83 +1,44 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { viteStaticCopy } from "vite-plugin-static-copy";
 import path from "path";
+import { staticCopyPlugin } from "./build/staticCopyPlugin";
 import { BUILD_MODES, HOSTED_ICON_FILES } from "../../types/DashboardConstants";
 
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
-    // Copy static assets that React build needs
-    viteStaticCopy({
-      targets: [
-        // Copy dictionaries for Typo.js spell checking
-        // stripBase:2 strips "static/dictionaries/" while preserving the locale subfolder (en_US/).
-        {
-          src: "static/dictionaries/**/*",
-          dest: "dictionaries",
-          rename: { stripBase: 2 },
-        },
-        // Copy typo.js for spell checking from npm package (typo-js)
-        // stripBase:true strips the "typo-js/" directory prefix so the file lands at the output root as "typo.js".
-        {
-          src: "../../../node_modules/typo-js/typo.js",
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        // Copy codicon CSS from @vscode/codicons package
-        {
-          src: "../../../node_modules/@vscode/codicons/dist/codicon.css",
-          dest: "codicons",
-          rename: { stripBase: true },
-        },
-        // Copy codicon font file
-        {
-          src: "../../../node_modules/@vscode/codicons/dist/codicon.ttf",
-          dest: "codicons",
-          rename: { stripBase: true },
-        },
-        // Copy generated custom-icons.css (produced by generate-custom-icons script)
-        {
-          src: "static/custom-icons.css",
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        // Copy extension logo for browser-hosted dashboard background
-        {
-          src: "../../../images/ctrlyoke-icon.svg",
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        // Copy hosted dashboard favicon/PWA assets. Both APP_ICON_* and FAVICON_* are the
-        // same mark; FAVICON_* just renders with a transparent canvas (see ctrlyoke-icon.svg).
-        {
-          src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        {
-          src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        {
-          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_PNG}`,
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        {
-          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_SVG}`,
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        // 180x180 PNG served at /apple-touch-icon.png for iOS "Add to Home Screen"
-        {
-          src: `../../../images/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
-          dest: ".",
-          rename: { stripBase: true },
-        },
-      ],
-    }),
+    // Copy static assets that React build needs. A file lands in `dest` under its
+    // own name; a directory's contents are copied into `dest` with subfolders kept.
+    staticCopyPlugin([
+      // Dictionaries for Typo.js spell checking (keeps the en_US/ locale subfolder)
+      { src: "static/dictionaries", dest: "dictionaries" },
+      // typo.js for spell checking from npm package (typo-js)
+      { src: "../../../node_modules/typo-js/typo.js", dest: "." },
+      // Codicon CSS and font from @vscode/codicons package
+      {
+        src: "../../../node_modules/@vscode/codicons/dist/codicon.css",
+        dest: "codicons",
+      },
+      {
+        src: "../../../node_modules/@vscode/codicons/dist/codicon.ttf",
+        dest: "codicons",
+      },
+      // Generated custom-icons.css (produced by generate-custom-icons script)
+      { src: "static/custom-icons.css", dest: "." },
+      // Extension logo for browser-hosted dashboard background
+      { src: "../../../images/ctrlyoke-icon.svg", dest: "." },
+      // Hosted dashboard favicon/PWA assets. Both APP_ICON_* and FAVICON_* are the
+      // same mark; FAVICON_* just renders with a transparent canvas (see ctrlyoke-icon.svg).
+      { src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_PNG}`, dest: "." },
+      { src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_SVG}`, dest: "." },
+      { src: `../../../images/${HOSTED_ICON_FILES.FAVICON_PNG}`, dest: "." },
+      { src: `../../../images/${HOSTED_ICON_FILES.FAVICON_SVG}`, dest: "." },
+      // 180x180 PNG served at /apple-touch-icon.png for iOS "Add to Home Screen"
+      {
+        src: `../../../images/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
+        dest: ".",
+      },
+    ]),
   ],
 
   root: path.resolve(__dirname),
