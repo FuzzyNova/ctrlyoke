@@ -163,19 +163,40 @@ that do:
 
 ---
 
+## E. Vitest 4 → 5 + jest-dom 6 → 7 — done 2026-10-06
+
+`vitest` 5.0.3, `@vitest/coverage-v8` 5.0.3, `@testing-library/jest-dom` 7.0.1.
+No config or test changes were needed: all 3433 UI tests pass, and
+`test:ui:coverage` still reports on `store/`, `hooks/`, `utils/`, and
+`components/` despite vitest 5's stricter relative `coverage.include` matching.
+jest-dom 7's new required peer, `@testing-library/dom` 10, was already
+installed.
+
+- **Temporary type shim:** `src/ui/webview-react/test/jestDomVitest.d.ts`.
+  jest-dom 7 still augments Vitest 4's one-parameter `Assertion<T>`, which
+  doesn't merge with Vitest 5's `Assertion<R, T>`, so every jest-dom matcher
+  vanished from `expect()`'s type (1903 `tsc` errors, though they all ran fine).
+  The shim augments `Matchers<R, T>` instead. **Delete it** once
+  [testing-library/jest-dom#742](https://github.com/testing-library/jest-dom/pull/742)
+  (fixes [#738](https://github.com/testing-library/jest-dom/issues/738))
+  ships, then re-run `npm run typecheck:webview`.
+- Vitest 5 behaviour now in effect: `clearMocks` defaults to `true`;
+  unawaited `resolves`/`rejects` fail the test; `vi.mock()` outside module top
+  level throws; `-t` patterns match names joined with `' > '`.
+
+---
+
 ## Other majors available (no vulnerabilities — upgrade opportunistically)
 
 All of these are compatible with our `>=22.12.0` Node floor.
 
-| Package                          | Current → Latest | prod/dev | Risk     | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
-| -------------------------------- | ---------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vitest` + `@vitest/coverage-v8` | 4.1 → 5.0        | dev      | Moderate | Must move in lockstep. UI test runner only; run `npm run test:ui` and `npm run test:ui:coverage`.                                                                                                                                                                                                                                                                                                   |
-| `@testing-library/jest-dom`      | 6.9 → 7.0        | dev      | Low      | Node ≥22. Bump alongside vitest 5.                                                                                                                                                                                                                                                                                                                                                                  |
-| `chalk`                          | 5.6 → 6.0        | prod     | Low      | CLI output coloring. Node ≥22.                                                                                                                                                                                                                                                                                                                                                                      |
-| `gpt-tokenizer`                  | 3.4 → 4.0        | prod     | Low–Mod  | Token counting; check for API/encoding-name changes and verify counts in the existing tests.                                                                                                                                                                                                                                                                                                        |
-| `vscode-jsonrpc`                 | 8.2 → 9.0        | prod     | Moderate | Check every import site for protocol/API changes before bumping.                                                                                                                                                                                                                                                                                                                                    |
-| `typescript`                     | 5.9 → 6.0        | dev      | High     | Carried over. `@typescript-eslint` 8.71 supports `>=4.8.4 <6.1.0`, so **6.0 is unblocked**. Expect new strictness errors and deprecations — dedicated typecheck-cleanup pass.                                                                                                                                                                                                                       |
-| `typescript`                     | 6.0 → 7.0        | dev      | Blocked  | TS 7 is the native (Go) compiler and is now `latest` on npm. Blocked on `@typescript-eslint` support, and on our use of the TS compiler JS API in `scripts/find-dead-methods.mjs`, `scripts/find-hardcoded-strings.mjs`, `scripts/check-a11y-names.mjs`, `src/test/unit/SourceAuditCounters.test.ts`, and `src/ui/webview-react/test/components/settings/settingsCatalog.test.ts`. Go to 6.0 first. |
+| Package          | Current → Latest | prod/dev | Risk     | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------- | ---------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chalk`          | 5.6 → 6.0        | prod     | Low      | CLI output coloring. Node ≥22.                                                                                                                                                                                                                                                                                                                                                                      |
+| `gpt-tokenizer`  | 3.4 → 4.0        | prod     | Low–Mod  | Token counting; check for API/encoding-name changes and verify counts in the existing tests.                                                                                                                                                                                                                                                                                                        |
+| `vscode-jsonrpc` | 8.2 → 9.0        | prod     | Moderate | Check every import site for protocol/API changes before bumping.                                                                                                                                                                                                                                                                                                                                    |
+| `typescript`     | 5.9 → 6.0        | dev      | High     | Carried over. `@typescript-eslint` 8.71 supports `>=4.8.4 <6.1.0`, so **6.0 is unblocked**. Expect new strictness errors and deprecations — dedicated typecheck-cleanup pass.                                                                                                                                                                                                                       |
+| `typescript`     | 6.0 → 7.0        | dev      | Blocked  | TS 7 is the native (Go) compiler and is now `latest` on npm. Blocked on `@typescript-eslint` support, and on our use of the TS compiler JS API in `scripts/find-dead-methods.mjs`, `scripts/find-hardcoded-strings.mjs`, `scripts/check-a11y-names.mjs`, `src/test/unit/SourceAuditCounters.test.ts`, and `src/ui/webview-react/test/components/settings/settingsCatalog.test.ts`. Go to 6.0 first. |
 
 ---
 
@@ -196,7 +217,8 @@ All of these are compatible with our `>=22.12.0` Node floor.
    pending. `npm audit` now shows only the KaTeX finding.
 4. ~~**D** — mermaid 12~~ — done and visually inspected. **C** waits on
    mermaid#8216.
-5. **vitest 5 + jest-dom 7** together; then `chalk`, `gpt-tokenizer`,
-   `vscode-jsonrpc` one at a time.
+5. ~~**E** — vitest 5 + jest-dom 7~~ — done; drop the type shim when
+   jest-dom#742 ships. Next: `chalk`, `gpt-tokenizer`, `vscode-jsonrpc` one at
+   a time.
 6. **TypeScript 6.0** dedicated pass. TypeScript 7 stays parked until the
    tooling supports it.
