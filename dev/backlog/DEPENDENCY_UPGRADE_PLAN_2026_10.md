@@ -234,6 +234,30 @@ lint is clean, and `npm test` passes (all three suites).
 
 ---
 
+## H. `landing/` (separate package) — done 2026-10-06
+
+`npm audit` in `landing/` went 12 → 0 (1 critical, 8 high, 3 moderate). Most
+of them cleared by moving `astro` 7.1.1 → 7.3.6 (the critical AVIF-optimization
+RCE plus base-path bypass) and refreshing the lockfile (`sharp`, `devalue`,
+`svgo`, `smol-toml`, `js-yaml`, `nanoid`, `postcss`, …). Everything is on latest.
+
+- **`postcss-selector-parser` override.** `@tailwindcss/typography` 0.5.20 (the
+  latest release) pins `6.0.10` exactly. `landing/package.json` overrides it to
+  `^7.1.6`, scoped to typography. The built CSS is identical apart from two
+  unrelated Tailwind/Lightning CSS changes. Drop the override once typography
+  ships a release that depends on 7.x.
+- **`astro check` gate.** `@astrojs/check` and `typescript` 6 are new dev deps,
+  and `build` now runs `astro check && astro build`. That gives landing a
+  typecheck in CI, which it never had.
+- `allowScripts: { esbuild: true }` mirrors the root package, which silences
+  npm 11's unapproved-install-script warning. `"private": true` was added.
+- The five legal/trust pages share `src/layouts/LegalPage.astro` instead of
+  five copies of the same shell. Generated HTML is unchanged.
+- `astro` 7.3's `undici` needs Node `>=22.19.0`. CI's `node-version: "22"` gets
+  that. An older local Node 22 only prints an `EBADENGINE` warning.
+
+---
+
 ## Other majors available (no vulnerabilities — upgrade opportunistically)
 
 All of these are compatible with our `>=22.12.0` Node floor.
@@ -267,3 +291,4 @@ All of these are compatible with our `>=22.12.0` Node floor.
    the root `tsconfig.json` moved to `module: node20`.
 7. ~~**G** — TypeScript 6.0~~ — done. TypeScript 7 stays parked until the
    tooling supports it.
+8. ~~**H** — `landing/` audit and upgrades~~ — done; `npm audit` clean.
