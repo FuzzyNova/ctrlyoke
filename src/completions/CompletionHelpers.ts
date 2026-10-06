@@ -21,13 +21,19 @@ import {
   buildFileReferenceValue,
   buildSelectionReference,
   buildSelectionReferenceValue,
-  buildSymbolReference,
-  buildSymbolReferenceValue,
   normalizeReferencePath,
 } from "./ContextReferenceBuilder";
-import { SYMBOL_KIND_ICONS } from "../types/SymbolKindConstants";
 import { outputCaptureCache } from "./OutputCaptureCache";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
+import {
+  CompletionCore,
+  mapSymbolKindToReferenceKind as mapLspSymbolKindToReferenceKind,
+} from "./CompletionCore";
+import { VsCodeSymbolIndex } from "../platform/VsCodeSymbolIndex";
+import { VsCodeEditorContextSource } from "../platform/VsCodeEditorContextSource";
+import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
+import { getVsCodeNamedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot";
+import { LspSymbolKind } from "./SymbolIndex";
 import {
   buildFuzzyIndex,
   fuzzyMatches,
@@ -100,6 +106,45 @@ export interface PlainCompletionItem {
   icon?: string;
 }
 
+let completionCore: CompletionCore | undefined;
+
+export function getCompletionCore(): CompletionCore {
+  if (!completionCore) {
+    completionCore = new CompletionCore({
+      isMultiRoot: () => isMultiRootWorkspace(),
+      getFiles: async () => {
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        const results: string[] = [];
+        for (const folder of folders) {
+          let paths: string[];
+          try {
+            paths = await getGitTrackedFiles(folder.uri.fsPath);
+          } catch (error) {
+            Log.warn(
+              `[Completions] git ls-files failed for ${folder.name}, falling back to workspace walk:`,
+              error
+            );
+            const walked = await walkSearchFiles(
+              folder.uri.fsPath,
+              Date.now(),
+              100_000,
+              10_000
+            );
+            paths = walked.files;
+          }
+          for (const file of paths) {
+            results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
+          }
+        }
+        return results;
+      },
+      symbols: new VsCodeSymbolIndex(),
+      editorContext: new VsCodeEditorContextSource(),
+    });
+  }
+  return completionCore;
+}
+
 /** Build value-free completion items for managed or declared secret names. */
 export function getSecretCompletions(
   secretNames: readonly string[],
@@ -118,89 +163,14 @@ export function getSecretCompletions(
 }
 
 /**
- * Map VS Code SymbolKind to CompletionItemKind
- * SymbolKind and CompletionItemKind are different enums with different values
- */
-function mapSymbolKindToCompletionKind(
-  symbolKind: vscode.SymbolKind
-): vscode.CompletionItemKind {
-  switch (symbolKind) {
-    case vscode.SymbolKind.File:
-      return vscode.CompletionItemKind.File;
-    case vscode.SymbolKind.Module:
-      return vscode.CompletionItemKind.Module;
-    case vscode.SymbolKind.Namespace:
-      return vscode.CompletionItemKind.Module;
-    case vscode.SymbolKind.Package:
-      return vscode.CompletionItemKind.Module;
-    case vscode.SymbolKind.Class:
-      return vscode.CompletionItemKind.Class;
-    case vscode.SymbolKind.Method:
-      return vscode.CompletionItemKind.Method;
-    case vscode.SymbolKind.Property:
-      return vscode.CompletionItemKind.Property;
-    case vscode.SymbolKind.Field:
-      return vscode.CompletionItemKind.Field;
-    case vscode.SymbolKind.Constructor:
-      return vscode.CompletionItemKind.Constructor;
-    case vscode.SymbolKind.Enum:
-      return vscode.CompletionItemKind.Enum;
-    case vscode.SymbolKind.Interface:
-      return vscode.CompletionItemKind.Interface;
-    case vscode.SymbolKind.Function:
-      return vscode.CompletionItemKind.Function;
-    case vscode.SymbolKind.Variable:
-      return vscode.CompletionItemKind.Variable;
-    case vscode.SymbolKind.Constant:
-      return vscode.CompletionItemKind.Constant;
-    case vscode.SymbolKind.String:
-      return vscode.CompletionItemKind.Value;
-    case vscode.SymbolKind.Number:
-      return vscode.CompletionItemKind.Value;
-    case vscode.SymbolKind.Boolean:
-      return vscode.CompletionItemKind.Value;
-    case vscode.SymbolKind.Array:
-      return vscode.CompletionItemKind.Value;
-    case vscode.SymbolKind.Object:
-      return vscode.CompletionItemKind.Value;
-    case vscode.SymbolKind.Key:
-      return vscode.CompletionItemKind.Property;
-    case vscode.SymbolKind.Null:
-      return vscode.CompletionItemKind.Value;
-    case vscode.SymbolKind.EnumMember:
-      return vscode.CompletionItemKind.EnumMember;
-    case vscode.SymbolKind.Struct:
-      return vscode.CompletionItemKind.Struct;
-    case vscode.SymbolKind.Event:
-      return vscode.CompletionItemKind.Event;
-    case vscode.SymbolKind.Operator:
-      return vscode.CompletionItemKind.Operator;
-    case vscode.SymbolKind.TypeParameter:
-      return vscode.CompletionItemKind.TypeParameter;
-    default:
-      return vscode.CompletionItemKind.Reference;
-  }
-}
-
-/**
- * Convert a vscode.SymbolKind enum value to the persisted kind name used in a
+ * Convert an LSP SymbolKind to the persisted kind name used in a
  * #sym.<kind>: reference. Unknown enum values intentionally remain unkinded so
  * a newer VS Code kind cannot produce a token the renderer does not recognize.
  */
 export function mapSymbolKindToReferenceKind(
-  symbolKind: vscode.SymbolKind
+  symbolKind: LspSymbolKind
 ): string | undefined {
-  const enumName = vscode.SymbolKind[symbolKind];
-  if (typeof enumName !== "string") {
-    return undefined;
-  }
-
-  const kindName = enumName
-    .replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
-    .replace(/^-/, "");
-  return Object.prototype.hasOwnProperty.call(SYMBOL_KIND_ICONS, kindName)
-    ? kindName
-    : undefined;
+  return mapLspSymbolKindToReferenceKind(symbolKind);
 }
 
 /**
@@ -222,34 +192,17 @@ export function mapSymbolKindToReferenceKind(
  * icon forever.
  */
 export async function findSymbolKindForReference(
-  uri: vscode.Uri,
+  viewerPath: string,
   symbolName: string,
   startLine: number,
   endLine: number
-): Promise<vscode.CompletionItemKind | undefined> {
-  try {
-    const documentMatch = await findSymbolKindViaDocumentSymbols(
-      uri,
-      symbolName,
-      startLine,
-      endLine
-    );
-    if (documentMatch !== undefined) {
-      return documentMatch;
-    }
-    return await findSymbolKindViaWorkspaceSymbols(
-      uri,
-      symbolName,
-      startLine,
-      endLine
-    );
-  } catch (error) {
-    Log.error(
-      "[Completions] Failed to resolve symbol kind for reference:",
-      error
-    );
-    return undefined;
-  }
+): Promise<number | undefined> {
+  return getCompletionCore().findSymbolKindForReference(
+    viewerPath,
+    symbolName,
+    startLine,
+    endLine
+  );
 }
 
 /** Resolve the kind for a dashboard reference without exposing VS Code URIs to its host-neutral service. */
@@ -259,62 +212,12 @@ export function findSymbolKindForReferencePath(
   startLine: number,
   endLine: number
 ): Promise<vscode.CompletionItemKind | undefined> {
-  return findSymbolKindForReference(
+  const roots = getVsCodeNamedWorkspaceRoots();
+  const relative = vscode.workspace.asRelativePath(
     vscode.Uri.file(filePath),
-    symbolName,
-    startLine,
-    endLine
+    roots.length > 1
   );
-}
-
-async function findSymbolKindViaDocumentSymbols(
-  uri: vscode.Uri,
-  symbolName: string,
-  startLine: number,
-  endLine: number
-): Promise<vscode.CompletionItemKind | undefined> {
-  const symbols = (await vscode.commands.executeCommand(
-    "vscode.executeDocumentSymbolProvider",
-    uri
-  )) as vscode.DocumentSymbol[] | undefined;
-  if (!symbols?.length) {
-    return undefined;
-  }
-
-  const match = findDocumentSymbolByNameAndRange(
-    symbols,
-    symbolName,
-    startLine,
-    endLine
-  );
-  return match ? mapSymbolKindToCompletionKind(match.kind) : undefined;
-}
-
-// Mirrors getSymbolCompletions()'s own provider call (same command, same
-// query-by-name) so the range comparison below is apples-to-apples with
-// whatever range that function used to build the original reference.
-async function findSymbolKindViaWorkspaceSymbols(
-  uri: vscode.Uri,
-  symbolName: string,
-  startLine: number,
-  endLine: number
-): Promise<vscode.CompletionItemKind | undefined> {
-  const symbols = (await vscode.commands.executeCommand(
-    "vscode.executeWorkspaceSymbolProvider",
-    symbolName
-  )) as vscode.SymbolInformation[] | undefined;
-  if (!symbols?.length) {
-    return undefined;
-  }
-
-  const match = findWorkspaceSymbolByUriNameAndRange(
-    symbols,
-    uri,
-    symbolName,
-    startLine,
-    endLine
-  );
-  return match ? mapSymbolKindToCompletionKind(match.kind) : undefined;
+  return findSymbolKindForReference(relative, symbolName, startLine, endLine);
 }
 
 // Exported for unit testing only; findSymbolKindForReference is the real entry point.
@@ -452,6 +355,7 @@ export function clearFilesCache(): void {
   filesCache = [];
   filesCacheTimestamp = 0;
   pathIndexCache = undefined;
+  completionCore?.clearCache();
 }
 
 /**
@@ -979,158 +883,6 @@ export async function getPathSuggestions(
  * caps navto at 256 results and a one-letter query would fill that cap with
  * noise.
  */
-const SYMBOL_CANDIDATE_PREFIX_LENGTH = 3;
-
-/**
- * Get all workspace symbols matching a query from VS Code's workspace symbol
- * providers.
- *
- * @param query Search query, passed to every provider verbatim (each
- *   provider decides what matches; VS Code itself filters nothing)
- * @returns Array of symbol information from all file types, in provider order
- */
-async function getWorkspaceSymbols(
-  query: string
-): Promise<vscode.SymbolInformation[]> {
-  try {
-    const allSymbols = (await vscode.commands.executeCommand(
-      "vscode.executeWorkspaceSymbolProvider",
-      query
-    )) as vscode.SymbolInformation[] | undefined;
-
-    return allSymbols ?? [];
-  } catch (error) {
-    Log.warn(
-      "[CompletionHelpers] Failed to get workspace symbols; returning no symbols:",
-      error
-    );
-    return [];
-  }
-}
-
-/**
- * Workspace symbols for the full query plus its short prefix (see
- * SYMBOL_CANDIDATE_PREFIX_LENGTH), de-duplicated, with `matchedFullQuery`
- * marking the ones the provider itself returned for the full query.
- */
-async function getWorkspaceSymbolCandidates(
-  filterText: string
-): Promise<
-  Array<{ symbol: vscode.SymbolInformation; matchedFullQuery: boolean }>
-> {
-  const prefix = filterText.slice(0, SYMBOL_CANDIDATE_PREFIX_LENGTH);
-  const [fullMatches, prefixMatches] = await Promise.all([
-    getWorkspaceSymbols(filterText),
-    prefix === filterText ? [] : getWorkspaceSymbols(prefix),
-  ]);
-
-  const candidates = new Map<
-    string,
-    { symbol: vscode.SymbolInformation; matchedFullQuery: boolean }
-  >();
-  const add = (
-    symbol: vscode.SymbolInformation,
-    matchedFullQuery: boolean
-  ): void => {
-    const { uri, range } = symbol.location;
-    const key = `${uri.toString()}::${symbol.name}::${symbol.kind}::${range.start.line}:${range.start.character}`;
-    if (!candidates.has(key)) {
-      candidates.set(key, { symbol, matchedFullQuery });
-    }
-  };
-  fullMatches.forEach((symbol) => add(symbol, true));
-  prefixMatches.forEach((symbol) => add(symbol, false));
-  return [...candidates.values()];
-}
-
-/**
- * Get symbol completions for # trigger
- * Shows workspace symbols from all file types, fuzzy-ranked against the query
- */
-async function getSymbolCompletions(
-  filterText: string,
-  maxResults: number = 500
-): Promise<PlainCompletionItem[]> {
-  const items: PlainCompletionItem[] = [];
-
-  try {
-    const multiRoot = isMultiRootWorkspace();
-    const candidates = (await getWorkspaceSymbolCandidates(filterText)).map(
-      (candidate) => ({
-        ...candidate,
-        relativePath: vscode.workspace.asRelativePath(
-          candidate.symbol.location.uri,
-          multiRoot
-        ),
-      })
-    );
-    let ranked = candidates;
-    if (filterText) {
-      const fuzzyRanked = rankByFuzzyQuery(filterText, candidates, [
-        (candidate) => candidate.symbol.name,
-        (candidate) => candidate.relativePath,
-      ]);
-      // Keep anything the provider matched on the full query that fuzzysort
-      // can't see (e.g. a `Container.member` query), after the ranked matches.
-      const rankedSet = new Set(fuzzyRanked);
-      ranked = [
-        ...fuzzyRanked,
-        ...candidates.filter(
-          (candidate) => candidate.matchedFullQuery && !rankedSet.has(candidate)
-        ),
-      ];
-    }
-
-    for (const [rank, { symbol, relativePath }] of ranked
-      .slice(0, maxResults)
-      .entries()) {
-      const startLine = symbol.location.range.start.line + 1;
-      const endLine = symbol.location.range.end.line + 1;
-      const symbolKindName = vscode.SymbolKind[symbol.kind];
-      const referenceKind = mapSymbolKindToReferenceKind(symbol.kind);
-
-      // Insert #sym:path/to/file.ts:SymbolName:123-145
-      // Quote paths with spaces so FileReferenceParser can handle them correctly
-      const insertText = buildSymbolReferenceValue(
-        relativePath,
-        symbol.name,
-        startLine,
-        endLine,
-        referenceKind
-      );
-
-      // Show symbol kind and location
-      // Map SymbolKind to CompletionItemKind for proper icon/color
-      const completionKind = mapSymbolKindToCompletionKind(symbol.kind);
-
-      const item: PlainCompletionItem = {
-        label: symbol.name,
-        kind: completionKind,
-        insertText: insertText,
-        detail: `${symbolKindName} in ${relativePath}:${startLine}-${endLine}`,
-        documentation:
-          `**Symbol Reference**\n\n` +
-          `Type: ${symbolKindName}\n\n` +
-          `Location: \`${relativePath}:${startLine}-${endLine}\`\n\n` +
-          `Insert: \`${buildSymbolReference(relativePath, symbol.name, startLine, endLine, referenceKind)}\`\n\n` +
-          `_ctrlyoke will attach this symbol's recorded line range._`,
-        sortText: filterText ? formatRankSortKey(rank) : symbol.name,
-        filterText: `${symbol.name} ${relativePath}`,
-        ...(filterText ? { rank } : {}),
-      };
-
-      items.push(item);
-    }
-  } catch (error) {
-    Log.error("[Completions] Failed to get symbol completions:", error);
-  }
-
-  return items;
-}
-
-/**
- * Get completions for all editor selections (from all visible editors)
- */
 function getSelectionCompletions(): PlainCompletionItem[] {
   const items: PlainCompletionItem[] = [];
 
@@ -1248,25 +1000,9 @@ export function getHashSelectionCompletions(): PlainCompletionItem[] {
 export async function getHashCompletions(
   filterText: string
 ): Promise<PlainCompletionItem[]> {
-  const items: PlainCompletionItem[] = [];
-
-  // 1. Add selection completions FIRST (bubbled to top with sortText).
-  // Filtered here because a ranked response is shown unfiltered by the
-  // webview (see PlainCompletionItem.rank).
-  items.push(
-    ...getHashSelectionCompletions().filter((item) =>
-      fuzzyMatches(item.filterText ?? item.label, filterText)
-    )
-  );
-
-  // 2. Add workspace symbols
-  const symbolItems = await getSymbolCompletions(filterText, 500);
-  symbolItems.forEach((item) => {
-    item.sortText = `1_${item.sortText || item.label}`;
-  });
-  items.push(...symbolItems);
-
-  return items;
+  return (await getCompletionCore().getHashCompletions(
+    filterText
+  )) as PlainCompletionItem[];
 }
 
 // ============================================================================

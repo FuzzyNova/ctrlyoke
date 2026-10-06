@@ -315,7 +315,7 @@ suite("CompletionHelpers", () => {
 
     assert.strictEqual(symbolKinds.length, 26);
     for (const symbolKind of symbolKinds) {
-      const referenceKind = mapSymbolKindToReferenceKind(symbolKind);
+      const referenceKind = mapSymbolKindToReferenceKind(symbolKind + 1);
       assert.ok(referenceKind, `missing kind name for ${symbolKind}`);
       assert.ok(
         Object.prototype.hasOwnProperty.call(SYMBOL_KIND_ICONS, referenceKind),

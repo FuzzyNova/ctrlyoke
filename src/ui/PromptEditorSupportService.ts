@@ -1,7 +1,10 @@
 import * as path from "path";
 import * as fs from "fs";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import type { DashboardHostActions, FileWatcherFactory } from "../core/HostPorts";
+import type {
+  DashboardHostActions,
+  FileWatcherFactory,
+} from "../core/HostPorts";
 import {
   ATOMIC_REFERENCE_KINDS,
   DASHBOARD_ACTION_RESULT_STATUSES,
@@ -18,6 +21,7 @@ import {
   PROMPT_FILE_RESOLUTION_STATUSES,
   REFERENCE_PATH_BASES,
   COMPLETION_TRIGGERS,
+  WORKSPACE_ENTRY_KINDS,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
@@ -61,18 +65,11 @@ import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../utils/ProjectStatePaths";
 import { Log } from "../utils/Log";
 import {
-  getFileCompletions,
-  getHashCompletions,
-  getHashSelectionCompletions,
-  getGitChangeCompletions,
-  getPromptFileCompletions,
-  getPriorContextCompletions,
-  getSecretCompletions,
-  getCtrlYokeSlashCompletions,
-  findSymbolKindForReferencePath,
-  getPathSuggestions,
   type PlainCompletionItem,
-} from "../completions/CompletionHelpers";
+  type CompletionCore,
+} from "../completions/CompletionCore";
+import { getCtrlYokeSlashCompletions } from "../completions/SlashTokenCompletionHelpers";
+import { toViewerPath } from "../platform/WorkspaceViewerPath";
 import { savePendingOutputSnapshot } from "./OutputSnapshotService";
 import {
   getScriptCommandCompletions,
@@ -232,7 +229,8 @@ export class PromptEditorSupportService {
     >,
     private readonly getNamedRoots: () => readonly ResolverWorkspaceFolder[] = () => [],
     private readonly getTrustedRoots: () => readonly string[] = () => [],
-    private readonly fileWatcherFactory?: FileWatcherFactory
+    private readonly fileWatcherFactory?: FileWatcherFactory,
+    private readonly completionCore?: CompletionCore
   ) {}
 
   private getTrustedWorkspaceRoots(): string[] {
@@ -274,7 +272,8 @@ export class PromptEditorSupportService {
       // workspace-symbol query resolves. Marked `partial` so the editor knows
       // a second, authoritative response is still coming.
       if (trigger === "#") {
-        const selectionItems = getHashSelectionCompletions();
+        const selectionItems =
+          this.completionCore?.getHashSelectionCompletions() ?? [];
         if (selectionItems.length > 0) {
           this.emitCompletionsResponse(
             ctx,
@@ -284,7 +283,10 @@ export class PromptEditorSupportService {
             true
           );
         }
-        const fullItems = await getHashCompletions(prefix.substring(1));
+        const fullItems =
+          (await this.completionCore?.getHashCompletions(
+            prefix.substring(1)
+          )) ?? [];
         this.emitCompletionsResponse(ctx, fullItems, position, seq, false);
         return;
       }
@@ -472,22 +474,33 @@ export class PromptEditorSupportService {
     if (trigger === "/") {
       return await getCtrlYokeSlashCompletions(this.getWorkspaceRoot(), prefix);
     } else if (trigger === "@") {
-      return await getFileCompletions(prefix.substring(1)); // Remove @
+      return this.completionCore?.getFileCompletions(prefix.substring(1)) ?? []; // Remove @
     } else if (trigger === "#") {
-      return await getHashCompletions(prefix.substring(1)); // Remove #
+      return this.completionCore?.getHashCompletions(prefix.substring(1)) ?? []; // Remove #
     } else if (trigger === "~") {
       const workspaceRoot = this.getWorkspaceRoot();
-      return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
+      return (
+        this.completionCore?.getGitChangeCompletions(
+          workspaceRoot,
+          prefix.substring(1)
+        ) ?? []
+      ); // Remove ~
     } else if (trigger === "$") {
-      return getPriorContextCompletions(prefix.substring(1)); // Remove $
+      return (
+        this.completionCore?.getPriorContextCompletions(prefix.substring(1)) ??
+        []
+      ); // Remove $
     } else if (trigger === "!") {
       if (!this.getWorkspaceRoot() || !this.secretRegistry) {
         return [];
       }
       const names = await this.secretRegistry.getCompletionNames();
-      return getSecretCompletions(names, prefix.substring(1));
+      return (
+        this.completionCore?.getSecretCompletions(names, prefix.substring(1)) ??
+        []
+      );
     } else if (trigger === COMPLETION_TRIGGERS.PATH) {
-      return await getPromptFileCompletions(prefix);
+      return this.completionCore?.getPromptFileCompletions(prefix) ?? [];
     }
 
     Log.warn(`[Dashboard] Unknown trigger: "${trigger}"`);
@@ -1048,12 +1061,20 @@ export class PromptEditorSupportService {
           // Best-effort: the reference text itself carries no kind, only a
           // live completion item does. A miss here (renamed/moved symbol,
           // no provider) just leaves the icon at its generic fallback.
-          const symbolKind = await findSymbolKindForReferencePath(
-            pathValidation.resolvedPath,
-            reference.symbolName,
-            startLine,
-            endLine
-          );
+          const workspaceRoot = this.getWorkspaceRoot();
+          const viewerPath = workspaceRoot
+            ? toViewerPath(pathValidation.resolvedPath, {
+                primaryRoot: workspaceRoot,
+                namedRoots: this.getNamedRoots(),
+              })
+            : pathValidation.resolvedPath;
+          const symbolKind =
+            await this.completionCore?.findSymbolKindForReference(
+              viewerPath,
+              reference.symbolName,
+              startLine,
+              endLine
+            );
           return symbolKind === undefined
             ? { exists: true }
             : { exists: true, symbolKind };
@@ -1089,10 +1110,13 @@ export class PromptEditorSupportService {
       (reference.type === ATOMIC_REFERENCE_KINDS.FILE ||
         reference.type === ATOMIC_REFERENCE_KINDS.DIRECTORY)
     ) {
-      const suggestions = await getPathSuggestions(
-        reference.path,
-        reference.type
-      );
+      const suggestions =
+        (await this.completionCore?.getPathSuggestions(
+          reference.path,
+          reference.type === ATOMIC_REFERENCE_KINDS.DIRECTORY
+            ? WORKSPACE_ENTRY_KINDS.DIRECTORY
+            : WORKSPACE_ENTRY_KINDS.FILE
+        )) ?? [];
       if (suggestions.length > 0) {
         return { exists: false, message, suggestions };
       }

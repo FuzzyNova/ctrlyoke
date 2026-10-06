@@ -18,6 +18,7 @@ export const INTERACTIVE_TERMINAL_MODES = {
   EMBEDDED_PTY: "embedded-pty",
   INHERIT_STDIO: "inherit-stdio",
 } as const;
+
 export type InteractiveTerminalMode =
   (typeof INTERACTIVE_TERMINAL_MODES)[keyof typeof INTERACTIVE_TERMINAL_MODES];
 
@@ -75,10 +76,39 @@ export const WORKFLOW_FILE_FORMATS = {
 
 /** Completion kinds shared by host-neutral helpers and dashboard clients. */
 export const COMPLETION_ITEM_KINDS = {
-  REFERENCE: 18,
-  KEYWORD: 14,
+  TEXT: 0,
+  METHOD: 1,
+  FUNCTION: 2,
+  CONSTRUCTOR: 3,
+  FIELD: 4,
+  VARIABLE: 5,
+  CLASS: 6,
+  INTERFACE: 7,
+  SYMBOL_MODULE: 8,
   MODULE: 9,
+  PROPERTY: 9,
+  UNIT: 10,
+  VALUE: 11,
+  ENUM: 12,
+  SNIPPET: 14,
+  COLOR: 15,
+  FILE: 16,
+  REFERENCE: 18,
+  GENERIC_REFERENCE: 17,
+  KEYWORD: 14,
+  FOLDER: 18,
+  ENUM_MEMBER: 19,
+  CONSTANT: 20,
+  STRUCT: 21,
+  EVENT: 22,
+  OPERATOR: 23,
+  TYPE_PARAMETER: 24,
+  USER: 25,
+  ISSUE: 26,
 } as const;
+
+export type ProjectCompletionItemKind =
+  (typeof COMPLETION_ITEM_KINDS)[keyof typeof COMPLETION_ITEM_KINDS];
 
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];

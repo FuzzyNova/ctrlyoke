@@ -12,6 +12,8 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import { pathsEqual } from "../../utils/PathCasing";
+import { CompletionCore } from "../../completions/CompletionCore";
+import { symbolCompletionGolden } from "../fixtures/SymbolCompletionGolden";
 
 suite("PromptEditorSupportService", () => {
   let workspaceRoot: string;
@@ -71,6 +73,60 @@ suite("PromptEditorSupportService", () => {
       pathsEqual(validation.resolvedPath, promptFile),
       `expected ${validation.resolvedPath} to resolve to ${promptFile}`
     );
+  });
+
+  test("returns current editor selections in the panel's partial # response", async () => {
+    const core = new CompletionCore({
+      getFiles: async () => [],
+      isMultiRoot: () => false,
+      symbols: {
+        workspaceSymbols: async () => [symbolCompletionGolden],
+        documentSymbols: async () => [symbolCompletionGolden],
+      },
+      editorContext: {
+        getSelections: () => [
+          {
+            viewerPath: "src/Widget.ts",
+            startLine: 4,
+            endLine: 8,
+            text: "class Widget {}",
+            isOutput: false,
+          },
+        ],
+        getVisibleOutputChannels: () => [],
+      },
+    });
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      () => [],
+      undefined,
+      core
+    );
+    const responses: Array<{
+      partial: boolean;
+      items: Array<{ insertText: string }>;
+    }> = [];
+    await service.handleCompletionRequest(
+      createWebviewClientContext("test-client", (message) => {
+        if (message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE)
+          responses.push(message as (typeof responses)[number]);
+      }),
+      "#",
+      "#",
+      1,
+      7
+    );
+    assert.strictEqual(responses[0]?.partial, true);
+    assert.strictEqual(
+      responses[0]?.items[0]?.insertText,
+      "selection:src/Widget.ts:4-8"
+    );
+    assert.strictEqual(responses[1]?.partial, false);
   });
 
   test("reports zero-byte prompt files as empty too", async () => {

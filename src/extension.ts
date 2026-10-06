@@ -7,7 +7,10 @@ import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
-import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
+import {
+  getCompletionCore,
+  initializeCompletionHelpers,
+} from "./completions/CompletionHelpers";
 import { ContextMenuReferenceCommands } from "./completions/ContextMenuReferenceCommands";
 import { CtrlYokeWebviewProvider } from "./ui/CtrlYokeWebviewProvider";
 import {
@@ -388,6 +391,7 @@ export async function activate(context: vscode.ExtensionContext) {
             : undefined,
         getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
         fileWatcherFactory,
+        completionCore: getCompletionCore(),
         getNamedRoots: () => {
           const roots = getVsCodeNamedWorkspaceRoots();
           if (roots.length === 0) return [];

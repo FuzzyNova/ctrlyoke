@@ -697,6 +697,18 @@ suite("SourceAuditCounters", () => {
     });
   }
 
+  test("PromptEditorSupportService never loads vscode at runtime", function () {
+    this.timeout(60_000);
+    assert.deepStrictEqual(
+      collectVscodeLoadsReachableFrom(
+        repoRoot,
+        "src/ui/PromptEditorSupportService.ts"
+      ),
+      [],
+      "PromptEditorSupportService reaches code that loads vscode. Keep completions behind injected host ports."
+    );
+  });
+
   test("holds the orchestrator direct VS Code boundary baselines", function () {
     assertShrinkOnlyCount(
       "Orchestrator direct vscode import",

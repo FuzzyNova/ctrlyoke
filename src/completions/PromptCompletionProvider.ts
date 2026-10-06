@@ -5,14 +5,8 @@ import {
 } from "../utils/ModelConstants";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
-import {
-  getFileCompletions,
-  getHashCompletions,
-  getGitChangeCompletions,
-  getPriorContextCompletions,
-  getSecretCompletions,
-  toVSCodeCompletionItem,
-} from "./CompletionHelpers";
+import { toVSCodeCompletionItem } from "./CompletionHelpers";
+import { getCompletionCore } from "./CompletionHelpers";
 import type { SecretRegistryService } from "../ui/SecretRegistryService";
 import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
@@ -149,7 +143,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument
   ): Promise<vscode.CompletionList> {
     // Use shared helper to get plain completions
-    const plainItems = await getFileCompletions(filterText);
+    const plainItems = await getCompletionCore().getFileCompletions(filterText);
 
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("@");
@@ -176,7 +170,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument
   ): Promise<vscode.CompletionList> {
     // Use shared helper to get plain completions
-    const plainItems = await getHashCompletions(filterText);
+    const plainItems = await getCompletionCore().getHashCompletions(filterText);
 
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("#");
@@ -204,7 +198,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : "";
-    const plainItems = await getGitChangeCompletions(workspaceRoot, filterText);
+    const plainItems = await getCompletionCore().getGitChangeCompletions(
+      workspaceRoot,
+      filterText
+    );
 
     const range = this.calculateCompletionRange("~");
     const items = plainItems.map((item) =>
@@ -218,7 +215,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     filterText: string,
     document: vscode.TextDocument
   ): vscode.CompletionList {
-    const plainItems = getPriorContextCompletions(filterText);
+    const plainItems =
+      getCompletionCore().getPriorContextCompletions(filterText);
     const range = this.calculateCompletionRange("$");
     const items = plainItems.map((item) =>
       toVSCodeCompletionItem(item, "$", range, document)
@@ -237,7 +235,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     }
 
     const names = await registry.getCompletionNames();
-    const plainItems = getSecretCompletions(names, filterText);
+    const plainItems = getCompletionCore().getSecretCompletions(
+      names,
+      filterText
+    );
     const range = this.calculateCompletionRange("!");
     const items = plainItems.map((item) =>
       toVSCodeCompletionItem(item, "!", range, document)
