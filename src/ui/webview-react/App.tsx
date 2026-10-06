@@ -42,6 +42,7 @@ import {
   type CenterSplitHandles,
   type EditorOverflowDetail,
 } from "@utils/editorAutoExpand";
+import { SIDEBAR_LAYOUT_PANEL_IDS } from "@utils/sidebarLayout";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
@@ -854,16 +855,15 @@ function App() {
             collapsedSize={PANEL_COLLAPSED_SIZE_SIDEBAR}
             minSize={PANEL_MIN_SIZE_SIDEBAR}
             maxSize={PANEL_MAX_SIZE_SIDEBAR}
-            id="prompts-panel"
+            id={SIDEBAR_LAYOUT_PANEL_IDS.steps}
             onResize={() => {
               if (!desktop.horizontalInitializedRef.current || !uiLayoutReady)
                 return;
               const isCollapsed =
                 desktop.stepsRef.current?.isCollapsed() ?? false;
               if (!isCollapsed) {
-                const sizePx = desktop.stepsRef.current?.getSize().inPixels;
-                if (sizePx != null) {
-                  const px = Math.round(sizePx);
+                const px = desktop.getSidePanelLayoutPx(desktop.stepsRef);
+                if (px != null) {
                   if (desktop.lastDesktopSizes.current.steps !== px) {
                     desktop.lastDesktopSizes.current.steps = px;
                     useUiStore.getState().setLastDesktopSizes({ steps: px });
@@ -889,7 +889,10 @@ function App() {
             panel or maxSize tricks, both of which break imperative expand().
             When at least one panel is open the Group is active and the user can
             drag the separator freely. */}
-          <Panel id="center-content" minSize={PANEL_MIN_SIZE_CENTER_COLUMN}>
+          <Panel
+            id={SIDEBAR_LAYOUT_PANEL_IDS.center}
+            minSize={PANEL_MIN_SIZE_CENTER_COLUMN}
+          >
             {outputCollapsed && editorCollapsed ? (
               <CenterContentArea />
             ) : (
@@ -1024,16 +1027,15 @@ function App() {
             collapsedSize={PANEL_COLLAPSED_SIZE_SIDEBAR}
             minSize={PANEL_MIN_SIZE_SIDEBAR}
             maxSize={PANEL_MAX_SIZE_SIDEBAR}
-            id="settings-panel"
+            id={SIDEBAR_LAYOUT_PANEL_IDS.settings}
             onResize={() => {
               if (!desktop.horizontalInitializedRef.current || !uiLayoutReady)
                 return;
               const isCollapsed =
                 desktop.settingsRef.current?.isCollapsed() ?? false;
               if (!isCollapsed) {
-                const sizePx = desktop.settingsRef.current?.getSize().inPixels;
-                if (sizePx != null) {
-                  const px = Math.round(sizePx);
+                const px = desktop.getSidePanelLayoutPx(desktop.settingsRef);
+                if (px != null) {
                   if (desktop.lastDesktopSizes.current.settings !== px) {
                     desktop.lastDesktopSizes.current.settings = px;
                     useUiStore.getState().setLastDesktopSizes({

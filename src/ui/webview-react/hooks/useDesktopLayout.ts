@@ -5,7 +5,12 @@
  * layout (prompts | center[output/editor] | settings). Isolated from mobile
  * concerns so App.tsx can focus on rendering and cross-layout transitions.
  */
-import { useEffect, useLayoutEffect, useRef } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type MutableRefObject,
+} from "react";
 import type {
   PanelImperativeHandle,
   GroupImperativeHandle,
@@ -17,12 +22,13 @@ import { useUiStore } from "@store/uiStore";
 import { centerPanelMountDefaults } from "@utils/panelSync";
 import { CENTER_PANEL_IDS } from "@utils/editorAutoExpand";
 import {
+  BOTH_SIDEBARS_MIN_WIDTH_PX,
+  buildSidebarLayout,
+} from "@utils/sidebarLayout";
+import {
   PANEL_COLLAPSED_SIZE_DEFAULT_PX,
-  PANEL_COLLAPSED_SIZE_SIDEBAR,
   PANEL_MIN_SIZE_CENTER,
-  PANEL_MIN_SIZE_CENTER_COLUMN,
   PANEL_MIN_SIZE_EDITOR_PX,
-  PANEL_MIN_SIZE_SIDEBAR,
 } from "../constants";
 
 interface DesktopLayoutParams {
@@ -155,97 +161,64 @@ export function useDesktopLayout({
     return groupElement?.getBoundingClientRect().width ?? 0;
   };
 
-  // Pixel width required to display both side panels (prompts + settings) and the
-  // center column simultaneously, each at its minimum size. Below this threshold
-  // the two side panels are mutually exclusive: expanding one collapses the
-  // other. Without this, buildHorizontalLayout() is forced to request
-  // sub-minimum widths for the side panels, which react-resizable-panels cannot
-  // satisfy — it clamps each side back to its 192px minSize, over-constrains the
-  // group, and strands the just-expanded panel at its collapsed width.
-  const bothSidebarsMinWidthPx =
-    2 * Number.parseInt(PANEL_MIN_SIZE_SIDEBAR, 10) +
-    Number.parseInt(PANEL_MIN_SIZE_CENTER_COLUMN, 10);
-
+  // Below BOTH_SIDEBARS_MIN_WIDTH_PX the two side panels are mutually
+  // exclusive: expanding one collapses the other, because no layout can give
+  // both their 192px minimum beside the center column (see buildSidebarLayout).
   const canFitBothSidebars = () => {
     const totalPx = getHorizontalGroupTotalPx();
     // Treat an unmeasured group (totalPx === 0) as "fits" so we never collapse a
     // panel based on a missing measurement.
-    return totalPx === 0 || totalPx >= bothSidebarsMinWidthPx;
+    return totalPx === 0 || totalPx >= BOTH_SIDEBARS_MIN_WIDTH_PX;
   };
 
-  const getHorizontalCollapsedPct = (totalPx: number) =>
-    Number(
-      (
-        (Number.parseInt(PANEL_COLLAPSED_SIZE_SIDEBAR, 10) / totalPx) *
-        100
-      ).toFixed(3)
-    );
+  /**
+   * Width a side panel is settling at, from the Group's target layout rather
+   * than the DOM. `getSize().inPixels` reads `offsetWidth`, which lags the
+   * layout for the whole collapse/expand transition — and the panel's
+   * ResizeObserver-driven `onResize` fires on every frame of it, so persisting
+   * that reading stored a mid-animation width whenever a toggle was
+   * interrupted.
+   */
+  const getSidePanelLayoutPx = (
+    panelRef: MutableRefObject<PanelImperativeHandle | null>
+  ) => {
+    const pct = panelRef.current?.getSize().asPercentage;
+    const totalPx = getHorizontalGroupTotalPx();
+    if (pct == null || totalPx <= 0) return null;
+    return Math.round((pct / 100) * totalPx);
+  };
 
-  const getHorizontalCenterMinPct = (totalPx: number) =>
-    Number(
-      (
-        (Number.parseInt(PANEL_MIN_SIZE_CENTER_COLUMN, 10) / totalPx) *
-        100
-      ).toFixed(3)
-    );
+  const buildHorizontalLayout = (totalPx: number) =>
+    buildSidebarLayout({
+      totalPx,
+      stepsCollapsed: promptsCollapsed,
+      settingsCollapsed,
+      stepsStoredPx: lastDesktopSizes.current.steps,
+      settingsStoredPx: lastDesktopSizes.current.settings,
+    });
 
-  const buildHorizontalLayout = (totalPx: number) => {
-    const collapsedPct = getHorizontalCollapsedPct(totalPx);
-    const centerMinPct = getHorizontalCenterMinPct(totalPx);
-    const maxSidePct = Math.max(0, 100 - centerMinPct);
-
-    const stepsStoredPct = Number(
-      ((lastDesktopSizes.current.steps / totalPx) * 100).toFixed(3)
-    );
-    const settingsStoredPct = Number(
-      ((lastDesktopSizes.current.settings / totalPx) * 100).toFixed(3)
-    );
-
-    let stepsPct = promptsCollapsed ? collapsedPct : stepsStoredPct;
-    let settingsPct = settingsCollapsed ? collapsedPct : settingsStoredPct;
-    const maxExpandedStepsPct = promptsCollapsed
-      ? collapsedPct
-      : Math.max(0, maxSidePct - settingsPct);
-    const maxExpandedSettingsPct = settingsCollapsed
-      ? collapsedPct
-      : Math.max(0, maxSidePct - stepsPct);
-
-    if (!promptsCollapsed) {
-      stepsPct = Math.min(stepsPct, maxExpandedStepsPct);
-    }
-    if (!settingsCollapsed) {
-      settingsPct = Math.min(settingsPct, maxExpandedSettingsPct);
-    }
-
-    const totalSidePct = stepsPct + settingsPct;
-    if (totalSidePct > maxSidePct && totalSidePct > 0) {
-      const availableExpandedPct =
-        maxSidePct -
-        (promptsCollapsed ? collapsedPct : 0) -
-        (settingsCollapsed ? collapsedPct : 0);
-      const expandedTotalPct =
-        (promptsCollapsed ? 0 : stepsPct) +
-        (settingsCollapsed ? 0 : settingsPct);
-      const scale =
-        expandedTotalPct > 0
-          ? Math.max(0, availableExpandedPct) / expandedTotalPct
-          : 1;
-
-      if (!promptsCollapsed) {
-        stepsPct = Number((stepsPct * scale).toFixed(3));
-      }
-      if (!settingsCollapsed) {
-        settingsPct = Number((settingsPct * scale).toFixed(3));
-      }
-    }
-
-    const centerPct = Number((100 - stepsPct - settingsPct).toFixed(3));
-
-    return {
-      "prompts-panel": stepsPct,
-      "center-content": centerPct,
-      "settings-panel": settingsPct,
-    };
+  // A store-expanded panel the library left collapsed is the "content shows
+  // but the panel stays narrow" failure: the panel never changes size, so its
+  // onResize never fires to reconcile the store. Log it with full context.
+  const warnIfExpandRejected = (
+    reason: string,
+    layout: Record<string, number>,
+    totalPx: number
+  ) => {
+    const rejected = [
+      !promptsCollapsed && stepsRef.current?.isCollapsed() ? "steps" : null,
+      !settingsCollapsed && settingsRef.current?.isCollapsed()
+        ? "settings"
+        : null,
+    ].filter(Boolean);
+    if (rejected.length === 0) return;
+    WebviewLog.warn("[LAYOUT] side panel stayed collapsed after expand", {
+      reason,
+      rejected,
+      layout,
+      totalPx,
+      snapshot: getDesktopPanelSnapshot(),
+    });
   };
 
   const applyHorizontalLayoutSync = (reason: string) => {
@@ -269,6 +242,7 @@ export function useDesktopLayout({
 
     try {
       horizontalGroupRef.current.setLayout(layout);
+      warnIfExpandRejected(reason, layout, totalPx);
     } catch (error) {
       WebviewLog.error("[LAYOUT] setHorizontalLayout() failed", {
         reason,
@@ -624,5 +598,6 @@ export function useDesktopLayout({
     wasBothCollapsed,
     // Size tracking
     lastDesktopSizes,
+    getSidePanelLayoutPx,
   };
 }
