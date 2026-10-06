@@ -1,5 +1,9 @@
 # Dependency Upgrade Plan
 
+> **Superseded (2026-10-05):** Batches 1 and 2 shipped. Batch 3 (`typescript`,
+> `tailwindcss`) was never done and is carried over, with newer majors, to
+> `dev/backlog/DEPENDENCY_UPGRADE_PLAN_2026_10.md`.
+
 Tracking doc for major-version dependency bumps. Created 2026-06-21 after an
 `npm audit` pass (commit dropped 21 → 7 findings; remaining are dev-only with no
 non-breaking fix). Batch 1 below was completed on 2026-06-21. Minor/patch bumps are not tracked here — just run

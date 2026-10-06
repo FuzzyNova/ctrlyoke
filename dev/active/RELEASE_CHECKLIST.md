@@ -570,7 +570,7 @@ Confirm:
 - [ ] `node_modules/node-pty/` included.
 - [ ] `.ctrlyoke/`, `.agents/`, local logs, prompts, test logs, dev-only files **not** included.
 - [ ] Generated VSIX version matches `package.json` (currently `0.1.0`).
-- [ ] `npm audit` — no new production advisories since the last check (dev-only findings tracked in `DEPENDENCY_UPGRADE_PLAN.md` are fine to carry).
+- [ ] `npm audit` — no new production advisories since the last check (dev-only findings tracked in `dev/backlog/DEPENDENCY_UPGRADE_PLAN_2026_10.md` are fine to carry).
 
 **Also still open from the original plan, unrelated to licensing:**
 
