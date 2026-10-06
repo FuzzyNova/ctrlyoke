@@ -46,6 +46,7 @@ import {
   VSCODE_URI_SCHEMES,
   PROMPT_FILE_LANGUAGE_IDS,
   type WorkspaceFileTreeEntryKind,
+  COMPLETION_ITEM_KINDS,
 } from "../types/DashboardConstants";
 
 export {
@@ -64,7 +65,7 @@ export {
  */
 export interface PlainCompletionItem {
   label: string;
-  kind: vscode.CompletionItemKind;
+  kind: number;
   insertText: string;
   // Set only on output-capture completion items; the picker resolves it via SAVE_OUTPUT_SNAPSHOT.
   captureId?: string;
@@ -1486,13 +1487,29 @@ export function getPriorContextCompletions(
 /**
  * Convert plain completion item to VS Code completion item
  */
+function toVSCodeCompletionItemKind(kind: number): vscode.CompletionItemKind {
+  switch (kind) {
+    case COMPLETION_ITEM_KINDS.REFERENCE:
+      return vscode.CompletionItemKind.Reference;
+    case COMPLETION_ITEM_KINDS.KEYWORD:
+      return vscode.CompletionItemKind.Keyword;
+    case COMPLETION_ITEM_KINDS.MODULE:
+      return vscode.CompletionItemKind.Module;
+    default:
+      return kind as vscode.CompletionItemKind;
+  }
+}
+
 export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
   _triggerChar: "@" | "#" | "~" | "$" | "/" | "!",
   range?: vscode.Range,
   document?: vscode.TextDocument
 ): vscode.CompletionItem {
-  const vscodeItem = new vscode.CompletionItem(item.label, item.kind);
+  const vscodeItem = new vscode.CompletionItem(
+    item.label,
+    toVSCodeCompletionItemKind(item.kind)
+  );
   const insertText = item.captureId
     ? CAPTURING_OUTPUT_PLACEHOLDER
     : item.insertText;

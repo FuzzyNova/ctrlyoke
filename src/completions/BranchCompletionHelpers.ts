@@ -1,6 +1,6 @@
-import * as vscode from "vscode";
 import type { PlainCompletionItem } from "./CompletionHelpers";
 import { listLocalBranches } from "../utils/GitUtils";
+import { COMPLETION_ITEM_KINDS } from "../types/DashboardConstants";
 
 const BRANCH_CACHE_DURATION_MS = 10_000;
 
@@ -49,7 +49,7 @@ export async function getBranchCompletions(
     .filter((branch) => branch.toLocaleLowerCase().startsWith(prefix))
     .map((branch) => ({
       label: branch,
-      kind: vscode.CompletionItemKind.Reference,
+      kind: COMPLETION_ITEM_KINDS.REFERENCE,
       insertText: branch,
       detail: "Existing branch",
     }));

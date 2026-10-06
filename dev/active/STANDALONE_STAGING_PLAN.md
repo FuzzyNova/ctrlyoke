@@ -129,7 +129,7 @@ names the guard or test that proves it, not just the code change.
     `HostedServerControl`, and `PromptEditorSupportService`'s own direct
     `vscode`/`VsCodeWorkspaceRoot` uses (it still reaches `vscode` through
     `CompletionHelpers` until Stage 5b).
-  - **5a:** split `FileSystemUtils`, add `COMPLETION_ITEM_KINDS`, extract the
+  - **5a done:** split `FileSystemUtils`, add `COMPLETION_ITEM_KINDS`, extract the
     shared search walker, and move `ScriptCommandCompletionHelpers` onto
     injected roots and the watcher factory.
   - **5b:** `CompletionCore`, the `SymbolIndex` and `EditorContextSource`

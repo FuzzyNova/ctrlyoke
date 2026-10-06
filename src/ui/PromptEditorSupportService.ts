@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import type { DashboardHostActions } from "../core/HostPorts";
+import type { DashboardHostActions, FileWatcherFactory } from "../core/HostPorts";
 import {
   ATOMIC_REFERENCE_KINDS,
   DASHBOARD_ACTION_RESULT_STATUSES,
@@ -231,7 +231,8 @@ export class PromptEditorSupportService {
       "openWorkspaceTarget" | "openContentPreview"
     >,
     private readonly getNamedRoots: () => readonly ResolverWorkspaceFolder[] = () => [],
-    private readonly getTrustedRoots: () => readonly string[] = () => []
+    private readonly getTrustedRoots: () => readonly string[] = () => [],
+    private readonly fileWatcherFactory?: FileWatcherFactory
   ) {}
 
   private getTrustedWorkspaceRoots(): string[] {
@@ -303,12 +304,25 @@ export class PromptEditorSupportService {
     seq: number
   ): Promise<void> {
     try {
+      const namedRoots = this.getNamedRoots();
+      const fallbackWorkspaceRoot =
+        namedRoots.length === 0 ? this.getWorkspaceRoot() : undefined;
       const workspaceRoot =
-        this.getNamedRoots()[0]?.fsPath ?? this.getWorkspaceRoot();
+        namedRoots.length > 0
+          ? namedRoots
+          : fallbackWorkspaceRoot
+            ? [
+                {
+                  name: path.basename(fallbackWorkspaceRoot),
+                  fsPath: fallbackWorkspaceRoot,
+                },
+              ]
+            : [];
       const items = await getScriptCommandCompletions(
         workspaceRoot,
         text,
-        position
+        position,
+        this.fileWatcherFactory
       );
       const from = parseScriptCompletionContext(
         text,

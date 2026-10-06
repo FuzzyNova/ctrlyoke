@@ -298,7 +298,8 @@ export class WebviewMessageRouter {
       secretRegistry,
       this.hostDependencies.actions,
       this.hostDependencies.getNamedRoots,
-      this.hostDependencies.getTrustedRoots ?? (() => [])
+      this.hostDependencies.getTrustedRoots ?? (() => []),
+      this.hostDependencies.fileWatcherFactory
     );
     this.harnessFiles = new HarnessFileMessageService(
       () => this.getWorkspaceRoot(),
@@ -2970,4 +2971,5 @@ export interface WebviewRouterHostDependencies {
   readonly getTrustedRoots?: () => readonly string[];
   readonly getWorkspaceRoot?: () => string | undefined;
   readonly serverControl?: import("../core/HostPorts").HostedServerControl;
+  readonly fileWatcherFactory?: import("../core/HostPorts").FileWatcherFactory;
 }

@@ -239,7 +239,7 @@ baselines in the same commit.
 | `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | **0** (`vscodeImportersReachableFromOrchestrator`)                             |
 | Direct `vscode` imports in `WorkflowOrchestrator.ts` / `WorkflowInstance.ts` |            1 / 0 | 0 / 0                                                                          |
 | `new VsCodeAdapter` outside `extension.ts`                                   |                6 | **0** (`coreVsCodeAdapterConstructions`)                                       |
-| Production `createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`    |                7 | 1 (`ScriptCommandCompletionHelpers`, Stage 5a)                                 |
+| Production `createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`    |                7 | **0** (all seven production watcher sites use `FileWatcherFactory`)             |
 | `src/cli.ts` / `src/mcp-server.ts` runtime graph loads `vscode`              |              yes | **no**, enforced statically. The esbuild shim alias is still present (Phase 8) |
 
 Phase 3 removed the last `vscode` import reachable from the orchestrator.
@@ -306,10 +306,11 @@ Node path needs it.
 | `src/ui/WorkflowSerializer.ts`                                                 | No host API imports. Explicit workspace roots, `KeyValueStore`, and `DashboardHostActions`; picker requests carry filters/default paths.                                                                                                                          | Done / 4a      | VS Code retains native pickers, last export/browse directories, and editor opening; browser clients retain their own picker.                                                                                                                                                                                        |
 | `src/ui/PromptEditorSupportService.ts`                                         | Reaches `vscode` transitively through `CompletionHelpers`; no direct host imports remain.                                                                                                                                                                                                                | Done / 4b      | Injected roots and `openWorkspaceTarget`/`openContentPreview`; the completion-core extraction remains Stage 5.                                                                                                                                       |
 | `src/ui/HarnessFileMessageService.ts`                                          | No host API imports. Directory reveal goes through optional `DashboardHostActions.revealInOs`.                                                                                                                                                                      | Done / 4a      | When reveal is unsupported, the scoped reply carries the directory path and the browser opens it in the workspace viewer.                                                                                                                                                                                          |
-| `src/utils/FileSystemUtils.ts`                                                 | `saveIfDirty` reads `workspace.textDocuments`. Every `readJsonFile` user therefore imports a `vscode` file.                                                                                                                                                        | 6 / 5          | Split it. Neutral JSON/file helpers stay. `saveIfDirty` moves to a VS Code-only module.                                                                                                                                                                                                                              |
+| `src/utils/FileSystemUtils.ts`                                                 | `saveIfDirty` read `workspace.textDocuments`. Every `readJsonFile` user therefore imported a `vscode` file.                                                                                                                                                         | Done / 5a      | `saveIfDirty` now lives in `src/platform/VsCodeDocuments.ts`; neutral JSON/file helpers remain.                                                                                                                                                                                                                      |
 | `src/completions/CompletionHelpers.ts`                                         | `findFiles` ×2, `workspaceFolders`, `asRelativePath` ×4, `visibleTextEditors` ×2, symbol-provider `executeCommand` ×3, `CompletionItem`/`SymbolKind`/`RelativePattern`, `isMultiRootWorkspace`.                                                                    | 6 / 5          | Node completion core plus the `SymbolIndex` port (Phase 6 item 4).                                                                                                                                                                                                                                                   |
-| `src/completions/BranchCompletionHelpers.ts`, `SlashTokenCompletionHelpers.ts` | only `vscode.CompletionItemKind` (1 and 3 uses)                                                                                                                                                                                                                    | 6 / 5          | A project-owned completion-kind constant, mapped to VS Code in the providers.                                                                                                                                                                                                                                        |
-| `src/completions/ScriptCommandCompletionHelpers.ts`                            | `workspaceFolders`, `createFileSystemWatcher("**/package.json")` (`:424`)                                                                                                                                                                                          | 6 / 5          | Injected roots and `FileWatcherFactory`.                                                                                                                                                                                                                                                                             |
+| `src/completions/BranchCompletionHelpers.ts`, `SlashTokenCompletionHelpers.ts` | only `vscode.CompletionItemKind` (1 and 3 uses)                                                                                                                                                                                                                    | Done / 5a      | Use project-owned `COMPLETION_ITEM_KINDS`; VS Code completion conversion maps those kinds in one place.                                                                                                                                                                                                               |
+| `src/completions/ScriptCommandCompletionHelpers.ts`                            | `workspaceFolders`, `createFileSystemWatcher("**/package.json")` (`:424`)                                                                                                                                                                                          | Done / 5a      | Receives named roots and `FileWatcherFactory`; contains no `vscode` import.                                                                                                                                                                                                                                          |
+| `src/server/HostedWorkspaceViewerService.ts`                                   | Owned the bounded non-git `walkSearchFiles` fallback used by viewer search.                                                                                                                                                                                        | Done / 5a      | The viewer and completion core share `src/utils/WorkspaceSearchFileWalker.ts`; the viewer search regression tests remain unchanged.                                                                                                                                                                                   |
 
 ### Resolved since the original audit
 
@@ -439,8 +440,9 @@ interface FileWatcherFactory {
     each caller would have to re-derive rename handling.
 - Callers receive normalized absolute string paths. Watcher ownership and
   disposal are explicit.
-- One production site still calls `vscode.workspace.createFileSystemWatcher`
-  directly: `ScriptCommandCompletionHelpers` ×1 (Phase 6 / Stage 5a).
+- No production site outside `VsCodeFileWatcher.ts` calls
+  `vscode.workspace.createFileSystemWatcher` directly; all seven production
+  watcher sites use `FileWatcherFactory`.
 - With no factory (`ctrlyoke run`), `PromptFileWatcher` polls. That stays the
   CLI's behavior. The standalone server injects the chokidar factory.
 
@@ -905,8 +907,8 @@ Don't add a parallel `WebSocketMessageRouter`, and don't copy handlers into a
 
 ### Phase 6 — Decouple utilities and completions (Staging Stage 5)
 
-1. Split `FileSystemUtils`. Neutral JSON/file helpers stay in the shared file;
-   `saveIfDirty` moves to `src/platform/VsCodeDocuments.ts`.
+1. **Done — Stage 5a.** Split `FileSystemUtils`. Neutral JSON/file helpers stay
+   in the shared file; `saveIfDirty` moves to `src/platform/VsCodeDocuments.ts`.
 2. ~~Replace `workspace.fs` in attachment builders.~~ **Done 2026-10-04.**
 3. ~~Pass roots into discovery utilities, agent discovery, and skill
    discovery.~~ **Done.** All three take explicit roots.
@@ -916,12 +918,14 @@ Don't add a parallel `WebSocketMessageRouter`, and don't copy handlers into a
      with `getGitTrackedFiles` (`GitUtils.ts`, `git ls-files --cached
 --others --exclude-standard`), and falls back to a walker outside git. Extract
      `walkSearchFiles` from `HostedWorkspaceViewerService` into a shared
-     utility, so the viewer search and completions use one implementation. **Don't add
+     utility, so the viewer search and completions use one implementation.
+     **Done — Stage 5a:** extracted as `WorkspaceSearchFileWalker.ts`. **Don't add
      `fast-glob` or `ignore`**: git already implements gitignore semantics,
      and the extracted walker is the fallback.
-   - Return project-owned completion items using a `COMPLETION_ITEM_KINDS`
-     constant. `BranchCompletionHelpers`, `SlashTokenCompletionHelpers`, and
-     `ScriptCommandCompletionHelpers` use it too.
+   - **Done — Stage 5a.** Use project-owned completion kinds from
+     `COMPLETION_ITEM_KINDS` in `BranchCompletionHelpers` and
+     `SlashTokenCompletionHelpers`; the VS Code conversion maps them in one
+     place.
    - The VS Code providers map items to `vscode.CompletionItem`.
    - **Live editor state goes through an optional `EditorContextSource`
      port**, not through the providers:
@@ -952,8 +956,8 @@ Don't add a parallel `WebSocketMessageRouter`, and don't copy handlers into a
    - Golden test: `#sym:` insert text and icons are unchanged in VS Code.
 5. ~~Split model registry sources.~~ **Done 2026-10-04.**
 6. ~~Refactor `Log` to host-provided sinks.~~ **Done 2026-10-04.**
-7. Give `ScriptCommandCompletionHelpers`' `**/package.json` watcher the
-   `FileWatcherFactory` and injected roots.
+7. **Done — Stage 5a.** Give `ScriptCommandCompletionHelpers`' `**/package.json`
+   watcher the `FileWatcherFactory` and injected roots.
 
 ### Phase 7 — Standalone application/server composition (Staging Stage 7a)
 
@@ -1072,7 +1076,8 @@ None remain open. All of them were resolved by 2026-10-06:
   load.
 - `vscodeImportersReachableFromOrchestrator` and
   `coreVsCodeAdapterConstructions` are 0 (Stage 2).
-- All seven watcher sites use `FileWatcherFactory`, and a contract suite
+- All seven production watcher sites use `FileWatcherFactory` (zero direct
+  `vscode.workspace.createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`), and a contract suite
   passes against both the VS Code and chokidar implementations (Stages 1
   and 5).
 - `PlatformAdapter` has no `isVsCode`, `openTextFile`, or `focusDashboard`;

@@ -67,7 +67,7 @@ import {
 } from "./utils/TelemetryEvents";
 import { Log } from "./utils/Log";
 import { secretRedactionService } from "./utils/SecretRedactionService";
-import { saveIfDirty } from "./utils/FileSystemUtils";
+import { saveIfDirty } from "./platform/VsCodeDocuments";
 import { getErrorMessage } from "./utils/ErrorUtils";
 import { findWorkflowFilesInWorkspace } from "./utils/WorkflowFileDiscovery";
 import { WorkspaceInitializer } from "./core/orchestration/WorkspaceInitializer";
@@ -369,6 +369,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register React webview provider (Phase 4 - unified provider)
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
     const dashboardHostActions = new VsCodeDashboardHostActions();
+    const fileWatcherFactory = new VsCodeFileWatcherFactory();
     webviewProvider = new CtrlYokeWebviewProvider(
       context,
       new TemplateManager(
@@ -386,6 +387,7 @@ export async function activate(context: vscode.ExtensionContext) {
             ? getVsCodeWorkspaceRoot()
             : undefined,
         getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
+        fileWatcherFactory,
         getNamedRoots: () => {
           const roots = getVsCodeNamedWorkspaceRoots();
           if (roots.length === 0) return [];
@@ -504,7 +506,7 @@ export async function activate(context: vscode.ExtensionContext) {
       dashboardProvider: webviewProvider,
       userFeedbackSink,
       runnerHostIdentity,
-      fileWatcherFactory: new VsCodeFileWatcherFactory(),
+      fileWatcherFactory,
       statusBarSink,
       disposableRegistry: {
         add: (disposable) => context.subscriptions.push(disposable),

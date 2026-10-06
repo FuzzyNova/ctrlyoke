@@ -73,6 +73,13 @@ export const WORKFLOW_FILE_FORMATS = {
   JSON: "json",
 } as const;
 
+/** Completion kinds shared by host-neutral helpers and dashboard clients. */
+export const COMPLETION_ITEM_KINDS = {
+  REFERENCE: 18,
+  KEYWORD: 14,
+  MODULE: 9,
+} as const;
+
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
