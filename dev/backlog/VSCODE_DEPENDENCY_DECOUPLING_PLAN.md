@@ -143,6 +143,65 @@ For the first standalone release, one process owns one repository/root:
 - Add automated dependency boundaries so future shared code cannot reintroduce
   `vscode`.
 
+## VS Code Behavior Is Preserved
+
+**This plan changes where code lives, not what the extension does.** When it
+is complete, the VS Code extension must behave exactly as it does today. Every
+VS Code-native feature keeps a VS Code implementation; only the host-neutral
+core loses its `vscode` imports. Specifically:
+
+- **Every `package.json` menu and command contribution stays registered and
+  working.** This includes:
+  - `ctrlyoke.runSubmenu`: run, load, queue, and queue-next, from the
+    Explorer, editor title, and editor tab context menus.
+  - The "Add … to ctrlyoke" items in the Explorer, editor, line-number,
+    Output, SCM resource/folder, and Timeline context menus.
+  - `scm/title` generate/cancel commit message.
+
+  Their files (`extension.ts`, `ContextMenuReferenceCommands.ts`,
+  `NativeOutputCaptureCommand.ts`, `ScmCommitCommand.ts`,
+  `CtrlyokeCliCommands.ts`) are in the boundary table and keep their native
+  code. Stage 3 extracts the run/pause/resume/stop command bodies so the
+  router and these commands share one implementation. The commands themselves
+  stay registered.
+
+- **Context-menu inserts still reach the dashboard.**
+  `ContextMenuReferenceCommands` pushes file, directory, selection, symbol,
+  SCM, timeline, and output references into the prompt editor through
+  `ContextMenuPromptEditorInsertSink`. `CtrlYokeWebviewProvider` implements
+  that sink today. After Stage 6 the provider keeps implementing it and
+  forwards to `DashboardApplication`, including the pending-insert queue that
+  waits for panel READY.
+- **Opening things from the panel stays native.** These all keep calling the
+  same VS Code APIs as today:
+  - file links and the current prompt file;
+  - export previews;
+  - commit and ref diffs (`OPEN_GIT_CHANGE`);
+  - worktree diffs and worktree folders;
+  - reveal in OS, the Output panel, and the MCP gallery;
+  - the offline-license file picker.
+
+  They are reached through the VS Code implementation of
+  `DashboardHostActions` instead of an `executeCommand` string inside the
+  router. The native OS file picker in the panel is a permanent carve-out.
+
+- **Editor-derived completions keep working in the panel:**
+  - `#selection:` and current-selection completions, plus output-channel
+    references, through `VsCodeEditorContextSource` (Phase 6 item 4).
+  - `#sym:` symbols through `VsCodeSymbolIndex`.
+  - VS Code editor IntelliSense, links, and property completions in
+    `.ctrlyoke.yaml`/`.prompt.md` files, which stay in the extension-only
+    providers.
+- **These keep their `src/platform/VsCode*` or boundary implementations:**
+  the status bar, native completion notifications, workspace trust,
+  multi-root folders, the VS Code output channel, telemetry, and secret
+  storage.
+
+Each stage is guarded by the existing extension-host test suite plus that
+stage's golden and regression tests. A stage that changes visible VS Code
+behavior is a bug, not a trade-off. The manual check for every Track A stage
+is to exercise the menus above in a dev host (`npm run dev:host:start`).
+
 ## Non-Goals
 
 - Removing VS Code from the extension entry point or VS Code-native features.
@@ -845,8 +904,23 @@ Don't add a parallel `WebSocketMessageRouter`, and don't copy handlers into a
    - Return project-owned completion items using a `COMPLETION_ITEM_KINDS`
      constant. `BranchCompletionHelpers`, `SlashTokenCompletionHelpers`, and
      `ScriptCommandCompletionHelpers` use it too.
-   - The VS Code providers map items to `vscode.CompletionItem` and add
-     active-editor selections (`visibleTextEditors`).
+   - The VS Code providers map items to `vscode.CompletionItem`.
+   - **Live editor state goes through an optional `EditorContextSource`
+     port**, not through the providers:
+     - `getSelections()` feeds `#selection:` completions and the `#`
+       `partial` response.
+     - `getVisibleOutputChannels()` feeds output-channel `@` completions.
+     - Both read `vscode.window.visibleTextEditors` today, in
+       `CompletionHelpers.ts` `getSelectionCompletions` and
+       `getOutputChannelCompletions`.
+     - The **dashboard** path (`PromptEditorSupportService` →
+       `getHashSelectionCompletions`) uses them as well as the VS Code editor
+       providers. So the port is injected into the completion core, and the
+       VS Code composition root supplies `VsCodeEditorContextSource`.
+     - Standalone supplies none, so its selection and output-channel lists
+       are empty.
+     - Golden test: the panel's `#` partial response still lists the current
+       VS Code selections.
    - **Symbols go through the `SymbolIndex` port** from
      `WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`:
      - Implement `VsCodeSymbolIndex` here, with the one-time 0-based
