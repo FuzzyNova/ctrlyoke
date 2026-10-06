@@ -719,6 +719,9 @@ export function createMessageHandlers(
   };
 
   handlers[MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT] = (message) => {
+    if (message.error) {
+      notifyUser(message.error, USER_FEEDBACK_SEVERITY.ERROR);
+    }
     if (message.requestId) {
       useSettingsStore.getState().setWorktreeActionResult(message.requestId, {
         success: Boolean(message.success),

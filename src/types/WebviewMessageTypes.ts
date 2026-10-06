@@ -1607,9 +1607,10 @@ export interface SyncNamedWorktreeMessage {
 /** Extension -> Webview: round-trip result for a worktree management action, sync, or refresh request. */
 export interface WorktreeManagementActionResultMessage {
   type: typeof MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT;
-  requestId: string;
+  requestId?: string;
   success: boolean;
   message: string;
+  error?: string;
 }
 
 /** Extension -> Webview: outcome of a host-native dashboard action. */

@@ -115,6 +115,114 @@ class FakeLicenseActionService implements LicenseActionService {
 }
 
 suite("WebviewMessageRouter — dashboard host actions", () => {
+  test("routes run controls directly to the orchestrator", async () => {
+    const calls: string[] = [];
+    const orchestrator = {
+      executeLoadedPromptFile: async () => void calls.push("run"),
+      pause: async () => void calls.push("pause"),
+      resume: async () => void calls.push("resume"),
+      stop: async () => void calls.push("stop"),
+    };
+    const router = buildRouter(orchestrator);
+
+    await router.route({ type: MESSAGE_TYPES.RUN });
+    await router.route({ type: MESSAGE_TYPES.PAUSE });
+    await router.route({ type: MESSAGE_TYPES.RESUME });
+    await router.route({ type: MESSAGE_TYPES.STOP });
+
+    assert.deepStrictEqual(calls, ["run", "pause", "resume", "stop"]);
+  });
+
+  test("calls the orchestrator for worktree merge and scopes failures to the initiator", async () => {
+    const mergeAddress = { kind: "run", workflowKey: "wf", runRef: "run" };
+    const initiatorReplies: unknown[] = [];
+    const otherClientReplies: unknown[] = [];
+    let mergedAddress: unknown;
+    const router = buildRouter(
+      {
+        executeLoadedPromptFile: async () => {},
+        mergeManagedWorktreeAtRun: async (address: unknown) => {
+          mergedAddress = address;
+          throw new Error("merge conflict");
+        },
+      },
+      undefined,
+      undefined,
+      { openWorkspaceTarget: async () => ({ status: "unsupported" }) }
+    );
+
+    await router.route(
+      { type: MESSAGE_TYPES.MERGE_WORKTREE, address: mergeAddress },
+      {
+        clientTag: "browser:initiator",
+        postMessage: (reply) => initiatorReplies.push(reply),
+      }
+    );
+    await router.route(
+      { type: MESSAGE_TYPES.RUN },
+      {
+        clientTag: "browser:other",
+        postMessage: (reply) => otherClientReplies.push(reply),
+      }
+    );
+
+    assert.strictEqual(mergedAddress, mergeAddress);
+    assert.deepStrictEqual(initiatorReplies, [
+      {
+        type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+        action: "merge worktree",
+        error: "merge conflict",
+      },
+    ]);
+    assert.deepStrictEqual(otherClientReplies, []);
+  });
+
+  test("returns worktree management failures only to the initiating client", async () => {
+    const initiatorReplies: unknown[] = [];
+    const otherClientReplies: unknown[] = [];
+    const router = buildRouter(
+      {
+        executeLoadedPromptFile: async () => {},
+        applyWorktreeManagementAction: async () => {
+          throw new Error("worktree is locked");
+        },
+      },
+      undefined,
+      undefined,
+      { openWorkspaceTarget: async () => ({ status: "unsupported" }) }
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION,
+        action: "remove",
+        worktreePath: "worktree",
+      },
+      {
+        clientTag: "browser:initiator",
+        postMessage: (reply) => initiatorReplies.push(reply),
+      }
+    );
+    await router.route(
+      { type: MESSAGE_TYPES.RUN },
+      {
+        clientTag: "browser:other",
+        postMessage: (reply) => otherClientReplies.push(reply),
+      }
+    );
+
+    assert.strictEqual(
+      initiatorReplies[0] && (initiatorReplies[0] as any).type,
+      MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT
+    );
+    assert.strictEqual((initiatorReplies[0] as any).success, false);
+    assert.strictEqual(
+      (initiatorReplies[0] as any).error,
+      "Worktree action failed: worktree is locked"
+    );
+    assert.deepStrictEqual(otherClientReplies, []);
+  });
+
   test("replies with a typed unsupported result for every missing native capability", async () => {
     const panelReplies: unknown[] = [];
     const clientReplies: unknown[] = [];

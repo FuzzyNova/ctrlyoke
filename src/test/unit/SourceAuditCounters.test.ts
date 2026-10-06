@@ -14,7 +14,9 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
     // Shrank from 49 to 46: the host-neutral trusted roots approval flow
     // moved ExternalFileTrustPrompt.ts's three direct show*Message calls
     // behind UserInteractionPort too.
-    boundary: 46,
+    // Shrank from 46 to 41: Stage 3b removed five router worktree notices;
+    // routine success notices were dropped and failures now use scoped replies.
+    boundary: 41,
     reusable: 0,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",
@@ -24,7 +26,6 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
       "src/scm/ScmCommitCommand.ts",
       "src/ui/ExternalFileTrustPrompt.ts",
       "src/ui/NotificationManager.ts",
-      "src/ui/WebviewMessageRouter.ts",
     ] as readonly string[],
   },
   adapterUi: 0,

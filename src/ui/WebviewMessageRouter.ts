@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type {
@@ -908,19 +907,19 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.RUN, () => {
-      vscode.commands.executeCommand("ctrlyoke.run");
+      return this.getOrchestrator()?.executeLoadedPromptFile();
     });
 
     table.set(MESSAGE_TYPES.PAUSE, () => {
-      vscode.commands.executeCommand("ctrlyoke.pause");
+      return this.getOrchestrator()?.pause();
     });
 
     table.set(MESSAGE_TYPES.RESUME, () => {
-      vscode.commands.executeCommand("ctrlyoke.resume");
+      return this.getOrchestrator()?.resume();
     });
 
     table.set(MESSAGE_TYPES.STOP, () => {
-      vscode.commands.executeCommand("ctrlyoke.stop");
+      return this.getOrchestrator()?.stop();
     });
 
     table.set(MESSAGE_TYPES.SHOW_OUTPUT, async (_message, ctx) => {
@@ -1226,10 +1225,18 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.MERGE_WORKTREE, async (message) => {
-      await vscode.commands.executeCommand(VSCODE_COMMANDS.MERGE_WORKTREE, {
-        address: message.address,
-      });
+    table.set(MESSAGE_TYPES.MERGE_WORKTREE, async (message, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      try {
+        await orchestrator.mergeManagedWorktreeAtRun(message.address);
+      } catch (error) {
+        ctx.emit({
+          type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+          action: "merge worktree",
+          error: getErrorMessage(error),
+        });
+      }
     });
 
     table.set(MESSAGE_TYPES.OPEN_PRIOR_CONTEXT, async (message, ctx) => {
@@ -2266,6 +2273,7 @@ export class WebviewMessageRouter {
         );
         let success = true;
         let resultMessage: string;
+        let errorMessage: string | undefined;
         try {
           await orchestrator.applyWorktreeManagementAction({
             action: message.action,
@@ -2277,24 +2285,24 @@ export class WebviewMessageRouter {
           Log.info(
             `[WorktreeManagement] ${message.action} succeeded: ${resultMessage}`
           );
-          void vscode.window.showInformationMessage(resultMessage);
         } catch (error) {
           // Without this, a rejected destructive action (e.g. a stale admin
           // entry that still needs `git worktree repair`) vanished into the
           // log with no feedback in the panel — the button looked like a no-op.
           success = false;
           resultMessage = `Worktree action failed: ${getErrorMessage(error)}`;
+          errorMessage = resultMessage;
           Log.error(
             `[WorktreeManagement] ${message.action} failed for "${target}": ${getErrorMessage(error)}`
           );
-          void vscode.window.showErrorMessage(resultMessage);
         }
-        if (message.requestId) {
+        if (message.requestId || errorMessage) {
           ctx.emit({
             type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
-            requestId: message.requestId,
+            ...(message.requestId ? { requestId: message.requestId } : {}),
             success,
             message: resultMessage,
+            ...(errorMessage ? { error: errorMessage } : {}),
           });
         }
         await sendWorktreeManagementState(true, ctx);
@@ -2308,6 +2316,7 @@ export class WebviewMessageRouter {
       );
       let success = true;
       let resultMessage: string;
+      let errorMessage: string | undefined;
       try {
         const result = await orchestrator.syncNamedWorktree(
           message.worktreePath
@@ -2333,27 +2342,27 @@ export class WebviewMessageRouter {
           : `Worktree sync finished with issues. ${summary}`;
         if (success) {
           Log.info(`[WorktreeManagement] sync succeeded: ${summary}`);
-          void vscode.window.showInformationMessage(resultMessage);
         } else {
+          errorMessage = resultMessage;
           Log.warn(
             `[WorktreeManagement] sync finished with issues: ${summary}`
           );
-          void vscode.window.showWarningMessage(resultMessage);
         }
       } catch (error) {
         success = false;
         resultMessage = `Worktree sync failed: ${getErrorMessage(error)}`;
+        errorMessage = resultMessage;
         Log.error(
           `[WorktreeManagement] sync failed for "${message.worktreePath}": ${getErrorMessage(error)}`
         );
-        void vscode.window.showErrorMessage(resultMessage);
       }
-      if (message.requestId) {
+      if (message.requestId || errorMessage) {
         ctx.emit({
           type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
-          requestId: message.requestId,
+          ...(message.requestId ? { requestId: message.requestId } : {}),
           success,
           message: resultMessage,
+          ...(errorMessage ? { error: errorMessage } : {}),
         });
       }
       await sendWorktreeManagementState(true, ctx);

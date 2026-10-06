@@ -1,15 +1,17 @@
 # VS Code Dependency Decoupling Plan
 
 **Status (2026-10-06):** In progress; Phases 0–3 and Phase 4's router
-sub-stage 3a are complete. Continue at Stage 3b. Done so far:
+sub-stages 3a and 3b are complete. Continue at Stage 4a. Done so far:
 
 - Phase 0 (dependency guards).
 - Phase 1 (host composition).
 - Phase 2 (Node watcher and remaining watcher sites).
 - Phase 3 (command/domain split and adapter cleanup).
-- Phase 4 router Stage 3a: `DashboardHostActions` now owns native dashboard
+- Phase 4 router Stage 3: `DashboardHostActions` owns native dashboard
   actions, `WebviewMessageRouter` receives host actions and named roots, and
   missing optional capabilities return scoped typed `unsupported` results.
+  Run controls and worktree merge dispatch directly to the orchestrator;
+  worktree errors use scoped replies.
 - Every prerequisite from
   [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md).
 - An early pass that removed `vscode` from the runtime graphs of the
@@ -229,9 +231,9 @@ baselines in the same commit.
 
 | Measure                                                                      | 2026-07-29 audit | 2026-10-06                                                                     |
 | ---------------------------------------------------------------------------- | ---------------: | ------------------------------------------------------------------------------ |
-| Production files importing `vscode`                                          |               39 | 34, plus `VsCodeTelemetry.ts` via `@vscode/extension-telemetry`                |
+| Production files importing `vscode`                                          |               39 | 33, plus `VsCodeTelemetry.ts` via `@vscode/extension-telemetry`; Stage 3b removed the router import |
 | Direct `show*Message` in reusable code                                       |               63 | **0** (`directMessage.reusable`)                                               |
-| Direct `show*Message` in boundary files                                      |               49 | 46 across 8 allowlisted files (`directMessage.boundary`)                       |
+| Direct `show*Message` in boundary files                                      |               49 | **41** across 7 allowlisted files (`directMessage.boundary`); Stage 3b removed five router notices |
 | Adapter-mediated host UI (`platform.log/warn/error/showProgress/showChoice`) |               19 | **0** (`adapterUi`); the methods are deleted from `PlatformAdapter`            |
 | `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | **0** (`vscodeImportersReachableFromOrchestrator`)                             |
 | Direct `vscode` imports in `WorkflowOrchestrator.ts` / `WorkflowInstance.ts` |            1 / 0 | 0 / 0                                                                          |
@@ -298,7 +300,7 @@ Node path needs it.
 | `src/ui/ExternalFileTrustPrompt.ts`                                            | Native file/selection opening via `vscode` editor and Explorer APIs.                                                                                                                                                                                               | Done / Phase 3 | Trust decisions and pending-root approval moved to `ExternalRootsApproval.ts`; this file owns `openResolvedTarget` and the VS Code trust-and-open command wrapper.                                                                                                                                                   |
 | `src/core/orchestration/WorkflowCommandHandler.ts` (96 lines)                  | No host API imports; receives `DashboardHostActions`.                                                                                                                                                                                                              | Done / Phase 3 | Focus and prompt-file opening go through the injected `focusDashboard` and `openWorkspaceTarget` actions.                                                                                                                                                                                                            |
 | `src/core/TemplateManager.ts`                                                  | No VS Code dependency; receives explicit extension path, workspace-root resolver, and `PlatformAdapter`.                                                                                                                                                           | Done / Phase 3 | The extension composition root constructs and injects the instance into `CtrlYokeWebviewProvider`.                                                                                                                                                                                                                   |
-| `src/ui/WebviewMessageRouter.ts`                                               | Stage 3a moved native dashboard actions to `DashboardHostActions`; remaining VS Code coupling is RUN/PAUSE/RESUME/STOP + MERGE command dispatch, 5 worktree-management `show*Message` calls (boundary-allowlisted), and the `vscode` import.                       | 4 / 3a–3b      | Stage 3b extracts the command bodies and converts the five worktree-management notices to scoped replies, then removes the router's `vscode` import.                                                                                                                                                                 |
+| `src/ui/WebviewMessageRouter.ts` | **Resolved — Stage 3b:** run/pause/resume/stop call shared orchestrator methods; merge calls `mergeManagedWorktreeAtRun` directly and scopes failures to the initiator; worktree management returns typed scoped errors and omits routine success notices. No `vscode` import or direct messages remain. | Done / 3b | Router tests cover direct dispatch and two-client reply scope. |
 | `src/ui/WebviewSettingsSync.ts`                                                | `workspaceFolders` ×6, `showOpenDialog` (external-root browse, the OS-picker carve-out), `showSaveDialog` (certificate), `executeCommand` ×3 (enable/disable server, regenerate token), and TLS CA generation (`:1640-1728`) rooted at `getVsCodeWorkspaceRoot()`. | 5 / 4          | Inject roots. Add a `HostedServerControl` port (`enable?`, `disable?`, `regenerateToken`). Extract a host-neutral `ServerCertificateService` that both this handler and `ctrlyoke server --https` call. Put the save dialog behind `selectWorkspacePath`, falling back to the existing `/cert` download in browsers. |
 | `src/ui/WorkflowSerializer.ts`                                                 | `workspaceFolders` ×11, `showOpenDialog` ×2, `showSaveDialog`, open/show document, `vscode.Memento` (last export/browse directories), `Uri`. 0 `show*Message`.                                                                                                     | 5 / 4          | Inject roots. Replace `Memento` with `KeyValueStore` (which gains `get`). Use the `selectWorkspacePath` and `openWorkspaceTarget` host actions.                                                                                                                                                                      |
 | `src/ui/PromptEditorSupportService.ts`                                         | `workspaceFolders` ×9, `openTextDocument` ×2, `showTextDocument`, `ViewColumn`; calls `ExternalFileTrustPrompt.openResolvedTarget`.                                                                                                                                | 5 / 4          | Inject roots, the completion core (Phase 6), and `openWorkspaceTarget`.                                                                                                                                                                                                                                              |
@@ -619,7 +621,7 @@ baseline can't go stale.
 | `workflowInstanceDirectVsCodeImports`                                 | `WorkflowInstance.ts`                                                   |                     0 | —                        |
 | `coreVsCodeAdapterConstructions`                                      | `src/core/**`                                                           |                     0 | —                        |
 | `adapterUi` (`platform.log/warn/error/showProgress/showChoice`)       | all production code                                                     |                     0 | —                        |
-| `directMessage.reusable` / `.boundary` (`vscode.window.show*Message`) | all production code; 8-file boundary allowlist                          |                0 / 46 | boundary → 41 at Stage 3 |
+| `directMessage.reusable` / `.boundary` (`vscode.window.show*Message`) | all production code; 7-file boundary allowlist                          |                0 / 41 | Stage 3 complete |
 | `webviewToast`                                                        | webview toast call sites outside the host-aware dispatcher              |                     1 | —                        |
 | CLI/MCP runtime graph loads `vscode`                                  | `src/cli.ts`, `src/mcp-server.ts`, including package `require()` graphs |                  `[]` | —                        |
 
@@ -839,25 +841,25 @@ remove them.
 
 ### Phase 4 — Host-neutral router and dashboard application (Staging Stages 3 and 6)
 
-**Status (2026-10-06):** Router Stage 3a is complete. Stage 3b remains before
-the router half is complete; the dashboard-application half is Stage 6.
+**Status (2026-10-06):** Router Stage 3 (3a and 3b) is complete; the
+dashboard-application half is Stage 6.
 
 **Router half (Stage 3):**
 
-1. **Stage 3a complete.** Implement host-native rows of the call-site table
-   in "Dashboard host actions" through the injected `DashboardHostActions`.
-   The direct run/pause/resume/stop and merge command dispatch remains for 3b.
-   In 3b, run/pause/resume/stop become direct orchestrator methods. Extract the
-   bodies of `ctrlyoke.run/pause/resume/stop` from `extension.ts` so the
-   commands and the router share one implementation.
-2. Inject `DashboardHostActions`, workspace roots (a `() => NamedRoot[]`
-   resolver instead of `VsCodeWorkspaceRoot`), and the existing feedback and
-   interaction ports into the router.
-3. Convert the five worktree-management `show*Message` calls into scoped
-   replies and remove the router from the boundary allowlist.
-4. Router tests use a fake `DashboardHostActions` with **no** optional
-   methods. Every host-native message must produce a typed `unsupported`
-   reply, not an exception.
+1. **Stage 3a and 3b complete.** Host-native rows use injected
+   `DashboardHostActions`; run/pause/resume/stop use the same orchestrator
+   methods from commands and router; merge calls `mergeManagedWorktreeAtRun`
+   directly. The VS Code merge command retains its native error reporting.
+2. **Done.** Inject `DashboardHostActions`, workspace roots (a
+   `() => NamedRoot[]` resolver instead of `VsCodeWorkspaceRoot`), and the
+   existing feedback and interaction ports into the router.
+3. **Done.** Removed routine worktree success notices. Worktree failures return
+   typed replies scoped to the initiating client, and the dashboard surfaces
+   replies carrying an error. Removed the router from the boundary allowlist;
+   the Phase 0 boundary baseline is 41.
+4. **Done.** Router tests use a fake `DashboardHostActions` with **no** optional
+   methods. Every host-native message produces a typed `unsupported` reply;
+   direct orchestration and two-client worktree reply scoping are covered.
 
 **Application half (Stage 6, after Phases 5 and 6 make the delegates
 host-neutral):**
