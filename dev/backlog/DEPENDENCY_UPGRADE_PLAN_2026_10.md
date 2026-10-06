@@ -112,11 +112,49 @@ in C remains).
 
 ---
 
-## C. KaTeX (via mermaid) — low risk, low severity
+## C. KaTeX (via mermaid) — waiting on upstream, no override
 
-| Package | Change                 | prod/dev | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------- | ---------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `katex` | `overrides`: `^0.18.2` | prod     | Low-severity advisory, only exploitable in combination with an existing prototype-pollution bug. `mermaid` 11 and 12 both pin `katex ^0.16.47`, so upgrading mermaid does not help. Overriding forces mermaid onto a KaTeX major it hasn't declared support for; only worth doing if a smoke test of mermaid rendering (including a diagram with `$$…$$` math) in the dashboard passes. Otherwise accept the finding and re-check on the next mermaid release. |
+Decision (2026-10-05): **accept the low finding and wait for mermaid**, rather
+than adding an `overrides` pin.
+
+- KaTeX is reached only through mermaid: our code never imports it, and
+  mermaid lazily imports it when a diagram label contains `$$…$$` math. It
+  calls `katex.renderToString(c, { throwOnError, displayMode, output })`,
+  using `output: "mathml"` wherever MathML is supported.
+- `mermaid@12.1.0` and mermaid's `develop` branch still declare
+  `katex ^0.16.47`. The bump is open as
+  [mermaid-js/mermaid#8216](https://github.com/mermaid-js/mermaid/pull/8216)
+  (`^0.18.0`, released as a mermaid minor). Once a 12.x release includes it,
+  `npm update` clears the finding.
+- If we ever do need the pin, it is safe: KaTeX's 0.17–0.19 breaking changes
+  (internal `__defineFunction`, prefixed CSS classes, `symbolNotInFont` strict
+  reporting) do not touch mermaid's call. A side-by-side `renderToString` of
+  0.16.47 vs 0.19.0 gave identical-length `mathml` output. Scope it to mermaid:
+  `"overrides": { "mermaid": { "katex": "^0.19.0" } }`.
+
+---
+
+## D. mermaid 11 → 12 — done 2026-10-05 (visual QA pending)
+
+`mermaid` 12.1.0. We only call `initialize({ startOnLoad, theme })` and
+`render()` (`MarkdownText.tsx`), so of 12.0's four breaking changes,
+`defaultRenderer` and the internal layout exports don't touch us. The two
+that do:
+
+- **ELK is now the default layout** for flowchart, state, class, ER,
+  requirement and use-case diagrams. Kept on purpose: we set no `layout`, so
+  these diagrams render with ELK. `mermaid.initialize({ layout: "dagre" })` is
+  the escape hatch. `elkjs` is a new mermaid dependency and ships as a lazy
+  `elk-*.js` chunk: production webview JS went 9.57 MB → 11.22 MB, with
+  `dashboard.js` unchanged.
+- **Browser floor: ES2024 / Safari 17.4+.** Vite downlevels syntax but does
+  not polyfill ES2024 built-ins, so the hosted dashboard on phones now
+  effectively needs iOS 17.4+ for diagrams (Tailwind 4 alone needed 16.4). The
+  VS Code webview is unaffected.
+- Does not change the KaTeX finding (see C). `npm test` passes (all three
+  suites).
+- QA still to do: flowchart, sequence, class, and state diagrams in the
+  webview, light/dark/high-contrast, plus Copy and PNG export.
 
 ---
 
@@ -128,7 +166,6 @@ All of these are compatible with our `>=22.12.0` Node floor.
 | -------------------------------- | ---------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vitest` + `@vitest/coverage-v8` | 4.1 → 5.0        | dev      | Moderate | Must move in lockstep. UI test runner only; run `npm run test:ui` and `npm run test:ui:coverage`.                                                                                                                                                                                                                                                                                                   |
 | `@testing-library/jest-dom`      | 6.9 → 7.0        | dev      | Low      | Node ≥22. Bump alongside vitest 5.                                                                                                                                                                                                                                                                                                                                                                  |
-| `mermaid`                        | 11.17 → 12.1     | prod     | Moderate | Dashboard diagram rendering (`MarkdownText.tsx`, `outputRows.ts`). Does **not** fix the KaTeX advisory. Visual check of rendered diagrams.                                                                                                                                                                                                                                                          |
 | `chalk`                          | 5.6 → 6.0        | prod     | Low      | CLI output coloring. Node ≥22.                                                                                                                                                                                                                                                                                                                                                                      |
 | `gpt-tokenizer`                  | 3.4 → 4.0        | prod     | Low–Mod  | Token counting; check for API/encoding-name changes and verify counts in the existing tests.                                                                                                                                                                                                                                                                                                        |
 | `vscode-jsonrpc`                 | 8.2 → 9.0        | prod     | Moderate | Check every import site for protocol/API changes before bumping.                                                                                                                                                                                                                                                                                                                                    |
@@ -152,8 +189,9 @@ All of these are compatible with our `>=22.12.0` Node floor.
 2. **A** — replace `vite-plugin-static-copy`. Small, unblocked.
 3. ~~**B** — Tailwind 4 + `eslint-plugin-tailwindcss` 4~~ — done; visual QA
    pending. `npm audit` now shows only the KaTeX finding.
-4. **C** — try the KaTeX override; keep it if mermaid smoke test passes.
+4. ~~**D** — mermaid 12~~ — done; visual QA pending. **C** waits on
+   mermaid#8216.
 5. **vitest 5 + jest-dom 7** together; then `chalk`, `gpt-tokenizer`,
-   `vscode-jsonrpc`, `mermaid` one at a time.
+   `vscode-jsonrpc` one at a time.
 6. **TypeScript 6.0** dedicated pass. TypeScript 7 stays parked until the
    tooling supports it.
