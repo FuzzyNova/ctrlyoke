@@ -297,8 +297,9 @@ export class WebviewMessageRouter {
       (absolutePath) => this.callbacks.resolveImageWebviewUri?.(absolutePath),
       secretRegistry
     );
-    this.harnessFiles = new HarnessFileMessageService(() =>
-      this.getWorkspaceRoot()
+    this.harnessFiles = new HarnessFileMessageService(
+      () => this.getWorkspaceRoot(),
+      this.hostDependencies.actions
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
     this.terminalHandlers = new TerminalMessageHandlers(() =>

@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as yaml from "js-yaml";
@@ -15,6 +14,8 @@ import {
   WORKFLOW_FILE_FORMATS,
   type WorkflowFileFormat,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  PATH_SELECTION_KINDS,
+  DASHBOARD_ACTION_RESULT_STATUSES,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -26,11 +27,6 @@ import {
   CURRENT_SCHEMA_VERSIONS,
   PERSISTED_STORES,
 } from "../utils/PersistedSchemaGuard";
-import {
-  getVsCodeWorkspaceRoot,
-  getVsCodeNamedWorkspaceRoots,
-  getVsCodeTrustedWorkspaceRoots,
-} from "../platform/VsCodeWorkspaceRoot";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type {
@@ -77,6 +73,11 @@ import {
 import type { SaveWorkflowBundlePreview } from "../types/WebviewMessageTypes";
 import { writeWorkflowBundle } from "../utils/WorkflowBundleWriter";
 import { normalizeParallelGroupTopology } from "../core/ParallelGroupTopology";
+import type {
+  DashboardHostActions,
+  KeyValueStore,
+  NamedRoot,
+} from "../core/HostPorts";
 
 /**
  * WorkflowSerializer
@@ -99,14 +100,49 @@ const NO_WORKFLOW_KEYS: ReadonlySet<WorkflowKey> = new Set();
 export class WorkflowSerializer {
   private readonly lineageRepository = new WorkflowLineageRepository();
 
+  private readonly hostActions: Pick<
+    DashboardHostActions,
+    "selectWorkspacePath" | "openWorkspaceTarget" | "openContentPreview"
+  >;
+  private readonly getWorkspaceRoot: () => string | undefined;
+  private readonly getNamedRoots: () => readonly NamedRoot[];
+  private readonly getTrustedRoots: () => readonly string[];
+
   constructor(
     private readonly postMessage: PostMessageFn,
     private readonly templateManager: TemplateManager,
     private readonly getManager: () => WorkflowOrchestrator | undefined,
     private readonly getOutputHistoryManager: () =>
       OutputHistoryManager | undefined,
-    private readonly workspaceState: vscode.Memento
-  ) {}
+    private readonly workspaceState: KeyValueStore,
+    hostServices: {
+      actions: Pick<
+        DashboardHostActions,
+        "selectWorkspacePath" | "openWorkspaceTarget" | "openContentPreview"
+      >;
+      getWorkspaceRoot: () => string | undefined;
+      getNamedRoots: () => readonly NamedRoot[];
+      getTrustedRoots: () => readonly string[];
+    } = {
+      actions: {
+        openWorkspaceTarget: async () => ({
+          status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
+        }),
+      },
+      getWorkspaceRoot: () => undefined,
+      getNamedRoots: () => [],
+      getTrustedRoots: () => [],
+    }
+  ) {
+    this.hostActions = hostServices.actions;
+    this.getWorkspaceRoot = hostServices.getWorkspaceRoot;
+    this.getNamedRoots = hostServices.getNamedRoots;
+    this.getTrustedRoots = hostServices.getTrustedRoots;
+  }
+
+  private get workspaceRoot(): string | undefined {
+    return this.getWorkspaceRoot();
+  }
 
   // ============================================================================
   // Save Workflow
@@ -143,9 +179,7 @@ export class WorkflowSerializer {
       return undefined;
     }
     const address = expectedAddress ?? viewedAddress;
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = this.workspaceRoot;
     if (address && workspaceRoot) {
       return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
         ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
@@ -170,9 +204,7 @@ export class WorkflowSerializer {
       throw new Error("A save destination is required.");
     }
 
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = this.workspaceRoot;
     const resolved = workspaceRoot
       ? path.resolve(workspaceRoot, filePath)
       : path.resolve(filePath);
@@ -238,9 +270,7 @@ export class WorkflowSerializer {
     clientId: string,
     manager: WorkflowOrchestrator
   ): Promise<WorkflowBundleAnalysis> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = this.workspaceRoot;
     const sourceDefinitionPath =
       typeof manager.getViewSourceDefinitionPath === "function"
         ? ((await manager.getViewSourceDefinitionPath(clientId)) ?? undefined)
@@ -249,14 +279,14 @@ export class WorkflowSerializer {
     return analyzeWorkflowBundle(cleanWorkflow, {
       workspaceRoot,
       trustedRoots: workspaceRoot
-        ? getVsCodeTrustedWorkspaceRoots()
+        ? [...this.getTrustedRoots()]
         : undefined,
       approvedExternalRoots: workspaceRoot
         ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
             ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
           )
         : undefined,
-      namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : undefined,
+      namedRoots: workspaceRoot ? [...this.getNamedRoots()] : undefined,
       sourceDefinitionPath,
       ...(destinationPath ? { destinationPath } : {}),
       templateMode,
@@ -385,18 +415,14 @@ export class WorkflowSerializer {
     // Unsaved workflows default to the last directory the user exported a
     // durable workflow to, then to the repo root on the very first export —
     // ctrlyoke doesn't own a durable "workflows" folder; the user decides.
-    const repoRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : "";
+    const repoRoot = this.workspaceRoot ?? "";
     const defaultDir =
       this.workspaceState.get<string>(LAST_EXPORT_DIR_KEY) || repoRoot;
 
     try {
       const rawContent = await fs.readFile(workingFilePath, "utf-8");
       const workingFile = JSON.parse(rawContent);
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
+      const workspaceRoot = this.workspaceRoot;
       const descriptor = workspaceRoot
         ? await this.lineageRepository.readDescriptor(
             workspaceRoot,
@@ -842,10 +868,8 @@ export class WorkflowSerializer {
         baseName += ".md";
       }
 
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
-      let defaultUri: vscode.Uri;
+      const workspaceRoot = this.workspaceRoot;
+      let defaultPath: string;
       if (workspaceRoot) {
         const outputDir = path.join(
           workspaceRoot,
@@ -853,17 +877,19 @@ export class WorkflowSerializer {
           "output"
         );
         await fs.mkdir(outputDir, { recursive: true });
-        defaultUri = vscode.Uri.file(path.join(outputDir, baseName));
+        defaultPath = path.join(outputDir, baseName);
       } else {
-        defaultUri = vscode.Uri.file(baseName);
+        defaultPath = path.resolve(baseName);
       }
 
       Log.debug(
-        `[WorkflowSerializer] handleExportOutput: showing save dialog, defaultUri=${defaultUri.fsPath}, contentLength=${content.length}`
+        `[WorkflowSerializer] handleExportOutput: requesting save path, defaultPath=${defaultPath}, contentLength=${content.length}`
       );
 
-      const uri = await vscode.window.showSaveDialog({
-        defaultUri,
+      const selectedPath = await this.hostActions.selectWorkspacePath?.({
+        kind: PATH_SELECTION_KINDS.SAVE,
+        title: "Export Output",
+        defaultPath,
         filters: {
           "Markdown Files": ["md"],
           "Text Files": ["txt"],
@@ -871,8 +897,8 @@ export class WorkflowSerializer {
         },
       });
 
-      if (uri) {
-        await fs.writeFile(uri.fsPath, content, "utf-8");
+      if (selectedPath) {
+        await fs.writeFile(selectedPath, content, "utf-8");
       } else {
         Log.debug(
           "[WorkflowSerializer] handleExportOutput: save dialog cancelled by user"
@@ -1031,8 +1057,7 @@ export class WorkflowSerializer {
       // Best-effort editor convenience for desktop VS Code users; irrelevant to
       // (and safely ignored by) hosted browser clients.
       try {
-        const doc = await vscode.workspace.openTextDocument(templatePath);
-        await vscode.window.showTextDocument(doc);
+        await this.hostActions.openWorkspaceTarget({ path: templatePath });
       } catch (openError) {
         Log.warn(
           `[WorkflowSerializer] Failed to open newly created template: ${openError}`
@@ -1057,31 +1082,31 @@ export class WorkflowSerializer {
   }
 
   /**
-   * Resolve a `showOpenDialog` result into a workspace-relative,
+   * Resolve a native picker result into a workspace-relative,
    * forward-slash-normalized path (portable across platforms and valid in
    * prompt file @path references). Returns undefined when the dialog was
    * cancelled. Shared by `handleBrowseTemplateFile` and
    * `handleBrowseSaveLocation` so the two native dialogs normalize identically.
    */
   private resolveDialogSelection(
-    uris: vscode.Uri[] | undefined,
+    selectedPath: string | undefined,
     workspaceRoot: string | undefined
   ): string | undefined {
-    if (!uris || uris.length === 0) {
+    if (!selectedPath) {
       return undefined;
     }
-    let selectedPath = uris[0].fsPath;
+    let resolvedPath = selectedPath;
     // `isPathWithinDirectory` rather than a raw `startsWith`: the dialog returns
     // a VS Code `fsPath` (lowercase drive letter) while `workspaceRoot` may carry
     // OS-native casing, and the shared helper also rejects sibling-prefix matches
     // like `C:\dev\ctrlyoke-evil`. Case-folding preserves length, so the slice
     // below stays correct.
-    if (workspaceRoot && isPathWithinDirectory(selectedPath, workspaceRoot)) {
-      selectedPath = selectedPath
+    if (workspaceRoot && isPathWithinDirectory(resolvedPath, workspaceRoot)) {
+      resolvedPath = resolvedPath
         .slice(workspaceRoot.length)
         .replace(/^[\\/]/, "");
     }
-    return selectedPath.replace(/\\/g, "/");
+    return resolvedPath.replace(/\\/g, "/");
   }
 
   async handleBrowseTemplateFile(
@@ -1091,44 +1116,44 @@ export class WorkflowSerializer {
     selectFolder?: boolean
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
-    const filters: Record<string, string[]> = {};
-
-    if (!selectFolder && fileFilter && fileFilter.length > 0) {
-      const exts = extractExtensionsFromGlobs(fileFilter);
-      if (exts.length > 0) {
-        filters["Spec / Design Files"] = exts;
-      }
-    }
-    if (!selectFolder) {
-      filters["All Files"] = ["*"];
-    }
+    const workspaceRoot = this.workspaceRoot;
+    const fileExtensions =
+      !selectFolder && fileFilter?.length
+        ? extractExtensionsFromGlobs(fileFilter)
+        : undefined;
 
     const lastBrowseDirectory = this.workspaceState.get<string>(
       LAST_TEMPLATE_BROWSE_DIR_KEY
     );
 
-    const uris = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      canSelectFolders: !!selectFolder,
-      canSelectFiles: !selectFolder,
-      defaultUri: lastBrowseDirectory
-        ? vscode.Uri.file(lastBrowseDirectory)
-        : workspaceRoot
-          ? vscode.Uri.file(workspaceRoot)
-          : undefined,
-      filters: selectFolder ? undefined : filters,
+    const selectPath = this.hostActions.selectWorkspacePath;
+    if (!selectPath) {
+      const unsupported = {
+        status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
+      } as const;
+      Log.debug(
+        `[WorkflowSerializer] Native template picker unavailable (${unsupported.status}); browser picker remains active.`
+      );
+      return;
+    }
+    const selectedPath = await selectPath({
+      kind: selectFolder ? PATH_SELECTION_KINDS.FOLDER : PATH_SELECTION_KINDS.FILE,
       title: selectFolder
         ? `Select folder for {${variable}}`
         : `Select file for {${variable}}`,
+      defaultPath: lastBrowseDirectory ?? workspaceRoot,
+      filters: selectFolder
+        ? undefined
+        : {
+            ...(fileExtensions?.length
+              ? { "Spec / Design Files": fileExtensions }
+              : {}),
+            "All Files": ["*"],
+          },
     });
 
-    const selectedUri = uris?.[0];
-    const filePath = this.resolveDialogSelection(uris, workspaceRoot);
-    if (selectedUri && filePath !== undefined) {
-      const selectedPath = selectedUri.fsPath;
+    const filePath = this.resolveDialogSelection(selectedPath, workspaceRoot);
+    if (selectedPath && filePath !== undefined) {
       await this.workspaceState.update(
         LAST_TEMPLATE_BROWSE_DIR_KEY,
         selectFolder ? selectedPath : path.dirname(selectedPath)
@@ -1151,30 +1176,35 @@ export class WorkflowSerializer {
     defaultDir?: string
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = this.workspaceRoot;
 
-    let defaultUri: vscode.Uri | undefined;
+    let defaultPath: string | undefined;
     if (defaultDir) {
-      const absoluteDir =
+      defaultPath =
         path.isAbsolute(defaultDir) || !workspaceRoot
           ? defaultDir
           : path.join(workspaceRoot, defaultDir);
-      defaultUri = vscode.Uri.file(absoluteDir);
     } else if (workspaceRoot) {
-      defaultUri = vscode.Uri.file(workspaceRoot);
+      defaultPath = workspaceRoot;
     }
 
-    const uris = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      canSelectFolders: true,
-      canSelectFiles: false,
-      defaultUri,
+    const selectPath = this.hostActions.selectWorkspacePath;
+    if (!selectPath) {
+      const unsupported = {
+        status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
+      } as const;
+      Log.debug(
+        `[WorkflowSerializer] Native save-location picker unavailable (${unsupported.status}); browser picker remains active.`
+      );
+      return;
+    }
+    const selectedPath = await selectPath({
+      kind: PATH_SELECTION_KINDS.FOLDER,
+      defaultPath,
       title: "Select Save Location",
     });
 
-    const dirPath = this.resolveDialogSelection(uris, workspaceRoot);
+    const dirPath = this.resolveDialogSelection(selectedPath, workspaceRoot);
     if (dirPath !== undefined) {
       pm({
         type: MESSAGE_TYPES.SAVE_LOCATION_SELECTED,
@@ -1218,9 +1248,7 @@ export class WorkflowSerializer {
   ): Promise<void> {
     const pm = replyPostMessage ?? this.postMessage;
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
+      const workspaceRoot = this.workspaceRoot;
       if (!workspaceRoot) {
         pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
@@ -1444,9 +1472,7 @@ export class WorkflowSerializer {
 
   async handleToggleFavorite(address: WorkflowViewAddress): Promise<void> {
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
+      const workspaceRoot = this.workspaceRoot;
       if (!workspaceRoot) return;
       await this.lineageRepository.updateDescriptor(
         workspaceRoot,
@@ -1462,9 +1488,7 @@ export class WorkflowSerializer {
   }
 
   private resolveHistoryWorkspaceRoot(): string | undefined {
-    return vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    return this.workspaceRoot;
   }
 
   private readonly isLineageExecuting = (workflowKey: WorkflowKey): boolean =>

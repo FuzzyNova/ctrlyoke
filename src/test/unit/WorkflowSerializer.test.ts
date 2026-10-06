@@ -7,6 +7,7 @@ import * as yaml from "js-yaml";
 import * as vscode from "vscode";
 import { suite, test } from "mocha";
 import { WorkflowSerializer } from "../../ui/WorkflowSerializer";
+import type { DashboardHostActions, KeyValueStore } from "../../core/HostPorts";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import {
@@ -46,22 +47,52 @@ function fakeWorkspaceState(): any {
   };
 }
 
-class RecordingMemento implements vscode.Memento {
+class RecordingMemento implements KeyValueStore {
   private readonly values = new Map<string, unknown>();
 
   keys(): readonly string[] {
     return [...this.values.keys()];
   }
 
-  get<T>(key: string): T | undefined;
-  get<T>(key: string, defaultValue: T): T;
-  get<T>(key: string, defaultValue?: T): T | undefined {
-    return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
+  get<T>(key: string): T | undefined {
+    return this.values.get(key) as T | undefined;
   }
 
   async update(key: string, value: unknown): Promise<void> {
     this.values.set(key, value);
   }
+}
+
+function createWorkflowSerializer(
+  postMessage: (message: any) => void,
+  templateManager: any,
+  getManager: () => WorkflowOrchestrator | undefined,
+  getOutputHistoryManager: () => any,
+  workspaceState: KeyValueStore,
+  actions: Pick<
+    DashboardHostActions,
+    "selectWorkspacePath" | "openWorkspaceTarget" | "openContentPreview"
+  > = {
+    openWorkspaceTarget: async () => ({ status: "opened" }),
+  }
+): WorkflowSerializer {
+  const roots = (vscode.workspace.workspaceFolders ?? []).map((folder) => ({
+    name: folder.name,
+    fsPath: folder.uri.fsPath,
+  }));
+  return new WorkflowSerializer(
+    postMessage,
+    templateManager,
+    getManager,
+    getOutputHistoryManager,
+    workspaceState,
+    {
+      actions,
+      getWorkspaceRoot: () => roots[0]?.fsPath,
+      getNamedRoots: () => roots,
+      getTrustedRoots: () => roots.map(({ fsPath }) => fsPath),
+    }
+  );
 }
 
 interface SchemaNode {
@@ -263,7 +294,7 @@ suite("WorkflowSerializer", () => {
           setCalls.push({ key, value, scope });
         }) as typeof configService.set;
 
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -296,9 +327,16 @@ suite("WorkflowSerializer", () => {
     test("remembers the selected file's directory for the next native picker", async () => {
       const workspaceRoot = path.join(os.tmpdir(), "ctrlyoke-picker-workspace");
       const selectedFile = path.join(workspaceRoot, "specs", "feature.md");
+      const normalizedWorkspaceRoot = workspaceRoot.replace(
+        /^([A-Z]):/,
+        (_drive, letter: string) => `${letter.toLowerCase()}:`
+      );
+      const normalizedSelectedFile = selectedFile.replace(
+        /^([A-Z]):/,
+        (_drive, letter: string) => `${letter.toLowerCase()}:`
+      );
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
-      const originalShowOpenDialog = vscode.window.showOpenDialog;
-      const dialogOptions: vscode.OpenDialogOptions[] = [];
+      const requests: any[] = [];
       let callCount = 0;
 
       try {
@@ -312,37 +350,43 @@ suite("WorkflowSerializer", () => {
           ],
           configurable: true,
         });
-        Object.defineProperty(vscode.window, "showOpenDialog", {
-          value: async (options: vscode.OpenDialogOptions) => {
-            dialogOptions.push(options);
+        const actions: Pick<
+          DashboardHostActions,
+          "selectWorkspacePath" | "openWorkspaceTarget"
+        > = {
+          openWorkspaceTarget: async () => ({ status: "opened" }),
+          selectWorkspacePath: async (request) => {
+            requests.push(request);
             callCount += 1;
-            return callCount === 1
-              ? [vscode.Uri.file(selectedFile)]
-              : undefined;
+            return callCount === 1 ? normalizedSelectedFile : undefined;
           },
-          configurable: true,
-        });
+        };
 
         const messages: unknown[] = [];
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
           () => undefined,
-          new RecordingMemento()
+          new RecordingMemento(),
+          actions
         );
 
         await serializer.handleBrowseTemplateFile("spec", ["**/*.md"]);
         await serializer.handleBrowseTemplateFile("spec", ["**/*.md"]);
 
         assert.strictEqual(
-          dialogOptions[0].defaultUri?.fsPath,
-          vscode.Uri.file(workspaceRoot).fsPath
+          requests[0].defaultPath,
+          normalizedWorkspaceRoot
         );
         assert.strictEqual(
-          dialogOptions[1].defaultUri?.fsPath,
-          path.dirname(vscode.Uri.file(selectedFile).fsPath)
+          requests[1].defaultPath,
+          path.dirname(normalizedSelectedFile)
         );
+        assert.deepStrictEqual(requests[0].filters, {
+          "Spec / Design Files": ["md"],
+          "All Files": ["*"],
+        });
         assert.deepStrictEqual(messages, [
           {
             type: MESSAGE_TYPES.TEMPLATE_FILE_SELECTED,
@@ -353,10 +397,6 @@ suite("WorkflowSerializer", () => {
       } finally {
         Object.defineProperty(vscode.workspace, "workspaceFolders", {
           value: originalWorkspaceFolders,
-          configurable: true,
-        });
-        Object.defineProperty(vscode.window, "showOpenDialog", {
-          value: originalShowOpenDialog,
           configurable: true,
         });
       }
@@ -410,7 +450,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -478,7 +518,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           () => undefined,
           {} as any,
           () =>
@@ -564,7 +604,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {
             saveWorkflowAsTemplate: async (
@@ -689,7 +729,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           () => undefined,
           {} as any,
           () =>
@@ -819,7 +859,7 @@ suite("WorkflowSerializer", () => {
         );
 
         const messages: any[] = [];
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -1030,7 +1070,7 @@ suite("WorkflowSerializer", () => {
           "utf8"
         );
 
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {
             saveWorkflowAsTemplate: async () => {
@@ -1104,7 +1144,7 @@ suite("WorkflowSerializer", () => {
           ],
           configurable: true,
         });
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -1171,7 +1211,7 @@ suite("WorkflowSerializer", () => {
         workflowKey: "workflow-stale-1",
         kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
-      const serializer = new WorkflowSerializer(
+      const serializer = createWorkflowSerializer(
         (message) => messages.push(message),
         {} as any,
         () =>
@@ -1255,7 +1295,7 @@ suite("WorkflowSerializer", () => {
           JSON.stringify({ steps: [{ prompt: "No generated references" }] }),
           "utf8"
         );
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -1389,7 +1429,7 @@ suite("WorkflowSerializer", () => {
           lineage.workflowKey,
           run
         );
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () =>
@@ -1444,7 +1484,7 @@ suite("WorkflowSerializer", () => {
         );
 
         const messages: any[] = [];
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -1496,7 +1536,7 @@ suite("WorkflowSerializer", () => {
           );
 
         const messages: any[] = [];
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -1534,7 +1574,7 @@ suite("WorkflowSerializer", () => {
         await writeDraftWorkingFile(workspaceRoot, lineage.workflowKey, 1_000);
 
         const messages: any[] = [];
-        const serializer = new WorkflowSerializer(
+        const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
           () => undefined,
@@ -1615,7 +1655,7 @@ suite("WorkflowSerializer", () => {
           await fs.writeFile(runFilePath, JSON.stringify(runFile));
 
           const messages: any[] = [];
-          const serializer = new WorkflowSerializer(
+          const serializer = createWorkflowSerializer(
             (message) => messages.push(message),
             {} as any,
             () => undefined,
@@ -1669,7 +1709,7 @@ suite("WorkflowSerializer", () => {
           );
 
           const messages: any[] = [];
-          const serializer = new WorkflowSerializer(
+          const serializer = createWorkflowSerializer(
             (message) => messages.push(message),
             {} as any,
             () => undefined,
@@ -1715,7 +1755,7 @@ suite("WorkflowSerializer", () => {
       ) => Promise<void>,
       forgetRunActivity?: (workflowKey: WorkflowKey) => void
     ): WorkflowSerializer {
-      return new WorkflowSerializer(
+      return createWorkflowSerializer(
         (message) => messages.push(message),
         {} as any,
         () =>

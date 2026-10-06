@@ -18,6 +18,7 @@ import {
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
 import { VsCodeDashboardHostActions } from "./platform/VsCodeDashboardHostActions";
+import { VsCodeKeyValueStore } from "./platform/VsCodeKeyValueStore";
 import { TemplateManager } from "./core/TemplateManager";
 import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
 import {
@@ -500,11 +501,7 @@ export async function activate(context: vscode.ExtensionContext) {
       disposableRegistry: {
         add: (disposable) => context.subscriptions.push(disposable),
       },
-      workspaceState: {
-        update: async (key, value) => {
-          await context.workspaceState.update(key, value);
-        },
-      },
+      workspaceState: new VsCodeKeyValueStore(context.workspaceState),
       isWorkspaceTrusted: () => vscode.workspace.isTrusted,
       userInteractionPort: webviewProvider.getUserInteractionPort(),
     });

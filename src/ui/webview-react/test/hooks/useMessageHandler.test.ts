@@ -55,6 +55,7 @@ import { useTerminalStore } from "@store/terminalStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
 import { useHistoryTrashStore } from "@store/historyTrashStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
@@ -1265,6 +1266,23 @@ describe("USER_FEEDBACK", () => {
 // ---------------------------------------------------------------------------
 
 describe("OPEN_HARNESS_DIR_RESULT", () => {
+  it("opens the workspace viewer at the directory when OS reveal is unsupported", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT, {
+        success: true,
+        path: ".claude/skills",
+      });
+    });
+
+    expect(useWorkspaceViewerStore.getState().isOpen).toBe(true);
+    expect(useWorkspaceViewerStore.getState().pendingNavigation).toEqual({
+      type: "directory",
+      dirPath: ".claude/skills",
+    });
+  });
+
   it("uses native panel feedback when the folder could not be opened", () => {
     renderHook(() => useMessageHandler());
 

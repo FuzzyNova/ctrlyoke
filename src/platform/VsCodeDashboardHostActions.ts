@@ -79,6 +79,9 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
     }
     const pickerOptions = {
       title: request.title,
+      defaultUri: request.defaultPath
+        ? vscode.Uri.file(request.defaultPath)
+        : undefined,
       filters: request.fileExtensions?.length
         ? {
             "ctrlyoke License": request.fileExtensions.filter(
@@ -88,6 +91,13 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
               ? { "All Files": ["*"] }
               : {}),
           }
+        : request.filters
+          ? Object.fromEntries(
+              Object.entries(request.filters).map(([label, extensions]) => [
+                label,
+                [...extensions],
+              ])
+            )
         : undefined,
     };
     if (request.kind === PATH_SELECTION_KINDS.SAVE) {

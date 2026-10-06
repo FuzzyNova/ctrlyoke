@@ -1,6 +1,6 @@
 # Standalone Server Staging Plan
 
-**Status (2026-10-06):** Stages 1, 2, and 3 are complete; continue at Stage 4a.
+**Status (2026-10-06):** Stages 1, 2, 3, and 4a are complete; continue at Stage 4b.
 This document only sets the order of work. It contains no design. The design lives
 in the three plans below, and this file arranges their remaining work into
 stages that can each be shipped on their own. All four documents were
@@ -123,8 +123,8 @@ names the guard or test that proves it, not just the code change.
     run/pause/resume/stop methods; merge calls the orchestrator directly with
     scoped failures. Worktree errors use scoped replies, routine success
     notices were removed, and the router has no `vscode` import.
-  - **4a:** `KeyValueStore.get`, `WorkflowSerializer`, and
-    `HarnessFileMessageService`.
+  - **4a done:** `KeyValueStore.get`, `WorkflowSerializer`, and
+    `HarnessFileMessageService` use host-neutral ports and tests with Node host fakes.
   - **4b:** `WebviewSettingsSync`, `ServerCertificateService`,
     `HostedServerControl`, and `PromptEditorSupportService`'s own direct
     `vscode`/`VsCodeWorkspaceRoot` uses (it still reaches `vscode` through

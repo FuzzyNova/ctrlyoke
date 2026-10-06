@@ -72,6 +72,10 @@ class TestDisposableRegistry implements DisposableRegistry {
 }
 
 class TestWorkspaceState implements KeyValueStore {
+  get<T>(_key: string): T | undefined {
+    return undefined;
+  }
+
   async update(_key: string, _value: unknown): Promise<void> {}
 }
 

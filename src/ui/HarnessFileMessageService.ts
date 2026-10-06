@@ -1,7 +1,9 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
+import * as path from "path";
+import type { DashboardHostActions } from "../core/HostPorts";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import {
+  DASHBOARD_ACTION_RESULT_STATUSES,
   MESSAGE_TYPES,
   type HarnessFileType,
 } from "../types/DashboardConstants";
@@ -30,7 +32,10 @@ import type { WebviewClientContext } from "./WebviewClientContext";
  * entries there are thin delegations to this service.
  */
 export class HarnessFileMessageService {
-  constructor(private readonly getWorkspaceRoot: () => string) {}
+  constructor(
+    private readonly getWorkspaceRoot: () => string,
+    private readonly hostActions: Pick<DashboardHostActions, "revealInOs">
+  ) {}
 
   /**
    * Every mutating file op shares one shape: run the op, then re-enumerate and
@@ -188,13 +193,22 @@ export class HarnessFileMessageService {
         );
       }
 
-      await vscode.commands.executeCommand(
-        "revealFileInOS",
-        vscode.Uri.file(dirPath)
-      );
+      const result = this.hostActions.revealInOs
+        ? await this.hostActions.revealInOs(dirPath)
+        : undefined;
+      if (result?.status === DASHBOARD_ACTION_RESULT_STATUSES.FAILED) {
+        throw new Error(result.message);
+      }
+      const browserDirectory = path
+        .relative(workspaceRoot, dirPath)
+        .replace(/\\/g, "/");
       ctx.emit({
         type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
         success: true,
+        ...(!result ||
+        result.status === DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED
+          ? { path: browserDirectory || "." }
+          : {}),
       });
     } catch (error) {
       ctx.emit({

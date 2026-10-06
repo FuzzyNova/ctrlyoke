@@ -2941,6 +2941,8 @@ export interface OpenHarnessDirMessage {
 export interface OpenHarnessDirResultMessage {
   type: typeof MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT;
   success: boolean;
+  /** Browser fallback target when the host cannot reveal a directory in the OS. */
+  path?: string;
   error?: string;
 }
 

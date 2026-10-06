@@ -41,6 +41,8 @@ export interface PathSelectionRequest {
   readonly title?: string;
   readonly openLabel?: string;
   readonly fileExtensions?: readonly string[];
+  readonly defaultPath?: string;
+  readonly filters?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** Inputs to a native source-control diff view. */
@@ -100,6 +102,7 @@ export interface DisposableRegistry {
 
 /** Minimal asynchronous key/value storage used by shared orchestration code. */
 export interface KeyValueStore {
+  get<T>(key: string): T | undefined;
   update(key: string, value: unknown): Promise<void>;
 }
 

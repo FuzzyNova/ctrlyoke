@@ -2109,6 +2109,8 @@ export function createMessageHandlers(
         message.error ?? "Unable to open folder",
         USER_FEEDBACK_SEVERITY.WARNING
       );
+    } else if (message.path) {
+      useWorkspaceViewerStore.getState().openToDirectory(message.path);
     }
   };
 

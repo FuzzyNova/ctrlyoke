@@ -65,7 +65,13 @@ import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { retryWithBackoff } from "../utils/RetryUtils";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
-import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { VsCodeKeyValueStore } from "../platform/VsCodeKeyValueStore";
+import {
+  getVsCodeWorkspaceRoot,
+  getVsCodeNamedWorkspaceRoots,
+  getVsCodeTrustedWorkspaceRoots,
+} from "../platform/VsCodeWorkspaceRoot";
+import { DASHBOARD_ACTION_RESULT_STATUSES } from "../types/DashboardConstants";
 import { SecretRegistryService } from "./SecretRegistryService";
 import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
 import type { UserInteractionPort } from "./UserInteractionPort";
@@ -213,7 +219,20 @@ export class CtrlYokeWebviewProvider
       templateManager,
       getOrchestrator,
       getOutputHistoryManager,
-      context.workspaceState
+      new VsCodeKeyValueStore(context.workspaceState),
+      {
+        actions: hostDependencies?.actions ?? {
+          openWorkspaceTarget: async () => ({
+            status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
+          }),
+        },
+        getWorkspaceRoot: () =>
+          vscode.workspace.workspaceFolders?.length
+            ? getVsCodeWorkspaceRoot()
+            : undefined,
+        getNamedRoots: getVsCodeNamedWorkspaceRoots,
+        getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
+      }
     );
     this.router = new WebviewMessageRouter(
       postMessage,
