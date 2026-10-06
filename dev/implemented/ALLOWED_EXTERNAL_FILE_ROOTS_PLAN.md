@@ -43,7 +43,7 @@
 >    batch-approval `showQuickPick`, both in `ExternalFileTrustPrompt.ts`, and
 >    the "Add folder…" native OS picker behind `BROWSE_AND_ADD_EXTERNAL_ROOT`
 >    in `WebviewSettingsSync.ts`. Tracked as new/expanded rows in
->    `dev/backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` rather than here.
+>    `dev/implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` rather than here.
 >
 > Separately, `confirmExternalFileTrust()` always persists an accepted "Trust
 > Parent Folder" offer to **user scope** (every workspace, not just the

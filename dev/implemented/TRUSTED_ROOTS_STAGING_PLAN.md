@@ -20,7 +20,7 @@ platform-specific exception.
   the context-menu gap staged here.
 - [`TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`](TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md) —
   the new workflow-scoped trust tier (all of Stages 2-6 below).
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
   owns the `ExternalFileTrustPrompt.ts`/`WebviewSettingsSync.ts` browser-parity
   rows folded into Stage 4 below.
 

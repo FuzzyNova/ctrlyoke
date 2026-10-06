@@ -13,7 +13,7 @@ numbers in this document describe structure only.
 
 **Related plans:**
 
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
   is the authoritative plan for host ports, the host-neutral router,
   `DashboardApplication`, the Node watcher, and retiring the Node-side shim.
   It also holds the full `vscode` inventory, which this document no longer
@@ -323,6 +323,10 @@ Add `src/platform/NodeHostServices.ts` with
 | Secrets, token, and license | `OsCredentialStore` (with `FallbackSecretStore`) → `ServerTokenStore` and `LicenseService`                                                                                                                                                                                                                                  |
 | Logging                     | `Log.initializeCli(<logsDir>, verbose)`, the same file log as `ctrlyoke run`                                                                                                                                                                                                                                                |
 
+Build everything from one canonical `cwd`: no `.code-workspace` parsing and no
+fabricated `vscode.WorkspaceFolder`. Construct `WorkflowOrchestrator` and
+`DashboardApplication` from these services exactly as `extension.ts` does.
+
 Process lifecycle: call `setRuntimeMode(RUNNER_IDS.SERVER)`. On
 `SIGINT`/`SIGTERM`, stop the server, dispose the orchestrator (which releases
 `runner.json` locks), and exit 0. A second `Ctrl+C` forces exit.
@@ -460,6 +464,34 @@ goes in `src/cli/ServerCommand.ts`. Flags override `server.*` settings
   - Make the server-asset copy part of the CLI build.
   - Add a `"server": "node out/cli.js server"` convenience script.
   - Document the command in `docs/cli/ctrlyoke.md`.
+- **Guard root:** add `src/cli/ServerCommand.ts` to
+  `src/test/unit/SourceAuditCounters.test.ts` as a root that must reach no
+  `vscode` load, next to the existing `cli.ts`, `mcp-server.ts`,
+  `DashboardApplication.ts`, and `CtrlYokeHostedServer.ts` roots. (Moved here
+  from the decoupling plan's Phase 7 item 4 when that plan was closed.)
+
+### Phase 11: retire the Node-side shim (Stage 10)
+
+Moved here from the decoupling plan's Phase 8 when that plan was closed on
+2026-10-06. Its Track A work is done, so this is the only decoupling work
+left, and it depends on `server` shipping first.
+
+1. Verify `ctrlyoke run`, `validate`, `commit`, `history`, `status`, `step`,
+   `secret`, and `server` with the real Node module graph. The CLI/MCP static
+   guard already passes.
+2. Remove `registerCliAdapter()`/`unregisterCliAdapter()` and their two
+   callers in `cli.ts` (`:911` and `:2339` on 2026-10-06). The only remaining
+   reader is the shim's own `getConfiguration`.
+3. Remove the `vscode` → `src/platform/vscode-shim.ts` alias from **all four**
+   Node bundles in `esbuild.js`: `cli`, `mcp-server`,
+   `historySearchRebuildWorker`, and `historySearchMatcherWorker`.
+4. Delete `vscode-shim.ts`.
+5. Fail the build if any Node bundle's metafile contains the `vscode` package,
+   `@vscode/extension-telemetry`, or a `src/platform/VsCode*` file.
+
+The browser-side `standalone-shim.js` remains. It replaces
+`acquireVsCodeApi()` in the browser and is unrelated to the Node-side
+`vscode-shim.ts`.
 
 ## File Structure (new or changed)
 
@@ -490,8 +522,8 @@ scripts/build-npm-package.mjs, esbuild.js  CHANGED: ship server + webview assets
 - **Server asset copying.** Today `copyServerPlugin` runs only on the
   extension context. Make the CLI build copy the same server assets plus
   `themes/`. The webview build output is already shared under `out/`.
-- **The Node-side `vscode-shim.ts` alias** is retired in Stage 10 (decoupling
-  Phase 8), after `server` ships. The browser `standalone-shim.js` remains.
+- **The Node-side `vscode-shim.ts` alias** is retired in Stage 10 (Phase 11
+  below), after `server` ships. The browser `standalone-shim.js` remains.
 
 ## Message Protocol Compatibility
 

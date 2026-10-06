@@ -1,20 +1,27 @@
 # VS Code Dependency Decoupling Plan
 
-**Status (2026-10-06):** Track A complete. Phases 0–3, Phase 4, Phase 5
-items 2–5, and Phase 6 are complete; continue with standalone Stage 7a.
-Done so far:
+**Status (2026-10-06): Implemented.** Staging Track A (Stages 1–6, run as
+sub-stages 3a–5c) is complete, and Phases 0–6 are done. The two phases that
+only the standalone server can finish moved to
+[`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md) when this
+plan closed: Phase 7 is that plan's Phases 5–6 plus its Phase 10 guard root
+(Stage 7a), and Phase 8 is its Phase 11 (Stage 10). Done:
 
 - Phase 0 (dependency guards).
 - Phase 1 (host composition).
 - Phase 2 (Node watcher and remaining watcher sites).
 - Phase 3 (command/domain split and adapter cleanup).
-- Phase 4 router Stage 3: `DashboardHostActions` owns native dashboard
+- Phase 4: the router half (Stage 3) and the application half (Stage 6,
+  `DashboardApplication` + `DashboardClientEndpoint`).
+- Phase 5 (shared UI services, Stage 4) and Phase 6 (utilities and the
+  completion core, Stage 5).
+- Router detail from Stage 3: `DashboardHostActions` owns native dashboard
   actions, `WebviewMessageRouter` receives host actions and named roots, and
   missing optional capabilities return scoped typed `unsupported` results.
   Run controls and worktree merge dispatch directly to the orchestrator;
   worktree errors use scoped replies.
 - Every prerequisite from
-  [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md).
+  [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md).
 - An early pass that removed `vscode` from the runtime graphs of the
   standalone CLI and the MCP server (see "CLI runtime graph" below).
 
@@ -28,18 +35,18 @@ This is the shared foundation that lets `ctrlyoke run` and the future
 **Sequencing:** [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md)
 is the only authoritative order for this plan,
 [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md), and
-[`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](./WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md).
-This plan's remaining phases map to staging Stages 1–6 (Track A), Stage 7a
-(Phase 7), and Stage 10 (Phase 8).
+[`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md).
+This plan's phases mapped to staging Stages 1–6 (Track A). Phases 7 and 8
+moved to the standalone plan (Stages 7a and 10).
 
 **Related plans:**
 
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md)
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md)
   (implemented)
 - [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
-- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](./WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md):
+- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md):
   supplies the `SymbolIndex` port that Phase 6 item 4 adopts.
-- [`VISUAL_STUDIO_EXTENSION_PLAN.md`](./VISUAL_STUDIO_EXTENSION_PLAN.md): a
+- [`VISUAL_STUDIO_EXTENSION_PLAN.md`](../backlog/VISUAL_STUDIO_EXTENSION_PLAN.md): a
   third `DashboardHostActions` host, built on the standalone server.
 
 ## Decision
@@ -230,17 +237,17 @@ baselines in the same commit.
 
 ### Current snapshot (2026-10-06)
 
-| Measure                                                                      | 2026-07-29 audit | 2026-10-06                                                                     |
-| ---------------------------------------------------------------------------- | ---------------: | ------------------------------------------------------------------------------ |
+| Measure                                                                      | 2026-07-29 audit | 2026-10-06                                                                                                                    |
+| ---------------------------------------------------------------------------- | ---------------: | ----------------------------------------------------------------------------------------------------------------------------- |
 | Production files importing `vscode`                                          |               39 | 32, plus `VsCodeTelemetry.ts` via `@vscode/extension-telemetry`; Stage 4b removed the settings-sync and prompt-editor imports |
-| Direct `show*Message` in reusable code                                       |               63 | **0** (`directMessage.reusable`)                                               |
-| Direct `show*Message` in boundary files                                      |               49 | **41** across 7 allowlisted files (`directMessage.boundary`); Stage 3b removed five router notices |
-| Adapter-mediated host UI (`platform.log/warn/error/showProgress/showChoice`) |               19 | **0** (`adapterUi`); the methods are deleted from `PlatformAdapter`            |
-| `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | **0** (`vscodeImportersReachableFromOrchestrator`)                             |
-| Direct `vscode` imports in `WorkflowOrchestrator.ts` / `WorkflowInstance.ts` |            1 / 0 | 0 / 0                                                                          |
-| `new VsCodeAdapter` outside `extension.ts`                                   |                6 | **0** (`coreVsCodeAdapterConstructions`)                                       |
-| Production `createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`    |                7 | **0** (all seven production watcher sites use `FileWatcherFactory`)             |
-| `src/cli.ts` / `src/mcp-server.ts` runtime graph loads `vscode`              |              yes | **no**, enforced statically. The esbuild shim alias is still present (Phase 8) |
+| Direct `show*Message` in reusable code                                       |               63 | **0** (`directMessage.reusable`)                                                                                              |
+| Direct `show*Message` in boundary files                                      |               49 | **41** across 7 allowlisted files (`directMessage.boundary`); Stage 3b removed five router notices                            |
+| Adapter-mediated host UI (`platform.log/warn/error/showProgress/showChoice`) |               19 | **0** (`adapterUi`); the methods are deleted from `PlatformAdapter`                                                           |
+| `vscode` value-importers reachable from `WorkflowOrchestrator.ts`            |               13 | **0** (`vscodeImportersReachableFromOrchestrator`)                                                                            |
+| Direct `vscode` imports in `WorkflowOrchestrator.ts` / `WorkflowInstance.ts` |            1 / 0 | 0 / 0                                                                                                                         |
+| `new VsCodeAdapter` outside `extension.ts`                                   |                6 | **0** (`coreVsCodeAdapterConstructions`)                                                                                      |
+| Production `createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`    |                7 | **0** (all seven production watcher sites use `FileWatcherFactory`)                                                           |
+| `src/cli.ts` / `src/mcp-server.ts` runtime graph loads `vscode`              |              yes | **no**, enforced statically. The esbuild shim alias is still present (Phase 8)                                                |
 
 Phase 3 removed the last `vscode` import reachable from the orchestrator.
 `WorkflowCommandHandler` uses `DashboardHostActions`, and the orchestrator
@@ -263,7 +270,7 @@ holds:
 - **Triage before porting.** Delete a call site that duplicates a typed reply,
   announces routine success, or asks at runtime what config already declares,
   instead of building a host port for it. Use the triage table in
-  `../implemented/BROWSER_USER_FEEDBACK_PLAN.md` Phase 2.
+  `./BROWSER_USER_FEEDBACK_PLAN.md` Phase 2.
 - **"No `vscode` import" is necessary but not sufficient.** Reusable code must
   have no path to host UI except through an injected port whose headless
   behavior is defined.
@@ -280,38 +287,38 @@ These are legitimate native integrations. Standalone and CLI graphs must not
 import them. Any shared types or domain logic they hold must move out once a
 Node path needs it.
 
-| File(s)                                                                                                                                   | Native use                                                                | Disposition                                                                                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/extension.ts`                                                                                                                        | composition root; 19 direct `show*Message`; commands; trust/folder events | Keep. The license-command policy violations were fixed on 2026-09-11. Its unused `?? 3000` hosted-port fallback disagrees with the `server.port` default of 4747, so Stage 7a removes it when server options move into one place. |
-| `src/platform/VsCode*.ts` (`Adapter`, `FileWatcher`, `LogOutputChannel`, `SecretStore`, `UserFeedbackSink`, `WorkspaceRoot`, `Telemetry`) | implementations of project ports                                          | Keep as the explicit implementation boundary.                                                                                                                                                                                     |
-| `src/platform/VsCodeDashboardHostActions.ts`                                                                                              | dashboard focus and native target opening                                 | Keep as the VS Code implementation of `DashboardHostActions`.                                                                                                                                                                     |
-| `src/ui/ExternalFileTrustPrompt.ts`                                                                                                       | native editor and Explorer opening                                        | Keep as the VS Code opener; trust decisions live in `ExternalRootsApproval.ts`.                                                                                                                                                   |
-| `src/completions/ContextMenuReferenceCommands.ts`, `WorkspaceReferencePaths.ts`                                                           | Explorer/SCM/editor context menus; `executeDocumentSymbolProvider`        | Keep. The symbol lookup can switch to `VsCodeSymbolIndex` (Phase 6) but stays extension-only.                                                                                                                                     |
-| `src/completions/PromptCompletionProvider.ts`, `PromptLinkProvider.ts`, `PromptPropertyCompletionProvider.ts`                             | VS Code editor language features                                          | Keep. After Phase 6 they become thin adapters over the Node completion core.                                                                                                                                                      |
-| `src/ui/CtrlyokeCliCommands.ts`, `src/ui/NativeOutputCaptureCommand.ts`, `src/scm/ScmCommitCommand.ts`, `src/dev/DevCommands.ts`          | command registration, terminals, active editor                            | Keep.                                                                                                                                                                                                                             |
-| `src/ui/StatusBarManager.ts`, `src/ui/NotificationManager.ts`                                                                             | status bar, native completion notifications                               | Keep as optional sinks.                                                                                                                                                                                                           |
-| `src/ui/CtrlYokeWebviewProvider.ts`                                                                                                       | `WebviewView`, `asWebviewUri`, panel lifecycle                            | Keep as the VS Code view transport: HTML, nonce, panel READY/reconnect, theme capture, and queued prompt-editor inserts. Shared routing and dashboard services live in `DashboardApplication`.                                      |
-| `src/ui/DashboardApplication.ts`                                                                                                         | No VS Code imports; composes shared router, delegates, secret registry, interaction port, history search, and browser-client cleanup | Done / Phase 4 | Implements `DashboardClientEndpoint`; constructed in `extension.ts` from host services, actions, and the injected `TemplateManager`.                                                                                         |
+| File(s)                                                                                                                                   | Native use                                                                                                                           | Disposition                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/extension.ts`                                                                                                                        | composition root; 19 direct `show*Message`; commands; trust/folder events                                                            | Keep. The license-command policy violations were fixed on 2026-09-11. Its unused `?? 3000` hosted-port fallback disagrees with the `server.port` default of 4747, so Stage 7a removes it when server options move into one place. |
+| `src/platform/VsCode*.ts` (`Adapter`, `FileWatcher`, `LogOutputChannel`, `SecretStore`, `UserFeedbackSink`, `WorkspaceRoot`, `Telemetry`) | implementations of project ports                                                                                                     | Keep as the explicit implementation boundary.                                                                                                                                                                                     |
+| `src/platform/VsCodeDashboardHostActions.ts`                                                                                              | dashboard focus and native target opening                                                                                            | Keep as the VS Code implementation of `DashboardHostActions`.                                                                                                                                                                     |
+| `src/ui/ExternalFileTrustPrompt.ts`                                                                                                       | native editor and Explorer opening                                                                                                   | Keep as the VS Code opener; trust decisions live in `ExternalRootsApproval.ts`.                                                                                                                                                   |
+| `src/completions/ContextMenuReferenceCommands.ts`, `WorkspaceReferencePaths.ts`                                                           | Explorer/SCM/editor context menus; `executeDocumentSymbolProvider`                                                                   | Keep. The symbol lookup can switch to `VsCodeSymbolIndex` (Phase 6) but stays extension-only.                                                                                                                                     |
+| `src/completions/PromptCompletionProvider.ts`, `PromptLinkProvider.ts`, `PromptPropertyCompletionProvider.ts`                             | VS Code editor language features                                                                                                     | Keep. After Phase 6 they become thin adapters over the Node completion core.                                                                                                                                                      |
+| `src/ui/CtrlyokeCliCommands.ts`, `src/ui/NativeOutputCaptureCommand.ts`, `src/scm/ScmCommitCommand.ts`, `src/dev/DevCommands.ts`          | command registration, terminals, active editor                                                                                       | Keep.                                                                                                                                                                                                                             |
+| `src/ui/StatusBarManager.ts`, `src/ui/NotificationManager.ts`                                                                             | status bar, native completion notifications                                                                                          | Keep as optional sinks.                                                                                                                                                                                                           |
+| `src/ui/CtrlYokeWebviewProvider.ts`                                                                                                       | `WebviewView`, `asWebviewUri`, panel lifecycle                                                                                       | Keep as the VS Code view transport: HTML, nonce, panel READY/reconnect, theme capture, and queued prompt-editor inserts. Shared routing and dashboard services live in `DashboardApplication`.                                    |
+| `src/ui/DashboardApplication.ts`                                                                                                          | No VS Code imports; composes shared router, delegates, secret registry, interaction port, history search, and browser-client cleanup | Done / Phase 4                                                                                                                                                                                                                    | Implements `DashboardClientEndpoint`; constructed in `extension.ts` from host services, actions, and the injected `TemplateManager`. |
 
 ### Reusable code that still depends on VS Code
 
-| File                                                                           | Current coupling                                                                                                                                                                                                                                                   | Phase / stage  | Replacement                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/core/orchestration/ExternalRunWatchSession.ts`                            | `createFileSystemWatcher` ×3 (`:156`, `:284`, `:343`). `ExternalRunWatchCoordinator.ts:542` constructs it without a factory, even though the coordinator already holds one.                                                                                        | 2 / 1          | Pass the coordinator's `FileWatcherFactory` through.                                                                                                                                                                                                                                                                 |
-| `src/core/orchestration/ExecutionRootCoordinationWatchSession.ts`              | `createFileSystemWatcher` ×1 (`:79`). `WorkflowOrchestrator.ts:4906` constructs it without a factory.                                                                                                                                                              | 2 / 1          | Pass the orchestrator's factory through.                                                                                                                                                                                                                                                                             |
-| `src/ui/ExternalFileTrustPrompt.ts`                                            | Native file/selection opening via `vscode` editor and Explorer APIs.                                                                                                                                                                                               | Done / Phase 3 | Trust decisions and pending-root approval moved to `ExternalRootsApproval.ts`; this file owns `openResolvedTarget` and the VS Code trust-and-open command wrapper.                                                                                                                                                   |
-| `src/core/orchestration/WorkflowCommandHandler.ts` (96 lines)                  | No host API imports; receives `DashboardHostActions`.                                                                                                                                                                                                              | Done / Phase 3 | Focus and prompt-file opening go through the injected `focusDashboard` and `openWorkspaceTarget` actions.                                                                                                                                                                                                            |
-| `src/core/TemplateManager.ts`                                                  | No VS Code dependency; receives explicit extension path, workspace-root resolver, and `PlatformAdapter`.                                                                                                                                                           | Done / Phase 3 | The extension composition root constructs and injects the instance into `CtrlYokeWebviewProvider`.                                                                                                                                                                                                                   |
-| `src/ui/WebviewMessageRouter.ts` | **Resolved — Stage 3b:** run/pause/resume/stop call shared orchestrator methods; merge calls `mergeManagedWorktreeAtRun` directly and scopes failures to the initiator; worktree management returns typed scoped errors and omits routine success notices. No `vscode` import or direct messages remain. | Done / 3b | Router tests cover direct dispatch and two-client reply scope. |
-| `src/ui/WebviewSettingsSync.ts`                                                | Workspace and certificate/server operations previously used direct VS Code APIs.                                                                                                                                                                               | Done / 4b      | Injected roots, `selectWorkspacePath?`, `HostedServerControl`, and the extracted host-neutral `ServerCertificateService`; browser certificate download remains available.                                                                                 |
-| `src/ui/WorkflowSerializer.ts`                                                 | No host API imports. Explicit workspace roots, `KeyValueStore`, and `DashboardHostActions`; picker requests carry filters/default paths.                                                                                                                          | Done / 4a      | VS Code retains native pickers, last export/browse directories, and editor opening; browser clients retain their own picker.                                                                                                                                                                                        |
-| `src/ui/PromptEditorSupportService.ts`                                         | Host-neutral dashboard prompt editor support, with injected `CompletionCore`; no runtime `vscode` load.                                                                                                                                                                                                  | Done / 5b      | Completion and symbol lookups use the injected core and ports; the rooted source-audit guard holds this boundary.                                                                                                                                 |
-| `src/ui/HarnessFileMessageService.ts`                                          | No host API imports. Directory reveal goes through optional `DashboardHostActions.revealInOs`.                                                                                                                                                                      | Done / 4a      | When reveal is unsupported, the scoped reply carries the directory path and the browser opens it in the workspace viewer.                                                                                                                                                                                          |
-| `src/utils/FileSystemUtils.ts`                                                 | `saveIfDirty` read `workspace.textDocuments`. Every `readJsonFile` user therefore imported a `vscode` file.                                                                                                                                                         | Done / 5a      | `saveIfDirty` now lives in `src/platform/VsCodeDocuments.ts`; neutral JSON/file helpers remain.                                                                                                                                                                                                                      |
-| `src/completions/CompletionHelpers.ts`                                         | VS Code completion composition, conversion, configuration subscription, and output-channel slug.                                                                                                                                                                                                          | Done / 5c      | Contains only the VS Code composition root and adapter helpers; all completion discovery and ranking lives in `CompletionCore`, with symbols/editor context behind their ports.                                                                    |
-| `src/completions/BranchCompletionHelpers.ts`, `SlashTokenCompletionHelpers.ts` | only `vscode.CompletionItemKind` (1 and 3 uses)                                                                                                                                                                                                                    | Done / 5a      | Use project-owned `COMPLETION_ITEM_KINDS`; VS Code completion conversion maps those kinds in one place.                                                                                                                                                                                                               |
-| `src/completions/ScriptCommandCompletionHelpers.ts`                            | `workspaceFolders`, `createFileSystemWatcher("**/package.json")` (`:424`)                                                                                                                                                                                          | Done / 5a      | Receives named roots and `FileWatcherFactory`; contains no `vscode` import.                                                                                                                                                                                                                                          |
-| `src/server/HostedWorkspaceViewerService.ts`                                   | Owned the bounded non-git `walkSearchFiles` fallback used by viewer search.                                                                                                                                                                                        | Done / 5a      | The viewer and completion core share `src/utils/WorkspaceSearchFileWalker.ts`; the viewer search regression tests remain unchanged.                                                                                                                                                                                   |
+| File                                                                           | Current coupling                                                                                                                                                                                                                                                                                         | Phase / stage  | Replacement                                                                                                                                                                     |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/core/orchestration/ExternalRunWatchSession.ts`                            | `createFileSystemWatcher` ×3 (`:156`, `:284`, `:343`). `ExternalRunWatchCoordinator.ts:542` constructs it without a factory, even though the coordinator already holds one.                                                                                                                              | 2 / 1          | Pass the coordinator's `FileWatcherFactory` through.                                                                                                                            |
+| `src/core/orchestration/ExecutionRootCoordinationWatchSession.ts`              | `createFileSystemWatcher` ×1 (`:79`). `WorkflowOrchestrator.ts:4906` constructs it without a factory.                                                                                                                                                                                                    | 2 / 1          | Pass the orchestrator's factory through.                                                                                                                                        |
+| `src/ui/ExternalFileTrustPrompt.ts`                                            | Native file/selection opening via `vscode` editor and Explorer APIs.                                                                                                                                                                                                                                     | Done / Phase 3 | Trust decisions and pending-root approval moved to `ExternalRootsApproval.ts`; this file owns `openResolvedTarget` and the VS Code trust-and-open command wrapper.              |
+| `src/core/orchestration/WorkflowCommandHandler.ts` (96 lines)                  | No host API imports; receives `DashboardHostActions`.                                                                                                                                                                                                                                                    | Done / Phase 3 | Focus and prompt-file opening go through the injected `focusDashboard` and `openWorkspaceTarget` actions.                                                                       |
+| `src/core/TemplateManager.ts`                                                  | No VS Code dependency; receives explicit extension path, workspace-root resolver, and `PlatformAdapter`.                                                                                                                                                                                                 | Done / Phase 3 | The extension composition root constructs and injects the instance into `CtrlYokeWebviewProvider`.                                                                              |
+| `src/ui/WebviewMessageRouter.ts`                                               | **Resolved — Stage 3b:** run/pause/resume/stop call shared orchestrator methods; merge calls `mergeManagedWorktreeAtRun` directly and scopes failures to the initiator; worktree management returns typed scoped errors and omits routine success notices. No `vscode` import or direct messages remain. | Done / 3b      | Router tests cover direct dispatch and two-client reply scope.                                                                                                                  |
+| `src/ui/WebviewSettingsSync.ts`                                                | Workspace and certificate/server operations previously used direct VS Code APIs.                                                                                                                                                                                                                         | Done / 4b      | Injected roots, `selectWorkspacePath?`, `HostedServerControl`, and the extracted host-neutral `ServerCertificateService`; browser certificate download remains available.       |
+| `src/ui/WorkflowSerializer.ts`                                                 | No host API imports. Explicit workspace roots, `KeyValueStore`, and `DashboardHostActions`; picker requests carry filters/default paths.                                                                                                                                                                 | Done / 4a      | VS Code retains native pickers, last export/browse directories, and editor opening; browser clients retain their own picker.                                                    |
+| `src/ui/PromptEditorSupportService.ts`                                         | Host-neutral dashboard prompt editor support, with injected `CompletionCore`; no runtime `vscode` load.                                                                                                                                                                                                  | Done / 5b      | Completion and symbol lookups use the injected core and ports; the rooted source-audit guard holds this boundary.                                                               |
+| `src/ui/HarnessFileMessageService.ts`                                          | No host API imports. Directory reveal goes through optional `DashboardHostActions.revealInOs`.                                                                                                                                                                                                           | Done / 4a      | When reveal is unsupported, the scoped reply carries the directory path and the browser opens it in the workspace viewer.                                                       |
+| `src/utils/FileSystemUtils.ts`                                                 | `saveIfDirty` read `workspace.textDocuments`. Every `readJsonFile` user therefore imported a `vscode` file.                                                                                                                                                                                              | Done / 5a      | `saveIfDirty` now lives in `src/platform/VsCodeDocuments.ts`; neutral JSON/file helpers remain.                                                                                 |
+| `src/completions/CompletionHelpers.ts`                                         | VS Code completion composition, conversion, configuration subscription, and output-channel slug.                                                                                                                                                                                                         | Done / 5c      | Contains only the VS Code composition root and adapter helpers; all completion discovery and ranking lives in `CompletionCore`, with symbols/editor context behind their ports. |
+| `src/completions/BranchCompletionHelpers.ts`, `SlashTokenCompletionHelpers.ts` | only `vscode.CompletionItemKind` (1 and 3 uses)                                                                                                                                                                                                                                                          | Done / 5a      | Use project-owned `COMPLETION_ITEM_KINDS`; VS Code completion conversion maps those kinds in one place.                                                                         |
+| `src/completions/ScriptCommandCompletionHelpers.ts`                            | `workspaceFolders`, `createFileSystemWatcher("**/package.json")` (`:424`)                                                                                                                                                                                                                                | Done / 5a      | Receives named roots and `FileWatcherFactory`; contains no `vscode` import.                                                                                                     |
+| `src/server/HostedWorkspaceViewerService.ts`                                   | Owned the bounded non-git `walkSearchFiles` fallback used by viewer search.                                                                                                                                                                                                                              | Done / 5a      | The viewer and completion core share `src/utils/WorkspaceSearchFileWalker.ts`; the viewer search regression tests remain unchanged.                                             |
 
 ### Resolved since the original audit
 
@@ -450,7 +457,7 @@ interface FileWatcherFactory {
 ### User feedback and interactions
 
 Done. See
-[`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md).
+[`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md).
 
 - `UserFeedbackSink` implementations: `CompositeUserFeedbackSink`,
   `ConsoleUserFeedbackSink` (CLI), `VsCodeUserFeedbackSink`, and
@@ -617,18 +624,18 @@ rooted at the real entry points can. Every guard lives in
 `ts.CallExpression`/import nodes, and they fail in **both** directions, so a
 baseline can't go stale.
 
-| Guard                                                                 | Root / scope                                                            | Baseline (2026-10-06) | Goes to 0 at             |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------: | ------------------------ |
-| `vscodeImportersReachableFromOrchestrator` (explicit allowlist)       | `WorkflowOrchestrator.ts`, value imports only (`import type` erased)    |                     0 | —                        |
-| `orchestratorDirectVsCodeImports`                                     | `WorkflowOrchestrator.ts`                                               |                     0 | —                        |
-| `orchestratorVsCodeConstructorParams`                                 | orchestrator constructor                                                |                     0 | —                        |
-| `workflowInstanceDirectVsCodeImports`                                 | `WorkflowInstance.ts`                                                   |                     0 | —                        |
-| `coreVsCodeAdapterConstructions`                                      | `src/core/**`                                                           |                     0 | —                        |
-| `adapterUi` (`platform.log/warn/error/showProgress/showChoice`)       | all production code                                                     |                     0 | —                        |
+| Guard                                                                 | Root / scope                                                            | Baseline (2026-10-06) | Goes to 0 at     |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------: | ---------------- |
+| `vscodeImportersReachableFromOrchestrator` (explicit allowlist)       | `WorkflowOrchestrator.ts`, value imports only (`import type` erased)    |                     0 | —                |
+| `orchestratorDirectVsCodeImports`                                     | `WorkflowOrchestrator.ts`                                               |                     0 | —                |
+| `orchestratorVsCodeConstructorParams`                                 | orchestrator constructor                                                |                     0 | —                |
+| `workflowInstanceDirectVsCodeImports`                                 | `WorkflowInstance.ts`                                                   |                     0 | —                |
+| `coreVsCodeAdapterConstructions`                                      | `src/core/**`                                                           |                     0 | —                |
+| `adapterUi` (`platform.log/warn/error/showProgress/showChoice`)       | all production code                                                     |                     0 | —                |
 | `directMessage.reusable` / `.boundary` (`vscode.window.show*Message`) | all production code; 7-file boundary allowlist                          |                0 / 41 | Stage 3 complete |
-| `webviewToast`                                                        | webview toast call sites outside the host-aware dispatcher              |                     1 | —                        |
-| CLI/MCP runtime graph loads `vscode`                                  | `src/cli.ts`, `src/mcp-server.ts`, including package `require()` graphs |                  `[]` | —                        |
-| Dashboard/server runtime graph loads `vscode`                         | `src/ui/DashboardApplication.ts`, `src/server/CtrlYokeHostedServer.ts`  |                  `[]` | Stage 6 complete          |
+| `webviewToast`                                                        | webview toast call sites outside the host-aware dispatcher              |                     1 | —                |
+| CLI/MCP runtime graph loads `vscode`                                  | `src/cli.ts`, `src/mcp-server.ts`, including package `require()` graphs |                  `[]` | —                |
+| Dashboard/server runtime graph loads `vscode`                         | `src/ui/DashboardApplication.ts`, `src/server/CtrlYokeHostedServer.ts`  |                  `[]` | Stage 6 complete |
 
 New guards are added by the stage that makes them true:
 
@@ -968,7 +975,10 @@ Don't add a parallel `WebSocketMessageRouter`, and don't copy handlers into a
 7. **Done — Stage 5a.** Give `ScriptCommandCompletionHelpers`' `**/package.json`
    watcher the `FileWatcherFactory` and injected roots.
 
-### Phase 7 — Standalone application/server composition (Staging Stage 7a)
+### Phase 7 — Standalone application/server composition (moved)
+
+**Moved on 2026-10-06** to `STANDALONE_SERVER_PLAN.md` Phases 5–6 and its
+Phase 10 guard-root bullet (staging Stage 7a). The obligations as they stood:
 
 `STANDALONE_SERVER_PLAN.md` Phases 5–7 own the details. The decoupling
 obligations are:
@@ -984,7 +994,10 @@ obligations are:
    `HostedWorkspaceViewerService` with one named root.
 4. Add `src/cli/ServerCommand.ts` as a guard root.
 
-### Phase 8 — Retire the Node-side shim (Staging Stage 10)
+### Phase 8 — Retire the Node-side shim (moved)
+
+**Moved on 2026-10-06** to `STANDALONE_SERVER_PLAN.md` Phase 11 (staging
+Stage 10), which is now the authoritative copy. The items as they stood:
 
 1. Verify `ctrlyoke run`, `validate`, `commit`, `history`, `status`, `step`,
    `secret`, and `server` with the real Node module graph. The CLI/MCP static
@@ -1083,22 +1096,24 @@ None remain open. All of them were resolved by 2026-10-06:
   Phase 4).
 - **DONE 2026-10-04:** `src/cli.ts` and `src/mcp-server.ts` reach no `vscode`
   load.
-- `vscodeImportersReachableFromOrchestrator` and
-  `coreVsCodeAdapterConstructions` are 0 (Stage 2).
-- All seven production watcher sites use `FileWatcherFactory` (zero direct
+- **DONE — Stage 2:** `vscodeImportersReachableFromOrchestrator` and
+  `coreVsCodeAdapterConstructions` are 0.
+- **DONE — Stages 1 and 5:** all seven production watcher sites use `FileWatcherFactory` (zero direct
   `vscode.workspace.createFileSystemWatcher` calls outside `VsCodeFileWatcher.ts`), and a contract suite
   passes against both the VS Code and chokidar implementations (Stages 1
   and 5).
-- `PlatformAdapter` has no `isVsCode`, `openTextFile`, or `focusDashboard`;
+- **DONE — Stage 2:** `PlatformAdapter` has no `isVsCode`, `openTextFile`, or `focusDashboard`;
   `interactiveTerminal` is explicit (Stage 2).
 - **DONE — Stage 6:** `WebviewMessageRouter`, its delegates, and `DashboardApplication` have no
   direct VS Code commands, window, workspace, URI, `Memento`, or editor
   dependencies (Stages 3–6).
 - **DONE — Stage 6:** One `DashboardApplication` and one `CtrlYokeHostedServer` class serve the
-  VS Code panel, the VS Code-hosted browser, and the standalone browser
-  (Stages 6 and 7a).
-- Node composition uses one root without fabricating VS Code workspace
-  objects (Stage 7a).
-- Valid VS Code-native integrations stay native and extension-only.
-- No Node bundle aliases `vscode-shim.ts`, and the metafile check fails on any
-  `vscode` package or `src/platform/VsCode*` file (Stage 10).
+  VS Code panel and the VS Code-hosted browser. The standalone browser
+  reuses both in Stage 7a (standalone plan).
+- **Moved to the standalone plan (Stage 7a):** Node composition uses one
+  root without fabricating VS Code workspace objects.
+- **DONE:** valid VS Code-native integrations stay native and
+  extension-only; `npm test` passes with no changed VS Code behavior.
+- **Moved to the standalone plan (Stage 10, its Phase 11):** no Node bundle
+  aliases `vscode-shim.ts`, and the metafile check fails on any `vscode`
+  package or `src/platform/VsCode*` file.

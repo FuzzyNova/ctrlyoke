@@ -23,7 +23,7 @@ Phase 1 adds the `trustedExternalRoots` denial alongside both.
   the user- and workspace-scope trust model this plan adds a third tier to.
   Read that plan first; this doc does not repeat its security model, only
   extends it.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
   owns the general native-vs-built-in-modal policy (decided 2026-09-02): this
   plan's approval UI is built **once**, host-neutral, from the start — there
   is no VS Code-native interim state and no separate browser-only dialog to

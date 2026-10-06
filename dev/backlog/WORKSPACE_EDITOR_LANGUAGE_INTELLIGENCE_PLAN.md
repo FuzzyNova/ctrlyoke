@@ -27,7 +27,7 @@ server class. Two pieces run earlier:
   Phase 8 uses this plan's `SymbolIndex` port with `RegexSymbolIndex`. The
   one-off `LspSymbolClient` is not built. `LspSymbolIndex` (phase 7b here)
   later upgrades standalone `#` through the same port.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
   the managed language-server host must stay in the Node-only graph. Phase 6
   item 4 of that plan is where `VsCodeSymbolIndex` and the completion core
   land.
