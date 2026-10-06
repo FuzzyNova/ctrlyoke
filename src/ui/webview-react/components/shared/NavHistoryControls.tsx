@@ -31,9 +31,11 @@ export const NavHistoryControls: React.FC<NavHistoryControlsProps> = ({
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
 
+  // `flex`, not `inline-flex`: callers pass `hidden md:flex`, and Tailwind 4
+  // emits `.inline-flex` after `.hidden`, so it would override the hide.
   return (
     <div
-      className={`inline-flex shrink-0 ${btnSize.groupContainer} ${className}`}
+      className={`flex shrink-0 ${btnSize.groupContainer} ${className}`}
       role="group"
       aria-label="Navigation history"
     >

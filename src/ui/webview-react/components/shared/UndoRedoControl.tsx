@@ -501,9 +501,11 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const btnSizes = isMobile
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
-  const btnBase = `inline-flex items-center justify-center h-full min-w-[calc(var(--cy-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-hidden focus-visible:ring-1`;
+  // `flex`, not `inline-flex`: the history chevron adds `hidden lg:flex`, and
+  // Tailwind 4 emits `.inline-flex` after `.hidden`, so it would override the hide.
+  const btnBase = `flex items-center justify-center h-full min-w-[calc(var(--cy-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-hidden focus-visible:ring-1`;
   const btnBaseDesktop =
-    "inline-flex h-full self-stretch items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-hidden focus-visible:ring-1";
+    "flex h-full self-stretch items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-hidden focus-visible:ring-1";
   const resolvedBtnBase = isMobile ? btnBase : btnBaseDesktop;
   const activeClass =
     "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
