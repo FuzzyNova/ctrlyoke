@@ -15,7 +15,7 @@ const SHELL_WORKFLOW_ID = "_shell";
 const ACTION_CLASS =
   "inline-flex min-w-0 max-w-full items-center gap-1 transition-colors";
 
-const CHIP_CLASS = "rounded border px-1.5 py-0.5";
+const CHIP_CLASS = "rounded-sm border px-1.5 py-0.5";
 const CHIP_PRESSED_CLASS = "border-focus-border text-foreground";
 const CHIP_IDLE_CLASS = "border-panel-border text-description-fg";
 
@@ -72,7 +72,7 @@ export const ParallelGroupHeaderRowView: React.FC<
   );
 
   return (
-    <div className="mx-2 mb-1 rounded border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs">
+    <div className="mx-2 mb-1 rounded-sm border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-semibold text-foreground">
           {parallelGroupHeaderTitle(row)}

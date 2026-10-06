@@ -401,7 +401,7 @@ export function KeyValueRowsEditor({
                 addRow();
               }
             }}
-            className={`h-7 min-w-0 flex-1 rounded border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${fieldValidationBorderClass(rowDiagnostics.value)}`}
+            className={`h-7 min-w-0 flex-1 rounded-sm border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60 ${fieldValidationBorderClass(rowDiagnostics.value)}`}
           />
           {allowSecretReferences && (
             <div className="relative shrink-0">
@@ -415,7 +415,7 @@ export function KeyValueRowsEditor({
                     current === row.id ? null : row.id
                   )
                 }
-                className="inline-flex h-7 w-7 items-center justify-center rounded border border-input-border bg-input-bg text-description-fg hover:text-foreground focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-input-border bg-input-bg text-description-fg hover:text-foreground focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Icon name="key" />
               </button>
@@ -423,7 +423,7 @@ export function KeyValueRowsEditor({
                 <div
                   role="listbox"
                   aria-label={`Secrets for ${row.key || "empty row"}`}
-                  className="absolute right-0 z-10 mt-1 flex max-h-48 min-w-48 flex-col overflow-auto rounded border border-panel-border bg-input-bg p-1 shadow-lg"
+                  className="absolute right-0 z-10 mt-1 flex max-h-48 min-w-48 flex-col overflow-auto rounded-sm border border-panel-border bg-input-bg p-1 shadow-lg"
                 >
                   {secretNames.length > 0 ? (
                     secretNames.map((name) => (
@@ -434,7 +434,7 @@ export function KeyValueRowsEditor({
                         aria-label={`Use secret ${name}`}
                         aria-selected={row.value === `\${secret:${name}}`}
                         onClick={() => selectSecret(row.id, name)}
-                        className="rounded px-2 py-1 text-left text-xs text-input-fg hover:bg-list-hover-bg focus:bg-list-hover-bg focus:outline-none"
+                        className="rounded-sm px-2 py-1 text-left text-xs text-input-fg hover:bg-list-hover-bg focus:bg-list-hover-bg focus:outline-hidden"
                       >
                         {name} → $&#123;secret:{name}&#125;
                       </button>
@@ -483,7 +483,7 @@ export function KeyValueRowsEditor({
           aria-pressed={isBulkEdit}
           disabled={disabled}
           onClick={isBulkEdit ? exitBulkEdit : enterBulkEdit}
-          className="self-start text-xs text-link-fg underline hover:no-underline focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          className="self-start text-xs text-link-fg underline hover:no-underline focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isBulkEdit ? "Exit bulk edit" : "Bulk edit"}
         </button>
@@ -498,10 +498,10 @@ export function KeyValueRowsEditor({
             }}
             disabled={disabled}
             rows={Math.max(3, rows.length)}
-            className="w-full resize-none rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full resize-none rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
           />
         ) : rows.length === 0 ? (
-          <p className="rounded border border-panel-border px-3 py-2 text-xs text-description-fg">
+          <p className="rounded-sm border border-panel-border px-3 py-2 text-xs text-description-fg">
             No {entryNoun}s configured.
           </p>
         ) : (
@@ -540,7 +540,7 @@ export function KeyValueRowsEditor({
                       }
                       onPaste={(event) => handleKeyPaste(row.id, event)}
                       onBlur={() => commitRows(rowsRef.current)}
-                      className={`h-7 w-full min-w-0 rounded border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${fieldValidationBorderClass(rowDiagnostics.key)}`}
+                      className={`h-7 w-full min-w-0 rounded-sm border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60 ${fieldValidationBorderClass(rowDiagnostics.key)}`}
                     />
                     <FieldDiagnostic
                       id={keyDiagnosticId}

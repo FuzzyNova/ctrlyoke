@@ -264,7 +264,7 @@ const EditorSectionInner: React.FC = () => {
         {/* Left: Collapse trigger (chevron + icon + label) */}
         <button
           type="button"
-          className="flex flex-shrink-0 appearance-none items-center gap-1 border-0 bg-transparent p-0 text-description-fg transition-colors hover:text-foreground"
+          className="flex shrink-0 appearance-none items-center gap-1 border-0 bg-transparent p-0 text-description-fg transition-colors hover:text-foreground"
           onClick={handleToggle}
           aria-label="Collapse editor"
         >
@@ -345,7 +345,7 @@ const EditorSectionInner: React.FC = () => {
                     : "Enable step"
               }
               aria-pressed={!enabledMixed && !bulkEnabled}
-              className={`control-button flex items-center flex-shrink-0 px-0.5 bg-transparent border-none leading-none transition-colors ${
+              className={`control-button flex items-center shrink-0 px-0.5 bg-transparent border-none leading-none transition-colors ${
                 !enabledMixed && !bulkEnabled
                   ? "text-warning-fg hover:text-warning-fg cursor-pointer"
                   : "text-description-fg hover:text-foreground cursor-pointer"
@@ -392,7 +392,7 @@ const EditorSectionInner: React.FC = () => {
                 onBlur={saveNameEdit}
                 placeholder="Step name (optional)"
                 aria-label="Step name"
-                className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48 max-w-full min-w-0"
+                className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded-sm outline-hidden w-48 max-w-full min-w-0"
                 style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
               />
             ) : (

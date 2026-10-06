@@ -77,9 +77,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
     : workspacePath;
 
   return (
-    <div className="flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
+    <div className="flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg shrink-0">
       {/* Tab buttons — fixed left, never shrink */}
-      <div className="flex items-center flex-shrink-0" role="tablist">
+      <div className="flex items-center shrink-0" role="tablist">
         <button
           className={`cy-tab cy-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.EXPLORER ? "cy-tab-active cy-tab-hc-selected" : "cy-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.EXPLORER)}
@@ -121,7 +121,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
         <div className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 max-w-full min-w-0">
           <Icon
             name={titleFilePath ? "codicon-file" : "codicon-project"}
-            className="codicon-sm flex-shrink-0"
+            className="codicon-sm shrink-0"
           />
           <span className="truncate" data-testid="workspace-name">
             {titleFilePath
@@ -130,7 +130,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           </span>
           {showDirtyDot && (
             <span
-              className="text-[var(--status-warning)] flex-shrink-0"
+              className="text-(--status-warning) shrink-0"
               title="Unsaved changes"
             >
               ●

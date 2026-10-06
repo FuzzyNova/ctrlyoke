@@ -274,7 +274,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         metaBadge={
           workflow.externalOwner != null ? (
             <span
-              className="whitespace-nowrap rounded border border-btn-border bg-btn-bg px-1.5 py-0.5 text-xxs font-semibold text-btn-fg"
+              className="whitespace-nowrap rounded-sm border border-btn-border bg-btn-bg px-1.5 py-0.5 text-xxs font-semibold text-btn-fg"
               title={getExternalReadOnlyLabel(workflow.externalOwner)}
             >
               {getExternalOwnerBadgeLabel(workflow.externalOwner)}
@@ -312,7 +312,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                     onPause();
                   }}
                   onKeyDown={(e) => e.stopPropagation()}
-                  className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+                  className="p-0.5 rounded-sm text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
                 >
                   <Icon name="debug-pause" />
                 </button>
@@ -326,7 +326,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                     onCancelPause();
                   }}
                   onKeyDown={(e) => e.stopPropagation()}
-                  className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+                  className="p-0.5 rounded-sm text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
                 >
                   <Icon name="debug-continue" />
                 </button>
@@ -340,7 +340,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                     onResume();
                   }}
                   onKeyDown={(e) => e.stopPropagation()}
-                  className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+                  className="p-0.5 rounded-sm text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
                 >
                   <Icon name="debug-continue" />
                 </button>
@@ -355,7 +355,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                   onStop();
                 }}
                 onKeyDown={(e) => e.stopPropagation()}
-                className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+                className="p-0.5 rounded-sm text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
               >
                 <Icon name="debug-stop" />
               </button>

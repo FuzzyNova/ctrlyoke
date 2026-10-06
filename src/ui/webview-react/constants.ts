@@ -98,14 +98,13 @@ export const HEADER_BUTTON_SIZES = {
   },
   /** Mobile / touch: height controlled by --cy-touch-target in globals.css */
   touch: {
-    iconButton:
-      "h-[var(--cy-touch-target)] min-w-[var(--cy-touch-target)] px-2 text-sm",
-    groupContainer: "h-[var(--cy-touch-target)]",
+    iconButton: "h-(--cy-touch-target) min-w-(--cy-touch-target) px-2 text-sm",
+    groupContainer: "h-(--cy-touch-target)",
     splitButtonMain: "h-full px-2 sm:px-3 text-sm",
     splitButtonDropdown:
       "h-full min-w-[calc(var(--cy-touch-target)-2px)] px-2 text-sm",
     icon: "codicon-lg",
-    mobileToggleButton: "h-[var(--cy-touch-target)]",
+    mobileToggleButton: "h-(--cy-touch-target)",
     separatorPy: "h-full py-0",
   },
 } as const;
@@ -246,7 +245,7 @@ export const WORKFLOW_STATUS_BUTTON_SIZES = {
   },
   /** Mobile / touch: height controlled by --cy-touch-target in globals.css */
   touch: {
-    container: "h-[var(--cy-touch-target)]",
+    container: "h-(--cy-touch-target)",
     mainButton: "h-full px-3",
     triggerButton: "h-full px-3",
     separatorPy: "h-full py-0",

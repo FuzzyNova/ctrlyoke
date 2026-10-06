@@ -1,6 +1,6 @@
 /**
  * Shared color mapping for git source-control status, matching VS Code's
- * gitDecoration palette (see tailwind.config.js scm-*-fg tokens).
+ * gitDecoration palette (see the `--color-scm-*-fg` tokens in styles/globals.css).
  */
 import type { SourceControlFile } from "@root/types/HostedWorkspaceViewerTypes";
 

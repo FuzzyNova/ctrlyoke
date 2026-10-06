@@ -24,13 +24,13 @@ export const CoordinationActivityPanel: React.FC = () => {
 
   return (
     <aside
-      className="rounded border border-panel-border bg-sidebar-bg/50 px-3 py-2 text-xs"
+      className="rounded-sm border border-panel-border bg-sidebar-bg/50 px-3 py-2 text-xs"
       aria-label="Execution-root coordination"
       data-coordination-panel="true"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-semibold text-[var(--fg-primary)]">
+          <div className="font-semibold text-(--fg-primary)">
             Execution-root coordination board
           </div>
           <div
@@ -56,7 +56,7 @@ export const CoordinationActivityPanel: React.FC = () => {
         {scope.attestationNotice}
       </div>
 
-      <div className="mt-2 font-medium text-[var(--fg-secondary)]">
+      <div className="mt-2 font-medium text-(--fg-secondary)">
         Participants ({participants.length})
       </div>
       {participants.length === 0 ? (
@@ -74,7 +74,7 @@ export const CoordinationActivityPanel: React.FC = () => {
         </ul>
       )}
 
-      <div className="mt-2 font-medium text-[var(--fg-secondary)]">
+      <div className="mt-2 font-medium text-(--fg-secondary)">
         Recent entries
       </div>
       {entries.length === 0 ? (
@@ -87,7 +87,7 @@ export const CoordinationActivityPanel: React.FC = () => {
           data-untrusted-content="true"
         >
           {[...entries].reverse().map((entry) => (
-            <li key={entry.seq} className="whitespace-pre-wrap break-words">
+            <li key={entry.seq} className="whitespace-pre-wrap wrap-break-word">
               <span className="font-medium">
                 {coordinationParticipantAttribution(entry.from)}
               </span>

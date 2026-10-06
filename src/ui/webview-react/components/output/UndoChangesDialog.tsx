@@ -384,7 +384,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           } = row;
           const stateChip =
             row.direction === UNDO_REDO_DIRECTIONS.REDO ? (
-              <span className="rounded bg-severity-info-bg px-1.5 py-0.5 text-[10px] font-sans font-medium text-terminal-ansiGreen">
+              <span className="rounded-sm bg-severity-info-bg px-1.5 py-0.5 text-[10px] font-sans font-medium text-terminal-ansiGreen">
                 Undone
               </span>
             ) : undefined;
@@ -534,7 +534,7 @@ const ResultBanner: React.FC<ResultBannerProps> = ({
   const failVerb = mode === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo";
   if (result === RESULT_STATE.SUCCESS) {
     return (
-      <div className="mb-3 flex gap-2 rounded px-3 py-2 text-xs bg-severity-info-bg text-info-fg border border-info-fg border-opacity-30">
+      <div className="mb-3 flex gap-2 rounded-sm px-3 py-2 text-xs bg-severity-info-bg text-info-fg border border-info-fg/30">
         <span>✅</span>
         <span>
           {undoResult?.restoredFiles.length ?? 0} file
@@ -547,7 +547,7 @@ const ResultBanner: React.FC<ResultBannerProps> = ({
 
   if (result === RESULT_STATE.PARTIAL) {
     return (
-      <div className="mb-3 flex gap-2 rounded px-3 py-2 text-xs bg-severity-warning-bg text-warning-fg border border-warning-fg border-opacity-30">
+      <div className="mb-3 flex gap-2 rounded-sm px-3 py-2 text-xs bg-severity-warning-bg text-warning-fg border border-warning-fg/30">
         <span>⚠️</span>
         <div>
           <div>
@@ -555,10 +555,7 @@ const ResultBanner: React.FC<ResultBannerProps> = ({
             {undoResult?.failedFiles.length ?? 0} failed.
           </div>
           {undoResult?.failedFiles.map((file) => (
-            <div
-              key={file.path}
-              className="mt-0.5 font-mono [overflow-wrap:anywhere]"
-            >
+            <div key={file.path} className="mt-0.5 font-mono wrap-anywhere">
               {file.path}: {file.error}
             </div>
           ))}
@@ -568,15 +565,12 @@ const ResultBanner: React.FC<ResultBannerProps> = ({
   }
 
   return (
-    <div className="mb-3 flex gap-2 rounded px-3 py-2 text-xs bg-severity-error-bg text-error-fg border border-error-fg border-opacity-30">
+    <div className="mb-3 flex gap-2 rounded-sm px-3 py-2 text-xs bg-severity-error-bg text-error-fg border border-error-fg/30">
       <span>❌</span>
       <div>
         <div>{failVerb} failed.</div>
         {undoResult?.failedFiles.map((file) => (
-          <div
-            key={file.path}
-            className="mt-0.5 font-mono [overflow-wrap:anywhere]"
-          >
+          <div key={file.path} className="mt-0.5 font-mono wrap-anywhere">
             {file.path}: {file.error}
           </div>
         ))}

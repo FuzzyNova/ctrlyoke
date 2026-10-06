@@ -141,7 +141,7 @@ export function ErrorBehaviorEditor({
                 });
               }}
               disabled={disabled}
-              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border"
             />
           </div>
 
@@ -184,7 +184,7 @@ export function ErrorBehaviorEditor({
                 });
               }}
               disabled={disabled}
-              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border"
             />
           </div>
         </div>

@@ -142,7 +142,7 @@ export const CreateScriptModal: React.FC<CreateScriptModalProps> = ({
             onChange={(event) => setScriptName(event.target.value)}
             disabled={pending}
             autoFocus
-            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border disabled:opacity-50"
           />
           <span className="text-xxs text-description-fg">
             The script will be created in .ctrlyoke/scripts.

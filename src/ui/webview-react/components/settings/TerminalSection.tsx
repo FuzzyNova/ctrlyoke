@@ -213,7 +213,7 @@ export function TerminalSection({
             value={terminal.wordSeparators}
             placeholder={" ()[]{}',\"`"}
             onCommit={(v) => onUpdate("terminal.wordSeparators", v)}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
           />
         </SettingInputRow>
 
@@ -271,7 +271,7 @@ export function TerminalSection({
                   value={terminal.shellExecutable}
                   placeholder="C:\\Program Files\\PowerShell\\7\\pwsh.exe"
                   onCommit={(v) => onUpdate("terminal.shellExecutable", v)}
-                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                  className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
                 />
               </SettingInputRow>
             )}
@@ -304,7 +304,7 @@ export function TerminalSection({
                     : "Auto-detected from $SHELL, then /bin/bash"
                 }
                 onCommit={(v) => onUpdate("terminal.shellExecutable", v)}
-                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
               />
             </SettingInputRow>
 

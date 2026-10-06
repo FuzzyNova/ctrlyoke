@@ -33,7 +33,7 @@ export const NavHistoryControls: React.FC<NavHistoryControlsProps> = ({
 
   return (
     <div
-      className={`inline-flex flex-shrink-0 ${btnSize.groupContainer} ${className}`}
+      className={`inline-flex shrink-0 ${btnSize.groupContainer} ${className}`}
       role="group"
       aria-label="Navigation history"
     >

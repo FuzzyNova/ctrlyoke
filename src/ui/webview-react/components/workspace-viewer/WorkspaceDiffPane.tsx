@@ -218,7 +218,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   if (fileHistoryActive && fileHistoryPath) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0">
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border shrink-0">
           <button
             type="button"
             onClick={handleFileHistoryBack}
@@ -261,22 +261,22 @@ export const WorkspaceDiffPane: React.FC = () => {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Ref header banner */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-panel-border flex-shrink-0">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-panel-border shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <Icon
               name="git-commit"
-              className="flex-shrink-0 text-sm text-editor-fg opacity-60"
+              className="shrink-0 text-sm text-editor-fg opacity-60"
             />
             <span className="text-xs font-semibold text-editor-fg truncate">
               {pagedGitRefDiff.refLabel}
             </span>
-            <span className="text-xs text-editor-fg opacity-40 flex-shrink-0">
+            <span className="text-xs text-editor-fg opacity-40 shrink-0">
               {pagedGitRefDiff.totalCount === 1
                 ? "1 file"
                 : `${pagedGitRefDiff.totalCount} files`}
             </span>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {pagedGitRefDiff.totalCount > 0 && (
               <ExpandCollapseAllDiffsButton
                 anyDiffCollapsed={commitDiffsCollapsed}
@@ -301,7 +301,7 @@ export const WorkspaceDiffPane: React.FC = () => {
 
         {/* Commit details (collapsible) */}
         {pagedGitRefDiff.commitInfo && (
-          <div className="border-b border-panel-border flex-shrink-0">
+          <div className="border-b border-panel-border shrink-0">
             <button
               onClick={() => setCommitDetailsExpanded((v) => !v)}
               aria-label="Toggle commit details"
@@ -314,7 +314,7 @@ export const WorkspaceDiffPane: React.FC = () => {
             >
               <Icon
                 name="chevron-right"
-                className={`text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
+                className={`text-xs shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
               />
               <span className="truncate font-medium">
                 {pagedGitRefDiff.commitInfo.subject}
@@ -378,22 +378,22 @@ export const WorkspaceDiffPane: React.FC = () => {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Ref header banner */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-panel-border flex-shrink-0">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-panel-border shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <Icon
               name="git-commit"
-              className="flex-shrink-0 text-sm text-editor-fg opacity-60"
+              className="shrink-0 text-sm text-editor-fg opacity-60"
             />
             <span className="text-xs font-semibold text-editor-fg truncate">
               {diffRefLabel}
             </span>
-            <span className="text-xs text-editor-fg opacity-40 flex-shrink-0">
+            <span className="text-xs text-editor-fg opacity-40 shrink-0">
               {visibleFiles.length === 1
                 ? "1 file"
                 : `${visibleFiles.length} files`}
             </span>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {visibleFiles.length > 0 && (
               <ExpandCollapseAllDiffsButton
                 anyDiffCollapsed={commitDiffsCollapsed}
@@ -418,7 +418,7 @@ export const WorkspaceDiffPane: React.FC = () => {
 
         {/* Commit details (collapsible) */}
         {diffCommitInfo && (
-          <div className="border-b border-panel-border flex-shrink-0">
+          <div className="border-b border-panel-border shrink-0">
             <button
               onClick={() => setCommitDetailsExpanded((v) => !v)}
               aria-label="Toggle commit details"
@@ -431,7 +431,7 @@ export const WorkspaceDiffPane: React.FC = () => {
             >
               <Icon
                 name="chevron-right"
-                className={`text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
+                className={`text-xs shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
               />
               <span className="truncate font-medium">
                 {diffCommitInfo.subject}

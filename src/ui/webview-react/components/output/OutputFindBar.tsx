@@ -97,7 +97,7 @@ export function OutputFindBar({
     <div
       ref={containerDivRef}
       role="search"
-      className={`absolute right-[calc(var(--cy-output-minimap-width)_+_0.5rem)] top-0 z-content-floating flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+      className={`absolute right-[calc(var(--cy-output-minimap-width)+0.5rem)] top-0 z-content-floating flex items-center gap-1.5 overflow-hidden rounded-sm border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
         isNarrow ? "left-2" : ""
       } ${closing ? "animate-output-find-exit" : "animate-output-find-enter"}`}
       onKeyDown={onKeyDown}
@@ -110,7 +110,7 @@ export function OutputFindBar({
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Find in output"
         aria-label="Find in output"
-        className="h-7 min-w-0 flex-1 basis-32 rounded border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-none focus:border-focus-border"
+        className="h-7 min-w-0 flex-1 basis-32 rounded-sm border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-hidden focus:border-focus-border"
       />
       <span
         className={`shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-description-fg ${

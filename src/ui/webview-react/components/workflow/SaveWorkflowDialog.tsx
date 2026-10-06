@@ -366,13 +366,13 @@ export const SaveWorkflowDialog: React.FC = () => {
             <div
               role="group"
               aria-labelledby="format-label"
-              className="inline-flex rounded border border-btn-border overflow-hidden"
+              className="inline-flex rounded-sm border border-btn-border overflow-hidden"
             >
               {Object.values(WORKFLOW_FILE_FORMATS).map((fmt) => (
                 <button
                   key={fmt}
                   type="button"
-                  className={`px-4 py-1.5 text-sm font-medium transition-colors focus:outline-none ${
+                  className={`px-4 py-1.5 text-sm font-medium transition-colors focus:outline-hidden ${
                     format === fmt
                       ? "bg-btn-bg text-btn-fg"
                       : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -402,7 +402,7 @@ export const SaveWorkflowDialog: React.FC = () => {
                 onChange={handleTemplateNameChange}
                 onKeyDown={handleKeyDown}
                 placeholder="my-custom-template"
-                className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
+                className={`w-full px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border focus:outline-hidden ${
                   templateNameError
                     ? "border-input-error-border"
                     : "border-input-border focus:border-focus-border"
@@ -439,7 +439,7 @@ export const SaveWorkflowDialog: React.FC = () => {
               </span>
               <div className="flex items-center gap-1.5">
                 <span
-                  className="flex-1 min-w-0 truncate px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border font-mono text-xs"
+                  className="flex-1 min-w-0 truncate px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border font-mono text-xs"
                   title={location || "(workspace root)"}
                 >
                   {location || "(workspace root)"}
@@ -473,7 +473,7 @@ export const SaveWorkflowDialog: React.FC = () => {
                   onKeyDown={handleKeyDown}
                   spellCheck={false}
                   placeholder="my-workflow"
-                  className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none font-mono text-xs ${
+                  className={`w-full px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border focus:outline-hidden font-mono text-xs ${
                     nameError
                       ? "border-input-error-border"
                       : "border-input-border focus:border-focus-border"

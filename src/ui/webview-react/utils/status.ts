@@ -633,7 +633,7 @@ const EXECUTION_STATE_BADGE_CLASSES: Record<ExecutionState, string> = {
  * @returns Tailwind classes for badge styling
  *
  * @example
- * <span className={`px-1.5 py-0.5 rounded ${getExecutionStateBadgeClass("running")}`}>
+ * <span className={`px-1.5 py-0.5 rounded-sm ${getExecutionStateBadgeClass("running")}`}>
  *   Running
  * </span>
  */

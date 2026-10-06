@@ -42,7 +42,7 @@ export const ExecutionStateBadge: React.FC<ExecutionStateBadgeProps> = ({
     unstarted && state === EXECUTION_STATES.IDLE ? UNSTARTED_LABEL : state;
   return (
     <span
-      className={`inline-flex items-center rounded px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(state)} ${className}`}
+      className={`inline-flex items-center rounded-sm px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(state)} ${className}`}
       title={isNarrow ? label : undefined}
       role="status"
     >

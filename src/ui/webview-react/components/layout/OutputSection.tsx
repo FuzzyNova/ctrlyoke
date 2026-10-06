@@ -1590,7 +1590,7 @@ const OutputSectionInner: React.FC = () => {
     <button
       type="button"
       ref={mergedHeaderRef}
-      className="flex h-[30px] w-full flex-shrink-0 appearance-none flex-row items-center gap-1 border-0 border-b border-panel-border bg-sidebar-bg px-2 text-left text-description-fg transition-colors hover:text-foreground"
+      className="flex h-[30px] w-full shrink-0 appearance-none flex-row items-center gap-1 border-0 border-b border-panel-border bg-sidebar-bg px-2 text-left text-description-fg transition-colors hover:text-foreground"
       onClick={handleToggleOutputCollapse}
       aria-label="Expand output"
     >

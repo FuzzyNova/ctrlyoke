@@ -107,7 +107,7 @@ export const OutputScrollSeekPlaceholder: React.FC<{
   height: number;
 }> = ({ row, height }) => (
   <div
-    className="px-2 py-1 text-[length:var(--cy-output-font-size-xs)] text-description-fg"
+    className="px-2 py-1 text-(length:--cy-output-font-size-xs) text-description-fg"
     data-step-color-bar={row.stepColor ? "true" : undefined}
     style={{
       height: `${Math.max(1, height)}px`,
@@ -115,7 +115,7 @@ export const OutputScrollSeekPlaceholder: React.FC<{
       ...(row.stepColor ? getStepIdentityBarStyle(row.stepColor) : undefined),
     }}
   >
-    <div className="h-full min-h-6 rounded border border-panel-border bg-sidebar-bg/40 px-2 py-1 overflow-hidden">
+    <div className="h-full min-h-6 rounded-sm border border-panel-border bg-sidebar-bg/40 px-2 py-1 overflow-hidden">
       <span className="opacity-80">
         Rendering {getScrollSeekRowLabel(row)}...
       </span>

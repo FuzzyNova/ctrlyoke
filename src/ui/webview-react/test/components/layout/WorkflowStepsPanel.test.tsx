@@ -496,11 +496,7 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     render(<WorkflowStepsPanel />);
 
     const boundary = screen.getByTestId("pause-boundary");
-    expect(boundary).toHaveClass(
-      "h-[2px]",
-      "bg-[var(--status-warning)]",
-      "top-0"
-    );
+    expect(boundary).toHaveClass("h-[2px]", "bg-(--status-warning)", "top-0");
     expect(boundary.closest("[data-workflow-step-index]")).toHaveAttribute(
       "data-workflow-step-index",
       "1"

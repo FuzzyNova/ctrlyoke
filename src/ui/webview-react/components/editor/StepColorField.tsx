@@ -117,7 +117,7 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
           type="button"
           onClick={reset}
           disabled={!hasOverride}
-          className="flex h-6 w-6 items-center justify-center rounded text-description-fg transition-colors hover:bg-toolbar-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-6 w-6 items-center justify-center rounded-sm text-description-fg transition-colors hover:bg-toolbar-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           title="Reset step color to inherit"
           aria-label="Reset step color to inherit"
         >
@@ -128,7 +128,7 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
         {mixed && (
           <div
             aria-hidden="true"
-            className="absolute inset-0 rounded border border-input-border"
+            className="absolute inset-0 rounded-sm border border-input-border"
             style={{
               background:
                 "repeating-linear-gradient(135deg, #808080 0 6px, #d0d0d0 6px 12px)",
@@ -141,7 +141,7 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
           value={color}
           onChange={(event) => setColor(event.target.value)}
           onBlur={commit}
-          className={`relative h-8 w-full cursor-pointer rounded border border-input-border bg-input-bg p-0.5 ${mixed ? "opacity-0" : ""}`}
+          className={`relative h-8 w-full cursor-pointer rounded-sm border border-input-border bg-input-bg p-0.5 ${mixed ? "opacity-0" : ""}`}
           title={
             mixed
               ? "Selected steps have mixed colors"

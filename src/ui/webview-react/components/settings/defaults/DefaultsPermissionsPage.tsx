@@ -83,7 +83,7 @@ export function DefaultsPermissionsPage({
           }
           placeholder={"read\nglob\ngrep"}
           fontSize="0.875rem"
-          className="w-full min-h-[72px] bg-input-bg border border-input-border rounded text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
+          className="w-full min-h-[72px] bg-input-bg border border-input-border rounded-sm text-sm text-foreground focus:outline-hidden focus:border-focus-border font-mono"
         />
         <PermissionCapabilitySummary
           id="defaults-allowed-tools-diagnostic"
@@ -105,7 +105,7 @@ export function DefaultsPermissionsPage({
           }
           placeholder={"shell(rm:*)\nwrite"}
           fontSize="0.875rem"
-          className="w-full min-h-[72px] bg-input-bg border border-input-border rounded text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
+          className="w-full min-h-[72px] bg-input-bg border border-input-border rounded-sm text-sm text-foreground focus:outline-hidden focus:border-focus-border font-mono"
         />
         <PermissionCapabilitySummary
           id="defaults-denied-tools-diagnostic"

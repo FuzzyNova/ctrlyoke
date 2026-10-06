@@ -447,7 +447,7 @@ export function WorktreesSection({
           onCommit={(value) => onUpdate("worktrees.root", value)}
           disabled={userScopeOnly}
           placeholder="Automatic"
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border disabled:opacity-60 disabled:cursor-not-allowed"
         />
         {userScopeOnly && (
           <p className="text-xs text-warning-fg mt-1" role="note">
@@ -467,7 +467,7 @@ export function WorktreesSection({
         <div
           id="worktrees-effective-root"
           role="status"
-          className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-sm text-description-fg font-mono break-all"
+          className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 text-sm text-description-fg font-mono break-all"
         >
           {effectiveRoot}
         </div>
@@ -741,7 +741,7 @@ function WorktreeRow({
   };
   return (
     <div
-      className={`rounded border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}
+      className={`rounded-sm border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}
     >
       <div className="font-mono break-all text-foreground">
         {entry.worktreePath}

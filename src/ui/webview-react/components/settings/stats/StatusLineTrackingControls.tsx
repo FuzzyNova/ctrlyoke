@@ -211,7 +211,7 @@ export function StatusLineTrackingControls({
   };
 
   return (
-    <div className="rounded border border-panel-border bg-panel-bg p-2 space-y-2">
+    <div className="rounded-sm border border-panel-border bg-panel-bg p-2 space-y-2">
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <HarnessIcon harnessId={harnessId} size={16} />
         <span>{harnessName}</span>
@@ -237,7 +237,7 @@ export function StatusLineTrackingControls({
           value={tracking.customCommand}
           onCommit={(value) => sendGlobalSetting(paths.customCommand, value)}
           placeholder="None"
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border font-mono"
         />
       </SettingInputRow>
       <SettingToggleRow

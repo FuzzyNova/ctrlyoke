@@ -66,7 +66,7 @@ export interface SchemaOptionMeta<V extends string> {
   alias?: { reason: string };
   visual?: {
     codicon: string;
-    /** Tailwind text-color class; see the tailwind.config.js content globs. */
+    /** Tailwind text-color class; scanned via the `@source` list in webview-react/styles/globals.css. */
     color: string;
   };
   short?: string;

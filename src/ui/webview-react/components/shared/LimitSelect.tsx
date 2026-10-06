@@ -133,7 +133,7 @@ export function LimitSelect({
           aria-label={schemaAriaLabel(`${label} Custom`, path)}
           title={schemaTitle(path)}
           disabled={disabled}
-          className="w-full min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full min-w-0 flex-1 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       )}
     </div>

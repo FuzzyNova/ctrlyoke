@@ -12,7 +12,7 @@ export interface PanelAnimationOptions {
 let animationToken = 0;
 
 /**
- * Briefly enables the flex-grow CSS transition on all [data-panel] elements.
+ * Briefly enables the grow CSS transition on all [data-panel] elements.
  *
  * The transition is intentionally disabled by default so that panels don't
  * animate during initial mount, window resize, or drag interactions. Call

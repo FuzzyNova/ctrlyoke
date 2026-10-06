@@ -135,7 +135,7 @@ export function HarnessesSection({
           return (
             <div
               key={harnessId}
-              className="border border-panel-border rounded p-3 space-y-2"
+              className="border border-panel-border rounded-sm p-3 space-y-2"
             >
               <div className="text-sm font-medium text-foreground">
                 {info.name}
@@ -163,7 +163,7 @@ export function HarnessesSection({
                       onUpdate(`defaults.models.${harnessId}`, v || undefined)
                     }
                     placeholder="Enter model ID"
-                    className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                    className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
                   />
                 )}
               </SettingInputRow>
@@ -186,7 +186,7 @@ export function HarnessesSection({
                       v || undefined
                     )
                   }
-                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                  className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
                 />
               </SettingInputRow>
               <SettingInputRow
@@ -213,7 +213,7 @@ export function HarnessesSection({
                       e.target.value
                     )
                   }
-                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                  className="w-full h-8 cursor-pointer rounded-sm border border-input-border p-0.5 bg-input-bg"
                   title={`${info.name} color`}
                 />
               </SettingInputRow>

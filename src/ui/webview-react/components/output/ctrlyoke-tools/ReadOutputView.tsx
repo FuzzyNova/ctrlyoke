@@ -25,7 +25,7 @@ export const ReadOutputBody: React.FC<ToolViewBodyProps> = ({
   const output = result as ReadOutputResult;
   let offset = 0;
   return (
-    <div className="space-y-2 text-[length:var(--cy-output-font-size-sm)]">
+    <div className="space-y-2 text-(length:--cy-output-font-size-sm)">
       {output.outputs.map((item) => {
         const heading = readOutputHeading(item);
         const start = offset;
@@ -59,7 +59,7 @@ export const ReadOutputBody: React.FC<ToolViewBodyProps> = ({
         return (
           <section
             key={item.index}
-            className="rounded border border-border/50 p-2"
+            className="rounded-sm border border-border/50 p-2"
           >
             <button
               type="button"
@@ -73,12 +73,12 @@ export const ReadOutputBody: React.FC<ToolViewBodyProps> = ({
               }
             >
               <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
-              <span className="min-w-0 flex-1 break-words">
+              <span className="min-w-0 flex-1 wrap-break-word">
                 {highlightText(heading, matchesFor(start, heading.length))}
               </span>
             </button>
             {expanded && item.responseText !== null && (
-              <div className="mt-2 break-words">
+              <div className="mt-2 wrap-break-word">
                 <MarkdownText
                   findDecorations={{
                     matches: matchesFor(
@@ -111,7 +111,7 @@ export const ReadOutputBody: React.FC<ToolViewBodyProps> = ({
         errorFindMatches={errorFindMatches}
         expansion={expansion}
         onExpansionChange={onExpansionChange}
-        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
+        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-(length:--cy-output-font-size-sm) hover:underline"
       />
     </div>
   );

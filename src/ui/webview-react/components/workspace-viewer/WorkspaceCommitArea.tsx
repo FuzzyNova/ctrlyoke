@@ -169,7 +169,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   }, [pulling, selectedRepoId, setPulling, setScmError, onRefresh]);
 
   return (
-    <div className="flex flex-col gap-2 p-3 flex-shrink-0">
+    <div className="flex flex-col gap-2 p-3 shrink-0">
       {repos.length > 1 && (
         <label className="flex flex-col gap-1">
           <span className="text-xxs font-semibold uppercase tracking-wide text-editor-fg opacity-50">
@@ -184,7 +184,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
               value={selectedRepoId ?? ""}
               onChange={(e) => setSelectedRepoId(e.target.value || null)}
               aria-label="Select repository"
-              className="w-full appearance-none rounded border border-panel-border bg-input-bg pl-7 pr-7 py-1 text-xs text-editor-fg focus:outline-none focus:border-focus-border"
+              className="w-full appearance-none rounded-sm border border-panel-border bg-input-bg pl-7 pr-7 py-1 text-xs text-editor-fg focus:outline-hidden focus:border-focus-border"
             >
               {repos.map((repo) => (
                 <option key={repo.id} value={repo.id}>
@@ -205,7 +205,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           onClick={handlePush}
           disabled={pushing}
           aria-label="Push commits"
-          className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-1 rounded-sm border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
         >
           {pushing ? (
             <Icon name="loading" className="animate-spin" />
@@ -219,7 +219,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           onClick={handlePull}
           disabled={pulling}
           aria-label="Pull commits"
-          className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-1 rounded-sm border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
         >
           {pulling ? (
             <Icon name="loading" className="animate-spin" />
@@ -246,7 +246,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
             aria-describedby={
               generatingCommitMessage ? "commit-message-generating" : undefined
             }
-            className="w-full resize-none rounded border border-panel-border bg-input-bg px-2 py-1.5 text-xs text-editor-fg placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border disabled:cursor-wait disabled:opacity-50"
+            className="w-full resize-none rounded-sm border border-panel-border bg-input-bg px-2 py-1.5 text-xs text-editor-fg placeholder:text-editor-fg/40 focus:outline-hidden focus:border-focus-border disabled:cursor-wait disabled:opacity-50"
           />
           {generatingCommitMessage && (
             <span
@@ -274,7 +274,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
               : "Generate commit message"
           }
           data-testid="generate-commit-message-btn"
-          className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover"
+          className="shrink-0 w-8 flex items-center justify-center self-stretch rounded-sm border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover"
         >
           {generatingCommitMessage ? (
             <Icon name="stop-circle" />
@@ -290,7 +290,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       <button
         onClick={handleCommit}
         disabled={commitMessage.trim() === "" || committing}
-        className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-bg px-3 py-1 text-xs text-btn-fg transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex w-full items-center justify-center gap-1 rounded-sm border border-btn-border bg-btn-bg px-3 py-1 text-xs text-btn-fg transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {committing ? (
           <Icon name="loading" className="animate-spin" />

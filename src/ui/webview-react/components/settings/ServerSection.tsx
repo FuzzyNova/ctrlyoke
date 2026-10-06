@@ -327,7 +327,7 @@ export function ServerSection({
           type="button"
           onClick={() => setActiveTab("license")}
           aria-label="Unlock Pro Features"
-          className="mb-3 flex w-full items-center gap-2 rounded border border-pro-brand px-3 py-2 text-left hover:bg-pro-brand/10"
+          className="mb-3 flex w-full items-center gap-2 rounded-sm border border-pro-brand px-3 py-2 text-left hover:bg-pro-brand/10"
         >
           <Icon name="key" className="text-pro-brand" />
           <span className="flex-1 min-w-0">
@@ -358,7 +358,7 @@ export function ServerSection({
 
         {/* Start/stop — server-side only */}
         {!isStandalone && (
-          <div className="rounded border border-panel-border p-3 space-y-3">
+          <div className="rounded-sm border border-panel-border p-3 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm text-foreground">Current session</div>
@@ -371,7 +371,7 @@ export function ServerSection({
               <button
                 type="button"
                 onClick={() => toggleServer(!serverRunning)}
-                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover"
+                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded-sm hover:bg-btn-secondary-hover"
               >
                 {serverRunning ? "Stop server" : "Start server"}
               </button>
@@ -397,7 +397,7 @@ export function ServerSection({
                 />
               </SettingInputRow>
             )}
-            <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded mt-2">
+            <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded-sm mt-2">
               <span
                 className="w-2 h-2 rounded-full bg-indicator-success shrink-0"
                 title="Server running"
@@ -472,7 +472,7 @@ export function ServerSection({
             </div>
 
             {showQr && (
-              <div className="mt-2 flex flex-col items-center gap-1 p-3 bg-white rounded">
+              <div className="mt-2 flex flex-col items-center gap-1 p-3 bg-white rounded-sm">
                 <canvas ref={qrCanvasRef} />
                 <p className="text-xs text-description-fg">
                   Scan to open on your phone
@@ -509,7 +509,7 @@ export function ServerSection({
                 id="server-port"
                 value={server.port}
                 onCommit={(v) => onUpdate("server.port", v)}
-                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
               />
             </SettingInputRow>
             {portFallbackForCurrentSetting && (
@@ -600,7 +600,7 @@ export function ServerSection({
       </div>
 
       {/* Icon Colors — visible to all clients; live SVG preview, colors persist on blur */}
-      <div className="relative mt-3 rounded border border-pro-brand px-3 pb-3 pt-2">
+      <div className="relative mt-3 rounded-sm border border-pro-brand px-3 pb-3 pt-2">
         <span className="absolute -top-2 right-2 bg-panel-bg px-1 text-xxs text-pro-brand">
           Pro Feature
         </span>
@@ -626,7 +626,7 @@ export function ServerSection({
                     }
                   }}
                   disabled={!customIconEnabled}
-                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full h-8 cursor-pointer rounded-sm border border-input-border p-0.5 bg-input-bg disabled:cursor-not-allowed disabled:opacity-50"
                   title="Icon background color"
                 />
               </SettingInputRow>
@@ -648,19 +648,19 @@ export function ServerSection({
                     }
                   }}
                   disabled={!customIconEnabled}
-                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full h-8 cursor-pointer rounded-sm border border-input-border p-0.5 bg-input-bg disabled:cursor-not-allowed disabled:opacity-50"
                   title="Icon foreground color"
                 />
               </SettingInputRow>
             </div>
           </div>
-          <div className="flex justify-center rounded border border-panel-border bg-editor-bg p-4">
+          <div className="flex justify-center rounded-sm border border-panel-border bg-editor-bg p-4">
             <img
               src={buildIconPreviewDataUrl(localBg, localFg)}
               alt="Icon preview"
               width={72}
               height={72}
-              className="h-[72px] w-[72px] rounded"
+              className="h-[72px] w-[72px] rounded-sm"
             />
           </div>
         </div>
@@ -687,7 +687,7 @@ export function ServerSection({
       {!isStandalone && (
         <fieldset
           disabled={!licenseAccess.hasRemoteAccess}
-          className={`relative mt-3 rounded border border-pro-brand px-3 pb-3 pt-2 ${!licenseAccess.hasRemoteAccess ? "opacity-50" : ""}`}
+          className={`relative mt-3 rounded-sm border border-pro-brand px-3 pb-3 pt-2 ${!licenseAccess.hasRemoteAccess ? "opacity-50" : ""}`}
         >
           <span className="absolute -top-2 right-2 bg-panel-bg px-1 text-xxs text-pro-brand">
             Pro Feature
@@ -736,7 +736,7 @@ export function ServerSection({
                   value={server.tls?.certPath ?? ""}
                   placeholder="/path/to/cert.pem"
                   onCommit={(v) => onUpdate("server.tls.certPath", v)}
-                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
+                  className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground font-mono focus:outline-hidden focus:border-focus-border"
                 />
               </SettingInputRow>
               <SettingInputRow
@@ -749,7 +749,7 @@ export function ServerSection({
                   value={server.tls?.keyPath ?? ""}
                   placeholder="/path/to/key.pem"
                   onCommit={(v) => onUpdate("server.tls.keyPath", v)}
-                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
+                  className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground font-mono focus:outline-hidden focus:border-focus-border"
                 />
               </SettingInputRow>
               <div className="flex flex-col gap-1.5">

@@ -61,7 +61,7 @@ export const HarnessIcon: React.FC<HarnessIconProps> = ({
     <img
       src={src}
       alt=""
-      className={`inline-block flex-shrink-0 transition-opacity ${
+      className={`inline-block shrink-0 transition-opacity ${
         ADAPTIVE_HARNESSES.has(harnessId) ? "harness-icon-adaptive" : ""
       } ${dimmed ? "opacity-40" : "opacity-100"} ${className}`}
       style={{ width: size, height: size }}

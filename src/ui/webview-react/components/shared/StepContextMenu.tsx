@@ -88,7 +88,7 @@ export function StepContextMenu({
         visibility: pos ? "visible" : "hidden",
       }}
       role="presentation"
-      className="step-context-menu bg-editor-bg border border-panel-border rounded shadow-lg py-0.5 min-w-[160px]"
+      className="step-context-menu bg-editor-bg border border-panel-border rounded-sm shadow-lg py-0.5 min-w-[160px]"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => {

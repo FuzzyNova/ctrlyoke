@@ -153,7 +153,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
               onChange={(e) => setProperty("sessionId", e.target.value)}
               disabled={!isSessionIdActive}
               placeholder="Session ID (e.g. 1)"
-              className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
+              className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
             />
           </div>
         </div>

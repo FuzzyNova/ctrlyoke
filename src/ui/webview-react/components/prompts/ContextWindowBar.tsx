@@ -47,13 +47,13 @@ export const ContextWindowBar: React.FC<ContextWindowBarProps> = ({
   return (
     <div
       data-context-window-bar
-      className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5"
+      className="shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5"
     >
       {/* Compaction badge above the bar — only takes up space when present,
           so the bar fills the row when this attempt didn't compact. */}
       {hasCompacted && (
         <span
-          className="flex-shrink-0 flex items-center justify-center"
+          className="shrink-0 flex items-center justify-center"
           title={`Compactions: ${compactionCount}`}
         >
           <Icon

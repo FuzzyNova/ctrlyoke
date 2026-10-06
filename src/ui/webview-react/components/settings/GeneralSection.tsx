@@ -83,7 +83,7 @@ export function GeneralSection({
           value={general.defaultTemplate}
           onCommit={(v) => onUpdate("general.defaultTemplate", v || "blank")}
           placeholder="blank"
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <div className="pt-3 border-t border-panel-border mt-3">
@@ -145,7 +145,7 @@ export function GeneralSection({
               onBlur={(e) =>
                 onUpdate("ui.harnessColors.script", e.target.value)
               }
-              className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+              className="w-full h-8 cursor-pointer rounded-sm border border-input-border p-0.5 bg-input-bg"
               title="Script step color"
             />
           </SettingInputRow>
@@ -220,7 +220,7 @@ export function GeneralSection({
                 ? Math.max(1, parsed)
                 : DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT;
             }}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
           />
         </SettingInputRow>
         <SettingInputRow
@@ -319,7 +319,7 @@ export function GeneralSection({
             value={runs.historySearchCacheMb}
             onCommit={(v) => onUpdate("runs.historySearchCacheMb", v)}
             parse={(v) => Math.max(0, parseInt(v, 10) || 0)}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
           />
         </SettingInputRow>
       </div>

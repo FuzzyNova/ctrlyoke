@@ -196,7 +196,7 @@ export const FileBrowserModal: React.FC = () => {
           >
             {statusText}
           </span>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <Button variant="secondary" onClick={handleCancel}>
               Cancel
             </Button>
@@ -216,7 +216,7 @@ export const FileBrowserModal: React.FC = () => {
           <button
             onClick={handleBack}
             disabled={directory.parentPath === null}
-            className={`flex items-center justify-center w-6 h-6 rounded transition-colors flex-shrink-0 ${
+            className={`flex items-center justify-center w-6 h-6 rounded-sm transition-colors shrink-0 ${
               directory.parentPath === null
                 ? "opacity-30 cursor-default"
                 : "hover:bg-btn-secondary-hover text-editor-fg"
@@ -236,7 +236,7 @@ export const FileBrowserModal: React.FC = () => {
         <div
           ref={scrollContainerRef}
           data-testid="file-browser-directory-list"
-          className="h-72 overflow-y-auto rounded border border-panel-border"
+          className="h-72 overflow-y-auto rounded-sm border border-panel-border"
           aria-busy={directory.isLoading}
         >
           <FileBrowserSortHeader
@@ -302,7 +302,7 @@ export const FileBrowserModal: React.FC = () => {
                       className="min-h-[44px] animate-pulse px-3 py-2"
                       aria-label={`Loading entry ${index + 1}`}
                     >
-                      <span className="block h-4 w-2/3 rounded bg-panel-border opacity-50" />
+                      <span className="block h-4 w-2/3 rounded-sm bg-panel-border opacity-50" />
                     </div>
                   );
                 }}

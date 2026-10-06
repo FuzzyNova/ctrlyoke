@@ -525,7 +525,7 @@ export const Header: React.FC<{
     `cy-button-group-divider${bothVisible ? "" : " hidden xs:block"}`;
 
   const runControls = (
-    <div className="header-run-controls flex items-center flex-shrink-0">
+    <div className="header-run-controls flex items-center shrink-0">
       <div
         className={`cy-button-group ${btnSize.groupContainer}`}
         role="group"
@@ -641,7 +641,7 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header cy-no-select grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header cy-no-select grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls — always top-left (col 1 / row 1) at every tier so the
             workflow picker anchors the corner. From sm up the action controls sit inline here; on
             narrow mobile they move to the combined row-2 group. */}
@@ -825,14 +825,14 @@ export const Header: React.FC<{
         {/* Mobile status row: forward/back + WorkflowStatus. Hidden from sm up, where both controls
             move into the shared center lane so they can negotiate width together. */}
         <div className="header-status col-start-2 row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0 px-1 sm:hidden">
-          {!isMobile && <NavHistoryControls className="flex-shrink-0" />}
+          {!isMobile && <NavHistoryControls className="shrink-0" />}
           {isMobile && <WorkflowStatus className="flex-1 min-w-0" />}
         </div>
 
         {/* Desktop center lane: medium keeps a shared flex row, while lg+ promotes the centered
             region back into dedicated tracks so WorkflowStatus stays perfectly page-centered. */}
         <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 lg:hidden min-w-0 items-center justify-center gap-0">
-          <NavHistoryControls className="hidden md:flex flex-shrink-0" />
+          <NavHistoryControls className="hidden md:flex shrink-0" />
           {isMediumLayout && (
             <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
           )}
@@ -840,7 +840,7 @@ export const Header: React.FC<{
         </div>
 
         <div className="hidden lg:flex lg:col-start-3 lg:row-start-1 items-center justify-end min-w-0 mr-1">
-          <NavHistoryControls className="hidden md:flex flex-shrink-0" />
+          <NavHistoryControls className="hidden md:flex shrink-0" />
         </div>
 
         <div className="hidden lg:flex lg:col-start-4 lg:row-start-1 items-center justify-center min-w-0">

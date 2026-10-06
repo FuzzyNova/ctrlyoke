@@ -14,7 +14,7 @@ export const CenterContentArea: React.FC = () => {
   const logoUrl = document.body.getAttribute("data-logo-uri") || "";
 
   return (
-    <div className="relative w-full h-full bg-[var(--bg-primary)] flex flex-col overflow-hidden">
+    <div className="relative w-full h-full bg-(--bg-primary) flex flex-col overflow-hidden">
       {/* Background logo - uses CSS mask to apply foreground color to SVG */}
       <div
         className="background-logo"

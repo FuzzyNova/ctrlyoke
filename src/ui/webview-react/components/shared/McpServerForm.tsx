@@ -198,7 +198,7 @@ export function McpServerForm({
 
   return (
     <div
-      className={`flex flex-col gap-1.5 rounded border border-focus-border bg-editor-bg p-2 ${className}`.trim()}
+      className={`flex flex-col gap-1.5 rounded-sm border border-focus-border bg-editor-bg p-2 ${className}`.trim()}
     >
       {(title || subtitle) && (
         <div className="flex flex-col gap-0.5">
@@ -218,7 +218,7 @@ export function McpServerForm({
         title={schemaTitle(`${schemaPath}.id`)}
         value={value.id}
         onChange={(event) => onChange({ ...value, id: event.target.value })}
-        className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
+        className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
         autoFocus={autoFocus}
       />
 
@@ -231,7 +231,7 @@ export function McpServerForm({
         onChange={(event) =>
           onChange({ ...value, description: event.target.value })
         }
-        className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-none"
+        className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
       />
 
       <div className="flex gap-1">
@@ -240,7 +240,7 @@ export function McpServerForm({
             key={tab}
             type="button"
             onClick={() => onChange({ ...value, activeTab: tab })}
-            className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+            className={`rounded-sm border px-2 py-0.5 text-xs transition-colors ${
               value.activeTab === tab
                 ? "border-btn-bg bg-btn-bg text-btn-fg"
                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
@@ -262,7 +262,7 @@ export function McpServerForm({
             onChange={(event) =>
               onChange({ ...value, command: event.target.value })
             }
-            className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
+            className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
           />
           <input
             type="text"
@@ -273,7 +273,7 @@ export function McpServerForm({
             onChange={(event) =>
               onChange({ ...value, args: event.target.value })
             }
-            className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
+            className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
           />
           <KeyValueRowsEditor
             id="mcp-server-env"
@@ -298,7 +298,7 @@ export function McpServerForm({
             onChange={(event) =>
               onChange({ ...value, url: event.target.value })
             }
-            className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
+            className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
           />
           <CustomSelect
             value={value.transport}
@@ -359,7 +359,7 @@ export function McpServerForm({
             })
           }
           rows={2}
-          className="w-full resize-none rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
+          className="w-full resize-none rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
         />
       </label>
 
@@ -396,14 +396,14 @@ export function McpServerForm({
           type="button"
           onClick={onSubmit}
           disabled={!isValid}
-          className="rounded bg-btn-bg px-2 py-0.5 text-xs text-btn-fg hover:bg-btn-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-sm bg-btn-bg px-2 py-0.5 text-xs text-btn-fg hover:bg-btn-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitLabel}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg hover:border-focus-border hover:text-foreground"
+          className="rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg hover:border-focus-border hover:text-foreground"
         >
           {cancelLabel}
         </button>

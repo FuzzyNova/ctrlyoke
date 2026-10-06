@@ -53,7 +53,7 @@ export const DateRangeFilterControls: React.FC<
         onChange={(event) =>
           handleDatePresetChange(event.target.value as DateRangePreset)
         }
-        className="h-7 min-w-[112px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+        className="h-7 min-w-[112px] shrink-0 rounded-sm border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-hidden focus:border-focus-border"
       >
         <option value={DATE_RANGE_PRESETS.ALL}>Any time</option>
         <option value="last7">Last 7 days</option>
@@ -71,7 +71,7 @@ export const DateRangeFilterControls: React.FC<
             onChange={(event) =>
               handleDateBoundChange("from", event.target.value)
             }
-            className="h-7 w-[128px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+            className="h-7 w-[128px] shrink-0 rounded-sm border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-hidden focus:border-focus-border"
           />
           <input
             type="date"
@@ -80,7 +80,7 @@ export const DateRangeFilterControls: React.FC<
             onChange={(event) =>
               handleDateBoundChange("to", event.target.value)
             }
-            className="h-7 w-[128px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+            className="h-7 w-[128px] shrink-0 rounded-sm border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-hidden focus:border-focus-border"
           />
         </>
       )}

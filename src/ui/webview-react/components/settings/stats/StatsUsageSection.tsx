@@ -261,7 +261,7 @@ export function StatsUsageSection({
           </div>
         </section>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-panel-border bg-panel-bg px-2 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-panel-border bg-panel-bg px-2 py-1.5">
         <div>
           <p className="text-sm text-foreground">Quota percent direction</p>
           <p className="text-xs text-description-fg">
@@ -320,7 +320,7 @@ export function StatsUsageSection({
         />
       )}
       {!snapshot && (
-        <div className="rounded border border-panel-border bg-panel-bg p-3 text-xs text-description-fg">
+        <div className="rounded-sm border border-panel-border bg-panel-bg p-3 text-xs text-description-fg">
           Workspace statistics: loading…
         </div>
       )}

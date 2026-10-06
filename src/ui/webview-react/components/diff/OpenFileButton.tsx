@@ -20,7 +20,7 @@ export const OpenFileButton: React.FC<OpenFileButtonProps> = ({ path }) => (
       event.stopPropagation();
       openContextReference({ type: "file", path }, getVsCodeApi());
     }}
-    className="flex items-center justify-center rounded p-0.5 text-editor-fg opacity-60 hover:opacity-100 hover:bg-list-hover-bg transition-colors"
+    className="flex items-center justify-center rounded-sm p-0.5 text-editor-fg opacity-60 hover:opacity-100 hover:bg-list-hover-bg transition-colors"
     title="Open file"
     aria-label={`Open ${path}`}
   >

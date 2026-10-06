@@ -17,12 +17,12 @@ export const ListHarnessesBody: React.FC<ToolViewBodyProps> = ({
 }) => {
   const modelsExpanded = expansion.listHarnessModelsExpanded ?? false;
   return (
-    <div className="space-y-2 text-[length:var(--cy-output-font-size-sm)]">
+    <div className="space-y-2 text-(length:--cy-output-font-size-sm)">
       <ul className="flex flex-wrap gap-2">
         {allHarnesses(result as ListHarnessesResult).map((harness) => (
           <li key={harness.id} className="space-y-1">
             <span
-              className={`inline-flex rounded-full px-2 py-1 ${harness.available ? "bg-[var(--vscode-testing-iconPassed)]/20 text-[var(--vscode-testing-iconPassed)]" : "bg-muted text-muted-foreground"}`}
+              className={`inline-flex rounded-full px-2 py-1 ${harness.available ? "bg-(--vscode-testing-iconPassed)/20 text-(--vscode-testing-iconPassed)" : "bg-muted text-muted-foreground"}`}
             >
               {harness.displayName} ·{" "}
               {harness.available ? "available" : "unavailable"}
@@ -41,7 +41,7 @@ export const ListHarnessesBody: React.FC<ToolViewBodyProps> = ({
       ) && (
         <button
           type="button"
-          className="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
+          className="text-bash-expand-link cursor-pointer bg-transparent p-0 text-(length:--cy-output-font-size-sm) hover:underline"
           aria-expanded={modelsExpanded}
           onClick={() =>
             onExpansionChange(
@@ -60,7 +60,7 @@ export const ListHarnessesBody: React.FC<ToolViewBodyProps> = ({
         errorFindMatches={errorFindMatches}
         expansion={expansion}
         onExpansionChange={onExpansionChange}
-        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
+        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-(length:--cy-output-font-size-sm) hover:underline"
       />
     </div>
   );

@@ -236,7 +236,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 
   return (
     <div
-      className="relative z-header w-full flex-shrink-0 border-t border-panel-border"
+      className="relative z-header w-full shrink-0 border-t border-panel-border"
       style={{
         background:
           "color-mix(in srgb, var(--vscode-terminal-background, var(--vscode-editor-background)) 92%, transparent)",
@@ -248,7 +248,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
             <button
               key={item.id}
               type="button"
-              className={`h-8 min-w-12 px-2 rounded border text-xs shrink-0 transition-colors ${
+              className={`h-8 min-w-12 px-2 rounded-sm border text-xs shrink-0 transition-colors ${
                 ctrlActive
                   ? "border-focus-border text-foreground bg-list-active-bg"
                   : "border-panel-border text-description-fg bg-transparent hover:text-foreground hover:bg-toolbar-hover-bg"
@@ -265,7 +265,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
             <button
               key={item.id}
               type="button"
-              className="h-8 min-w-10 px-2 rounded border border-panel-border text-xs text-description-fg bg-transparent hover:text-foreground hover:bg-toolbar-hover-bg shrink-0 transition-colors"
+              className="h-8 min-w-10 px-2 rounded-sm border border-panel-border text-xs text-description-fg bg-transparent hover:text-foreground hover:bg-toolbar-hover-bg shrink-0 transition-colors"
               title={item.label}
               aria-label={item.label}
               onClick={() => sendKey(item.sequence)}
@@ -279,7 +279,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
           <div ref={moreRef} className="relative ml-auto shrink-0">
             <button
               type="button"
-              className={`h-8 min-w-10 px-2 rounded border text-xs shrink-0 transition-colors ${
+              className={`h-8 min-w-10 px-2 rounded-sm border text-xs shrink-0 transition-colors ${
                 moreOpen
                   ? "border-focus-border text-foreground bg-list-active-bg"
                   : "border-panel-border text-description-fg bg-transparent hover:text-foreground hover:bg-toolbar-hover-bg"
@@ -296,7 +296,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
             {moreOpen && (
               <div
                 role="menu"
-                className="absolute right-0 bottom-full mb-1 w-48 max-h-[60vh] overflow-y-auto rounded border border-panel-border bg-editor-bg shadow-lg"
+                className="absolute right-0 bottom-full mb-1 w-48 max-h-[60vh] overflow-y-auto rounded-sm border border-panel-border bg-editor-bg shadow-lg"
               >
                 <div className="p-1 space-y-1">
                   {resolvedPopupItems.map((item) => (
@@ -304,7 +304,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
                       key={item.id}
                       type="button"
                       role="menuitem"
-                      className="w-full px-2 py-1.5 text-left text-xs rounded text-foreground hover:bg-list-hover-bg"
+                      className="w-full px-2 py-1.5 text-left text-xs rounded-sm text-foreground hover:bg-list-hover-bg"
                       onClick={() => sendKey(item.sequence)}
                     >
                       {item.label}

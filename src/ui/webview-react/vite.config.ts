@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { staticCopyPlugin } from "./build/staticCopyPlugin";
 import { BUILD_MODES, HOSTED_ICON_FILES } from "../../types/DashboardConstants";
@@ -7,6 +8,8 @@ import { BUILD_MODES, HOSTED_ICON_FILES } from "../../types/DashboardConstants";
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    // Tailwind 4: theme, sources, and variants all live in styles/globals.css.
+    tailwindcss(),
     // Copy static assets that React build needs. A file lands in `dest` under its
     // own name; a directory's contents are copied into `dest` with subfolders kept.
     staticCopyPlugin([

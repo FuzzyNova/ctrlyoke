@@ -51,7 +51,7 @@ export const DIFF_FILE_DIFF_VIEW_MARGIN_HEIGHT = 8;
 const DIFF_FILE_CARD_NOTE_HORIZONTAL_CHROME = 40;
 /** Summary and heading rows use Tailwind `text-xs`'s 16px line box. */
 const DIFF_FILE_LIST_TEXT_LINE_HEIGHT = 16;
-/** Approximate monospace advance used by the note's `[overflow-wrap:anywhere]`. */
+/** Approximate monospace advance used by the note's `wrap-anywhere`. */
 const DIFF_FILE_HEADER_CHAR_WIDTH = 0.6;
 const DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT = 24;
 const DIFF_FILE_IMAGE_PREVIEW_HEIGHT = 256;

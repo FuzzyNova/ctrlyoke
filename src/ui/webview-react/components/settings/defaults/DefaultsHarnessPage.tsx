@@ -164,7 +164,7 @@ export function DefaultsHarnessPage({
                     : ""
                 }
                 onCommit={(value) => updateWorktreeField("branch", value)}
-                className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
+                className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7`}
               />
               <FieldDiagnostic
                 id="defaults-worktree-branch-diagnostic"
@@ -184,7 +184,7 @@ export function DefaultsHarnessPage({
                 }
                 onCommit={(value) => updateWorktreeField("base", value)}
                 placeholder="Current branch (HEAD)"
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7"
               />
             </SettingInputRow>
             <SettingInputRow
@@ -200,7 +200,7 @@ export function DefaultsHarnessPage({
                 }
                 onCommit={(value) => updateWorktreeField("setup", value)}
                 placeholder="e.g. npm ci"
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7"
               />
             </SettingInputRow>
           </>
@@ -222,7 +222,7 @@ export function DefaultsHarnessPage({
                 }
                 onCommit={(value) => updateWorktreeField("base", value)}
                 placeholder="Current branch (HEAD)"
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7"
               />
             </SettingInputRow>
             <SettingInputRow
@@ -240,7 +240,7 @@ export function DefaultsHarnessPage({
                 }
                 onCommit={(value) => updateWorktreeField("setup", value)}
                 placeholder="e.g. npm ci"
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono h-7"
               />
             </SettingInputRow>
             <SettingInputRow

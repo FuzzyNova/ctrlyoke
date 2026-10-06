@@ -1677,7 +1677,7 @@ const WorkflowStepsPanelInner: React.FC<{
       );
       if (!group) return null;
       return (
-        <div className="flex items-center gap-2 rounded border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs shadow-lg">
+        <div className="flex items-center gap-2 rounded-sm border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs shadow-lg">
           <Icon name="type-hierarchy-sub" className="text-description-fg" />
           <span className="font-semibold">
             Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
@@ -1733,7 +1733,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
     const companionCount = container?.items.length ?? 1;
     return (
-      <div className="relative overflow-hidden rounded border border-panel-border bg-editor-bg shadow-lg">
+      <div className="relative overflow-hidden rounded-sm border border-panel-border bg-editor-bg shadow-lg">
         <WorkflowStepRowFrame
           index={index}
           slotNumber={slotNumber}
@@ -1797,7 +1797,7 @@ const WorkflowStepsPanelInner: React.FC<{
       {/* Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div
         ref={headerRef}
-        className={`flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 transition-colors${isMobileMode ? "" : " cursor-pointer select-none text-description-fg hover:text-foreground"}`}
+        className={`flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg shrink-0 transition-colors${isMobileMode ? "" : " cursor-pointer select-none text-description-fg hover:text-foreground"}`}
         onClick={isMobileMode ? undefined : handleToggle}
         role={isMobileMode ? undefined : "button"}
         aria-label={isMobileMode ? undefined : "Collapse steps"}
@@ -1817,7 +1817,7 @@ const WorkflowStepsPanelInner: React.FC<{
         )}
         {onRequestSidebar && (
           <button
-            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+            className="flex items-center justify-center w-[20px] h-[20px] rounded-sm text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
             onClick={(e) => {
               e.stopPropagation();
               onRequestSidebar();
@@ -1943,7 +1943,7 @@ const WorkflowStepsPanelInner: React.FC<{
             </p>
             <button
               type="button"
-              className="rounded bg-btn-bg px-3 py-1.5 text-xs font-medium text-btn-fg hover:bg-btn-hover"
+              className="rounded-sm bg-btn-bg px-3 py-1.5 text-xs font-medium text-btn-fg hover:bg-btn-hover"
               onClick={() => sendMessage(MESSAGE_TYPES.NEW_WORKFLOW)}
             >
               Create from Template
@@ -2197,7 +2197,7 @@ const WorkflowStepsPanelInner: React.FC<{
         currentStep === steps.length &&
         finalStep &&
         finalStep.enabled !== false && (
-          <div className="relative h-0 flex-shrink-0">
+          <div className="relative h-0 shrink-0">
             <PauseBoundary />
           </div>
         )}

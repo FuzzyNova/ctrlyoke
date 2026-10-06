@@ -128,7 +128,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
       return (
         <button
           type="button"
-          className="block min-h-8 w-full min-w-0 whitespace-normal rounded px-1 py-1 text-left text-[length:var(--cy-output-font-size-sm)] [overflow-wrap:anywhere]"
+          className="block min-h-8 w-full min-w-0 whitespace-normal rounded-sm px-1 py-1 text-left text-(length:--cy-output-font-size-sm) wrap-anywhere"
           aria-expanded={false}
           aria-label={`${presentation.label} · ${getCompareLabel(verdict)} · ${actualLabel} · ${action} · ${formatDuration(verdict.durationMs)}`}
           onClick={() => onExpansionChange?.(true)}
@@ -176,7 +176,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
     }
 
     return (
-      <div className="min-w-0 rounded border border-panel-border bg-sidebar-bg/30 px-2 py-2 text-[length:var(--cy-output-font-size-sm)] [overflow-wrap:anywhere]">
+      <div className="min-w-0 rounded-sm border border-panel-border bg-sidebar-bg/30 px-2 py-2 text-(length:--cy-output-font-size-sm) wrap-anywhere">
         <button
           type="button"
           className="mb-2 flex w-full min-w-0 flex-wrap items-center gap-1 text-left"
@@ -194,11 +194,11 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
           <dt className="text-description-fg">Compare</dt>
           <dd className="min-w-0">{getCompareLabel(verdict)}</dd>
           <dt className="text-description-fg">Expected</dt>
-          <dd className="min-w-0 break-words">
+          <dd className="min-w-0 wrap-break-word">
             {highlightText(expected, expectedFindMatches)}
           </dd>
           <dt className="text-description-fg">Actual</dt>
-          <dd className="min-w-0 whitespace-pre-wrap break-words">
+          <dd className="min-w-0 whitespace-pre-wrap wrap-break-word">
             {highlightText(actualPreview.visibleText || "∅", actualFindMatches)}
           </dd>
           <dt className="text-description-fg">Result</dt>
@@ -213,7 +213,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
           {verdict.error && (
             <>
               <dt className="text-description-fg">Error</dt>
-              <dd className="min-w-0 break-words text-error-fg">
+              <dd className="min-w-0 wrap-break-word text-error-fg">
                 {verdict.error}
               </dd>
             </>

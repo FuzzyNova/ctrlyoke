@@ -37,7 +37,7 @@ function resolveStatusBannerNarrow(width: number): boolean {
 
 /** Shared class for text buttons placed inside a banner message. */
 export const STATUS_BANNER_LINK_CLASS =
-  "underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1";
+  "underline opacity-90 hover:opacity-100 focus-visible:outline-solid focus-visible:outline-1";
 
 export interface StatusBannerAction {
   label: string;
@@ -91,16 +91,16 @@ export const StatusBanner: React.FC<StatusBannerProps> = ({
       role="status"
       aria-label={ariaLabel}
     >
-      <span className="flex h-5 flex-shrink-0 items-center">
+      <span className="flex h-5 shrink-0 items-center">
         <Icon name={icon} className={iconClassName} />
       </span>
-      <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+      <span className="min-w-0 flex-1 wrap-anywhere">
         {isNarrow && narrowChildren !== undefined ? narrowChildren : children}
       </span>
       {action && (
         <button
           type="button"
-          className={`flex-shrink-0 whitespace-nowrap ${STATUS_BANNER_LINK_CLASS}`}
+          className={`shrink-0 whitespace-nowrap ${STATUS_BANNER_LINK_CLASS}`}
           onClick={action.onClick}
           aria-label={action["aria-label"] ?? action.label}
           title={action.title}

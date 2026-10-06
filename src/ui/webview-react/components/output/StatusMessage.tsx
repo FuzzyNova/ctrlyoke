@@ -46,16 +46,14 @@ export const StatusMessage: React.FC<StatusMessageProps> = ({
 
   return (
     <div
-      className={`py-[var(--spacing-xs)] px-[var(--spacing-md)] my-[var(--spacing-xs)] border-l-[3px] rounded-sm text-[length:var(--cy-output-font-size-sm)] text-[var(--fg-primary)] flex items-start min-w-0 gap-[var(--spacing-sm)] ${styles.container} ${className}`}
+      className={`py-(--spacing-xs) px-(--spacing-md) my-(--spacing-xs) border-l-[3px] rounded-xs text-(length:--cy-output-font-size-sm) text-(--fg-primary) flex items-start min-w-0 gap-(--spacing-sm) ${styles.container} ${className}`}
     >
       {displayTime && (
-        <span className="text-[var(--fg-secondary)] text-[length:var(--cy-output-font-size-xs)] shrink-0">
+        <span className="text-(--fg-secondary) text-(length:--cy-output-font-size-xs) shrink-0">
           [{displayTime}]
         </span>
       )}
-      <span
-        className={`font-medium min-w-0 break-words [overflow-wrap:anywhere] ${styles.text}`}
-      >
+      <span className={`font-medium min-w-0 wrap-anywhere ${styles.text}`}>
         {message}
       </span>
     </div>

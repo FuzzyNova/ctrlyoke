@@ -91,7 +91,7 @@ export const TypedConfirmModal: React.FC<TypedConfirmModalProps> = ({
         autoCorrect="off"
         autoCapitalize="off"
         spellCheck={false}
-        className="mt-1 w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border"
+        className="mt-1 w-full bg-input-bg border border-input-border rounded-sm px-2 py-1.5 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
       />
     </Modal>
   );

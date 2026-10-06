@@ -1547,7 +1547,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const workflowFilterControls = (
     <div className="flex min-w-0 items-start gap-2">
       <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
-        <div className="flex-shrink-0 text-xs text-description-fg">
+        <div className="shrink-0 text-xs text-description-fg">
           <MultiCheckboxDropdown
             id="workflow-state-filter"
             selectedValues={selectedWorkflowStates}
@@ -1565,7 +1565,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           />
         </div>
 
-        <div className="flex-shrink-0 text-xs text-description-fg">
+        <div className="shrink-0 text-xs text-description-fg">
           <MultiCheckboxDropdown
             id="workflow-harness-filter"
             selectedValues={selectedWorkflowHarnesses}
@@ -1595,7 +1595,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           title="Favorites only"
           aria-label="Favorites only"
           aria-pressed={favoriteWorkflowsOnly}
-          className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border transition-colors ${
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border transition-colors ${
             favoriteWorkflowsOnly
               ? "border-focus-border bg-btn-bg text-favorite"
               : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -1616,7 +1616,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         disabled={!filtersActive}
         title="Clear workflow filters"
         aria-label="Clear workflow filters"
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
       >
         <Icon name="clear-all" className="text-xxs" />
       </button>
@@ -1639,7 +1639,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={saveEdit}
-          className="workflow-name-edit-input w-full px-2 py-1 text-sm font-semibold bg-input-bg text-input-fg border border-focus-border rounded outline-none"
+          className="workflow-name-edit-input w-full px-2 py-1 text-sm font-semibold bg-input-bg text-input-fg border border-focus-border rounded-sm outline-hidden"
           style={{
             boxShadow: "0 0 0 1px var(--vscode-focusBorder)",
           }}
@@ -1669,7 +1669,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
               {!isVeryNarrow && currentWorkflowHasActiveTerminal && (
                 <span
-                  className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
+                  className="shrink-0 w-4 flex items-center justify-center text-description-fg"
                   title="Terminal session is still running"
                   aria-label="Terminal session is still running"
                 >
@@ -1679,7 +1679,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
               {!isVeryNarrow && worktreeIndicator && (
                 <span
-                  className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
+                  className="shrink-0 w-4 flex items-center justify-center text-description-fg"
                   title={worktreeIndicator.title}
                   aria-label={worktreeIndicator.title}
                 >
@@ -1693,7 +1693,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   state={executionState}
                   isNarrow={isNarrow}
                   unstarted={viewedRunUnstarted}
-                  className="flex-shrink-0"
+                  className="shrink-0"
                 />
               )}
             </div>
@@ -1705,7 +1705,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           {isDisplayedLineageRunVisible && displayedViewAddress && (
             <>
               <div
-                className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}
+                className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} shrink-0`}
               >
                 <div className="w-px h-full bg-current opacity-40" />
               </div>
@@ -1734,7 +1734,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
           {/* Separator — mirrors VS Code's monaco-button-dropdown-separator */}
           <div
-            className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}
+            className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} shrink-0`}
           >
             <div className="w-px h-full bg-current opacity-40" />
           </div>
@@ -1788,7 +1788,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       <div
         ref={mergedDropdownRef}
         onTransitionEnd={handleDropdownTransitionEnd}
-        className={`workflow-dropdown-menu cy-no-select fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-[opacity,clip-path,visibility] ${dropdownRevealed ? "duration-[250ms] ease-out opacity-100 visible" : "duration-[220ms] ease-in opacity-0 invisible pointer-events-none"}`}
+        className={`workflow-dropdown-menu cy-no-select fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-[opacity,clip-path,visibility] ${dropdownRevealed ? "duration-250 ease-out opacity-100 visible" : "duration-220 ease-in opacity-0 invisible pointer-events-none"}`}
         style={{
           top: dropdownTop,
           left: !isMobile && dropdownWidth !== null ? dropdownLeft : undefined,

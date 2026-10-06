@@ -812,7 +812,7 @@ const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
       </span>
       <button
         onClick={handleTakeControl}
-        className="text-sm px-5 py-1 rounded select-none cursor-pointer border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+        className="text-sm px-5 py-1 rounded-sm select-none cursor-pointer border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
       >
         Take Control
       </button>

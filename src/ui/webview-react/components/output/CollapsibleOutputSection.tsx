@@ -83,10 +83,8 @@ export const CollapsibleOutputSection = memo<CollapsibleOutputSectionProps>(
           // family. The wrapper is flex so its height is the pill's 1.625em —
           // one result line, which is what the estimators charge for it.
           <div
-            className={`flex bg-[var(--bg-primary)] ${
-              isExpanded
-                ? "sticky top-[var(--cy-output-sticky-top,0px)] z-[1]"
-                : ""
+            className={`flex bg-(--bg-primary) ${
+              isExpanded ? "sticky top-(--cy-output-sticky-top,0px) z-1" : ""
             }`}
           >
             <ToolCallExpandToggle
@@ -107,7 +105,7 @@ export const CollapsibleOutputSection = memo<CollapsibleOutputSectionProps>(
         <div className="flex items-start gap-1">
           <span className="shrink-0">⎿</span>
           <div
-            className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
+            className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere"
             id={contentId}
           >
             {highlightText(visibleText, findMatches ?? [])}

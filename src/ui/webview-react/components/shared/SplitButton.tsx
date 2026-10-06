@@ -325,7 +325,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
 
   // Button classes based on variant
   const baseButtonClass =
-    "inline-flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1";
+    "inline-flex items-center justify-center transition-colors focus:outline-hidden focus-visible:ring-1";
   const variantClass =
     variant === BUTTON_VARIANTS.PRIMARY
       ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
@@ -387,10 +387,10 @@ ${MENU_GESTURE_HINT}`
             : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
         } ${focusedIndex === index ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected" : ""}`}
       >
-        {option.icon && <span className="flex-shrink-0">{option.icon}</span>}
+        {option.icon && <span className="shrink-0">{option.icon}</span>}
         <span className="flex-1">{option.label}</span>
         {option.shortcut && (
-          <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded font-mono">
+          <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded-sm font-mono">
             {option.shortcut}
           </kbd>
         )}
@@ -400,8 +400,8 @@ ${MENU_GESTURE_HINT}`
 
   const inFlowMenuClass =
     menuPlacement === MENU_PLACEMENTS.TOP
-      ? `absolute bottom-full left-0 mb-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-floating overflow-hidden transition-all duration-150 origin-bottom ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible pointer-events-none"}`
-      : `absolute top-full left-0 mt-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-floating overflow-hidden transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`;
+      ? `absolute bottom-full left-0 mb-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded-sm shadow-lg z-floating overflow-hidden transition-all duration-150 origin-bottom ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible pointer-events-none"}`
+      : `absolute top-full left-0 mt-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded-sm shadow-lg z-floating overflow-hidden transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`;
 
   return (
     /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- keyboard handler manages split button group navigation across child controls */
@@ -409,7 +409,7 @@ ${MENU_GESTURE_HINT}`
       ref={containerRef}
       role="group"
       aria-label={typeof mainLabel === "string" ? mainLabel : undefined}
-      className={`relative inline-flex flex-shrink-0 ${className}`}
+      className={`relative inline-flex shrink-0 ${className}`}
       onKeyDown={handleKeyDown}
     >
       {/* Keep the button surface clipped by the shared border. The popup is a
@@ -462,7 +462,7 @@ ${MENU_GESTURE_HINT}`
                 outer div fills with button background (padding creates the inset),
                 inner 1px div is the visible hairline using --vscode-button-separator */}
             <div
-              className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}
+              className={`${separatorClass} ${btnSizes.separatorPy} shrink-0`}
             >
               <div className="w-px h-full bg-current opacity-40" />
             </div>
@@ -494,7 +494,7 @@ ${MENU_GESTURE_HINT}`
           isOpen={isOpen}
           popupPos={popupPos}
           role="listbox"
-          className="min-w-[200px] rounded shadow-lg overflow-hidden"
+          className="min-w-[200px] rounded-sm shadow-lg overflow-hidden"
         >
           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- keyboard handler keeps navigation working when the menu is portaled away from the split-button group */}
           <div onKeyDown={handleMenuKeyDown}>{menuItems}</div>

@@ -197,13 +197,13 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   return (
     <div className="run-panel flex h-full flex-col">
       {/* Pinned header — outside the scroll container, like the workflow list's search header */}
-      <div className="run-panel-header flex flex-shrink-0 items-center gap-1 border-b border-dropdown-border bg-editor-bg px-2 py-2">
+      <div className="run-panel-header flex shrink-0 items-center gap-1 border-b border-dropdown-border bg-editor-bg px-2 py-2">
         <button
           type="button"
           onClick={onBack}
           title="Back to workflow list"
           aria-label="Back to workflow list"
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg hover:text-foreground"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-description-fg hover:bg-list-hover-bg hover:text-foreground"
         >
           <Icon name="chevron-left" className="text-sm" />
         </button>
@@ -221,7 +221,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           disabled={!canGoNewer}
           title="Newer run"
           aria-label="Newer run"
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-description-fg hover:bg-list-hover-bg hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
         >
           <Icon name="arrow-up" className="text-sm" />
         </button>
@@ -233,7 +233,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           disabled={!canGoOlder}
           title="Older run"
           aria-label="Older run"
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-description-fg hover:bg-list-hover-bg hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
         >
           <Icon name="arrow-down" className="text-sm" />
         </button>
@@ -305,11 +305,11 @@ export const RunPanel: React.FC<RunPanelProps> = ({
       </div>
 
       {hasRuns && (
-        <div className="run-panel-footer flex-shrink-0 border-t border-dropdown-border bg-editor-bg p-1">
+        <div className="run-panel-footer shrink-0 border-t border-dropdown-border bg-editor-bg p-1">
           <button
             type="button"
             onClick={handleDeleteAllRuns}
-            className="cy-dropdown-row w-full cursor-pointer rounded border-none bg-transparent px-3 py-1.5 text-center text-xs text-link-fg transition-colors hover:bg-list-hover-bg"
+            className="cy-dropdown-row w-full cursor-pointer rounded-sm border-none bg-transparent px-3 py-1.5 text-center text-xs text-link-fg transition-colors hover:bg-list-hover-bg"
           >
             Delete all runs
           </button>

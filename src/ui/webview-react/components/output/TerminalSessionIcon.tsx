@@ -21,27 +21,27 @@ export const TerminalSessionIcon: React.FC<TerminalSessionIconProps> = ({
       <HarnessIcon
         harnessId={session.harnessId as HarnessId}
         size={12}
-        className="flex-shrink-0"
+        className="shrink-0"
       />
     );
   }
 
   const codiconName = getShellCodiconName(session.shellKind, session.stepName);
   if (codiconName) {
-    return <Icon name={codiconName} className="text-xs flex-shrink-0" />;
+    return <Icon name={codiconName} className="text-xs shrink-0" />;
   }
 
   if (session.status === TERMINAL_SESSION_STATUS.RUNNING) {
     return (
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse flex-shrink-0" />
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse shrink-0" />
     );
   }
   if (session.status === TERMINAL_SESSION_STATUS.FAILED) {
     return (
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-error flex-shrink-0" />
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-error shrink-0" />
     );
   }
   return (
-    <span className="inline-block w-1.5 h-1.5 rounded-full bg-description-fg/50 flex-shrink-0" />
+    <span className="inline-block w-1.5 h-1.5 rounded-full bg-description-fg/50 shrink-0" />
   );
 };

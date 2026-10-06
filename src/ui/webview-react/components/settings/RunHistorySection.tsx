@@ -105,7 +105,7 @@ export function RunHistorySection({
         </p>
       </div>
 
-      <div className="mt-2 rounded border border-panel-border bg-input-bg p-2 text-xs">
+      <div className="mt-2 rounded-sm border border-panel-border bg-input-bg p-2 text-xs">
         <div className="text-description-fg">Resolved run-history location</div>
         <code className="block mt-1 break-all text-foreground" role="status">
           {settings.runHistoryPath ?? "Unavailable until a workspace is open"}
@@ -120,14 +120,14 @@ export function RunHistorySection({
       )}
 
       {reloadPending && (
-        <div className="mt-2 flex items-center justify-between gap-3 rounded border border-focus-border bg-input-bg p-2 text-xs">
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-sm border border-focus-border bg-input-bg p-2 text-xs">
           <span>
             Reload the window now to use the new run-history location.
           </span>
           <button
             type="button"
             onClick={onReload}
-            className="shrink-0 px-2 py-1 rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+            className="shrink-0 px-2 py-1 rounded-sm bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
           >
             Reload window
           </button>
@@ -153,7 +153,7 @@ export function RunHistorySection({
             type="button"
             aria-label="View Recently deleted"
             onClick={() => setRecentlyDeletedOpen(true)}
-            className="shrink-0 px-2 py-1 rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+            className="shrink-0 px-2 py-1 rounded-sm bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
           >
             View
           </button>
@@ -179,7 +179,7 @@ export function RunHistorySection({
               Math.max(MIN_TRASH_RETENTION_DAYS, Math.floor(value))
             );
           }}
-          className="w-24 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border disabled:opacity-60"
+          className="w-24 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border disabled:opacity-60"
         />
       </SettingInputRow>
 
@@ -191,7 +191,7 @@ export function RunHistorySection({
               type="button"
               aria-label="Clear all history"
               onClick={() => setClearHistoryOpen(true)}
-              className="px-2 py-1 text-xs rounded border border-btn-border text-error-fg bg-transparent hover:bg-list-hover-bg"
+              className="px-2 py-1 text-xs rounded-sm border border-btn-border text-error-fg bg-transparent hover:bg-list-hover-bg"
             >
               Clear all history…
             </button>

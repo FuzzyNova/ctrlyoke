@@ -64,7 +64,13 @@ export const AnimatedSection: React.FC<{
 
   return (
     <div
-      className={`grid animate-slide-down-in${closing ? " animate-slide-down-out" : ""}${className ? ` ${className}` : ""}`}
+      className={[
+        "grid animate-slide-down-in",
+        closing && "animate-slide-down-out",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onAnimationEnd={handleAnimationEnd}
     >
       <div className="overflow-hidden min-h-0">{children}</div>

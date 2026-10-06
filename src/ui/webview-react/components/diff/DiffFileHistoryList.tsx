@@ -66,7 +66,7 @@ function cardProps(
 }
 
 const PLACEHOLDER_CLASS =
-  "h-16 rounded border border-panel-border bg-editor-bg/40 px-2.5 py-2 text-xs text-description-fg";
+  "h-16 rounded-sm border border-panel-border bg-editor-bg/40 px-2.5 py-2 text-xs text-description-fg";
 
 export function DiffFileHistoryList({
   path,

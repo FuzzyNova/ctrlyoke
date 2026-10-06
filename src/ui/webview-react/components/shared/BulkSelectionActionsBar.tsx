@@ -187,7 +187,7 @@ export function BulkSelectionActionsBar({
                 className="shrink-0 max-w-full"
               />
             ) : (
-              <div className="shrink-0 max-w-full rounded border border-panel-border bg-list-hover-bg px-2 py-1 text-xs text-description-fg">
+              <div className="shrink-0 max-w-full rounded-sm border border-panel-border bg-list-hover-bg px-2 py-1 text-xs text-description-fg">
                 No targets available for {scope}
               </div>
             )}
@@ -213,7 +213,7 @@ export function BulkSelectionActionsBar({
             }
             onSetDefault();
           }}
-          className={`h-6 shrink-0 rounded px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`h-6 shrink-0 rounded-sm px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
             action === BULK_ACTIONS.DELETE
               ? "border border-btn-border bg-btn-secondary-bg text-error-fg hover:bg-btn-secondary-hover"
               : "bg-btn-bg text-btn-fg hover:bg-btn-hover"

@@ -71,7 +71,7 @@ const HookCommandField: React.FC<HookCommandFieldProps> = ({
       onBlur={local.onBlur}
       placeholder="node ./scripts/my-hook.js"
       aria-label={`hook-${index}-command`}
-      className="w-full min-w-0 rounded border border-input-border bg-input-bg text-xs font-mono text-input-fg"
+      className="w-full min-w-0 rounded-sm border border-input-border bg-input-bg text-xs font-mono text-input-fg"
     />
   );
 };
@@ -140,7 +140,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
           key={m}
           type="button"
           onClick={() => handleModeChange(m)}
-          className={`px-2 py-0.5 text-xs rounded cursor-pointer ${
+          className={`px-2 py-0.5 text-xs rounded-sm cursor-pointer ${
             mode === m
               ? "bg-button-bg text-button-fg"
               : "bg-transparent text-description-fg hover:text-fg"
@@ -229,7 +229,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                       event: e.target.value as UserHookConfig["event"],
                     })
                   }
-                  className="h-7 w-full min-w-0 rounded border border-input-border bg-input-bg px-1 py-0.5 text-xs text-input-fg"
+                  className="h-7 w-full min-w-0 rounded-sm border border-input-border bg-input-bg px-1 py-0.5 text-xs text-input-fg"
                 >
                   {toSelectOptions(
                     HOOK_EVENT_OPTIONS_META,
@@ -282,7 +282,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                     handleUpdateHook(index, { timeoutSec });
                   }}
                   placeholder="Default"
-                  className="h-7 w-full min-w-0 rounded border border-input-border bg-input-bg px-2 py-0.5 text-xs text-input-fg"
+                  className="h-7 w-full min-w-0 rounded-sm border border-input-border bg-input-bg px-2 py-0.5 text-xs text-input-fg"
                 />
               </div>
               <Button

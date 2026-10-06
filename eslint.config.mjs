@@ -9,9 +9,10 @@ import { resolve } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const TAILWIND_CONFIG = resolve(
+// Tailwind 4 is configured in CSS: the plugin compiles this entry stylesheet.
+const TAILWIND_CSS_CONFIG = resolve(
   __dirname,
-  "src/ui/webview-react/tailwind.config.js"
+  "src/ui/webview-react/styles/globals.css"
 );
 const jsxA11yRecommendedRules = Object.fromEntries(
   Object.entries(jsxA11y.configs.recommended.rules).map(([key, config]) => {
@@ -214,27 +215,32 @@ export default [
   },
   // Tailwind CSS linting for webview-react files.
   // Scoped to webview-react (the only part of the codebase that uses Tailwind).
-  // flat/recommended is an array [pluginEntry, rulesEntry] — spread both with
-  // the file scope applied, then add settings + rule overrides in a third block.
-  ...tailwindcss.configs["flat/recommended"].map((config) => ({
-    ...config,
+  // `recommended` is a single flat config; re-scope it, then override below.
+  {
+    ...tailwindcss.configs.recommended,
     files: ["src/ui/webview-react/**/*.{ts,tsx}"],
-  })),
+  },
   {
     files: ["src/ui/webview-react/**/*.{ts,tsx}"],
     settings: {
-      tailwindcss: { config: TAILWIND_CONFIG },
+      tailwindcss: { cssConfigPath: TAILWIND_CSS_CONFIG },
     },
     rules: {
-      // classnames-order: off — no prettier-plugin-tailwindcss to auto-fix ordering.
-      // Also uses context.getSourceCode() removed in ESLint v10.
+      // classnames-order: off — ordering churn with no prettier-plugin-tailwindcss
+      // to keep it fixed on save.
       "tailwindcss/classnames-order": "off",
-      // enforces-shorthand: off — also uses context.getSourceCode() (ESLint v10 incompatible)
-      "tailwindcss/enforces-shorthand": "off",
-      // migration-from-tailwind-2: off — already off in recommended, but explicit
-      "tailwindcss/migration-from-tailwind-2": "off",
-      // no-custom-classname: off — project has many custom VS Code theme tokens
+      // no-custom-classname: off — `cy-*` component classes, codicons, and
+      // structural marker classes are not Tailwind utilities by design.
       "tailwindcss/no-custom-classname": "off",
+      // Keep v3 spellings (flex-shrink-0, bg-[var(--x)], !important prefix)
+      // from creeping back in: both autofix to the Tailwind 4 form.
+      "tailwindcss/enforces-canonical-classname": "error",
+      "tailwindcss/important-modifier-suffix": "error",
+      // Off for now: both rewrite working classes into equivalent shorter
+      // ones (`w-4 h-4` → `size-4`, `w-[32px]` → `w-8`) across hundreds of
+      // call sites — a style pass, not something Tailwind 4 requires.
+      "tailwindcss/enforces-shorthand": "off",
+      "tailwindcss/no-unnecessary-arbitrary-value": "off",
       // no-contradicting-classname: matches VS Code Tailwind IntelliSense cssConflict
       "tailwindcss/no-contradicting-classname": "warn",
     },

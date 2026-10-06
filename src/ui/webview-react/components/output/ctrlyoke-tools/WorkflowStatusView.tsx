@@ -55,9 +55,9 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
   const harness = workflowStatusHarnessLabel(status);
   let offset = 0;
   return (
-    <div className="space-y-2 text-[length:var(--cy-output-font-size-sm)]">
+    <div className="space-y-2 text-(length:--cy-output-font-size-sm)">
       <div
-        className="h-1.5 overflow-hidden rounded bg-muted"
+        className="h-1.5 overflow-hidden rounded-sm bg-muted"
         role="progressbar"
         aria-label="Workflow progress"
         aria-valuenow={workflowStatusProgress(status)}
@@ -65,7 +65,7 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
         aria-valuemax={100}
       >
         <div
-          className="h-full bg-[var(--vscode-progressBar-background)]"
+          className="h-full bg-(--vscode-progressBar-background)"
           style={{ width: `${workflowStatusProgress(status)}%` }}
         />
       </div>
@@ -96,7 +96,7 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
                     <StatusIcon status={workflowStepStatus(step.status)} />
                   </td>
                   <td
-                    className="p-1 [overflow-wrap:anywhere]"
+                    className="p-1 wrap-anywhere"
                     title={workflowStatusStepTitle(step)}
                   >
                     {highlightText(
@@ -145,7 +145,7 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
         errorFindMatches={errorFindMatches}
         expansion={expansion}
         onExpansionChange={onExpansionChange}
-        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
+        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-(length:--cy-output-font-size-sm) hover:underline"
       />
     </div>
   );

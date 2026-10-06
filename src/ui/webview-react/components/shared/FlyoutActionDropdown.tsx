@@ -199,10 +199,10 @@ export function FlyoutActionDropdown({
         aria-label={iconOnly ? label : undefined}
         className={
           iconOnly
-            ? `flex h-6 items-center justify-center gap-0.5 rounded border border-panel-border px-1.5 text-xxs transition-colors hover:border-focus-border ${
+            ? `flex h-6 items-center justify-center gap-0.5 rounded-sm border border-panel-border px-1.5 text-xxs transition-colors hover:border-focus-border ${
                 className || "text-description-fg hover:text-foreground"
               }`
-            : "flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+            : "flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded-sm bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
         }
       >
         <span className="flex min-w-0 items-center gap-1 truncate">

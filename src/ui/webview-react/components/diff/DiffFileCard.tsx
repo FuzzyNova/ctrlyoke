@@ -430,7 +430,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
   // aria-posinset/aria-setsize standalone.
   return (
     <div
-      className="border border-panel-border rounded overflow-hidden"
+      className="border border-panel-border rounded-sm overflow-hidden"
       {...(ariaSetSize !== undefined ? { role: "article" } : {})}
       aria-setsize={ariaSetSize}
       aria-posinset={ariaPosInSet}
@@ -495,7 +495,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
           )}
         </div>
         {note && (
-          <span className="pl-5 text-description-fg italic [overflow-wrap:anywhere]">
+          <span className="pl-5 text-description-fg italic wrap-anywhere">
             {note}
           </span>
         )}

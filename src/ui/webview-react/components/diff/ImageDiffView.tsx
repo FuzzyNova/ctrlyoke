@@ -32,7 +32,7 @@ function ImageSide({
     <div className="flex min-w-0 flex-col gap-1">
       <h4 className="text-xs font-semibold text-description-fg">{label}</h4>
       <div
-        className="flex h-64 min-w-72 items-center justify-center overflow-hidden rounded border border-panel-border bg-editor-bg"
+        className="flex h-64 min-w-72 items-center justify-center overflow-hidden rounded-sm border border-panel-border bg-editor-bg"
         style={checkerboardStyle}
       >
         {dataUri ? (
@@ -78,7 +78,7 @@ export const ImageDiffView: React.FC<ImageDiffViewProps> = ({
     </button>
     {!collapsed && (
       <div className="mt-2 max-w-full overflow-x-auto">
-        <div className="grid min-w-[36rem] grid-cols-2 gap-3">
+        <div className="grid min-w-xl grid-cols-2 gap-3">
           <ImageSide
             label="Before"
             dataUri={sides.oldImageDataUri}

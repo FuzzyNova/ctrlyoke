@@ -57,7 +57,7 @@ export function SettingToggleRow({
     <label
       data-settings-search-id={entry?.id}
       title={resolvedPath ? schemaTitle(resolvedPath) : resolvedDescription}
-      className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}${isMatch ? " rounded-sm bg-list-hover-bg/50" : ""}${isActive ? " outline outline-1 outline-focus-border" : ""}`}
+      className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}${isMatch ? " rounded-xs bg-list-hover-bg/50" : ""}${isActive ? " outline-solid outline-1 outline-focus-border" : ""}`}
     >
       <input
         type="checkbox"
@@ -103,7 +103,7 @@ export function SettingToggleRow({
                 ? `Defined in ${source} config`
                 : undefined
           }
-          className={`shrink-0 mt-0.5 w-4 h-4 flex items-center justify-center rounded text-description-fg hover:text-foreground transition-opacity ${
+          className={`shrink-0 mt-0.5 w-4 h-4 flex items-center justify-center rounded-sm text-description-fg hover:text-foreground transition-opacity ${
             canReset
               ? "opacity-0 group-hover:opacity-100"
               : "opacity-0 pointer-events-none"

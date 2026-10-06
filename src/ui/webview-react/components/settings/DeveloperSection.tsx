@@ -325,12 +325,12 @@ export function DeveloperSection() {
         )}
 
         {devBuild.lastResult?.errorSummary && (
-          <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-error-fg">
+          <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded-sm border border-input-border bg-input-bg p-2 text-xs text-error-fg">
             {devBuild.lastResult.errorSummary}
           </pre>
         )}
 
-        <pre className="min-h-40 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+        <pre className="min-h-40 max-h-80 overflow-auto whitespace-pre-wrap rounded-sm border border-input-border bg-input-bg p-2 text-xs text-foreground">
           {devBuild.output || "No command output yet."}
         </pre>
       </div>

@@ -19,7 +19,7 @@ export const ExitButton: React.FC<ExitButtonProps> = ({
 }) => (
   <button
     type={type}
-    className={`control-button flex h-6 w-6 appearance-none items-center justify-center rounded border border-btn-border bg-btn-secondary-bg p-0 leading-none text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover ${className}`}
+    className={`control-button flex h-6 w-6 appearance-none items-center justify-center rounded-sm border border-btn-border bg-btn-secondary-bg p-0 leading-none text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover ${className}`}
     aria-label={ariaLabel}
     {...props}
   >

@@ -461,7 +461,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={railRef}
-      className="relative flex-shrink-0 flex flex-row w-[var(--cy-output-minimap-width)] [--cy-minimap-diff-added:theme(colors.minimap-diff-added)] [--cy-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
+      className="relative shrink-0 flex flex-row w-(--cy-output-minimap-width) [--cy-minimap-diff-added:var(--color-minimap-diff-added)] [--cy-minimap-diff-removed:var(--color-minimap-diff-removed)]"
       onMouseDown={handleRailMouseDown}
       onTouchStart={handleRailTouchStart}
       style={{ cursor: canScroll ? "pointer" : "default", touchAction: "none" }}
@@ -472,14 +472,14 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           markers below are absolutely positioned on top of it. */}
       <div
         ref={pillsColumnRef}
-        className="flex-shrink-0 w-[var(--cy-output-minimap-pills-width)] border-l border-panel-border"
+        className="shrink-0 w-(--cy-output-minimap-pills-width) border-l border-panel-border"
       />
 
       {/* Diff track — opaque, flush with the panel edge; holds the diff
           overlays and the scroll thumb. */}
       <div
         ref={diffColumnRef}
-        className="relative flex-shrink-0 w-[var(--cy-output-minimap-diff-width)] bg-sidebar-bg"
+        className="relative shrink-0 w-(--cy-output-minimap-diff-width) bg-sidebar-bg"
       >
         {/* Diff overlays — one bar per occupied rail pixel, below thumb and
             markers. Only a genuinely paired split-view row (or a collapsed
@@ -524,7 +524,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         tabIndex={0}
         aria-label="Scroll viewport"
         aria-valuenow={Math.round(viewportPct.top * 100)}
-        className={`absolute right-0 w-[var(--cy-output-minimap-width)] rounded-sm z-raised ${
+        className={`absolute right-0 w-(--cy-output-minimap-width) rounded-xs z-raised ${
           isDragging
             ? "bg-minimap-thumb-active"
             : isThumbHovered

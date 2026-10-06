@@ -86,7 +86,7 @@ export function UsageCard({
 
   if (!snapshot) {
     return (
-      <div className="rounded border border-panel-border bg-panel-bg p-2 text-xs text-description-fg">
+      <div className="rounded-sm border border-panel-border bg-panel-bg p-2 text-xs text-description-fg">
         Usage: loading…
         {harnessId === HARNESS_IDS.COPILOT_CLI && (
           <div className="mt-1">
@@ -106,7 +106,7 @@ export function UsageCard({
 
   const observed = snapshot.observed;
   return (
-    <div className="rounded border border-panel-border bg-panel-bg p-2 text-xs space-y-2">
+    <div className="rounded-sm border border-panel-border bg-panel-bg p-2 text-xs space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <span className="font-medium text-foreground">Usage</span>
         <span className="min-w-0 text-description-fg">
@@ -139,7 +139,7 @@ export function UsageCard({
       )}
       <div className="grid grid-cols-3 gap-2 text-foreground">
         {(["daily", "weekly", "monthly"] as const).map((period) => (
-          <div key={period} className="rounded bg-input-bg px-2 py-1">
+          <div key={period} className="rounded-sm bg-input-bg px-2 py-1">
             <div className="text-description-fg capitalize">{period}</div>
             <div>
               {formatTokenTotal(

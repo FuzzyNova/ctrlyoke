@@ -72,7 +72,7 @@ export function PortListEditor({
               setPortError(null);
             }}
             placeholder="e.g. 4749"
-            className="w-full rounded border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-none"
+            className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-hidden"
             aria-invalid={portError ? "true" : undefined}
             aria-describedby={portError ? `${inputId}-error` : undefined}
           />
@@ -92,7 +92,7 @@ export function PortListEditor({
       </form>
 
       {ports.length === 0 ? (
-        <p className="rounded border border-panel-border px-3 py-2 text-xs text-description-fg">
+        <p className="rounded-sm border border-panel-border px-3 py-2 text-xs text-description-fg">
           No fallback ports configured.
         </p>
       ) : (
@@ -100,7 +100,7 @@ export function PortListEditor({
           {ports.map((port) => (
             <span
               key={port}
-              className="flex items-center gap-1.5 rounded border border-panel-border bg-input-bg px-2 py-1 font-mono text-xs text-foreground"
+              className="flex items-center gap-1.5 rounded-sm border border-panel-border bg-input-bg px-2 py-1 font-mono text-xs text-foreground"
               data-testid={`port-list-entry-${port}`}
             >
               {port}

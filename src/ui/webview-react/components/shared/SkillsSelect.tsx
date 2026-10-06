@@ -207,7 +207,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
               onClick={() => handleKeywordSelect(keyword)}
               aria-label={schemaAriaLabel(label, schemaPath, schemaValue)}
               title={schemaTitle(schemaPath, schemaValue)}
-              className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
+              className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-hidden border-none ${
                 isSelected
                   ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
                   : "hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
@@ -215,7 +215,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             >
               <Icon
                 name="check"
-                className={`text-xxs flex-shrink-0 ${
+                className={`text-xxs shrink-0 ${
                   isSelected ? "visible" : "invisible"
                 }`}
               />
@@ -245,7 +245,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
               <div
                 key={skill.name}
                 title={skill.description}
-                className={`group w-full flex items-start focus:outline-none border-none ${
+                className={`group w-full flex items-start focus:outline-hidden border-none ${
                   isChecked
                     ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
                     : "hover:bg-list-hover-bg cy-dropdown-row"
@@ -255,14 +255,14 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                   type="button"
                   disabled={disabled}
                   onClick={() => toggleSkill(skill.name)}
-                  className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                  className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-hidden border-none bg-transparent cursor-pointer"
                 >
                   <input
                     type="checkbox"
                     checked={isChecked}
                     onChange={() => {}}
                     aria-hidden={true}
-                    className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                    className="mt-0.5 w-3 h-3 shrink-0 accent-focus-border cursor-pointer"
                     tabIndex={-1}
                   />
                   <span className="flex flex-col min-w-0">
@@ -284,7 +284,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                       e.stopPropagation();
                       onHideOption?.(skill.name);
                     }}
-                    className="flex-shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+                    className="shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent transition-opacity"
                   >
                     <Icon name="eye-closed" className="text-xs" />
                   </button>
@@ -313,7 +313,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                         e.stopPropagation();
                         onUnhideOption?.(skill.name);
                       }}
-                      className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                      className="shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent"
                     >
                       <Icon name="eye" className="text-xs" />
                     </button>
@@ -321,7 +321,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                       type="button"
                       disabled={disabled}
                       onClick={() => handleHiddenSkillSelect(skill.name)}
-                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
+                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-hidden border-none bg-transparent cursor-pointer"
                     >
                       <span className="flex flex-col min-w-0">
                         <span className="truncate">
@@ -398,7 +398,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
         <span className="truncate">{buttonLabel}</span>
         <Icon
           name={`chevron-${isOpen ? "up" : "down"}`}
-          className="text-xxs flex-shrink-0 ml-1"
+          className="text-xxs shrink-0 ml-1"
         />
       </button>
       {warning && (

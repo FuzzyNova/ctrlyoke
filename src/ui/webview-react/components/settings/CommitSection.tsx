@@ -37,7 +37,7 @@ function PromptPreview({ text }: { text: string }) {
     ? lines.slice(0, MAX_PROMPT_LINES).join("\n") + "\n... (truncated)"
     : text;
   return (
-    <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+    <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-sm border border-input-border bg-input-bg p-2 text-xs text-foreground">
       {display}
     </pre>
   );
@@ -171,7 +171,7 @@ export function CommitSection({
             value={currentModel}
             onCommit={(v) => onUpdate("commit.model", v)}
             placeholder="Harness default"
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
           />
         )}
       </SettingInputRow>
@@ -187,7 +187,7 @@ export function CommitSection({
           value={commit.systemPrompt as string}
           onCommit={(v) => onUpdate(SETTING_PATHS.COMMIT_SYSTEM_PROMPT, v)}
           placeholder={DEFAULT_PROMPT}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border resize-y font-mono"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border resize-y font-mono"
         />
       </SettingInputRow>
 
@@ -218,7 +218,7 @@ export function CommitSection({
         {lastCommitMessageGeneration?.commands.length ? (
           <div className="text-xs text-description-fg">
             Git commands:
-            <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+            <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap rounded-sm border border-input-border bg-input-bg p-2 text-xs text-foreground">
               {lastCommitMessageGeneration.commands.join("\n")}
             </pre>
           </div>
@@ -261,7 +261,7 @@ export function CommitSection({
                 <div className="text-xs font-semibold text-description-fg">
                   Harness command:
                 </div>
-                <pre className="overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+                <pre className="overflow-auto whitespace-pre-wrap rounded-sm border border-input-border bg-input-bg p-2 text-xs text-foreground">
                   {lastCommitMessageGeneration.cliCommand}
                 </pre>
               </div>
@@ -284,14 +284,14 @@ export function CommitSection({
                 <div className="text-xs font-semibold text-description-fg">
                   Generated message:
                 </div>
-                <pre className="overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+                <pre className="overflow-auto whitespace-pre-wrap rounded-sm border border-input-border bg-input-bg p-2 text-xs text-foreground">
                   {lastCommitMessageGeneration.generatedMessage}
                 </pre>
               </div>
             ) : null}
           </>
         ) : (
-          <pre className="min-h-20 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+          <pre className="min-h-20 overflow-auto whitespace-pre-wrap rounded-sm border border-input-border bg-input-bg p-2 text-xs text-foreground">
             No commit message generation has run yet.
           </pre>
         )}

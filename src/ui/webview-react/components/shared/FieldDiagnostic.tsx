@@ -42,7 +42,7 @@ export const FieldDiagnostic: React.FC<FieldDiagnosticProps> = ({
             key={`${diagnostic.message}-${index}`}
             className={`flex items-start gap-1 ${style.className}`}
           >
-            <Icon name={style.icon} className="mt-px flex-shrink-0" />
+            <Icon name={style.icon} className="mt-px shrink-0" />
             <span>{diagnostic.message}</span>
           </p>
         );
@@ -78,18 +78,18 @@ export const CompatibilitySummary: React.FC<CompatibilitySummaryProps> = ({
 
   return (
     <div
-      className="mt-1 flex items-center gap-2 rounded border border-warning-fg border-opacity-40 bg-severity-warning-bg px-2 py-1 text-xxs text-warning-fg"
+      className="mt-1 flex items-center gap-2 rounded-sm border border-warning-fg/40 bg-severity-warning-bg px-2 py-1 text-xxs text-warning-fg"
       role="status"
       aria-live="polite"
     >
-      <Icon name="warning" className="flex-shrink-0" />
+      <Icon name="warning" className="shrink-0" />
       <span>
         {count} {warningLabel} {harnessLabel}
       </span>
       <button
         type="button"
         onClick={onReview}
-        className="ml-auto flex-shrink-0 font-semibold underline hover:no-underline"
+        className="ml-auto shrink-0 font-semibold underline hover:no-underline"
       >
         Review
       </button>

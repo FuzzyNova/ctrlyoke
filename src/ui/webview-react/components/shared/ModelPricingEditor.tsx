@@ -208,7 +208,7 @@ export const ModelPricingEditor: React.FC<{
         return (
           <section
             key={harnessId}
-            className="space-y-3 rounded border border-panel-border bg-editor-bg p-3"
+            className="space-y-3 rounded-sm border border-panel-border bg-editor-bg p-3"
             aria-labelledby={`model-pricing-${harnessId}-heading`}
           >
             <div className="flex items-center justify-between gap-2">
@@ -258,7 +258,7 @@ export const ModelPricingEditor: React.FC<{
                     }))
                   }
                   placeholder="Enter model ID"
-                  className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                  className="min-w-0 flex-1 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
                 />
                 <Button
                   type="button"
@@ -292,7 +292,7 @@ export const ModelPricingEditor: React.FC<{
             {Object.entries(models).map(([modelId, override]) => (
               <div
                 key={modelId}
-                className="space-y-2 rounded border border-panel-border p-2"
+                className="space-y-2 rounded-sm border border-panel-border p-2"
               >
                 <div className="flex items-center justify-between gap-2">
                   <code
@@ -349,7 +349,7 @@ export const ModelPricingEditor: React.FC<{
                           onCommit={(next) =>
                             updateRate(harnessId, modelId, key, next)
                           }
-                          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
                         />
                       </label>
                     );

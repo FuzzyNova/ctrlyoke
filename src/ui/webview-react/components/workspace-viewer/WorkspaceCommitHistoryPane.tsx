@@ -592,7 +592,7 @@ const RefPill: React.FC<RefPillProps> = ({ label, colorClass, iconOnly }) => {
           : "codicon-git-branch";
   return (
     <span
-      className={`flex items-center gap-0.5 px-1 py-px rounded border text-xxs leading-none whitespace-nowrap ${colorClass} ${borderColorClass}`}
+      className={`flex items-center gap-0.5 px-1 py-px rounded-sm border text-xxs leading-none whitespace-nowrap ${colorClass} ${borderColorClass}`}
       title={label.name}
     >
       <Icon name={icon} className="text-xxs" />
@@ -655,7 +655,7 @@ const CommitRow: React.FC<CommitRowProps> = ({
         {commit.subject}
       </span>
       {commit.refs.length > 0 && (
-        <span className="flex items-center gap-1 flex-shrink-0">
+        <span className="flex items-center gap-1 shrink-0">
           {commit.refs.map((ref) => (
             <RefPill
               key={`${ref.type}:${ref.name}`}
@@ -855,7 +855,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
 
   return (
     <div className="flex h-full min-h-0 flex-col cy-no-select">
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 flex-shrink-0">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
             History
@@ -865,31 +865,28 @@ export const WorkspaceCommitHistoryPane: React.FC<
               className="flex items-center gap-1 min-w-0 text-xs text-scm-graph-local"
               title={`Current branch: ${currentBranch}`}
             >
-              <Icon name="git-branch" className="text-xs flex-shrink-0" />
+              <Icon name="git-branch" className="text-xs shrink-0" />
               <span className="truncate">{currentBranch}</span>
             </span>
           ) : (
             <span className="flex items-center gap-1 text-xs text-yellow-400">
-              <Icon name="git-commit" className="text-xs flex-shrink-0" />
+              <Icon name="git-commit" className="text-xs shrink-0" />
               detached
             </span>
           )}
         </div>
         <button
           onClick={handleRefresh}
-          className="codicon codicon-refresh text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity flex-shrink-0"
+          className="codicon codicon-refresh text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity shrink-0"
           title="Refresh commit history"
           aria-label="Refresh commit history"
         />
       </div>
 
       {detached && (
-        <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-yellow-500/10 border-y border-yellow-500/20 flex-shrink-0">
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-yellow-500/10 border-y border-yellow-500/20 shrink-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Icon
-              name="warning"
-              className="text-xs text-yellow-400 flex-shrink-0"
-            />
+            <Icon name="warning" className="text-xs text-yellow-400 shrink-0" />
             <span className="text-xs text-editor-fg truncate">
               Detached HEAD
             </span>
@@ -897,7 +894,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
           {returnBranchLabel && (
             <button
               onClick={() => void handleReturnToBranch()}
-              className="flex-shrink-0 text-xs text-btn-fg hover:underline whitespace-nowrap"
+              className="shrink-0 text-xs text-btn-fg hover:underline whitespace-nowrap"
               title={`Return to branch ${returnBranchLabel}`}
             >
               Return to {returnBranchLabel}
@@ -934,7 +931,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
       </div>
 
       {controller.isLoading && (
-        <div className="flex items-center gap-2 px-3 py-2 text-editor-fg opacity-50 flex-shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 text-editor-fg opacity-50 shrink-0">
           <Icon name="loading" className="animate-spin text-xs" />
           <span className="text-xs">Loading…</span>
         </div>

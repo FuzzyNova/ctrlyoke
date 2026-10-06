@@ -75,7 +75,7 @@ export function NumberField({
             onChange(clamp(next, min, max));
           }
         }}
-        className={`w-full bg-input-bg border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border ${
+        className={`w-full bg-input-bg border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border ${
           isInvalid ? "border-input-error-border" : "border-input-border"
         }`}
       />

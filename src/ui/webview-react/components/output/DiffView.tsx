@@ -636,12 +636,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
           type="button"
           onClick={handleToggle}
           aria-label="Toggle diff"
-          className="flex min-w-0 items-center gap-1.5 text-[length:var(--cy-output-font-size-xs)] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+          className="flex min-w-0 items-center gap-1.5 text-(length:--cy-output-font-size-xs) text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
           title={isExpanded ? "Collapse diff" : "Expand diff"}
         >
           <Icon
             name="chevron-right"
-            className={`text-[length:var(--cy-output-font-size-xs)] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+            className={`text-(length:--cy-output-font-size-xs) transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
           />
           <span>
             {isExpanded ? "Hide" : "Show"} diff
@@ -654,7 +654,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         </button>
         {(summaryStats.added > 0 || summaryStats.removed > 0) && (
           <span
-            className="flex shrink-0 items-center gap-1 font-mono text-[length:var(--cy-output-font-size-xs)]"
+            className="flex shrink-0 items-center gap-1 font-mono text-(length:--cy-output-font-size-xs)"
             aria-label={`${summaryStats.added} lines added, ${summaryStats.removed} lines removed`}
           >
             {summaryStats.added > 0 && (
@@ -676,7 +676,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
       {/* Diff — only mounted when expanded and there are hunks */}
       {isExpanded && parsedDiff.fallbackText !== undefined && (
-        <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-[3px] border border-panel-border bg-editor-bg p-2 font-mono text-[length:var(--cy-output-font-size-xs)] text-description-fg">
+        <pre className="max-h-96 overflow-auto whitespace-pre-wrap wrap-break-word rounded-[3px] border border-panel-border bg-editor-bg p-2 font-mono text-(length:--cy-output-font-size-xs) text-description-fg">
           {parsedDiff.fallbackText}
         </pre>
       )}
@@ -707,7 +707,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                   nodes.push(
                     <Decoration key={`gap-${i}-${hunk.oldStart}`}>
                       {hasExpandableSource ? (
-                        <div className="flex w-full items-center justify-center gap-x-3 bg-diff-hidden-bg px-3 py-0.5 text-[length:var(--cy-output-font-size-xs)]">
+                        <div className="flex w-full items-center justify-center gap-x-3 bg-diff-hidden-bg px-3 py-0.5 text-(length:--cy-output-font-size-xs)">
                           <Icon
                             name="triangle-right"
                             className="text-description-fg"
@@ -752,7 +752,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         </div>
                       ) : (
                         <div
-                          className="flex w-full items-center justify-center gap-x-2 bg-diff-hidden-bg px-3 py-0.5 font-mono text-[length:var(--cy-output-font-size-xs)] text-description-fg opacity-70"
+                          className="flex w-full items-center justify-center gap-x-2 bg-diff-hidden-bg px-3 py-0.5 font-mono text-(length:--cy-output-font-size-xs) text-description-fg opacity-70"
                           title="Hidden lines can't be expanded because the original file content is unavailable for this diff."
                         >
                           {hiddenLinesLabel}

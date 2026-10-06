@@ -37,7 +37,7 @@ export function useIsMobile(): boolean {
 
 /**
  * Convenience hook: `true` when the viewport is below the project's custom
- * `xs` breakpoint (380px, see `tailwind.config.js`) — the width at which the
+ * `xs` breakpoint (380px, `--breakpoint-xs` in `styles/globals.css`) — the width at which the
  * header already starts dropping non-actionable controls entirely. Reserve it
  * for the last round of concessions, after icon-only labels (`useIsMobile`)
  * have stopped being enough.

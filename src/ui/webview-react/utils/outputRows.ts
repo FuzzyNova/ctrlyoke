@@ -846,7 +846,7 @@ function estimateTextBlockHeight(
 // download / fullscreen buttons) and an overflow-x-auto scroll region:
 //   <div class="my-4 ... rounded-lg border p-2">      ← wrapper
 //     <div class="...justify-end gap-1">...buttons</div> ← control bar
-//     <div class="overflow-x-auto ... border rounded"> ← scroll region
+//     <div class="overflow-x-auto ... border rounded-sm"> ← scroll region
 //       <table class="w-full divide-y">                ← th: nowrap px-4 py-2
 // Cells use px-4 (32px horizontal) / py-2 (16px vertical) padding, header cells
 // are whitespace-nowrap (always one line), body cells wrap.
@@ -1213,7 +1213,7 @@ function estimateCollapsedScriptVerdictHeight(
 /**
  * Height of a ● header line (or a short one-line block that renders like one).
  * Uses the ● block's real geometry: `leading-relaxed` at the base font size
- * over `my-2`, with only the row's own `px-[var(--spacing-md)]` taken out
+ * over `my-2`, with only the row's own `px-(--spacing-md)` taken out
  * horizontally — ToolCallBlock adds no padding of its own.
  */
 /**
@@ -1708,7 +1708,7 @@ function estimateToolCallStructuredEventHeight(
 // not the output font-size var), so its estimate is independent of
 // `outputFontSize` — only the pane width can change it, by wrapping the
 // summary line or the chip row.
-//   <div class="mx-2 mb-1 rounded border px-2 py-1.5 text-xs">
+//   <div class="mx-2 mb-1 rounded-sm border px-2 py-1.5 text-xs">
 //     <div class="flex flex-wrap gap-x-2 gap-y-1">  ← title / counts / undo
 //     <div class="mt-1 flex flex-wrap gap-1">       ← All + member chips
 const PARALLEL_GROUP_HEADER_VERTICAL_CHROME = 18; // py-1.5 (12) + border (2) + mb-1 (4)

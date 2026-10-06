@@ -29,7 +29,7 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
   const workflowLines = lines.slice(0, status.workflows.length);
   let offset = 0;
   return (
-    <div className="space-y-2 text-[length:var(--cy-output-font-size-sm)]">
+    <div className="space-y-2 text-(length:--cy-output-font-size-sm)">
       <ul className="space-y-1">
         {status.workflows.map((workflow, i) => {
           const text = workflowLines[i] ?? "";
@@ -44,7 +44,7 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
               <span className="rounded-full bg-muted px-2 py-0.5">
                 {workflow.executionState}
               </span>
-              <span className="min-w-0 flex-1 break-words">
+              <span className="min-w-0 flex-1 wrap-break-word">
                 {highlightText(
                   workflow.workflowName,
                   sliceFindMatches(
@@ -77,7 +77,7 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
         errorFindMatches={errorFindMatches}
         expansion={expansion}
         onExpansionChange={onExpansionChange}
-        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
+        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-(length:--cy-output-font-size-sm) hover:underline"
       />
     </div>
   );

@@ -40,7 +40,7 @@ Note: the camelCase within a segment is preserved. Only the `.` separator become
 
 ## Variables Used in This Project (Tailwind Token Mapping)
 
-These are all `--vscode-*` variables referenced in the FlightPath webview. Each is mapped to a Tailwind token in `tailwind.config.js` — never use them as inline arbitrary values in className strings; use the token.
+These are all `--vscode-*` variables referenced in the FlightPath webview. Each is mapped to a Tailwind `--color-*` token in the `@theme` block of `src/ui/webview-react/styles/globals.css` — never use them as inline arbitrary values in className strings; use the token.
 
 | CSS Variable                                | Tailwind Token         | Notes                                                                                                                                             |
 | ------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |

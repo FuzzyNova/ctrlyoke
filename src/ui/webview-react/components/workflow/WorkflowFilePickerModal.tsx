@@ -153,7 +153,7 @@ export const WorkflowFilePickerModal: React.FC<
                     scope: hideGitIgnoredFilesScope,
                   })
                 }
-                className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors ${
+                className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-sm transition-colors ${
                   hideGitIgnoredFiles
                     ? "text-description-fg hover:bg-btn-secondary-hover"
                     : "text-foreground hover:bg-btn-secondary-hover"
@@ -180,11 +180,11 @@ export const WorkflowFilePickerModal: React.FC<
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="workflow, prompt, .ctrlyoke"
-            className="w-full rounded border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-none focus:ring-1 focus:ring-focus-border"
+            className="w-full rounded-sm border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-hidden focus:ring-1 focus:ring-focus-border"
           />
         </div>
 
-        <div className="h-64 overflow-y-auto rounded border border-panel-border">
+        <div className="h-64 overflow-y-auto rounded-sm border border-panel-border">
           {isLoading && (
             <div className="px-3 py-2 text-sm text-description-fg">
               Loading files...
@@ -227,7 +227,7 @@ export const WorkflowFilePickerModal: React.FC<
             value={manualPath}
             onChange={(event) => setManualPath(event.target.value)}
             placeholder={WORKFLOW_PATH_PLACEHOLDER}
-            className="mt-2 w-full rounded border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-none focus:ring-1 focus:ring-focus-border"
+            className="mt-2 w-full rounded-sm border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-hidden focus:ring-1 focus:ring-focus-border"
           />
         </label>
       </div>

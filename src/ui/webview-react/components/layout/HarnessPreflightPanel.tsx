@@ -28,7 +28,7 @@ export function HarnessPreflightPanel() {
 
   return (
     <section
-      className="mx-3 mt-3 rounded border border-input-error-border bg-input-bg px-3 py-2 text-sm text-foreground"
+      className="mx-3 mt-3 rounded-sm border border-input-error-border bg-input-bg px-3 py-2 text-sm text-foreground"
       aria-label="Harness installation guidance"
     >
       <div className="flex items-center gap-2">
@@ -48,7 +48,7 @@ export function HarnessPreflightPanel() {
           return (
             <li
               key={harnessId}
-              className="flex min-w-0 items-center gap-1.5 rounded bg-editor-bg px-2 py-1"
+              className="flex min-w-0 items-center gap-1.5 rounded-sm bg-editor-bg px-2 py-1"
             >
               <HarnessIcon harnessId={harnessId} size={14} />
               <span className="shrink-0 text-xs font-medium">

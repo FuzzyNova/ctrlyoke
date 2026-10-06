@@ -179,7 +179,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
       dot={<ToolDot status={resultDotStatus(result)} />}
       header={
         <>
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <span className="min-w-0 flex-1 wrap-anywhere">
             {labelContent ?? `MCP: ${server}.${tool}`}
           </span>
           {resolvedRenderPlan.params.canToggle && (
@@ -204,7 +204,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
       }
     >
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
-        <div className="text-[length:var(--cy-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <div className="text-(length:--cy-output-font-size-sm) text-description-fg whitespace-pre-wrap wrap-anywhere">
           {highlightText(fullParamsText, paramsFindMatches ?? [])}
         </div>
       )}
@@ -266,7 +266,7 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
       />
     }
     header={
-      <span className="min-w-0 [overflow-wrap:anywhere]">
+      <span className="min-w-0 wrap-anywhere">
         {queryContent ?? <>Web search: &ldquo;{query}&rdquo;</>}
       </span>
     }
@@ -274,7 +274,7 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
     {error && (
       <div className={`${TOOL_ERROR_LINE} flex items-start gap-1`}>
         <span className="shrink-0">⎿</span>
-        <div className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <div className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere">
           {errorContent ?? error}
         </div>
       </div>
@@ -348,7 +348,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       dot={<ToolDot status={resultDotStatus(result)} />}
       header={
         <>
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <span className="min-w-0 flex-1 wrap-anywhere">
             {nameFindMatches?.length ? (
               <>
                 {highlightText(name, nameFindMatches)}({params})
@@ -380,7 +380,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       }
     >
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
-        <div className="text-[length:var(--cy-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <div className="text-(length:--cy-output-font-size-sm) text-description-fg whitespace-pre-wrap wrap-anywhere">
           {highlightText(fullParamsText, paramsFindMatches ?? [])}
         </div>
       )}

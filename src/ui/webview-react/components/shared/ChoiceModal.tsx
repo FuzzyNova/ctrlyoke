@@ -44,7 +44,7 @@ export function ChoiceModal() {
           {request.choices.map((choice) => (
             <label
               key={choice.value}
-              className="flex cursor-pointer items-center gap-2 rounded border border-panel-border px-3 py-2 text-sm text-foreground"
+              className="flex cursor-pointer items-center gap-2 rounded-sm border border-panel-border px-3 py-2 text-sm text-foreground"
             >
               <input
                 type="radio"

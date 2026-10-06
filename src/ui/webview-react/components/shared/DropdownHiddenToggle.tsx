@@ -38,13 +38,13 @@ export const DropdownHiddenToggle: React.FC<DropdownHiddenToggleProps> = ({
   dividerSide = DROPDOWN_DIVIDER_SIDES.TOP,
 }) => (
   <div
-    className={`${dividerSide === DROPDOWN_DIVIDER_SIDES.BOTTOM ? "border-b" : "border-t"} border-dropdown-border bg-editor-bg flex-shrink-0`}
+    className={`${dividerSide === DROPDOWN_DIVIDER_SIDES.BOTTOM ? "border-b" : "border-t"} border-dropdown-border bg-editor-bg shrink-0`}
   >
     <button
       type="button"
       disabled={hiddenCount === 0}
       onClick={onToggle}
-      className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+      className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-hidden border-none bg-transparent transition-colors"
     >
       {showHidden
         ? "Hide hidden"

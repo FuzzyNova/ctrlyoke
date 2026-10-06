@@ -170,7 +170,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     return (
       <div
         key={option.value}
-        className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
+        className={`group w-full flex items-start focus:outline-hidden border-none cursor-pointer ${
           isSelected
             ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
             : "hover:bg-list-hover-bg hover:text-list-highlight-fg cy-dropdown-row"
@@ -181,7 +181,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
           onClick={() => toggleValue(option.value)}
           disabled={isLocked}
           aria-disabled={isLocked}
-          className={`flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent ${isLocked ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
+          className={`flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-hidden border-none bg-transparent ${isLocked ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
         >
           <input
             type="checkbox"
@@ -189,7 +189,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             disabled={isLocked}
             onChange={() => {}}
             aria-hidden={true}
-            className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+            className="mt-0.5 w-3 h-3 shrink-0 accent-focus-border cursor-pointer"
             tabIndex={-1}
           />
           <span className="flex flex-col min-w-0">
@@ -219,7 +219,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
               e.stopPropagation();
               handleHide(option.value);
             }}
-            className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+            className="shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent transition-opacity"
           >
             <Icon name="eye-closed" className="text-xs" />
           </button>
@@ -327,7 +327,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
         </span>
         <Icon
           name={`chevron-${isOpen ? "up" : "down"}`}
-          className="text-xxs flex-shrink-0 ml-1"
+          className="text-xxs shrink-0 ml-1"
         />
       </button>
       {warning && (
@@ -370,7 +370,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
               }
               aria-label={`All (${allSelectedCount}/${allVisibleValues.length})`}
               onClick={toggleAll}
-              className="sticky top-0 z-20 flex h-7 w-full flex-shrink-0 items-center gap-2 border-b border-dropdown-border bg-dropdown-bg px-2 text-left text-xs cursor-pointer"
+              className="sticky top-0 z-20 flex h-7 w-full shrink-0 items-center gap-2 border-b border-dropdown-border bg-dropdown-bg px-2 text-left text-xs cursor-pointer"
             >
               <input
                 type="checkbox"
@@ -383,10 +383,10 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                 onChange={() => {}}
                 aria-hidden={true}
                 tabIndex={-1}
-                className="w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                className="w-3 h-3 shrink-0 accent-focus-border cursor-pointer"
               />
               <span className="font-medium truncate flex-1">All</span>
-              <span className="text-xxs text-description-fg flex-shrink-0">
+              <span className="text-xxs text-description-fg shrink-0">
                 {allSelectedCount}/{allVisibleValues.length}
               </span>
             </button>
@@ -454,12 +454,12 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                         onChange={() => {}}
                         aria-hidden={true}
                         tabIndex={-1}
-                        className="w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                        className="w-3 h-3 shrink-0 accent-focus-border cursor-pointer"
                       />
                       <span className="font-medium truncate flex-1">
                         {group.group}
                       </span>
-                      <span className="text-xxs text-description-fg flex-shrink-0">
+                      <span className="text-xxs text-description-fg shrink-0">
                         {selectedCount}/{groupValues.length}
                       </span>
                     </button>
@@ -492,7 +492,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                         e.stopPropagation();
                         onUnhideOption?.(option.value);
                       }}
-                      className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                      className="shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent"
                     >
                       <Icon name="eye" className="text-xs" />
                     </button>
@@ -500,14 +500,14 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                     <button
                       type="button"
                       onClick={() => handleUnhideAndCheck(option.value)}
-                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-hidden border-none bg-transparent cursor-pointer"
                     >
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => {}}
                         aria-hidden={true}
-                        className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                        className="mt-0.5 w-3 h-3 shrink-0 accent-focus-border cursor-pointer"
                         tabIndex={-1}
                       />
                       <span className="flex flex-col min-w-0">

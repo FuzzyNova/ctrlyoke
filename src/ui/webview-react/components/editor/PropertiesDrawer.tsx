@@ -588,7 +588,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         </h3>
         <button
           type="button"
-          className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
+          className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
           onClick={handleResetAllToInherit}
           title="Reset all to inherit"
           aria-label="Reset all to inherit"
@@ -905,7 +905,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       onChange={(value) =>
                         setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, value)
                       }
-                      className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                      className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                     />
                   </div>
                 )}
@@ -932,7 +932,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     onChange={(value) =>
                       setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, value)
                     }
-                    className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                    className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                   />
                 </div>
               )}
@@ -1049,7 +1049,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         ? "Inherited from workflow"
                         : "Session ID, prompt number, or blank for auto-resume"
                     }
-                    className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                    className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border"
                     title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
                   />
                   {showAutoResumeHint && (
@@ -1093,7 +1093,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </h4>
               <button
                 type="button"
-                className="flex h-6 w-6 items-center justify-center rounded text-description-fg transition-colors hover:bg-toolbar-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-6 w-6 items-center justify-center rounded-sm text-description-fg transition-colors hover:bg-toolbar-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={openDryRunStep}
                 disabled={!hasEditorContent}
                 title="Dry Run Step"
@@ -1138,7 +1138,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <AnimatedSection
                 visible={preConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
               >
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded-sm">
                   <ScriptConditionEditor
                     variant={PROMPT_PROPERTIES.PRE_CONDITION}
                     schemaPath="preCondition"
@@ -1193,7 +1193,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <AnimatedSection
                 visible={endConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
               >
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded-sm">
                   <ScriptConditionEditor
                     variant={PROMPT_PROPERTIES.END_CONDITION}
                     schemaPath="endCondition"
@@ -1245,7 +1245,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <AnimatedSection
                 visible={errorBehaviorMode === PROPERTY_EDITOR_MODES.CUSTOM}
               >
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded-sm">
                   <ErrorBehaviorEditor
                     schemaPath="errorBehavior"
                     value={displayedProperties.errorBehavior}
@@ -1411,7 +1411,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                               : undefined
                           }
                           placeholder={"read\nglob\ngrep"}
-                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border resize-none font-mono${
                             allowedDisabled
                               ? " opacity-50 cursor-not-allowed"
                               : ""
@@ -1462,7 +1462,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                               : undefined
                           }
                           placeholder={"shell(rm:*)\nwrite"}
-                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                          className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border resize-none font-mono${
                             deniedDisabled
                               ? " opacity-50 cursor-not-allowed"
                               : ""

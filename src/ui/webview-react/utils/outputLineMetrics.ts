@@ -34,17 +34,17 @@ export const TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME =
   TOOL_CALL_BLOCK_VERTICAL_CHROME / 2;
 
 /**
- * `px-[var(--spacing-md)]` on OutputRow's CLI-group wrapper — the only
+ * `px-(--spacing-md)` on OutputRow's CLI-group wrapper — the only
  * horizontal padding a ● block sees. Body content inside ToolCallBlock carries
  * none of its own (see TOOL_RESULT_LINE in outputStyles.ts), and the gutter
  * column is subtracted separately by the caller.
  */
 export const OUTPUT_ROW_HORIZONTAL_PADDING = 16;
 
-/** `pt-[var(--spacing-sm)]` on the first row of a CLI output group. */
+/** `pt-(--spacing-sm)` on the first row of a CLI output group. */
 export const OUTPUT_ROW_GROUP_START_PADDING = 6;
 
-/** `pb-[var(--spacing-sm)]` plus the 1px `border-b` on the last row of a CLI output group. */
+/** `pb-(--spacing-sm)` plus the 1px `border-b` on the last row of a CLI output group. */
 export const OUTPUT_ROW_GROUP_END_PADDING = 7;
 
 /**
@@ -144,7 +144,7 @@ export const DIFF_GAP_DECORATION_VERTICAL_PADDING = 4;
 /**
  * Height of one "Show N hidden lines" gap decoration bar between hunks.
  * Renders outside `.diff-line` (it is DiffView's own markup, not react-diff-view's
- * vendored row CSS), at the same `text-[length:var(--cy-output-font-size-xs)]`
+ * vendored row CSS), at the same `text-(length:--cy-output-font-size-xs)`
  * class as the diff's own header line — so it shares that line's already-measured
  * `leading-relaxed` line height, plus its own `py-0.5` the header line doesn't have.
  */
@@ -174,7 +174,7 @@ export function diffCharWidth(outputFontSize: number): number {
  * and new in separate columns; split gives each side its own). `.diff-code`
  * carries `padding: 0 0 0 .5em`, once per code column — one unified, two split.
  * The table sits inside a 1px-bordered wrapper, itself inside OutputRow's
- * `px-[var(--spacing-md)]`; the ● gutter is *not* subtracted, because diffs
+ * `px-(--spacing-md)`; the ● gutter is *not* subtracted, because diffs
  * render through ToolCallBlock's `fullBleed` slot and span it.
  *
  * The constants this replaced (168 unified / 224 split, plus a 24px "column

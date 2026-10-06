@@ -62,9 +62,11 @@ function RecentlyDeletedRow({
       aria-label={description}
     >
       <div className="min-w-0 flex-1 basis-48">
-        <div className="text-sm text-foreground break-words">{description}</div>
+        <div className="text-sm text-foreground wrap-break-word">
+          {description}
+        </div>
         {workflows && (
-          <div className="text-xs text-description-fg break-words">
+          <div className="text-xs text-description-fg wrap-break-word">
             {workflows}
           </div>
         )}

@@ -501,17 +501,17 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const btnSizes = isMobile
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
-  const btnBase = `inline-flex items-center justify-center h-full min-w-[calc(var(--cy-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-none focus-visible:ring-1`;
+  const btnBase = `inline-flex items-center justify-center h-full min-w-[calc(var(--cy-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-hidden focus-visible:ring-1`;
   const btnBaseDesktop =
-    "inline-flex h-full self-stretch items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-1";
+    "inline-flex h-full self-stretch items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-hidden focus-visible:ring-1";
   const resolvedBtnBase = isMobile ? btnBase : btnBaseDesktop;
   const activeClass =
     "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
   const disabledClass =
     "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed";
-  const separatorClass = `bg-btn-secondary-bg text-btn-secondary-fg ${btnSizes.separatorPy} flex-shrink-0`;
+  const separatorClass = `bg-btn-secondary-bg text-btn-secondary-fg ${btnSizes.separatorPy} shrink-0`;
   const containerClass = embedded
-    ? `relative inline-flex h-full self-stretch overflow-hidden flex-shrink-0 ${btnSizes.groupContainer}`
+    ? `relative inline-flex h-full self-stretch overflow-hidden shrink-0 ${btnSizes.groupContainer}`
     : `cy-button-group ${btnSizes.groupContainer}`;
 
   const undoDisabled = !canUndo || editingDisabled;
@@ -639,7 +639,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
           <div
             ref={popupRef}
             role="listbox"
-            className="fixed min-w-[220px] overflow-y-auto bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-popover"
+            className="fixed min-w-[220px] overflow-y-auto bg-dropdown-bg border border-dropdown-border rounded-sm shadow-lg z-popover"
             style={{
               top: popupPos.top,
               left: popupPos.left,
@@ -671,11 +671,11 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
                       ? "codicon-redo"
                       : "codicon-discard"
                   }
-                  className="text-description-fg text-xs flex-shrink-0"
+                  className="text-description-fg text-xs shrink-0"
                 />
                 <span className="flex-1 truncate">{label}</span>
                 {stepCount === 1 && (
-                  <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded font-mono flex-shrink-0">
+                  <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded-sm font-mono shrink-0">
                     {direction === UNDO_REDO_DIRECTIONS.REDO
                       ? formatShortcut("Ctrl", "Y")
                       : formatShortcut("Ctrl", "Z")}

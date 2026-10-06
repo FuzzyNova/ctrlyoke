@@ -711,7 +711,7 @@ This file already exists and is already shared by the hosted server. Standalone 
 
 **New files:** `src/server/themes/vscode-default-dark.css`, `src/server/themes/vscode-default-light.css`
 
-All `--vscode-*` variables referenced in `tailwind.config.js` must be defined. Complete variable list:
+All `--vscode-*` variables referenced in the `@theme` block of `src/ui/webview-react/styles/globals.css` must be defined. Complete variable list:
 
 | Group             | Variables                                                                                                                                                                                                               |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

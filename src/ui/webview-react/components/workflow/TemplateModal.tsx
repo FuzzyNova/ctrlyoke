@@ -447,7 +447,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               id="template-select"
               value={selectedTemplateId}
               onChange={(e) => handleTemplateChange(e.target.value)}
-              className="w-full px-2 py-1.5 rounded bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-none focus:border-focus-border"
+              className="w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border"
             >
               {builtInTemplates.length > 0 && (
                 <optgroup label="Built-in Templates">
@@ -494,7 +494,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           </button>
 
           <AnimatedSection visible={showCreateTemplateForm} className="mt-2">
-            <div className="space-y-2 p-3 rounded border border-panel-border bg-panel-bg">
+            <div className="space-y-2 p-3 rounded-sm border border-panel-border bg-panel-bg">
               <div className="form-group">
                 <label
                   htmlFor="new-template-name"
@@ -511,7 +511,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                       if (newTemplateNameError) setNewTemplateNameError(null);
                     }}
                     placeholder="my-custom-template"
-                    className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
+                    className={`w-full px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border focus:outline-hidden ${
                       newTemplateNameError
                         ? "border-input-error-border"
                         : "border-input-border focus:border-focus-border"
@@ -592,9 +592,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               const isMultiline =
                 !!variable.multiline && !isPicker && !isSelect && !isHarness;
               const inputClass =
-                "flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs";
+                "flex-1 px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border focus:outline-hidden focus:border-focus-border font-mono text-xs";
               const selectClass =
-                "w-full px-2 py-1.5 rounded bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-none focus:border-focus-border";
+                "w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border";
               return (
                 <div key={variable.name} className="form-group">
                   <label
@@ -724,7 +724,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               onChange={(e) => handleFilenameChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="my-workflow"
-              className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
+              className={`w-full px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border focus:outline-hidden ${
                 filenameError
                   ? "border-input-error-border"
                   : "border-input-border focus:border-focus-border"

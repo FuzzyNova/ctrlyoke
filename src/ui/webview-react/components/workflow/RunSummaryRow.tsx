@@ -216,7 +216,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
               e.stopPropagation();
               onDelete?.();
             }}
-            className="flex h-5 w-5 items-center justify-center rounded text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100"
+            className="flex h-5 w-5 items-center justify-center rounded-sm text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100"
           >
             <Icon name="trash" className="text-xs" />
           </button>

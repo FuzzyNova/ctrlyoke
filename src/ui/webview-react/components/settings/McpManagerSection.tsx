@@ -417,7 +417,7 @@ function sortResolvedLocations(
 
 function ScopeBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center rounded border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
+    <span className="inline-flex items-center rounded-sm border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
       {label}
     </span>
   );
@@ -934,7 +934,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           </span>
         </div>
 
-        <div className="rounded border border-panel-border bg-editor-bg px-3 py-2">
+        <div className="rounded-sm border border-panel-border bg-editor-bg px-3 py-2">
           <BulkSelectionActionsBar
             totalCount={managedServers?.length ?? 0}
             selectedCount={selectedServers.length}
@@ -954,7 +954,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           />
         </div>
 
-        <div className="overflow-hidden rounded border border-panel-border">
+        <div className="overflow-hidden rounded-sm border border-panel-border">
           {isLoadingManagedServers && managedServers === undefined && (
             <div className="px-3 py-4 text-center text-xs text-description-fg">
               Loading managed servers…
@@ -1071,7 +1071,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             {server.displayName}
                           </span>
                           {server.displayName !== server.id && (
-                            <span className="shrink-0 rounded bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
+                            <span className="shrink-0 rounded-sm bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
                               {server.id}
                             </span>
                           )}
@@ -1081,7 +1081,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           <button
                             type="button"
                             onClick={() => handleStartEdit(server)}
-                            className="flex h-6 items-center justify-center rounded border border-panel-border px-1.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+                            className="flex h-6 items-center justify-center rounded-sm border border-panel-border px-1.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
                             title={`Edit ${server.id} in ${activeScope}`}
                             aria-label={`Edit ${server.id}`}
                           >
@@ -1117,7 +1117,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           <button
                             type="button"
                             onClick={() => handleDefaultToggle(server)}
-                            className={`flex h-6 items-center justify-center gap-1 rounded border px-1.5 text-xxs transition-colors ${
+                            className={`flex h-6 items-center justify-center gap-1 rounded-sm border px-1.5 text-xxs transition-colors ${
                               defaultsEnabled
                                 ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
                                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
@@ -1199,7 +1199,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                   setShowAddForm(true);
                   setEditingId(null);
                 }}
-                className="flex items-center gap-1 rounded border border-dashed border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+                className="flex items-center gap-1 rounded-sm border border-dashed border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
               >
                 <Icon name="add" className="text-xxs" />
                 Add server
@@ -1218,7 +1218,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           <button
             type="button"
             onClick={() => setDiscoveryTab(MCP_MANAGER_DISCOVERY_TABS.LOCAL)}
-            className={`flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${
+            className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-xs transition-colors ${
               discoveryTab === MCP_MANAGER_DISCOVERY_TABS.LOCAL
                 ? "border-btn-bg bg-btn-bg text-btn-fg"
                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
@@ -1230,7 +1230,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           <button
             type="button"
             onClick={() => setDiscoveryTab(MCP_MANAGER_DISCOVERY_TABS.REGISTRY)}
-            className={`flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${
+            className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-xs transition-colors ${
               discoveryTab === MCP_MANAGER_DISCOVERY_TABS.REGISTRY
                 ? "border-btn-bg bg-btn-bg text-btn-fg"
                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
@@ -1244,7 +1244,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
               type="button"
               onClick={() => sendMessage(MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER)}
               title="Open VS Code's MCP Servers Panel. Browse and install MCPs from Microsoft's curated list of MCP servers, then return here and click 'Scan again' to import them"
-              className="flex items-center gap-1 rounded border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+              className="flex items-center gap-1 rounded-sm border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
             >
               <Icon name="extensions" className="text-xxs" />
               VS Code MCP
@@ -1253,7 +1253,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         </div>
 
         {discoveryTab === MCP_MANAGER_DISCOVERY_TABS.LOCAL && (
-          <div className="space-y-2 rounded border border-panel-border bg-editor-bg p-3">
+          <div className="space-y-2 rounded-sm border border-panel-border bg-editor-bg p-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-xs text-description-fg">
                 Import local MCP entries into the {activeScope} ctrlyoke
@@ -1266,7 +1266,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 type="button"
                 onClick={requestLocalScan}
                 disabled={isLoadingLocal}
-                className="ml-auto rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                className="ml-auto rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isLoadingLocal ? "Scanning…" : "Scan again"}
               </button>
@@ -1301,7 +1301,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       return (
                         <div
                           key={`${entry.source}:${entry.path}:${entry.id}`}
-                          className="flex items-center justify-between gap-2 rounded border border-panel-border px-2 py-1.5"
+                          className="flex items-center justify-between gap-2 rounded-sm border border-panel-border px-2 py-1.5"
                         >
                           <div className="min-w-0">
                             <div className="truncate text-xs font-medium text-foreground">
@@ -1326,7 +1326,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             type="button"
                             disabled={alreadyAdded}
                             onClick={() => handleImportLocal(entry)}
-                            className="rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                            className="rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                             title={
                               alreadyAdded
                                 ? `Already in ${activeScope} registry`
@@ -1346,7 +1346,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         )}
 
         {discoveryTab === MCP_MANAGER_DISCOVERY_TABS.REGISTRY && (
-          <div className="space-y-2 rounded border border-panel-border bg-editor-bg p-3">
+          <div className="space-y-2 rounded-sm border border-panel-border bg-editor-bg p-3">
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
@@ -1360,13 +1360,13 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 }}
                 placeholder="Search the MCP registry…"
                 aria-label="Search MCP registry"
-                className="min-w-[220px] flex-1 rounded border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-none"
+                className="min-w-[220px] flex-1 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-hidden"
               />
               <button
                 type="button"
                 onClick={handleSearchRegistry}
                 disabled={isLoadingRemote}
-                className="rounded border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-sm border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Search
               </button>
@@ -1383,7 +1383,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                   key={sort}
                   type="button"
                   onClick={() => handleChangeSort(sort)}
-                  className={`rounded border px-1.5 py-0 text-xxs transition-colors ${
+                  className={`rounded-sm border px-1.5 py-0 text-xxs transition-colors ${
                     remoteSort === sort
                       ? "border-btn-bg bg-btn-bg text-btn-fg"
                       : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
@@ -1420,7 +1420,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                     return (
                       <div
                         key={entry.id}
-                        className="flex items-start justify-between gap-2 rounded border border-panel-border px-2 py-1.5"
+                        className="flex items-start justify-between gap-2 rounded-sm border border-panel-border px-2 py-1.5"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1">
@@ -1430,7 +1430,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             {entry.verified && (
                               <Icon
                                 name="verified-filled"
-                                className="flex-shrink-0 text-xxs text-verified"
+                                className="shrink-0 text-xxs text-verified"
                                 title="MCP Registry verified"
                               />
                             )}
@@ -1471,7 +1471,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           type="button"
                           disabled={alreadyAdded}
                           onClick={() => handleImportRegistry(entry)}
-                          className="mt-0.5 rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                          className="mt-0.5 rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                           title={
                             alreadyAdded
                               ? `Already in ${activeScope} registry`
@@ -1494,7 +1494,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       disabled={
                         remotePageCursors.length <= 1 || isLoadingRemote
                       }
-                      className="flex items-center gap-1 rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1 rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <Icon name="chevron-left" className="text-xxs" />
                       Prev
@@ -1506,7 +1506,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       type="button"
                       onClick={goNextPage}
                       disabled={!remoteNextCursor || isLoadingRemote}
-                      className="flex items-center gap-1 rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1 rounded-sm border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       Next
                       <Icon name="chevron-right" className="text-xxs" />
@@ -1547,7 +1547,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           }}
         >
           <div
-            className="mx-4 w-full max-w-sm rounded border border-panel-border bg-editor-bg p-4 shadow-lg"
+            className="mx-4 w-full max-w-sm rounded-sm border border-panel-border bg-editor-bg p-4 shadow-lg"
             role="dialog"
             aria-modal="true"
           >
@@ -1568,14 +1568,14 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
               <button
                 type="button"
                 onClick={() => setDeleteLocationState(null)}
-                className="rounded border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                className="rounded-sm border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDeleteLocation}
-                className="rounded bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
+                className="rounded-sm bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
               >
                 Delete
               </button>
@@ -1608,7 +1608,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           }}
         >
           <div
-            className="mx-4 w-full max-w-sm rounded border border-panel-border bg-editor-bg p-4 shadow-lg"
+            className="mx-4 w-full max-w-sm rounded-sm border border-panel-border bg-editor-bg p-4 shadow-lg"
             role="dialog"
             aria-modal="true"
           >
@@ -1627,14 +1627,14 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
               <button
                 type="button"
                 onClick={() => setDeleteTargetState(null)}
-                className="rounded border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                className="rounded-sm border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDeleteTarget}
-                className="rounded bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
+                className="rounded-sm bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
               >
                 Delete
               </button>

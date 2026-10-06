@@ -110,33 +110,25 @@ const EVENT_KIND_LABELS: Record<HistoryEventKind, string> = {
 };
 
 const EVENT_KIND_BADGES: Record<HistoryEventKind, string> = {
-  [HISTORY_EVENT_KINDS.PROMPT]: "bg-[var(--status-success)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.PROMPT]: "bg-(--status-success)/20 text-foreground",
   [HISTORY_EVENT_KINDS.RESPONSE]: "bg-btn-bg/20 text-btn-fg",
   [HISTORY_EVENT_KINDS.THINKING]: "bg-btn-bg/15 text-description-fg",
-  [HISTORY_EVENT_KINDS.BASH]: "bg-[var(--status-warning)]/20 text-foreground",
-  [HISTORY_EVENT_KINDS.FILE_READ]:
-    "bg-[var(--status-info)]/15 text-description-fg",
-  [HISTORY_EVENT_KINDS.FILE_WRITE]:
-    "bg-[var(--status-info)]/20 text-foreground",
-  [HISTORY_EVENT_KINDS.FILE_EDIT]:
-    "bg-[var(--status-error)]/15 text-foreground",
-  [HISTORY_EVENT_KINDS.FILE_DELETE]:
-    "bg-[var(--status-error)]/20 text-foreground",
-  [HISTORY_EVENT_KINDS.TOOL]: "bg-[var(--status-warning)]/15 text-foreground",
-  [HISTORY_EVENT_KINDS.MCP_TOOL]:
-    "bg-[var(--status-warning)]/20 text-foreground",
-  [HISTORY_EVENT_KINDS.WEB_SEARCH]:
-    "bg-[var(--status-info)]/20 text-foreground",
+  [HISTORY_EVENT_KINDS.BASH]: "bg-(--status-warning)/20 text-foreground",
+  [HISTORY_EVENT_KINDS.FILE_READ]: "bg-(--status-info)/15 text-description-fg",
+  [HISTORY_EVENT_KINDS.FILE_WRITE]: "bg-(--status-info)/20 text-foreground",
+  [HISTORY_EVENT_KINDS.FILE_EDIT]: "bg-(--status-error)/15 text-foreground",
+  [HISTORY_EVENT_KINDS.FILE_DELETE]: "bg-(--status-error)/20 text-foreground",
+  [HISTORY_EVENT_KINDS.TOOL]: "bg-(--status-warning)/15 text-foreground",
+  [HISTORY_EVENT_KINDS.MCP_TOOL]: "bg-(--status-warning)/20 text-foreground",
+  [HISTORY_EVENT_KINDS.WEB_SEARCH]: "bg-(--status-info)/20 text-foreground",
   [HISTORY_EVENT_KINDS.COMPACTION]: "bg-btn-bg/15 text-description-fg",
-  [HISTORY_EVENT_KINDS.CLI_COMMAND]:
-    "bg-[var(--status-warning)]/15 text-foreground",
-  [HISTORY_EVENT_KINDS.STATUS]:
-    "bg-[var(--status-info)]/15 text-description-fg",
+  [HISTORY_EVENT_KINDS.CLI_COMMAND]: "bg-(--status-warning)/15 text-foreground",
+  [HISTORY_EVENT_KINDS.STATUS]: "bg-(--status-info)/15 text-description-fg",
   [HISTORY_EVENT_KINDS.SCRIPT]: "bg-btn-bg/20 text-btn-fg",
   [HISTORY_EVENT_KINDS.PRE_CONDITION]:
-    "bg-[var(--status-success)]/15 text-foreground",
+    "bg-(--status-success)/15 text-foreground",
   [HISTORY_EVENT_KINDS.END_CONDITION]:
-    "bg-[var(--status-success)]/20 text-foreground",
+    "bg-(--status-success)/20 text-foreground",
 };
 
 const EVENT_KIND_OPTIONS: Array<{
@@ -583,7 +575,7 @@ export function HistorySearchDrawer() {
         <button
           type="button"
           onClick={() => navigateToResult(result)}
-          className="w-full rounded-md border border-transparent px-3 py-3 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-none"
+          className="w-full rounded-md border border-transparent px-3 py-3 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-hidden"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -637,13 +629,13 @@ export function HistorySearchDrawer() {
         {/* A placeholder carries its own ordinal so a fast scroll through
             not-yet-fetched rows still reads as a position in the listing. */}
         <div className="flex items-start justify-between gap-3">
-          <div className="h-3 w-2/5 animate-pulse rounded bg-description-fg/20" />
+          <div className="h-3 w-2/5 animate-pulse rounded-sm bg-description-fg/20" />
           <span className="shrink-0 text-[11px] tabular-nums text-description-fg/70">
             {formatResultOrdinal(index)}
           </span>
         </div>
-        <div className="mt-3 h-3 w-4/5 animate-pulse rounded bg-description-fg/15" />
-        <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-description-fg/15" />
+        <div className="mt-3 h-3 w-4/5 animate-pulse rounded-sm bg-description-fg/15" />
+        <div className="mt-2 h-3 w-3/5 animate-pulse rounded-sm bg-description-fg/15" />
       </div>
     ),
     []
@@ -754,7 +746,7 @@ export function HistorySearchDrawer() {
                 aria-invalid={historySearchError ? true : undefined}
                 placeholder="Search workflow history..."
                 aria-label="Search workflow history"
-                className="h-9 w-full rounded border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-none focus:border-focus-border"
+                className="h-9 w-full rounded-sm border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-hidden focus:border-focus-border"
               />
             </div>
             <button
@@ -764,7 +756,7 @@ export function HistorySearchDrawer() {
               aria-expanded={filtersOpen}
               aria-controls="history-search-filters"
               title="History search filters"
-              className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
             >
               <Icon name="filter" className="text-sm" />
               {activeFilterCount > 0 && (
@@ -794,7 +786,7 @@ export function HistorySearchDrawer() {
               className="mt-2 flex min-w-0 items-start gap-2"
             >
               <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
-                <div className="flex-shrink-0 text-xs text-description-fg">
+                <div className="shrink-0 text-xs text-description-fg">
                   <MultiCheckboxDropdown
                     id="history-event-kind-filter"
                     selectedValues={historySearchFilters.eventKinds}
@@ -818,7 +810,7 @@ export function HistorySearchDrawer() {
                   />
                 </div>
 
-                <div className="flex-shrink-0 text-xs text-description-fg">
+                <div className="shrink-0 text-xs text-description-fg">
                   <MultiCheckboxDropdown
                     id="history-harness-filter"
                     selectedValues={historySearchFilters.harnesses}
@@ -842,7 +834,7 @@ export function HistorySearchDrawer() {
                   />
                 </div>
 
-                <div className="flex-shrink-0 text-xs text-description-fg">
+                <div className="shrink-0 text-xs text-description-fg">
                   <MultiCheckboxDropdown
                     id="history-outcome-filter"
                     selectedValues={historySearchFilters.executionStates}
@@ -865,7 +857,7 @@ export function HistorySearchDrawer() {
                   />
                 </div>
 
-                <div className="relative w-full flex-shrink-0 sm:w-[170px]">
+                <div className="relative w-full shrink-0 sm:w-[170px]">
                   <Icon
                     name="search"
                     className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xxs text-description-fg"
@@ -878,12 +870,12 @@ export function HistorySearchDrawer() {
                     }
                     placeholder="File path contains..."
                     aria-label="File path contains"
-                    className="h-7 w-full rounded border border-input-border bg-input-bg pl-7 pr-2 text-xs text-input-fg outline-none focus:border-focus-border"
+                    className="h-7 w-full rounded-sm border border-input-border bg-input-bg pl-7 pr-2 text-xs text-input-fg outline-hidden focus:border-focus-border"
                   />
                 </div>
 
                 {workflowScopeAvailable && workflowName && (
-                  <label className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded border border-input-border bg-input-bg px-2 text-xs text-input-fg">
+                  <label className="flex h-7 shrink-0 items-center gap-1.5 rounded-sm border border-input-border bg-input-bg px-2 text-xs text-input-fg">
                     <input
                       type="checkbox"
                       checked={historySearchFilters.workflowOnly}
@@ -919,7 +911,7 @@ export function HistorySearchDrawer() {
                 disabled={activeFilterCount === 0}
                 title="Clear history search filters"
                 aria-label="Clear history search filters"
-                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
               >
                 <Icon name="clear-all" className="text-xxs" />
               </button>

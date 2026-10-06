@@ -22,7 +22,7 @@ export const BackgroundWorkHoldOutput: React.FC<{
   const heldAtLabel = data.heldAt ? formatTime(data.heldAt) : "";
   return (
     <div className="my-2" data-testid="background-work-hold">
-      <div className="flex items-center gap-1.5 min-w-0 text-[length:var(--cy-output-font-size-xs)] text-warning-fg">
+      <div className="flex items-center gap-1.5 min-w-0 text-(length:--cy-output-font-size-xs) text-warning-fg">
         <Icon name="watch" className="text-xxs shrink-0" />
         <span className="truncate">
           {getBackgroundWorkHoldHeadline(data)}

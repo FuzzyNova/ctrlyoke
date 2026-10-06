@@ -153,9 +153,9 @@ export function FileBrowserSortHeader({
         aria-label={`${fullLabel}, ${accessibleDirection}`}
         aria-pressed={isActive}
         onClick={() => onSortKeyRequest(key)}
-        className={`flex min-w-0 items-center gap-1 truncate rounded px-1 py-1 text-left text-xs font-medium text-description-fg hover:bg-btn-secondary-hover hover:text-editor-fg ${
+        className={`flex min-w-0 items-center gap-1 truncate rounded-sm px-1 py-1 text-left text-xs font-medium text-description-fg hover:bg-btn-secondary-hover hover:text-editor-fg ${
           key === WORKSPACE_ENTRY_SORT_KEYS.NAME
-            ? "col-span-2 pl-[1.625rem]"
+            ? "col-span-2 pl-6.5"
             : "col-start-3 justify-center"
         }`}
       >
@@ -167,7 +167,7 @@ export function FileBrowserSortHeader({
                 ? "codicon-chevron-up"
                 : "codicon-chevron-down"
             }
-            className="flex-shrink-0"
+            className="shrink-0"
           />
         )}
       </button>
@@ -286,7 +286,7 @@ export function EntryRow({
         }
         className={`text-sm ${
           entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
-            ? "text-[var(--status-warning)]"
+            ? "text-(--status-warning)"
             : ""
         }`}
       />
@@ -323,7 +323,7 @@ export function DirectoryPageFailureNotice({
   return (
     <div
       role="alert"
-      className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-panel-border px-3 py-1.5 text-sm text-warning-fg"
+      className="flex shrink-0 items-center justify-between gap-2 border-t border-panel-border px-3 py-1.5 text-sm text-warning-fg"
     >
       <span>
         Unable to load entries {failedRange.offset + 1}–
@@ -331,7 +331,7 @@ export function DirectoryPageFailureNotice({
       </span>
       <button
         type="button"
-        className="rounded border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
+        className="rounded-sm border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
         onClick={() => onRetry(failedRange.offset)}
       >
         Retry / Load page

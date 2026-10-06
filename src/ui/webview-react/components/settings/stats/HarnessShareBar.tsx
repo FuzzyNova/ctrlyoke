@@ -38,7 +38,7 @@ export function HarnessShareBar({
   return (
     <div aria-label={`Harness share by ${label}`}>
       <div
-        className="h-3 w-full overflow-hidden rounded bg-input-bg"
+        className="h-3 w-full overflow-hidden rounded-sm bg-input-bg"
         aria-hidden="true"
       >
         <div className="flex h-full w-full">

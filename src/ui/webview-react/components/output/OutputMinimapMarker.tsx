@@ -93,11 +93,11 @@ const MinimapStepPopupRow: React.FC<MinimapStepPopupRowProps> = ({
             style={{ touchAction: "manipulation" }}
             aria-label={`Go to ${step.label}`}
             title={step.label}
-            className="flex items-center gap-1.5 text-xxs font-semibold text-foreground hover:text-link-fg transition-colors leading-tight focus:outline-none focus-visible:underline"
+            className="flex items-center gap-1.5 text-xxs font-semibold text-foreground hover:text-link-fg transition-colors leading-tight focus:outline-hidden focus-visible:underline"
           >
             <span
               aria-hidden="true"
-              className={`h-1.5 w-1.5 flex-shrink-0 rounded-full bg-current ${getStepMarkerTone(step).className}`}
+              className={`h-1.5 w-1.5 shrink-0 rounded-full bg-current ${getStepMarkerTone(step).className}`}
             />
             {step.label}
           </button>
@@ -116,7 +116,7 @@ const MinimapStepPopupRow: React.FC<MinimapStepPopupRowProps> = ({
           aria-pressed={step.hidden}
           aria-label={hideShowLabel}
           title={hideShowLabel}
-          className="ml-auto flex items-center gap-1 text-xxs text-description-fg hover:text-foreground transition-colors leading-tight focus:outline-none"
+          className="ml-auto flex items-center gap-1 text-xxs text-description-fg hover:text-foreground transition-colors leading-tight focus:outline-hidden"
         >
           <Icon
             name={step.hidden ? "eye-closed" : "eye"}
@@ -137,7 +137,7 @@ const MinimapStepPopupRow: React.FC<MinimapStepPopupRowProps> = ({
           style={{ touchAction: "manipulation" }}
           title={changeAction.title}
           aria-label={changeAction.label}
-          className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
+          className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-hidden"
         >
           <Icon name="diff" className="text-xxs" />
           {changeLabel && (
@@ -242,7 +242,7 @@ const OutputMinimapMarkerComponent: React.FC<OutputMinimapMarkerProps> = ({
     <div
       role="group"
       aria-label={isGroup ? markerLabel : `Step ${lead.label}`}
-      className={`group absolute right-[var(--cy-output-minimap-diff-width)] flex flex-row ${alignClass} z-header ${allHidden ? "opacity-60" : ""}`}
+      className={`group absolute right-(--cy-output-minimap-diff-width) flex flex-row ${alignClass} z-header ${allHidden ? "opacity-60" : ""}`}
       style={containerStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -288,7 +288,7 @@ const OutputMinimapMarkerComponent: React.FC<OutputMinimapMarkerProps> = ({
 
           {/* Tail triangle pointing right toward the marker */}
           <div
-            className="self-center flex-shrink-0 text-dropdown-bg"
+            className="self-center shrink-0 text-dropdown-bg"
             style={{
               width: 0,
               height: 0,
@@ -329,9 +329,9 @@ const OutputMinimapMarkerComponent: React.FC<OutputMinimapMarkerProps> = ({
         aria-label={markerLabel}
         aria-expanded={isOpen}
         tabIndex={0}
-        className={`h-full w-[var(--cy-output-minimap-pills-width)] flex-shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-transform duration-100 bg-current ${
+        className={`h-full w-(--cy-output-minimap-pills-width) shrink-0 focus:outline-hidden focus-visible:ring-1 focus-visible:ring-focus-border transition-transform duration-100 bg-current ${
           isGroup
-            ? "rounded-sm"
+            ? "rounded-xs"
             : "rounded-full group-hover:scale-y-150 group-focus-within:scale-y-150"
         } ${toneClass}`}
       />

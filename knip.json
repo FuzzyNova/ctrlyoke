@@ -6,8 +6,6 @@
     "src/test/runTest.ts",
     "src/test/suite/index.ts",
     "src/test/**/*.test.ts",
-    "src/ui/webview-react/postcss.config.js",
-    "src/ui/webview-react/tailwind.config.js",
     "src/ui/webview-react/scripts/bootstrapScript.ts",
     "src/ui/webview-react/scripts/moduleLoaderScript.ts",
     "src/ui/webview-react/test/**/*.test.{ts,tsx}",
@@ -70,5 +68,5 @@
     "src/ui/webview-react/types/index.ts",
     "src/ui/webview-react/utils/index.ts"
   ],
-  "ignoreDependencies": ["@vscode/codicons", "autoprefixer", "typo-js"]
+  "ignoreDependencies": ["@vscode/codicons", "typo-js"]
 }

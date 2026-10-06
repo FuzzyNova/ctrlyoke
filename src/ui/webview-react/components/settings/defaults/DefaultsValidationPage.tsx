@@ -60,7 +60,7 @@ function ObjectSettingHeader({
               ? `Defined in ${source} config`
               : undefined
         }
-        className={`w-4 h-4 flex items-center justify-center rounded text-description-fg hover:text-foreground transition-opacity ${
+        className={`w-4 h-4 flex items-center justify-center rounded-sm text-description-fg hover:text-foreground transition-opacity ${
           canReset
             ? "opacity-0 group-hover:opacity-100"
             : "opacity-0 pointer-events-none"
@@ -111,7 +111,7 @@ export function DefaultsValidationPage({
   return (
     <div className="space-y-4">
       {/* Default Pre-Condition */}
-      <div className="border border-panel-border rounded p-3 group">
+      <div className="border border-panel-border rounded-sm p-3 group">
         <div
           className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
           title="Default pre-condition gate applied to all new workflows."
@@ -146,7 +146,7 @@ export function DefaultsValidationPage({
       </div>
 
       {/* Default End Condition */}
-      <div className="border border-panel-border rounded p-3 group">
+      <div className="border border-panel-border rounded-sm p-3 group">
         <div
           className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
           title="Default end condition applied to all new workflows."
@@ -181,7 +181,7 @@ export function DefaultsValidationPage({
       </div>
 
       {/* Default Error Behavior */}
-      <div className="border border-panel-border rounded p-3 group">
+      <div className="border border-panel-border rounded-sm p-3 group">
         <div
           className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
           title="Default harness failure policy applied to all new workflows."

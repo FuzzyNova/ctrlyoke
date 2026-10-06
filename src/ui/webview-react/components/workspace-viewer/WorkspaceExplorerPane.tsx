@@ -545,11 +545,11 @@ export const WorkspaceExplorerPane: React.FC = () => {
       className="flex flex-col h-full w-full overflow-hidden cy-no-select"
     >
       {/* Navigation toolbar */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-panel-border flex-shrink-0">
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-panel-border shrink-0">
         <button
           onClick={handleBack}
           disabled={parentPath === null}
-          className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
+          className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded-sm transition-colors shrink-0 ${
             parentPath === null
               ? "opacity-30 cursor-default"
               : "hover:bg-btn-secondary-hover text-editor-fg"
@@ -576,7 +576,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 scope: hideGitIgnoredFilesScope,
               })
             }
-            className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
+            className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded-sm transition-colors shrink-0 ${
               hideGitIgnoredFiles
                 ? "hover:bg-btn-secondary-hover text-editor-fg opacity-40"
                 : "hover:bg-btn-secondary-hover text-editor-fg"
@@ -601,7 +601,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
         <button
           onClick={() => handleRefresh()}
-          className="flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded hover:bg-btn-secondary-hover text-editor-fg transition-colors flex-shrink-0"
+          className="flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded-sm hover:bg-btn-secondary-hover text-editor-fg transition-colors shrink-0"
           title="Refresh directory"
           aria-label="Refresh directory"
         >
@@ -615,7 +615,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           <button
             onClick={handleSyncExplorer}
             disabled={!selectedFilePath || selectedFileExternal}
-            className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
+            className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded-sm transition-colors shrink-0 ${
               selectedFilePath && !selectedFileExternal
                 ? "hover:bg-btn-secondary-hover text-editor-fg"
                 : "opacity-30 cursor-default"
@@ -644,7 +644,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
             <span>{directory.initialError.message}</span>
             <button
               type="button"
-              className="rounded border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
+              className="rounded-sm border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
               onClick={directory.retryInitial}
             >
               Retry
@@ -705,7 +705,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     className="min-h-[36px] animate-pulse px-3 py-2"
                     aria-label={`Loading entry ${index + 1}`}
                   >
-                    <span className="block h-4 w-2/3 rounded bg-panel-border opacity-50" />
+                    <span className="block h-4 w-2/3 rounded-sm bg-panel-border opacity-50" />
                   </div>
                 );
               }}
@@ -729,7 +729,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
         directory.totalCount > 0 &&
         directory.uniqueLoadedCount < directory.totalCount && (
           <p
-            className="flex-shrink-0 px-2 py-1 text-xs text-description-fg"
+            className="shrink-0 px-2 py-1 text-xs text-description-fg"
             aria-live="polite"
           >
             Loaded {directory.uniqueLoadedCount.toLocaleString()} of{" "}
@@ -747,7 +747,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileEditorColumn = (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden relative">
       {/* File toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0 min-h-9">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border shrink-0 min-h-9">
         {isMobile && (
           <button
             onClick={handleMobileBack}
@@ -765,7 +765,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 <button
                   onClick={handleSave}
                   disabled={fileSaving || !fileDirty}
-                  className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                  className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-sm border transition-colors shrink-0 ${
                     fileDirty && !fileSaving
                       ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
                       : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
@@ -792,7 +792,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     disabled={!canUndo}
                     title="Undo"
                     aria-label="Undo"
-                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-none focus-visible:ring-1 ${
+                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-hidden focus-visible:ring-1 ${
                       canUndo
                         ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                         : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
@@ -800,7 +800,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   >
                     <Icon name="discard" />
                   </button>
-                  <div className="bg-btn-secondary-bg text-btn-secondary-fg py-0.5 flex-shrink-0">
+                  <div className="bg-btn-secondary-bg text-btn-secondary-fg py-0.5 shrink-0">
                     <div className="w-px h-full bg-current opacity-40" />
                   </div>
                   <button
@@ -809,7 +809,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     disabled={!canRedo}
                     title="Redo"
                     aria-label="Redo"
-                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-none focus-visible:ring-1 ${
+                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-hidden focus-visible:ring-1 ${
                       canRedo
                         ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                         : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
@@ -824,7 +824,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     onClick={() => setPreviewMode((p) => !p)}
                     aria-pressed={previewMode}
                     aria-label={previewMode ? "Edit file" : "Preview file"}
-                    className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                    className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-sm border transition-colors shrink-0 ${
                       previewMode
                         ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
                         : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -846,7 +846,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 <button
                   onClick={handleDiscardUnsaved}
                   disabled={fileSaving || fileLoading || !fileDirty}
-                  className={`ml-auto flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                  className={`ml-auto flex items-center gap-1 px-2 py-0.5 text-xs rounded-sm border transition-colors shrink-0 ${
                     fileDirty && !fileSaving && !fileLoading
                       ? "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                       : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"

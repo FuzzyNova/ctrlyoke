@@ -434,11 +434,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       >
         <button
           onClick={() => selectFileDiff(file.path)}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-sm text-editor-fg"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-0.5 text-left text-sm text-editor-fg"
           title={file.path}
         >
           <span
-            className={`flex-shrink-0 text-xs font-mono font-bold ${badgeColorClass}`}
+            className={`shrink-0 text-xs font-mono font-bold ${badgeColorClass}`}
           >
             {badge}
           </span>
@@ -452,7 +452,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           {!isStaged && (
             <button
               onClick={() => requestDiscard([file.path])}
-              className="codicon codicon-discard flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
+              className="codicon codicon-discard flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
               title="Discard changes"
               aria-label="Discard changes"
             />
@@ -461,14 +461,14 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           {isStaged ? (
             <button
               onClick={() => handleUnstage(file.path)}
-              className="codicon codicon-dash flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
+              className="codicon codicon-dash flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
               title="Unstage"
               aria-label="Unstage"
             />
           ) : (
             <button
               onClick={() => handleStage(file.path)}
-              className="codicon codicon-plus flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
+              className="codicon codicon-plus flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
               title="Stage"
               aria-label="Stage"
             />
@@ -547,7 +547,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         onRefresh={refreshAll}
         outgoingCommitCount={outgoingCommitCount}
       />
-      <div className="border-t border-panel-border flex-shrink-0" />
+      <div className="border-t border-panel-border shrink-0" />
 
       {/* Files region — independently scrollable */}
       <div className={filesRegionClass}>
@@ -561,7 +561,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         )}
       </div>
 
-      <div className="border-t border-panel-border flex-shrink-0" />
+      <div className="border-t border-panel-border shrink-0" />
 
       {/* Commit history region — independently scrollable */}
       <div className={historyRegionClass}>
@@ -577,7 +577,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   if (isMobile && mobileDiffVisible) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border flex-shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border shrink-0">
           <button
             onClick={handleDiffBack}
             aria-label="Back to source control"

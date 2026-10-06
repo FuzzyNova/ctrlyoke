@@ -586,7 +586,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     return (
       <div
         key={`group-${group.id}`}
-        className="relative mx-0.5 my-0.5 overflow-hidden rounded-sm border border-panel-border"
+        className="relative mx-0.5 my-0.5 overflow-hidden rounded-xs border border-panel-border"
         data-testid={`chip-parallel-group-${group.id}`}
       >
         {groupStatus === PARALLEL_GROUP_RUNNING_STATUS && (
@@ -675,7 +675,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       {/* Header: chevron + list icon stacked, expands to full panel on click */}
       <button
         type="button"
-        className="flex flex-shrink-0 appearance-none flex-col items-center justify-center border-0 border-b border-panel-border bg-transparent p-0 py-1.5 transition-colors hover:bg-toolbar-hover-bg"
+        className="flex shrink-0 appearance-none flex-col items-center justify-center border-0 border-b border-panel-border bg-transparent p-0 py-1.5 transition-colors hover:bg-toolbar-hover-bg"
         onClick={onExpand}
         aria-label="Expand prompts"
         title="Expand prompts"

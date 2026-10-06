@@ -291,7 +291,7 @@ const StepHiddenRowView: React.FC<{
       </button>
       <button
         type="button"
-        className="shrink-0 rounded border border-btn-border px-2 py-0.5 text-xs text-link-fg hover:bg-toolbar-hover-bg hover:text-link-active-fg"
+        className="shrink-0 rounded-sm border border-btn-border px-2 py-0.5 text-xs text-link-fg hover:bg-toolbar-hover-bg hover:text-link-active-fg"
         aria-label={showLabel}
         onClick={handleShow}
       >
@@ -382,9 +382,7 @@ const TextOutput: React.FC<{
 }) => (
   <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent ${className}`}>
     {raw ? (
-      <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
-        {content ?? text}
-      </div>
+      <div className="whitespace-pre-wrap wrap-anywhere">{content ?? text}</div>
     ) : (
       <MarkdownText
         animated={animated}
@@ -419,11 +417,11 @@ const ScriptOutputSegment: React.FC<{
 }> = ({ row, content, onTailToggle }) => (
   <div
     className={[
-      "px-[var(--spacing-sm)] border-l-[3px] border-l-transparent",
-      "whitespace-pre-wrap [overflow-wrap:anywhere] font-mono",
-      "text-[length:var(--cy-output-font-size-sm)] bg-transparent",
-      row.isFirstSegment ? "pt-[var(--spacing-sm)] mt-[var(--spacing-sm)]" : "",
-      row.isLastSegment ? "pb-[var(--spacing-sm)] mb-[var(--spacing-sm)]" : "",
+      "px-(--spacing-sm) border-l-[3px] border-l-transparent",
+      "whitespace-pre-wrap wrap-anywhere font-mono",
+      "text-(length:--cy-output-font-size-sm) bg-transparent",
+      row.isFirstSegment ? "pt-(--spacing-sm) mt-(--spacing-sm)" : "",
+      row.isLastSegment ? "pb-(--spacing-sm) mb-(--spacing-sm)" : "",
     ]
       .filter(Boolean)
       .join(" ")}
@@ -433,7 +431,7 @@ const ScriptOutputSegment: React.FC<{
       <div>
         <button
           type="button"
-          className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+          className="text-bash-expand-link no-underline text-(length:--cy-output-font-size-sm) cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
           onClick={(event) => {
             event.preventDefault();
             onTailToggle?.(!row.tailToggle?.expanded);
@@ -474,7 +472,7 @@ const ThinkingOutput: React.FC<{
       : OUTPUT_DEFAULT_LABELS.THINKING;
   return (
     <div className="my-2">
-      <div className="text-[length:var(--cy-output-font-size-xs)] text-description-fg mb-1">
+      <div className="text-(length:--cy-output-font-size-xs) text-description-fg mb-1">
         ● {displayLabel}
       </div>
       <div className="text-description-fg pl-3 border-l border-panel-border">
@@ -512,10 +510,10 @@ const UserSteerOutput: React.FC<{
   priorContextStepCount,
 }) => (
   <div className="my-2">
-    <div className="text-[length:var(--cy-output-font-size-xs)] text-indicator-info mb-1">
+    <div className="text-(length:--cy-output-font-size-xs) text-indicator-info mb-1">
       ● User message
     </div>
-    <div className="text-editor-fg pl-3 border-l border-indicator-info/50 whitespace-pre-wrap [overflow-wrap:anywhere]">
+    <div className="text-editor-fg pl-3 border-l border-indicator-info/50 whitespace-pre-wrap wrap-anywhere">
       <MarkdownText
         highlightQuery={findQuery}
         highlightCaseSensitive={findCaseSensitive}
@@ -547,10 +545,10 @@ const ToolResultOutput: React.FC<{
 
   return (
     <div
-      className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error text-[length:var(--cy-output-font-size-sm)]"} ${TOOL_RESULT_STANDALONE_INDENT} flex items-start gap-1`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error text-(length:--cy-output-font-size-sm)"} ${TOOL_RESULT_STANDALONE_INDENT} flex items-start gap-1`}
     >
       <span className="shrink-0">⎿</span>
-      <span className="whitespace-pre-wrap min-w-0 [overflow-wrap:anywhere]">
+      <span className="whitespace-pre-wrap min-w-0 wrap-anywhere">
         {content ?? contentText}
       </span>
     </div>
@@ -1250,9 +1248,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               ? ` — ${data.preTokens.toLocaleString()} tokens compacted`
               : "";
         return (
-          <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--cy-output-font-size-sm)]">
+          <div className="my-3 flex items-center gap-2 text-description-fg text-(length:--cy-output-font-size-sm)">
             <div className="flex-1 h-px bg-panel-border" />
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-panel-border bg-editor-bg whitespace-nowrap">
               <Icon name="fold" className="text-xxs" />
               <span>
                 Conversation compacted ({trigger}){tokenInfo}
@@ -1266,9 +1264,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         const data = event.data as FollowUpResumedData;
         const resumedAtLabel = data.resumedAt ? formatTime(data.resumedAt) : "";
         return (
-          <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--cy-output-font-size-sm)]">
+          <div className="my-3 flex items-center gap-2 text-description-fg text-(length:--cy-output-font-size-sm)">
             <div className="flex-1 h-px bg-panel-border" />
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-panel-border bg-editor-bg whitespace-nowrap">
               <Icon name="debug-continue" className="text-xxs" />
               <span>
                 Follow-up{resumedAtLabel ? ` — ${resumedAtLabel}` : ""}
@@ -1379,7 +1377,7 @@ const CliHeaderRowView: React.FC<{
           ? "codicon-tools"
           : "codicon-checklist";
     return (
-      <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--cy-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
+      <div className="font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 flex-wrap items-start gap-x-(--spacing-sm) gap-y-(--spacing-xs)">
         <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-[2px]">
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
           <span className="inline-flex min-w-0 items-center gap-1">
@@ -1390,15 +1388,13 @@ const CliHeaderRowView: React.FC<{
               }
               className="text-xs"
             />
-            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-              {headerLabel}]
-            </span>
+            <span className="min-w-0 wrap-anywhere">{headerLabel}]</span>
           </span>
           {(() => {
             const scriptTitle =
               row.stepName?.trim() || getFirstWords(output.cliCommand, 3);
             return scriptTitle ? (
-              <span className="ml-1 min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
+              <span className="ml-1 min-w-0 text-foreground wrap-anywhere">
                 {stepNameContent ?? scriptTitle}
               </span>
             ) : null;
@@ -1416,23 +1412,23 @@ const CliHeaderRowView: React.FC<{
   }
 
   return (
-    <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--cy-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
+    <div className="font-semibold mb-(--spacing-sm) text-(--fg-secondary) pb-(--spacing-xs) border-b border-(--border-color) text-(length:--cy-output-font-size-sm) flex min-w-0 flex-wrap items-start gap-x-(--spacing-sm) gap-y-(--spacing-xs)">
       <span className="inline-flex min-w-0 flex-1 items-center flex-wrap gap-x-1 gap-y-[2px]">
         {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
         <span className="inline-flex min-w-0 items-center gap-1">
           <span>[</span>
           <Icon name="comment" className="text-xs" />
-          <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+          <span className="min-w-0 wrap-anywhere">
             {stepLabelContent ?? row.stepLabel}]
           </span>
         </span>
         {stepDisplayName && (
-          <span className="ml-1 min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
+          <span className="ml-1 min-w-0 text-foreground wrap-anywhere">
             {stepNameContent ?? stepDisplayName}
           </span>
         )}
         {(harnessShortName || modelLabel) && (
-          <span className="min-w-0 break-words text-description-fg font-normal text-[length:var(--cy-output-font-size-xs)] [overflow-wrap:anywhere]">
+          <span className="min-w-0 text-description-fg font-normal text-(length:--cy-output-font-size-xs) wrap-anywhere">
             {[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
           </span>
         )}
@@ -1670,7 +1666,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   if (parts.length === 0) return null;
 
   return (
-    <div className="mt-[var(--spacing-xs)] text-[length:var(--cy-output-font-size-xs)] text-[var(--fg-secondary)]">
+    <div className="mt-(--spacing-xs) text-(length:--cy-output-font-size-xs) text-(--fg-secondary)">
       {parts.map((part, index) => (
         <React.Fragment key={`stats-${index}`}>
           {index > 0 && <span aria-hidden="true"> | </span>}
@@ -1742,7 +1738,7 @@ const PromptReferenceText: React.FC<{
 
   return (
     <div
-      className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
+      className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-(--fg-primary)`}
     >
       {nodes}
     </div>
@@ -1805,7 +1801,7 @@ function OutputRowComponent({
       break;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       content = (
-        <div className="px-3 pt-2 text-[length:var(--cy-output-font-size-xs)] uppercase tracking-wide text-description-fg">
+        <div className="px-3 pt-2 text-(length:--cy-output-font-size-xs) uppercase tracking-wide text-description-fg">
           {row.label}
         </div>
       );
@@ -1856,7 +1852,7 @@ function OutputRowComponent({
           : "border-l-output-command-border";
       content = (
         <div
-          className={`${OUTPUT_BLOCK_BASE} ${borderClass} text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
+          className={`${OUTPUT_BLOCK_BASE} ${borderClass} text-(--fg-primary) whitespace-pre-wrap wrap-anywhere`}
         >
           {renderCommandTextWithFileLinks(
             formatCliCommandDisplay(
@@ -1988,7 +1984,7 @@ function OutputRowComponent({
       content = (
         <button
           type="button"
-          className="cy-dropdown-row inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs text-description-fg hover:text-foreground"
+          className="cy-dropdown-row inline-flex items-center gap-1 rounded-sm px-1 py-0.5 text-xs text-description-fg hover:text-foreground"
           aria-label={`Expand ${row.attemptCount} attempts${totalLabel ? `, ${totalLabel} total` : ""}`}
           onClick={() => onAttemptGroupToggle?.(row.groupKey)}
         >
@@ -2036,7 +2032,7 @@ function OutputRowComponent({
       <div
         className={[
           row.stepColor ? contentOffsetClass : "",
-          isActiveRow ? "rounded-sm ring-1 ring-focus-border" : "",
+          isActiveRow ? "rounded-xs ring-1 ring-focus-border" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -2052,11 +2048,11 @@ function OutputRowComponent({
   return (
     <div
       className={[
-        "bg-[var(--bg-primary)] px-[var(--spacing-md)] overflow-x-hidden",
-        isActiveRow ? "rounded-sm ring-1 ring-focus-border" : "",
-        row.groupStart ? "pt-[var(--spacing-sm)]" : "",
+        "bg-(--bg-primary) px-(--spacing-md) overflow-x-hidden",
+        isActiveRow ? "rounded-xs ring-1 ring-focus-border" : "",
+        row.groupStart ? "pt-(--spacing-sm)" : "",
         row.groupEnd
-          ? "pb-[var(--spacing-sm)] border-b border-[var(--border-color)]"
+          ? "pb-(--spacing-sm) border-b border-(--border-color)"
           : "",
       ]
         .filter(Boolean)
@@ -2074,7 +2070,7 @@ const OutputRowContent = memo(OutputRowComponent);
 export const OutputRow: React.FC<OutputRowProps> = (props) => (
   <ErrorBoundary
     fallback={
-      <div className="my-1 px-[var(--spacing-md)] text-[length:var(--cy-output-font-size-xs)] text-description-fg">
+      <div className="my-1 px-(--spacing-md) text-(length:--cy-output-font-size-xs) text-description-fg">
         could not render this event
       </div>
     }

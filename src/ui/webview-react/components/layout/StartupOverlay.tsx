@@ -120,10 +120,10 @@ export const StartupOverlay: React.FC = () => {
             working files.
           </span>
           <button
-            className="mt-1 px-4 py-1.5 text-xs font-medium rounded
+            className="mt-1 px-4 py-1.5 text-xs font-medium rounded-sm
                        bg-btn-bg text-btn-fg border border-btn-border
                        hover:bg-btn-hover transition-colors
-                       focus:outline-none focus:ring-1 focus:ring-focus-border
+                       focus:outline-hidden focus:ring-1 focus:ring-focus-border
                        cursor-pointer select-none"
             onClick={() =>
               getVsCodeApi().postMessage({
@@ -180,10 +180,10 @@ const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
         ctrlyoke tab down to the bottom panel.
       </span>
       <button
-        className="mt-1 px-4 py-1.5 text-xs font-medium rounded
+        className="mt-1 px-4 py-1.5 text-xs font-medium rounded-sm
                    bg-btn-bg text-btn-fg border border-btn-border
                    hover:bg-btn-hover transition-colors
-                   focus:outline-none focus:ring-1 focus:ring-focus-border
+                   focus:outline-hidden focus:ring-1 focus:ring-focus-border
                    cursor-pointer select-none"
         onClick={dismiss}
       >

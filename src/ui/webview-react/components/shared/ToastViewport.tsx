@@ -92,7 +92,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
     // the keyboard controls while the region owns hover/focus pause behavior.
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <article
-      className={`pointer-events-auto flex w-full items-start gap-2 rounded border px-3 py-2 shadow-lg text-sm text-foreground motion-safe:animate-slide-down-in motion-reduce:transition-none ${getSeverityClasses(toast)}`}
+      className={`pointer-events-auto flex w-full items-start gap-2 rounded-sm border px-3 py-2 shadow-lg text-sm text-foreground motion-safe:animate-slide-down-in motion-reduce:transition-none ${getSeverityClasses(toast)}`}
       role={assertive ? "alert" : "status"}
       aria-live={assertive ? "assertive" : "polite"}
       tabIndex={-1}
@@ -106,12 +106,12 @@ function ToastCard({ toast }: { toast: ToastItem }) {
       }}
     >
       <div className="min-w-0 flex-1 select-text">
-        <p className="whitespace-pre-wrap break-words">{toast.message}</p>
+        <p className="whitespace-pre-wrap wrap-break-word">{toast.message}</p>
         {toast.detail && (
           <>
             <button
               type="button"
-              className="mt-1 text-xs text-link-fg underline underline-offset-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border"
+              className="mt-1 text-xs text-link-fg underline underline-offset-2 focus:outline-hidden focus-visible:ring-1 focus-visible:ring-focus-border"
               aria-expanded={isDetailExpanded}
               aria-controls={detailId}
               onClick={() => setIsDetailExpanded((expanded) => !expanded)}
@@ -121,7 +121,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
             {isDetailExpanded && (
               <p
                 id={detailId}
-                className="mt-1 whitespace-pre-wrap break-words text-xs"
+                className="mt-1 whitespace-pre-wrap wrap-break-word text-xs"
               >
                 {toast.detail}
               </p>
@@ -131,7 +131,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
         {toast.action && (
           <button
             type="button"
-            className="mt-2 text-xs text-link-fg underline underline-offset-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border"
+            className="mt-2 text-xs text-link-fg underline underline-offset-2 focus:outline-hidden focus-visible:ring-1 focus-visible:ring-focus-border"
             onClick={() => {
               toast.action?.onClick();
               dismissToast(toast.id);
@@ -143,7 +143,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
       </div>
       <button
         type="button"
-        className="shrink-0 rounded p-1 text-foreground hover:bg-list-hover-bg focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border"
+        className="shrink-0 rounded-sm p-1 text-foreground hover:bg-list-hover-bg focus:outline-hidden focus-visible:ring-1 focus-visible:ring-focus-border"
         aria-label="Dismiss notification"
         onClick={() => dismissToast(toast.id)}
       >

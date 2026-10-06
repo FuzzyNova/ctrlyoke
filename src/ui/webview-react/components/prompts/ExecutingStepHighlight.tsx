@@ -60,7 +60,7 @@ export function PauseBoundary({
   return (
     <div
       data-testid={testId}
-      className={`pointer-events-none absolute z-raised bg-[var(--status-warning)] ${
+      className={`pointer-events-none absolute z-raised bg-(--status-warning) ${
         orientation === "horizontal"
           ? "inset-x-0 top-0 h-[2px]"
           : "inset-y-0 left-0 w-[2px]"

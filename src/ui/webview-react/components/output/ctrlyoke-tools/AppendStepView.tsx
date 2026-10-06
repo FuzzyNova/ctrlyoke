@@ -69,7 +69,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
     <div className="space-y-2">
       {params ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-[length:var(--cy-output-font-size-sm)]">
+          <table className="w-full text-left text-(length:--cy-output-font-size-sm)">
             <thead>
               <tr className="text-description-foreground">
                 <th className="w-px whitespace-nowrap p-1 font-medium">#</th>
@@ -132,7 +132,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                           )
                         )}
                       </td>
-                      <td className="p-1 [overflow-wrap:anywhere]">
+                      <td className="p-1 wrap-anywhere">
                         {highlightText(
                           name,
                           sliceFindMatches(
@@ -152,7 +152,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                           )
                         )}
                       </td>
-                      <td className="p-1 [overflow-wrap:anywhere]">
+                      <td className="p-1 wrap-anywhere">
                         {highlightText(
                           shownPrompt,
                           sliceFindMatches(
@@ -179,7 +179,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                             ).split(" failFast")[0]
                           }
                         </span>
-                        <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs">
+                        <span className="ml-2 rounded-sm bg-muted px-1.5 py-0.5 text-xs">
                           {" "}
                           failFast {groupFailFast ? "on" : "off"}
                         </span>
@@ -198,7 +198,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
           ) && (
             <button
               type="button"
-              className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+              className="text-bash-expand-link no-underline text-(length:--cy-output-font-size-sm) cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
               aria-expanded={promptsExpanded}
               onClick={() =>
                 onExpansionChange(
@@ -212,7 +212,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
           )}
         </div>
       ) : (
-        <div className="text-[length:var(--cy-output-font-size-sm)] text-muted-foreground">
+        <div className="text-(length:--cy-output-font-size-sm) text-muted-foreground">
           {result.stepsAdded} {result.stepsAdded === 1 ? "step" : "steps"} at{" "}
           {displayIndex(result.insertIndex)}–
           {displayIndex(result.insertedEndIndex)}

@@ -198,7 +198,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         return (
           <div
             key={option.value}
-            className={`group w-full flex items-center focus:outline-none border-none ${
+            className={`group w-full flex items-center focus:outline-hidden border-none ${
               isSelected
                 ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
                 : option.disabled
@@ -211,7 +211,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               onClick={() => !option.disabled && handleSelect(option.value)}
               disabled={option.disabled}
               aria-label={optionAriaLabel(option)}
-              className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit disabled:cursor-not-allowed"
+              className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-hidden border-none bg-transparent cursor-inherit disabled:cursor-not-allowed"
             >
               <span className="flex flex-col min-w-0">
                 <span title={optionTitle(option)} className="truncate">
@@ -237,7 +237,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   e.stopPropagation();
                   onHideOption?.(option.value);
                 }}
-                className="flex-shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+                className="shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent transition-opacity"
               >
                 <Icon name="eye-closed" className="text-xs" />
               </button>
@@ -264,7 +264,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   e.stopPropagation();
                   onUnhideOption?.(option.value);
                 }}
-                className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                className="shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent"
               >
                 <Icon name="eye" className="text-xs" />
               </button>
@@ -273,7 +273,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 type="button"
                 onClick={() => handleSelectHidden(option.value)}
                 aria-label={optionAriaLabel(option)}
-                className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
+                className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-hidden border-none bg-transparent cursor-pointer"
               >
                 <span className="flex flex-col min-w-0">
                   <span title={optionTitle(option)} className="truncate">
@@ -346,7 +346,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         <span className="truncate">{selectedOption?.label ?? value}</span>
         <Icon
           name={`chevron-${isOpen ? "up" : "down"}`}
-          className="text-xxs flex-shrink-0 ml-1"
+          className="text-xxs shrink-0 ml-1"
         />
       </button>
       {warning && (
@@ -359,7 +359,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         >
           <Icon
             name={dropdownWarningIcon(warningSeverity)}
-            className="mt-px flex-shrink-0"
+            className="mt-px shrink-0"
           />
           {warning}
         </span>

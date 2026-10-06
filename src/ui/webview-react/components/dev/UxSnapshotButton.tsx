@@ -117,7 +117,7 @@ export function UxSnapshotButton() {
       disabled={status === UX_SNAPSHOT_STATUSES.CAPTURING}
       aria-label="Capture UX snapshot"
       title="Capture UX snapshot (dev)"
-      className={`fixed right-0 top-1/2 -translate-y-1/2 z-popover flex items-center justify-center w-9 h-11 rounded-l-md border border-r-0 border-panel-border bg-editor-bg/90 shadow-md backdrop-blur transition-colors hover:bg-editor-bg disabled:cursor-wait ${stateTextClass}`}
+      className={`fixed right-0 top-1/2 -translate-y-1/2 z-popover flex items-center justify-center w-9 h-11 rounded-l-md border border-r-0 border-panel-border bg-editor-bg/90 shadow-md backdrop-blur-sm transition-colors hover:bg-editor-bg disabled:cursor-wait ${stateTextClass}`}
     >
       <Icon name={iconClass} />
     </button>

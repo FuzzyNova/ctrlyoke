@@ -72,7 +72,7 @@ export const ContentPreviewModal: React.FC = () => {
         <>
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-sm transition-colors ${
               copied
                 ? "text-indicator-success"
                 : "text-description-fg hover:text-foreground"
@@ -85,7 +85,7 @@ export const ContentPreviewModal: React.FC = () => {
           </button>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded-sm transition-colors"
             onClick={handleExport}
             title={isStandalone ? "Download as file" : "Open in VS Code editor"}
           >
@@ -110,7 +110,7 @@ export const ContentPreviewModal: React.FC = () => {
         className={`font-mono text-xs leading-relaxed text-editor-fg overflow-x-auto ${
           modal.language === CONTENT_PREVIEW_LANGUAGES.DIFF
             ? "whitespace-pre"
-            : "whitespace-pre-wrap break-words"
+            : "whitespace-pre-wrap wrap-break-word"
         }`}
       >
         {modal.content}

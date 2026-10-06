@@ -215,13 +215,13 @@ export const WorkspaceSearchPane: React.FC = () => {
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search workspace..."
             aria-label="Search workspace"
-            className="h-9 w-full rounded border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-none focus:border-focus-border"
+            className="h-9 w-full rounded-sm border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-hidden focus:border-focus-border"
           />
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
           <div
-            className="flex shrink-0 rounded border border-input-border bg-input-bg p-0.5"
+            className="flex shrink-0 rounded-sm border border-input-border bg-input-bg p-0.5"
             role="group"
             aria-label="Search scope"
           >
@@ -231,7 +231,7 @@ export const WorkspaceSearchPane: React.FC = () => {
                 type="button"
                 aria-pressed={searchScope === option.value}
                 onClick={() => setSearchScope(option.value)}
-                className={`min-h-[44px] min-w-[44px] rounded px-2 py-1 text-xs transition-colors sm:min-h-0 sm:min-w-0 ${
+                className={`min-h-[44px] min-w-[44px] rounded-sm px-2 py-1 text-xs transition-colors sm:min-h-0 sm:min-w-0 ${
                   searchScope === option.value
                     ? "bg-btn-bg text-btn-fg"
                     : "text-description-fg hover:bg-btn-secondary-hover hover:text-foreground"
@@ -242,7 +242,7 @@ export const WorkspaceSearchPane: React.FC = () => {
             ))}
           </div>
 
-          <label className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded border border-input-border bg-input-bg px-2 text-xs text-input-fg sm:min-h-0">
+          <label className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-sm border border-input-border bg-input-bg px-2 text-xs text-input-fg sm:min-h-0">
             <input
               type="checkbox"
               checked={searchIncludeGitIgnored}
@@ -269,7 +269,7 @@ export const WorkspaceSearchPane: React.FC = () => {
                     setSelectedRepoId(event.target.value || null)
                   }
                   aria-label="Select repository"
-                  className="h-8 w-full appearance-none rounded border border-input-border bg-input-bg pl-7 pr-7 text-xs text-input-fg outline-none focus:border-focus-border"
+                  className="h-8 w-full appearance-none rounded-sm border border-input-border bg-input-bg pl-7 pr-7 text-xs text-input-fg outline-hidden focus:border-focus-border"
                 >
                   {repos.map((repo) => (
                     <option key={repo.id} value={repo.id}>
@@ -320,7 +320,7 @@ export const WorkspaceSearchPane: React.FC = () => {
                       key={`file:${result.path}`}
                       type="button"
                       onClick={() => openToFile(result.path)}
-                      className="min-h-[44px] w-full rounded border border-transparent px-3 py-2 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-none sm:min-h-0"
+                      className="min-h-[44px] w-full rounded-sm border border-transparent px-3 py-2 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-hidden sm:min-h-0"
                     >
                       <div className="truncate text-sm font-semibold text-foreground">
                         {result.name}
@@ -354,7 +354,7 @@ export const WorkspaceSearchPane: React.FC = () => {
                             onClick={() =>
                               openToFile(result.path, result.line, result.line)
                             }
-                            className="min-h-[44px] w-full rounded border border-transparent px-3 py-2 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-none sm:min-h-0"
+                            className="min-h-[44px] w-full rounded-sm border border-transparent px-3 py-2 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-hidden sm:min-h-0"
                           >
                             <div className="flex items-start gap-2 text-xs text-description-fg">
                               <span className="shrink-0 font-mono">
@@ -386,7 +386,7 @@ export const WorkspaceSearchPane: React.FC = () => {
               type="button"
               onClick={handleLoadMore}
               disabled={searchLoading}
-              className="flex min-h-[44px] items-center justify-center gap-2 rounded border border-btn-border bg-btn-secondary-bg px-4 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60 sm:min-h-0"
+              className="flex min-h-[44px] items-center justify-center gap-2 rounded-sm border border-btn-border bg-btn-secondary-bg px-4 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60 sm:min-h-0"
             >
               {searchLoading && (
                 <Icon name="loading" className="animate-spin" />

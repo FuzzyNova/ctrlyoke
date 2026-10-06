@@ -67,9 +67,9 @@ function NoChangeNotice({
 }) {
   if (changed !== false) return null;
   return (
-    <div className="text-[length:var(--cy-output-font-size-sm)] text-warning-fg">
+    <div className="text-(length:--cy-output-font-size-sm) text-warning-fg">
       <div className="font-medium">No change</div>
-      {note && <div className="break-words">{note}</div>}
+      {note && <div className="wrap-break-word">{note}</div>}
     </div>
   );
 }
@@ -93,7 +93,7 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
     <div className="space-y-1">
       <NoChangeNotice changed={result.changed} note={result.note} />
       {fields.length > 0 && (
-        <ul className="m-0 list-none space-y-0.5 p-0 text-[length:var(--cy-output-font-size-sm)]">
+        <ul className="m-0 list-none space-y-0.5 p-0 text-(length:--cy-output-font-size-sm)">
           {fields.map((field) => {
             const value = updates[field];
             const before = result.before?.[field];
@@ -102,7 +102,7 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
               field
             );
             return (
-              <li key={field} className="break-words">
+              <li key={field} className="wrap-break-word">
                 <span className="font-medium">{field}</span>:{" "}
                 {hasBefore ? <>{String(before)} → </> : null}
                 {field === STEP_MUTATION_PROMPT_FIELD
@@ -114,7 +114,7 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
             );
           })}
           {cleared.map((field) => (
-            <li key={`clear-${field}`} className="break-words">
+            <li key={`clear-${field}`} className="wrap-break-word">
               <s>{field}</s>: inherited default
             </li>
           ))}
@@ -133,7 +133,7 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
         </div>
       )}
       {result.changed !== false && fields.length === 0 && !prompt && (
-        <div className="text-[length:var(--cy-output-font-size-sm)] text-muted-foreground">
+        <div className="text-(length:--cy-output-font-size-sm) text-muted-foreground">
           {summary}
         </div>
       )}
@@ -170,11 +170,11 @@ export const ReorderStepsBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
     <div className="space-y-1">
       <NoChangeNotice changed={result.changed} note={result.note} />
       {result.changed !== false && (
-        <div className="text-[length:var(--cy-output-font-size-sm)] font-medium">
+        <div className="text-(length:--cy-output-font-size-sm) font-medium">
           {reorderStepsSummary(params, result)}
         </div>
       )}
-      <ol className="m-0 list-none space-y-0.5 p-0 text-[length:var(--cy-output-font-size-sm)]">
+      <ol className="list-none space-y-0.5 p-0 text-(length:--cy-output-font-size-sm)">
         {reorderStepPairs(params, result).map((pair) => (
           <li key={pair}>{pair}</li>
         ))}
@@ -196,7 +196,7 @@ export const SubmitCommitMessageBody: React.FC<CtrlYokeToolBodyProps> = (
   return (
     <div className="space-y-1">
       {message && (
-        <pre className="m-0 overflow-x-auto whitespace-pre-wrap break-words rounded bg-muted/40 p-2 font-mono text-[length:var(--cy-output-font-size-sm)]">
+        <pre className="m-0 overflow-x-auto whitespace-pre-wrap wrap-break-word rounded-sm bg-muted/40 p-2 font-mono text-(length:--cy-output-font-size-sm)">
           {message}
         </pre>
       )}

@@ -37,7 +37,7 @@ export const DiffFileNameLabel: React.FC<DiffFilePathLabelProps> = ({
     <span className={`flex min-w-0 items-baseline gap-1 ${className ?? ""}`}>
       {oldBasename !== undefined && (
         <>
-          <span className="truncate font-medium [overflow-wrap:anywhere]">
+          <span className="truncate font-medium wrap-anywhere">
             {oldBasename}
           </span>
           <span className="shrink-0 opacity-60" aria-hidden="true">
@@ -45,9 +45,7 @@ export const DiffFileNameLabel: React.FC<DiffFilePathLabelProps> = ({
           </span>
         </>
       )}
-      <span className="truncate font-medium [overflow-wrap:anywhere]">
-        {basename}
-      </span>
+      <span className="truncate font-medium wrap-anywhere">{basename}</span>
     </span>
   );
 };

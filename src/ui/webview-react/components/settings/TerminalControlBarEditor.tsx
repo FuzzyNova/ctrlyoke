@@ -360,7 +360,7 @@ function KeyCaptureInput({
           if (next !== sequence) onSequenceChange(next);
           setEditing(false);
         }}
-        className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
+        className="min-w-0 flex-1 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground font-mono focus:outline-hidden focus:border-focus-border"
       />
     );
   }
@@ -368,7 +368,7 @@ function KeyCaptureInput({
   return (
     <div ref={containerRef} className="min-w-0 flex-1">
       <div
-        className={`flex items-center gap-1 bg-input-bg border rounded px-2 py-1 text-sm h-[30px] ${
+        className={`flex items-center gap-1 bg-input-bg border rounded-sm px-2 py-1 text-sm h-[30px] ${
           capturing ? "border-focus-border" : "border-input-border"
         }`}
       >
@@ -382,7 +382,7 @@ function KeyCaptureInput({
             if (!capturing) setEditing(true);
           }}
           title={humanLabel && sequence ? `Sequence: ${sequence}` : undefined}
-          className={`flex-1 min-w-0 truncate text-left focus:outline-none ${
+          className={`flex-1 min-w-0 truncate text-left focus:outline-hidden ${
             capturing
               ? "text-description-fg italic text-xs"
               : sequence
@@ -445,7 +445,7 @@ function SortableBarChip({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex w-20 shrink-0 flex-col items-center gap-1 rounded border border-input-border bg-input-bg px-1.5 py-1"
+      className="flex w-20 shrink-0 flex-col items-center gap-1 rounded-sm border border-input-border bg-input-bg px-1.5 py-1"
     >
       <button
         type="button"
@@ -519,7 +519,7 @@ function SortablePopupRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 rounded border border-input-border bg-input-bg px-2 py-1"
+      className="flex items-center gap-2 rounded-sm border border-input-border bg-input-bg px-2 py-1"
     >
       <button
         type="button"
@@ -541,7 +541,7 @@ function SortablePopupRow({
             placeholder="Label"
             aria-label={`Shortcut ${index + 1} label`}
             onCommit={(label) => onUpdateShortcut({ label })}
-            className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            className="min-w-0 flex-1 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
           />
           <KeyCaptureInput
             sequence={shortcut.sequence}
@@ -739,7 +739,7 @@ export function TerminalControlBarEditor({
       activeScope={activeScope}
     >
       <section
-        className="space-y-3 rounded border border-panel-border bg-panel-bg p-2"
+        className="space-y-3 rounded-sm border border-panel-border bg-panel-bg p-2"
         aria-label="Mobile control bar layout"
       >
         <div>
@@ -842,7 +842,7 @@ export function TerminalControlBarEditor({
             {hiddenItems.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-2 rounded border border-panel-border bg-list-hover-bg px-2 py-1 text-description-fg opacity-70"
+                className="flex items-center justify-between gap-2 rounded-sm border border-panel-border bg-list-hover-bg px-2 py-1 text-description-fg opacity-70"
               >
                 <span className="truncate text-sm" title={item.label}>
                   {item.glyph ? `${item.glyph} ${item.label}` : item.label}

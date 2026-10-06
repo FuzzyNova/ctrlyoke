@@ -229,7 +229,7 @@ export function NotificationsSection({
         </SettingInputRow>
 
         {browserModeEnabled ? (
-          <div className="space-y-2 rounded border border-panel-border p-3">
+          <div className="space-y-2 rounded-sm border border-panel-border p-3">
             {iosBlocksBrowserNotifications ? (
               <p className="text-xs text-description-fg">
                 Browser notifications on iPhone and iPad require ctrlyoke to be
@@ -278,7 +278,7 @@ export function NotificationsSection({
                     type="button"
                     onClick={handleEnableBrowserNotifications}
                     disabled={busy}
-                    className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
+                    className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded-sm hover:bg-btn-secondary-hover disabled:opacity-50"
                   >
                     {busy
                       ? "Updating..."
@@ -293,7 +293,7 @@ export function NotificationsSection({
                     type="button"
                     onClick={handleDisablePush}
                     disabled={busy}
-                    className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
+                    className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded-sm hover:bg-btn-secondary-hover disabled:opacity-50"
                   >
                     {busy ? "Updating..." : "Disable push notifications"}
                   </button>

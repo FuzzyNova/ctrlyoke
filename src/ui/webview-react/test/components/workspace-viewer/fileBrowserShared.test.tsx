@@ -65,7 +65,7 @@ describe("FileBrowserSortHeader", () => {
       name: /Date modified, inactive.*descending/i,
     });
 
-    expect(nameButton).toHaveClass("col-span-2", "pl-[1.625rem]");
+    expect(nameButton).toHaveClass("col-span-2", "pl-6.5");
     expect(dateButton).toHaveClass("col-start-3", "justify-center");
     expect(nameButton).toHaveAttribute("aria-pressed", "true");
     expect(dateButton).toHaveAttribute("aria-pressed", "false");

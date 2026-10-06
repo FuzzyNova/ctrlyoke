@@ -241,7 +241,7 @@ function HarnessBadge({
   const isFp = id === SPECIAL_TARGET_IDS.CTRLYOKE;
   return (
     <span
-      className={`inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none
+      className={`inline-flex items-center px-1 py-0.5 rounded-sm text-xxs font-medium leading-none
         ${
           isFp
             ? "bg-badge-bg text-badge-fg"
@@ -330,7 +330,7 @@ function FileRow({
             <button
               type="button"
               onClick={() => onEdit(file)}
-              className="flex h-6 items-center justify-center rounded border border-panel-border px-1.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+              className="flex h-6 items-center justify-center rounded-sm border border-panel-border px-1.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
               title={`Open ${file.type === HARNESS_FILE_TYPES.SKILL ? "SKILL.md" : file.displayName} in VS Code`}
               aria-label={`Edit ${file.displayName}`}
             >
@@ -370,7 +370,7 @@ function FileRow({
           <button
             type="button"
             onClick={() => onToggleDefault(file)}
-            className={`flex h-6 items-center justify-center gap-1 rounded border px-1.5 text-xxs transition-colors ${
+            className={`flex h-6 items-center justify-center gap-1 rounded-sm border px-1.5 text-xxs transition-colors ${
               isDefault
                 ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
@@ -402,7 +402,7 @@ function FileRow({
           />
         ))}
         {file.builtInSourcePath && (
-          <span className="inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none bg-badge-bg text-badge-fg">
+          <span className="inline-flex items-center px-1 py-0.5 rounded-sm text-xxs font-medium leading-none bg-badge-bg text-badge-fg">
             Built-in
           </span>
         )}
@@ -721,7 +721,7 @@ export function AgentSkillsManagerSection({
       </div>
 
       {/* Bulk actions */}
-      <div className="rounded border border-panel-border bg-editor-bg px-3 py-2">
+      <div className="rounded-sm border border-panel-border bg-editor-bg px-3 py-2">
         <BulkSelectionActionsBar
           totalCount={managedFiles.length}
           selectedCount={selectedFiles.length}
@@ -749,7 +749,7 @@ export function AgentSkillsManagerSection({
       </div>
 
       {/* File list */}
-      <div className="border border-panel-border rounded overflow-hidden">
+      <div className="border border-panel-border rounded-sm overflow-hidden">
         {loading && (
           <div className="px-3 py-4 text-xs text-description-fg text-center">
             Loading…
@@ -809,7 +809,7 @@ export function AgentSkillsManagerSection({
           }}
         >
           <div
-            className="bg-editor-bg border border-panel-border rounded p-4 max-w-sm w-full mx-4 shadow-lg"
+            className="bg-editor-bg border border-panel-border rounded-sm p-4 max-w-sm w-full mx-4 shadow-lg"
             role="dialog"
             aria-modal="true"
           >
@@ -826,14 +826,14 @@ export function AgentSkillsManagerSection({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(null)}
-                className="px-3 py-1 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+                className="px-3 py-1 text-xs rounded-sm bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDeleteConfirm}
-                className="px-3 py-1 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                className="px-3 py-1 text-xs rounded-sm bg-btn-bg text-btn-fg hover:bg-btn-hover"
               >
                 Delete
               </button>
@@ -867,7 +867,7 @@ export function AgentSkillsManagerSection({
           }}
         >
           <div
-            className="bg-editor-bg border border-panel-border rounded p-4 max-w-sm w-full mx-4 shadow-lg"
+            className="bg-editor-bg border border-panel-border rounded-sm p-4 max-w-sm w-full mx-4 shadow-lg"
             role="dialog"
             aria-modal="true"
           >
@@ -885,14 +885,14 @@ export function AgentSkillsManagerSection({
               <button
                 type="button"
                 onClick={() => setConfirmDeleteAll(null)}
-                className="px-3 py-1 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+                className="px-3 py-1 text-xs rounded-sm bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDeleteAllConfirm}
-                className="px-3 py-1 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                className="px-3 py-1 text-xs rounded-sm bg-btn-bg text-btn-fg hover:bg-btn-hover"
               >
                 Delete
               </button>

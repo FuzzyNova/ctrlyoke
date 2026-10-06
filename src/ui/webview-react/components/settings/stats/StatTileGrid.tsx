@@ -30,9 +30,9 @@ function Tile({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded border border-panel-border bg-panel-bg p-3 min-w-0">
+    <div className="rounded-sm border border-panel-border bg-panel-bg p-3 min-w-0">
       <div className="text-xs text-description-fg">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-foreground break-words">
+      <div className="mt-1 text-lg font-semibold text-foreground wrap-break-word">
         {value}
       </div>
       {children && (
@@ -101,7 +101,7 @@ export function StatTileGrid({ snapshot, isNarrow, showCostEstimates }: Props) {
     >
       {tiles}
       {snapshot.backfill.state === WORKSPACE_STATS_BACKFILL_STATES.RUNNING && (
-        <div className="col-span-full rounded border border-panel-border bg-panel-bg px-3 py-2 text-xs text-description-fg">
+        <div className="col-span-full rounded-sm border border-panel-border bg-panel-bg px-3 py-2 text-xs text-description-fg">
           <div>
             Building history… {numberLabel(snapshot.backfill.scanned)}/
             {numberLabel(snapshot.backfill.total)}

@@ -223,7 +223,7 @@ export const DuplicateWorkflowDialog: React.FC = () => {
               aria-describedby={
                 nameError ? "duplicate-workflow-name-error" : undefined
               }
-              className="w-full rounded border border-input-border bg-input-bg px-2 py-1.5 text-sm text-input-fg focus:border-focus-border focus:outline-none"
+              className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 text-sm text-input-fg focus:border-focus-border focus:outline-hidden"
             />
             {nameError && (
               <p

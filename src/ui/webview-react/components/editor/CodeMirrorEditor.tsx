@@ -939,7 +939,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // never fires for exactly the navigation keys a stuck user presses. A
   // capture-phase window listener runs before CodeMirror sees the key at all, so
   // destroying the orphan here means the subsequent cursor-move transaction no
-  // longer re-arms the snap. `blur` covers focus leaving the panel. Both are
+  // longer re-arms the snap. `blur-sm` covers focus leaving the panel. Both are
   // no-ops during normal use (no MouseSelection is active outside a live drag).
   useEffect(() => {
     const teardown = () => {
@@ -951,7 +951,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     window.addEventListener("blur", teardown);
     return () => {
       window.removeEventListener("keydown", teardown, true);
-      window.removeEventListener("blur", teardown);
+      window.removeEventListener("blur-sm", teardown);
     };
   }, []);
 
@@ -1748,7 +1748,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 // and nulls `inputState.mouseSelection` so the per-transaction re-select stops
 // firing. By the time any key is pressed the mouse button is necessarily up, so a
 // stale MouseSelection is always an orphan — see the window-level capture-phase
-// `keydown`/`blur` teardown in the component (NOT EditorView.domEventHandlers,
+// `keydown`/`blur-sm` teardown in the component (NOT EditorView.domEventHandlers,
 // whose keydown handler is pre-empted by the keymap for bound keys like arrows).
 // `inputState.mouseSelection` is not in CodeMirror's public typings; access it
 // defensively so a future internal change degrades to a no-op instead of throwing.

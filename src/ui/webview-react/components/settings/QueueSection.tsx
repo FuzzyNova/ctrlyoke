@@ -57,7 +57,7 @@ export function QueueSection({
           value={queue.maxParallelSteps}
           onCommit={(v) => onUpdate("queue.maxParallelSteps", v)}
           parse={(v) => parseInt(v, 10) || 1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <SettingInputRow

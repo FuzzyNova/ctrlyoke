@@ -45,7 +45,7 @@ export const ExportOutputModal: React.FC<ExportOutputModalProps> = ({
         </button>
         <button
           type="button"
-          className="px-4 py-2 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded transition-colors"
+          className="px-4 py-2 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded-sm transition-colors"
           onClick={onConfirm}
         >
           {isStandaloneMode ? (
@@ -113,7 +113,7 @@ export const ExportOutputModal: React.FC<ExportOutputModalProps> = ({
             totalCliSteps > 1 ? `e.g. 1-${totalCliSteps}` : "e.g. 1,2,4-10"
           }
           aria-label="Step range (e.g. 1,2,4-10)"
-          className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${
+          className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7 ${
             stepRangeError ? "border-input-error-border" : "border-input-border"
           }`}
         />

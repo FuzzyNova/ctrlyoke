@@ -91,7 +91,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   return (
     <div
       ref={refCallback}
-      className="relative z-header cy-no-select flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
+      className="relative z-header cy-no-select flex items-center justify-between gap-(--spacing-sm) h-[30px] pl-2 pr-1 border-b border-panel-border shrink-0 bg-sidebar-bg"
     >
       <div className="flex items-center gap-1">
         <button
@@ -265,7 +265,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             {hiddenOutputCount > 0 && (
               <button
                 type="button"
-                className="rounded border border-panel-border px-1.5 py-0.5 text-xs text-description-fg hover:text-foreground transition-colors whitespace-nowrap"
+                className="rounded-sm border border-panel-border px-1.5 py-0.5 text-xs text-description-fg hover:text-foreground transition-colors whitespace-nowrap"
                 aria-label={`Show all output steps (${hiddenOutputCount} hidden)`}
                 onClick={onClearHiddenOutputTargets}
               >
@@ -281,7 +281,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 aria-label={workflowChangeSummary.label}
                 onClick={onWorkflowView}
               >
-                <Icon name="diff" className="codicon-lg flex-shrink-0" />
+                <Icon name="diff" className="codicon-lg shrink-0" />
                 <span className="text-nowrap">
                   {workflowChangeLabel.main}
                   {workflowChangeLabel.undone && (

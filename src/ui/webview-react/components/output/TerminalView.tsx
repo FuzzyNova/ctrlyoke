@@ -465,7 +465,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
 
                 {/* Divider between ai-cli and shell sections */}
                 {hasBothKinds && (
-                  <div className="border-t border-panel-border my-1 flex-shrink-0" />
+                  <div className="border-t border-panel-border my-1 shrink-0" />
                 )}
 
                 {/* Shell sessions */}
@@ -526,7 +526,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
     <div
       role="tab"
       tabIndex={0}
-      className={`flex items-center gap-1 px-2 py-1.5 text-xs flex-shrink-0 cursor-pointer transition-colors
+      className={`flex items-center gap-1 px-2 py-1.5 text-xs shrink-0 cursor-pointer transition-colors
         ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}
         ${!isRunning ? "opacity-60" : ""}`}
       onClick={onClick}
@@ -542,7 +542,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
       <span className="truncate flex-1">{getTerminalStepLabel(session)}</span>
       {onClose && (
         <button
-          className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
+          className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 shrink-0"
           title="Close terminal"
           aria-label="Close terminal"
           onClick={(e) => {
@@ -573,7 +573,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
     <div
       role="tab"
       tabIndex={0}
-      className={`flex items-center gap-1 px-2 py-1.5 text-xs flex-shrink-0 cursor-pointer transition-colors
+      className={`flex items-center gap-1 px-2 py-1.5 text-xs shrink-0 cursor-pointer transition-colors
         ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}
         ${isEnded ? "opacity-60" : ""}`}
       onClick={onClick}
@@ -588,7 +588,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
       <SessionIcon session={session} />
       <span className="truncate flex-1">{getTerminalStepLabel(session)}</span>
       <button
-        className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
+        className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 shrink-0"
         title="Close terminal"
         aria-label="Close terminal"
         onClick={(e) => {
@@ -617,7 +617,7 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
   onClick,
 }) => (
   <button
-    className={`flex flex-col items-center justify-center gap-0.5 py-2 w-full flex-shrink-0 transition-colors
+    className={`flex flex-col items-center justify-center gap-0.5 py-2 w-full shrink-0 transition-colors
       ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}`}
     onClick={onClick}
     title={getTerminalStepLabel(session)}

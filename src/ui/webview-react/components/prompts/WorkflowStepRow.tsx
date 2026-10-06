@@ -281,7 +281,7 @@ export function WorkflowStepRowFrame({
       {showPauseBoundaryBefore && <PauseBoundary />}
       {/* Keep the identity rail separate from the consistently sized number column. */}
       <div
-        className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
+        className={`w-[2px] shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
         style={
           stepColor
             ? { backgroundColor: stepColor, ...displacementStyle }
@@ -289,7 +289,7 @@ export function WorkflowStepRowFrame({
         }
       />
       <div
-        className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none"
+        className="shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none"
         style={displacementStyle}
       >
         {slotNumber}

@@ -34,7 +34,7 @@ export const RawToolCallSection: React.FC<RawToolCallSectionProps> = ({
   paramsFindMatches,
   outputFindMatches,
   errorFindMatches,
-  buttonClassName = "text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit",
+  buttonClassName = "text-bash-expand-link no-underline text-(length:--cy-output-font-size-sm) cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit",
 }) => {
   const resolvedServer = data?.server ?? server ?? "";
   const resolvedTool = data?.tool ?? tool ?? "";

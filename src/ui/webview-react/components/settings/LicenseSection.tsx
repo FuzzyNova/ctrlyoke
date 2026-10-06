@@ -203,7 +203,7 @@ export function LicenseSection() {
             href={LICENSE_UI.PRICING_URL}
             target="_blank"
             rel="noreferrer"
-            className="shrink-0 rounded bg-pro-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+            className="shrink-0 rounded-sm bg-pro-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
           >
             Purchase a License
           </a>
@@ -211,7 +211,7 @@ export function LicenseSection() {
       </div>
 
       <section
-        className="rounded border border-panel-border bg-input-bg p-3"
+        className="rounded-sm border border-panel-border bg-input-bg p-3"
         aria-label="License status"
       >
         <div className="flex items-center justify-between gap-2">
@@ -219,7 +219,7 @@ export function LicenseSection() {
             License status
           </h4>
           <span
-            className={`rounded px-2 py-0.5 text-xs font-semibold ${licenseAccess.isPro ? "bg-pro-brand text-white" : "border border-panel-border text-description-fg"}`}
+            className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${licenseAccess.isPro ? "bg-pro-brand text-white" : "border border-panel-border text-description-fg"}`}
           >
             {tierLabel}
           </span>
@@ -272,7 +272,7 @@ export function LicenseSection() {
             onCommit={setLicenseKey}
             onValueChange={setLicenseKey}
             placeholder="Paste your Pro license key"
-            className="min-w-0 basis-64 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
+            className="min-w-0 basis-64 flex-1 bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground font-mono focus:outline-hidden focus:border-focus-border"
           />
           <ActionButton
             label="Activate"
@@ -348,7 +348,7 @@ export function LicenseSection() {
             onChange={(event) => setLicenseBlob(event.target.value)}
             placeholder="-----BEGIN LICENSE FILE-----"
             rows={5}
-            className="w-full resize-y bg-input-bg border border-input-border rounded px-2 py-1 text-xs text-foreground font-mono focus:outline-none focus:border-focus-border"
+            className="w-full resize-y bg-input-bg border border-input-border rounded-sm px-2 py-1 text-xs text-foreground font-mono focus:outline-hidden focus:border-focus-border"
           />
           <ActionButton
             label="Import license file"
@@ -405,7 +405,7 @@ export function LicenseSection() {
               No activated machines found.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded border border-panel-border">
+            <div className="overflow-x-auto rounded-sm border border-panel-border">
               <table className="w-full text-xs">
                 <thead className="bg-input-bg text-left text-description-fg">
                   <tr>
@@ -423,7 +423,7 @@ export function LicenseSection() {
                       <td className="px-2 py-1.5 text-foreground">
                         {machineLabel(machine)}{" "}
                         {machine.isThisMachine && (
-                          <span className="ml-1 rounded border border-pro-brand px-1 text-xxs text-pro-brand">
+                          <span className="ml-1 rounded-sm border border-pro-brand px-1 text-xxs text-pro-brand">
                             This machine
                           </span>
                         )}
@@ -461,7 +461,7 @@ export function LicenseSection() {
 
       {licenseAccess.isPro && isEnterprise && (
         <section
-          className="rounded border border-panel-border bg-input-bg p-3"
+          className="rounded-sm border border-panel-border bg-input-bg p-3"
           aria-label="Enterprise machine management"
         >
           <h4 className="text-sm font-semibold text-foreground">

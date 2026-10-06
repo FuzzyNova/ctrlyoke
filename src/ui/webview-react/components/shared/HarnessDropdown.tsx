@@ -69,7 +69,7 @@ const StatusIndicator: React.FC<{ status: HarnessAvailabilityStatus }> = ({
     data-harness-status={
       isHarnessVersionOutdated(status) ? "outdated" : status.status
     }
-    className={`w-2 h-2 rounded-full flex-shrink-0 ${
+    className={`w-2 h-2 rounded-full shrink-0 ${
       isHarnessVersionOutdated(status)
         ? OUTDATED_STATUS_COLOR
         : (STATUS_COLORS[status.status] ?? STATUS_COLORS.checking)
@@ -121,7 +121,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
     : undefined;
 
   const usageIndicator = showStatus && status && (
-    <span className="inline-flex items-center gap-1 flex-shrink-0">
+    <span className="inline-flex items-center gap-1 shrink-0">
       {!narrow && usageDisplay.percentOnly && (
         <span className="text-xxs text-description-fg">
           {usageDisplay.percentOnly}
@@ -146,7 +146,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
             e.stopPropagation();
             onUnhide?.(harness);
           }}
-          className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+          className="shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent"
         >
           <Icon name="eye" className="text-xs" />
         </button>
@@ -155,7 +155,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           title={schemaTitle(schemaPath, harness, rowTooltip)}
           aria-label={schemaAriaLabel(name, schemaPath, harness)}
           onClick={() => onSelect(harness)}
-          className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer flex items-center gap-1.5"
+          className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-hidden border-none bg-transparent cursor-pointer flex items-center gap-1.5"
         >
           <HarnessIcon harnessId={harness} size={13} />
           {name}
@@ -184,13 +184,13 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           isAvailable || isChecking ? onSelect(harness) : undefined
         }
         disabled={!isAvailable && !isChecking}
-        className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent disabled:cursor-not-allowed cursor-inherit flex items-center gap-1.5"
+        className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-hidden border-none bg-transparent disabled:cursor-not-allowed cursor-inherit flex items-center gap-1.5"
       >
         <HarnessIcon harnessId={harness} size={13} />
         {name}
       </button>
       {usageIndicator}
-      <div className="flex-shrink-0 w-4 flex items-center justify-center">
+      <div className="shrink-0 w-4 flex items-center justify-center">
         {/* Reserve a right-edge action slot so status text never shifts on hover. */}
         {canHideRow && (
           <button
@@ -201,7 +201,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
               e.stopPropagation();
               onHide?.(harness);
             }}
-            className="p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+            className="p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent transition-opacity"
           >
             <Icon name="eye-closed" className="text-xs" />
           </button>
@@ -418,7 +418,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
               omit: true,
             })}
             title={schemaTitle(schemaPath, { omit: true })}
-            className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit flex items-center"
+            className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-hidden border-none bg-transparent cursor-inherit flex items-center"
           >
             {defaultSentinelContent}
           </button>
@@ -542,7 +542,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
                 : "Retry harness detection"
             }
             title="Retry harness detection"
-            className="flex-shrink-0 px-1.5 py-1 text-xxs text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent disabled:cursor-wait"
+            className="shrink-0 px-1.5 py-1 text-xxs text-description-fg hover:text-foreground focus:outline-hidden border-none bg-transparent disabled:cursor-wait"
           >
             {retrying ? (
               <Icon name="loading" className="animate-spin" />

@@ -35,11 +35,6 @@
     }
   },
   "include": ["./**/*.ts", "./**/*.tsx"],
-  "exclude": [
-    "vite.config.ts",
-    "build/**",
-    "postcss.config.js",
-    "tailwind.config.js"
-  ],
+  "exclude": ["vite.config.ts", "build/**"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

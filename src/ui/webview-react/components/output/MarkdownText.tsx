@@ -516,7 +516,7 @@ function FileRefButton({
   return (
     <button
       type="button"
-      className="group inline-flex items-baseline gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
+      className="group inline-flex items-baseline gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-inherit"
       onClick={() =>
         line !== undefined ? openFile(path, line) : openFile(path)
       }
@@ -733,7 +733,7 @@ function ImageRefThumbnail({
           onClick={() => void downloadImage(uri, filename)}
           title={`Download ${filename}`}
           aria-label={`Download ${filename}`}
-          className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity hover:brightness-110 focus:opacity-100 group-hover/thumb:opacity-100"
+          className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-sm bg-black/60 text-white opacity-0 transition-opacity hover:brightness-110 focus:opacity-100 group-hover/thumb:opacity-100"
         >
           <Icon name="cloud-download" className="text-sm" />
         </button>
@@ -945,7 +945,7 @@ mermaid.initialize({
 let mermaidIdCounter = 0;
 
 const MERMAID_HEADER_BTN_CLASS =
-  "inline-flex items-center justify-center rounded px-1.5 py-0.5 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center rounded-sm px-1.5 py-0.5 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed";
 
 // Module-level cache of rendered SVG keyed by diagram source. Mermaid blocks
 // unmount when virtualized out of view; caching lets a re-realized block show
@@ -1123,7 +1123,7 @@ function MermaidBlock({ code }: { code: string }) {
         />
       ) : state === MERMAID_RENDER_STATES.ERROR ? (
         <>
-          <div className="p-3 font-mono text-xs text-foreground whitespace-pre-wrap [overflow-wrap:anywhere]">
+          <div className="p-3 font-mono text-xs text-foreground whitespace-pre-wrap wrap-anywhere">
             {code}
           </div>
           <p className="px-3 pb-2 text-xs text-error-fg">{errorMsg}</p>
@@ -1466,7 +1466,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         // Inline code (single backtick, no language)
         if (!language) {
           return (
-            <code className="bg-code-block text-code-inline-fg rounded px-1 py-0.5 font-mono">
+            <code className="bg-code-block text-code-inline-fg rounded-sm px-1 py-0.5 font-mono">
               {codeFindHighlight
                 ? highlightCodeText(
                     getNodeText(codeChildren),
@@ -1497,7 +1497,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       // Preserve indentation while still allowing long code lines to wrap
       // inside narrow output panes instead of forcing horizontal overflow.
       pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
-        <pre className="bg-editor-bg border border-panel-border rounded p-3 my-2 font-mono whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <pre className="bg-editor-bg border border-panel-border rounded-sm p-3 my-2 font-mono whitespace-pre-wrap wrap-anywhere">
           {preChildren}
         </pre>
       ),

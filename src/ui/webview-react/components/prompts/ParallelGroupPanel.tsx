@@ -263,7 +263,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         transition: isSorting ? transition : undefined,
         opacity: isDragging ? 0.5 : 1,
       }}
-      className="group/parallel relative mx-1 my-1 overflow-hidden rounded border border-panel-border bg-sidebar-bg"
+      className="group/parallel relative mx-1 my-1 overflow-hidden rounded-sm border border-panel-border bg-sidebar-bg"
       data-testid={`parallel-group-${group.id}`}
       aria-label={`Parallel steps ${group.startIndex + 1} to ${group.endIndex + 1}`}
     >
@@ -304,7 +304,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         </label>
         {isSortable && (
           <span
-            className="ml-auto flex w-4 flex-shrink-0 cursor-grab items-center justify-center text-description-fg opacity-0 transition-opacity hover:text-foreground active:cursor-grabbing group-hover/parallel:opacity-100"
+            className="ml-auto flex w-4 shrink-0 cursor-grab items-center justify-center text-description-fg opacity-0 transition-opacity hover:text-foreground active:cursor-grabbing group-hover/parallel:opacity-100"
             style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
             {...listeners}
             {...attributes}

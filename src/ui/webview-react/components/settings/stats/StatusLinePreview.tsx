@@ -212,7 +212,7 @@ export function StatusLinePreview({
   percentDirection = "used",
 }: Props) {
   return (
-    <div className="rounded border border-input-border bg-input-bg px-2 py-1.5">
+    <div className="rounded-sm border border-input-border bg-input-bg px-2 py-1.5">
       <p className="text-xs text-description-fg">Live preview</p>
       <code className="mt-1 block break-all text-sm text-foreground">
         {renderStatusLinePreview(

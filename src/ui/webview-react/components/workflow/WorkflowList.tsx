@@ -290,7 +290,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
               e.stopPropagation();
               onToggleFavorite(workflow.address);
             }}
-            className={`flex h-8 w-6 flex-shrink-0 items-center justify-center rounded px-0 py-0 leading-none transition-colors ${
+            className={`flex h-8 w-6 shrink-0 items-center justify-center rounded-sm px-0 py-0 leading-none transition-colors ${
               workflow.isFavorite
                 ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
                 : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
@@ -315,7 +315,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
               e.stopPropagation();
               onRemove(workflow.address);
             }}
-            className="flex h-8 w-6 flex-shrink-0 items-center justify-center rounded px-0 py-0 leading-none text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100"
+            className="flex h-8 w-6 shrink-0 items-center justify-center rounded-sm px-0 py-0 leading-none text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100"
           >
             <Icon name="trash" className="block leading-none" />
           </button>
@@ -455,12 +455,10 @@ export const WorkflowList = React.forwardRef<
           role="region"
           aria-label="Running workflows"
           className={`running-workflows-region flex flex-col border-b border-dropdown-border ${
-            hasRecentRows
-              ? "flex-shrink-0 max-h-[min(260px,50%)]"
-              : "flex-1 min-h-0"
+            hasRecentRows ? "shrink-0 max-h-[min(260px,50%)]" : "flex-1 min-h-0"
           }`}
         >
-          <div className="flex flex-shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-xxs font-semibold uppercase tracking-wider text-description-fg">
+          <div className="flex shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-xxs font-semibold uppercase tracking-wider text-description-fg">
             <Icon name="debug-line-by-line" />
             <span>Running ({runningRows.length})</span>
           </div>
@@ -509,7 +507,7 @@ export const WorkflowList = React.forwardRef<
         role="list"
         aria-label="Recent workflows"
         className={`workflow-menu-items overflow-y-auto overflow-x-clip py-1 ${
-          hasRecentRows || !hasRunningRows ? "flex-1 min-h-0" : "flex-shrink-0"
+          hasRecentRows || !hasRunningRows ? "flex-1 min-h-0" : "shrink-0"
         }`}
       >
         {hasRecentRows ? (

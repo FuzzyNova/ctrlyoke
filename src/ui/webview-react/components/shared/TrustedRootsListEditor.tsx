@@ -81,7 +81,7 @@ export function TrustedRootsListEditor({
                 setPathError(null);
               }}
               placeholder="Enter a directory path"
-              className="w-full rounded border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-none"
+              className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-hidden"
               aria-invalid={pathError ? "true" : undefined}
               aria-describedby={
                 pathError ? "trusted-root-path-error" : undefined
@@ -104,7 +104,7 @@ export function TrustedRootsListEditor({
       </div>
 
       {entries.length === 0 ? (
-        <p className="rounded border border-panel-border px-3 py-3 text-sm text-description-fg">
+        <p className="rounded-sm border border-panel-border px-3 py-3 text-sm text-description-fg">
           No external directories configured.
         </p>
       ) : (
@@ -112,7 +112,7 @@ export function TrustedRootsListEditor({
           {entries.map((entry) => (
             <div
               key={entry.path}
-              className="flex items-start gap-3 rounded border border-panel-border px-3 py-2"
+              className="flex items-start gap-3 rounded-sm border border-panel-border px-3 py-2"
               data-testid={`trusted-root-row-${entry.path}`}
             >
               <code className="min-w-0 flex-1 break-all text-sm text-foreground">
@@ -121,7 +121,7 @@ export function TrustedRootsListEditor({
               {showDecisionStatus && (
                 <div className="flex shrink-0 items-start gap-2">
                   <span
-                    className={`rounded px-1.5 py-px text-xs font-semibold ${decisionClass(entry.decision)}`}
+                    className={`rounded-sm px-1.5 py-px text-xs font-semibold ${decisionClass(entry.decision)}`}
                     data-testid={`trusted-root-status-${entry.path}`}
                   >
                     {decisionLabel(entry.decision)}

@@ -62,36 +62,53 @@ went 11 → 10; `chokidar@3` stays in the tree via Tailwind 3 until B lands.
 
 ---
 
-## B. Tailwind CSS 3 → 4 — high risk, dedicated pass
+## B. Tailwind CSS 3 → 4 — done 2026-10-05 (visual QA pending)
 
-| Package                     | Current → Latest | prod/dev    | Notes                                                                                                                                                                                                                                                                                 |
-| --------------------------- | ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tailwindcss`               | 3.4 → 4.3        | dev (build) | Whole-surface styling migration.                                                                                                                                                                                                                                                      |
-| `eslint-plugin-tailwindcss` | 3.18 → 4.4       | dev         | v4 has a `tailwindcss ^4` peer dependency, so it must move in the same change. It drops `fast-glob` and moves to `postcss-nested@7`. Re-check that our rule config in `eslint.config.mjs` (the `settings.tailwindcss.config` path, the disabled rules) still maps onto v4's rule set. |
-| `autoprefixer`              | remove           | dev         | Tailwind 4 does vendor prefixing itself (Lightning CSS).                                                                                                                                                                                                                              |
+`tailwindcss` 4.3, `@tailwindcss/vite` 4.3, and `eslint-plugin-tailwindcss` 4.4;
+`autoprefixer`, `postcss` (now only transitive), `postcss.config.js`, and
+`tailwind.config.js` are gone. `npm audit` went 10 → 2 (only the KaTeX finding
+in C remains).
 
-Scope in this repo:
+- The JS config was ported straight to `@theme` in
+  `src/ui/webview-react/styles/globals.css` — no `@config` bridge. The theme,
+  `@source` list (explicit, `source(none)`), and custom variants all live there;
+  `.github/instructions/webview-react.instructions.md` has the sharp edges.
+- `npx @tailwindcss/upgrade` (run from `src/ui/webview-react/` with a temporary
+  `@config` line, since `landing/` confuses it from the repo root) did the bulk
+  of the `.tsx` renames. Its stylesheet output was discarded: it duplicated every
+  color as a `--border-color-*` token and turned every `@layer components` rule
+  into `@utility` — including `bg-btn-bg` and `codicon`, which would have merged
+  HC overrides into real utilities.
+- It skips classes it cannot parse confidently inside template literals. The
+  leftovers (`flex-shrink-0`, bare `rounded`, `bg-opacity-*`, `border-opacity-*`,
+  `placeholder-opacity-*`) were fixed by hand or by
+  `tailwindcss/enforces-canonical-classname --fix`, which is now an `error`.
+  `enforces-shorthand` (321 hits) and `no-unnecessary-arbitrary-value` (66) are
+  left off as a separate style pass.
+- Verified by building a v3 stylesheet from `HEAD` and diffing its class
+  selectors against the v4 build: every class the source still names is
+  generated. Per-file token counts confirmed each v3 `-sm` radius/shadow/blur
+  became `-xs`. Behaviour kept from v3 on purpose: `hover:` without the
+  `(hover: hover)` media gate (phone row actions), class-based `dark:`, default
+  border color, placeholder color, and `:disabled { cursor: default }`.
 
-- `src/ui/webview-react/tailwind.config.js` is **455 lines** of JS config. v4 is
-  CSS-first (`@theme` in CSS). Option: use `@config "./tailwind.config.js"` as an
-  interim bridge to land the engine bump first, then port the theme to `@theme`
-  as a follow-up.
-- `src/ui/webview-react/postcss.config.js` uses the v3 `tailwindcss` PostCSS
-  plugin. Since the webview is built by Vite, prefer `@tailwindcss/vite` over
-  `@tailwindcss/postcss` — `landing/` already runs Tailwind 4 that way
-  (`landing/astro.config.mjs`, `landing/src/styles/global.css`) and is the
-  in-repo reference.
-- `src/ui/webview-react/styles/globals.css`: `@tailwind` directives →
-  `@import "tailwindcss"`; 14 `@apply` uses to re-check.
-- ~390 `.tsx` files under `src/ui/webview-react/`. Start with
-  `npx @tailwindcss/upgrade` for utility renames (e.g. `shadow-sm`→`shadow-xs`,
-  `rounded`→`rounded-sm`, `outline-none`→`outline-hidden`, default border color
-  now `currentColor`, default ring width 1px).
-- **Browser floor:** Tailwind 4 requires Safari 16.4+ / Chrome 111+ / Firefox
-  128+. The VS Code webview is fine; the **hosted dashboard on phones** (older
-  iOS Safari) is the case to decide on consciously.
-- QA: full visual pass of the dashboard in both the VS Code webview and the
-  hosted browser, light/dark/high-contrast themes; run `npm run test:ui`.
+**Rendering that changes** — check these in the visual pass:
+
+- Opacity modifiers on `var()` colors now apply. v3 generated no CSS for them, so
+  ~45 classes that were silent no-ops (`bg-editor-bg/90`, `bg-list-hover-bg/50`,
+  `bg-(--status-*)/15`, the `border-*-fg/30|40` warning/error boxes, Streamdown's
+  `bg-muted/40` and `bg-background/80`) start rendering as tints.
+- `space-y-*` children with their own vertical margin: v3's sibling selector
+  overrode the child's margin, v4's zero-specificity one does not. The cases are
+  the settings sections (`h3 … mb-3` under `space-y-4` is 12px, was 16px;
+  `pt-3 border-t mt-3` dividers under `space-y-1` are 12px, were 4px;
+  `-mt-2` descriptions in Commit/Harnesses now pull up 8px) and the Server
+  section's icon-color box. The two tool-output lists whose `m-0` would have
+  zeroed their sibling gap had the redundant `m-0` removed.
+- **Browser floor:** Safari 16.4+ / Chrome 111+ / Firefox 128+. Fine for the VS
+  Code webview; the hosted dashboard on phones now needs iOS 16.4+.
+- QA still to do: visual pass in the VS Code webview and the hosted browser,
+  light/dark/high-contrast. `npm test` passes (all three suites).
 
 ---
 
@@ -133,8 +150,8 @@ All of these are compatible with our `>=22.12.0` Node floor.
 
 1. **`npm update`** for minor/patch, full `npm test`.
 2. **A** — replace `vite-plugin-static-copy`. Small, unblocked.
-3. **B** — Tailwind 4 + `eslint-plugin-tailwindcss` 4, on its own with full
-   visual QA. After A + B, `npm audit` should show only the KaTeX finding.
+3. ~~**B** — Tailwind 4 + `eslint-plugin-tailwindcss` 4~~ — done; visual QA
+   pending. `npm audit` now shows only the KaTeX finding.
 4. **C** — try the KaTeX override; keep it if mermaid smoke test passes.
 5. **vitest 5 + jest-dom 7** together; then `chalk`, `gpt-tokenizer`,
    `vscode-jsonrpc`, `mermaid` one at a time.

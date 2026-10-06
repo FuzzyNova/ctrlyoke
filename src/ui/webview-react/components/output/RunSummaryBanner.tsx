@@ -31,7 +31,7 @@ import { Icon } from "../shared/Icon";
 
 /** Bordered pill styling shared by the worktree row's action buttons, so two adjacent buttons never read as one run-together label. */
 const WORKTREE_BUTTON_CLASS =
-  "rounded border border-widget-border px-1.5 py-0.5 text-xs leading-none text-link-fg hover:bg-list-hover-bg focus:outline-none whitespace-nowrap";
+  "rounded-sm border border-widget-border px-1.5 py-0.5 text-xs leading-none text-link-fg hover:bg-list-hover-bg focus:outline-hidden whitespace-nowrap";
 
 const OUTCOME_TONE: Record<
   WorktreeOutcomeSeverity,
@@ -94,7 +94,7 @@ export interface RunSummaryBannerProps extends RunBannerData {
 export const WorkspaceWorktreeOwnershipBanner: React.FC<{
   ownership: WorkspaceWorktreeOwnership;
 }> = ({ ownership }) => (
-  <div className="flex items-center gap-1 px-3 py-1.5 text-[length:var(--cy-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border">
+  <div className="flex items-center gap-1 px-3 py-1.5 text-(length:--cy-output-font-size-sm) text-description-fg bg-editor-bg border-b border-widget-border">
     <Icon name="worktree-compact" />
     <span>
       This is branch <code className="font-mono">{ownership.branchName}</code>,
@@ -160,7 +160,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`flex flex-col gap-1 px-3 py-1.5 text-[length:var(--cy-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex-shrink-0 ${
+      className={`flex flex-col gap-1 px-3 py-1.5 text-(length:--cy-output-font-size-sm) text-description-fg bg-editor-bg border-b border-widget-border shrink-0 ${
         isPinned ? "sticky top-0 z-header" : ""
       }`}
     >
@@ -171,7 +171,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
           </span>
           <ExecutionStateBadge state={executionState} />
         </span>
-        <span className="flex items-center gap-2 flex-shrink-0">
+        <span className="flex items-center gap-2 shrink-0">
           {hasWorkflowTokenUsage(tokenTotals) && (
             <WorkflowTokenUsage totals={tokenTotals} />
           )}
@@ -179,7 +179,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             <button
               type="button"
               onClick={onBackToLive}
-              className="text-link-fg hover:underline focus:outline-none"
+              className="text-link-fg hover:underline focus:outline-hidden"
             >
               Back to Live{" "}
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
@@ -200,7 +200,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
         </span>
       </div>
       {worktree && (
-        <div className="flex min-w-0 flex-col gap-1 rounded border border-widget-border px-2 py-1.5">
+        <div className="flex min-w-0 flex-col gap-1 rounded-sm border border-widget-border px-2 py-1.5">
           {/* Worktree identity + merge/landing outcome — outcome wraps to its
               own row on narrow widths rather than truncating alongside it. */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -213,7 +213,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             </span>
             {worktreeOutcome && (
               <span
-                className={`inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap ${OUTCOME_TONE[worktreeOutcome.severity].className}`}
+                className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap ${OUTCOME_TONE[worktreeOutcome.severity].className}`}
                 title={worktreeOutcome.text}
               >
                 <Icon
@@ -231,8 +231,8 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
               narrow widths. */}
           {branchName && (
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <span className="flex min-w-0 flex-shrink items-center gap-1">
-                <span className="flex-shrink-0">Branch:</span>
+              <span className="flex min-w-0 shrink items-center gap-1">
+                <span className="shrink-0">Branch:</span>
                 <span className="min-w-0 truncate font-mono" title={branchName}>
                   {branchName}
                 </span>
@@ -241,7 +241,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
                   onClick={handleCopyBranch}
                   title="Copy branch name"
                   aria-label="Copy branch name"
-                  className="icon-btn flex-shrink-0 py-0 px-1"
+                  className="icon-btn shrink-0 py-0 px-1"
                 >
                   <Icon
                     name={copiedBranch ? "codicon-check" : "codicon-copy"}
@@ -249,7 +249,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
                 </button>
               </span>
               {hasWorktreeButtons && (
-                <span className="flex flex-shrink-0 flex-wrap items-center gap-1">
+                <span className="flex shrink-0 flex-wrap items-center gap-1">
                   {hasDiffButton && (
                     <button
                       type="button"

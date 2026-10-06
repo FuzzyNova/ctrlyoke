@@ -1,6 +1,6 @@
 # Streamdown Styling Guide for VS Code Webviews
 
-A practical reference for correctly styling Streamdown-rendered markdown (prose, tables, copy/download controls) inside a VS Code webview using Tailwind CSS v3 and VS Code CSS variables.
+A practical reference for correctly styling Streamdown-rendered markdown (prose, tables, copy/download controls) inside a VS Code webview using Tailwind CSS v4 and VS Code CSS variables. ctrlyoke's own setup is in `src/ui/webview-react/styles/globals.css`.
 
 ---
 
@@ -14,20 +14,12 @@ Streamdown follows **shadcn/ui naming conventions** for color tokens. If your Ta
 
 ## Step 1 — Scan Streamdown's Dist for Class Names
 
-### Tailwind v3 (`tailwind.config.js`)
-
-```js
-content: [
-  // ... your app files ...
-  path.join(__dirname, "../../../node_modules/streamdown/dist/*.js"),
-],
-```
-
-### Tailwind v4 (`globals.css`)
-
 ```css
-@source "../node_modules/streamdown/dist/*.js";
+/* globals.css — the path is relative to the stylesheet */
+@source "../../../../node_modules/streamdown/dist/*.js";
 ```
+
+Automatic source detection skips `node_modules`, so this line is required even without `source(none)`.
 
 ---
 
@@ -35,33 +27,18 @@ content: [
 
 Streamdown's table controls use these shadcn/ui token names. Map each to your theme's equivalent color variable:
 
-```js
-// tailwind.config.js — theme.extend.colors
-// These names must match exactly so Tailwind generates the right classes.
-// 'foreground' is usually already defined; add the rest.
-"background":  "var(--your-editor-background)",
-"sidebar":     "var(--your-sidebar-background)",
-"border":      "var(--your-panel-border, transparent)",
-"muted": {
-  DEFAULT:     "var(--your-list-hover-background, rgba(127, 127, 127, 0.1))",
-  foreground:  "var(--your-description-foreground)",
-},
-"foreground":  "var(--your-foreground)",
-"ring":        "var(--your-focus-border, transparent)",
-```
-
-**For VS Code webviews specifically:**
-
-```js
-"background":  "var(--vscode-editor-background)",
-"sidebar":     "var(--vscode-sideBar-background)",
-"border":      "var(--vscode-panel-border, transparent)",
-"muted": {
-  DEFAULT:     "var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1))",
-  foreground:  "var(--vscode-descriptionForeground)",
-},
-"foreground":  "var(--vscode-foreground)",
-"ring":        "var(--vscode-focusBorder, transparent)",
+```css
+/* globals.css — these names must match exactly so Tailwind generates the
+   right classes. 'foreground' is usually already defined; add the rest. */
+@theme {
+  --color-background: var(--vscode-editor-background);
+  --color-sidebar: var(--vscode-sideBar-background);
+  --color-border: var(--vscode-panel-border, transparent);
+  --color-muted: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1));
+  --color-muted-foreground: var(--vscode-descriptionForeground);
+  --color-foreground: var(--vscode-foreground);
+  --color-ring: var(--vscode-focusBorder, transparent);
+}
 ```
 
 This causes Tailwind to generate:
@@ -78,14 +55,15 @@ This causes Tailwind to generate:
 
 ## Step 3 — Import Streamdown's Animation Styles
 
-Streamdown's `styles.css` provides animation keyframes for the streaming caret and word fade-in. Import it before Tailwind directives:
+Streamdown's `styles.css` provides animation keyframes for the streaming caret and word fade-in. Import it into the `base` layer ahead of Tailwind, so utilities still win over it:
 
 ```css
-@import "streamdown/styles.css";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@layer theme, base, components, utilities;
+@import "streamdown/styles.css" layer(base);
+@import "tailwindcss";
 ```
+
+Streamdown's dist also carries `dark:` classes for Shiki's dual themes. Tailwind 4's default `dark:` follows the OS `prefers-color-scheme`, not the VS Code theme, so declare a class-based variant (`@custom-variant dark (&:where(.dark, .dark *));`) to keep them under your control.
 
 ---
 
@@ -149,7 +127,7 @@ Every Streamdown element has a `data-streamdown` attribute you can target:
 
 ---
 
-## Step 6 — Fix the Two Gaps Tailwind v3 Cannot Cover
+## Step 6 — Fix the Gaps Streamdown's Classes Leave
 
 ### Gap 1: Dropdown Panel Background
 
@@ -168,9 +146,9 @@ Streamdown uses `bg-background` for both the table area and dropdown panels, but
 }
 ```
 
-### Gap 2: Dropdown Item Hover (the `bg-muted/40` problem)
+### Gap 2: Dropdown Item Hover
 
-Tailwind v3 opacity modifiers (e.g. `bg-muted/40`) **do not work** when the color value is a CSS variable (`var(...)`). Tailwind cannot decompose a CSS var into RGB channels at build time, so the modifier is silently ignored. Add an explicit rule:
+Under Tailwind v3, opacity modifiers (e.g. `bg-muted/40`) were silently dropped when the color value is a CSS variable, because v3 cannot decompose a `var(...)` into RGB channels. **Tailwind v4 fixes this** by emitting `color-mix()`, so `bg-muted/40` now renders as a 40% tint of the hover color. The explicit rule below is only needed if you want the dropdown-specific colors instead:
 
 ```css
 /* Dropdown item text color */
@@ -196,16 +174,16 @@ Tailwind v3 opacity modifiers (e.g. `bg-muted/40`) **do not work** when the colo
 
 ## Quick Reference: What Each Token Controls
 
-| Streamdown class        | Token needed       | Controls                                                     |
-| ----------------------- | ------------------ | ------------------------------------------------------------ |
-| `bg-sidebar`            | `sidebar`          | Outer table wrapper card background                          |
-| `bg-background`         | `background`       | Inner table area + dropdown panel background                 |
-| `border-border`         | `border`           | Table wrapper border, inner table border, dropdown border    |
-| `text-muted-foreground` | `muted.foreground` | Copy/Download icon button default color                      |
-| `hover:text-foreground` | `foreground`       | Copy/Download icon button hover color                        |
-| `bg-muted`              | `muted.DEFAULT`    | Hover background base (opacity modifier broken — see Step 6) |
-| `ring-ring`             | `ring`             | Focus rings                                                  |
-| `shadow-lg`             | (built-in)         | Dropdown panel drop shadow                                   |
+| Streamdown class        | Token needed       | Controls                                                  |
+| ----------------------- | ------------------ | --------------------------------------------------------- |
+| `bg-sidebar`            | `sidebar`          | Outer table wrapper card background                       |
+| `bg-background`         | `background`       | Inner table area + dropdown panel background              |
+| `border-border`         | `border`           | Table wrapper border, inner table border, dropdown border |
+| `text-muted-foreground` | `muted-foreground` | Copy/Download icon button default color                   |
+| `hover:text-foreground` | `foreground`       | Copy/Download icon button hover color                     |
+| `bg-muted`              | `muted`            | Hover background base (`/40` modifier works in v4)        |
+| `ring-ring`             | `ring`             | Focus rings                                               |
+| `shadow-lg`             | (built-in)         | Dropdown panel drop shadow                                |
 
 ---
 

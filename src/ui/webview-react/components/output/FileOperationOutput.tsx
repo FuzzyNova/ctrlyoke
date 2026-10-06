@@ -64,7 +64,7 @@ const FilePath: React.FC<{
 }> = ({ path, className = "", children, onClick, title }) => (
   <button
     type="button"
-    className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal [overflow-wrap:anywhere] max-w-full ${className}`}
+    className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] whitespace-normal wrap-anywhere max-w-full ${className}`}
     onClick={onClick ?? (() => openFile(path))}
     title={title ?? `Open ${path}`}
     aria-label={title ?? `Open ${path}`}
@@ -182,7 +182,7 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
                 path={path}
                 onClick={openTarget}
                 title={plainTitle}
-                className="inline-block whitespace-normal [overflow-wrap:anywhere] text-left align-top"
+                className="inline-block whitespace-normal wrap-anywhere text-left align-top"
               >
                 {pathContent}
               </FilePath>
@@ -232,7 +232,7 @@ const FileUndoButton: React.FC<{
         ? "Redo file operation"
         : "Undo file operation"
     }
-    className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--cy-output-font-size-xs)] ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
+    className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-(length:--cy-output-font-size-xs) ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
     title={
       fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
         ? `Redo ${actionNoun} ${path}`

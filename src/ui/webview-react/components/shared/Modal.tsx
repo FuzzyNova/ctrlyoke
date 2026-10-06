@@ -125,7 +125,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <button
         type="button"
-        className={`fixed inset-0 ${backdropZ} flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 cursor-default`}
+        className={`fixed inset-0 ${backdropZ} flex items-center justify-center overflow-y-auto bg-black/50 border-0 p-0 cursor-default`}
         onClick={onClose}
         aria-label="Close modal backdrop"
       />
@@ -145,17 +145,17 @@ export const Modal: React.FC<ModalProps> = ({
           aria-labelledby={titleId}
         >
           {/* Header */}
-          <div className="flex-shrink-0 px-6 py-4 border-b border-panel-border">
+          <div className="shrink-0 px-6 py-4 border-b border-panel-border">
             <div
               className={`flex ${wrapTitle ? "items-start" : "items-center"} justify-between gap-2`}
             >
               <h2
                 id={titleId}
-                className={`min-w-0 ${wrapTitle ? "break-words" : "truncate"} text-xl font-semibold text-foreground`}
+                className={`min-w-0 ${wrapTitle ? "wrap-break-word" : "truncate"} text-xl font-semibold text-foreground`}
               >
                 {title}
               </h2>
-              <div className="flex flex-shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {headerActions}
                 <ExitButton onClick={onClose} aria-label="Close modal" />
               </div>
@@ -177,7 +177,7 @@ export const Modal: React.FC<ModalProps> = ({
 
           {/* Footer */}
           {footer && (
-            <div className="flex-shrink-0 flex items-center justify-end gap-1 overflow-x-auto px-2 py-3 border-t border-panel-border sm:gap-3 sm:px-6 sm:py-4">
+            <div className="shrink-0 flex items-center justify-end gap-1 overflow-x-auto px-2 py-3 border-t border-panel-border sm:gap-3 sm:px-6 sm:py-4">
               {footer}
             </div>
           )}

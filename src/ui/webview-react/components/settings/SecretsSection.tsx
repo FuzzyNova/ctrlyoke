@@ -113,18 +113,18 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
   const isMissing =
     entry.state === SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_NOT_FOUND;
   const rowClass = isMissing
-    ? "border-warning-fg border-opacity-40 bg-severity-warning-bg"
+    ? "border-warning-fg/40 bg-severity-warning-bg"
     : "border-panel-border";
 
   return (
     <div
-      className={`grid gap-3 rounded border px-3 py-2 md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_auto] ${rowClass}`}
+      className={`grid gap-3 rounded-sm border px-3 py-2 md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_auto] ${rowClass}`}
       data-testid={`secret-row-${entry.name}`}
     >
       <div className="min-w-0">
         <code className="break-all text-sm text-foreground">{entry.name}</code>
         {entry.description && (
-          <p className="mt-1 break-words text-xs text-description-fg">
+          <p className="mt-1 wrap-break-word text-xs text-description-fg">
             {entry.description}
           </p>
         )}
@@ -321,7 +321,7 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
             onBlur={() => setNameError(validateName(name.trim()))}
             aria-invalid={nameError ? "true" : undefined}
             aria-describedby={nameError ? "secret-name-error" : undefined}
-            className="w-full rounded border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-none disabled:opacity-60"
+            className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-hidden disabled:opacity-60"
           />
           {nameError && (
             <p
@@ -350,7 +350,7 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
               autoComplete="new-password"
               rows={6}
               style={{ WebkitTextSecurity: "disc" } as CSSProperties}
-              className="w-full resize-y rounded border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-none"
+              className="w-full resize-y rounded-sm border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-hidden"
             />
           ) : (
             <input
@@ -363,7 +363,7 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
                 if (event.target.value.includes("\n")) setMultiline(true);
               }}
               autoComplete="new-password"
-              className="w-full rounded border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-none"
+              className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-hidden"
             />
           )}
           <label className="mt-2 flex items-center gap-2 text-xs text-description-fg">
@@ -405,7 +405,7 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
             type="text"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            className="w-full rounded border border-input-border bg-input-bg px-2 py-1.5 text-sm text-input-fg focus:border-focus-border focus:outline-none"
+            className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 text-sm text-input-fg focus:border-focus-border focus:outline-hidden"
           />
         </div>
       </div>
@@ -505,7 +505,7 @@ export function SecretsSection({
         {loading && entries.length === 0 ? (
           <p className="text-sm text-description-fg">Loading secrets…</p>
         ) : entries.length === 0 ? (
-          <p className="rounded border border-panel-border px-3 py-4 text-sm text-description-fg">
+          <p className="rounded-sm border border-panel-border px-3 py-4 text-sm text-description-fg">
             No managed or declared secrets found for this scope.
           </p>
         ) : (

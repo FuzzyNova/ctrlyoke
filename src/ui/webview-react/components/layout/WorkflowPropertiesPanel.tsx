@@ -1593,7 +1593,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           )}
           <button
             type="button"
-            className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
+            className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               handleResetAllToDefault();
@@ -1847,7 +1847,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   value={additionalArgsInput}
                   onChange={setAdditionalArgsInput}
                   onBlur={() => handleAdditionalArgsChange(additionalArgsInput)}
-                  className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                  className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                 />
               </FormField>
 
@@ -1941,7 +1941,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                             ? "settings-worktree-branch-diagnostic"
                             : undefined
                         }
-                        className={`w-full bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono`}
+                        className={`w-full bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono`}
                       />
                       <FieldDiagnostic
                         id="settings-worktree-branch-diagnostic"
@@ -1964,7 +1964,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         handleWorktreeFieldChange("base", worktreeBaseInput)
                       }
                       placeholder="Current branch (HEAD)"
-                      className="w-full bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                      className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                     />
                   </FormField>
                   <FormField
@@ -1982,7 +1982,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         handleWorktreeFieldChange("setup", worktreeSetupInput)
                       }
                       placeholder="e.g. npm ci"
-                      className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                      className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border font-mono"
                     />
                   </FormField>
                   {worktreeMode === WORKTREE_MODES.MANAGED && (
@@ -2117,7 +2117,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           e.currentTarget.blur();
                       }}
                       placeholder="Session ID, prompt number, or blank for auto-resume"
-                      className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
+                      className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
                       title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
                     />
                     {effectiveResumeSession &&
@@ -2572,7 +2572,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       }
                       placeholder={"read\nglob\ngrep"}
                       fontSize="0.75rem"
-                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono${
+                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono${
                         permMode !== PERMISSION_MODES.CUSTOM
                           ? " opacity-50 cursor-not-allowed"
                           : ""
@@ -2644,7 +2644,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       }
                       placeholder={"shell(rm:*)\nwrite"}
                       fontSize="0.75rem"
-                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono${
+                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedFieldDiagnostics)} rounded-sm focus:outline-hidden focus:border-focus-border font-mono${
                         permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                         permMode === PERMISSION_MODES.NONE
                           ? " opacity-50 cursor-not-allowed"

@@ -754,10 +754,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
     render(<OutputRow row={row} isExecutionActive={false} />);
 
     const summary = screen.getByRole("button");
-    expect(summary).toHaveClass(
-      "whitespace-normal",
-      "[overflow-wrap:anywhere]"
-    );
+    expect(summary).toHaveClass("whitespace-normal", "wrap-anywhere");
     expect(summary).not.toHaveClass("overflow-hidden");
     expect(summary).toHaveTextContent("exit code == 0");
     expect(summary).toHaveTextContent("actual 1");
@@ -1804,16 +1801,16 @@ describe("OutputRow auto-expand on hidden active match", () => {
       );
       const segment = middle.container.querySelector(".border-l-transparent");
 
-      expect(segment?.className).not.toContain("pt-[var(--spacing-sm)]");
-      expect(segment?.className).not.toContain("pb-[var(--spacing-sm)]");
+      expect(segment?.className).not.toContain("pt-(--spacing-sm)");
+      expect(segment?.className).not.toContain("pb-(--spacing-sm)");
 
       const only = render(
         <OutputRow row={buildScriptOutputRow({})} isExecutionActive={false} />
       );
       const onlySegment = only.container.querySelector(".border-l-transparent");
 
-      expect(onlySegment?.className).toContain("pt-[var(--spacing-sm)]");
-      expect(onlySegment?.className).toContain("pb-[var(--spacing-sm)]");
+      expect(onlySegment?.className).toContain("pt-(--spacing-sm)");
+      expect(onlySegment?.className).toContain("pb-(--spacing-sm)");
     });
   });
 });

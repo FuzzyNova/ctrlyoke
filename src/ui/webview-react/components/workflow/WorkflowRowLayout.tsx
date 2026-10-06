@@ -53,7 +53,7 @@ interface WorkflowRowLayoutProps {
    * row kind shifts the primary button's width for that row alone, sitting
    * its state badge out of line with its neighbours (see
    * `webview-react-components.instructions.md`). The meta line has no such
-   * constraint: it already truncates its own content. `flex-shrink-0` keeps
+   * constraint: it already truncates its own content. `shrink-0` keeps
    * the badge itself intact while the truncatable meta parts give way first.
    */
   metaBadge?: React.ReactNode;
@@ -91,7 +91,7 @@ export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
 
   return (
     <span
-      className="flex flex-shrink-0 justify-end"
+      className="flex shrink-0 justify-end"
       style={{ width: WORKFLOW_ROW_TRACKS.runIndicator }}
     >
       {drill && (
@@ -103,7 +103,7 @@ export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
             event.stopPropagation();
             drill.onDrill();
           }}
-          className="cy-dropdown-row flex h-8 items-center gap-0.5 rounded px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
+          className="cy-dropdown-row flex h-8 items-center gap-0.5 rounded-sm px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
         >
           <span className="truncate">{drill.label}</span>
           <Icon name="chevron-right" className="block text-xxs leading-none" />
@@ -126,7 +126,7 @@ export const RowActionRail: React.FC<{ children?: React.ReactNode }> = ({
   children,
 }) => (
   <span
-    className="flex flex-shrink-0 items-center justify-end gap-1"
+    className="flex shrink-0 items-center justify-end gap-1"
     style={{ width: WORKFLOW_ROW_TRACKS.actions }}
   >
     {children}
@@ -222,16 +222,14 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
             <span className="truncate">{part.node}</span>
           </React.Fragment>
         ))}
-        {hasContent(metaBadge) && (
-          <span className="flex-shrink-0">{metaBadge}</span>
-        )}
+        {hasContent(metaBadge) && <span className="shrink-0">{metaBadge}</span>}
         {hasContent(glyph) && (
-          <span className="flex w-4 flex-shrink-0 items-center justify-center">
+          <span className="flex w-4 shrink-0 items-center justify-center">
             {glyph}
           </span>
         )}
         {worktree && (
-          <span className="flex w-4 flex-shrink-0 items-center justify-center">
+          <span className="flex w-4 shrink-0 items-center justify-center">
             <Icon
               name="worktree-compact"
               title={worktreeTitle}

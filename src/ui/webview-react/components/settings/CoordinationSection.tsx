@@ -43,7 +43,7 @@ export function CoordinationSection({
             onUpdate("coordination.readNotesPageSize", value)
           }
           parse={(value) => parseInt(value, 10) || 1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <SettingInputRow
@@ -57,7 +57,7 @@ export function CoordinationSection({
           value={coordination.maxNoteLength}
           onCommit={(value) => onUpdate("coordination.maxNoteLength", value)}
           parse={(value) => parseInt(value, 10) || 1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <SettingInputRow
@@ -71,7 +71,7 @@ export function CoordinationSection({
           value={coordination.maxEntries}
           onCommit={(value) => onUpdate("coordination.maxEntries", value)}
           parse={(value) => parseInt(value, 10) || 1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <SettingInputRow
@@ -85,7 +85,7 @@ export function CoordinationSection({
           value={coordination.maxBoardBytes}
           onCommit={(value) => onUpdate("coordination.maxBoardBytes", value)}
           parse={(value) => parseInt(value, 10) || 1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <SettingInputRow
@@ -99,7 +99,7 @@ export function CoordinationSection({
           value={coordination.maxEntryAgeDays}
           onCommit={(value) => onUpdate("coordination.maxEntryAgeDays", value)}
           parse={(value) => parseInt(value, 10) || 1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <SettingInputRow
@@ -115,7 +115,7 @@ export function CoordinationSection({
             onUpdate("coordination.cliParticipantTtlMinutes", value)
           }
           parse={(value) => parseInt(value, 10) || 1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <SettingToggleRow

@@ -74,7 +74,7 @@ describe("CollapsibleOutputSection", () => {
     // and paints the background the stuck pill sits on.
     expect(hide.parentElement?.className).toContain("sticky");
     expect(hide.parentElement?.className).toContain(
-      "top-[var(--cy-output-sticky-top,0px)]"
+      "top-(--cy-output-sticky-top,0px)"
     );
     expect(hide).toHaveAttribute("aria-controls", "section-output");
     expect(screen.queryByText(/more lines/)).not.toBeInTheDocument();

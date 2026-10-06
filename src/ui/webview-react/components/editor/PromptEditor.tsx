@@ -1395,7 +1395,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
           message: warning.message,
         }))}
-        className="border-b border-[var(--vscode-widget-border,var(--vscode-panel-border))] px-2 py-1"
+        className="border-b border-(--vscode-widget-border,var(--vscode-panel-border)) px-2 py-1"
       />
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
@@ -1469,7 +1469,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               idPrefix="script-step"
             />
           )}
-          <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
+          <div className="mt-4 space-y-4 rounded-sm border border-panel-border p-3">
             {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
               <StepColorField idPrefix="script-step" />
             )}
@@ -1561,7 +1561,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         <FieldDiagnostic
           id="prompt-image-compatibility"
           diagnostics={imageCompatibilityDiagnostics}
-          className="border-t border-[var(--vscode-widget-border,var(--vscode-panel-border))] px-2 py-1"
+          className="border-t border-(--vscode-widget-border,var(--vscode-panel-border)) px-2 py-1"
         />
       )}
 

@@ -48,7 +48,7 @@ export const ReadNotesBody: React.FC<{
   findCaseSensitive,
 }) => (
   <div className="space-y-2">
-    <ol className="m-0 list-none space-y-2 p-0">
+    <ol className="list-none space-y-2 p-0">
       {result.entries.map((entry, index) => {
         const entrySearchText = coordinationEntrySearchText(entry);
         const entryDecorations =
@@ -63,7 +63,7 @@ export const ReadNotesBody: React.FC<{
             {entry.kind === COORDINATION_ENTRY_KINDS.NOTE &&
               entry.text !== undefined && (
                 <div
-                  className="whitespace-pre-wrap break-words"
+                  className="whitespace-pre-wrap wrap-break-word"
                   data-untrusted-content="true"
                   aria-label={COORDINATION_UNTRUSTED_LABEL}
                 >

@@ -150,6 +150,6 @@ describe("Modal", () => {
       </Modal>
     );
     expect(heading).not.toHaveClass("truncate");
-    expect(heading).toHaveClass("break-words");
+    expect(heading).toHaveClass("wrap-break-word");
   });
 });

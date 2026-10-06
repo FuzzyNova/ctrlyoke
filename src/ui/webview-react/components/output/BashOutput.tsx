@@ -186,7 +186,7 @@ export const BashOutput = memo<BashOutputProps>(
       if (isRunning) {
         return (
           <span
-            className={`inline ml-2 text-[length:var(--cy-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES.running}`}
+            className={`inline ml-2 text-(length:--cy-output-font-size-sm) font-normal ${STATUS_BADGE_STYLES.running}`}
           >
             running
           </span>
@@ -199,7 +199,7 @@ export const BashOutput = memo<BashOutputProps>(
           : TOOL_RESULT_STATUSES.ERROR;
         return (
           <span
-            className={`inline ml-2 text-[length:var(--cy-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES[variant]}`}
+            className={`inline ml-2 text-(length:--cy-output-font-size-sm) font-normal ${STATUS_BADGE_STYLES[variant]}`}
           >
             (exit: {exitCode})
           </span>
@@ -223,12 +223,12 @@ export const BashOutput = memo<BashOutputProps>(
         dot={<span className={dotColorClass}>●</span>}
         header={
           <>
-            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+            <span className="min-w-0 flex-1 wrap-anywhere">
               <span
                 className={
                   hasCommandLabel
-                    ? "text-editor-fg [overflow-wrap:anywhere]"
-                    : "text-description-fg italic [overflow-wrap:anywhere]"
+                    ? "text-editor-fg wrap-anywhere"
+                    : "text-description-fg italic wrap-anywhere"
                 }
               >
                 {highlightText(

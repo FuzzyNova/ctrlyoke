@@ -280,7 +280,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             Always the same shape regardless of draggability — the drag handle
             lives at the trailing edge of the row instead, so this column never
             shifts and stays aligned across done/pending/locked rows. */}
-        <span className="flex-shrink-0 flex flex-col items-center self-stretch">
+        <span className="shrink-0 flex flex-col items-center self-stretch">
           <span className="mt-0.5">
             <StatusIcon status={status} disabled={isDisabled} animate />
           </span>
@@ -313,7 +313,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               <div className="flex items-center gap-1 min-w-0">
                 <Icon
                   name={getStepKindIconClass(STEP_TYPES.SCRIPT)}
-                  className="text-xs opacity-60 flex-shrink-0"
+                  className="text-xs opacity-60 shrink-0"
                 />
                 <span
                   className={`text-xs leading-relaxed truncate ${titleTextClass}`}
@@ -321,7 +321,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                   {name ? name : text}
                 </span>
                 {isDisabled && (
-                  <span className="px-1 py-px rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
+                  <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
                     Disabled
                   </span>
                 )}
@@ -354,7 +354,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               <div className="flex items-center gap-1 min-w-0">
                 <Icon
                   name={getStepKindIconClass(STEP_TYPES.PROMPT)}
-                  className="text-xs opacity-60 flex-shrink-0"
+                  className="text-xs opacity-60 shrink-0"
                 />
                 <span
                   className={`text-xs leading-relaxed truncate ${titleTextClass}`}
@@ -362,7 +362,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                   {name ? name : text}
                 </span>
                 {isDisabled && (
-                  <span className="px-1 py-px rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
+                  <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
                     Disabled
                   </span>
                 )}
@@ -395,7 +395,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
         {dragHandleProps && (
           <button
             type="button"
-            className="flex-shrink-0 w-3 flex items-center justify-center self-stretch cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            className="shrink-0 w-3 flex items-center justify-center self-stretch cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
             style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
             onClick={(e) => e.stopPropagation()}
             // Dragging/long-pressing the handle must never surface the row's

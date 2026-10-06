@@ -108,7 +108,7 @@ function Finding({
   diagnostic: PortabilityDiagnostic;
 }): React.ReactElement {
   return (
-    <li className="rounded border border-panel-border px-3 py-2">
+    <li className="rounded-sm border border-panel-border px-3 py-2">
       <div className="grid gap-2 sm:grid-cols-[minmax(8rem,auto)_minmax(0,1fr)]">
         <span className="text-description-fg">Location</span>
         <span>
@@ -138,7 +138,7 @@ function WorkspaceSideEffect({
   sideEffect: PortabilityWorkspaceSideEffect;
 }): React.ReactElement {
   return (
-    <li className="rounded border border-warning-fg border-opacity-40 bg-severity-warning-bg px-3 py-2">
+    <li className="rounded-sm border border-warning-fg/40 bg-severity-warning-bg px-3 py-2">
       <div className="grid gap-2 sm:grid-cols-[minmax(8rem,auto)_minmax(0,1fr)]">
         <span className="text-description-fg">Location</span>
         <span>
@@ -217,7 +217,7 @@ function ReportBody({
   if (report.rows.length === 0) {
     return (
       <div
-        className="rounded border border-panel-border px-3 py-4 text-sm text-description-fg"
+        className="rounded-sm border border-panel-border px-3 py-4 text-sm text-description-fg"
         role="status"
       >
         No installed harnesses are available to compare with this workflow.
@@ -231,7 +231,7 @@ function ReportBody({
       role="region"
       aria-label="Installed harness compatibility report"
     >
-      <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
+      <table className="w-full min-w-136 border-collapse text-left text-xs">
         <caption className="sr-only">
           Installed harness compatibility classifications
         </caption>
@@ -262,13 +262,13 @@ function ReportBody({
                   <th scope="row" className="px-2 py-3 font-normal">
                     <button
                       type="button"
-                      className="flex min-w-0 items-center gap-2 rounded text-left text-foreground underline-offset-2 hover:underline focus:outline-none focus:ring-1 focus:ring-focus-border"
+                      className="flex min-w-0 items-center gap-2 rounded-sm text-left text-foreground underline-offset-2 hover:underline focus:outline-hidden focus:ring-1 focus:ring-focus-border"
                       aria-controls={detailsId}
                       aria-expanded={expanded}
                       onClick={() => onToggle(row.harnessId)}
                     >
                       <HarnessIcon harnessId={row.harnessId} size={20} />
-                      <span className="min-w-0 break-words">
+                      <span className="min-w-0 wrap-break-word">
                         {harnessLabel(row.harnessId)}
                       </span>
                     </button>
@@ -293,7 +293,7 @@ function ReportBody({
                   <td className="px-2 py-3 text-right">
                     <button
                       type="button"
-                      className="rounded px-2 py-1 text-link-fg hover:underline focus:outline-none focus:ring-1 focus:ring-focus-border"
+                      className="rounded-sm px-2 py-1 text-link-fg hover:underline focus:outline-hidden focus:ring-1 focus:ring-focus-border"
                       aria-label={`${expanded ? "Hide" : "Show"} ${harnessLabel(row.harnessId)} details`}
                       aria-controls={detailsId}
                       aria-expanded={expanded}

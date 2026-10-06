@@ -51,7 +51,7 @@ export const PostNoteBody: React.FC<PostNoteBodyProps> = ({
 }) => (
   <div className="space-y-1">
     <div
-      className="whitespace-pre-wrap break-words"
+      className="whitespace-pre-wrap wrap-break-word"
       data-untrusted-content="true"
       aria-label={COORDINATION_UNTRUSTED_LABEL}
     >

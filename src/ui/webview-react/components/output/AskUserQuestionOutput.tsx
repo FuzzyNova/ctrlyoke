@@ -101,9 +101,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
     <ToolCallBlock
       dot={<ToolDot status={dotStatus} />}
       header={
-        <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-          {headerLabel}
-        </span>
+        <span className="min-w-0 flex-1 wrap-anywhere">{headerLabel}</span>
       }
     >
       <div className="mt-1 flex flex-col gap-3">
@@ -126,7 +124,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
                   : undefined
               }
             >
-              <div className="text-foreground [overflow-wrap:anywhere]">
+              <div className="text-foreground wrap-anywhere">
                 {segment
                   ? highlightText(
                       question.question,
@@ -148,7 +146,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
                     return (
                       <div
                         key={optionIndex}
-                        className="flex items-start gap-1.5 text-[length:var(--cy-output-font-size-sm)]"
+                        className="flex items-start gap-1.5 text-(length:--cy-output-font-size-sm)"
                       >
                         <span
                           className={`shrink-0 mt-px ${
@@ -159,7 +157,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
                         >
                           {isSelected ? "✓" : "○"}
                         </span>
-                        <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                        <div className="min-w-0 flex-1 wrap-anywhere">
                           <span
                             className={
                               isSelected
@@ -194,7 +192,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
                             </span>
                           )}
                           {isSelected && option.preview && (
-                            <pre className="mt-1 whitespace-pre-wrap rounded bg-editor-bg/50 px-2 py-1 text-[length:var(--cy-output-font-size-xs)] text-description-fg [overflow-wrap:anywhere]">
+                            <pre className="mt-1 whitespace-pre-wrap rounded-sm bg-editor-bg/50 px-2 py-1 text-(length:--cy-output-font-size-xs) text-description-fg wrap-anywhere">
                               {option.preview}
                             </pre>
                           )}

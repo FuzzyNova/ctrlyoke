@@ -72,7 +72,7 @@ export function BatchApprovalModal() {
           {request.items.map((item) => (
             <label
               key={item.value}
-              className="flex items-center gap-2 rounded border border-panel-border px-2 py-1.5"
+              className="flex items-center gap-2 rounded-sm border border-panel-border px-2 py-1.5"
             >
               <input
                 type="checkbox"

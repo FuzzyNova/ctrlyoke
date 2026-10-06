@@ -147,7 +147,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
       {/* Properties toggle button — hidden in script mode */}
       {!isScriptMode && (
         <button
-          className={`btn-properties shrink-0 px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
+          className={`btn-properties shrink-0 px-2 py-1 text-xs rounded-sm flex items-center gap-1 transition-colors ${
             propertiesOpen
               ? "bg-btn-secondary-bg text-btn-secondary-fg"
               : "hover:bg-list-hover-bg text-foreground"
@@ -260,7 +260,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           // Edit mode buttons
           <>
             <button
-              className="btn-editor-cancel border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-cancel border border-btn-border px-3 py-1 text-xs rounded-sm flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
               disabled={isExternallyManaged}
               aria-label="Cancel"
@@ -275,7 +275,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded-sm flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
               disabled={
                 isExternallyManaged ||
@@ -300,7 +300,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-terminal-ansiRed text-terminal-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded-sm flex items-center gap-1 bg-terminal-ansiRed text-terminal-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
               disabled={
                 isExternallyManaged || isBulkMode || isPromptActivelyRunning
@@ -330,7 +330,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           // New prompt mode buttons
           <>
             <button
-              className="btn-editor-queue border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-queue border border-btn-border px-3 py-1 text-xs rounded-sm flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
               disabled={isExternallyManaged || isBulkMode || !hasContent}
               aria-label="Queue"

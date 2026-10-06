@@ -53,7 +53,7 @@ export function SettingInputRow({
 
   return (
     <div
-      className={`group${isMatch ? " rounded-sm bg-list-hover-bg/50" : ""}${isActive ? " outline outline-1 outline-focus-border" : ""}`}
+      className={`group${isMatch ? " rounded-xs bg-list-hover-bg/50" : ""}${isActive ? " outline-solid outline-1 outline-focus-border" : ""}`}
       data-settings-search-id={entry?.id}
     >
       <div className="flex items-center gap-1.5 mb-1">
@@ -89,7 +89,7 @@ export function SettingInputRow({
                   ? `Defined in ${source} config`
                   : undefined
             }
-            className={`w-4 h-4 flex items-center justify-center rounded text-description-fg hover:text-foreground transition-opacity ${
+            className={`w-4 h-4 flex items-center justify-center rounded-sm text-description-fg hover:text-foreground transition-opacity ${
               canReset
                 ? "opacity-0 group-hover:opacity-100"
                 : "opacity-0 pointer-events-none"

@@ -12,24 +12,646 @@
    index.html with URLs injected by the VS Code extension at runtime.
 
    ARCHITECTURE NOTE:
-   Tailwind tokens in tailwind.config.js are the single source of truth for all
-   VS Code CSS variables used in JSX className strings. The :root block below
-   is only for variables consumed in non-Tailwind contexts:
+   The @theme block below is the single source of truth for all VS Code CSS
+   variables used in JSX className strings. The :root block after it is only
+   for variables consumed in non-Tailwind contexts:
      - Arbitrary value classes in CliOutput, StatusMessage, etc. (var(--spacing-*))
      - Inline style props (var(--btn-fg) in Header.tsx)
      - globals.css base styles themselves (body, select, :focus-visible)
-   Do NOT add new variables here for things Tailwind tokens already cover.
+   Do NOT add new variables there for things Tailwind tokens already cover.
    ============================================================================ */
 
+/* Pin the cascade-layer order before anything below can declare a layer: the
+   two vendor sheets are imported into `base` ahead of Tailwind so its
+   utilities (and Preflight, later in the same layer) still win over them. */
+@layer theme, base, components, utilities;
+
 /* Streamdown: animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp) */
-@import "streamdown/styles.css";
+@import "streamdown/styles.css" layer(base);
 
 /* react-diff-view: base diff table styles and CSS variable defaults */
-@import "react-diff-view/style/index.css";
+@import "react-diff-view/style/index.css" layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* source(none) turns off automatic detection (which would scan the whole repo
+   from the cwd); the @source list is the complete set of class-name sources. */
+@import "tailwindcss" source(none);
+
+@source "../index.html";
+@source "../*.{ts,tsx}";
+@source "../components";
+@source "../hooks";
+@source "../store";
+@source "../utils";
+/* Permission-mode visuals carry Tailwind color classes outside the webview tree */
+@source "../../../types/SchemaUiMetadata.ts";
+/* Streamdown's bundled class names (see dev/reference/STREAMDOWN_STYLING_GUIDE.md) */
+@source "../../../../node_modules/streamdown/dist/*.js";
+
+/* Tailwind 4 wraps `hover:` in @media (hover: hover), so it never matches on a
+   touch screen. The hosted dashboard runs on phones and several row actions
+   (delete, favorite, reset) are revealed only by `group-hover:opacity-100`;
+   a tap has to keep revealing them, as it did under Tailwind 3. */
+@custom-variant hover (&:hover);
+
+/* Class-based dark mode, as under Tailwind 3's `darkMode: "class"`. Nothing
+   sets `.dark` — themes come from VS Code's `body.vscode-*` classes — so this
+   keeps Streamdown's bundled `dark:` classes inert instead of letting them
+   follow the OS `prefers-color-scheme` (Tailwind 4's default). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================================
+   Theme tokens
+   ============================================================================
+   `--color-<name>` generates every color utility (bg-, text-, border-,
+   outline-, ring-, fill-, ...) for <name>. Opacity modifiers (`bg-foo/40`)
+   work on these var()-based colors too — Tailwind 4 emits color-mix(). */
+@theme {
+  /* ── VS Code theme tokens (renamed from vscode-* for brevity) ── */
+  --color-editor-bg: var(--vscode-editor-background);
+  --color-editor-fg: var(--vscode-editor-foreground);
+  --color-foreground: var(--vscode-foreground);
+  --color-panel-bg: var(--vscode-panel-background);
+  --color-panel-border: var(--vscode-panel-border);
+  --color-panel-sticky-bg: var(
+    --vscode-panelStickyScroll-background,
+    var(--vscode-panel-background)
+  );
+  --color-sidebar-bg: var(--vscode-sideBar-background);
+  --color-sidebar-drop-bg: var(--vscode-sideBar-dropBackground);
+  --color-terminal-bg: var(
+    --vscode-terminal-background,
+    var(--vscode-editor-background)
+  );
+  --color-focus-border: var(--vscode-focusBorder);
+  --color-focus-border-hover: color-mix(
+    in srgb,
+    var(--vscode-focusBorder) 65%,
+    white
+  );
+  --color-contrast-active-border: var(
+    --vscode-contrastActiveBorder,
+    transparent
+  );
+  --color-focus-highlight: var(--vscode-list-focusHighlightForeground, #2aaaff);
+  --color-widget-border: var(--vscode-widget-border);
+  --color-simple-find-sash-border: var(
+    --vscode-simpleFindWidget-sashBorder,
+    var(--vscode-widget-border)
+  );
+  --color-widget-highlight-fg: var(
+    --vscode-editorHoverWidget-highlightForeground
+  );
+  --color-widget-highlight-fg-hover: color-mix(
+    in srgb,
+    var(--vscode-editorHoverWidget-highlightForeground) 65%,
+    white
+  );
+  --color-find-match: var(
+    --vscode-editor-findMatchBackground,
+    rgba(39, 103, 130, 0.56)
+  );
+  --color-find-match-highlight: var(
+    --vscode-editor-findMatchHighlightBackground,
+    rgba(39, 103, 130, 0.5)
+  );
+  --color-find-match-border: var(
+    --vscode-editor-findMatchBorder,
+    var(--vscode-focusBorder, transparent)
+  );
+
+  /* Buttons */
+  --color-btn-bg: var(--vscode-button-background);
+  --color-btn-hover: var(--vscode-button-hoverBackground);
+  --color-btn-fg: var(--vscode-button-foreground);
+  --color-btn-separator: var(--vscode-button-separator);
+  /* button.border is null in most themes — transparent matches VS Code's design intent */
+  --color-btn-border: var(--vscode-button-border, transparent);
+  /* HC themes omit secondary button colors and rely on borders instead.
+     Fall back to the primary button tokens so buttons still render predictably. */
+  --color-btn-secondary-bg: var(
+    --vscode-button-secondaryBackground,
+    var(--vscode-button-background)
+  );
+  --color-btn-secondary-hover: var(
+    --vscode-button-secondaryHoverBackground,
+    var(--vscode-button-background)
+  );
+  --color-btn-secondary-fg: var(
+    --vscode-button-secondaryForeground,
+    var(--vscode-button-foreground)
+  );
+
+  /* Inputs */
+  --color-input-bg: var(--vscode-input-background);
+  --color-input-fg: var(--vscode-input-foreground);
+  /* input.border is null in most themes — transparent means "no border" when unset,
+     matching VS Code's design intent. Themes that define it get the defined color. */
+  --color-input-border: var(--vscode-input-border, transparent);
+  --color-input-placeholder: var(--vscode-input-placeholderForeground);
+  --color-input-error-bg: var(--vscode-inputValidation-errorBackground);
+  --color-input-error-fg: var(--vscode-inputValidation-errorForeground);
+  --color-input-error-border: var(--vscode-inputValidation-errorBorder);
+
+  /* Lists */
+  --color-list-hover-bg: var(--vscode-list-hoverBackground);
+  /* list-hoverForeground is omitted by themes that rely on contrast with hover bg */
+  --color-list-hover-fg: var(
+    --vscode-list-hoverForeground,
+    var(--vscode-foreground)
+  );
+  /* Highlight color for hovered/focused list item text — defined in all themes */
+  --color-list-highlight-fg: var(--vscode-list-highlightForeground);
+  /* HC themes don't define list selection backgrounds — fall back to hoverBackground */
+  --color-list-active-bg: var(
+    --vscode-list-activeSelectionBackground,
+    var(--vscode-list-hoverBackground)
+  );
+  --color-list-active-fg: var(
+    --vscode-list-activeSelectionForeground,
+    var(--vscode-dropdown-foreground)
+  );
+  --color-list-inactive-bg: var(
+    --vscode-list-inactiveSelectionBackground,
+    var(--vscode-list-hoverBackground)
+  );
+  --color-list-focus-bg: var(
+    --vscode-list-focusBackground,
+    var(--vscode-list-hoverBackground)
+  );
+
+  /* Dropdowns */
+  --color-dropdown-bg: var(--vscode-dropdown-background);
+  --color-dropdown-fg: var(--vscode-dropdown-foreground);
+  /* dropdown.border is null in most themes — transparent matches VS Code's design intent */
+  --color-dropdown-border: var(--vscode-dropdown-border, transparent);
+  /* VS Code has no dropdown-specific selection variable; uses list selection vars.
+     --vscode-dropdown-selectedBackground does not exist.
+     HC themes don't define list-activeSelectionBackground — fall back to hoverBackground. */
+  --color-dropdown-selected-bg: var(
+    --vscode-list-activeSelectionBackground,
+    var(--vscode-list-hoverBackground)
+  );
+
+  /* Text colors */
+  --color-description-fg: var(--vscode-descriptionForeground);
+  --color-error-fg: var(--vscode-errorForeground);
+  --color-warning-fg: var(--vscode-editorWarning-foreground);
+  --color-info-fg: var(--vscode-editorInfo-foreground);
+  --color-link-fg: var(--vscode-textLink-foreground);
+  --color-link-active-fg: var(--vscode-textLink-activeForeground);
+  --color-disabled-fg: var(--vscode-disabledForeground);
+  --color-charts-blue: var(--vscode-charts-blue, #4084d6);
+  --color-verified: var(--color-charts-blue);
+
+  /* Badges */
+  --color-badge-bg: var(--vscode-badge-background);
+  --color-badge-fg: var(--vscode-badge-foreground);
+
+  /* Command Center (used for WorkflowStatus split button styling) */
+  --color-cmd-bg: var(--vscode-commandCenter-activeBackground);
+  --color-cmd-fg: var(--vscode-commandCenter-foreground);
+  --color-cmd-active-bg: var(--vscode-commandCenter-debuggingBackground);
+  --color-cmd-active-fg: var(--vscode-commandCenter-activeForeground);
+  --color-cmd-inactive-fg: var(--vscode-commandCenter-inactiveForeground);
+  /* commandCenter.border defaults to contrastBorder (null in standard themes);
+     fall back to widget-border which is always defined in Dark+ and Light+ */
+  --color-cmd-border: var(
+    --vscode-commandCenter-border,
+    var(--vscode-widget-border)
+  );
+  --color-cmd-active-border: var(
+    --vscode-commandCenter-activeBorder,
+    var(--vscode-focusBorder)
+  );
+  --color-cmd-inactive-border: var(
+    --vscode-commandCenter-inactiveBorder,
+    var(--vscode-widget-border)
+  );
+
+  /* Toolbar / keybinding */
+  --color-toolbar-hover-bg: var(--vscode-toolbar-hoverBackground);
+  --color-toolbar-hover-outline: var(
+    --vscode-toolbar-hoverOutline,
+    transparent
+  );
+  --color-keybinding-bg: var(
+    --vscode-keybindingLabel-background,
+    rgba(128, 128, 128, 0.17)
+  );
+
+  /* Notifications */
+  --color-notification-info-fg: var(--vscode-notificationsInfoIcon-foreground);
+
+  /* Execution status colors (semantic, theme-independent) */
+  --color-status-idle: #2d80c4;
+  --color-status-running: #1caa63;
+  --color-status-completed: #26544e;
+  --color-status-stopped: #7e2332;
+  --color-status-paused: #bea307;
+  --color-status-error: #ff1100;
+  --color-status-cancelling: #ff9900;
+
+  /* ── Severity colors (status messages) ──
+     Use VS Code theme vars so text is readable in all themes.
+     color-mix generates a 15% tint of the foreground color for the background. */
+  --color-severity-info: var(--vscode-editorInfo-foreground, #59a4f9);
+  --color-severity-info-bg: color-mix(
+    in srgb,
+    var(--vscode-editorInfo-foreground, #59a4f9) 15%,
+    transparent
+  );
+  --color-severity-warning: var(--vscode-editorWarning-foreground, #cca700);
+  --color-severity-warning-bg: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground, #cca700) 15%,
+    transparent
+  );
+  --color-severity-error: var(--vscode-editorError-foreground, #f14c4c);
+  --color-severity-error-bg: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground, #f14c4c) 15%,
+    transparent
+  );
+
+  /* ── Output block border colors (constant, theme independent) ── */
+  --color-output-prompt-border: rgb(100, 100, 255);
+  --color-output-command-border: rgb(255, 200, 100);
+  --color-output-script-border: rgb(200, 120, 255);
+  --color-output-streaming: #4ec9b0;
+
+  /* ── Overlay scrims (status bars over mirrored terminal content) ──
+     Semi-transparent black, intentionally theme-independent — dimming
+     the terminal beneath should look consistent in light and dark themes. */
+  --color-overlay-scrim: rgba(0, 0, 0, 0.4);
+  --color-overlay-scrim-strong: rgba(0, 0, 0, 0.55);
+
+  /* ── Source control status colors ──
+     Used by WorkspaceSourceControlPane.tsx for file status badges (A/M/D/R/U).
+     Matches VS Code's gitDecoration palette so badge colors are consistent
+     with the native Source Control view. Fallbacks are Dark+ defaults. */
+  --color-scm-added-fg: var(
+    --vscode-gitDecoration-addedResourceForeground,
+    #73c991
+  );
+  --color-scm-deleted-fg: var(
+    --vscode-gitDecoration-deletedResourceForeground,
+    #f48771
+  );
+  --color-scm-ignored-fg: var(
+    --vscode-gitDecoration-ignoredResourceForeground,
+    #8c8c8c
+  );
+  --color-scm-modified-fg: var(
+    --vscode-gitDecoration-modifiedResourceForeground,
+    #e5ba7d
+  );
+  --color-scm-renamed-fg: var(
+    --vscode-gitDecoration-renamedResourceForeground,
+    #73c991
+  );
+  --color-scm-untracked-fg: var(
+    --vscode-gitDecoration-untrackedResourceForeground,
+    #73c991
+  );
+
+  /* ── Diff colors ──
+     diff-added-fg: used by UndoChangesDialog.tsx for "created" file status text.
+     diff-hidden-bg: background for hidden-lines decoration rows in DiffView. */
+  --color-diff-added-fg: var(--vscode-terminal-ansiGreen, #89d185);
+  --color-diff-hidden-bg: var(
+    --vscode-diffEditor-unchangedCodeBackground,
+    rgba(116, 116, 116, 0.16)
+  );
+
+  /* ── Output minimap colors ──
+     Keep diff colors aligned with VS Code's native minimap gutter tokens. */
+  --color-minimap-diff-added: var(
+    --vscode-minimapGutter-addedBackground,
+    #72c892
+  );
+  --color-minimap-diff-removed: var(
+    --vscode-minimapGutter-deletedBackground,
+    #f28772
+  );
+  /* Reuse the theme's RGB channels but override alpha explicitly so
+     semi-transparent theme tokens (for example rgba(..., 0.6)) do not
+     lock the minimap thumb into a weaker opacity than we want. */
+  --color-minimap-thumb: rgb(
+    from var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.7)) r g
+      b / 0.7
+  );
+  --color-minimap-thumb-hover: rgb(
+    from var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.8))
+      r g b / 0.8
+  );
+  --color-minimap-thumb-active: rgb(
+    from
+      var(--vscode-scrollbarSlider-activeBackground, rgba(191, 191, 191, 0.9)) r
+      g b / 0.9
+  );
+
+  /* ── Markdown enrichment colors (VS Code symbol icon palette) ──
+     Used by MarkdownText.tsx for bold, italic, headings, and tables.
+     Fallbacks are Dark+ defaults so the UI looks reasonable on all themes. */
+  --color-md-strong-fg: var(--vscode-symbolIcon-interfaceForeground, #75beff);
+  --color-md-em-fg: var(--vscode-symbolIcon-functionForeground, #b180d7);
+  --color-md-heading-fg: var(--vscode-symbolIcon-classForeground, #ee9d28);
+  --color-md-table-head-bg: var(
+    --vscode-list-hoverBackground,
+    rgba(127, 127, 127, 0.1)
+  );
+
+  /* ── Inline code color ──
+     Warm VS Code string tint for backtick inline code (no language class). */
+  --color-code-inline-fg: var(--vscode-debugTokenExpression-string, #ce9178);
+  --color-code-block: var(--vscode-textCodeBlock-background);
+
+  /* ── SCM graph (commit history) colors ──
+     Themed from VS Code's scmGraph palette so commit-history ref pills and
+     graph nodes match the native Source Control graph. Fallbacks are Dark+. */
+  --color-scm-graph-local: var(--vscode-scmGraph-historyItemRefColor, #57a3f8);
+  --color-scm-graph-remote: var(
+    --vscode-scmGraph-historyItemRemoteRefColor,
+    #ad80d7
+  );
+  --color-scm-graph-base: var(
+    --vscode-scmGraph-historyItemBaseRefColor,
+    #ea5c00
+  );
+  /* Rotating swimlane palette (non-ref-specific lanes) — matches VS
+     Code's scmGraph.foreground1-5 tokens used by its graph renderer. */
+  --color-scm-graph-fg1: var(--vscode-scmGraph-foreground1, #ffb000);
+  --color-scm-graph-fg2: var(--vscode-scmGraph-foreground2, #dc267f);
+  --color-scm-graph-fg3: var(--vscode-scmGraph-foreground3, #994f00);
+  --color-scm-graph-fg4: var(--vscode-scmGraph-foreground4, #40b0a6);
+  --color-scm-graph-fg5: var(--vscode-scmGraph-foreground5, #b66dff);
+
+  /* ── Context window bar ──
+     Track (empty portion) uses a 15% tint of the foreground so it reads
+     clearly in both regular dark and HC themes without clashing with the
+     bright teal border color that HC assigns to --vscode-panel-border. */
+  --color-ctx-bar-track: color-mix(
+    in srgb,
+    var(--vscode-foreground) 15%,
+    transparent
+  );
+
+  /* ── Semantic accent colors ── */
+  --color-bash-expand-link: #569cd6;
+  --color-favorite: #e5c014;
+  --color-pro-brand: var(--vscode-focusBorder, #3994bc);
+  --color-scope-workspace: #d97706;
+  --color-scope-user: #3b82f6;
+  --color-indicator-success: var(--vscode-charts-green, #89d185);
+  --color-indicator-error: var(--vscode-charts-red, #c24038);
+  --color-indicator-running: var(--vscode-charts-yellow, #d19a66);
+
+  /* ── Terminal ANSI colors ── */
+  --color-terminal-ansiGreen: var(--vscode-terminal-ansiGreen, #89d185);
+  --color-terminal-ansiYellow: var(--vscode-terminal-ansiYellow, #e5e510);
+  --color-terminal-ansiRed: var(--vscode-terminal-ansiRed, #f14c4c);
+  --color-terminal-ansiBrightGreen: var(
+    --vscode-terminal-ansiBrightGreen,
+    #23d18b
+  );
+  --color-terminal-ansiBrightYellow: var(
+    --vscode-terminal-ansiBrightYellow,
+    #f5f543
+  );
+  --color-terminal-ansiBrightRed: var(--vscode-terminal-ansiBrightRed, #f14c4c);
+  --color-terminal-foreground: var(
+    --vscode-terminal-foreground,
+    var(--vscode-editor-foreground)
+  );
+
+  /* ── Execution state badge backgrounds (VS Code theme vars with fallbacks) ── */
+  --color-exec-idle-bg: var(
+    --vscode-statusBarItem-prominentBackground,
+    rgba(128, 128, 128, 0.2)
+  );
+  --color-exec-idle-fg: var(
+    --vscode-statusBarItem-prominentForeground,
+    var(--fg-secondary)
+  );
+  --color-exec-running-bg: var(
+    --vscode-progressBar-background,
+    rgba(14, 99, 156, 0.8)
+  );
+  --color-exec-stopped-bg: var(
+    --vscode-editorInfo-foreground,
+    rgba(150, 150, 150, 0.8)
+  );
+
+  /* ── Streamdown / shadcn-ui compatibility ──
+     Streamdown's table Copy/Download controls use shadcn/ui Tailwind class
+     names: bg-background, bg-sidebar, border-border, text-muted-foreground,
+     hover:text-foreground, ring-ring. Mapping them here causes the host
+     Tailwind build to generate VS Code-themed CSS for those classes.
+     'foreground' is already mapped above.
+     Fallback to transparent where a VS Code theme may leave a value unset. */
+  --color-background: var(--vscode-editor-background);
+  --color-sidebar: var(--vscode-sideBar-background);
+  --color-border: var(--vscode-panel-border, transparent);
+  --color-muted: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1));
+  --color-muted-foreground: var(--vscode-descriptionForeground);
+  --color-ring: var(--vscode-focusBorder, transparent);
+
+  /* ── Breakpoints ──
+     Tailwind's defaults are in rem and breakpoints sort by value, so xs is in
+     rem too. 23.75rem = 380px (media-query rem is always the 16px initial
+     size); useMediaQuery.ts mirrors it in px. */
+  --breakpoint-xs: 23.75rem;
+
+  --radius-button: 4px;
+
+  --text-xxs: 0.625rem;
+  --text-xxs--line-height: 1rem;
+
+  --font-mono: var(--vscode-editor-font-family), monospace;
+
+  /* ── Shared app layer scale ──
+     Use these for layers that cross component boundaries; keep local
+     in-component stacking local. */
+  --z-index-raised: 10;
+  --z-index-header: 20;
+  --z-index-overlay: 30;
+  /* Floating widgets confined to the main content area (e.g. the output find
+     bar) — above header-level content, but below full-page drawers (History
+     Search, Settings) so those correctly cover it instead of floating on top. */
+  --z-index-content-floating: 35;
+  --z-index-drawer: 40;
+  --z-index-floating: 50;
+  --z-index-panel: 100;
+  /* Full-viewport takeover for the output/terminal section's fullscreen
+     toggle. Above ordinary panels, but below modal dialogs so Export/Undo
+     dialogs rendered from inside the fullscreened section still appear on top. */
+  --z-index-output-fullscreen: 150;
+  --z-index-modal-backdrop: 200;
+  --z-index-modal: 210;
+  --z-index-modal-prominent: 220;
+  --z-index-workspace-viewer: 300;
+  /* Modals opened from inside the workspace viewer must sit above it. */
+  --z-index-viewer-modal-backdrop: 310;
+  --z-index-viewer-modal: 320;
+  --z-index-popover: 9999;
+
+  /* ── Animations ── */
+  --animate-pulse-custom: pulse-custom 2s ease-in-out infinite;
+  --animate-pulse-streaming: pulse-streaming 1.5s ease-in-out infinite;
+  --animate-pulse-cancelling: pulse-custom 1.5s ease-in-out infinite;
+  --animate-slide-in-left: slide-in-left 0.25s ease-out;
+  --animate-slide-in-right: slide-in-right 0.25s ease-out;
+  --animate-slide-out-left: slide-out-left 0.22s ease-in forwards;
+  --animate-slide-out-right: slide-out-right 0.22s ease-in forwards;
+  --animate-slide-down-in: slide-down-fade-in 300ms ease-out forwards;
+  --animate-slide-down-out: slide-down-fade-out 300ms ease-in forwards;
+  --animate-ctx-update: ctx-update 0.4s ease-out;
+  --animate-slide-in-sidebar: slide-in-sidebar 0.25s ease-out both;
+  --animate-slide-out-sidebar: slide-out-sidebar 0.22s ease-in both;
+  --animate-modal-enter: modal-enter 0.25s ease-out forwards;
+  --animate-modal-exit: modal-exit 0.22s ease-in forwards;
+  --animate-output-find-enter: output-find-enter 0.22s ease-out forwards;
+  --animate-output-find-exit: output-find-exit 0.18s ease-in forwards;
+
+  @keyframes pulse-custom {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  @keyframes pulse-streaming {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  @keyframes slide-in-left {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+  @keyframes slide-in-right {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+  @keyframes slide-out-left {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes slide-out-right {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes slide-down-fade-in {
+    from {
+      opacity: 0;
+      grid-template-rows: 0fr;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      grid-template-rows: 1fr;
+      transform: translateY(0);
+    }
+  }
+  @keyframes slide-down-fade-out {
+    from {
+      opacity: 1;
+      grid-template-rows: 1fr;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      grid-template-rows: 0fr;
+      transform: translateY(-4px);
+    }
+  }
+  @keyframes ctx-update {
+    0% {
+      filter: brightness(2);
+    }
+    100% {
+      filter: brightness(1);
+    }
+  }
+  /* Width-based animations for the mobile sidebar chip rail. Unlike
+     translateX animations, these affect flex layout so the adjacent output
+     panel is pushed/pulled smoothly rather than jumping when the rail mounts
+     or unmounts. */
+  @keyframes slide-in-sidebar {
+    from {
+      width: 0px;
+    }
+    to {
+      width: 32px;
+    }
+  }
+  @keyframes slide-out-sidebar {
+    from {
+      width: 32px;
+    }
+    to {
+      width: 0px;
+    }
+  }
+  @keyframes modal-enter {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  @keyframes modal-exit {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-100%);
+    }
+  }
+  @keyframes output-find-enter {
+    from {
+      opacity: 0;
+      transform: translateY(calc(-100% - 8px));
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes output-find-exit {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(calc(-100% - 8px));
+    }
+  }
+}
 
 /* ============================================================================
    CSS Custom Properties — Minimal Set for Non-Tailwind Contexts
@@ -228,6 +850,27 @@ body.vscode-high-contrast-light {
     padding: 0;
   }
 
+  /* Default border color. Unsuffixed border utilities (border, border-l,
+     divide-y, ...) set only a width, so this is the color they draw in —
+     Tailwind 4's own default is currentColor. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(
+      --vscode-panel-border,
+      var(--vscode-widget-border, rgba(128, 128, 128, 0.35))
+    );
+  }
+
+  /* Placeholder text in the theme's placeholder color unless a control sets
+     placeholder:text-* itself (Tailwind 4's default is 50% currentColor). */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+
   /* Root elements */
   html,
   body,
@@ -351,6 +994,12 @@ body.vscode-high-contrast-light {
      All visual styling must be applied via explicit Tailwind classes. */
   select {
     cursor: pointer;
+  }
+
+  /* Disabled controls drop the pointer above (Tailwind 3's Preflight did
+     this; Tailwind 4's does not). */
+  :disabled {
+    cursor: default;
   }
 
   /* Label styles */
@@ -725,7 +1374,7 @@ button .codicon {
   /* Icon-only button used in panel headers and output toolbars.
      Provides consistent hover feedback across all header action buttons. */
   .icon-btn {
-    @apply flex items-center justify-center rounded bg-transparent border-none
+    @apply flex items-center justify-center rounded-sm bg-transparent border-none
            text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg
            transition-colors duration-100
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-description-fg;
@@ -733,7 +1382,7 @@ button .codicon {
 
   /* Shared elevated surface for custom dropdown popups rendered in portals. */
   .cy-dropdown-popup {
-    @apply rounded overflow-hidden;
+    @apply rounded-sm overflow-hidden;
     box-shadow: var(--cy-dropdown-popup-shadow);
   }
 
@@ -882,7 +1531,7 @@ button .codicon {
      cy-dropdown-row at the call site for the HC hover outline. */
   .cy-select-trigger {
     @apply w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border
-           border-dropdown-border rounded focus:outline-none focus:border-focus-border
+           border-dropdown-border rounded-sm focus:outline-hidden focus:border-focus-border
            text-left flex items-center justify-between h-7
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -910,7 +1559,7 @@ button .codicon {
   .cy-button-group {
     /* The outer group owns the corner radius. Inner buttons stay square so
        anti-aliased child corners cannot reveal the parent background. */
-    @apply relative inline-flex rounded-button border border-btn-border overflow-hidden flex-shrink-0;
+    @apply relative inline-flex rounded-button border border-btn-border overflow-hidden shrink-0;
   }
   .cy-button-group-divider {
     @apply w-px self-stretch bg-btn-separator opacity-40;
@@ -937,11 +1586,11 @@ button .codicon {
      Include a divider element between buttons:
        <div class="cy-mode-switch-divider"><div class="w-px h-full bg-current opacity-40" /></div> */
   .cy-mode-switch {
-    @apply relative inline-flex rounded-button border border-btn-border overflow-hidden flex-shrink-0;
+    @apply relative inline-flex rounded-button border border-btn-border overflow-hidden shrink-0;
   }
   .cy-mode-switch-btn {
     @apply inline-flex items-center justify-center gap-1 px-2 py-0.5
-           text-xs transition-colors focus:outline-none;
+           text-xs transition-colors focus:outline-hidden;
   }
   .cy-mode-switch-btn-active {
     @apply bg-btn-bg text-btn-fg;
@@ -950,63 +1599,64 @@ button .codicon {
     @apply bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover;
   }
   .cy-mode-switch-divider {
-    @apply bg-btn-secondary-bg text-btn-secondary-fg py-1 flex-shrink-0;
+    @apply bg-btn-secondary-bg text-btn-secondary-fg py-1 shrink-0;
   }
 }
 
 /* ============================================================================
    Utility Classes
    ============================================================================ */
-@layer utilities {
-  /* Hide scrollbar but keep functionality */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+/* Declared with @utility (not plain classes) so they sort and take variants
+   like built-in utilities, e.g. `sm:scrollbar-hide`. */
 
-  .scrollbar-hide::-webkit-scrollbar {
+/* Hide scrollbar but keep functionality */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
     display: none;
   }
+}
 
-  /* Thin scrollbar */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-  }
+/* Thin scrollbar */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
 
-  .scrollbar-thin::-webkit-scrollbar {
+  &::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
+}
 
-  /* iOS safe area bottom spacer — expands to env(safe-area-inset-bottom), 0px elsewhere.
-     Place one as the last flex child of the root h-dvh container (App.tsx) so the
-     flex-1 content area is automatically shortened by the home indicator height.
-     Every element inside — panels, absolute overlays, footers — then clears the
-     indicator without per-component padding. */
-  .safe-area-spacer {
-    height: var(--safe-area-bottom);
-    flex-shrink: 0;
-  }
+/* iOS safe area bottom spacer — expands to env(safe-area-inset-bottom), 0px elsewhere.
+   Place one as the last flex child of the root h-dvh container (App.tsx) so the
+   flex-1 content area is automatically shortened by the home indicator height.
+   Every element inside — panels, absolute overlays, footers — then clears the
+   indicator without per-component padding. */
+@utility safe-area-spacer {
+  height: var(--safe-area-bottom);
+  flex-shrink: 0;
+}
 
-  /* Background logo - uses CSS mask to apply foreground color to SVG */
-  .background-logo {
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 0;
-    pointer-events: none;
-    width: min(80%, 500px);
-    height: min(80%, 500px);
-    opacity: 0.08;
-    background-color: var(--vscode-foreground);
-    -webkit-mask-size: contain;
-    mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-position: center bottom;
-    mask-position: center bottom;
-  }
+/* Background logo - uses CSS mask to apply foreground color to SVG */
+@utility background-logo {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 0;
+  pointer-events: none;
+  width: min(80%, 500px);
+  height: min(80%, 500px);
+  opacity: 0.08;
+  background-color: var(--vscode-foreground);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center bottom;
+  mask-position: center bottom;
 }
 
 /* ============================================================================

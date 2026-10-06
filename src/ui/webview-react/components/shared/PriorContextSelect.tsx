@@ -308,7 +308,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           <span className="truncate">{buttonLabel}</span>
           <Icon
             name={`chevron-${isOpen ? "up" : "down"}`}
-            className="text-xxs flex-shrink-0 ml-1"
+            className="text-xxs shrink-0 ml-1"
           />
         </button>
 
@@ -340,7 +340,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                     schemaPath,
                     PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ?? k
                   )}
-                  className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
+                  className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-hidden border-none ${
                     isSelected
                       ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
                       : "hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
@@ -348,7 +348,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                 >
                   <Icon
                     name="check"
-                    className={`text-xxs flex-shrink-0 ${
+                    className={`text-xxs shrink-0 ${
                       isSelected ? "visible" : "invisible"
                     }`}
                   />
@@ -371,7 +371,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
               onChange={handlePreviousCountChange}
               placeholder="e.g. 3"
               aria-label="Number of previous step outputs"
-              className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${dropdownBorderClass(
+              className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7 ${dropdownBorderClass(
                 parsePreviousCount(previousCountText) === undefined,
                 "error"
               )}`}
@@ -390,7 +390,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
             onChange={(event) => updateRunAddress(event.target.value, runRef)}
             placeholder="Workflow key"
             aria-label="Prior-context workflow key"
-            className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7"
+            className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
           />
           <input
             value={runRef}
@@ -399,7 +399,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
             }
             placeholder="Run reference"
             aria-label="Prior-context run reference"
-            className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7"
+            className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
           />
           <span className="text-xxs text-description-fg">
             Imports all output from a completed run in this workspace.
@@ -421,7 +421,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           disabled={!showCustomInput}
           placeholder="e.g. 1,2,4-10"
           aria-label="Custom step range (e.g. 1,2,4-10)"
-          className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${dropdownBorderClass(
+          className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7 ${dropdownBorderClass(
             customError,
             "error"
           )}`}

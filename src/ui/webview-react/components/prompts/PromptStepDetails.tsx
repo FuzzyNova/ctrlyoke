@@ -114,7 +114,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                 <HarnessIcon
                   harnessId={harnessId}
                   size={12}
-                  className="opacity-90 flex-shrink-0"
+                  className="opacity-90 shrink-0"
                 />
               )}
               <span className="truncate">
@@ -127,9 +127,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
           )}
           {modelLabel && (
             <span className="inline-flex min-w-0 max-w-full items-center gap-1">
-              {harnessLabel && (
-                <span className="flex-shrink-0 opacity-40">·</span>
-              )}
+              {harnessLabel && <span className="shrink-0 opacity-40">·</span>}
               <span
                 className="truncate"
                 title={modelIsDefault ? `${modelLabel} (default)` : modelLabel}
@@ -238,7 +236,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
           {overrides.map((override, i) => (
             <span
               key={i}
-              className="inline-flex items-center px-1 rounded bg-badge-bg text-badge-fg opacity-90"
+              className="inline-flex items-center px-1 rounded-sm bg-badge-bg text-badge-fg opacity-90"
               title={override.title ?? override.label}
             >
               {override.icon && (

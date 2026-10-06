@@ -36,7 +36,7 @@ export interface SingleLineCompletionEditorProps {
   disabled?: boolean;
   /**
    * Classes for the wrapper div this editor mounts into (e.g. `border`,
-   * `rounded`, `bg-input-bg`). Single-line and wrap-single-line modes fix
+   * `rounded-sm`, `bg-input-bg`). Single-line and wrap-single-line modes fix
    * their own height range (see `singleLineTheme`/`wrapSingleLineTheme`),
    * while multiline mode lets this wrapper's height determine the visible
    * editor size. All modes pad their content horizontally via `.cm-line` —

@@ -509,7 +509,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           multiline
           placeholder="npm test"
           disabled={disabled}
-          className="w-full bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+          className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border disabled:opacity-50"
         />
       </div>
 
@@ -596,7 +596,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               }
               className={`px-2 py-1 text-sm bg-input-bg text-input-fg border ${fieldValidationBorderClass(
                 comparisonDiagnostics
-              )} rounded focus:outline-none focus:border-focus-border disabled:opacity-50 ${
+              )} rounded-sm focus:outline-hidden focus:border-focus-border disabled:opacity-50 ${
                 narrow ? "w-full" : "flex-1 min-w-0"
               }`}
             />
@@ -706,7 +706,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             step="any"
             placeholder="Default (from settings)"
             disabled={disabled}
-            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border disabled:opacity-50"
           />
         </div>
         <div className="flex flex-col gap-1 w-full">
@@ -762,7 +762,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             }}
             placeholder={customShellPathPlaceholder(platform)}
             disabled={disabled}
-            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border disabled:opacity-50"
           />
           <span className="text-xxs text-description-fg">
             Machine-specific paths do not travel with a shared workflow — prefer
@@ -879,7 +879,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 hasPreCondition={hasPreCondition}
                 minHeightClassName="min-h-[96px]"
                 maxHeightClassName="max-h-[220px]"
-                className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
+                className={`overflow-hidden rounded-sm border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
               />
               <span className="text-xxs text-description-fg">
                 Type $ for condition-output references like{" "}
@@ -913,7 +913,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 hasPreCondition={hasPreCondition}
                 minHeightClassName="min-h-[96px]"
                 maxHeightClassName="max-h-[220px]"
-                className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
+                className={`overflow-hidden rounded-sm border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
               />
               <span className="text-xxs text-description-fg">
                 Type $ for condition-output references like{" "}

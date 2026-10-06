@@ -118,7 +118,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     : "Final Step — Not set";
 
   return (
-    <div className="group/final-step relative border-t border-panel-border bg-sidebar-bg flex-shrink-0 cy-no-select">
+    <div className="group/final-step relative border-t border-panel-border bg-sidebar-bg shrink-0 cy-no-select">
       <div
         data-final-step-identity-bar
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : "bg-transparent"}`}
@@ -237,14 +237,14 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         ) : (
           // Nothing configured is not the same as configured-but-off, so the
           // empty state shows no status icon (the spacer keeps label alignment).
-          <span className="w-4 flex-shrink-0" aria-hidden="true" />
+          <span className="w-4 shrink-0" aria-hidden="true" />
         )}
         <span className="text-xs font-semibold uppercase tracking-wide">
           {"Final Step"}
         </span>
         {hasFinalStep && finalStep && isScriptStep(finalStep) && (
           <span
-            className="ml-1 px-1 py-px rounded text-xxs bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
+            className="ml-1 px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg opacity-75 shrink-0"
             title="Script step — runs a shell command"
           >
             script
@@ -258,7 +258,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           <span className="text-xs italic text-warning-fg">disabled</span>
         ) : null}
         {loopCount > 0 && (
-          <span className="ml-1 flex-shrink-0 whitespace-nowrap rounded bg-badge-bg px-1.5 py-px text-xxs text-badge-fg">
+          <span className="ml-1 shrink-0 whitespace-nowrap rounded-sm bg-badge-bg px-1.5 py-px text-xxs text-badge-fg">
             {isNarrow ? loopCount + 1 : formatFinalPassBadge(loopCount + 1)}
           </span>
         )}

@@ -399,7 +399,7 @@ export function highlightText(
         {
           key: `mark-${index}-${match.start}`,
           [OUTPUT_FIND_ACTIVE_ATTRIBUTE]: match.active ? "true" : undefined,
-          className: `rounded px-0.5 ${
+          className: `rounded-sm px-0.5 ${
             match.active
               ? "bg-find-match text-foreground ring-1 ring-find-match-border"
               : "bg-find-match-highlight text-foreground"

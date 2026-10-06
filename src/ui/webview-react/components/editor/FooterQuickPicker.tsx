@@ -87,7 +87,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         disabled={disabled}
         title={disabled ? (disabledReason ?? title) : title}
         aria-label={title}
-        className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`px-2 py-1 text-xs rounded-sm flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isOverride || isOpen
             ? "bg-btn-secondary-bg text-btn-secondary-fg cy-dropdown-row-selected"
             : "hover:bg-list-hover-bg text-foreground cy-dropdown-row"
@@ -128,7 +128,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
             }}
           >
             {heading && (
-              <div className="flex items-center px-3 py-2 border-b border-dropdown-border bg-editor-bg flex-shrink-0">
+              <div className="flex items-center px-3 py-2 border-b border-dropdown-border bg-editor-bg shrink-0">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
                   {heading}
                 </h3>

@@ -186,10 +186,10 @@ function DiagnosticList({
         return (
           <div
             key={`${diagnostic.code}-${diagnostic.propertyPointer ?? ""}-${index}`}
-            className={`flex items-start gap-2 rounded border border-panel-border px-3 py-2 text-xs ${style.text}`}
+            className={`flex items-start gap-2 rounded-sm border border-panel-border px-3 py-2 text-xs ${style.text}`}
             role="listitem"
           >
-            <Icon name={style.icon} className="mt-px flex-shrink-0" />
+            <Icon name={style.icon} className="mt-px shrink-0" />
             <div className="min-w-0">
               <div>{diagnostic.message}</div>
               {diagnostic.remediation && (
@@ -215,7 +215,7 @@ function DefinitionList({
       {entries.map(([label, value]) => (
         <React.Fragment key={label}>
           <dt className="text-description-fg">{label}</dt>
-          <dd className="min-w-0 break-words text-editor-fg">{value}</dd>
+          <dd className="min-w-0 wrap-break-word text-editor-fg">{value}</dd>
         </React.Fragment>
       ))}
     </dl>
@@ -262,8 +262,8 @@ function WorktreeSummary({
       <h3 className="mb-3 text-sm font-semibold text-foreground">Worktree</h3>
       <DefinitionList entries={entries} />
       {!worktree.eligible && (
-        <div className="mt-2 flex items-start gap-1 rounded border border-error-fg border-opacity-40 bg-severity-error-bg px-3 py-2 text-xs text-error-fg">
-          <Icon name="error" className="mt-px flex-shrink-0" />
+        <div className="mt-2 flex items-start gap-1 rounded-sm border border-error-fg/40 bg-severity-error-bg px-3 py-2 text-xs text-error-fg">
+          <Icon name="error" className="mt-px shrink-0" />
           <span>
             This run will not use a worktree
             {worktree.eligibilityReason
@@ -274,7 +274,7 @@ function WorktreeSummary({
       )}
       {worktree.eligible && worktree.plannedDirectoryNotice && (
         <div className="mt-2 flex items-start gap-1 text-xxs text-description-fg">
-          <Icon name="info" className="mt-px flex-shrink-0" />
+          <Icon name="info" className="mt-px shrink-0" />
           <span>{worktree.plannedDirectoryNotice}</span>
         </div>
       )}
@@ -352,7 +352,7 @@ function TimelineEntryRow({
 }): React.ReactElement {
   if (entry.kind === STEP_TIMELINE_ENTRY_KINDS.PAYLOAD) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
+      <div className="flex items-center justify-between gap-3 rounded-sm border border-panel-border px-3 py-2 text-xs">
         <div className="min-w-0 truncate text-editor-fg">
           <Icon name="file-code" className="mr-2 text-description-fg" />
           Payload — {formatPayloadFileCount(entry.fileCount)},{" "}
@@ -360,7 +360,7 @@ function TimelineEntryRow({
         </div>
         <button
           type="button"
-          className="flex-shrink-0 text-link-fg hover:underline"
+          className="shrink-0 text-link-fg hover:underline"
           onClick={() => onNavigate(DRY_RUN_TABS.PAYLOAD)}
         >
           View in Payload tab
@@ -371,7 +371,7 @@ function TimelineEntryRow({
 
   if (entry.kind === STEP_TIMELINE_ENTRY_KINDS.COMMAND) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
+      <div className="flex items-center justify-between gap-3 rounded-sm border border-panel-border px-3 py-2 text-xs">
         <div className="min-w-0 truncate text-editor-fg">
           <Icon name="terminal" className="mr-2 text-description-fg" />
           Command — <code>{entry.executable}</code> · cwd:{" "}
@@ -379,7 +379,7 @@ function TimelineEntryRow({
         </div>
         <button
           type="button"
-          className="flex-shrink-0 text-link-fg hover:underline"
+          className="shrink-0 text-link-fg hover:underline"
           onClick={() => onNavigate(DRY_RUN_TABS.COMMAND)}
         >
           View in Command tab
@@ -392,9 +392,9 @@ function TimelineEntryRow({
   const isShared = mutation.scope === PREVIEW_MUTATION_SCOPES.SHARED;
   return (
     <div
-      className={`rounded border px-3 py-2 text-xs ${
+      className={`rounded-sm border px-3 py-2 text-xs ${
         isShared
-          ? "border-warning-fg border-opacity-40 bg-severity-warning-bg"
+          ? "border-warning-fg/40 bg-severity-warning-bg"
           : "border-panel-border"
       }`}
     >
@@ -408,7 +408,7 @@ function TimelineEntryRow({
       </div>
       {isShared ? (
         <div className="mt-1 flex items-start gap-1 text-warning-fg">
-          <Icon name="warning" className="mt-px flex-shrink-0" />
+          <Icon name="warning" className="mt-px shrink-0" />
           <span>{mutation.warning ?? "Workspace-wide side effect."}</span>
         </div>
       ) : (
@@ -486,7 +486,7 @@ function TimelineSection({
           <button
             key={block.groupId}
             type="button"
-            className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-left text-xs text-description-fg hover:text-foreground"
+            className="flex items-center justify-between gap-3 rounded-sm border border-panel-border px-3 py-2 text-left text-xs text-description-fg hover:text-foreground"
             aria-expanded="false"
             onClick={() =>
               setExpandedGroups((current) => ({
@@ -515,10 +515,10 @@ function StepTimelineHeading({
 }): React.ReactElement {
   return (
     <div
-      className="flex items-center gap-2 rounded px-2 py-2 text-left text-xs text-description-fg"
+      className="flex items-center gap-2 rounded-sm px-2 py-2 text-left text-xs text-description-fg"
       aria-label={`Step ${step.stepIndex + 1}: ${stepLabel(step)}`}
     >
-      <span className="w-4 flex-shrink-0 text-right text-xxs">
+      <span className="w-4 shrink-0 text-right text-xxs">
         {step.stepIndex + 1}
       </span>
       <HarnessIcon harnessId={step.resolvedProperties.harnessId} size={15} />
@@ -629,7 +629,7 @@ function OverviewPanel({
             return [
               <section
                 key={group.id}
-                className="flex flex-col gap-2 rounded border border-panel-border p-2"
+                className="flex flex-col gap-2 rounded-sm border border-panel-border p-2"
                 aria-label={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -760,7 +760,7 @@ function FileReferenceSection({
   const basename = section.path ? getPathBasename(section.path) : path;
 
   return (
-    <section className="rounded border border-panel-border">
+    <section className="rounded-sm border border-panel-border">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-panel-border px-3 py-2">
         <div className="min-w-0 text-xs font-semibold text-foreground">
           {
@@ -811,7 +811,7 @@ function PayloadSection({
   });
   const reason = truncationReasonLabel(section.truncationReason);
   return (
-    <section className="rounded border border-panel-border">
+    <section className="rounded-sm border border-panel-border">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-panel-border px-3 py-2">
         <div className="min-w-0 text-xs font-semibold text-foreground">
           {PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} · chunk{" "}
@@ -839,14 +839,14 @@ function PayloadSection({
             role="note"
           >
             {!isNeutralTruncationReason(section.truncationReason) && (
-              <Icon name="warning" className="mt-px flex-shrink-0" />
+              <Icon name="warning" className="mt-px shrink-0" />
             )}
             <span>{reason}</span>
           </div>
         )}
         {body ? (
           <>
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-input-bg p-2 font-mono text-xxs leading-relaxed text-editor-fg">
+            <pre className="max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word rounded-sm bg-input-bg p-2 font-mono text-xxs leading-relaxed text-editor-fg">
               {collapsed.visibleText}
             </pre>
             <button
@@ -991,7 +991,7 @@ function CommandPanel({
             </span>
           </h3>
           {canToggleCommandShell(command) && (
-            <div className="inline-flex overflow-hidden rounded border border-panel-border text-xxs">
+            <div className="inline-flex overflow-hidden rounded-sm border border-panel-border text-xxs">
               {WINDOWS_COMMAND_DISPLAY_SHELLS.map((shell) => (
                 <button
                   key={shell}
@@ -1011,7 +1011,7 @@ function CommandPanel({
           )}
         </div>
         <pre
-          className="overflow-auto whitespace-pre-wrap break-words rounded bg-input-bg p-3 font-mono text-xs text-editor-fg"
+          className="overflow-auto whitespace-pre-wrap wrap-break-word rounded-sm bg-input-bg p-3 font-mono text-xs text-editor-fg"
           title={displayText}
         >
           {summarizedDisplayText}
@@ -1037,7 +1037,7 @@ function CommandPanel({
       />
       {worktree?.eligible && worktree.mode === WORKTREE_MODES.MANAGED && (
         <div className="flex items-start gap-1 text-xxs text-description-fg">
-          <Icon name="info" className="mt-px flex-shrink-0" />
+          <Icon name="info" className="mt-px shrink-0" />
           <span>
             This step actually runs inside a managed worktree, not the directory
             shown above — its exact path is assigned when this workflow runs.
@@ -1049,7 +1049,7 @@ function CommandPanel({
         worktree.mode === WORKTREE_MODES.NAMED &&
         !worktree.plannedDirectoryIsExact && (
           <div className="flex items-start gap-1 text-xxs text-description-fg">
-            <Icon name="info" className="mt-px flex-shrink-0" />
+            <Icon name="info" className="mt-px shrink-0" />
             <span>
               The working directory above is a best-effort guess for this named
               worktree. See Worktree in the Overview tab for details.
@@ -1077,7 +1077,7 @@ function ConditionList({
           {conditions.map((condition, index) => (
             <div
               key={`${condition.kind}-${condition.scriptPath ?? ""}-${index}`}
-              className="rounded border border-panel-border px-3 py-2 text-xs"
+              className="rounded-sm border border-panel-border px-3 py-2 text-xs"
             >
               <div className="font-semibold text-foreground">
                 {condition.kind}
@@ -1171,7 +1171,7 @@ function StepDetail({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-panel-border px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-panel-border px-4 py-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-foreground">
             {stepLabel(step)}
@@ -1187,7 +1187,7 @@ function StepDetail({
             </span>
           </div>
         </div>
-        <span className="flex-shrink-0 text-xxs text-description-fg">
+        <span className="shrink-0 text-xxs text-description-fg">
           Step {step.stepIndex + 1}
         </span>
       </div>
@@ -1198,7 +1198,7 @@ function StepDetail({
         ariaLabel="Dry run sections"
         harnessId={step.resolvedProperties.harnessId}
         tabOverrides={tabOverrides}
-        className="flex flex-shrink-0 items-center border-b border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
+        className="flex shrink-0 items-center border-b border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {activeTab === DRY_RUN_TABS.SUMMARY && (
@@ -1238,12 +1238,12 @@ function Rail({
 }): React.ReactElement {
   return (
     <nav
-      className="flex w-[200px] flex-shrink-0 flex-col border-r border-panel-border bg-sidebar-bg p-2"
+      className="flex w-[200px] shrink-0 flex-col border-r border-panel-border bg-sidebar-bg p-2"
       aria-label="Dry run sections"
     >
       <button
         type="button"
-        className={`flex items-center gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${selection === PREVIEW_RAIL_SELECTIONS.OVERVIEW ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
+        className={`flex items-center gap-2 rounded-sm px-2 py-2 text-left text-xs transition-colors ${selection === PREVIEW_RAIL_SELECTIONS.OVERVIEW ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
         onClick={() => onSelect(PREVIEW_RAIL_SELECTIONS.OVERVIEW)}
       >
         <Icon name="dashboard" />
@@ -1260,12 +1260,12 @@ function Rail({
             <button
               key={step.stepIndex}
               type="button"
-              className={`flex items-center gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${selection === step.stepIndex ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
+              className={`flex items-center gap-2 rounded-sm px-2 py-2 text-left text-xs transition-colors ${selection === step.stepIndex ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
               onClick={() => onSelect(step.stepIndex)}
               title={stepLabel(step)}
               aria-label={stepLabel(step)}
             >
-              <span className="w-4 flex-shrink-0 text-right text-xxs">
+              <span className="w-4 shrink-0 text-right text-xxs">
                 {step.stepIndex + 1}
               </span>
               <HarnessIcon
@@ -1275,7 +1275,7 @@ function Rail({
               <span className="min-w-0 flex-1 truncate">{stepLabel(step)}</span>
               {style && (
                 <span
-                  className={`h-2 w-2 flex-shrink-0 rounded-full ${style.dot}`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`}
                   title={`${severity} diagnostic`}
                   aria-label={`${severity} diagnostic`}
                 />
@@ -1432,7 +1432,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
         <>
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm rounded transition-colors sm:px-3 ${commandText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
+            className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-sm transition-colors sm:px-3 ${commandText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
             onClick={() => void handleCopy("command", commandText)}
             disabled={!commandText}
             title="Copy the exact command ctrlyoke will run — may reference generated files not yet written to disk"
@@ -1448,7 +1448,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
           </button>
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm rounded transition-colors sm:px-3 ${payloadText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
+            className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-sm transition-colors sm:px-3 ${payloadText ? "text-description-fg hover:text-foreground" : "cursor-not-allowed text-description-fg opacity-50"}`}
             onClick={() => void handleCopy("payload", payloadText)}
             disabled={!payloadText}
             title="Copy payload"
@@ -1464,7 +1464,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
           </button>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-description-fg transition-colors hover:text-foreground sm:px-3"
+            className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm text-description-fg transition-colors hover:text-foreground sm:px-3"
             onClick={handleExport}
             disabled={!preview}
             title="Export"
@@ -1475,7 +1475,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
           </button>
           <button
             type="button"
-            className="ml-auto inline-flex items-center gap-1.5 rounded bg-btn-bg px-2 py-1.5 text-sm text-btn-fg transition-colors hover:bg-btn-hover sm:px-3"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-sm bg-btn-bg px-2 py-1.5 text-sm text-btn-fg transition-colors hover:bg-btn-hover sm:px-3"
             onClick={handleRun}
           >
             <Icon name="play" />
@@ -1493,18 +1493,18 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
       ) : (
         <div
           ref={contentRef}
-          className="flex h-full min-h-[28rem] min-w-0 flex-col"
+          className="flex h-full min-h-112 min-w-0 flex-col"
         >
           {isStale && (
             <div
-              className="flex items-center gap-2 border-b border-warning-fg border-opacity-40 bg-severity-warning-bg px-4 py-2 text-xs text-warning-fg"
+              className="flex items-center gap-2 border-b border-warning-fg/40 bg-severity-warning-bg px-4 py-2 text-xs text-warning-fg"
               role="status"
             >
               <Icon name="warning" />
               <span>Definition changed —</span>
               <button
                 type="button"
-                className="ml-auto rounded px-2 py-1 font-semibold underline hover:bg-toolbar-hover-bg"
+                className="ml-auto rounded-sm px-2 py-1 font-semibold underline hover:bg-toolbar-hover-bg"
                 onClick={handleRefresh}
               >
                 Refresh
@@ -1512,7 +1512,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             </div>
           )}
           {workflowNarrow && (
-            <div className="flex-shrink-0 border-b border-panel-border p-3">
+            <div className="shrink-0 border-b border-panel-border p-3">
               <CustomSelect
                 value={String(selection)}
                 onChange={(value) =>

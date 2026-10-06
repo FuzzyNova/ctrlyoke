@@ -648,7 +648,7 @@ function App() {
                       panel is pushed/pulled by the layout, not a transform. */}
                   {(sidebarShouldShow || sidebarChipClosing) && (
                     <div
-                      className={`flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg overflow-hidden ${sidebarChipClosing ? "animate-slide-out-sidebar" : "animate-slide-in-sidebar"}`}
+                      className={`shrink-0 h-full border-r border-panel-border bg-sidebar-bg overflow-hidden ${sidebarChipClosing ? "animate-slide-out-sidebar" : "animate-slide-in-sidebar"}`}
                       onAnimationEnd={
                         sidebarChipClosing
                           ? (event) => {

@@ -318,7 +318,7 @@ Build a minimal VSIX whose tool window is a WebView2 pointed at a manually start
 - **One source of truth for the mapping:** a JSON table in the repo from `--vscode-*` variable
   name to VS resource key (`EnvironmentColors.*`, `CommonControlsColors.*`,
   `TreeViewColors.*`, …).
-  - It covers exactly the variable set the React app consumes. `tailwind.config.js` has about
+  - It covers exactly the variable set the React app consumes. The `@theme` block in `styles/globals.css` has about
     125 references, and xterm reads `--vscode-terminal-*` through `readVsCodeTheme()`.
   - A Node test fails when the React app starts using a `--vscode-*` variable that has
     neither a mapping nor a fallback in the Phase 4 static theme of `STANDALONE_SERVER_PLAN.md`.

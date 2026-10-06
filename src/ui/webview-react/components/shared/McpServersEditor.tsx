@@ -248,7 +248,7 @@ function buildListedServers(
 
 function ScopeBadge({ scope }: { scope: SettingWriteScope }) {
   return (
-    <span className="inline-flex items-center rounded border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
+    <span className="inline-flex items-center rounded-sm border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
       {formatScopeLabel(scope)}
     </span>
   );
@@ -319,7 +319,7 @@ function ServerDetails({ server }: { server: ListedServer }) {
               key={row.label}
               className="flex min-w-0 items-baseline gap-1 text-xs text-description-fg"
             >
-              <span className="flex-shrink-0 font-mono text-foreground">
+              <span className="shrink-0 font-mono text-foreground">
                 {row.label}:
               </span>
               <TruncatedServerText value={row.value!} className="flex-1" />
@@ -405,7 +405,7 @@ function McpServersPanel({
           Built-in
         </div>
         <div
-          className={`flex flex-col rounded border transition-colors ${
+          className={`flex flex-col rounded-sm border transition-colors ${
             ctrlyokeEnabled
               ? "border-focus-border bg-editor-bg"
               : "border-panel-border"
@@ -429,7 +429,7 @@ function McpServersPanel({
               checked={ctrlyokeEnabled}
               readOnly
               aria-label="ctrlyoke enabled"
-              className="mt-0.5 h-3 w-3 flex-shrink-0 accent-focus-border pointer-events-none"
+              className="mt-0.5 h-3 w-3 shrink-0 accent-focus-border pointer-events-none"
               tabIndex={-1}
             />
             <span className="flex min-w-0 flex-col">
@@ -466,7 +466,7 @@ function McpServersPanel({
                         }
                         disabled={readOnly}
                         title={tool.description}
-                        className={`flex items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors ${
+                        className={`flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors ${
                           readOnly
                             ? "cursor-default"
                             : "hover:bg-toolbar-hover-bg"
@@ -476,7 +476,7 @@ function McpServersPanel({
                           type="checkbox"
                           checked={!denied}
                           readOnly
-                          className="h-3 w-3 flex-shrink-0 accent-focus-border pointer-events-none"
+                          className="h-3 w-3 shrink-0 accent-focus-border pointer-events-none"
                           tabIndex={-1}
                         />
                         <span className="text-xxs font-medium text-foreground">
@@ -534,7 +534,7 @@ function McpServersPanel({
               return (
                 <div
                   key={server.id}
-                  className={`rounded border bg-editor-bg transition-colors ${
+                  className={`rounded-sm border bg-editor-bg transition-colors ${
                     isServerEnabled
                       ? "border-focus-border"
                       : "border-panel-border"
@@ -547,7 +547,7 @@ function McpServersPanel({
                         readOnly ? undefined : () => onToggleServer?.(server.id)
                       }
                       disabled={readOnly}
-                      className="flex flex-shrink-0 items-center"
+                      className="flex shrink-0 items-center"
                       aria-label={
                         isServerEnabled
                           ? `Disable ${server.id}`
@@ -577,7 +577,7 @@ function McpServersPanel({
                     >
                       <Icon
                         name={`chevron-${isExpanded ? "down" : "right"}`}
-                        className="flex-shrink-0 text-xxs text-description-fg"
+                        className="shrink-0 text-xxs text-description-fg"
                       />
                       <TruncatedServerText
                         value={displayName}
@@ -636,7 +636,7 @@ function McpServersPanel({
           <button
             type="button"
             onClick={onManageServers}
-            className="mb-1 flex items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors"
+            className="mb-1 flex items-center justify-center gap-1 rounded-sm border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors"
             title="Open MCP Manager in Settings to add, edit, or remove MCP servers"
           >
             <Icon name="settings-gear" className="text-xxs" />
@@ -832,7 +832,7 @@ export const McpServersEditor: React.FC<{
               key={option}
               type="button"
               onClick={() => handleModeChange(option)}
-              className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+              className={`rounded-sm border px-2 py-0.5 text-xs transition-colors ${
                 mode === option
                   ? "border-btn-bg bg-btn-bg text-btn-fg"
                   : "border-panel-border bg-transparent text-description-fg hover:border-focus-border hover:text-foreground"

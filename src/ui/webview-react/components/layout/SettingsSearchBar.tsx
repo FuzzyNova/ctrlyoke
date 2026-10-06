@@ -65,7 +65,7 @@ export function SettingsSearchBar({
         }}
         placeholder="Search settings"
         aria-label="Search settings"
-        className="h-7 min-w-0 flex-1 basis-32 rounded border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-none focus:border-focus-border"
+        className="h-7 min-w-0 flex-1 basis-32 rounded-sm border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-hidden focus:border-focus-border"
       />
       <span className="w-16 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-description-fg">
         {counter}
