@@ -22,7 +22,13 @@ import {
   SEARCH_HISTORY_ERROR_CODES,
   VSCODE_COMMANDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  DASHBOARD_HOST_ACTIONS,
+  DASHBOARD_ACTION_RESULT_STATUSES,
+  PATH_SELECTION_KINDS,
+  PATH_SELECTION_TITLES,
 } from "../../types/DashboardConstants";
+import type { DashboardHostActions, NamedRoot } from "../../core/HostPorts";
+import { getVsCodeNamedWorkspaceRoots } from "../../platform/VsCodeWorkspaceRoot";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
 import {
   HistorySearchRegexTimeoutError,
@@ -39,7 +45,11 @@ import type { LicenseActionService } from "../../ui/LicenseSettingsHandlers";
 function buildRouter(
   orchestrator: unknown,
   defaultPostMessage: (message: unknown) => void = () => {},
-  licenseService?: LicenseActionService
+  licenseService?: LicenseActionService,
+  actions: DashboardHostActions = {
+    openWorkspaceTarget: async () => ({ status: "unsupported" }),
+  },
+  getNamedRoots: () => NamedRoot[] = getVsCodeNamedWorkspaceRoots
 ): WebviewMessageRouter {
   const settingsSync = {
     sendWorkflowPropertiesToSettings: async () => {},
@@ -52,7 +62,8 @@ function buildRouter(
     {} as any,
     { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
     undefined,
-    licenseService
+    licenseService,
+    { actions, getNamedRoots }
   );
 }
 
@@ -103,6 +114,194 @@ class FakeLicenseActionService implements LicenseActionService {
   }
 }
 
+suite("WebviewMessageRouter — dashboard host actions", () => {
+  test("replies with a typed unsupported result for every missing native capability", async () => {
+    const panelReplies: unknown[] = [];
+    const clientReplies: unknown[] = [];
+    const router = buildRouter(
+      undefined,
+      (message) => panelReplies.push(message),
+      undefined,
+      { openWorkspaceTarget: async () => ({ status: "unsupported" }) }
+    );
+    const messages = [
+      { type: MESSAGE_TYPES.SELECT_FILE },
+      { type: MESSAGE_TYPES.APPEND_FILE },
+      { type: MESSAGE_TYPES.EDIT_FILE },
+      { type: MESSAGE_TYPES.SHOW_OUTPUT },
+      { type: MESSAGE_TYPES.OPEN_GIT_CHANGE, ref: "HEAD" },
+      { type: MESSAGE_TYPES.OPEN_WORKTREE, worktreePath: "worktree" },
+      {
+        type: MESSAGE_TYPES.VIEW_WORKTREE_DIFF,
+        sourceCheckoutRoot: "root",
+        baseCommit: "base",
+        branchName: "branch",
+      },
+      {
+        type: MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW,
+        content: "diff",
+        language: "diff",
+      },
+      { type: MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER },
+      {
+        type: MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND,
+        command: VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO,
+      },
+      { type: MESSAGE_TYPES.RELOAD_WINDOW },
+      { type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER, stateRoot: "owner" },
+    ];
+
+    for (const message of messages) {
+      await router.route(message, {
+        clientTag: "browser:7",
+        postMessage: (reply) => clientReplies.push(reply),
+      });
+    }
+
+    assert.deepStrictEqual(
+      clientReplies,
+      [
+        DASHBOARD_HOST_ACTIONS.SELECT_FILE,
+        DASHBOARD_HOST_ACTIONS.APPEND_FILE,
+        DASHBOARD_HOST_ACTIONS.EDIT_FILE,
+        DASHBOARD_HOST_ACTIONS.SHOW_OUTPUT,
+        DASHBOARD_HOST_ACTIONS.OPEN_GIT_CHANGE,
+        DASHBOARD_HOST_ACTIONS.OPEN_WORKTREE,
+        DASHBOARD_HOST_ACTIONS.VIEW_WORKTREE_DIFF,
+        DASHBOARD_HOST_ACTIONS.EXPORT_CONTENT_PREVIEW,
+        DASHBOARD_HOST_ACTIONS.OPEN_VSCODE_MCP_BROWSER,
+        DASHBOARD_HOST_ACTIONS.ACTIVATE_OFFLINE_PRO,
+        DASHBOARD_HOST_ACTIONS.RELOAD_WINDOW,
+        DASHBOARD_HOST_ACTIONS.OPEN_WORKTREE_OWNER,
+      ].map((action) => ({
+        type: MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT,
+        action,
+        status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
+        message: undefined,
+      }))
+    );
+    assert.deepStrictEqual(panelReplies, []);
+  });
+
+  test("forwards native messages to the matching host actions", async () => {
+    const calls: unknown[][] = [];
+    const actions: DashboardHostActions = {
+      openWorkspaceTarget: async (target) => {
+        calls.push(["openWorkspaceTarget", target]);
+        return { status: "opened" };
+      },
+      openContentPreview: async (content) => {
+        calls.push(["openContentPreview", content]);
+        return { status: "opened" };
+      },
+      selectWorkspacePath: async (request) => {
+        calls.push(["selectWorkspacePath", request]);
+        return undefined;
+      },
+      revealOutput: async () => {
+        calls.push(["revealOutput"]);
+      },
+      openFolderWindow: async (path) => {
+        calls.push(["openFolderWindow", path]);
+        return { status: "opened" };
+      },
+      openGitDiff: async (request) => {
+        calls.push(["openGitDiff", request]);
+        return { status: "opened" };
+      },
+      browseMcpGallery: async () => {
+        calls.push(["browseMcpGallery"]);
+      },
+      reloadHost: async () => {
+        calls.push(["reloadHost"]);
+      },
+    };
+    const router = buildRouter(
+      { getCurrentPromptFilePathForClient: () => "current.yaml" },
+      () => {},
+      undefined,
+      actions,
+      () => [{ name: "root", fsPath: process.cwd() }]
+    );
+    await router.route({ type: MESSAGE_TYPES.SELECT_FILE });
+    await router.route({ type: MESSAGE_TYPES.APPEND_FILE });
+    await router.route({ type: MESSAGE_TYPES.EDIT_FILE });
+    await router.route({ type: MESSAGE_TYPES.SHOW_OUTPUT });
+    await router.route({ type: MESSAGE_TYPES.OPEN_GIT_CHANGE, ref: "HEAD" });
+    await router.route({
+      type: MESSAGE_TYPES.OPEN_WORKTREE,
+      worktreePath: "wt",
+    });
+    await router.route({
+      type: MESSAGE_TYPES.VIEW_WORKTREE_DIFF,
+      sourceCheckoutRoot: "root",
+      baseCommit: "base",
+      branchName: "branch",
+    });
+    await router.route({
+      type: MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW,
+      content: "text",
+      language: "markdown",
+    });
+    await router.route({ type: MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER });
+    await router.route({
+      type: MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND,
+      command: VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO,
+    });
+    await router.route({ type: MESSAGE_TYPES.RELOAD_WINDOW });
+    await router.route({
+      type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER,
+      stateRoot: "owner",
+    });
+
+    assert.deepStrictEqual(calls, [
+      [
+        "selectWorkspacePath",
+        {
+          kind: PATH_SELECTION_KINDS.FILE,
+          title: PATH_SELECTION_TITLES.LOAD_WORKFLOW,
+        },
+      ],
+      [
+        "selectWorkspacePath",
+        {
+          kind: PATH_SELECTION_KINDS.FILE,
+          title: PATH_SELECTION_TITLES.APPEND_WORKFLOW,
+        },
+      ],
+      ["openWorkspaceTarget", { path: "current.yaml" }],
+      ["revealOutput"],
+      [
+        "openGitDiff",
+        { kind: "change", workspaceRoot: process.cwd(), ref: "HEAD" },
+      ],
+      ["openFolderWindow", "wt"],
+      [
+        "openGitDiff",
+        {
+          kind: "worktree",
+          sourceCheckoutRoot: "root",
+          baseCommit: "base",
+          branchName: "branch",
+        },
+      ],
+      ["openContentPreview", { content: "text", language: "markdown" }],
+      ["browseMcpGallery"],
+      [
+        "selectWorkspacePath",
+        {
+          kind: PATH_SELECTION_KINDS.FILE,
+          title: PATH_SELECTION_TITLES.IMPORT_OFFLINE_LICENSE,
+          openLabel: PATH_SELECTION_TITLES.IMPORT_OFFLINE_LICENSE,
+          fileExtensions: ["license", "txt", "json", "lic", "*"],
+        },
+      ],
+      ["reloadHost"],
+      ["openFolderWindow", "owner"],
+    ]);
+  });
+});
+
 suite("WebviewMessageRouter — client workflow file paths", () => {
   test("LOAD_WORKFLOW resolves a workspace-relative path to an absolute one", async () => {
     const loaded: string[] = [];
@@ -130,23 +329,16 @@ suite("WebviewMessageRouter — client workflow file paths", () => {
     );
   });
 
-  test("RELOAD_WINDOW invokes VS Code's window reload command", async () => {
-    const originalExecuteCommand = vscode.commands.executeCommand;
-    const commands: string[] = [];
-    vscode.commands.executeCommand = (async (command: string) => {
-      commands.push(command);
-      return undefined;
-    }) as typeof vscode.commands.executeCommand;
+  test("RELOAD_WINDOW delegates to the injected host action", async () => {
+    let reloaded = false;
+    await buildRouter(undefined, undefined, undefined, {
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
+      reloadHost: async () => {
+        reloaded = true;
+      },
+    }).route({ type: MESSAGE_TYPES.RELOAD_WINDOW });
 
-    try {
-      await buildRouter(undefined).route({
-        type: MESSAGE_TYPES.RELOAD_WINDOW,
-      });
-    } finally {
-      vscode.commands.executeCommand = originalExecuteCommand;
-    }
-
-    assert.deepStrictEqual(commands, [VSCODE_COMMANDS.RELOAD_WINDOW]);
+    assert.strictEqual(reloaded, true);
   });
 
   test("APPEND_FILE resolves a workspace-relative path to an absolute one", async () => {
@@ -1087,7 +1279,15 @@ suite("WebviewMessageRouter — license actions", () => {
         {} as any,
         () => undefined as any,
         historySearchService as any,
-        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
+        undefined,
+        undefined,
+        {
+          actions: {
+            openWorkspaceTarget: async () => ({ status: "unsupported" }),
+          },
+          getNamedRoots: getVsCodeNamedWorkspaceRoots,
+        }
       );
       return {
         router,
@@ -1311,7 +1511,15 @@ suite("WebviewMessageRouter — license actions", () => {
         {} as any,
         () => undefined as any,
         historySearchService as any,
-        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
+        undefined,
+        undefined,
+        {
+          actions: {
+            openWorkspaceTarget: async () => ({ status: "unsupported" }),
+          },
+          getNamedRoots: getVsCodeNamedWorkspaceRoots,
+        }
       );
       try {
         await router.route({
@@ -1356,7 +1564,15 @@ suite("WebviewMessageRouter — license actions", () => {
         {} as any,
         () => undefined as any,
         historySearchService as any,
-        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
+        undefined,
+        undefined,
+        {
+          actions: {
+            openWorkspaceTarget: async () => ({ status: "unsupported" }),
+          },
+          getNamedRoots: getVsCodeNamedWorkspaceRoots,
+        }
       );
       try {
         await router.route({

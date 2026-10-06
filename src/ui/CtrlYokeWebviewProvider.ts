@@ -46,7 +46,10 @@ import { configService } from "../config/CtrlYokeConfigService";
 import { harnessAvailability } from "../utils/HarnessAvailability";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
-import { WebviewMessageRouter } from "./WebviewMessageRouter";
+import {
+  WebviewMessageRouter,
+  type WebviewRouterHostDependencies,
+} from "./WebviewMessageRouter";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -163,7 +166,8 @@ export class CtrlYokeWebviewProvider
     private readonly context: vscode.ExtensionContext,
     templateManager: TemplateManager,
     nativeFeedbackSink?: UserFeedbackSink,
-    licenseService?: LicenseService
+    licenseService?: LicenseService,
+    hostDependencies?: WebviewRouterHostDependencies
   ) {
     // Bind postMessage to use the view reference
     const postMessage = (message: any) => this.postMessage(message);
@@ -245,7 +249,8 @@ export class CtrlYokeWebviewProvider
           this.interactionPort.handleChoiceResponse(id, value),
       },
       this.secretRegistry,
-      licenseService
+      licenseService,
+      hostDependencies
     );
 
     // Listen for model registry updates

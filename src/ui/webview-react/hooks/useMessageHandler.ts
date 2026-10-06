@@ -2267,6 +2267,11 @@ export function createMessageHandlers(
     });
   };
 
+  // Host-native actions are not available in the browser. The browser already
+  // selects its own file-browser/editor/diff surface before sending these
+  // messages; acknowledge the scoped result without changing that flow.
+  handlers[MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT] = () => {};
+
   // --------------------------------------------------------------------------
   // MCP_CONFIG_PREVIEW_RESULT
   // --------------------------------------------------------------------------

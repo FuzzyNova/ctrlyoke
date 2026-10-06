@@ -2,6 +2,7 @@ import type { HarnessStatus } from "./HarnessIntegration";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 import {
   DASHBOARD_ACTION_RESULT_STATUSES,
+  PATH_SELECTION_KINDS,
   type HarnessId,
 } from "../types/DashboardConstants";
 
@@ -28,12 +29,52 @@ export interface WorkspaceOpenTarget {
   readonly workflowSourcePath?: string;
 }
 
+/** Content rendered in a host-owned preview document. */
+export interface ContentPreview {
+  readonly content: string;
+  readonly language: string;
+}
+
+/** Native picker requested by a dashboard operation. */
+export interface PathSelectionRequest {
+  readonly kind: (typeof PATH_SELECTION_KINDS)[keyof typeof PATH_SELECTION_KINDS];
+  readonly title?: string;
+  readonly openLabel?: string;
+  readonly fileExtensions?: readonly string[];
+}
+
+/** Inputs to a native source-control diff view. */
+export interface GitDiffRequest {
+  readonly kind: "change" | "worktree";
+  readonly workspaceRoot?: string;
+  readonly ref?: string;
+  readonly sourceCheckoutRoot?: string;
+  readonly baseCommit?: string;
+  readonly branchName?: string;
+}
+
+/** A workspace root's stable display name and filesystem path. */
+export interface NamedRoot {
+  readonly name: string;
+  readonly fsPath: string;
+}
+
 /** Host UI actions used by shared orchestration and dashboard services. */
 export interface DashboardHostActions {
   /** Open a file or selection in the host's editor. */
   openWorkspaceTarget(target: WorkspaceOpenTarget): Promise<ActionResult>;
+  openContentPreview?(content: ContentPreview): Promise<ActionResult>;
+  selectWorkspacePath?(
+    request: PathSelectionRequest
+  ): Promise<string | undefined>;
+  revealOutput?(): Promise<void>;
   /** Focus the dashboard when this host provides one. */
   focusDashboard?(): void;
+  openFolderWindow?(absolutePath: string): Promise<ActionResult>;
+  openGitDiff?(request: GitDiffRequest): Promise<ActionResult>;
+  revealInOs?(absolutePath: string): Promise<ActionResult>;
+  browseMcpGallery?(): Promise<void>;
+  reloadHost?(): Promise<void>;
 }
 
 export interface HarnessDetailedStatus {

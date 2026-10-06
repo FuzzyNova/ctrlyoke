@@ -4742,6 +4742,11 @@ export class WorkflowOrchestrator {
     await this.workflowCommandHandler.openCurrentPromptFile(filePath);
   }
 
+  /** Return the source prompt path currently loaded by one dashboard client. */
+  getCurrentPromptFilePathForClient(clientId: string): string | undefined {
+    return this.getInstanceForClient(clientId).getCurrentPromptFilePath();
+  }
+
   async createSampleScript(
     scriptType: EndConditionScriptType,
     scriptName?: string

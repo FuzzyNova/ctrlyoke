@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { pathsEqual } from "../utils/PathCasing";
+import { URI_SCHEMES } from "../types/DashboardConstants";
 import {
   resolveWorkspaceRoot,
   resolveTrustedWorkspaceRoots,
@@ -28,7 +29,7 @@ function gatherResolverInput(): WorkspaceRootResolverInput {
   // `undefined` (single folder) and `untitled:` (unsaved multi-root) fall
   // through to the workspace-folder branch inside the resolver.
   const workspaceFileDir =
-    workspaceFile?.scheme === "file"
+    workspaceFile?.scheme === URI_SCHEMES.FILE
       ? path.dirname(workspaceFile.fsPath)
       : undefined;
 

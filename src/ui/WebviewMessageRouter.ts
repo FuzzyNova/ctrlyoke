@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
+import * as fs from "fs/promises";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import {
-  getVsCodeNamedWorkspaceRoots,
-  getVsCodeWorkspaceRoot,
-} from "../platform/VsCodeWorkspaceRoot";
+import type {
+  ActionResult,
+  DashboardHostActions,
+  NamedRoot,
+} from "../core/HostPorts";
 import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   MESSAGE_TYPES,
@@ -25,6 +27,10 @@ import {
   WORKTREE_MANAGEMENT_ACTIONS,
   type WorktreeManagementAction,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  DASHBOARD_ACTION_RESULT_STATUSES,
+  DASHBOARD_HOST_ACTIONS,
+  PATH_SELECTION_KINDS,
+  PATH_SELECTION_TITLES,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -76,6 +82,7 @@ import type {
   ChoiceResponseMessage,
   ServerPortFallbackInfo,
   BindAddressFallbackInfo,
+  DashboardHostActionResultMessage,
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
@@ -273,7 +280,15 @@ export class WebviewMessageRouter {
     private readonly historySearchService: HistorySearchService,
     private readonly callbacks: WebviewRouterCallbacks,
     private readonly secretRegistry?: SecretRegistryService,
-    licenseService?: LicenseActionService
+    licenseService?: LicenseActionService,
+    private readonly hostDependencies: WebviewRouterHostDependencies = {
+      actions: {
+        openWorkspaceTarget: async () => ({
+          status: DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
+        }),
+      },
+      getNamedRoots: () => [],
+    }
   ) {
     this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
     this.mutationCoordinator = new WorkflowMutationCoordinator(getOrchestrator);
@@ -783,15 +798,36 @@ export class WebviewMessageRouter {
   private resolveClientWorkflowFilePath(filePath: string): string {
     return resolveNamedRelativePath(
       filePath,
-      getVsCodeWorkspaceRoot(),
-      getVsCodeNamedWorkspaceRoots()
+      this.getWorkspaceRoot(),
+      this.hostDependencies.getNamedRoots()
     );
   }
 
   private registerWorkflowControl(table: DispatchTable): void {
     // ── Dashboard — Workflow Control ──────────────────────────────────────
-    table.set(MESSAGE_TYPES.SELECT_FILE, () => {
-      vscode.commands.executeCommand("ctrlyoke.selectPromptFile");
+    table.set(MESSAGE_TYPES.SELECT_FILE, async (_message, ctx) => {
+      const selectPath = this.hostDependencies.actions.selectWorkspacePath;
+      if (!selectPath) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.SELECT_FILE);
+        return;
+      }
+      const filePath = await selectPath.call(this.hostDependencies.actions, {
+        kind: PATH_SELECTION_KINDS.FILE,
+        title: PATH_SELECTION_TITLES.LOAD_WORKFLOW,
+      });
+      if (!filePath) return;
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      await orchestrator.loadPromptFileForClient(
+        this.resolveClientWorkflowFilePath(filePath),
+        ctx.postMessage,
+        ctx.clientId,
+        ctx.interactionPort
+      );
+      await this.settingsSync.sendWorkflowPropertiesToSettings(
+        ctx.postMessage,
+        ctx.clientId
+      );
     });
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message, ctx) => {
@@ -817,11 +853,38 @@ export class WebviewMessageRouter {
         }
         return;
       }
-      vscode.commands.executeCommand("ctrlyoke.appendFromDashboard");
+      const selectPath = this.hostDependencies.actions.selectWorkspacePath;
+      if (!selectPath) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.APPEND_FILE);
+        return;
+      }
+      const filePath = await selectPath.call(this.hostDependencies.actions, {
+        kind: PATH_SELECTION_KINDS.FILE,
+        title: PATH_SELECTION_TITLES.APPEND_WORKFLOW,
+      });
+      if (filePath) {
+        await this.getOrchestrator()?.appendFromFileForClient(
+          undefined,
+          this.resolveClientWorkflowFilePath(filePath),
+          ctx.clientId,
+          QUEUE_POSITION.END
+        );
+      }
     });
 
-    table.set(MESSAGE_TYPES.EDIT_FILE, () => {
-      vscode.commands.executeCommand("ctrlyoke.editCurrentPromptFile");
+    table.set(MESSAGE_TYPES.EDIT_FILE, async (_message, ctx) => {
+      const path = this.getOrchestrator()?.getCurrentPromptFilePathForClient(
+        ctx.clientId
+      );
+      if (!path) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.EDIT_FILE);
+        return;
+      }
+      await this.runHostAction(
+        ctx,
+        DASHBOARD_HOST_ACTIONS.EDIT_FILE,
+        this.hostDependencies.actions.openWorkspaceTarget({ path })
+      );
     });
 
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async (_message, ctx) => {
@@ -860,8 +923,13 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("ctrlyoke.stop");
     });
 
-    table.set(MESSAGE_TYPES.SHOW_OUTPUT, () => {
-      vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
+    table.set(MESSAGE_TYPES.SHOW_OUTPUT, async (_message, ctx) => {
+      const reveal = this.hostDependencies.actions.revealOutput;
+      if (!reveal) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.SHOW_OUTPUT);
+        return;
+      }
+      await reveal.call(this.hostDependencies.actions);
     });
 
     table.set(MESSAGE_TYPES.EXPORT_OUTPUT, async (message, ctx) => {
@@ -1108,31 +1176,54 @@ export class WebviewMessageRouter {
       this.promptEditorSupport.handleOpenSkill(ctx, message.skillName);
     });
 
-    table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message) => {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
-      if (!workspaceRoot) {
+    table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message, ctx) => {
+      const openGitDiff = this.hostDependencies.actions.openGitDiff;
+      if (!openGitDiff) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.OPEN_GIT_CHANGE);
         return;
       }
-      await vscode.commands.executeCommand("ctrlyoke.openGitChange", {
-        workspaceRoot,
-        ref: message.ref,
-      });
+      const workspaceRoot = this.hostDependencies.getNamedRoots()[0]?.fsPath;
+      if (!workspaceRoot) return;
+      await this.runHostAction(
+        ctx,
+        DASHBOARD_HOST_ACTIONS.OPEN_GIT_CHANGE,
+        openGitDiff.call(this.hostDependencies.actions, {
+          kind: "change",
+          workspaceRoot,
+          ref: message.ref,
+        })
+      );
     });
 
-    table.set(MESSAGE_TYPES.OPEN_WORKTREE, async (message) => {
-      await vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_WORKTREE, {
-        worktreePath: message.worktreePath,
-      });
+    table.set(MESSAGE_TYPES.OPEN_WORKTREE, async (message, ctx) => {
+      const openFolder = this.hostDependencies.actions.openFolderWindow;
+      if (!openFolder) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.OPEN_WORKTREE);
+        return;
+      }
+      await this.runHostAction(
+        ctx,
+        DASHBOARD_HOST_ACTIONS.OPEN_WORKTREE,
+        openFolder.call(this.hostDependencies.actions, message.worktreePath)
+      );
     });
 
-    table.set(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, async (message) => {
-      await vscode.commands.executeCommand(VSCODE_COMMANDS.VIEW_WORKTREE_DIFF, {
-        sourceCheckoutRoot: message.sourceCheckoutRoot,
-        baseCommit: message.baseCommit,
-        branchName: message.branchName,
-      });
+    table.set(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, async (message, ctx) => {
+      const openGitDiff = this.hostDependencies.actions.openGitDiff;
+      if (!openGitDiff) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.VIEW_WORKTREE_DIFF);
+        return;
+      }
+      await this.runHostAction(
+        ctx,
+        DASHBOARD_HOST_ACTIONS.VIEW_WORKTREE_DIFF,
+        openGitDiff.call(this.hostDependencies.actions, {
+          kind: "worktree",
+          sourceCheckoutRoot: message.sourceCheckoutRoot,
+          baseCommit: message.baseCommit,
+          branchName: message.branchName,
+        })
+      );
     });
 
     table.set(MESSAGE_TYPES.MERGE_WORKTREE, async (message) => {
@@ -1165,19 +1256,23 @@ export class WebviewMessageRouter {
       }
     );
 
-    table.set(MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW, async (message) => {
-      try {
-        const doc = await vscode.workspace.openTextDocument({
+    table.set(MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW, async (message, ctx) => {
+      const openPreview = this.hostDependencies.actions.openContentPreview;
+      if (!openPreview) {
+        this.replyHostAction(
+          ctx,
+          DASHBOARD_HOST_ACTIONS.EXPORT_CONTENT_PREVIEW
+        );
+        return;
+      }
+      await this.runHostAction(
+        ctx,
+        DASHBOARD_HOST_ACTIONS.EXPORT_CONTENT_PREVIEW,
+        openPreview.call(this.hostDependencies.actions, {
           content: message.content as string,
           language: message.language as string,
-        });
-        await vscode.window.showTextDocument(doc, { preview: true });
-      } catch (error) {
-        Log.error(
-          "[WebviewMessageRouter] EXPORT_CONTENT_PREVIEW: failed to open document",
-          error
-        );
-      }
+        })
+      );
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message, ctx) => {
@@ -2028,27 +2123,60 @@ export class WebviewMessageRouter {
       this.settingsSync.handleOpenSettings();
     });
 
-    table.set(MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER, () => {
-      vscode.commands.executeCommand("workbench.mcp.browseServers");
+    table.set(MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER, async (_message, ctx) => {
+      const browse = this.hostDependencies.actions.browseMcpGallery;
+      if (!browse) {
+        this.replyHostAction(
+          ctx,
+          DASHBOARD_HOST_ACTIONS.OPEN_VSCODE_MCP_BROWSER
+        );
+        return;
+      }
+      await browse.call(this.hostDependencies.actions);
     });
 
-    table.set(MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND, async (message) => {
+    table.set(MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND, async (message, ctx) => {
       // Keep this bridge deliberately narrow: dashboard clients may request
       // the native offline-license picker, but never arbitrary commands.
       if (message.command !== VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO) {
         return;
       }
-      await vscode.commands.executeCommand(
-        VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO
+      const selectPath = this.hostDependencies.actions.selectWorkspacePath;
+      if (!selectPath) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.ACTIVATE_OFFLINE_PRO);
+        return;
+      }
+      const selectedPath = await selectPath.call(
+        this.hostDependencies.actions,
+        {
+          kind: PATH_SELECTION_KINDS.FILE,
+          title: PATH_SELECTION_TITLES.IMPORT_OFFLINE_LICENSE,
+          openLabel: PATH_SELECTION_TITLES.IMPORT_OFFLINE_LICENSE,
+          fileExtensions: ["license", "txt", "json", "lic", "*"],
+        }
       );
+      if (selectedPath) {
+        await this.licenseHandlers.handleImportLicenseFile(
+          {
+            type: MESSAGE_TYPES.IMPORT_LICENSE_FILE,
+            blob: await fs.readFile(selectedPath, "utf8"),
+          },
+          ctx
+        );
+      }
     });
 
     table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, (_message, ctx) => {
       this.settingsSync.handleGlobalSettingsLoadRequest(ctx.postMessage);
     });
 
-    table.set(MESSAGE_TYPES.RELOAD_WINDOW, async () => {
-      await vscode.commands.executeCommand(VSCODE_COMMANDS.RELOAD_WINDOW);
+    table.set(MESSAGE_TYPES.RELOAD_WINDOW, async (_message, ctx) => {
+      const reload = this.hostDependencies.actions.reloadHost;
+      if (!reload) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.RELOAD_WINDOW);
+        return;
+      }
+      await reload.call(this.hostDependencies.actions);
     });
 
     table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message, ctx) => {
@@ -2230,12 +2358,16 @@ export class WebviewMessageRouter {
       }
       await sendWorktreeManagementState(true, ctx);
     });
-    table.set(MESSAGE_TYPES.OPEN_WORKTREE_OWNER, async (message) => {
-      await vscode.commands.executeCommand(
-        VSCODE_COMMANDS.OPEN_WORKTREE_OWNER,
-        {
-          stateRoot: message.stateRoot,
-        }
+    table.set(MESSAGE_TYPES.OPEN_WORKTREE_OWNER, async (message, ctx) => {
+      const openFolder = this.hostDependencies.actions.openFolderWindow;
+      if (!openFolder) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.OPEN_WORKTREE_OWNER);
+        return;
+      }
+      await this.runHostAction(
+        ctx,
+        DASHBOARD_HOST_ACTIONS.OPEN_WORKTREE_OWNER,
+        openFolder.call(this.hostDependencies.actions, message.stateRoot)
       );
     });
 
@@ -2709,9 +2841,42 @@ export class WebviewMessageRouter {
   }
 
   private getWorkspaceRoot(): string {
-    return vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : "";
+    return this.hostDependencies.getNamedRoots()[0]?.fsPath ?? "";
+  }
+
+  private async runHostAction(
+    ctx: WebviewClientContext,
+    action: DashboardHostActionResultMessage["action"],
+    result: Promise<ActionResult>
+  ): Promise<void> {
+    try {
+      const outcome = await result;
+      if (outcome.status !== DASHBOARD_ACTION_RESULT_STATUSES.OPENED) {
+        this.replyHostAction(ctx, action, outcome.status, outcome.message);
+      }
+    } catch (error) {
+      this.replyHostAction(
+        ctx,
+        action,
+        DASHBOARD_ACTION_RESULT_STATUSES.FAILED,
+        getErrorMessage(error)
+      );
+    }
+  }
+
+  private replyHostAction(
+    ctx: WebviewClientContext,
+    action: DashboardHostActionResultMessage["action"],
+    status: DashboardHostActionResultMessage["status"] = DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED,
+    message?: string
+  ): void {
+    const reply: DashboardHostActionResultMessage = {
+      type: MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT,
+      action,
+      status,
+      message,
+    };
+    ctx.emit(reply);
   }
 }
 
@@ -2784,4 +2949,9 @@ export interface WebviewRouteOptions {
   postMessage?: PostMessageFn;
   /** Short label identifying the client for log prefixing, e.g. "panel" or "browser:1" */
   clientTag?: string;
+}
+
+export interface WebviewRouterHostDependencies {
+  readonly actions: DashboardHostActions;
+  readonly getNamedRoots: () => NamedRoot[];
 }

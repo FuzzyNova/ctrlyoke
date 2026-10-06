@@ -23,6 +23,7 @@ import {
   AnyTargetId,
   PromptEditorInsertMode,
   MESSAGE_TYPES,
+  DASHBOARD_ACTION_RESULT_STATUSES,
   SEARCH_HISTORY_ERROR_CODES,
   TRUST_DECISIONS,
   STATUS_MESSAGE_SEVERITY,
@@ -35,6 +36,7 @@ import {
   type UndoFileAction,
   type CompletionNotificationSeverity,
   type UserFeedbackSeverity,
+  type DashboardHostAction,
   type EndConditionScriptType,
   type HookEvent,
   type McpTransport,
@@ -1610,6 +1612,15 @@ export interface WorktreeManagementActionResultMessage {
   message: string;
 }
 
+/** Extension -> Webview: outcome of a host-native dashboard action. */
+export interface DashboardHostActionResultMessage {
+  type: typeof MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT;
+  action: DashboardHostAction;
+  status: (typeof DASHBOARD_ACTION_RESULT_STATUSES)[keyof typeof DASHBOARD_ACTION_RESULT_STATUSES];
+  message?: string;
+  requestId?: string;
+}
+
 /**
  * Global settings updated message (extension -> webview)
  */
@@ -3051,6 +3062,7 @@ export type IncomingMessage =
   | GlobalSettingsLoadedMessage
   | WorktreeManagementStateMessage
   | WorktreeManagementActionResultMessage
+  | DashboardHostActionResultMessage
   | WorkspaceWorktreeOwnershipMessage
   | GlobalSettingUpdatedMessage
   | LicenseMachinesUpdatedMessage

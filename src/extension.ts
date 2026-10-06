@@ -84,9 +84,7 @@ import {
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
 import { NotificationManager } from "./ui/NotificationManager";
-import {
-  promptBatchApprovalForPendingWorkspaceExternalRoots,
-} from "./ui/ExternalRootsApproval";
+import { promptBatchApprovalForPendingWorkspaceExternalRoots } from "./ui/ExternalRootsApproval";
 import {
   confirmExternalFileTrustAndOpen,
   type FileOpenTarget,
@@ -367,6 +365,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register React webview provider (Phase 4 - unified provider)
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
+    const dashboardHostActions = new VsCodeDashboardHostActions();
     webviewProvider = new CtrlYokeWebviewProvider(
       context,
       new TemplateManager(
@@ -375,7 +374,23 @@ export async function activate(context: vscode.ExtensionContext) {
         platform
       ),
       vscodeUserFeedbackSink,
-      licenseService
+      licenseService,
+      {
+        actions: dashboardHostActions,
+        getNamedRoots: () => {
+          const roots = getVsCodeNamedWorkspaceRoots();
+          if (roots.length === 0) return [];
+          const workspaceRoot = getVsCodeWorkspaceRoot();
+          const primary = roots.find((root) => root.fsPath === workspaceRoot);
+          return [
+            {
+              name: primary?.name ?? path.basename(workspaceRoot),
+              fsPath: workspaceRoot,
+            },
+            ...roots.filter((root) => root.fsPath !== workspaceRoot),
+          ];
+        },
+      }
     );
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
@@ -475,7 +490,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarSink);
     workflowOrchestrator = new WorkflowOrchestrator({
       platform,
-      dashboardHostActions: new VsCodeDashboardHostActions(),
+      dashboardHostActions,
       workspaceFolderPathResolver: () => getVsCodeWorkspaceFolder()?.uri.fsPath,
       dashboardProvider: webviewProvider,
       userFeedbackSink,
@@ -1050,7 +1065,7 @@ function registerCommands(
 
   // Select Prompt File command (for dashboard)
   const selectPromptFileCommand = vscode.commands.registerCommand(
-    "ctrlyoke.selectPromptFile",
+    VSCODE_COMMANDS.SELECT_PROMPT_FILE,
     async () => {
       const selectedPath = await pickWorkflowFile(
         "Select a prompt file to load"
