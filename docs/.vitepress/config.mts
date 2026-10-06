@@ -107,7 +107,10 @@ export default defineConfig({
       "/pro/": [
         {
           text: "ctrlyoke Pro",
-          items: [{ text: "Overview & activation", link: "/pro/" }],
+          items: [
+            { text: "Overview & activation", link: "/pro/" },
+            { text: "Use ctrlyoke on your phone", link: "/pro/mobile-setup" },
+          ],
         },
       ],
       "/examples/": [

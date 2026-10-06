@@ -240,19 +240,24 @@ Each item: what to capture, what prep it needs, where it's used.
   - **The Android install recording:** the same flow's Chrome equivalent — scan the QR code → the URL
     opens in Chrome → proceed past the certificate warning → Settings → Download certificate (saved
     to Downloads as `ctrlyoke.crt`) → install it from Android Settings → Security & privacy → More
-    security settings → Encryption & credentials → Install a certificate → CA certificate (since
-    Android 11, tapping the downloaded file does not install a CA cert; the path varies by maker) →
-    reopen Chrome so the warning is gone → tap Chrome's install affordance (this varies: an
-    address-bar install icon, the ⋮ menu's "Install app" / "Add to Home screen" item, or a custom
-    in-app install banner, depending on Android/Chrome version and whether the page fires `beforeinstallprompt`) → open the installed app
-    from the home screen/app drawer and see/take control of the same running workflow. Unlike iOS,
-    this one may stay mostly video: the install affordance varies by device and Chrome version, so a
-    short clip plus "it may look like X or Y" text can beat stills of a single variant.
+    security settings → (Samsung) Credential storage → Install from device storage → CA certificate,
+    or (Pixel/stock) Encryption & credentials → Install a certificate → CA certificate → Install
+    anyway → pick the file (since Android 11, tapping the downloaded file does not install a CA
+    cert) → optionally show it under User certificates → **fully quit Chrome** (swipe every window
+    away in Recent apps; on a real Samsung tablet, reopening a tab wasn't enough and the warning
+    persisted) → reopen Chrome, warning gone → ⋮ → "Install and create shortcut" → **Install**
+    (not "Create shortcut", which only opens a Chrome tab and was the only option that worked
+    before the cert was trusted; older Chrome says "Install app" / "Add to home screen") → open the
+    installed app from the home screen/app drawer and see/take control of the same running
+    workflow. Unlike iOS, this one may stay mostly video: the settings path and install menu vary
+    by device and Chrome version, so a short clip plus "it may look like X or Y" text can beat
+    stills of a single variant.
 
   The iOS and Android install walkthroughs together are the release-blocking PWA-setup tutorial's
   centerpiece asset — the hard requirement is documented Android + iOS install instructions in
   `docs/pro/`, and these recordings are the visual walkthrough that instructions alone don't convey
-  well.
+  well. **Status — instructions: drafted** as `docs/pro/mobile-setup.md` (text only; slot the iOS
+  stills and the Android recording in once annotated/recorded).
 
 - **Prep:** real devices, not emulators — install-prompt UI, camera-to-browser hand-off, and app-drawer/
   home-screen placement after install are all real-device/real-browser-version behavior that doesn't
