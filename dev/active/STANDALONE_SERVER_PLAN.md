@@ -161,10 +161,10 @@ reach no `vscode` load, as guarded by `SourceAuditCounters`.
 - **Resolved in 7b1:** generated dark/light static theme defaults now cover the
   webview's referenced variables. The hosted server applies `server.theme` and
   per-client `?theme=`, with captured VS Code variables layered over defaults.
-- No `workspaceKey` or `storageVersion` in the shim. `fpState-*` keys are
-  scoped only by origin, so two workspaces served on the same port at
-  different times restore each other's drafts. The React adapter is still
-  named `vsCodeStateStorage.ts`.
+- **Resolved in 7b2:** the server injects `projectKey(workspaceRoot)` as the
+  shim `workspaceKey`; tab and state keys are workspace-scoped, persisted roots
+  require `storageVersion: 1`, and the adapter is named `webviewStateStorage`.
+  Tests cover independent workspaces and clean startup on version mismatch.
 - TLS certificate generation lives in `WebviewSettingsSync.ts:1640-1728`,
   rooted at the VS Code workspace.
 - **npm packaging.** `scripts/build-npm-package.mjs`'s `NPM_PACKAGE_ENTRIES`

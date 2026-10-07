@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
+import { webviewRawStorage } from "@utils/webviewStateStorage";
 import { selectToastLevel } from "@store/settingsStore";
 import type {
   WorkflowSummary,
@@ -2462,7 +2462,7 @@ export const useUiStore = create<UiState & UiActions>()(
       // Rehydrated explicitly from main.tsx before App mounts so retained
       // panel reconnects do not call vscode.getState() during module import.
       skipHydration: true,
-      storage: createJSONStorage(() => vsCodeRawStorage),
+      storage: createJSONStorage(() => webviewRawStorage),
       // Only persist specific fields (layout preferences)
       partialize: (state) =>
         Object.fromEntries(

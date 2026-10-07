@@ -152,7 +152,8 @@ function loadShim() {
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
   const shimPath = path.join(repoRoot, "src", "server", "standalone-shim.js");
   const source = renderHostedStandaloneShimScript(
-    fs.readFileSync(shimPath, "utf8")
+    fs.readFileSync(shimPath, "utf8"),
+    "test-workspace"
   );
   const windowListeners = new Map<string, TimerCallback[]>();
   const documentListeners = new Map<string, TimerCallback[]>();

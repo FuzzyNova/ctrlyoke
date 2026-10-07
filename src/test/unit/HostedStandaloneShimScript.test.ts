@@ -137,7 +137,7 @@ function loadShim(): {
   context.window.clearTimeout = context.clearTimeout;
   context.window.setInterval = context.setInterval;
 
-  vm.runInNewContext(buildHostedStandaloneShimScript(), context);
+  vm.runInNewContext(buildHostedStandaloneShimScript("test-workspace"), context);
   return { api: context.window.vscodeApi, sockets, dispatched };
 }
 
@@ -150,7 +150,8 @@ function openSocket(socket: FakeSocket): void {
 suite("HostedStandaloneShimScript", () => {
   test("renders shared liveness configuration into the template", () => {
     const rendered = renderHostedStandaloneShimScript(
-      'const config = "__CTRLYOKE_HOSTED_CONNECTION_CONFIG__";'
+      'const config = "__CTRLYOKE_HOSTED_CONNECTION_CONFIG__";',
+      "test-workspace"
     );
 
     assert.ok(
@@ -164,6 +165,7 @@ suite("HostedStandaloneShimScript", () => {
       )
     );
     assert.ok(rendered.includes(JSON.stringify(MESSAGE_TYPES.READY)));
+    assert.ok(rendered.includes('"workspaceKey":"test-workspace"'));
     assert.ok(
       rendered.includes(
         `"CLIENT_STALE_TIMEOUT_MS":${HOSTED_CONNECTION_LIVENESS.CLIENT_STALE_TIMEOUT_MS}`
@@ -172,7 +174,7 @@ suite("HostedStandaloneShimScript", () => {
   });
 
   test("loads the standalone shim without placeholder tokens", () => {
-    const rendered = buildHostedStandaloneShimScript();
+    const rendered = buildHostedStandaloneShimScript("test-workspace");
 
     assert.match(rendered, /function checkInboundLiveness\(\)/);
     assert.ok(!rendered.includes("__CTRLYOKE_HOSTED_CONNECTION_CONFIG__"));

@@ -2,13 +2,13 @@ import type { StateStorage } from "zustand/middleware";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 
 /**
- * Raw StateStorage adapter backed by the VS Code webview state API.
+ * Raw StateStorage adapter backed by the host webview state API.
  *
- * Unlike localStorage, vscode.getState()/setState() persists across VS Code
- * restarts for sidebar webview views. Values are stored under namespaced keys
- * inside the shared root state object so multiple stores can coexist.
+ * Values are stored under namespaced keys inside the host's shared root state
+ * object so multiple stores can coexist. The VS Code panel persists that state
+ * across restarts; the browser shim persists it in workspace-scoped localStorage.
  */
-export const vsCodeRawStorage: StateStorage = {
+export const webviewRawStorage: StateStorage = {
   getItem(name: string): string | null {
     try {
       const vscode = getVsCodeApi();

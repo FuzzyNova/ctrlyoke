@@ -9,10 +9,13 @@
   // sessionStorage survives page refreshes, but a real browser/PWA close clears
   // it. Mirror the most recent state in localStorage so reopening the only tab
   // can recover unsent prompt text even when the tab gets a new session id.
-  const TAB_ID_KEY = "fpTabId";
-  const LAST_TAB_ID_KEY = "fpLastTabId";
-  const OPEN_TABS_KEY = "fpOpenTabs";
-  const LAST_STATE_KEY = "fpState-last";
+  const WORKSPACE_KEY = CONNECTION_CONFIG.workspaceKey;
+  const STORAGE_VERSION = 1;
+  const scopedKey = (key) => `${key}-${WORKSPACE_KEY}`;
+  const TAB_ID_KEY = scopedKey("fpTabId");
+  const LAST_TAB_ID_KEY = scopedKey("fpLastTabId");
+  const OPEN_TABS_KEY = scopedKey("fpOpenTabs");
+  const LAST_STATE_KEY = `fpState-${WORKSPACE_KEY}-last`;
   const OPEN_TAB_STALE_MS = 15000;
   const HEARTBEAT_MS = 5000;
 
@@ -63,7 +66,7 @@
     sessionStorage.setItem(TAB_ID_KEY, tabId);
   }
   localStorage.setItem(LAST_TAB_ID_KEY, tabId);
-  const STATE_KEY = "fpState-" + tabId;
+  const STATE_KEY = `fpState-${WORKSPACE_KEY}-${tabId}`;
 
   function markTabOpen() {
     const tabs = getOpenTabs(Date.now());
@@ -86,10 +89,18 @@
   try {
     const persistedState = localStorage.getItem(STATE_KEY);
     const lastState = localStorage.getItem(LAST_STATE_KEY);
-    _state = JSON.parse(persistedState || lastState || "{}");
+    const parsedState = JSON.parse(persistedState || lastState || "null");
+    _state =
+      parsedState &&
+      typeof parsedState === "object" &&
+      !Array.isArray(parsedState) &&
+      parsedState.storageVersion === STORAGE_VERSION
+        ? parsedState
+        : { storageVersion: STORAGE_VERSION };
   } catch {
     localStorage.removeItem(STATE_KEY);
     localStorage.removeItem(LAST_STATE_KEY);
+    _state = { storageVersion: STORAGE_VERSION };
   }
   let ws;
   let reconnectTimer;
@@ -800,9 +811,9 @@
       return _state;
     },
     setState(s) {
-      _state = s;
-      writeJson(STATE_KEY, s);
-      writeJson(LAST_STATE_KEY, s);
+      _state = { ...s, storageVersion: STORAGE_VERSION };
+      writeJson(STATE_KEY, _state);
+      writeJson(LAST_STATE_KEY, _state);
     },
   };
 })();

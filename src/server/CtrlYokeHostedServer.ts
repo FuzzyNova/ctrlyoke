@@ -74,6 +74,7 @@ import {
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
+import { projectKey } from "../utils/ProjectStatePaths";
 import { colorizeSvg, resolveHostedIconColors } from "./IconColorizer";
 import {
   WebPushService,
@@ -300,6 +301,7 @@ export class CtrlYokeHostedServer
   private readonly getOrchestrator: () => WorkflowOrchestrator;
   private port: number;
   private readonly workspaceRoot: string;
+  private readonly workspaceKey: string;
   private readonly token: string;
   private bindAddress: string;
   private readonly fallbackPorts: number[];
@@ -332,6 +334,7 @@ export class CtrlYokeHostedServer
     this.fallbackPorts = fallbackPorts;
     this.bindAddress = bindAddress;
     this.workspaceRoot = workspaceRoot;
+    this.workspaceKey = projectKey(workspaceRoot);
     this.token = token;
     this.onSiblingServerDetected = onSiblingServerDetected;
     this.hostKind = hostKind;
@@ -972,7 +975,7 @@ export class CtrlYokeHostedServer
       res.locals.skipSecretRedaction = true;
       res
         .type("application/javascript")
-        .send(buildHostedStandaloneShimScript());
+        .send(buildHostedStandaloneShimScript(this.workspaceKey));
     });
     // Cert download — no token required so iOS users can fetch and install it
     // before the WebSocket handshake can succeed. The cert is a public key only.
