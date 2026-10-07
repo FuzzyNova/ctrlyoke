@@ -1,9 +1,15 @@
 # Workspace Editor Language Intelligence Plan
 
 **Status (2026-10-07):** Phase 2 managed backend is implemented (staging
-Stage 13b); its trust, approval/hash renewal, lifecycle, cap/LRU, and restart
-contracts have unit coverage. Browser completion/hover/rename/diagnostics
-verification remains a manual follow-up in both hosts. Phases 7a, 7-regex, and
+Stage 13b), and Stage 14a applies rename/server workspace edits across open and
+unopened workspace files. Rename confirmation uses the LSP request
+`ctrlyoke/confirmWorkspaceRename` (params `{ fileCount }`, boolean result);
+open-buffer edits use the `ctrlyoke/applyWorkspaceTextEdits` notification
+(`{ uri, edits }`). The browser intercepts these messages on the LSP socket and
+answers/applies them through the viewer modal and CodeMirror buffer. Its trust,
+approval/hash renewal, lifecycle, cap/LRU, restart, and edit contracts have
+automated coverage. Browser completion/hover/rename/diagnostics verification
+remains a manual follow-up in both hosts. Phases 7a, 7-regex, and
 7c are complete, as is phase 1 (staging Stages 12a and 12b). Later phases
 remain.
 The `SymbolIndex` port and `VsCodeSymbolIndex` (phase 7a) plus
@@ -308,13 +314,19 @@ UX, including where the catalog comes from, is in "Settings section UX" below.
   - Results that point outside the workspace roots (for example lib `.d.ts`
     files in a global install) are returned as read-only locations. The
     editor may preview them but never writes them.
-- **Multi-file edits (rename, code actions):** the proxy applies the
+- **Multi-file edits (rename, code actions):** Stage 14a applies rename results
+  and server `workspace/applyEdit` requests in the proxy. The proxy applies the
   `WorkspaceEdit` itself. The open buffer is edited in the browser. Files that
   aren't open are written through `HostedWorkspaceViewerService` (same EOL
   preservation and atomic write), and then a `workspace/didChangeWatchedFiles`
   notification is sent. A rename that touches unopened files asks for confirmation
   with a file count in the browser (a built-in modal, per the native-vs-built-in
-  modal policy).
+  modal policy). The proxy sends `ctrlyoke/confirmWorkspaceRename` as an LSP
+  request with `{ fileCount }`; the browser replies with a boolean result.
+  Edits to open buffers are sent as the LSP notification
+  `ctrlyoke/applyWorkspaceTextEdits` with `{ uri, edits }`, then flow back to
+  the proxy through the normal `didChange` stream. Code-action edits are applied
+  when the server sends `workspace/applyEdit` after the user executes an action.
 
 ### Multiple tabs and external changes: best effort, never read-only
 

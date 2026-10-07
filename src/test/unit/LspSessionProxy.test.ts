@@ -221,6 +221,83 @@ suite("LspSessionProxy", () => {
     );
     redactedProxy?.dispose();
   });
+
+  test("applies rename edits to the requesting tab buffer", async () => {
+    await open(proxyA!, "const value = 1;\n");
+    backend.requestHandler = () => ({ changes: {
+      [pathToFileURL(path.join(workspaceRoot, "src", "main.ts")).toString()]: [
+        { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 11 } }, newText: "renamed" },
+      ],
+    } });
+    await proxyA!.handleMessage({ jsonrpc: "2.0", id: 31, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
+    assert.ok(clientA.some((message) => (message as { method?: string }).method === "ctrlyoke/applyWorkspaceTextEdits"));
+    await waitFor(() => backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
+      (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 1;\n"));
+    assert.ok(backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
+      (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 1;\n"));
+  });
+
+  test("applies edits to a dirty cross-tab buffer without replacing its unsaved text", async () => {
+    await open(proxyA!, "const value = 1;\n");
+    await open(proxyB!, "const value = 2; // unsaved\n");
+    backend.requestHandler = () => ({ changes: {
+      [pathToFileURL(path.join(workspaceRoot, "src", "main.ts")).toString()]: [
+        { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 11 } }, newText: "renamed" },
+      ],
+    } });
+    await proxyA!.handleMessage({ jsonrpc: "2.0", id: 32, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
+    assert.ok(clientB.some((message) => (message as { method?: string }).method === "ctrlyoke/applyWorkspaceTextEdits"));
+    await waitFor(() => backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
+      (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 2; // unsaved\n"));
+    assert.ok(backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
+      (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 2; // unsaved\n"));
+  });
+
+  test("confirms and writes edits to unopened files then notifies watched files", async () => {
+    const unopened = path.join(workspaceRoot, "src", "other.ts");
+    fs.writeFileSync(unopened, "const value = 1;\r\n");
+    let saved = "";
+    const editProxy = await host.createProxy(sessionId, (message) => clientA.push(message), async () => true, {
+      readFile: async () => ({ content: "const value = 1;\r\n" }),
+      writeFile: async (_viewerPath, content) => { saved = content; },
+      notifyFileChanged: async (viewerPath) => host.notifyWorkspaceFileChanged(viewerPath),
+    });
+    backend.requestHandler = () => ({ changes: {
+      [pathToFileURL(unopened).toString()]: [
+        { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 11 } }, newText: "renamed" },
+      ],
+    } });
+    const pending = editProxy!.handleMessage({ jsonrpc: "2.0", id: 33, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
+    await waitFor(() => clientA.some((message) => (message as { method?: string }).method === "ctrlyoke/confirmWorkspaceRename"));
+    const confirmation = clientA.find((message) => (message as { method?: string }).method === "ctrlyoke/confirmWorkspaceRename") as { id: string };
+    await editProxy!.handleMessage({ jsonrpc: "2.0", id: confirmation.id, result: true });
+    await pending;
+    assert.strictEqual(saved, "const renamed = 1;\r\n");
+    await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_CHANGE_WATCHED_FILES));
+    assert.ok(backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE_WATCHED_FILES &&
+      (params as { changes?: unknown[] }).changes?.length === 1));
+    editProxy?.dispose();
+  });
+
+  test("rejects a workspace edit targeting a redacted file", async () => {
+    const secretPath = path.join(workspaceRoot, "src", "secret.ts");
+    fs.writeFileSync(secretPath, "const secret = true;\n");
+    const writes: string[] = [];
+    const readOnlyProxy = await host.createProxy(sessionId, (message) => clientA.push(message), async (p) => p !== "src/secret.ts", {
+      readFile: async () => ({ content: "[REDACTED]", readOnly: true }),
+      writeFile: async (viewerPath) => { writes.push(viewerPath); },
+      notifyFileChanged: async () => undefined,
+    });
+    backend.requestHandler = () => ({ changes: {
+      [pathToFileURL(secretPath).toString()]: [
+        { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: "changed" },
+      ],
+    } });
+    await readOnlyProxy!.handleMessage({ jsonrpc: "2.0", id: 34, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
+    assert.deepStrictEqual(writes, []);
+    assert.ok((clientA.at(-1) as { error?: unknown }).error);
+    readOnlyProxy?.dispose();
+  });
 });
 
 const viewerUri = `${LSP_VIEWER_URI_PREFIX}src/main.ts`;

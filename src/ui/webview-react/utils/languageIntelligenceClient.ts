@@ -13,6 +13,7 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   LanguageIntelligenceTransport,
   type LspWebSocketFactory,
+  setWorkspaceEditHandler,
 } from "./languageIntelligenceTransport";
 
 interface ClientSession {
@@ -24,6 +25,25 @@ interface ClientSession {
 const sessions = new Map<string, ClientSession>();
 const editorViews = new Map<string, EditorView>();
 const viewListeners = new Map<string, Set<(view: EditorView) => void>>();
+
+export function applyWorkspaceTextEdits(uri: string, edits: unknown[]): void {
+  const view = editorViews.get(uri);
+  if (!view) return;
+  const changes = edits.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const edit = value as { range?: { start?: { line?: number; character?: number }; end?: { line?: number; character?: number } }; newText?: unknown };
+    if (typeof edit.newText !== "string" || !edit.range?.start || !edit.range.end) return [];
+    const offset = (position: { line?: number; character?: number }) => {
+      if (typeof position.line !== "number" || typeof position.character !== "number") return 0;
+      return view.state.doc.line(Math.min(view.state.doc.lines, position.line + 1)).from + position.character;
+    };
+    const from = offset(edit.range.start);
+    const to = offset(edit.range.end);
+    return [{ from, to, insert: edit.newText }];
+  }).sort((a, b) => a.from - b.from);
+  if (changes.length) view.dispatch({ changes });
+}
+setWorkspaceEditHandler(applyWorkspaceTextEdits);
 
 export function workspaceFileUri(filePath: string): string {
   const encodedPath = filePath

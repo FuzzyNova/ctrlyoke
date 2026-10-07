@@ -1,4 +1,12 @@
 import type { Transport } from "@codemirror/lsp-client";
+import { confirmWorkspaceRename } from "./workspaceEditConfirmation";
+
+let workspaceEditHandler: ((uri: string, edits: unknown[]) => void) | undefined;
+export function setWorkspaceEditHandler(
+  handler: (uri: string, edits: unknown[]) => void
+): void {
+  workspaceEditHandler = handler;
+}
 
 export interface LspWebSocket {
   readonly readyState: number;
@@ -70,6 +78,7 @@ export class LanguageIntelligenceTransport implements Transport {
     socket.onmessage = (event) => {
       if (this.disposed || this.socket !== socket) return;
       const message = typeof event.data === "string" ? event.data : String(event.data);
+      if (this.handleProxyMessage(message)) return;
       for (const handler of [...this.handlers]) handler(message);
     };
     socket.onclose = () => {
@@ -79,6 +88,26 @@ export class LanguageIntelligenceTransport implements Transport {
       this.scheduleReconnect();
     };
     socket.onerror = () => socket.close();
+  }
+
+  private handleProxyMessage(raw: string): boolean {
+    let message: { id?: string | number; method?: string; params?: unknown };
+    try { message = JSON.parse(raw) as typeof message; } catch { return false; }
+    if (message.method === "ctrlyoke/confirmWorkspaceRename" && message.id !== undefined) {
+      const fileCount = (message.params as { fileCount?: unknown } | undefined)?.fileCount;
+      void confirmWorkspaceRename(typeof fileCount === "number" ? fileCount : 0).then((confirmed) => {
+        this.send(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: confirmed }));
+      });
+      return true;
+    }
+    if (message.method === "ctrlyoke/applyWorkspaceTextEdits") {
+      const params = message.params as { uri?: unknown; edits?: unknown } | undefined;
+      if (typeof params?.uri === "string" && Array.isArray(params.edits)) {
+        workspaceEditHandler?.(params.uri, params.edits);
+      }
+      return true;
+    }
+    return false;
   }
 
   private scheduleReconnect(): void {

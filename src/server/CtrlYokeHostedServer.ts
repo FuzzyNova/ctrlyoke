@@ -467,6 +467,22 @@ export class CtrlYokeHostedServer
         }, async (viewerPath) => {
           const file = await this.viewerService.readFile(viewerPath);
           return file.readOnly !== true;
+        }, {
+          readFile: async (viewerPath) => {
+            const file = await this.viewerService.readFile(viewerPath);
+            return { content: file.content, readOnly: file.readOnly };
+          },
+          writeFile: async (viewerPath, content) => {
+            const file = await this.viewerService.readFile(viewerPath);
+            if (file.readOnly) throw new Error(`Workspace edit targets a read-only file: ${viewerPath}`);
+            await this.viewerService.saveFile({
+              path: viewerPath,
+              content,
+              baseModifiedAt: file.modifiedAt ?? null,
+            });
+          },
+          notifyFileChanged: (viewerPath) =>
+            this.languageIntelligenceHost.notifyWorkspaceFileChanged(viewerPath),
         })
         .then((created) => {
           proxy = created;

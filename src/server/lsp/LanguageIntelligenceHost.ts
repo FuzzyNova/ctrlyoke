@@ -103,7 +103,16 @@ export class LanguageIntelligenceHost {
   async createProxy(
     serverId: string,
     send: (message: unknown) => void,
-    canOpenPath: (viewerPath: string) => Promise<boolean>
+    canOpenPath: (viewerPath: string) => Promise<boolean>,
+    fileEditOperations: {
+      readFile: (viewerPath: string) => Promise<{ content: string; readOnly?: boolean }>;
+      writeFile: (viewerPath: string, content: string) => Promise<void>;
+      notifyFileChanged: (viewerPath: string) => Promise<void>;
+    } = {
+      readFile: async () => ({ content: "", readOnly: true }),
+      writeFile: async () => undefined,
+      notifyFileChanged: async () => undefined,
+    }
   ): Promise<LspSessionProxy | undefined> {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
     const pending = this.sessionsById.get(serverId);
@@ -116,6 +125,7 @@ export class LanguageIntelligenceHost {
       roots: this.roots,
       send,
       canOpenPath,
+      ...fileEditOperations,
       documents: session.documents,
       onDispose: () => session.proxies.delete(proxy),
       onDocumentOpened: () => this.options.backend.documentOpened?.(session.descriptor),

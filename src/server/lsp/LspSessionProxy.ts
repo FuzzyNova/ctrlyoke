@@ -34,6 +34,9 @@ interface ProxyOptions {
   readonly roots: WorkspacePathContext;
   readonly send: (message: unknown) => void;
   readonly canOpenPath: (viewerPath: string) => Promise<boolean>;
+  readonly readFile: (viewerPath: string) => Promise<{ content: string; readOnly?: boolean }>;
+  readonly writeFile: (viewerPath: string, content: string) => Promise<void>;
+  readonly notifyFileChanged: (viewerPath: string) => Promise<void>;
   readonly documents: Map<string, SharedDocument>;
   readonly onDispose: () => void;
   readonly onDocumentOpened?: () => void;
@@ -50,6 +53,7 @@ export class LspSessionProxy {
     { resolve(value: unknown): void; reject(error: Error): void }
   >();
   private nextServerRequestId = 1;
+  private nextClientRequestId = 1;
   private disposed = false;
 
   constructor(private readonly options: ProxyOptions) {}
@@ -69,6 +73,11 @@ export class LspSessionProxy {
 
   async forwardServerRequest(method: string, params: unknown): Promise<unknown> {
     if (this.disposed) throw new Error("LSP client is disconnected.");
+    if (method === "workspace/applyEdit") {
+      const edit = (params as { edit?: unknown } | undefined)?.edit;
+      await this.applyWorkspaceEdit(edit, false);
+      return { applied: true };
+    }
     const id = `server-${this.nextServerRequestId++}`;
     const rewrittenParams = await this.rewriteUris(params, false);
     const response = new Promise<unknown>((resolve, reject) => {
@@ -137,10 +146,14 @@ export class LspSessionProxy {
         request.method,
         params
       );
+      if (request.method === "textDocument/rename") {
+        await this.applyWorkspaceEdit(result, true);
+      }
+      const rewrittenResult = await this.rewriteUris(result, false);
       this.sendToClient({
         jsonrpc: "2.0",
         id: request.id,
-        result: await this.rewriteUris(result, false),
+        result: rewrittenResult,
       });
     } catch (error) {
       this.sendError(request.id, INVALID_REQUEST, String(error));
@@ -383,6 +396,110 @@ export class LspSessionProxy {
     }
   }
 
+  private async applyWorkspaceEdit(value: unknown, confirmUnopened: boolean): Promise<void> {
+    if (!value || typeof value !== "object") return;
+    const edit = value as {
+      changes?: Record<string, Array<{ range?: unknown; newText?: unknown }>>;
+      documentChanges?: Array<{
+        textDocument?: { uri?: unknown };
+        edits?: Array<{ range?: unknown; newText?: unknown }>;
+      }>;
+    };
+    const byPath = new Map<string, Array<{ range?: unknown; newText?: unknown }>>();
+    for (const [uri, edits] of Object.entries(edit.changes ?? {})) {
+      if (typeof uri !== "string" || !Array.isArray(edits)) throw new Error("Invalid workspace edit.");
+      byPath.set(this.viewerPathFromServerUri(uri), edits);
+    }
+    for (const change of edit.documentChanges ?? []) {
+      const uri = change.textDocument?.uri;
+      if (typeof uri !== "string" || !Array.isArray(change.edits)) throw new Error("Unsupported workspace edit operation.");
+      const existing = byPath.get(this.viewerPathFromServerUri(uri)) ?? [];
+      byPath.set(this.viewerPathFromServerUri(uri), [...existing, ...change.edits]);
+    }
+    if (byPath.size === 0) return;
+
+    // Validate the whole edit before mutating any buffer or file.
+    const resolved = [...byPath].map(([viewerPath, edits]) => {
+      const serverUri = this.resolveClientUri(`${LSP_VIEWER_URI_PREFIX}${viewerPath
+        .split("/").map(encodeURIComponent).join("/")}`)?.serverUri;
+      if (!serverUri) throw new Error(`Workspace edit path is outside the workspace: ${viewerPath}`);
+      return { viewerPath, serverUri, edits };
+    });
+    for (const file of resolved) {
+      if (!(await this.options.canOpenPath(file.viewerPath))) {
+        throw new Error(`Workspace edit targets a read-only file: ${file.viewerPath}`);
+      }
+    }
+    const unopened = resolved.filter(({ serverUri }) => !this.options.documents.get(serverUri)?.tabs.size);
+    if (confirmUnopened && unopened.length > 0 && !(await this.confirmUnopenedRename(unopened.length))) {
+      throw new Error("Rename cancelled.");
+    }
+
+    for (const file of resolved) {
+      const shared = this.options.documents.get(file.serverUri);
+      if (shared?.tabs.size) {
+        for (const proxy of shared.tabs.keys()) {
+          proxy.applyEditsToOpenBuffer(file.serverUri, file.edits);
+        }
+      } else {
+        const response = await this.options.readFile(file.viewerPath);
+        if (response.readOnly) throw new Error(`Workspace edit targets a read-only file: ${file.viewerPath}`);
+        const content = applyLspTextEdits(response.content, file.edits);
+        await this.options.writeFile(file.viewerPath, content);
+        await this.options.notifyFileChanged(file.viewerPath);
+      }
+    }
+  }
+
+  private applyEditsToOpenBuffer(
+    serverUri: string,
+    edits: Array<{ range?: unknown; newText?: unknown }>
+  ): void {
+    const shared = this.options.documents.get(serverUri);
+    if (!shared) return;
+    for (const [proxy, tab] of shared.tabs) {
+      const state = [...proxy.buffers.values()].find((buffer) => buffer.serverUri === serverUri);
+      if (!state) continue;
+      state.text = applyLspTextEdits(state.text, edits);
+      state.version += 1;
+      shared.tabs.set(proxy, { text: state.text, version: state.version });
+      proxy.sendToClient({
+        jsonrpc: "2.0",
+        method: "ctrlyoke/applyWorkspaceTextEdits",
+        params: { uri: `${LSP_VIEWER_URI_PREFIX}${state.viewerPath.split("/").map(encodeURIComponent).join("/")}`, edits },
+      });
+      void proxy.sendFullTextChange(shared, state);
+      void tab;
+    }
+  }
+
+  private viewerPathFromServerUri(uri: string): string {
+    let absolutePath: string;
+    try { absolutePath = fileURLToPath(uri); } catch { throw new Error(`Invalid workspace edit URI: ${uri}`); }
+    const viewerPath = toViewerPath(absolutePath, {
+      primaryRoot: this.options.roots.workspaceRoot,
+      namedRoots: this.options.roots.namedRoots,
+    });
+    if (!safeResolveWorkspacePath(viewerPath, this.options.roots)) {
+      throw new Error(`Workspace edit URI is outside the workspace: ${uri}`);
+    }
+    return viewerPath;
+  }
+
+  private async confirmUnopenedRename(fileCount: number): Promise<boolean> {
+    const id = `confirm-${this.nextClientRequestId++}`;
+    const response = new Promise<unknown>((resolve, reject) => {
+      this.pendingServerRequests.set(id, { resolve, reject });
+    });
+    this.sendToClient({
+      jsonrpc: "2.0",
+      id,
+      method: "ctrlyoke/confirmWorkspaceRename",
+      params: { fileCount },
+    });
+    return (await response) === true;
+  }
+
   private sendResponse(id: string | number, result: unknown): void {
     this.sendToClient({ jsonrpc: "2.0", id, result });
   }
@@ -425,4 +542,22 @@ function applyTextChange(text: string, range: unknown, replacement: string): str
   const start = offset(candidate.start.line, candidate.start.character);
   const end = offset(candidate.end.line, candidate.end.character);
   return `${text.slice(0, start)}${replacement}${text.slice(end)}`;
+}
+
+function applyLspTextEdits(
+  text: string,
+  edits: Array<{ range?: unknown; newText?: unknown }>
+): string {
+  const changes = edits
+    .filter((edit) => typeof edit.newText === "string")
+    .map((edit) => ({ range: edit.range, text: edit.newText as string }))
+    .sort((a, b) => {
+      const left = a.range as { start?: { line?: number; character?: number } };
+      const right = b.range as { start?: { line?: number; character?: number } };
+      return (right.start?.line ?? 0) - (left.start?.line ?? 0) ||
+        (right.start?.character ?? 0) - (left.start?.character ?? 0);
+    });
+  let updated = text;
+  for (const change of changes) updated = applyTextChange(updated, change.range, change.text);
+  return updated;
 }

@@ -237,9 +237,13 @@ names the guard or test that proves it, not just the code change.
     its isolated rerun passed.
   - **13b:** `ManagedLanguageServerBackend` lifecycle (spawn, idle, cap/LRU,
     crash restart), workspace-definition approval, trust gate, `startOnLaunch`.
-  - **14a:** proxy-applied `WorkspaceEdit` (unopened files via the viewer
+  - **14a — done (2026-10-07):** proxy-applied rename and server
+    `workspace/applyEdit` `WorkspaceEdit`s (unopened files via the viewer
     service, cross-tab buffer edits, redacted-file rejection) and the
-    multi-file rename confirmation.
+    multi-file rename confirmation. The browser protocol is documented in the
+    language-intelligence plan. `npm run typecheck`, `npm run lint`, and
+    `npm test` passed (extension 5,635 passing/4 pending, UI 3,468 passing,
+    packaging 80 passing).
   - **14b:** context-menu group, F12, references panel, capability gating.
   - **15a:** `LanguageServerManagerService`, message constants, local-config
     discovery, npm install, live status push.

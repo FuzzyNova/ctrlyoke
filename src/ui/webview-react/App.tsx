@@ -72,6 +72,7 @@ import {
   WorkflowSwitchOverlay,
 } from "./components/layout";
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
+import { WorkspaceRenameConfirmationModal } from "./components/workspace-viewer/WorkspaceRenameConfirmationModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
 import { UxSnapshotButton } from "./components/dev/UxSnapshotButton";
 import { useNavigationSync } from "./navigation/useNavigationSync";
@@ -806,6 +807,7 @@ function App() {
 
         {/* Workspace viewer — fixed fullscreen overlay, standalone mode only */}
         <WorkspaceViewerModal />
+        <WorkspaceRenameConfirmationModal />
 
         {/* Content preview modal — git diff / prior-context XML */}
         <ContentPreviewModal />
@@ -1067,6 +1069,7 @@ function App() {
 
       {/* Workspace viewer — fixed fullscreen overlay, standalone mode only */}
       <WorkspaceViewerModal />
+      <WorkspaceRenameConfirmationModal />
 
       {/* Content preview modal — git diff / prior-context XML */}
       <ContentPreviewModal />
