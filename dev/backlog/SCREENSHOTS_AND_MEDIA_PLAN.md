@@ -252,12 +252,26 @@ Each item: what to capture, what prep it needs, where it's used.
     workflow. Unlike iOS, this one may stay mostly video: the settings path and install menu vary
     by device and Chrome version, so a short clip plus "it may look like X or Y" text can beat
     stills of a single variant.
+    - **Status — done, as stills plus an overview animation like iOS** (recorded on a Samsung
+      tablet; the page text covers the Pixel/stock path):
+      `images/screenshots/android-pwa-setup-01-…-15-*-750x1202.png` (15 stills, transparent outside
+      the device frame) and `android-pwa-setup-390x626.webp` (57s, 15 fps, 1.6 MB). The recording
+      starts in ctrlyoke's Server settings, so the QR scan and certificate-warning steps are text
+      only.
+  - **The desktop setup recording — done:** the shared first part of the guide, Server settings →
+    bind to `0.0.0.0` → Enable HTTPS → generate the self-signed certificate → Start server → QR
+    code. No transparency needed, so it's a plain MP4 (`desktop-server-setup-1300x1000.mp4`, 31s,
+    1.2 MB, embedded as a `<video>`) plus five panel crops
+    (`desktop-server-setup-01-…-05-*-628x*.png`). Record in that order: a certificate generated
+    before switching to All interfaces covers only localhost, and the cert summary line shows it.
 
   The iOS and Android install walkthroughs together are the release-blocking PWA-setup tutorial's
   centerpiece asset — the hard requirement is documented Android + iOS install instructions in
   `docs/pro/`, and these recordings are the visual walkthrough that instructions alone don't convey
-  well. **Status — instructions: drafted** as `docs/pro/mobile-setup.md` (text only; slot the iOS
-  stills and the Android recording in once annotated/recorded).
+  well. **Status — instructions: drafted** as `docs/pro/mobile-setup.md`: shared desktop and
+  open-the-link steps, then separate iPhone/iPad and Android sections with each step's stills in a
+  row (`.device-shots`, `docs/.vitepress/theme/custom.css`; click opens full size) and the overview
+  animation in a collapsed `<details>`. Stills are unannotated; the text names the item to tap.
 
 - **Prep:** real devices, not emulators — install-prompt UI, camera-to-browser hand-off, and app-drawer/
   home-screen placement after install are all real-device/real-browser-version behavior that doesn't

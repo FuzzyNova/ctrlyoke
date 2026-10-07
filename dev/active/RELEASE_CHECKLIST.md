@@ -468,6 +468,7 @@ You can't create the LS webhook without a target URL, and the Netlify function's
 - [x] 14-day remote-access trial timer in `globalState`.
 - [x] Production-build verification of the **unlicensed free path** — nothing above should ever block core workflow execution. `npm run package` passed on August 28, 2026 and produced `ctrlyoke-0.1.0.vsix` (249 files, 14.1 MB). A clean-profile install was not practical in this environment, so the remainder was verified by code-path review: workflow execution, local notifications, custom hooks, MCP, agents/skills, AI commit messages, and the localhost dashboard have no license block; first use initializes the 14-day remote trial; gated remote/TLS/push/UI surfaces warn and link to pricing instead of failing. The package contains the production webview, MCP server, and node-pty runtime.
 - [x] `docs/pro/index.md` — online + air-gapped activation instructions, referencing the real Keygen/LS setup above. QR scanning for air-gapped transfer is deliberately deferred; file-picker and paste import are shipped.
+- [x] `docs/pro/mobile-setup.md` — phone setup guide (HTTPS, certificate trust, PWA install). Shared computer steps first (`images/screenshots/desktop-server-setup-*`), then separate iPhone/iPad and Android sections, each with per-step screenshots and an animated overview (`images/screenshots/{ios,android}-pwa-setup-*`). See `dev/backlog/SCREENSHOTS_AND_MEDIA_PLAN.md` #7.
 
 ---
 

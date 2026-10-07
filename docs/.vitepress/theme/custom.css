@@ -1,0 +1,36 @@
+.vp-doc video {
+  max-width: 100%;
+  height: auto;
+}
+
+/*
+ * A row of device screenshots for a step-by-step guide. Wrap the images in
+ * <div class="device-shots"> with blank lines around the markdown so they stay
+ * one paragraph; link each image to itself so readers can open it full size.
+ */
+.vp-doc .device-shots p {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* Shrink to keep a step's shots on one row; wrap two-up on narrow screens. */
+.vp-doc .device-shots a {
+  flex: 0 1 180px;
+  min-width: 0;
+  line-height: 0;
+}
+
+@media (max-width: 640px) {
+  .vp-doc .device-shots p {
+    flex-wrap: wrap;
+  }
+
+  .vp-doc .device-shots a {
+    flex-basis: calc(50% - 6px);
+  }
+}
+
+.vp-doc .device-shots img {
+  width: 100%;
+}
