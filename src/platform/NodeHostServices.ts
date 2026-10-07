@@ -20,6 +20,8 @@ import { resolveServerToken, ServerTokenStore } from "./ServerTokenStore";
 import { LicenseService } from "../license/LicenseService";
 import { CompletionCore } from "../completions/CompletionCore";
 import { RegexSymbolIndex } from "../completions/RegexSymbolIndex";
+import { LspSymbolIndex } from "../completions/LspSymbolIndex";
+import { FallbackSymbolIndex } from "../completions/FallbackSymbolIndex";
 import type { EditorContextSource } from "../completions/EditorContextSource";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
@@ -72,6 +74,7 @@ export interface NodeHostServices {
   tokenStore: ServerTokenStore;
   licenseService: LicenseService;
   completionCore: CompletionCore;
+  getCompletionFiles(): Promise<string[]>;
   disposableRegistry: {
     add(disposable: { dispose(): void }): void;
     dispose(): void;
@@ -141,10 +144,11 @@ export async function createNodeHostServices(options: {
     getSelections: () => [],
     getVisibleOutputChannels: () => [],
   };
+  const regexSymbolIndex = new RegexSymbolIndex(cwd, getCompletionFiles);
   const completionCore = new CompletionCore({
     isMultiRoot: () => false,
     getFiles: getCompletionFiles,
-    symbols: new RegexSymbolIndex(cwd, getCompletionFiles),
+    symbols: regexSymbolIndex,
     editorContext,
   });
 
@@ -163,6 +167,7 @@ export async function createNodeHostServices(options: {
     tokenStore: new ServerTokenStore(secretStore, cwd),
     licenseService,
     completionCore,
+    getCompletionFiles,
     disposableRegistry,
     dispose: () => disposableRegistry.dispose(),
   };
@@ -302,6 +307,13 @@ export async function createNodeHostedServer(options: {
     namedWorkspaceRoots: namedRoots,
     isWorkspaceTrusted: () => true,
   });
+  const regexSymbolIndex = new RegexSymbolIndex(cwd, services.getCompletionFiles);
+  const lspSymbolIndex = new LspSymbolIndex(cwd, services.getCompletionFiles, languageIntelligenceHost);
+  services.completionCore.setSymbolIndex(new FallbackSymbolIndex(
+    lspSymbolIndex,
+    regexSymbolIndex,
+    (symbol) => lspSymbolIndex.shouldUseRegexFallback(symbol)
+  ));
   dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);
   server = new CtrlYokeHostedServer(
     createHostedServerOptions({

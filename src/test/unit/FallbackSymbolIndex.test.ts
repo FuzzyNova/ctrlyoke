@@ -83,4 +83,17 @@ suite("FallbackSymbolIndex", () => {
     );
     assert.strictEqual(unusedFallback.documentCalls, 0);
   });
+
+  test("merges regex results only for languages without a ready primary", async () => {
+    const fallbackForUnavailableLanguage = new FallbackSymbolIndex(
+      new FakeSymbolIndex([primarySymbol], []),
+      new FakeSymbolIndex([primarySymbol, fallbackSymbol], []),
+      (symbol) => symbol.viewerPath === fallbackSymbol.viewerPath
+    );
+
+    assert.deepStrictEqual(
+      await fallbackForUnavailableLanguage.workspaceSymbols("query", 10),
+      [primarySymbol, fallbackSymbol]
+    );
+  });
 });

@@ -1,7 +1,7 @@
 # Standalone Server Staging Plan
 
 **Status (2026-10-07):** Track A Stages 1–6 and Track B Stages 7a, 7b, 8,
-9, and 10 are complete; independent Stages I1 and I2 and Track C Stages 12a,
+9, 10, and 16 are complete; independent Stages I1 and I2 and Track C Stages 12a,
 12b, 13a, and 13b are also complete. Stage 13b has automated coverage for
 trust gating, approval/hash renewal, open-document protection, cap rejection,
 idle shutdown, LRU eviction, and crash restart. Manual browser completion,
@@ -111,7 +111,7 @@ names the guard or test that proves it, not just the code change.
 |   13b | **Done.** Managed backend lifecycle: hash-bound workspace-definition approval, stdio spawn, idle/cap/LRU/restart, trust gate, status events, and standalone `startOnLaunch`.                                     | LSP phase 2 (managed backend half)                     | Stage 13a                     | Unit tests cover approval/hash renewal, trust, open-document protection, cap rejection, idle shutdown, LRU eviction, and crash restart. Browser completion/hover/rename/diagnostics still need manual verification in both hosts. |
 |    14 | **Done.** Editor UX: capability-gated context actions, F12 definition navigation, references panel with workflow context insertion, and cross-file navigation.                                      | LSP phase 3                                            | Stage 13b                     | Vitest covers missing-capability hiding, F12 dispatch, reference formatting/navigation/context insertion, and preserved reference-link gestures. |
 |    15 | **Done.** Language Servers settings section: live status, curated catalog (detected / not installed, confirmed npm install, copyable install commands, homepage links), and local-config scan/import. | LSP phase 4                                            | Stage 13b                     | The Languages strip writes the active scope; server rows cover lifecycle/status actions, catalog installation, and local config import. `npm test` passes (extension 5,640/4 pending, UI 3,489, packaging 80). |
-|    16 | `LspSymbolIndex` for standalone `#`, with the regex index as the per-language fallback.                                                                                                             | LSP phase 7b                                           | Stages 9 and 13b              | The golden test covers all three indexes. Standalone `#` returns LSP symbols when a server is available.                                        |
+|    16 | **Done.** `LspSymbolIndex` for standalone `#`, with regex fallback per language. First `#` starts detected servers within the managed cap; regex answers during startup; catalog anchors stay open for each root marker. | LSP phase 7b | Stages 9 and 13b | Golden coverage matches all three indexes; fake-host coverage checks fan-out, range resolution, max results, startup fallback, and anchor opening. |
 |    17 | Harness export and the `DiagnosticsSource` Node implementation.                                                                                                                                     | LSP phase 6, coordinated with `VSCODE_LSP_MCP_PLAN.md` | Stage 13b; that plan's Phase 1 | `kind: "diagnostics"` works in a standalone run. Export writes each harness-native LSP config.                                                  |
 
 ### Independent stages (not on the critical path)

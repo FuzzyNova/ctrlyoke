@@ -30,6 +30,8 @@ export interface LanguageServerCatalogEntry {
   languages: string[];
   extensions: string[];
   rootMarkers: string[];
+  /** Opens one project anchor after startup for servers that need a loaded project. */
+  warmup?: { anchorExtensions: string[]; configMarkers: string[] };
   install: LanguageServerInstallRecipe;
 }
 
@@ -72,6 +74,7 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
     ],
     extensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"],
     rootMarkers: ["tsconfig.json", "jsconfig.json", "package.json"],
+    warmup: { anchorExtensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"], configMarkers: ["tsconfig.json", "jsconfig.json"] },
     install: npmInstall(
       ["typescript-language-server", "typescript"],
       "typescript-language-server"
@@ -93,6 +96,7 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
     ],
     extensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"],
     rootMarkers: ["tsconfig.json", "jsconfig.json", "package.json"],
+    warmup: { anchorExtensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"], configMarkers: ["tsconfig.json", "jsconfig.json"] },
     install: npmInstall(["@vtsls/language-server", "typescript"], "vtsls"),
   },
   {

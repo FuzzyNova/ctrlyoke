@@ -85,6 +85,18 @@ suite("LspSessionProxy", () => {
     });
   });
 
+  test("opens one hidden warmup anchor and keeps it open for the server", async () => {
+    await host.openWarmupDocument("src/main.ts", "typescript");
+    await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_OPEN));
+    const opened = backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN);
+    const params = opened[0].params as { textDocument: { uri: string; languageId: string; text: string } };
+    assert.strictEqual(params.textDocument.uri, pathToFileURL(path.join(workspaceRoot, "src", "main.ts")).toString());
+    assert.strictEqual(params.textDocument.languageId, "typescript");
+    assert.strictEqual(params.textDocument.text, "const value = 1;\n");
+    await host.openWarmupDocument("src/main.ts", "typescript");
+    assert.strictEqual(backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN).length, 1);
+  });
+
   test("resyncs the requesting tab's full text before forwarding its request", async () => {
     await open(proxyA!, "first buffer");
     await open(proxyB!, "second buffer");
@@ -161,7 +173,7 @@ suite("LspSessionProxy", () => {
       LSP_METHODS.PUBLISH_DIAGNOSTICS,
       { uri: pathToFileURL(path.join(workspaceRoot, "src", "main.ts")).toString(), diagnostics: [] }
     );
-    await flushMessages();
+    await waitFor(() => clientA.length + clientB.length > 0);
 
     assert.strictEqual(clientA.length, 1);
     assert.strictEqual(clientB.length, 0);

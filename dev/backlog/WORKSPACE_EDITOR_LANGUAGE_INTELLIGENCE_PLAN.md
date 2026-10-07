@@ -642,12 +642,22 @@ and **nothing falls back when it returns empty.**
      indentation in Python. When no end is found, `endLine = startLine`.
    - It becomes the per-language fallback in both hosts (7b and 7c).
 3. **7c — VS Code cold start** (staging Stage I2). See below.
-4. **7b — `LspSymbolIndex`** (Node-only, staging Stage 16).
+4. **Done — 7b, `LspSymbolIndex`** (Node-only, staging Stage 16, 2026-10-07).
    - It issues `workspace/symbol` and `textDocument/documentSymbol` through
      `LanguageIntelligenceHost`.
    - It fans out to every running or startable server for the workspace,
      within the global cap.
    - It merges the results and applies `maxResults`.
+   - The first `#` query starts servers selected for languages with matching
+     root markers. Startup stays asynchronous for the current query, so the
+     regex index answers until each language has a ready server.
+   - Catalog warm-up metadata opens one anchor per matching TS/JS config
+     marker and keeps it open for the server lifetime. Symbol requests refresh
+     managed-server idle activity.
+   - Range-less workspace symbols are resolved when the server supports
+     `workspaceSymbol/resolve`; unresolved entries are omitted.
+   - Standalone `createNodeHostedServer` composes this with the existing
+     `FallbackSymbolIndex`; VS Code composition remains unchanged.
 
 The composition root picks the index per host. VS Code-hosted uses
 `VsCodeSymbolIndex` with the regex fallback from 7c (Open Question 2).

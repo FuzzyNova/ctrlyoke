@@ -26,7 +26,7 @@ interface SharedDocument {
 
 interface SharedServerSession {
   readonly id: string;
-  readonly descriptor: LanguageServerDescriptor;
+  descriptor: LanguageServerDescriptor;
   readonly connection: MessageConnection;
   readonly documents: Map<string, SharedDocument>;
   readonly proxies: Set<LspSessionProxy>;
@@ -47,6 +47,7 @@ export class LanguageIntelligenceHost {
   private readonly sessions = new Map<string, Promise<SharedServerSession>>();
   private readonly sessionsById = new Map<string, Promise<SharedServerSession>>();
   private disposed = false;
+  private readonly warmupDocuments = new Map<string, Set<string>>();
   private readonly statusEvents = new EventEmitter();
   private readonly backendStatusSubscription?: { dispose(): void };
 
@@ -73,6 +74,34 @@ export class LanguageIntelligenceHost {
 
   async startLanguages(languageIds: readonly string[]): Promise<void> {
     await this.options.backend.startLanguages?.(languageIds);
+  }
+
+  async requestForPath(viewerPath: string, method: string, params: unknown): Promise<{ descriptor: LanguageServerDescriptor; result: unknown } | undefined> {
+    if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
+    const resolution = await this.options.backend.resolveForPath(viewerPath, this.roots);
+    if (!("descriptor" in resolution)) return undefined;
+    const session = await this.getOrCreateSession(resolution.descriptor);
+    if (!this.options.isWorkspaceTrusted()) return undefined;
+    session.descriptor = resolution.descriptor;
+    return { descriptor: session.descriptor, result: await session.connection.sendRequest(method, params) };
+  }
+
+  async openWarmupDocument(viewerPath: string, languageId: string): Promise<void> {
+    if (this.disposed || !this.options.isWorkspaceTrusted()) return;
+    const absolutePath = safeResolveWorkspacePath(viewerPath, this.roots);
+    if (!absolutePath) return;
+    const resolution = await this.options.backend.resolveForPath(viewerPath, this.roots);
+    if (!("descriptor" in resolution)) return;
+    const session = await this.getOrCreateSession(resolution.descriptor);
+    const uri = pathToFileURL(absolutePath).toString();
+    const opened = this.warmupDocuments.get(session.id) ?? new Set<string>();
+    if (opened.has(uri)) return;
+    const fs = await import("node:fs/promises");
+    const text = await fs.readFile(absolutePath, "utf8");
+    await session.connection.sendNotification(LSP_METHODS.DID_OPEN, { textDocument: { uri, languageId, version: 1, text } });
+    opened.add(uri);
+    this.warmupDocuments.set(session.id, opened);
+    this.options.backend.documentOpened?.(session.descriptor);
   }
 
   async restartServer(id: string): Promise<void> {
@@ -170,6 +199,7 @@ export class LanguageIntelligenceHost {
     const results = await Promise.allSettled(pendingSessions);
     for (const result of results) {
       if (result.status !== "fulfilled") continue;
+      await this.closeWarmupDocuments(result.value);
       for (const proxy of [...result.value.proxies]) proxy.dispose();
     }
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -253,8 +283,23 @@ export class LanguageIntelligenceHost {
     this.sessions.delete(key);
     void pending.then((session) => {
       this.sessionsById.delete(session.id);
+      void this.closeWarmupDocuments(session);
       for (const proxy of [...session.proxies]) proxy.dispose();
       session.connection.dispose();
     }).catch(() => undefined);
+  }
+
+  private async closeWarmupDocuments(session: SharedServerSession): Promise<void> {
+    const uris = this.warmupDocuments.get(session.id);
+    if (!uris) return;
+    this.warmupDocuments.delete(session.id);
+    for (const uri of uris) {
+      try {
+        await session.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
+          textDocument: { uri },
+        });
+      } catch { /* server may already have exited */ }
+      this.options.backend.documentClosed?.(session.descriptor);
+    }
   }
 }

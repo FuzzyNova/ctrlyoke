@@ -947,6 +947,9 @@ export const LSP_METHODS = {
   DID_CLOSE: "textDocument/didClose",
   PUBLISH_DIAGNOSTICS: "textDocument/publishDiagnostics",
   DID_CHANGE_WATCHED_FILES: "workspace/didChangeWatchedFiles",
+  WORKSPACE_SYMBOL: "workspace/symbol",
+  DOCUMENT_SYMBOL: "textDocument/documentSymbol",
+  WORKSPACE_SYMBOL_RESOLVE: "workspaceSymbol/resolve",
   CANCEL_REQUEST: "$/cancelRequest",
 } as const;
 
