@@ -74,7 +74,9 @@ through a VPN.
    in Chrome).
 
 The link contains an access token that works like a password. Share it only
-with people you trust, and select **Regenerate token** if it's exposed.
+with people you trust, and select **Regenerate token** if it's exposed. Each
+workspace has its own token, so regenerating it only changes that workspace's
+link, and only its home-screen app needs to be added again.
 
 Select any screenshot below to open it full size.
 

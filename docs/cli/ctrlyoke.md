@@ -63,19 +63,19 @@ ctrlyoke server --cwd ./my-workspace --port 5000 --open
 ctrlyoke server --bind 0.0.0.0 --https
 ```
 
-| Option | Meaning |
-| --- | --- |
-| `-d, --cwd <path>` | Workspace root (default: current directory) |
-| `-p, --port <n>` | Port to listen on; defaults to `server.port` (4747) |
-| `--strict-port` | Fail if the requested port is unavailable instead of trying fallback ports |
-| `--bind <addr>` | Bind address (default: `127.0.0.1`) |
-| `--https`, `--no-https` | Enable or disable HTTPS, overriding `server.tls.enabled` |
-| `--cert <path>` | TLS certificate path, overriding `server.tls.certPath` |
-| `--key <path>` | TLS private key path, overriding `server.tls.keyPath` |
-| `--theme <mode>` | Dashboard theme: `auto`, `light`, or `dark` |
-| `--open` | Open the tokenized dashboard URL in the default browser |
-| `--regenerate-token` | Rotate the persisted server token before starting |
-| `--verbose` | Enable diagnostic file logging |
+| Option                  | Meaning                                                                    |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `-d, --cwd <path>`      | Workspace root (default: current directory)                                |
+| `-p, --port <n>`        | Port to listen on; defaults to `server.port` (4747)                        |
+| `--strict-port`         | Fail if the requested port is unavailable instead of trying fallback ports |
+| `--bind <addr>`         | Bind address (default: `127.0.0.1`)                                        |
+| `--https`, `--no-https` | Enable or disable HTTPS, overriding `server.tls.enabled`                   |
+| `--cert <path>`         | TLS certificate path, overriding `server.tls.certPath`                     |
+| `--key <path>`          | TLS private key path, overriding `server.tls.keyPath`                      |
+| `--theme <mode>`        | Dashboard theme: `auto`, `light`, or `dark`                                |
+| `--open`                | Open the tokenized dashboard URL in the default browser                    |
+| `--regenerate-token`    | Rotate this workspace's persisted server token before starting             |
+| `--verbose`             | Enable diagnostic file logging                                             |
 
 Options override matching `server.*` settings in `.ctrlyoke/settings.json`.
 For scripts, `npm run server` starts the dashboard from the current directory.

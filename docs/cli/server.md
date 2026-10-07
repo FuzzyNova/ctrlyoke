@@ -22,9 +22,12 @@ ctrlyoke server --open
 
 Keep the tokenized URL private. Requests without the token are rejected. The
 server token persists so a saved bookmark or scanned QR code remains usable
-after restart. Pass `--regenerate-token` to rotate it. For scripted use,
-`CTRLYOKE_SERVER_TOKEN` supplies the token without putting it in visible
-process arguments.
+after restart. Each workspace has its own token, stored in the system credential
+store and shared with the VS Code extension's server for the same workspace, so
+the link stays the same whichever one serves it. `--regenerate-token` rotates
+only this workspace's token. For scripted use, `CTRLYOKE_SERVER_TOKEN` supplies
+the token without putting it in visible process arguments; while it is set the
+persisted token is not used.
 
 ## Work from a phone and laptop
 
@@ -74,7 +77,7 @@ the paths in `server.tls` in `.ctrlyoke/settings.json`.
 | `--key <path>`          | TLS private key path, overriding `server.tls.keyPath`.                                   |
 | `--theme <mode>`        | Select `auto`, `light`, or `dark`.                                                       |
 | `--open`                | Open the tokenized URL in the default browser.                                           |
-| `--regenerate-token`    | Rotate the persisted server token before starting.                                       |
+| `--regenerate-token`    | Rotate this workspace's persisted server token before starting.                          |
 | `--verbose`             | Write diagnostic file logging.                                                           |
 
 Options override the matching `server.*` settings in

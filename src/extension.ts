@@ -34,6 +34,7 @@ import {
 import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
 import { OsCredentialStore } from "./platform/OsCredentialStore";
 import { FallbackSecretStore } from "./platform/FallbackSecretStore";
+import type { SecretStore } from "./platform/SecretStore";
 import {
   CtrlYokeHostedServer,
   maskHostedServerUrlToken,
@@ -132,6 +133,9 @@ let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
 let dashboardApplication: DashboardApplication;
 let licenseService: LicenseService;
+// OS-credential-store-first secrets shared by every VS Code profile, the dev
+// host, the CLI, and `ctrlyoke server`; set during activation.
+let machineSecretStore: SecretStore;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let memoryWatchdog: MemoryWatchdog | undefined;
 let notificationManager: NotificationManager | undefined;
@@ -273,28 +277,28 @@ export async function activate(context: vscode.ExtensionContext) {
     // can spawn, for the processes the orchestrator launches.
     exposeBundledCli(context);
 
-    // License state is extension-host-owned so commands and the status bar
-    // share one service instance and update immediately after activation.
-    // Deliberately NOT VsCodeAdapter.getSecretStore(): a license is bound to
-    // the machine, not to one --user-data-dir/profile, so it prefers the OS
-    // credential store (shared by every VS Code profile, the dev host, the
-    // CLI, and the future standalone server — see
-    // dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md) and falls back to
+    // Deliberately NOT VsCodeAdapter.getSecretStore(): the license and the
+    // per-workspace server tokens are bound to the machine, not to one
+    // --user-data-dir/profile, so they prefer the OS credential store (shared
+    // by every VS Code profile, the dev host, the CLI, and `ctrlyoke server` —
+    // see dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md) and fall back to
     // VS Code's own per-profile secret storage only where the OS store is
     // unreachable (e.g. a remote/Codespaces extension host with no local
-    // keyring). Other secret consumers (managed workflow secrets, server
-    // tokens) keep VsCodeAdapter's profile-scoped store unchanged.
-    licenseService = new LicenseService(
-      new FallbackSecretStore(
-        new OsCredentialStore(),
-        new VsCodeSecretStore(context.secrets),
-        (error) =>
-          Log.warn(
-            `[Extension] ctrlyoke: OS credential store unavailable for license storage, falling back to VS Code secret storage: ${error.message}`
-          )
-      ),
-      { trialState: context.globalState }
+    // keyring). Managed workflow secrets keep VsCodeAdapter's profile-scoped
+    // store unchanged.
+    machineSecretStore = new FallbackSecretStore(
+      new OsCredentialStore(),
+      new VsCodeSecretStore(context.secrets),
+      (error) =>
+        Log.warn(
+          `[Extension] ctrlyoke: OS credential store unavailable for license and server token storage, falling back to VS Code secret storage: ${error.message}`
+        )
     );
+    // License state is extension-host-owned so commands and the status bar
+    // share one service instance and update immediately after activation.
+    licenseService = new LicenseService(machineSecretStore, {
+      trialState: context.globalState,
+    });
     context.subscriptions.push(licenseService);
     void licenseService.refresh();
 
@@ -761,7 +765,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register commands
-    registerCommands(context, runnerHostIdentity, platform);
+    registerCommands(context, runnerHostIdentity);
 
     // Show the Getting Started walkthrough once, on first activation after install.
     if (!context.globalState.get<boolean>(GETTING_STARTED_SHOWN_KEY)) {
@@ -779,8 +783,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 function registerCommands(
   context: vscode.ExtensionContext,
-  runnerHostIdentity: RunnerHostIdentity,
-  platform: VsCodeAdapter
+  runnerHostIdentity: RunnerHostIdentity
 ) {
   const reportCommandError = (message: string): void => {
     notifyUserFeedback(
@@ -1639,30 +1642,34 @@ function registerCommands(
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
-        platform.getSecretStore()
+        machineSecretStore,
+        workspaceRoot
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
       try {
-        hostedServer = new CtrlYokeHostedServer(createHostedServerOptions({
-          hub,
-          endpoint: dashboardApplication,
-          getOrchestrator: () => workflowOrchestrator,
-          workspaceRoot,
-          namedWorkspaceRoots,
-          token,
-          licenseService,
-          getUserFeedbackSink: () => workflowOrchestrator.getUserFeedbackSink(),
-          onSiblingServerDetected: (existingServerUrl) =>
-            notifyUserFeedback(
+        hostedServer = new CtrlYokeHostedServer(
+          createHostedServerOptions({
+            hub,
+            endpoint: dashboardApplication,
+            getOrchestrator: () => workflowOrchestrator,
+            workspaceRoot,
+            namedWorkspaceRoots,
+            token,
+            licenseService,
+            getUserFeedbackSink: () =>
               workflowOrchestrator.getUserFeedbackSink(),
-              USER_FEEDBACK_SEVERITY.WARNING,
-              `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
-            ),
-          runnerHostIdentity,
-          hostKind: HOST_KINDS.VSCODE,
-          fileWatcherFactory: new VsCodeFileWatcherFactory(),
-        }));
+            onSiblingServerDetected: (existingServerUrl) =>
+              notifyUserFeedback(
+                workflowOrchestrator.getUserFeedbackSink(),
+                USER_FEEDBACK_SEVERITY.WARNING,
+                `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
+              ),
+            runnerHostIdentity,
+            hostKind: HOST_KINDS.VSCODE,
+            fileWatcherFactory: new VsCodeFileWatcherFactory(),
+          })
+        );
       } catch (err) {
         unprotectServerToken?.();
         unprotectServerToken = undefined;
@@ -1745,7 +1752,10 @@ function registerCommands(
   const regenerateServerTokenCommand = vscode.commands.registerCommand(
     "ctrlyoke.regenerateServerToken",
     async () => {
-      await new ServerTokenStore(platform.getSecretStore()).regenerate();
+      await new ServerTokenStore(
+        machineSecretStore,
+        getVsCodeWorkspaceRoot()
+      ).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });

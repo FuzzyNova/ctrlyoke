@@ -154,7 +154,7 @@ export async function createNodeHostServices(options: {
     userFeedbackSink,
     dashboardHostActions: new NodeDashboardHostActions(),
     secretStore,
-    tokenStore: new ServerTokenStore(secretStore),
+    tokenStore: new ServerTokenStore(secretStore, cwd),
     licenseService,
     completionCore,
     disposableRegistry,
@@ -266,12 +266,10 @@ export async function createNodeHostedServer(options: {
     );
   });
 
-  const persistedToken = options.regenerateToken
-    ? await services.tokenStore.regenerate()
-    : await services.tokenStore.getOrCreate();
-  const token = resolveServerToken(
+  const token = await resolveServerToken(
+    services.tokenStore,
     process.env.CTRLYOKE_SERVER_TOKEN,
-    persistedToken
+    options.regenerateToken
   );
   // Exempt the connection token from heuristic redaction while the server is
   // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.

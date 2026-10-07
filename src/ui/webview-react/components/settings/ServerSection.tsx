@@ -504,7 +504,11 @@ export function ServerSection({
               <p>
                 Regenerate the token if this link is exposed or someone should
                 no longer have access. Like changing a password, this
-                invalidates the old link after the server restarts.
+                invalidates the old link after the server restarts. Each
+                workspace has its own token, so this only changes this
+                workspace&apos;s link, and only its home-screen app needs to be
+                added again. The same token is used whether VS Code or{" "}
+                <code>ctrlyoke server</code> serves this workspace.
               </p>
             </div>
           </div>

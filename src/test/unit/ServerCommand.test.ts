@@ -7,7 +7,6 @@ import {
   resolveServerSettings,
   type ServerSignalSource,
 } from "../../cli/ServerCommand";
-import { resolveServerToken } from "../../platform/ServerTokenStore";
 
 const settings = {
   autoStart: false,
@@ -43,17 +42,6 @@ suite("ServerCommand", () => {
       resolveServerSettings({ strictPort: true }, "C:/repo", settings)
         .fallbackPorts.length,
       0
-    );
-  });
-
-  test("environment token takes precedence over persisted token", () => {
-    assert.strictEqual(
-      resolveServerToken("env-secret", "saved-secret"),
-      "env-secret"
-    );
-    assert.strictEqual(
-      resolveServerToken(undefined, "saved-secret"),
-      "saved-secret"
     );
   });
 

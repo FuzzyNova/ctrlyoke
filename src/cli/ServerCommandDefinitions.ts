@@ -44,7 +44,10 @@ export function registerServerCommand(
       ).choices(Object.values(SERVER_THEME_MODES))
     )
     .option("--open", "Open the tokenized URL in the default browser")
-    .option("--regenerate-token", "Rotate the persisted server token")
+    .option(
+      "--regenerate-token",
+      "Rotate this workspace's persisted server token"
+    )
     .option("--verbose", "Enable diagnostic file logging")
     .action(async (options: ServerOptions) => handlers.server(options));
 }
