@@ -99,6 +99,7 @@ export default defineConfig({
           items: [
             { text: "Overview", link: "/cli/" },
             { text: "ctrlyoke", link: "/cli/ctrlyoke" },
+            { text: "Standalone server", link: "/cli/server" },
             { text: "CLI in CI", link: "/cli/ci" },
             { text: "ctrlyoke-mcp", link: "/cli/ctrlyoke-mcp" },
           ],

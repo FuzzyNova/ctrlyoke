@@ -1,10 +1,15 @@
 # Standalone ctrlyoke Server Plan
 
 **Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
-server implementation has started: Track A (Stages 1–6), Track B sub-stages
-7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stages 8–10 are complete.
-Every fact in this document was re-audited against `src/` on 2026-10-06, and every open
-question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
+server implementation and Stage 11 documentation are complete. Windows packed
+artifact checks passed for launch/banner/QR, `--open`, token rejection,
+authenticated dashboard assets, HTTPS certificate serving, SIGINT shutdown,
+and absence of stale `runner.json`. `docs:build`, `check:docs`, `typecheck`,
+`lint`, and the full `npm test` summary passed. Cross-OS, device,
+browser-interaction, and remaining manual checks are listed below for Nathan.
+Every fact in this document was re-audited against `src/` on 2026-10-06, and
+every open question has a decision. ROADMAP lists it as a P2 item for milestone
+0.4.
 
 **Sequencing:** [`STANDALONE_STAGING_PLAN.md`](STANDALONE_STAGING_PLAN.md) is
 the only authoritative order of work. The standalone work is staging Track B
@@ -640,24 +645,41 @@ Implementation requirements (Stage 7b):
 
 ## Manual Verification (Stage 11)
 
-Run this on Windows and on one of Linux or macOS, from the **packed npm
-artifact**:
+Stage 11 verification on 2026-10-06 used the packed npm artifact installed in
+a clean Windows temp prefix. The checks below distinguish what ran from what
+still needs Nathan's device, browser, or second-OS access.
 
-- Launch `ctrlyoke server`. Check the banner URL, the OSC 8 link, the QR code,
-  and `--open`.
-- Open a desktop browser and a phone. Check token rejection without `?token=`
-  and the remote-access gate on a LAN bind.
-- Run with `--https`: certificate install on the phone and the reconnect
-  banner.
-- Run parallel workflows, the switcher, history, and an interactive step in
-  the dashboard terminal.
-- Check watch mode and an external run's live updates (chokidar).
-- Check `@`/`#`/`~`/`/` completions.
-- Check workspace-viewer edit, save, and conflict (Stage I1), plus git
-  stage/commit/push.
-- Check that unsaved drafts survive closing and reopening the tab, and don't
-  leak between two workspaces served on the same port.
-- Check that `Ctrl+C` exits cleanly with no stale `runner.json`.
+**Passed on Windows from the packed artifact:**
+
+- [x] Launch; verify banner URL and terminal QR code.
+- [x] Run `--open`; the packed CLI invoked the Windows URL handler and stayed
+  running. The browser display itself was not inspected.
+- [x] Request the dashboard without `?token=` and confirm HTTP 401; request it
+  with the token and confirm the HTML and standalone shim load.
+- [x] Launch with `--https`; confirm HTTPS and that `/cert` serves a PEM
+  certificate.
+- [x] Send SIGINT and confirm clean shutdown with no stale `runner.json`.
+
+**Open checklist for Nathan:**
+
+- [ ] On Windows, check the OSC 8 link in an interactive terminal.
+- [ ] Open the dashboard in a desktop browser and phone; verify the Pro
+  remote-access gate on a LAN bind.
+- [ ] Install/trust the generated certificate on a phone and verify the
+  reconnect banner after restarting the HTTPS server.
+- [ ] In a browser, run parallel workflows, use the switcher and history, and
+  run an interactive step in the dashboard terminal.
+- [ ] Verify watch mode reflects an external run's live updates (chokidar).
+- [ ] Verify `@`/`#`/`~`/`/` completions.
+- [ ] Verify workspace-viewer edit/save and stale-save conflict (Stage I1),
+  plus git stage/commit/push.
+- [ ] Verify unsaved drafts survive closing/reopening a tab and remain
+  isolated between two workspaces served on the same origin.
+- [ ] Repeat the packed-artifact launch and server checks on Linux or macOS.
+
+No Playwright MCP was attached, so no browser workflow or UI-only checklist
+item is marked as passed. The server launch test ran without a TTY, so OSC 8
+and visual confirmation of the opened desktop page remain unchecked.
 
 ## Open Questions (all resolved 2026-10-06)
 

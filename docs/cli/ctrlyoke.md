@@ -54,6 +54,9 @@ Start the hosted dashboard for the current workspace. The server binds to
 `127.0.0.1` by default and prints a tokenized URL and terminal QR code. Keep
 the process running while using the dashboard; Ctrl+C stops it cleanly.
 
+See the [standalone server guide](/cli/server) for the phone and laptop
+workflow, HTTPS certificate setup, themes, and browser storage behavior.
+
 ```bash
 ctrlyoke server
 ctrlyoke server --cwd ./my-workspace --port 5000 --open

@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { spawn } from "node:child_process";
 import { Command } from "commander";
 import QRCode from "qrcode";
 import { EXECUTION_MODES } from "../types/DashboardConstants";
@@ -74,6 +75,36 @@ export function formatServerBanner(
   if (https)
     lines.push("Install the HTTPS certificate on your phone from /cert.");
   return lines.join("\n");
+}
+
+export function getUrlOpener(
+  url: string,
+  platform: NodeJS.Platform = process.platform
+): { command: string; args: string[] } {
+  if (platform === "win32") {
+    return {
+      command: "rundll32.exe",
+      args: ["url.dll,FileProtocolHandler", url],
+    };
+  }
+  return {
+    command: platform === "darwin" ? "open" : "xdg-open",
+    args: [url],
+  };
+}
+
+async function openUrl(url: string): Promise<void> {
+  const { command, args } = getUrlOpener(url);
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("spawn", resolve);
+  });
+  child.unref();
 }
 
 export interface ServerSignalSource {
@@ -175,8 +206,7 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     )
   );
   if (options.open) {
-    const open = (await import("open")).default;
-    await open(runtime.url);
+    await openUrl(runtime.url);
   }
 }
 

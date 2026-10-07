@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   formatServerBanner,
+  getUrlOpener,
   installServerShutdown,
   resolveServerSettings,
   type ServerSignalSource,
@@ -78,6 +79,22 @@ suite("ServerCommand", () => {
     );
     assert.ok(tty.includes("https://192.168.1.4:4747/?token=secret"));
     assert.ok(tty.includes("/cert"));
+  });
+
+  test("selects the platform URL handler without shell interpolation", () => {
+    const url = "https://localhost/?token=secret&theme=dark";
+    assert.deepStrictEqual(getUrlOpener(url, "win32"), {
+      command: "rundll32.exe",
+      args: ["url.dll,FileProtocolHandler", url],
+    });
+    assert.deepStrictEqual(getUrlOpener(url, "darwin"), {
+      command: "open",
+      args: [url],
+    });
+    assert.deepStrictEqual(getUrlOpener(url, "linux"), {
+      command: "xdg-open",
+      args: [url],
+    });
   });
 
   test("disposes on the first signal and forces exit on a second signal", async () => {

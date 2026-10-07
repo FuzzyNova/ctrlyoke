@@ -258,9 +258,9 @@ Start these after real launch feedback and the P1 safety contracts exist.
    Do not add workflow or per-step limit properties.
    ([plan](../backlog/EXECUTION_GUARDRAILS_PLAN.md))
 4. **Standalone server** — reuse the shipped hosted dashboard without requiring
-   VS Code. The hosted server is implemented; `ctrlyoke server` is not.
-   Sequenced after the remaining decoupling work, and followed by browser
-   workspace-editor language intelligence.
+   VS Code. The implementation, documentation, and Windows packed-artifact
+   checks are complete; phone, second-OS, and browser-interaction checks remain
+   open in the standalone plan.
    ([plan](../active/STANDALONE_SERVER_PLAN.md),
    [staging](../active/STANDALONE_STAGING_PLAN.md))
 5. **Workflow scheduling** — use the existing global execution limits and

@@ -93,7 +93,7 @@ names the guard or test that proves it, not just the code change.
 |     8 | **Done.** The `ctrlyoke server` command and launch UX:<br>• 8a: flags, lifecycle, tokenized URL, OSC 8 link, terminal QR, TLS hint, `--open`, and HTTPS certificate generation.<br>• 8b: npm package entries for `out/server/`, `out/ui/webview-react/`, and `out/runtime-deps/`, CLI-build asset copy, packaging guard, smoke test, and CLI reference page. | Standalone Phase 10                                            | Stage 7b                             | Production build and packed install pass. Installed command serves tokenized HTML, shim, and theme CSS, and accepts an authenticated WebSocket connection. Browser workflow check is conditional on Playwright being attached.                                  |
 |     9 | **Done.** Standalone prompt-editor completions: files from the Stage 5 core, `#` symbols from **`RegexSymbolIndex`**, and empty selection completions.                                                                                                                                                  | Standalone Phase 8, plus LSP plan phase 7 (`RegexSymbolIndex`) | Stage 8                              | The golden `#sym:` test covers `RegexSymbolIndex` on the shared fixture. `@`, `#`, `~`, and `/` completions work in a standalone browser.                                                                         |
 |    10 | **Done.** Retire the Node-side shim: drop `registerCliAdapter`, remove the `vscode` alias from the cli/mcp/worker bundles, and delete `vscode-shim.ts`.                                                                                                                                                  | Standalone Phase 11                                            | Stage 9                              | `esbuild.js` contains no `vscode-shim` alias. A metafile check fails if any Node bundle includes `vscode`, `@vscode/extension-telemetry`, or a `src/platform/VsCode*` file.                                      |
-|    11 | Manual verification and user docs: `docs/` page for `ctrlyoke server`, the CLI reference, and the phone + laptop scenario.                                                                                                                                                                                | Standalone "Manual verification"                               | Stages 8–10 and Independent Stage I1 | The Track 3 checklist in the standalone plan passes on Windows and on Linux or macOS. Docs build and `npm run check:docs` passes.                                                                                 |
+|    11 | **Docs and Windows packed-artifact checks complete; Nathan's browser/device/cross-OS checklist remains open.** Add the `ctrlyoke server` guide, CLI reference link, and phone + laptop scenario. | Standalone "Manual verification" | Stages 8–10 and Independent Stage I1 | Windows packed-artifact launch, `--open`, auth, HTTPS certificate serving, and clean SIGINT checks pass. Docs build, `npm run check:docs`, typecheck, lint, and the full `npm test` summary pass. Nathan's remaining checklist is recorded in the standalone plan. |
 
 ### Track C: Workspace editor language intelligence
 
@@ -184,10 +184,19 @@ names the guard or test that proves it, not just the code change.
     initialized. The package assertions were corrected and the focused
     package test passes. No Playwright MCP was attached, so no browser
     workflow was run.
-  - **Stage 11 caveat:** an agent session can run the automated parts
-    (packed-artifact launch, browser checks through Playwright if attached).
-    Phone, second-OS, and certificate-install checks need Nathan and are
-    recorded as an open checklist in the standalone plan.
+  - **Stage 11 verification (2026-10-06):** the `ctrlyoke server` guide and
+    navigation links are in place. The packed npm artifact was installed in a
+    clean Windows temp prefix; launch/banner/QR, token rejection, authenticated
+    HTML and shim, HTTPS `/cert`, SIGINT shutdown, and no stale `runner.json`
+    passed. A separate packed `--open` check invoked the Windows URL handler
+    without error. Docs build passed. No Playwright MCP was attached, and this
+    run had no TTY, so browser workflows, OSC 8, watch/completions,
+    workspace-viewer UI, phone/certificate install, and the second OS remain
+    explicit open checks in the standalone plan. `npm run check:docs`,
+    `npm run typecheck`, `npm run lint`, and the final `npm test` summary all
+    passed (extension 5596 passing/4 pending, UI 3454 passing, packaging 80
+    passing). The packed-build `--open` bug was fixed and verified from the
+    rebuilt tarball.
 - **Phase 5 of the LSP plan (the navigation-only VS Code provider backend) is
   dropped.** It isn't scheduled. The reasoning is in that plan's resolved open
   questions.
