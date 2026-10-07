@@ -144,6 +144,17 @@ suite("LspSessionProxy", () => {
         contentChanges: [{ text: "changed in tab A" }],
       },
     });
+    await waitFor(() =>
+      backend.events.some(({ isNotification, method, params }) => {
+        const changes = (params as { contentChanges?: Array<{ text?: string }> })
+          .contentChanges;
+        return (
+          isNotification &&
+          method === LSP_METHODS.DID_CHANGE &&
+          changes?.[0]?.text === "changed in tab A"
+        );
+      })
+    );
     clientA.length = 0;
     clientB.length = 0;
     await backend.serverConnections[0].sendNotification(

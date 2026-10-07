@@ -96,6 +96,7 @@ export class LanguageIntelligenceHost {
       session: {
         id: session.id,
         languageId: resolution.descriptor.languageId,
+        capabilities: resolution.descriptor.capabilities,
       },
     };
   }

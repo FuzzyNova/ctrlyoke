@@ -8,22 +8,28 @@ import { acquireLanguageIntelligenceClient } from "@utils/languageIntelligenceCl
 import type { LspWebSocket } from "@utils/languageIntelligenceTransport";
 import { WebviewLog } from "@utils/logger";
 
-interface HookState {
+export interface LanguageIntelligenceState {
   filePath: string;
   extensions: Extension[];
+  sessionId: string | null;
+  capabilities: Record<string, unknown>;
 }
 
-export function useLanguageIntelligence(filePath: string): Extension[] {
-  const [state, setState] = useState<HookState>({
+export function useLanguageIntelligence(
+  filePath: string
+): LanguageIntelligenceState {
+  const [state, setState] = useState<LanguageIntelligenceState>({
     filePath,
     extensions: [],
+    sessionId: null,
+    capabilities: {},
   });
 
   useEffect(() => {
     let active = true;
     let release: (() => void) | undefined;
     const controller = new AbortController();
-    setState({ filePath, extensions: [] });
+    setState({ filePath, extensions: [], sessionId: null, capabilities: {} });
 
     void languageIntelligenceSession(filePath, controller.signal)
       .then(({ session }) => {
@@ -36,7 +42,13 @@ export function useLanguageIntelligence(filePath: string): Extension[] {
           (url) => new WebSocket(url) as unknown as LspWebSocket
         );
         release = acquired.release;
-        if (active) setState({ filePath, extensions: [acquired.extension] });
+        if (active)
+          setState({
+            filePath,
+            extensions: [acquired.extension],
+            sessionId: session.id,
+            capabilities: session.capabilities,
+          });
         else acquired.release();
       })
       .catch((error: unknown) => {
@@ -54,5 +66,7 @@ export function useLanguageIntelligence(filePath: string): Extension[] {
     };
   }, [filePath]);
 
-  return state.filePath === filePath ? state.extensions : [];
+  return state.filePath === filePath
+    ? state
+    : { filePath, extensions: [], sessionId: null, capabilities: {} };
 }

@@ -881,8 +881,16 @@ Staging numbers refer to
    This delivers completion, hover, definition, references, rename, signature
    help, formatting, and diagnostics.
 
-3. **Editor UX** (**Stage 14**). Context menu items, the references panel,
-   rename confirmation for multi-file edits, F12, and capability gating.
+3. **Editor UX** (**Done — Stage 14, 2026-10-07**). The editor context menu
+   gates definition, references, rename, and formatting actions on the active
+   session's advertised capabilities. F12 navigates to definitions; reference
+   results use `path#L10-L12` rows, navigate through the viewer store, and can
+   be inserted into a workflow as selection context. The existing Ctrl/Cmd-click
+   and touch-tap `.cm-link` gestures remain reference navigation. Vitest covers
+   capability hiding, F12 dispatch, result formatting/navigation/context
+   insertion, and link gestures. Full verification passed: typecheck, lint, and
+   `npm test` (extension 5,635 passing/4 pending, UI 3,476 passing, packaging
+   80 passing).
 4. **Language Servers settings section** (**Stage 15**). Full UX in
    "Settings section UX".
    - Languages strip (`use` per language) and server rows with live status

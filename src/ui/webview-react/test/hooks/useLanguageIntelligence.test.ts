@@ -13,8 +13,15 @@ describe("useLanguageIntelligence", () => {
     const socket = vi.spyOn(window, "WebSocket");
     const { result } = renderHook(() => useLanguageIntelligence("src/app.ts"));
 
-    await waitFor(() => expect(lookup).toHaveBeenCalledWith("src/app.ts", expect.any(AbortSignal)));
-    expect(result.current).toEqual([]);
+    await waitFor(() =>
+      expect(lookup).toHaveBeenCalledWith("src/app.ts", expect.any(AbortSignal))
+    );
+    expect(result.current).toMatchObject({
+      filePath: "src/app.ts",
+      extensions: [],
+      sessionId: null,
+      capabilities: {},
+    });
     expect(socket).not.toHaveBeenCalled();
   });
 });

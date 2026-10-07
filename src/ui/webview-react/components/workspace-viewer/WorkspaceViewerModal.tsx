@@ -8,6 +8,7 @@ import { WorkspaceViewerHeader } from "./WorkspaceViewerHeader";
 import { WorkspaceExplorerPane } from "./WorkspaceExplorerPane";
 import { WorkspaceSourceControlPane } from "./WorkspaceSourceControlPane";
 import { WorkspaceSearchPane } from "./WorkspaceSearchPane";
+import { WorkspaceLanguageReferencesPanel } from "./WorkspaceLanguageReferencesPanel";
 
 const EXIT_DURATION_MS = 220;
 
@@ -96,6 +97,7 @@ export const WorkspaceViewerModal: React.FC = () => {
         ) : (
           <WorkspaceSearchPane />
         )}
+        <WorkspaceLanguageReferencesPanel />
       </div>
 
       {/* fixed inset-0 escapes the App root's flex layout (and its trailing

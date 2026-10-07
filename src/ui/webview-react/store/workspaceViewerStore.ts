@@ -42,6 +42,12 @@ export interface PendingFileHistory {
   generation: number;
 }
 
+export interface LanguageReferenceResult {
+  path: string;
+  startLine: number;
+  endLine: number;
+}
+
 function normalizeWorkspacePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "");
 }
@@ -132,6 +138,7 @@ interface WorkspaceViewerState {
   searchResults: WorkspaceSearchResult[];
   searchLoading: boolean;
   searchTruncated: boolean;
+  languageReferences: LanguageReferenceResult[] | null;
 
   // Commit area
   commitMessage: string;
@@ -238,6 +245,7 @@ interface WorkspaceViewerActions {
   setSearchResults(results: WorkspaceSearchResult[]): void;
   setSearchLoading(loading: boolean): void;
   setSearchTruncated(truncated: boolean): void;
+  setLanguageReferences(references: LanguageReferenceResult[] | null): void;
 
   // Commit history metadata used by the context menu and detached banner.
   setCurrentBranch(branch: string | null): void;
@@ -314,6 +322,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   searchResults: [],
   searchLoading: false,
   searchTruncated: false,
+  languageReferences: null,
 
   commitMessage: "",
   committing: false,
@@ -808,6 +817,10 @@ export const useWorkspaceViewerStore = create<
 
       setSearchTruncated(truncated) {
         set({ searchTruncated: truncated });
+      },
+
+      setLanguageReferences(references) {
+        set({ languageReferences: references });
       },
 
       // --- Commit history metadata ---

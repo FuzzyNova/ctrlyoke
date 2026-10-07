@@ -31,7 +31,12 @@ import {
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useLanguageIntelligence } from "@hooks/useLanguageIntelligence";
-import { registerLanguageIntelligenceView } from "@utils/languageIntelligenceClient";
+import {
+  registerLanguageIntelligenceView,
+  requestLanguageIntelligence,
+  viewerPathFromUri,
+  workspaceFileUri,
+} from "@utils/languageIntelligenceClient";
 import { useUiStore } from "@store/uiStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
@@ -47,6 +52,11 @@ export interface WorkspaceFileEditorHandle {
   selectLines: (startLine: number, endLine: number) => void;
   getSelectionText: () => string;
   getSelectionRange: () => { startLine: number; endLine: number } | null;
+  getLanguageCapabilities: () => Record<string, unknown>;
+  goToDefinition: () => Promise<void>;
+  findAllReferences: () => Promise<void>;
+  renameSymbol: () => Promise<void>;
+  formatDocument: () => Promise<void>;
 }
 
 interface WorkspaceFileEditorProps {
@@ -113,7 +123,9 @@ export const WorkspaceFileEditor = forwardRef<
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const languageIntelligenceCompartment = useRef(new Compartment());
-    const languageIntelligenceExtensions = useLanguageIntelligence(filePath);
+    const languageIntelligence = useLanguageIntelligence(filePath);
+    const languageIntelligenceRef = useRef(languageIntelligence);
+    languageIntelligenceRef.current = languageIntelligence;
     const onSaveRef = useRef(onSave);
     const onChangeRef = useRef(onChange);
     const onUndoRedoChangeRef = useRef(onUndoRedoChange);
@@ -144,36 +156,147 @@ export const WorkspaceFileEditor = forwardRef<
       onPendingSelectionAppliedRef.current = onPendingSelectionApplied;
     }, [onPendingSelectionApplied]);
 
-    useImperativeHandle(ref, () => ({
-      undo: () => {
-        if (viewRef.current) undo(viewRef.current);
-      },
-      redo: () => {
-        if (viewRef.current) redo(viewRef.current);
-      },
-      selectLines: (startLine: number, endLine: number) => {
-        const view = viewRef.current;
-        if (!view) return;
-        selectAndScrollToLines(view, startLine, endLine);
-      },
-      getSelectionText: () => {
-        const view = viewRef.current;
-        if (!view) return "";
-        const { from, to } = view.state.selection.main;
-        if (from === to) return "";
-        return view.state.sliceDoc(from, to);
-      },
-      getSelectionRange: () => {
-        const view = viewRef.current;
-        if (!view) return null;
-        const { from, to } = view.state.selection.main;
-        if (from === to) return null;
-        const doc = view.state.doc;
-        const startLine = doc.lineAt(from).number;
-        const endLine = doc.lineAt(to).number;
-        return { startLine, endLine };
-      },
-    }));
+    const goToDefinition = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const result = (await requestLanguageIntelligence(
+        sessionId,
+        "textDocument/definition",
+        {
+          textDocument: { uri: workspaceFileUri(filePath) },
+          position: toLspPosition(view, view.state.selection.main.head),
+        }
+      )) as LspLocation | LspLocation[] | null;
+      const location = Array.isArray(result) ? result[0] : result;
+      const path = location && viewerPathFromUri(location.uri);
+      if (!location || !path) return;
+      if (path === filePath)
+        selectAndScrollToLines(
+          view,
+          location.range.start.line + 1,
+          location.range.end.line + 1
+        );
+      else
+        openToFile(
+          path,
+          location.range.start.line + 1,
+          location.range.end.line + 1
+        );
+    }, [filePath, openToFile]);
+
+    const findAllReferences = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const result = (await requestLanguageIntelligence(
+        sessionId,
+        "textDocument/references",
+        {
+          textDocument: { uri: workspaceFileUri(filePath) },
+          position: toLspPosition(view, view.state.selection.main.head),
+          context: { includeDeclaration: true },
+        }
+      )) as LspLocation[] | null;
+      const references = (result ?? []).flatMap((location) => {
+        const path = viewerPathFromUri(location.uri);
+        return path
+          ? [
+              {
+                path,
+                startLine: location.range.start.line + 1,
+                endLine: Math.max(
+                  location.range.start.line + 1,
+                  location.range.end.line + 1
+                ),
+              },
+            ]
+          : [];
+      });
+      useWorkspaceViewerStore.getState().setLanguageReferences(references);
+      useWorkspaceViewerStore.getState().open();
+    }, [filePath]);
+
+    const renameSymbol = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const word = view.state.wordAt(view.state.selection.main.head);
+      if (!word) return;
+      const oldName = view.state.sliceDoc(word.from, word.to);
+      const newName = window.prompt("Rename symbol", oldName);
+      if (!newName || newName === oldName) return;
+      await requestLanguageIntelligence(sessionId, "textDocument/rename", {
+        textDocument: { uri: workspaceFileUri(filePath) },
+        position: toLspPosition(view, word.from),
+        newName,
+      });
+    }, [filePath]);
+
+    const formatDocument = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const edits = (await requestLanguageIntelligence(
+        sessionId,
+        "textDocument/formatting",
+        {
+          textDocument: { uri: workspaceFileUri(filePath) },
+          options: { tabSize: 2, insertSpaces: true },
+        }
+      )) as LspTextEdit[] | null;
+      if (!edits?.length) return;
+      view.dispatch({
+        changes: edits
+          .map((edit) => ({
+            from: lspOffset(view, edit.range.start),
+            to: lspOffset(view, edit.range.end),
+            insert: edit.newText,
+          }))
+          .sort((a, b) => a.from - b.from),
+      });
+    }, [filePath]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        undo: () => {
+          if (viewRef.current) undo(viewRef.current);
+        },
+        redo: () => {
+          if (viewRef.current) redo(viewRef.current);
+        },
+        selectLines: (startLine: number, endLine: number) => {
+          const view = viewRef.current;
+          if (!view) return;
+          selectAndScrollToLines(view, startLine, endLine);
+        },
+        getSelectionText: () => {
+          const view = viewRef.current;
+          if (!view) return "";
+          const { from, to } = view.state.selection.main;
+          if (from === to) return "";
+          return view.state.sliceDoc(from, to);
+        },
+        getSelectionRange: () => {
+          const view = viewRef.current;
+          if (!view) return null;
+          const { from, to } = view.state.selection.main;
+          if (from === to) return null;
+          const doc = view.state.doc;
+          const startLine = doc.lineAt(from).number;
+          const endLine = doc.lineAt(to).number;
+          return { startLine, endLine };
+        },
+        getLanguageCapabilities: () =>
+          languageIntelligenceRef.current.capabilities,
+        goToDefinition,
+        findAllReferences,
+        renameSymbol,
+        formatDocument,
+      }),
+      [findAllReferences, formatDocument, goToDefinition, renameSymbol]
+    );
 
     const extensions = useMemo<Extension[]>(() => {
       const langExt = getLanguageExtension(filePath);
@@ -192,6 +315,18 @@ export const WorkspaceFileEditor = forwardRef<
         languageIntelligenceCompartment.current.of([]),
         keymap.of([
           indentWithTab,
+          {
+            key: "F12",
+            preventDefault: true,
+            run: () => {
+              if (
+                !languageIntelligenceRef.current.capabilities.definitionProvider
+              )
+                return false;
+              void goToDefinition();
+              return true;
+            },
+          },
           {
             key: "Mod-s",
             run: () => {
@@ -214,17 +349,24 @@ export const WorkspaceFileEditor = forwardRef<
         }),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ];
-    }, [filePath, openSecretsSettings, openToDirectory, openToFile, readOnly]);
+    }, [
+      filePath,
+      goToDefinition,
+      openSecretsSettings,
+      openToDirectory,
+      openToFile,
+      readOnly,
+    ]);
 
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
       view.dispatch({
         effects: languageIntelligenceCompartment.current.reconfigure(
-          languageIntelligenceExtensions
+          languageIntelligence.extensions
         ),
       });
-    }, [languageIntelligenceExtensions]);
+    }, [languageIntelligence.extensions]);
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
@@ -339,6 +481,35 @@ export const WorkspaceFileEditor = forwardRef<
 );
 
 WorkspaceFileEditor.displayName = "WorkspaceFileEditor";
+
+interface LspPosition {
+  line: number;
+  character: number;
+}
+interface LspRange {
+  start: LspPosition;
+  end: LspPosition;
+}
+interface LspLocation {
+  uri: string;
+  range: LspRange;
+}
+interface LspTextEdit {
+  range: LspRange;
+  newText: string;
+}
+
+function toLspPosition(view: EditorView, offset: number): LspPosition {
+  const line = view.state.doc.lineAt(offset);
+  return { line: line.number - 1, character: offset - line.from };
+}
+
+function lspOffset(view: EditorView, position: LspPosition): number {
+  const line = view.state.doc.line(
+    Math.min(view.state.doc.lines, position.line + 1)
+  );
+  return Math.min(line.to, line.from + position.character);
+}
 
 function selectAndScrollToLines(
   view: EditorView,

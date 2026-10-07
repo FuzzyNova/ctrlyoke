@@ -10,6 +10,7 @@ import type { EditorView } from "@codemirror/view";
 import type { WorkspaceFile } from "@codemirror/lsp-client";
 import { LSP_VIEWER_URI_PREFIX } from "@root/types/HostedWorkspaceViewerTypes";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { WebviewLog } from "@utils/logger";
 import {
   LanguageIntelligenceTransport,
   type LspWebSocketFactory,
@@ -54,7 +55,7 @@ export function workspaceFileUri(filePath: string): string {
   return `${LSP_VIEWER_URI_PREFIX}${encodedPath}`;
 }
 
-function viewerPathFromUri(uri: string): string | null {
+export function viewerPathFromUri(uri: string): string | null {
   try {
     const pathname = new URL(uri).pathname;
     const prefix = new URL(LSP_VIEWER_URI_PREFIX).pathname;
@@ -67,6 +68,22 @@ function viewerPathFromUri(uri: string): string | null {
   } catch {
     return null;
   }
+}
+
+export function requestLanguageIntelligence(
+  sessionId: string,
+  method: string,
+  params: unknown
+): Promise<unknown> {
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return Promise.reject(new Error("Language server session is unavailable"));
+  }
+  session.client.sync();
+  return session.client.request<unknown, unknown>(method, params).catch((error: unknown) => {
+    WebviewLog.warn(`[languageIntelligenceClient] ${method} failed: ${String(error)}`);
+    return null;
+  });
 }
 
 export function registerLanguageIntelligenceView(

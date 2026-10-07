@@ -11,7 +11,12 @@ import {
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 
 const { useLanguageIntelligenceMock } = vi.hoisted(() => ({
-  useLanguageIntelligenceMock: vi.fn((): Extension[] => []),
+  useLanguageIntelligenceMock: vi.fn(() => ({
+    filePath: "src/app.ts",
+    extensions: [] as Extension[],
+    sessionId: null as string | null,
+    capabilities: {},
+  })),
 }));
 
 vi.mock("@hooks/useLanguageIntelligence", () => ({
@@ -30,7 +35,12 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
 
   beforeEach(() => {
     useWorkspaceViewerStore.getState().reset();
-    useLanguageIntelligenceMock.mockReturnValue([]);
+    useLanguageIntelligenceMock.mockReturnValue({
+      filePath: "src/app.ts",
+      extensions: [],
+      sessionId: null,
+      capabilities: {},
+    });
   });
 
   it("reconfigures a connected session without replacing the editor view", async () => {
@@ -53,7 +63,12 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
       create: () => "connected",
       update: (value) => value,
     });
-    useLanguageIntelligenceMock.mockReturnValue([sessionExtension]);
+    useLanguageIntelligenceMock.mockReturnValue({
+      filePath: "src/app.ts",
+      extensions: [sessionExtension],
+      sessionId: "session-1",
+      capabilities: { definitionProvider: true },
+    });
     rerender(<WorkspaceFileEditor ref={ref} {...props} />);
 
     await waitFor(() => {

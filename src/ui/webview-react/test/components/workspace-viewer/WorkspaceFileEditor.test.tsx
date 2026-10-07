@@ -85,6 +85,29 @@ describe("WorkspaceFileEditor link navigation", () => {
     }
   });
 
+  it("keeps Ctrl-click on a .cm-link as reference navigation", async () => {
+    const { container } = render(
+      <WorkspaceFileEditor
+        filePath="notes.prompt.md"
+        content={'Check #selection:"src/app.ts":10-12'}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    const link = await waitFor(() => {
+      const element = container.querySelector(".cm-link");
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    });
+    fireEvent.click(link, { ctrlKey: true, clientX: 1, clientY: 1 });
+    expect(useWorkspaceViewerStore.getState().pendingNavigation).toMatchObject({
+      type: "file",
+      filePath: "src/app.ts",
+      startLine: 10,
+      endLine: 12,
+    });
+  });
+
   it("opens #sym links at the symbol range on touch tap", async () => {
     const onChange = vi.fn();
     const onSave = vi.fn();

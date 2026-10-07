@@ -16,7 +16,11 @@ export const LSP_VIEWER_URI_PREFIX = "file:///__ctrlyoke_workspace__/";
 export type { WorkspaceSearchScope } from "./DashboardConstants";
 
 export interface LanguageIntelligenceSessionLookupResponse {
-  session: { id: string; languageId: string } | null;
+  session: {
+    id: string;
+    languageId: string;
+    capabilities: Record<string, unknown>;
+  } | null;
   reason?: (typeof LSP_SESSION_LOOKUP_REASONS)[keyof typeof LSP_SESSION_LOOKUP_REASONS];
 }
 
