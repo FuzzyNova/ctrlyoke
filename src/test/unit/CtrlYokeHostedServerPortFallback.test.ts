@@ -5,6 +5,7 @@ import * as fs from "fs";
 import { suite, test } from "mocha";
 import * as path from "path";
 import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
+import { HOST_KINDS } from "../../types/DashboardConstants";
 import { CtrlYokeHostedServer } from "../../server/CtrlYokeHostedServer";
 import * as BuildConfig from "../../utils/BuildConfig";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
@@ -127,22 +128,20 @@ function createHostedServer(
   workspaceRoot = process.cwd(),
   fallbackPorts: number[] = []
 ): CtrlYokeHostedServer {
-  return new CtrlYokeHostedServer(
-    new DashboardBroadcastHub(),
-    {} as never,
-    (() => ({})) as never,
+  return new CtrlYokeHostedServer({
+    hub: new DashboardBroadcastHub(),
+    endpoint: {} as never,
+    getOrchestrator: (() => ({})) as never,
     port,
+    fallbackPorts,
+    bindAddress: "127.0.0.1",
     workspaceRoot,
-    [],
+    namedWorkspaceRoots: [],
     token,
-    "127.0.0.1",
-    undefined,
+    remoteAccess: { isAllowed: async () => false, onBlocked: () => undefined },
     onSiblingServerDetected,
-    undefined,
-    undefined,
-    undefined,
-    fallbackPorts
-  );
+    hostKind: HOST_KINDS.VSCODE,
+  });
 }
 
 function devServerUrlFilePath(workspaceRoot: string): string {

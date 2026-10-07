@@ -4,6 +4,7 @@ import {
   buildHostedErrorPage,
   renderHostedErrorPage,
 } from "../../server/HostedErrorPageTemplate";
+import { HOST_KINDS } from "../../types/DashboardConstants";
 
 suite("renderHostedErrorPage", () => {
   test("substitutes every placeholder into the given template", () => {
@@ -92,5 +93,18 @@ suite("HostedErrorPageTemplate", () => {
     assert.ok(html.includes("&lt;script&gt;"));
     assert.ok(!html.includes("<img src=x"));
     assert.ok(html.includes("&lt;img src=x"));
+  });
+
+  test("uses standalone startup guidance on a 401 page", () => {
+    const html = buildHostedErrorPage({
+      statusCode: 401,
+      message: "You need a valid ctrlyoke access token to view this page.",
+      themeBodyClass: "vscode-dark",
+      themeStyleBlock: "",
+      hostKind: HOST_KINDS.STANDALONE,
+    });
+
+    assert.ok(html.includes("Use the URL printed by `ctrlyoke server`"));
+    assert.ok(!html.includes("Open the ctrlyoke panel in VS Code"));
   });
 });

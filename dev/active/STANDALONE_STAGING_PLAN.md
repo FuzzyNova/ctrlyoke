@@ -150,7 +150,8 @@ names the guard or test that proves it, not just the code change.
     parameters (including `remoteAccess: { isAllowed, onBlocked }` and
     `hostKind`). Remove `extension.ts`'s dead `?? 3000` port fallback. The
     host-aware 401/error page text moves here from 7b, so that `hostKind`
-    has a consumer as soon as it exists.
+    has a consumer as soon as it exists. **Done:** shared options object,
+    host-aware 401 guidance, and updated tests.
   - **7a2:** `createNodeHostServices`, `FileKeyValueStore`, the browser-only
     `DashboardHostActions`, and the in-process boot test.
   - **7a3:** the INIT `hostCapabilities` list (Phase 7), derived from the

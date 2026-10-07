@@ -1,10 +1,10 @@
 # Standalone ctrlyoke Server Plan
 
-**Status (2026-10-06):** The VS Code-hosted server has **shipped**. The
-standalone `ctrlyoke server` is **not started, but it is ready to implement**
-once its decoupling prerequisites land. Every fact in this document was
-re-audited against `src/` on 2026-10-06, and every open question has a
-decision. ROADMAP lists it as a P2 item for milestone 0.4.
+**Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
+server implementation has started: Track A (Stages 1–6) and Track B sub-stage
+7a1 are complete; the remaining Track B work is in progress. Every fact in
+this document was re-audited against `src/` on 2026-10-06, and every open
+question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
 
 **Sequencing:** [`STANDALONE_STAGING_PLAN.md`](STANDALONE_STAGING_PLAN.md) is
 the only authoritative order of work. The standalone work is staging Track B

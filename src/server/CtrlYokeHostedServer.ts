@@ -54,6 +54,7 @@ import {
   WORKSPACE_SEARCH_SCOPES,
   NETWORK_INTERFACE_FAMILIES,
   THEME_KINDS,
+  type HostKind,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -216,6 +217,26 @@ export function sanitizeBrowserClientId(
   return sanitized || null;
 }
 
+export interface HostedServerOptions {
+  hub: DashboardBroadcastHub;
+  endpoint: DashboardClientEndpoint;
+  getOrchestrator: () => WorkflowOrchestrator;
+  port: number;
+  fallbackPorts: number[];
+  bindAddress: string;
+  tls?: { certPath: string; keyPath: string };
+  workspaceRoot: string;
+  namedWorkspaceRoots: ResolverWorkspaceFolder[];
+  token: string;
+  remoteAccess: {
+    isAllowed: () => Promise<boolean>;
+    onBlocked: () => void;
+  };
+  runnerHostIdentity?: RunnerHostIdentity;
+  onSiblingServerDetected?: (url: string) => void;
+  hostKind: HostKind;
+}
+
 export class CtrlYokeHostedServer
   implements IDashboardProvider, IDashboardSink
 {
@@ -270,25 +291,46 @@ export class CtrlYokeHostedServer
   private readonly getRemoteAccess: (() => Promise<boolean>) | undefined;
   private readonly onRemoteAccessBlocked: (() => void) | undefined;
   private remoteAccessUpsellShown = false;
+  private readonly hub: DashboardBroadcastHub;
+  private readonly dashboardClient: DashboardClientEndpoint;
+  private readonly getOrchestrator: () => WorkflowOrchestrator;
+  private port: number;
+  private readonly workspaceRoot: string;
+  private readonly token: string;
+  private bindAddress: string;
+  private readonly fallbackPorts: number[];
+  private readonly onSiblingServerDetected?: (url: string) => void;
+  private readonly hostKind: HostKind;
 
-  constructor(
-    private hub: DashboardBroadcastHub,
-    private dashboardClient: DashboardClientEndpoint,
-    private readonly getOrchestrator: () => WorkflowOrchestrator,
-    private port: number,
-    private workspaceRoot: string,
-    namedWorkspaceRoots: ResolverWorkspaceFolder[],
-    private token: string,
-    private bindAddress: string = "127.0.0.1",
-    tlsConfig?: { certPath: string; keyPath: string },
-    private readonly onSiblingServerDetected?: (url: string) => void,
-    getRemoteAccess?: () => Promise<boolean>,
-    onRemoteAccessBlocked?: () => void,
-    runnerHostIdentity?: RunnerHostIdentity,
-    private readonly fallbackPorts: number[] = []
-  ) {
-    this.getRemoteAccess = getRemoteAccess;
-    this.onRemoteAccessBlocked = onRemoteAccessBlocked;
+  constructor(options: HostedServerOptions) {
+    const {
+      hub,
+      endpoint,
+      getOrchestrator,
+      port,
+      fallbackPorts,
+      bindAddress,
+      tls,
+      workspaceRoot,
+      namedWorkspaceRoots,
+      token,
+      remoteAccess,
+      runnerHostIdentity,
+      onSiblingServerDetected,
+      hostKind,
+    } = options;
+    this.hub = hub;
+    this.dashboardClient = endpoint;
+    this.getOrchestrator = getOrchestrator;
+    this.port = port;
+    this.fallbackPorts = fallbackPorts;
+    this.bindAddress = bindAddress;
+    this.workspaceRoot = workspaceRoot;
+    this.token = token;
+    this.onSiblingServerDetected = onSiblingServerDetected;
+    this.hostKind = hostKind;
+    this.getRemoteAccess = remoteAccess.isAllowed;
+    this.onRemoteAccessBlocked = remoteAccess.onBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.webPushService = new WebPushService(undefined, {
       hasRemoteAccess: () => this.resolveRemoteAccess(),
@@ -299,12 +341,12 @@ export class CtrlYokeHostedServer
       namedWorkspaceRoots,
       runnerHostIdentity
     );
-    if (tlsConfig) {
-      const cert = fs.readFileSync(tlsConfig.certPath);
-      const key = fs.readFileSync(tlsConfig.keyPath);
+    if (tls) {
+      const cert = fs.readFileSync(tls.certPath);
+      const key = fs.readFileSync(tls.keyPath);
       this.httpServer = createHttpsServer({ cert, key }, this.app);
       this.isTls = true;
-      this.tlsCertPath = tlsConfig.certPath;
+      this.tlsCertPath = tls.certPath;
     } else {
       this.httpServer = createHttpServer(this.app);
       this.isTls = false;
@@ -2015,10 +2057,10 @@ export class CtrlYokeHostedServer
           message: "You need a valid ctrlyoke access token to view this page.",
           hints: [
             "Did you recently regenerate your ctrlyoke token? Old links stop working as soon as the token changes.",
-            "Open the ctrlyoke panel in VS Code, go to its settings, and use the current link (with token) to reconnect.",
           ],
           themeBodyClass: this.resolveThemeBodyClass(),
           themeStyleBlock: this.buildThemeStyleBlock(),
+          hostKind: this.hostKind,
         })
       );
   }
@@ -2040,6 +2082,7 @@ export class CtrlYokeHostedServer
           hints,
           themeBodyClass: this.resolveThemeBodyClass(),
           themeStyleBlock: this.buildThemeStyleBlock(),
+          hostKind: this.hostKind,
         })
       );
   }

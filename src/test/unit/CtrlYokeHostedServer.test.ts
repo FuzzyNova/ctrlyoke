@@ -8,11 +8,13 @@ import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
 import {
   CtrlYokeHostedServer,
+  type HostedServerOptions,
   maskHostedServerUrlToken,
   sanitizeBrowserClientId,
 } from "../../server/CtrlYokeHostedServer";
 import {
   HARNESS_IDS,
+  HOST_KINDS,
   HOSTED_CONNECTION_LIVENESS,
   HARNESS_STATUS_STRINGS,
   HARNESS_VERSION_STATUSES,
@@ -34,6 +36,23 @@ import {
 } from "../../utils/SecretRedactionService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+
+function createHostedServer(options: Partial<HostedServerOptions> = {}) {
+  return new CtrlYokeHostedServer({
+    hub: new DashboardBroadcastHub(),
+    endpoint: {} as never,
+    getOrchestrator: (() => ({})) as never,
+    port: 0,
+    fallbackPorts: [],
+    bindAddress: "127.0.0.1",
+    workspaceRoot: process.cwd(),
+    namedWorkspaceRoots: [],
+    token: "test-token",
+    remoteAccess: { isAllowed: async () => false, onBlocked: () => undefined },
+    hostKind: HOST_KINDS.VSCODE,
+    ...options,
+  });
+}
 
 function sendJsonRequest(
   port: number,
@@ -96,15 +115,7 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
     const token =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-file-redaction-");
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      workspaceRoot,
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot, token });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -351,15 +362,11 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
       disconnectClient: () => undefined,
       routeClientMessage: async () => undefined,
     };
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      webviewProvider as never,
-      (() => ({})) as never,
-      0,
+    const server = createHostedServer({
+      endpoint: webviewProvider as never,
       workspaceRoot,
-      [],
-      token
-    );
+      token,
+    });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -470,15 +477,7 @@ suite("sanitizeBrowserClientId", () => {
 suite("CtrlYokeHostedServer file history route", () => {
   test("rejects a missing path before invoking the viewer service", async () => {
     const token = "route-test-token";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -517,15 +516,7 @@ suite("CtrlYokeHostedServer file history route", () => {
 
   test("rejects a missing commit before invoking the viewer service", async () => {
     const token = "route-test-token-commit";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -564,15 +555,7 @@ suite("CtrlYokeHostedServer file history route", () => {
 
   test("rejects a missing ref on the paged git-ref diff route", async () => {
     const token = "route-test-token-diff-page";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -614,15 +597,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
   test("rejects unauthenticated workspace file PUT before the JSON body finishes", async () => {
     const token = "unauthenticated-large-file-token";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-unauth-save-");
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      workspaceRoot,
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot, token });
 
     try {
       const serverUrl = await server.listen();
@@ -671,15 +646,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
   test("saves a 1 MB workspace viewer file", async () => {
     const token = "large-file-save-token";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-large-save-");
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      workspaceRoot,
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot, token });
 
     try {
       const serverUrl = await server.listen();
@@ -706,15 +673,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
 
   test("keeps the default JSON body limit for ordinary routes", async () => {
     const token = "default-json-limit-token";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
 
     try {
       const serverUrl = await server.listen();

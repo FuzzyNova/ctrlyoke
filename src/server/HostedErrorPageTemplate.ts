@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { HOST_KINDS, type HostKind } from "../types/DashboardConstants";
 
 /**
  * Themed HTML landing page for hosted-server error responses (401 token
@@ -34,6 +35,7 @@ export interface HostedErrorPageOptions {
   hints?: string[];
   themeBodyClass: string;
   themeStyleBlock: string;
+  hostKind?: HostKind;
 }
 
 function escapeHtml(text: string): string {
@@ -53,12 +55,27 @@ export function renderHostedErrorPage(
   template: string,
   options: HostedErrorPageOptions
 ): string {
-  const { statusCode, message, hints, themeBodyClass, themeStyleBlock } =
-    options;
+  const {
+    statusCode,
+    message,
+    hints,
+    themeBodyClass,
+    themeStyleBlock,
+    hostKind = HOST_KINDS.VSCODE,
+  } = options;
+  const pageHints =
+    statusCode === 401
+      ? [
+          ...(hints ?? []),
+          hostKind === HOST_KINDS.VSCODE
+            ? "Open the ctrlyoke panel in VS Code, go to its settings, and use the current link (with token) to reconnect."
+            : "Use the URL printed by `ctrlyoke server`.",
+        ]
+      : hints;
   const title = statusCode === 401 ? "Unauthorized" : "Not Found";
   const hintsBlock =
-    hints && hints.length > 0
-      ? `<ul class="ctrlyoke-error-hints">${hints
+    pageHints && pageHints.length > 0
+      ? `<ul class="ctrlyoke-error-hints">${pageHints
           .map((hint) => `<li>${escapeHtml(hint)}</li>`)
           .join("")}</ul>`
       : "";

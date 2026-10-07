@@ -22,6 +22,14 @@ export const INTERACTIVE_TERMINAL_MODES = {
 export type InteractiveTerminalMode =
   (typeof INTERACTIVE_TERMINAL_MODES)[keyof typeof INTERACTIVE_TERMINAL_MODES];
 
+/** Runtime host that composed a hosted dashboard server. */
+export const HOST_KINDS = {
+  VSCODE: "vscode",
+  STANDALONE: "standalone",
+} as const;
+
+export type HostKind = (typeof HOST_KINDS)[keyof typeof HOST_KINDS];
+
 /** Outcomes returned by host actions invoked from shared workflow code. */
 export const DASHBOARD_ACTION_RESULT_STATUSES = {
   OPENED: "opened",

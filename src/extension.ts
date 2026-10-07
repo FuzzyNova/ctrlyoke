@@ -40,6 +40,7 @@ import {
 } from "./server/CtrlYokeHostedServer";
 import {
   GIT_CHANGE_KINDS,
+  HOST_KINDS,
   LICENSE_UI,
   MESSAGE_TYPES,
   RUNNER_IDS,
@@ -1635,7 +1636,7 @@ function registerCommands(
     async () => {
       if (hostedServer) return;
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
-      const port = configService.get("server")?.port ?? 3000;
+      const port = configService.getAll().server.port;
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
@@ -1661,27 +1662,30 @@ function registerCommands(
         );
       };
       try {
-        hostedServer = new CtrlYokeHostedServer(
+        hostedServer = new CtrlYokeHostedServer({
           hub,
-          dashboardApplication,
-          () => workflowOrchestrator,
+          endpoint: dashboardApplication,
+          getOrchestrator: () => workflowOrchestrator,
           port,
           workspaceRoot,
           namedWorkspaceRoots,
           token,
           bindAddress,
-          tlsConfig,
-          (existingServerUrl) =>
+          tls: tlsConfig,
+          onSiblingServerDetected: (existingServerUrl) =>
             notifyUserFeedback(
               workflowOrchestrator.getUserFeedbackSink(),
               USER_FEEDBACK_SEVERITY.WARNING,
               `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
             ),
-          () => licenseService.hasRemoteAccess(),
-          showRemoteAccessUpsell,
+          remoteAccess: {
+            isAllowed: () => licenseService.hasRemoteAccess(),
+            onBlocked: showRemoteAccessUpsell,
+          },
           runnerHostIdentity,
-          fallbackPorts
-        );
+          fallbackPorts,
+          hostKind: HOST_KINDS.VSCODE,
+        });
       } catch (err) {
         unprotectServerToken?.();
         unprotectServerToken = undefined;
