@@ -2,7 +2,6 @@ import * as path from "path";
 import type { PlatformAdapter } from "./PlatformAdapter";
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 import type { ExecutionMode } from "../types/DashboardConstants";
-import { configService } from "../config/CtrlYokeConfigService";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { SecretStore } from "./SecretStore";
@@ -67,27 +66,11 @@ export class CliAdapter implements PlatformAdapter {
     return this.secretStore;
   }
 
-  getConfig<T>(key: string, defaultValue: T): T {
-    // CLI flags that map to settings (--model, --timeout, --permission-mode, …)
-    // reach shared code through configService.setCliOverlay() in cli.ts, not
-    // through here. Only keys a caller actually reads belong in this switch.
-    switch (key) {
-      // Read by CliIntegration.getExecutionMode(); lets CommitMessageGenerator
-      // force headless without touching the user's settings.
-      case "cliExecutionMode":
-        return this.config.cliExecutionMode as unknown as T;
-
-      // ── Fallback: config service only (file-based settings) ────────────
-      // Do NOT fall back to this.config[key] — config field names don't match
-      // VS Code setting key names, so property-name collisions cause silent bugs.
-      default: {
-        const serviceValue = configService.getNested(key);
-        if (serviceValue !== undefined) {
-          return serviceValue as unknown as T;
-        }
-        return defaultValue;
-      }
+  getConfig<T extends string>(key: string, defaultValue: T): T {
+    if (key === "cliExecutionMode") {
+      return this.config.cliExecutionMode as T;
     }
+    return defaultValue;
   }
 
   getWorkspaceRoot(): string {

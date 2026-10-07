@@ -20,8 +20,7 @@ Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts`
 
 1. `setRuntimeMode(RUNNER_IDS.CLI)` must stay at module top level before shared code initializes.
 2. `configService` is seeded with user/workspace file backends, then `setCliOverlay()` is applied with only explicitly provided flags.
-3. `CliAdapter` plus `registerCliAdapter()` is what makes shared `ConfigurationUtils` / `workspace.getConfiguration()` reads see CLI values inside the bundled Node process.
-4. Setting-tier CLI flags such as `--timeout` and `--script-timeout` go into the `setCliOverlay()` overlay, only when explicitly passed. Workflow-property flags (`--harness`, `--model`, execution mode, permission, and session flags) are applied after loading through `CliPropertyOverrides`; `--force` is limited to `run` and `rerun`. Never give a setting-tier flag a Commander default, or it silently overrides the settings file. Do not add `CliAdapter.getConfig()` key mappings for flags: that path is read only by callers that ask for a specific key (today just `cliExecutionMode`). Mappings nobody read accumulated there and made `-t`/`--script-timeout`/`--add-dir`/`--permission-mode` look wired when they were not. Do **not** fall back to `this.config[key]`; CLI option names and persisted setting keys intentionally do not match.
+3. Setting-tier CLI flags such as `--timeout` and `--script-timeout` go into the `setCliOverlay()` overlay, only when explicitly passed. Workflow-property flags (`--harness`, `--model`, execution mode, permission, and session flags) are applied after loading through `CliPropertyOverrides`; `--force` is limited to `run` and `rerun`. Never give a setting-tier flag a Commander default, or it silently overrides the settings file. CLI option names and persisted setting keys intentionally do not match setting paths.
 
 ## `run` data flow gotchas
 
@@ -54,7 +53,7 @@ Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts`
 
 ## Constraints
 
-- Never depend on the real `vscode` module from anything `cli.ts` reaches, directly or through a package. The bundle's alias to `src/platform/vscode-shim.ts` does not make that safe: the unbundled `tsc` output of `cli.js` loads every module for real. `SourceAuditCounters.test.ts` enforces an empty `vscode` load set for `src/cli.ts` and `src/mcp-server.ts`.
+- Never depend on `vscode`, `@vscode/extension-telemetry`, or `src/platform/VsCode*` from any Node entry point. `SourceAuditCounters.test.ts` checks source graphs, and esbuild metafile guards cover the CLI, MCP, and worker bundles.
 - CLI builds produce `out/cli.js` with a shebang and `IS_DEV_MODE=false`; keep code Node-safe and independent of extension-host services.
 - Preserve structured exit semantics when adding failure paths: `0` success, `1` workflow failure, `2` usage/parse/unexpected error, `3` harness/tool availability issues, `4` timeout, `5` interrupted.
 

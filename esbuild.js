@@ -2,6 +2,9 @@ const esbuild = require("esbuild");
 const fs = require("fs");
 const path = require("path");
 const { rewriteCrossSchemaRefs } = require("./scripts/schema-ref-utils.cjs");
+const { nodeBundleVscodeGuardPlugin } = require(
+  "./scripts/node-bundle-vscode-guard.cjs"
+);
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
@@ -427,12 +430,9 @@ async function main() {
     platform: "node",
     mainFields,
     outfile: "out/mcp-server.js",
+    metafile: true,
     logLevel: "silent",
-    alias: {
-      // Shared core projections use the platform logger; the MCP binary has
-      // no VS Code host, so resolve that dependency to the standalone shim.
-      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
-    },
+    plugins: [nodeBundleVscodeGuardPlugin("mcp-server")],
     // npm links `ctrlyoke-mcp` straight to this file, so it needs a shebang
     // like out/cli.js (dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.2).
     banner: {
@@ -454,9 +454,8 @@ async function main() {
     target: "node22",
     mainFields,
     outfile: "out/historySearchRebuildWorker.js",
-    alias: {
-      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
-    },
+    metafile: true,
+    plugins: [nodeBundleVscodeGuardPlugin("historySearchRebuildWorker")],
     logLevel: "silent",
   });
 
@@ -471,9 +470,8 @@ async function main() {
     target: "node22",
     mainFields,
     outfile: "out/historySearchMatcherWorker.js",
-    alias: {
-      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
-    },
+    metafile: true,
+    plugins: [nodeBundleVscodeGuardPlugin("historySearchMatcherWorker")],
     logLevel: "silent",
   });
 
@@ -507,14 +505,9 @@ async function main() {
     target: "node22",
     mainFields,
     outfile: "out/cli.js",
-    // vscode is intentionally NOT in externals — the shim below satisfies all vscode imports
-    // with no-op stubs so the CLI binary can run in plain Node.js without VS Code present.
     external: ["node-pty"], // optional native dep; not used by CLI paths
-    alias: {
-      // Redirect all `import ... from 'vscode'` in the CLI bundle to the no-op shim.
-      // The real vscode module is only available inside the VS Code extension host.
-      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
-    },
+    metafile: true,
+    plugins: [copyServerPlugin, nodeBundleVscodeGuardPlugin("cli")],
     logLevel: "silent",
     banner: {
       js: "#!/usr/bin/env node",
@@ -524,7 +517,6 @@ async function main() {
       VERSION: JSON.stringify(packageJson.version || "0.0.0"),
       IS_DEV_MODE: "false", // CLI is always production-like
     },
-    plugins: [copyServerPlugin],
   });
 
   if (watch) {

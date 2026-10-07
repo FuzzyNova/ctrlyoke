@@ -682,9 +682,8 @@ suite("SourceAuditCounters", () => {
       // Shares the parsed-source cache with the orchestrator graph test, but
       // also walks installed package JavaScript.
       this.timeout(60_000);
-      // The esbuild bundle aliases `vscode` to vscode-shim.ts, but the same
-      // entry is also run from plain `tsc` output (compile-tests emits it
-      // first), where any reachable `vscode` load is a hard crash:
+      // The same entry is also run from plain `tsc` output (compile-tests
+      // emits it first), where any reachable `vscode` load is a hard crash:
       // "Cannot find module 'vscode'". The standalone binaries must not
       // depend on VS Code at all.
       assert.deepStrictEqual(

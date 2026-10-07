@@ -2,7 +2,7 @@
 
 **Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
 server implementation has started: Track A (Stages 1–6), Track B sub-stages
-7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stages 8–9 are complete.
+7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stages 8–10 are complete.
 Every fact in this document was re-audited against `src/` on 2026-10-06, and every open
 question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
 
@@ -500,24 +500,33 @@ goes in `src/cli/ServerCommand.ts`. Flags override `server.*` settings
   `DashboardApplication.ts`, and `CtrlYokeHostedServer.ts` roots. (Moved here
   from the decoupling plan's Phase 7 item 4 when that plan was closed.)
 
-### Phase 11: retire the Node-side shim (Stage 10)
+### Phase 11: retire the Node-side shim (Stage 10 — done)
 
 Moved here from the decoupling plan's Phase 8 when that plan was closed on
-2026-10-06. Its Track A work is done, so this is the only decoupling work
-left, and it depends on `server` shipping first.
+2026-10-06. This phase depended on `server` shipping first and is now complete.
 
-1. Verify `ctrlyoke run`, `validate`, `commit`, `history`, `status`, `step`,
-   `secret`, and `server` with the real Node module graph. The CLI/MCP static
-   guard already passes.
-2. Remove `registerCliAdapter()`/`unregisterCliAdapter()` and their two
-   callers in `cli.ts` (`:911` and `:2339` on 2026-10-06). The only remaining
-   reader is the shim's own `getConfiguration`.
-3. Remove the `vscode` → `src/platform/vscode-shim.ts` alias from **all four**
+1. **Done:** Verify `ctrlyoke run`, `validate`, `commit`, `history`, `status`, `step`,
+   `secret`, and `server` with the real Node module graph. All eight `--help`
+   invocations passed; `validate` passed against a workflow file; `server`
+   started, listened, and stopped on Ctrl+C. The CLI/MCP source graph guard
+   passes.
+2. **Done:** Remove `registerCliAdapter()`/`unregisterCliAdapter()` and both
+   callers in `cli.ts`; the adapter's execution-mode lookup remains on the
+   `PlatformAdapter.getConfig()` host port.
+3. **Done:** Remove the `vscode` → `src/platform/vscode-shim.ts` alias from **all four**
    Node bundles in `esbuild.js`: `cli`, `mcp-server`,
    `historySearchRebuildWorker`, and `historySearchMatcherWorker`.
-4. Delete `vscode-shim.ts`.
-5. Fail the build if any Node bundle's metafile contains the `vscode` package,
+4. **Done:** Delete `vscode-shim.ts`.
+5. **Done:** Fail the build if any Node bundle's metafile contains the `vscode` package,
    `@vscode/extension-telemetry`, or a `src/platform/VsCode*` file.
+
+**Stage 10 gate (2026-10-07):** `npm run compile`, `npm run typecheck`, and
+`npm run lint` pass. The single `npm test` run passes UI (3454 tests) and
+packaging (80 tests); extension reports 5583 passing and 9 failures from the
+existing uninitialized run-history fixture (`Run history location has not been
+initialized` in `AddressedPriorContextResolver`, `CliSchemaRefusal`, and
+`StatusMessageReporter`). Its full output is in
+`.ctrlyoke/logs/test-runs/npm-test-2026-10-07T03-05-47-363Z.log`.
 
 The browser-side `standalone-shim.js` remains. It replaces
 `acquireVsCodeApi()` in the browser and is unrelated to the Node-side
@@ -552,8 +561,8 @@ scripts/build-npm-package.mjs, esbuild.js  CHANGED: ship server + webview assets
 - **Server asset copying.** Today `copyServerPlugin` runs only on the
   extension context. Make the CLI build copy the same server assets plus
   `themes/`. The webview build output is already shared under `out/`.
-- **The Node-side `vscode-shim.ts` alias** is retired in Stage 10 (Phase 11
-  below), after `server` ships. The browser `standalone-shim.js` remains.
+- **The Node-side `vscode-shim.ts` alias** was retired in Stage 10 (Phase 11
+  above), after `server` shipped. The browser `standalone-shim.js` remains.
 
 ## Message Protocol Compatibility
 

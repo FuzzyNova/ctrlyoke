@@ -13,7 +13,6 @@ import {
 } from "./cli/CliPropertyOverrides";
 import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
-import { registerCliAdapter } from "./platform/vscode-shim";
 import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
 import {
@@ -909,8 +908,6 @@ async function runCommand(
 
   const platform = new CliAdapter(config);
   const userFeedbackSink = new ConsoleUserFeedbackSink();
-  // Register the adapter with the vscode-shim for backward compatibility.
-  registerCliAdapter(platform);
   const factory = new IntegrationFactory(platform, userFeedbackSink);
   // The default harness used only when neither a step nor the workflow names
   // one. `run --harness` is applied to the workflow after it loads, so the
@@ -2326,19 +2323,9 @@ async function validateCommand(
 
     const workingDir = process.cwd();
     Log.initializeCli(workingDir, false);
-    const validationAdapter = new CliAdapter({
-      cwd: workingDir,
-
-      vars: {},
-      verbose: false,
-      quiet: true,
-      json: options.json === true,
-      cliExecutionMode: EXECUTION_MODES.HEADLESS,
-    });
     configService.setUserBackend(createUserConfigBackend());
     configService.setWorkspaceBackend(createWorkspaceConfigBackend(workingDir));
     configService.setCliOverlay({});
-    registerCliAdapter(validationAdapter);
 
     const capabilityRegistry = new HarnessCapabilityRegistry();
     try {
