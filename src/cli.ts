@@ -128,6 +128,7 @@ import {
 } from "./cli/CliRunCommandDefinitions";
 import { registerHistoryCommands } from "./cli/HistoryCommandDefinitions";
 import { registerStatusCommand } from "./cli/StatusCommandDefinitions";
+import { registerServerCommand } from "./cli/ServerCommand";
 import { statusCommand } from "./cli/CliStatusCommand";
 import {
   CLI_CLOSED_PIPE_EXIT_CODE,
@@ -275,6 +276,7 @@ program.hook("preAction", () =>
 );
 
 registerRunCommand(program, runCommand);
+registerServerCommand(program);
 
 registerRunScopedCommands(program, {
   rerun: rerunCommand,

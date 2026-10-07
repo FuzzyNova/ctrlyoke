@@ -16,7 +16,7 @@ import type { SecretStore } from "./SecretStore";
 import { ConsoleUserFeedbackSink } from "./ConsoleUserFeedbackSink";
 import { CompositeUserFeedbackSink } from "../core/CompositeUserFeedbackSink";
 import { HostedWebSocketUserFeedbackSink } from "../server/HostedWebSocketUserFeedbackSink";
-import { ServerTokenStore } from "./ServerTokenStore";
+import { resolveServerToken, ServerTokenStore } from "./ServerTokenStore";
 import { LicenseService } from "../license/LicenseService";
 import { CompletionCore } from "../completions/CompletionCore";
 import { getGitTrackedFiles } from "../utils/GitUtils";
@@ -77,7 +77,9 @@ export async function createNodeHostServices(options: {
 }): Promise<NodeHostServices> {
   const cwd = path.resolve(options.cwd);
   if (!isRunHistoryInitialized()) {
-    initializeRunHistoryLocation(configService.get("storage").runHistoryLocation);
+    initializeRunHistoryLocation(
+      configService.get("storage").runHistoryLocation
+    );
   }
   await new ProjectStateRegistry().initialize(cwd);
   const disposables: Array<{ dispose(): void }> = [];
@@ -165,13 +167,15 @@ export interface NodeHostedServerRuntime {
   readonly dashboardApplication: DashboardApplication;
   readonly server: CtrlYokeHostedServer;
   readonly url: string;
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 /** Compose and start the complete dashboard server in a plain Node process. */
 export async function createNodeHostedServer(options: {
   cwd: string;
   mode: ExecutionMode;
+  regenerateToken?: boolean;
+  strictPort?: boolean;
 }): Promise<NodeHostedServerRuntime> {
   const services = await createNodeHostServices(options);
   const { cwd } = services;
@@ -198,7 +202,8 @@ export async function createNodeHostedServer(options: {
     getServerUrl: () => server?.getServerUrl(),
     getAvailableIps: () => server?.getAvailableIps() ?? [],
     getPortFallback: () => server?.getPortFallbackInfo() ?? undefined,
-    getBindAddressFallback: () => server?.getBindAddressFallbackInfo() ?? undefined,
+    getBindAddressFallback: () =>
+      server?.getBindAddressFallbackInfo() ?? undefined,
     keyValueStore: services.workspaceState,
     secretStore: services.secretStore,
     getWorkspaceRoot: () => cwd,
@@ -242,11 +247,18 @@ export async function createNodeHostedServer(options: {
   orchestrator.getDashboardBroadcastHub().addClient(dashboardApplication);
   dashboardApplication.start();
   void orchestrator.initialize().catch((error: unknown) => {
-    Log.error(`[NodeHostServices] Orchestrator initialization failed: ${String(error)}`);
+    Log.error(
+      `[NodeHostServices] Orchestrator initialization failed: ${String(error)}`
+    );
   });
 
-  const token = process.env.CTRLYOKE_SERVER_TOKEN ??
-    (await services.tokenStore.getOrCreate());
+  const persistedToken = options.regenerateToken
+    ? await services.tokenStore.regenerate()
+    : await services.tokenStore.getOrCreate();
+  const token = resolveServerToken(
+    process.env.CTRLYOKE_SERVER_TOKEN,
+    persistedToken
+  );
   server = new CtrlYokeHostedServer(
     createHostedServerOptions({
       hub: orchestrator.getDashboardBroadcastHub(),
@@ -259,6 +271,7 @@ export async function createNodeHostedServer(options: {
       getUserFeedbackSink: () => orchestrator.getUserFeedbackSink(),
       hostKind: HOST_KINDS.STANDALONE,
       fileWatcherFactory: services.fileWatcherFactory,
+      strictPort: options.strictPort,
     })
   );
   let runningUrl: string;
@@ -280,9 +293,10 @@ export async function createNodeHostedServer(options: {
     dashboardApplication,
     server,
     url: runningUrl,
-    dispose: () => {
+    dispose: async () => {
       server?.dispose();
       dashboardApplication.dispose();
+      await orchestrator.shutdown();
       orchestrator.dispose();
       services.dispose();
     },

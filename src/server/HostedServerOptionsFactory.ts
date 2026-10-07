@@ -27,6 +27,7 @@ type HostedServerOptionOverrides = Pick<
   runnerHostIdentity?: RunnerHostIdentity;
   onSiblingServerDetected?: (url: string) => void;
   onRemoteAccessBlocked?: () => void;
+  strictPort?: boolean;
 };
 
 /** Shared config and Pro gate wiring for the VS Code and Node server roots. */
@@ -45,6 +46,7 @@ export function createHostedServerOptions(
     getOrchestrator: overrides.getOrchestrator,
     port: server.port,
     fallbackPorts: server.fallbackPorts,
+    strictPort: overrides.strictPort,
     bindAddress: server.bindAddress,
     ...(tls ? { tls } : {}),
     workspaceRoot: overrides.workspaceRoot,

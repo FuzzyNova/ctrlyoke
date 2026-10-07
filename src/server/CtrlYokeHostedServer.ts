@@ -229,6 +229,7 @@ export interface HostedServerOptions {
   getOrchestrator: () => WorkflowOrchestrator;
   port: number;
   fallbackPorts: number[];
+  strictPort?: boolean;
   bindAddress: string;
   tls?: { certPath: string; keyPath: string };
   workspaceRoot: string;
@@ -314,6 +315,7 @@ export class CtrlYokeHostedServer
   private readonly token: string;
   private bindAddress: string;
   private readonly fallbackPorts: number[];
+  private readonly strictPort: boolean;
   private readonly onSiblingServerDetected?: (url: string) => void;
   private readonly hostKind: HostKind;
   private readonly themeDefaults: HostedThemeDefaults;
@@ -325,6 +327,7 @@ export class CtrlYokeHostedServer
       getOrchestrator,
       port,
       fallbackPorts,
+      strictPort,
       bindAddress,
       tls,
       workspaceRoot,
@@ -342,6 +345,7 @@ export class CtrlYokeHostedServer
     this.getOrchestrator = getOrchestrator;
     this.port = port;
     this.fallbackPorts = fallbackPorts;
+    this.strictPort = strictPort ?? false;
     this.bindAddress = bindAddress;
     this.workspaceRoot = workspaceRoot;
     this.workspaceKey = projectKey(workspaceRoot);
@@ -2120,7 +2124,8 @@ export class CtrlYokeHostedServer
     req: express.Request
   ): Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO> | undefined {
     const value = req.query.theme;
-    return value === SERVER_THEME_MODES.LIGHT || value === SERVER_THEME_MODES.DARK
+    return value === SERVER_THEME_MODES.LIGHT ||
+      value === SERVER_THEME_MODES.DARK
       ? value
       : undefined;
   }
@@ -2160,7 +2165,8 @@ export class CtrlYokeHostedServer
     if (themeKind === THEME_KINDS.LIGHT) return "vscode-light";
     if (themeKind === THEME_KINDS.HIGH_CONTRAST) return "vscode-high-contrast";
     if (themeKind === THEME_KINDS.DARK) return "vscode-dark";
-    return this.resolveThemeSelection(themeOverride) === SERVER_THEME_MODES.LIGHT
+    return this.resolveThemeSelection(themeOverride) ===
+      SERVER_THEME_MODES.LIGHT
       ? "vscode-light"
       : "vscode-dark";
   }
@@ -2764,20 +2770,25 @@ export class CtrlYokeHostedServer
     this.portFellBack = false;
     this.bindAddressFallback = undefined;
     await this.enforceRemoteBindBeforeListen();
-    // Try the configured port, then each configured fallback port in order
-    // (so a workspace can pin a stable, bookmarkable URL even when the
-    // primary port is often taken), then finally an OS-assigned port.
-    const candidatePorts = [
-      this.port,
-      ...this.fallbackPorts.filter((port) => port !== this.port),
-      0,
-    ];
+    // In strict mode, try only the requested port. Otherwise try configured
+    // fallbacks in order, then an OS-assigned port.
+    const candidatePorts = this.strictPort
+      ? [this.port]
+      : [
+          this.port,
+          ...this.fallbackPorts.filter((port) => port !== this.port),
+          0,
+        ];
     let candidateIndex = 0;
     return new Promise((resolve, reject) => {
       const attemptListen = (port: number) => {
         const onError = (err: NodeJS.ErrnoException) => {
           this.httpServer.removeListener("listening", onListening);
           if (err.code === "EADDRINUSE") {
+            if (candidateIndex >= candidatePorts.length - 1) {
+              reject(err);
+              return;
+            }
             const tryNextCandidate = () => {
               this.portFellBack = true;
               candidateIndex += 1;

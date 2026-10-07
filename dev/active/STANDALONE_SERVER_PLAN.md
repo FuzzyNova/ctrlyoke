@@ -1,8 +1,9 @@
 # Standalone ctrlyoke Server Plan
 
 **Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
-server implementation has started: Track A (Stages 1–6) and Track B sub-stages
-7a1–7a3 are complete; Stage 7a is complete. Every fact in
+server implementation has started: Track A (Stages 1–6), Track B sub-stages
+7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stage 8a are complete.
+Stage 8b (packaging and CLI documentation) remains. Every fact in
 this document was re-audited against `src/` on 2026-10-06, and every open
 question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
 
@@ -432,6 +433,11 @@ injects it. `PromptFileWatcher`, `ExternalRunWatchSession` (formerly
 factory.
 
 ### Phase 10: the `ctrlyoke server` command and launch UX (Stage 8)
+
+**8a complete:** the command, config resolution, tokenized launch output, TLS
+certificate generation, browser opening, and graceful signal shutdown are
+implemented. Packaging, npm artifact verification, and CLI documentation are
+owned by 8b.
 
 Add a `server` subcommand in a new `src/cli/ServerCommandDefinitions.ts`,
 following the existing `*CommandDefinitions.ts` pattern. Config resolution
