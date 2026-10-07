@@ -10,6 +10,9 @@ import {
   type WorkspaceFileTreeEntryKind,
 } from "./DashboardConstants";
 
+/** Browser-safe URI prefix used to represent workspace-relative LSP documents. */
+export const LSP_VIEWER_URI_PREFIX = "file:///__ctrlyoke_workspace__/";
+
 export type { WorkspaceSearchScope } from "./DashboardConstants";
 
 export interface LanguageIntelligenceSessionLookupResponse {

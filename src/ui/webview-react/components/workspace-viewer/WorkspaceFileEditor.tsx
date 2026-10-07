@@ -9,6 +9,7 @@ import {
 import { EditorView, basicSetup } from "codemirror";
 import {
   EditorState,
+  Compartment,
   EditorSelection,
   RangeSetBuilder,
   type Extension,
@@ -29,6 +30,8 @@ import {
 } from "@utils/codemirrorLanguage";
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useLanguageIntelligence } from "@hooks/useLanguageIntelligence";
+import { registerLanguageIntelligenceView } from "@utils/languageIntelligenceClient";
 import { useUiStore } from "@store/uiStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
@@ -109,6 +112,8 @@ export const WorkspaceFileEditor = forwardRef<
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    const languageIntelligenceCompartment = useRef(new Compartment());
+    const languageIntelligenceExtensions = useLanguageIntelligence(filePath);
     const onSaveRef = useRef(onSave);
     const onChangeRef = useRef(onChange);
     const onUndoRedoChangeRef = useRef(onUndoRedoChange);
@@ -184,6 +189,7 @@ export const WorkspaceFileEditor = forwardRef<
           openSecretsSettings
         ),
         ...(langExt ? [langExt] : []),
+        languageIntelligenceCompartment.current.of([]),
         keymap.of([
           indentWithTab,
           {
@@ -210,6 +216,16 @@ export const WorkspaceFileEditor = forwardRef<
       ];
     }, [filePath, openSecretsSettings, openToDirectory, openToFile, readOnly]);
 
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({
+        effects: languageIntelligenceCompartment.current.reconfigure(
+          languageIntelligenceExtensions
+        ),
+      });
+    }, [languageIntelligenceExtensions]);
+
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
       // Image files render as an <img> (below), not a CodeMirror view.
@@ -222,19 +238,24 @@ export const WorkspaceFileEditor = forwardRef<
         parent: containerRef.current,
       });
       viewRef.current = view;
+      const unregisterLanguageView = registerLanguageIntelligenceView(
+        filePath,
+        view
+      );
       onUndoRedoChangeRef.current?.(
         undoDepth(view.state) > 0,
         redoDepth(view.state) > 0
       );
 
       return () => {
+        unregisterLanguageView();
         view.destroy();
         viewRef.current = null;
         onUndoRedoChangeRef.current?.(false, false);
       };
       // extensions covers filePath + readOnly; content is handled by the effect below
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [extensions]);
+    }, [extensions, filePath]);
 
     // Sync editor content when the prop changes externally (e.g. file loaded from disk)
     useEffect(() => {

@@ -1,6 +1,5 @@
 export { LSP_METHODS } from "../../types/DashboardConstants";
-
-export const LSP_VIEWER_URI_PREFIX = "file:///__ctrlyoke_workspace__/";
+export { LSP_VIEWER_URI_PREFIX } from "../../types/HostedWorkspaceViewerTypes";
 export const LSP_READ_ONLY_URI_SCHEME = "ctrlyoke-readonly:";
 
 export interface JsonRpcRequest {

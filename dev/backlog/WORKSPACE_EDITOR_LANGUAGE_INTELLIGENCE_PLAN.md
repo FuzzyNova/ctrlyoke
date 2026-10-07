@@ -1,11 +1,11 @@
 # Workspace Editor Language Intelligence Plan
 
 **Status (2026-10-07):** Proposed and decided. Phases 7a, 7-regex, and 7c
-are complete, as is the host half of phase 1 (staging Stage 12a). The browser
-half of phase 1 (Stage 12b) and later phases remain. The `SymbolIndex` port and
-`VsCodeSymbolIndex` (phase 7a) plus `RegexSymbolIndex` (phase 7-regex, staging
-Stage 9) are complete, along with the VS Code cold-start fallback and anchor
-warm-up. Remaining phases are ready to implement in sequence.
+are complete, as is phase 1 (staging Stages 12a and 12b). Later phases remain.
+The `SymbolIndex` port and `VsCodeSymbolIndex` (phase 7a) plus
+`RegexSymbolIndex` (phase 7-regex, staging Stage 9) are complete, along with
+the VS Code cold-start fallback and anchor warm-up. Remaining phases are ready
+to implement in sequence.
 Every code reference was re-audited against `src/` on 2026-10-07, after the
 standalone server shipped. That pass corrected stale locations, fixed the
 standalone trust claim, and added three things:
@@ -794,7 +794,7 @@ Staging numbers refer to
      watchers through `FileWatcherFactory` (in `CtrlYokeHostedServer`).
    - The reload/compare banner (in `WorkspaceExplorerPane.tsx`), and explorer
      directory refresh.
-1. **Protocol spine** (**Stage 12**, after the shared server class from
+1. **Protocol spine** (**Done — Stage 12**, after the shared server class from
    Stage 7a).
    - A `/ws/lsp` branch in the server's `upgrade` handler, before the 404,
      with the same `?token=` check. It hands off to a **separate**
@@ -820,8 +820,12 @@ Staging numbers refer to
    - `LanguageIntelligenceHost` + `LspSessionProxy` in `src/server/lsp/`: id
      rewriting, didOpen ref-counting, URI ⇄ viewer-path translation,
      containment, and outbound secret redaction.
-   - The `useLanguageIntelligence` hook and a CodeMirror client wired into
-     `WorkspaceFileEditor` through a `Compartment`.
+   - **Done — browser half (Stage 12b):** install `@codemirror/lsp-client`,
+     share a reconnecting socket/client per session id, and wire the hook and
+     client into `WorkspaceFileEditor` through a `Compartment`. Cross-file
+     navigation returns the editor view after viewer-store navigation; LSP
+     zero-based lines are converted to the viewer's one-based selection lines.
+     Reconnect and session changes do not recreate the editor view.
    - A shared workspace-root containment helper extracted from
      `HostedWorkspaceViewerService.safeResolve`, without its user-settings
      exception.

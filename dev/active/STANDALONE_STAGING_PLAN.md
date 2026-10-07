@@ -1,9 +1,9 @@
 # Standalone Server Staging Plan
 
 **Status (2026-10-07):** Track A Stages 1–6 and Track B Stages 7a, 7b, 8,
-9, and 10 are complete; independent Stages I1 and I2 and Track C Stage 12a are
-also complete. Track C Stage 12b is next. The LSP plan was re-audited and its
-settings UX defined on 2026-10-07, and independent Stage I2 (VS Code `#` cold
+9, and 10 are complete; independent Stages I1 and I2 and Track C Stages 12a and
+12b are also complete. Track C Stage 13a is next. The LSP plan was re-audited
+and its settings UX defined on 2026-10-07, and independent Stage I2 (VS Code `#` cold
 start) was implemented. The decoupling plan
 has moved to `dev/implemented/`. Its two remaining phases (Node composition
 and shim retirement) now live in the standalone plan as Stages 7a and 10.
@@ -103,7 +103,7 @@ names the guard or test that proves it, not just the code change.
 | Stage | Work                                                                                                                                                                                                | Owning plan / phase                                    | Prerequisite                  | Done when                                                                                                                                       |
 | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 |   12a | **Done.** Host protocol spine: shared workspace-root containment, backend seam, `LanguageIntelligenceHost`, `LspSessionProxy`, token-gated session lookup, and a dedicated `/ws/lsp` server. Production composition resolves no server until Stage 13. | LSP phase 1 (host half)                     | Stage 8                       | Fake stdio-server tests cover id isolation, buffer resync, matching diagnostics, redaction, inbound URI containment, and read-only file rejection. LSP sockets use separate auth and never register as dashboard clients. |
-|   12b | Browser: install `@codemirror/lsp-client`, WebSocket transport, `useLanguageIntelligence`, and the `Compartment` slot in `WorkspaceFileEditor`.                                                     | LSP phase 1 (browser half)                   | Stage 12a                     | With no session, the editor is unchanged; with a session, the LSP client connects and reconfigures without rebuilding the editor view.            |
+|   12b | **Done.** Browser: install `@codemirror/lsp-client`, a reconnecting WebSocket transport, session-keyed client/workspace, `useLanguageIntelligence`, and the `Compartment` slot in `WorkspaceFileEditor`. | LSP phase 1 (browser half)                   | Stage 12a                     | Fake-socket and null-session tests pass; a session extension reconfigures the compartment while preserving the existing editor DOM, document, and selection. |
 |    13 | Managed backend: the `languageServers` schema, approval of workspace definitions, built-in defaults, lifecycle, the cap, and the trust gate.                                                        | LSP phase 2                                            | Stage 12b                     | TypeScript completion, hover, rename, and diagnostics work in the browser editor in both hosts. The cap and idle shutdown are covered by tests. |
 |    14 | Editor UX: context menu, references panel, multi-file rename confirmation, F12, and capability gating.                                                                                              | LSP phase 3                                            | Stage 13                      | Every menu item is hidden when the session doesn't advertise its capability.                                                                    |
 |    15 | Language Servers settings section: live status, curated catalog (detected / not installed, npm one-click install, copyable install commands, homepage links), and local-config scan/import.         | LSP phase 4                                            | Stage 13                      | Scanning finds `.lsp.json`, Copilot, opencode, and cclsp configs, and imports them into the chosen scope.                                       |
@@ -216,6 +216,13 @@ names the guard or test that proves it, not just the code change.
     4 pending; UI 3,462 passed; packaging 80 passed).
   - **12b:** browser — install `@codemirror/lsp-client`, WebSocket transport,
     `useLanguageIntelligence`, `Compartment` slot in `WorkspaceFileEditor`.
+    **Done (2026-10-07):** one socket/client is shared per session id and
+    reconnect reuses the client, so the editor compartment stays installed
+    without recreating the view. Cross-file navigation uses the viewer store
+    and converts LSP's zero-based line positions to the viewer's one-based
+    positions. Fake-socket, null-session, and editor-compartment tests pass.
+    Verification passed: `npm run typecheck`, `npm run lint`, and `npm test`
+    (extension 5,616 passed/4 pending, UI 3,466 passed, packaging 80 passed).
   - **13a:** `languageServers` schema/settings plumbing, curated catalog data,
     command resolution/probe.
   - **13b:** `ManagedLanguageServerBackend` lifecycle (spawn, idle, cap/LRU,

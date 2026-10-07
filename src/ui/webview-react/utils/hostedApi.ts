@@ -29,6 +29,7 @@ import type {
   WorkspaceSearchResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
+import type { LanguageIntelligenceSessionLookupResponse } from "@root/types/HostedWorkspaceViewerTypes";
 
 export class HostedHttpError extends Error {
   constructor(
@@ -41,6 +42,22 @@ export class HostedHttpError extends Error {
 }
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
+
+export async function languageIntelligenceSession(
+  filePath: string,
+  signal?: AbortSignal
+): Promise<LanguageIntelligenceSessionLookupResponse> {
+  return hostedFetch<LanguageIntelligenceSessionLookupResponse>(
+    `/api/lsp/session?path=${encodeURIComponent(filePath)}`,
+    { signal }
+  );
+}
+
+export function languageIntelligenceSocketUrl(serverId: string): string {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const params = new URLSearchParams({ server: serverId, token });
+  return `${protocol}//${window.location.host}/ws/lsp?${params.toString()}`;
+}
 
 export async function hostedFetch<T>(
   path: string,
