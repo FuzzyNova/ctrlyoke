@@ -21,6 +21,7 @@ export interface ResolvedLanguageServer {
   extensions: string[];
   rootMarkers: string[];
   settings: Record<string, unknown>;
+  env?: Record<string, string>;
   catalogEntry?: LanguageServerCatalogEntry;
 }
 
@@ -220,6 +221,7 @@ async function resolveDefinition(
       ...options.userSettings.languageServers.settings[id],
       ...options.workspaceSettings.languageServers.settings[id],
     },
+    ...( "env" in definition && definition.env ? { env: { ...definition.env } } : {}),
     ...(catalogEntry ? { catalogEntry } : {}),
   };
 }
@@ -247,7 +249,7 @@ async function findExecutable(
   const extensions = executableHasExtension(executable)
     ? [""]
     : options.platform === "win32"
-      ? ["", ".exe", ".cmd", ".bat", ".ps1"]
+      ? [".exe", ".cmd", ".bat", ".ps1", ""]
       : [""];
   for (const candidate of candidates) {
     for (const extension of extensions) {

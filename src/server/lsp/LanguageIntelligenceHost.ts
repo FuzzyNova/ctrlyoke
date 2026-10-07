@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import type { MessageConnection } from "vscode-jsonrpc";
@@ -13,6 +14,7 @@ import { LANGUAGE_SERVER_RESOLUTION_REASONS } from "./LanguageServerBackend";
 import { LspSessionProxy } from "./LspSessionProxy";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
 import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
+import type { LanguageServerStatusChange } from "./ManagedLanguageServerBackend";
 
 interface SharedDocument {
   readonly uri: string;
@@ -44,12 +46,32 @@ export class LanguageIntelligenceHost {
   private readonly sessions = new Map<string, Promise<SharedServerSession>>();
   private readonly sessionsById = new Map<string, Promise<SharedServerSession>>();
   private disposed = false;
+  private readonly statusEvents = new EventEmitter();
+  private readonly backendStatusSubscription?: { dispose(): void };
 
   constructor(private readonly options: LanguageIntelligenceHostOptions) {
     this.roots = {
       workspaceRoot: options.workspaceRoot,
       namedRoots: options.namedWorkspaceRoots,
     };
+    const statusSource = options.backend as LanguageServerBackend & {
+      onStatusChanged?: (listener: (event: LanguageServerStatusChange) => void) => { dispose(): void };
+    };
+    this.backendStatusSubscription = statusSource.onStatusChanged?.((event) => {
+      this.statusEvents.emit("change", event);
+      if (event.status === "crashed" || event.status === "stopped") {
+        this.invalidateSession(event.id, event.rootPath);
+      }
+    });
+  }
+
+  onStatusChanged(listener: (event: LanguageServerStatusChange) => void): { dispose(): void } {
+    this.statusEvents.on("change", listener);
+    return { dispose: () => this.statusEvents.off("change", listener) };
+  }
+
+  async startLanguages(languageIds: readonly string[]): Promise<void> {
+    await this.options.backend.startLanguages?.(languageIds);
   }
 
   async lookupSession(viewerPath: string): Promise<LanguageIntelligenceSessionLookup> {
@@ -96,6 +118,8 @@ export class LanguageIntelligenceHost {
       canOpenPath,
       documents: session.documents,
       onDispose: () => session.proxies.delete(proxy),
+      onDocumentOpened: () => this.options.backend.documentOpened?.(session.descriptor),
+      onDocumentClosed: () => this.options.backend.documentClosed?.(session.descriptor),
     });
     session.proxies.add(proxy);
     return proxy;
@@ -114,16 +138,24 @@ export class LanguageIntelligenceHost {
     }
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
     this.disposed = true;
-    for (const pending of this.sessions.values()) {
-      void pending.then((session) => {
-        for (const proxy of [...session.proxies]) proxy.dispose();
-        session.connection.dispose();
-      });
+    const pendingSessions = [...this.sessions.values()];
+    const results = await Promise.allSettled(pendingSessions);
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      for (const proxy of [...result.value.proxies]) proxy.dispose();
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await this.options.backend.dispose?.();
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      result.value.connection.dispose();
     }
     this.sessions.clear();
     this.sessionsById.clear();
+    this.backendStatusSubscription?.dispose();
+    this.statusEvents.removeAllListeners();
   }
 
   private getOrCreateSession(
@@ -173,14 +205,30 @@ export class LanguageIntelligenceHost {
           const proxy = session.proxies.values().next().value;
           return proxy?.forwardServerRequest(method, params);
         });
-        connection.listen();
+        if (this.options.backend.listenConnection) {
+          this.options.backend.listenConnection(connection);
+        } else {
+          connection.listen();
+        }
         return session;
       }
     );
     this.sessions.set(key, created);
     void created.then((session) => {
       this.sessionsById.set(session.id, created);
-    });
+    }).catch(() => undefined);
     return created;
+  }
+
+  private invalidateSession(serverId: string, rootPath: string): void {
+    const key = `${serverId}\n${path.resolve(rootPath)}`;
+    const pending = this.sessions.get(key);
+    if (!pending) return;
+    this.sessions.delete(key);
+    void pending.then((session) => {
+      this.sessionsById.delete(session.id);
+      for (const proxy of [...session.proxies]) proxy.dispose();
+      session.connection.dispose();
+    }).catch(() => undefined);
   }
 }

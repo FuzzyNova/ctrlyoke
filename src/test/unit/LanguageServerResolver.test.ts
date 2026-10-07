@@ -66,6 +66,20 @@ function commandResult(command: string, args: string[]): CliResolvedCommand {
 }
 
 suite("LanguageServerResolver", () => {
+  test("prefers executable Windows shims over extensionless npm shim files", async () => {
+    const resolved = await resolveLanguageServer(
+      options({ platform: "win32" }),
+      {
+        fileExists: async (filePath) =>
+          filePath.endsWith("typescript-language-server.cmd") ||
+          filePath.endsWith("typescript-language-server"),
+        resolveCommand: async (command, args) => commandResult(command, args),
+      }
+    );
+    assert.ok(resolved);
+    assert.ok(resolved.command.command.endsWith("typescript-language-server.cmd"));
+  });
+
   test("uses workspace selection and resolves definitions user, approved workspace, then catalog", async () => {
     const userSettings = emptyLanguageServers();
     const workspaceSettings = emptyLanguageServers();

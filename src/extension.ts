@@ -41,12 +41,14 @@ import {
 } from "./server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "./server/HostedServerOptionsFactory";
 import { LanguageIntelligenceHost } from "./server/lsp/LanguageIntelligenceHost";
-import { EmptyLanguageServerBackend } from "./server/lsp/LanguageServerBackend";
+import { ManagedLanguageServerBackend } from "./server/lsp/ManagedLanguageServerBackend";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
 import {
   GIT_CHANGE_KINDS,
   HOST_KINDS,
   MESSAGE_TYPES,
   RUNNER_IDS,
+  SETTING_SCOPES,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
   VSCODE_GIT_COMMANDS,
@@ -1671,7 +1673,14 @@ function registerCommands(
             hostKind: HOST_KINDS.VSCODE,
             fileWatcherFactory: new VsCodeFileWatcherFactory(),
             languageIntelligenceHost: new LanguageIntelligenceHost({
-              backend: new EmptyLanguageServerBackend(),
+              backend: new ManagedLanguageServerBackend({
+                workspaceRoot,
+                userSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.USER) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
+                workspaceSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.WORKSPACE) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
+                approvalStore: new VsCodeKeyValueStore(context.globalState),
+                interactionPort: webviewProvider.getUserInteractionPort(),
+                isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
+              }),
               workspaceRoot,
               namedWorkspaceRoots,
               isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),

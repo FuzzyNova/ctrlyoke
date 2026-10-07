@@ -3131,7 +3131,9 @@ export class CtrlYokeHostedServer
     this.unregisterMemoryContext();
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
-    this.languageIntelligenceHost.dispose();
+    void this.languageIntelligenceHost.dispose().catch((error: unknown) => {
+      Log.warn(`[CtrlYokeHostedServer] Failed to stop language servers: ${String(error)}`);
+    });
     for (const { watcher } of this.fileWatchers.values()) watcher.dispose();
     this.fileWatchers.clear();
     this.watchedFilesByClient.clear();

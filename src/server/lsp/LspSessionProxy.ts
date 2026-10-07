@@ -36,6 +36,8 @@ interface ProxyOptions {
   readonly canOpenPath: (viewerPath: string) => Promise<boolean>;
   readonly documents: Map<string, SharedDocument>;
   readonly onDispose: () => void;
+  readonly onDocumentOpened?: () => void;
+  readonly onDocumentClosed?: () => void;
 }
 
 const INVALID_REQUEST = -32600;
@@ -92,7 +94,8 @@ export class LspSessionProxy {
         this.options.documents.delete(buffer.serverUri);
         void this.options.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
           textDocument: { uri: buffer.serverUri },
-        });
+        }).catch(() => undefined);
+        this.options.onDocumentClosed?.();
       }
     }
     this.buffers.clear();
@@ -225,6 +228,7 @@ export class LspSessionProxy {
     }
     shared.tabs.set(this, { text: state.text, version: state.version });
     if (isFirstOpen) {
+      this.options.onDocumentOpened?.();
       await this.options.connection.sendNotification(LSP_METHODS.DID_OPEN, {
         textDocument: {
           uri: state.serverUri,
@@ -280,6 +284,7 @@ export class LspSessionProxy {
     await this.options.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
       textDocument: { uri: state.serverUri },
     });
+    this.options.onDocumentClosed?.();
   }
 
   private async resyncForRequest(method: string, params: unknown): Promise<void> {

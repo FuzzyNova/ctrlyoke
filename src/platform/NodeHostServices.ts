@@ -36,7 +36,10 @@ import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { CtrlYokeHostedServer } from "../server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "../server/HostedServerOptionsFactory";
 import { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
-import { EmptyLanguageServerBackend } from "../server/lsp/LanguageServerBackend";
+import { ManagedLanguageServerBackend } from "../server/lsp/ManagedLanguageServerBackend";
+import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
+import { SETTING_SCOPES } from "../types/DashboardConstants";
 import { setRuntimeMode } from "../utils/RuntimeMode";
 import { initializeModelRegistry } from "../utils/ModelRegistry";
 
@@ -285,8 +288,16 @@ export async function createNodeHostedServer(options: {
   // Exempt the connection token from heuristic redaction while the server is
   // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.
   const unprotectToken = secretRedactionService.protectValue(token);
+  const languageServerBackend = new ManagedLanguageServerBackend({
+    workspaceRoot: cwd,
+    userSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.USER) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
+    workspaceSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.WORKSPACE) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
+    approvalStore: services.workspaceState,
+    interactionPort: dashboardApplication.interactionPort,
+    isWorkspaceTrusted: () => orchestrator.isWorkspaceTrusted(),
+  });
   const languageIntelligenceHost = new LanguageIntelligenceHost({
-    backend: new EmptyLanguageServerBackend(),
+    backend: languageServerBackend,
     workspaceRoot: cwd,
     namedWorkspaceRoots: namedRoots,
     isWorkspaceTrusted: () => true,
@@ -312,6 +323,12 @@ export async function createNodeHostedServer(options: {
     const url = await server.listen();
     if (!url) throw new Error("The hosted server did not start.");
     runningUrl = url;
+    if (configService.get("languageServers").startOnLaunch) {
+      const files = await getGitTrackedFiles(cwd).catch(() => []);
+      const extensions = new Set(files.map((file) => path.extname(file).slice(1).toLowerCase()));
+      const detectedLanguages = [...new Set(LANGUAGE_SERVER_CATALOG.filter((entry) => entry.extensions.some((extension) => extensions.has(extension.toLowerCase()))).flatMap((entry) => entry.languages))];
+      void languageIntelligenceHost.startLanguages(detectedLanguages);
+    }
   } catch (error) {
     unprotectToken();
     server.dispose();

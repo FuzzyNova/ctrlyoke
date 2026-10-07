@@ -28,6 +28,14 @@ export interface LanguageServerBackend {
   getConnection(
     descriptor: LanguageServerDescriptor
   ): Promise<MessageConnection> | MessageConnection;
+  /** Called by the shared host once it has installed its request handlers. */
+  listenConnection?(connection: MessageConnection): void;
+  /** Lifecycle accounting used by managed backends to protect open buffers. */
+  documentOpened?(descriptor: LanguageServerDescriptor): void;
+  documentClosed?(descriptor: LanguageServerDescriptor): void;
+  /** Optional eager start for the host's detected languages. */
+  startLanguages?(languageIds: readonly string[]): Promise<void>;
+  dispose?(): void | Promise<void>;
 }
 
 /** Phase 1 production seam: no configured server can resolve yet. */

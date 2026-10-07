@@ -1,7 +1,11 @@
 # Workspace Editor Language Intelligence Plan
 
-**Status (2026-10-07):** Proposed and decided. Phases 7a, 7-regex, and 7c
-are complete, as is phase 1 (staging Stages 12a and 12b). Later phases remain.
+**Status (2026-10-07):** Phase 2 managed backend is implemented (staging
+Stage 13b); its trust, approval/hash renewal, lifecycle, cap/LRU, and restart
+contracts have unit coverage. Browser completion/hover/rename/diagnostics
+verification remains a manual follow-up in both hosts. Phases 7a, 7-regex, and
+7c are complete, as is phase 1 (staging Stages 12a and 12b). Later phases
+remain.
 The `SymbolIndex` port and `VsCodeSymbolIndex` (phase 7a) plus
 `RegexSymbolIndex` (phase 7-regex, staging Stage 9) are complete, along with
 the VS Code cold-start fallback and anchor warm-up. Remaining phases are ready
@@ -852,6 +856,13 @@ Staging numbers refer to
    - PATH, tool-dir, and workspace `node_modules/.bin` resolution through
      `resolveCliCommand`.
    - Spawn/idle/cap/restart lifecycle, `startOnLaunch`, and the trust gate.
+     Stage 13b is implemented in `ManagedLanguageServerBackend`; tests cover
+     trust refusal, remembered and hash-invalidated approvals, open-document
+     protection, cap rejection, idle shutdown, LRU eviction, and crash restart.
+     The conditional installed-TypeScript-server integration covers completion
+     and hover through the proxy; the proxy's matching-diagnostics unit test
+     covers diagnostics routing. The live browser feature path has not yet been
+     manually exercised.
      Warm-on-`#` (first-`#` start and anchor documents) moved to phase 7b /
      Stage 16 on 2026-10-07, because `LspSymbolIndex` is its only consumer.
 
