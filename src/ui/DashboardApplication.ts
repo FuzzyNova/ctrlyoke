@@ -48,6 +48,8 @@ export interface DashboardApplicationOptions {
   templateManager: TemplateManager;
   postMessage: PostMessageFn;
   isPanelReady(): boolean;
+  interactionPostMessage?: PostMessageFn;
+  isInteractionClientReady?(): boolean;
   resolveImageWebviewUri(absolutePath: string): string | undefined;
   getServerUrl(): string | undefined;
   getAvailableIps(): string[];
@@ -115,8 +117,8 @@ export class DashboardApplication
       getWorkspaceRoot: options.getSecretWorkspaceRoot,
     });
     this.interactionPort = new WebviewUserInteractionPort(
-      postMessage,
-      options.isPanelReady
+      options.interactionPostMessage ?? postMessage,
+      options.isInteractionClientReady ?? options.isPanelReady
     );
     this.settingsSync = new WebviewSettingsSync(
       postMessage,

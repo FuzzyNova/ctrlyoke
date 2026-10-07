@@ -2665,6 +2665,14 @@ export class CtrlYokeHostedServer
     return this.availableIps;
   }
 
+  getServerUrl(): string | undefined {
+    return this.publicUrl;
+  }
+
+  hasConnectedClients(): boolean {
+    return this.connections.size > 0;
+  }
+
   /**
    * Non-null only when the configured `server.port` was already taken
    * (EADDRINUSE) and listen() fell back to an OS-assigned port instead.

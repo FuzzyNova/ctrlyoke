@@ -9,6 +9,7 @@ import type { SecretStore } from "./SecretStore";
 import { OsCredentialStore } from "./OsCredentialStore";
 import { resolvePackageRootFromEntry } from "../utils/CtrlyokeCliPath";
 import { INTERACTIVE_TERMINAL_MODES } from "../types/DashboardConstants";
+import type { InteractiveTerminalMode } from "../types/DashboardConstants";
 
 export interface ResolvedCliConfig {
   model?: string;
@@ -42,6 +43,7 @@ export interface ResolvedCliConfig {
    * platform adapter rather than vscode.workspace.getConfiguration().
    */
   cliExecutionMode: ExecutionMode;
+  interactiveTerminal?: InteractiveTerminalMode;
 }
 
 /**
@@ -49,7 +51,7 @@ export interface ResolvedCliConfig {
  * Used by the standalone ctrlyoke CLI binary.
  */
 export class CliAdapter implements PlatformAdapter {
-  readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO;
+  readonly interactiveTerminal: InteractiveTerminalMode;
   private readonly secretStore: SecretStore;
 
   constructor(
@@ -57,6 +59,8 @@ export class CliAdapter implements PlatformAdapter {
     secretStore: SecretStore = new OsCredentialStore()
   ) {
     this.secretStore = secretStore;
+    this.interactiveTerminal =
+      config.interactiveTerminal ?? INTERACTIVE_TERMINAL_MODES.INHERIT_STDIO;
   }
 
   getSecretStore(): SecretStore {

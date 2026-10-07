@@ -152,8 +152,11 @@ names the guard or test that proves it, not just the code change.
     host-aware 401/error page text moves here from 7b, so that `hostKind`
     has a consumer as soon as it exists. **Done:** shared options object,
     host-aware 401 guidance, and updated tests.
-  - **7a2:** `createNodeHostServices`, `FileKeyValueStore`, the browser-only
-    `DashboardHostActions`, and the in-process boot test.
+  - **7a2 — Done:** `createNodeHostServices`, `FileKeyValueStore`, the
+    browser-only `DashboardHostActions`, shared hosted-server configuration,
+    and the in-process two-client workflow boot test. `SourceAuditCounters`
+    confirms the Node composition root reaches no `vscode` load. Stage 7a
+    remains in progress until 7a3 adds INIT host capabilities.
   - **7a3:** the INIT `hostCapabilities` list (Phase 7), derived from the
     methods present on `DashboardHostActions`, with the UI hiding
     host-native actions the host doesn't advertise. No earlier stage

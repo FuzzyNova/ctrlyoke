@@ -700,6 +700,7 @@ suite("SourceAuditCounters", () => {
   for (const entry of [
     "src/ui/DashboardApplication.ts",
     "src/server/CtrlYokeHostedServer.ts",
+    "src/platform/NodeHostServices.ts",
   ]) {
     test(`${entry} never loads vscode at runtime`, function () {
       this.timeout(60_000);

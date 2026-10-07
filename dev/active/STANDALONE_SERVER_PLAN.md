@@ -1,8 +1,8 @@
 # Standalone ctrlyoke Server Plan
 
 **Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
-server implementation has started: Track A (Stages 1–6) and Track B sub-stage
-7a1 are complete; the remaining Track B work is in progress. Every fact in
+server implementation has started: Track A (Stages 1–6) and Track B sub-stages
+7a1–7a2 are complete; Stage 7a remains in progress pending 7a3. Every fact in
 this document was re-audited against `src/` on 2026-10-06, and every open
 question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
 
@@ -145,29 +145,19 @@ dashboard application and the same HTTP/WebSocket server class.
 
 ### Still missing
 
-**Shared prerequisites.** These are owned by the decoupling plan and
-sequenced as staging Stages 1–6:
+**Shared prerequisites.** Decoupling Stages 1–6 are complete. The Node
+composition root and shared hosted server now use the host-neutral ports and
+reach no `vscode` load, as guarded by `SourceAuditCounters`.
 
-- `WebviewMessageRouter` imports `vscode` and makes 16 `executeCommand`
-  calls.
-- `CtrlYokeWebviewProvider` is the only composition root for the dashboard
-  application.
-- `CtrlYokeHostedServer` routes through the provider.
-- `WorkflowSerializer`, `WebviewSettingsSync`, `PromptEditorSupportService`,
-  and `CompletionHelpers` still read `vscode.workspace.workspaceFolders`.
-- `CliIntegration` picks the PTY path by checking for VS Code. A standalone
-  adapter would currently fall through to `stdio: inherit`.
-- `ExternalRunWatchSession` and `ExecutionRootCoordinationWatchSession` call
-  `createFileSystemWatcher` directly, and the Node `FileWatcherFactory` has no
-  implementation yet. `chokidar` was removed as unused in `d30015831`.
-
-**Standalone-only pieces (none exist yet):**
+**Standalone-only pieces still missing:**
 
 - No `ctrlyoke server` subcommand. Today's commands are `run`, `rerun`,
   `append`, `continue`, `validate`, `about`, three `trust-*` commands,
   `commit`, `status`, `history …`, `step …`, and `secret …`.
-- No `createNodeHostServices`, no Node `KeyValueStore` implementation, and no
-  `src/cli/ServerCommand.ts`.
+- INIT does not yet advertise host capabilities, so browser controls are not
+  yet hidden based on the methods present on `DashboardHostActions` (Stage
+  7a3).
+- No `src/cli/ServerCommand.ts`.
 - No static theme defaults. `src/server/themes/` doesn't exist. With no
   captured vars, the hosted server emits an empty style block, and
   `server.theme` (`auto|light|dark`) has no runtime consumer.

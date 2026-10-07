@@ -1,0 +1,289 @@
+import * as path from "node:path";
+import { randomUUID } from "node:crypto";
+import type { ExecutionMode } from "../types/DashboardConstants";
+import {
+  HOST_KINDS,
+  INTERACTIVE_TERMINAL_MODES,
+  RUNNER_IDS,
+} from "../types/DashboardConstants";
+import { CliAdapter, type ResolvedCliConfig } from "./CliAdapter";
+import { NodeFileWatcherFactory } from "./NodeFileWatcher";
+import { FileKeyValueStore } from "./FileKeyValueStore";
+import { NodeDashboardHostActions } from "./NodeDashboardHostActions";
+import { OsCredentialStore } from "./OsCredentialStore";
+import { FallbackSecretStore } from "./FallbackSecretStore";
+import type { SecretStore } from "./SecretStore";
+import { ConsoleUserFeedbackSink } from "./ConsoleUserFeedbackSink";
+import { CompositeUserFeedbackSink } from "../core/CompositeUserFeedbackSink";
+import { HostedWebSocketUserFeedbackSink } from "../server/HostedWebSocketUserFeedbackSink";
+import { ServerTokenStore } from "./ServerTokenStore";
+import { LicenseService } from "../license/LicenseService";
+import { CompletionCore } from "../completions/CompletionCore";
+import { getGitTrackedFiles } from "../utils/GitUtils";
+import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
+import { Log } from "../utils/Log";
+import { configService } from "../config/CtrlYokeConfigService";
+import { initializeRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
+import { ProjectStateRegistry } from "../utils/ProjectStateRegistry";
+import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
+import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
+import { DashboardApplication } from "../ui/DashboardApplication";
+import { TemplateManager } from "../core/TemplateManager";
+import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import { CtrlYokeHostedServer } from "../server/CtrlYokeHostedServer";
+import { createHostedServerOptions } from "../server/HostedServerOptionsFactory";
+import { setRuntimeMode } from "../utils/RuntimeMode";
+
+class MemorySecretStore implements SecretStore {
+  private readonly values = new Map<string, string>();
+  async get(key: string): Promise<string | undefined> {
+    return this.values.get(key);
+  }
+  async store(key: string, value: string): Promise<void> {
+    this.values.set(key, value);
+  }
+  async delete(key: string): Promise<void> {
+    this.values.delete(key);
+  }
+  async keys(): Promise<string[]> {
+    return [...this.values.keys()];
+  }
+}
+
+export interface NodeHostServices {
+  cwd: string;
+  hub: DashboardBroadcastHub;
+  setDashboardHub(hub: DashboardBroadcastHub): void;
+  platform: CliAdapter;
+  fileWatcherFactory: NodeFileWatcherFactory;
+  workspaceState: FileKeyValueStore;
+  userFeedbackSink: CompositeUserFeedbackSink;
+  dashboardHostActions: NodeDashboardHostActions;
+  secretStore: SecretStore;
+  tokenStore: ServerTokenStore;
+  licenseService: LicenseService;
+  completionCore: CompletionCore;
+  disposableRegistry: {
+    add(disposable: { dispose(): void }): void;
+    dispose(): void;
+  };
+  dispose(): void;
+}
+
+/** Construct the Node equivalents of the host-owned services used by the dashboard. */
+export async function createNodeHostServices(options: {
+  cwd: string;
+  mode: ExecutionMode;
+}): Promise<NodeHostServices> {
+  const cwd = path.resolve(options.cwd);
+  if (!isRunHistoryInitialized()) {
+    initializeRunHistoryLocation(configService.get("storage").runHistoryLocation);
+  }
+  await new ProjectStateRegistry().initialize(cwd);
+  const disposables: Array<{ dispose(): void }> = [];
+  const disposableRegistry = {
+    add: (disposable: { dispose(): void }) => disposables.push(disposable),
+    dispose: () => {
+      for (const disposable of disposables.splice(0)) disposable.dispose();
+    },
+  };
+  const secretStore = new FallbackSecretStore(
+    new OsCredentialStore(),
+    new MemorySecretStore(),
+    (error) =>
+      Log.warn(
+        `ctrlyoke: OS credential store unavailable; server secrets will only last for this process: ${error.message}`
+      )
+  );
+  const config: ResolvedCliConfig = {
+    cwd,
+    verbose: configService.get("diagnostics").verboseLogging,
+    quiet: false,
+    json: false,
+    vars: {},
+    cliExecutionMode: options.mode,
+    interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
+  };
+  const platform = new CliAdapter(config, secretStore);
+  const licenseService = new LicenseService(secretStore);
+  disposables.push(licenseService);
+  void licenseService.refresh();
+  Log.initializeCli(cwd, config.verbose);
+
+  let hub = new DashboardBroadcastHub();
+  const userFeedbackSink = new CompositeUserFeedbackSink([
+    new ConsoleUserFeedbackSink(),
+    new HostedWebSocketUserFeedbackSink((message) => hub.postMessage(message)),
+  ]);
+  const completionCore = new CompletionCore({
+    isMultiRoot: () => false,
+    getFiles: async () => {
+      try {
+        return await getGitTrackedFiles(cwd);
+      } catch (error) {
+        Log.warn(
+          "[Completions] git ls-files failed; falling back to workspace walk:",
+          error
+        );
+        return (await walkSearchFiles(cwd, Date.now(), 100_000, 10_000)).files;
+      }
+    },
+  });
+
+  return {
+    cwd,
+    hub,
+    setDashboardHub: (nextHub) => {
+      hub = nextHub;
+    },
+    platform,
+    fileWatcherFactory: new NodeFileWatcherFactory(),
+    workspaceState: new FileKeyValueStore(cwd),
+    userFeedbackSink,
+    dashboardHostActions: new NodeDashboardHostActions(),
+    secretStore,
+    tokenStore: new ServerTokenStore(secretStore),
+    licenseService,
+    completionCore,
+    disposableRegistry,
+    dispose: () => disposableRegistry.dispose(),
+  };
+}
+
+function isRunHistoryInitialized(): boolean {
+  try {
+    getFrozenRunHistoryLocation();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export interface NodeHostedServerRuntime {
+  readonly services: NodeHostServices;
+  readonly orchestrator: WorkflowOrchestrator;
+  readonly dashboardApplication: DashboardApplication;
+  readonly server: CtrlYokeHostedServer;
+  readonly url: string;
+  dispose(): void;
+}
+
+/** Compose and start the complete dashboard server in a plain Node process. */
+export async function createNodeHostedServer(options: {
+  cwd: string;
+  mode: ExecutionMode;
+}): Promise<NodeHostedServerRuntime> {
+  const services = await createNodeHostServices(options);
+  const { cwd } = services;
+  setRuntimeMode(RUNNER_IDS.SERVER);
+  let hub = services.hub;
+  let server: CtrlYokeHostedServer | undefined;
+  const actions = services.dashboardHostActions;
+  const namedRoots = [{ name: path.basename(cwd), fsPath: cwd }];
+  const postMessage = (_message: unknown): void => undefined;
+  const interactionPostMessage = (message: unknown): void =>
+    hub.postMessage(message);
+  const templateManager = new TemplateManager(
+    services.platform.getExtensionPath(),
+    () => cwd,
+    services.platform
+  );
+  const dashboardApplication = new DashboardApplication({
+    templateManager,
+    postMessage,
+    isPanelReady: () => false,
+    interactionPostMessage,
+    isInteractionClientReady: () => server?.hasConnectedClients() === true,
+    resolveImageWebviewUri: () => undefined,
+    getServerUrl: () => server?.getServerUrl(),
+    getAvailableIps: () => server?.getAvailableIps() ?? [],
+    getPortFallback: () => server?.getPortFallbackInfo() ?? undefined,
+    getBindAddressFallback: () => server?.getBindAddressFallbackInfo() ?? undefined,
+    keyValueStore: services.workspaceState,
+    secretStore: services.secretStore,
+    getWorkspaceRoot: () => cwd,
+    getSecretWorkspaceRoot: () => cwd,
+    getNamedRoots: () => namedRoots,
+    getTrustedRoots: () => [cwd],
+    actions,
+    licenseService: services.licenseService,
+    hostDependencies: {
+      fileWatcherFactory: services.fileWatcherFactory,
+      completionCore: services.completionCore,
+    },
+    onPanelReady: () => false,
+    handleClearWorkflow: async () => undefined,
+    updateWorkflowName: () => undefined,
+    getDevStatus: async () => undefined,
+    notifyActiveWorkflowChanged: () => undefined,
+  });
+  let orchestrator!: WorkflowOrchestrator;
+  orchestrator = new WorkflowOrchestrator({
+    platform: services.platform,
+    dashboardHostActions: actions,
+    workspaceFolderPathResolver: () => cwd,
+    dashboardProvider: dashboardApplication,
+    userFeedbackSink: services.userFeedbackSink,
+    runnerHostIdentity: {
+      runner: RUNNER_IDS.SERVER,
+      hostInstanceId: randomUUID(),
+      pid: process.pid,
+    },
+    fileWatcherFactory: services.fileWatcherFactory,
+    disposableRegistry: services.disposableRegistry,
+    workspaceState: services.workspaceState,
+    isWorkspaceTrusted: () => true,
+    userInteractionPort: dashboardApplication.interactionPort,
+  });
+  hub = orchestrator.getDashboardBroadcastHub();
+  services.setDashboardHub(hub);
+  dashboardApplication.setWorkflowOrchestrator(orchestrator);
+  dashboardApplication.setHub(hub);
+  orchestrator.getDashboardBroadcastHub().addClient(dashboardApplication);
+  dashboardApplication.start();
+  void orchestrator.initialize().catch((error: unknown) => {
+    Log.error(`[NodeHostServices] Orchestrator initialization failed: ${String(error)}`);
+  });
+
+  const token = process.env.CTRLYOKE_SERVER_TOKEN ??
+    (await services.tokenStore.getOrCreate());
+  server = new CtrlYokeHostedServer(
+    createHostedServerOptions({
+      hub: orchestrator.getDashboardBroadcastHub(),
+      endpoint: dashboardApplication,
+      getOrchestrator: () => orchestrator,
+      workspaceRoot: cwd,
+      namedWorkspaceRoots: namedRoots,
+      token,
+      licenseService: services.licenseService,
+      getUserFeedbackSink: () => orchestrator.getUserFeedbackSink(),
+      hostKind: HOST_KINDS.STANDALONE,
+    })
+  );
+  let runningUrl: string;
+  try {
+    const url = await server.listen();
+    if (!url) throw new Error("The hosted server did not start.");
+    runningUrl = url;
+  } catch (error) {
+    server.dispose();
+    dashboardApplication.dispose();
+    orchestrator.dispose();
+    services.dispose();
+    throw error;
+  }
+
+  return {
+    services,
+    orchestrator,
+    dashboardApplication,
+    server,
+    url: runningUrl,
+    dispose: () => {
+      server?.dispose();
+      dashboardApplication.dispose();
+      orchestrator.dispose();
+      services.dispose();
+    },
+  };
+}
