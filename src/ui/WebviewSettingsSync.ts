@@ -26,6 +26,7 @@ import {
   PATH_SELECTION_KINDS,
   TRUST_DECISIONS,
   getEffectiveParallelGroupWidth,
+  getDashboardHostCapabilities,
 } from "../types/DashboardConstants";
 import type {
   DashboardHostActions,
@@ -130,6 +131,7 @@ export interface WebviewSettingsSyncHost {
   readonly getNamedRoots: () => readonly NamedRoot[];
   readonly selectWorkspacePath?: DashboardHostActions["selectWorkspacePath"];
   readonly serverControl?: HostedServerControl;
+  readonly actions?: DashboardHostActions;
 }
 
 const REMOTE_TLS_SETTING_KEYS = [
@@ -294,6 +296,9 @@ export class WebviewSettingsSync {
         type: MESSAGE_TYPES.INIT,
         data: {
           ...workflowState,
+          hostCapabilities: getDashboardHostCapabilities(
+            this.host.actions ?? {}
+          ),
           globalSettings,
           workflowProperties: {},
           modelOptions,

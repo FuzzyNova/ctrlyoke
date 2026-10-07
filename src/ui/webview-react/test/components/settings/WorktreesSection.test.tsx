@@ -14,6 +14,7 @@ import type {
   WorktreeManagementEntry,
 } from "@root/types/WebviewMessageTypes";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 
 function createSettings(root = ""): FullGlobalSettings {
   return {
@@ -31,6 +32,7 @@ describe("WorktreesSection", () => {
     useSettingsStore.getState().setWorktreeManagement(null);
   });
   it("preselects only provably safe merged branches and exposes in-use owners", () => {
+    useUiStore.setState({ hostCapabilities: ["openFolderWindow"] });
     const postMessage = vi.fn();
     window.vscodeApi = {
       postMessage,

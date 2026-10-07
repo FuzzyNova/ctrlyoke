@@ -5,6 +5,7 @@ import { RunSummaryBanner } from "@components/output/RunSummaryBanner";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import { workspaceWorktreeDiff } from "@utils/hostedApi";
+import { useUiStore } from "@store/uiStore";
 
 vi.hoisted(() => {
   window.__ctrlyokeStandalone = true;
@@ -47,15 +48,17 @@ function renderBanner(
 describe("RunSummaryBanner in the hosted browser (isStandalone)", () => {
   beforeEach(() => {
     useWorkspaceViewerStore.getState().reset();
+    useUiStore.setState({ hostCapabilities: [] });
     vi.mocked(workspaceWorktreeDiff).mockReset();
   });
 
-  it("hides Open Worktree since it can only open a new native window", () => {
+  it("shows a copy-path action when the host cannot open a new native window", () => {
     renderBanner();
 
     expect(
       screen.queryByRole("button", { name: "Open Worktree in New Window" })
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy worktree path" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "View Diff" })
     ).toBeInTheDocument();

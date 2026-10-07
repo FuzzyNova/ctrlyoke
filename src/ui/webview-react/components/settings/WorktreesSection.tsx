@@ -13,9 +13,11 @@ import {
   WORKTREE_UI_STATUSES,
   WORKTREE_MANAGEMENT_ACTIONS,
   USER_FEEDBACK_SEVERITY,
+  DASHBOARD_HOST_CAPABILITIES,
 } from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
@@ -630,6 +632,11 @@ function WorktreeRow({
   sourceCheckoutRoot?: string;
   sourceCheckoutBranch?: string | null;
 }) {
+  const canOpenWorktreeOwner = useUiStore((state) =>
+    state.hostCapabilities.includes(
+      DASHBOARD_HOST_CAPABILITIES.openFolderWindow
+    )
+  );
   const rowKey = (suffix: string) => worktreeRowKey(entry.worktreePath, suffix);
   const owner = entry.inUse
     ? `In use — ${entry.leaseOwners.map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`).join(", ")}`
@@ -774,7 +781,7 @@ function WorktreeRow({
         </div>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
-        {entry.inUse && entry.leaseOwners[0] && (
+        {canOpenWorktreeOwner && entry.inUse && entry.leaseOwners[0] && (
           <>
             <ActionButton
               label="Retry"

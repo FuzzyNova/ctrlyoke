@@ -12,6 +12,7 @@ import {
   ANTIGRAVITY_CLI_MODELS as MC_ANTIGRAVITY_CLI_MODELS,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
+import type { DashboardHostActions } from "../core/HostPorts";
 
 /** Host capability describing where interactive harness terminals are shown. */
 export const INTERACTIVE_TERMINAL_MODES = {
@@ -54,6 +55,40 @@ export const DASHBOARD_HOST_ACTIONS = {
 } as const;
 export type DashboardHostAction =
   (typeof DASHBOARD_HOST_ACTIONS)[keyof typeof DASHBOARD_HOST_ACTIONS];
+
+type OptionalDashboardHostAction = {
+  [Key in keyof DashboardHostActions]-?: Pick<DashboardHostActions, Key> extends
+    Required<Pick<DashboardHostActions, Key>>
+    ? never
+    : Key;
+}[keyof DashboardHostActions];
+
+/** Optional DashboardHostActions methods advertised to the dashboard client. */
+export const DASHBOARD_HOST_CAPABILITIES = {
+  openContentPreview: "openContentPreview",
+  selectWorkspacePath: "selectWorkspacePath",
+  revealOutput: "revealOutput",
+  focusDashboard: "focusDashboard",
+  openFolderWindow: "openFolderWindow",
+  openGitDiff: "openGitDiff",
+  revealInOs: "revealInOs",
+  browseMcpGallery: "browseMcpGallery",
+  reloadHost: "reloadHost",
+} as const satisfies Record<
+  OptionalDashboardHostAction,
+  OptionalDashboardHostAction
+>;
+
+export type DashboardHostCapability = OptionalDashboardHostAction;
+
+/** Derive advertised capabilities from the methods on the actual host object. */
+export function getDashboardHostCapabilities(
+  actions: Partial<Record<DashboardHostCapability, unknown>>
+): DashboardHostCapability[] {
+  return Object.values(DASHBOARD_HOST_CAPABILITIES).filter(
+    (capability) => typeof actions[capability] === "function"
+  );
+}
 
 /** Native workspace-path chooser modes used by dashboard host actions. */
 export const PATH_SELECTION_KINDS = {

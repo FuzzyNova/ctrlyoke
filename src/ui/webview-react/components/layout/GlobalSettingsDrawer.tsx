@@ -1,11 +1,12 @@
 import {
   GLOBAL_SETTINGS_TABS,
   KEYBOARD_KEYS,
+  DASHBOARD_HOST_CAPABILITIES,
 } from "@root/types/DashboardConstants";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import {
   MESSAGE_TYPES,
@@ -50,6 +51,9 @@ import { isFindShortcut } from "@utils/findShortcut";
 import { SETTINGS_CATALOG_ENTRIES } from "../settings/settingsCatalog";
 
 export function GlobalSettingsDrawer() {
+  const canReloadHost = useUiStore((state) =>
+    state.hostCapabilities.includes(DASHBOARD_HOST_CAPABILITIES.reloadHost)
+  );
   const vscode = useVsCodeApi();
   const globalSettingsOpen = useUiStore((s) => s.globalSettingsOpen);
   const activeTab = useUiStore((s) => s.globalSettingsActiveTab);
@@ -259,7 +263,7 @@ export function GlobalSettingsDrawer() {
   }
 
   function handleReloadWindow() {
-    if (isStandalone) {
+    if (!canReloadHost) {
       window.location.reload();
       return;
     }

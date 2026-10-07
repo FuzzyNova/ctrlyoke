@@ -661,6 +661,21 @@ describe("SESSION_RESTORED", () => {
 // ---------------------------------------------------------------------------
 
 describe("INIT", () => {
+  it("stores the host capabilities advertised by INIT", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.INIT, {
+        data: { hostCapabilities: ["revealInOs", "reloadHost"] },
+      });
+    });
+
+    expect(useUiStore.getState().hostCapabilities).toEqual([
+      "revealInOs",
+      "reloadHost",
+    ]);
+  });
+
   it("loads workflow when prompts are provided", () => {
     renderHook(() => useMessageHandler());
 

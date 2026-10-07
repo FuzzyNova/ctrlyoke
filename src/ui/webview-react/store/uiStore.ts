@@ -48,6 +48,7 @@ import {
   HISTORY_SEARCH_COUNT_STATES,
   OUTPUT_SCROLL_TARGET_KINDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type DashboardHostCapability,
 } from "@root/types/DashboardConstants";
 import {
   ALL_WORKFLOW_HARNESSES,
@@ -464,6 +465,8 @@ export function areOutputScrollTargetsEqual(
  * UI state - Layout, visibility, and modal states
  */
 interface UiState {
+  /** Optional host-native actions advertised by the INIT message. */
+  hostCapabilities: DashboardHostCapability[];
   // Dropdown hide feature — persisted to vscode state
   hiddenDropdownOptions: Record<string, string[]>; // namespace → hidden value[]
   // Section collapse states
@@ -808,6 +811,7 @@ interface UiState {
  * UI actions
  */
 interface UiActions {
+  setHostCapabilities: (capabilities: DashboardHostCapability[]) => void;
   // Section toggles
   togglePromptsCollapse: () => void;
   toggleFinalStepFooterExpanded: () => void;
@@ -1129,6 +1133,7 @@ interface UiActions {
 }
 
 const initialState: UiState = {
+  hostCapabilities: [],
   hiddenDropdownOptions: {},
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
@@ -1260,6 +1265,8 @@ export const useUiStore = create<UiState & UiActions>()(
   persist(
     (set, get) => ({
       ...initialState,
+
+      setHostCapabilities: (hostCapabilities) => set({ hostCapabilities }),
 
       // ============================================================================
       // SECTION TOGGLES

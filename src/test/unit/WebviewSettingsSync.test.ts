@@ -22,6 +22,7 @@ import {
   type StatusLineHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
   TRUST_DECISIONS,
+  DASHBOARD_HOST_CAPABILITIES,
 } from "../../types/DashboardConstants";
 import { MCP_LIST_HARNESSES_TOOL_NAME } from "../../utils/McpToolDefinitions";
 import type { CapabilitiesFile } from "../../types/CapabilitiesTypes";
@@ -44,10 +45,12 @@ import {
   type StatuslineManagerLike,
 } from "../../core/harness/shared/StatuslineManager";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { VsCodeDashboardHostActions } from "../../platform/VsCodeDashboardHostActions";
 
 function nodeSettingsHost(
   workspaceRoot?: string,
-  selectWorkspacePath?: (request: any) => Promise<string | undefined>
+  selectWorkspacePath?: (request: any) => Promise<string | undefined>,
+  actions?: any
 ) {
   return {
     getWorkspaceRoot: () => workspaceRoot,
@@ -56,6 +59,7 @@ function nodeSettingsHost(
         ? [{ name: path.basename(workspaceRoot), fsPath: workspaceRoot }]
         : [],
     selectWorkspacePath,
+    actions,
   };
 }
 
@@ -865,6 +869,47 @@ suite("WebviewSettingsSync", () => {
       );
       assert.strictEqual(init.data.workflowName, "");
       assert.strictEqual(init.data.fileName, "");
+    });
+
+    test("advertises no optional actions for a host without optional methods", async () => {
+      const messages: any[] = [];
+      const sync = new WebviewSettingsSync(
+        (message) => messages.push(message),
+        () => makeViewOrchestrator({}),
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(process.cwd(), undefined, {})
+      );
+
+      await sync.sendInitialState();
+
+      const init = messages.find((message) => message.type === MESSAGE_TYPES.INIT);
+      assert.deepStrictEqual(init.data.hostCapabilities, []);
+    });
+
+    test("advertises the methods implemented by the VS Code host", async () => {
+      const messages: any[] = [];
+      const sync = new WebviewSettingsSync(
+        (message) => messages.push(message),
+        () => makeViewOrchestrator({}),
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(
+          process.cwd(),
+          undefined,
+          new VsCodeDashboardHostActions()
+        )
+      );
+
+      await sync.sendInitialState();
+
+      const init = messages.find((message) => message.type === MESSAGE_TYPES.INIT);
+      assert.deepStrictEqual(
+        init.data.hostCapabilities,
+        Object.values(DASHBOARD_HOST_CAPABILITIES)
+      );
     });
 
     test("still describes the panel's lazily created instance for an unbound panel", async () => {

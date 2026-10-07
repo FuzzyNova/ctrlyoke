@@ -144,6 +144,7 @@ export class DashboardApplication
         selectWorkspacePath: options.actions.selectWorkspacePath?.bind(
           options.actions
         ),
+        actions: options.actions,
         serverControl: options.serverControl,
       }
     );

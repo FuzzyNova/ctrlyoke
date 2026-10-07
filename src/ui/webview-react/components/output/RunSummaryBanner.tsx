@@ -6,6 +6,7 @@ import {
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_LANDING_OUTCOMES,
   WORKTREE_MODES,
+  DASHBOARD_HOST_CAPABILITIES,
 } from "@root/types/DashboardConstants";
 import {
   WorkflowTokenUsage,
@@ -25,7 +26,7 @@ import {
   type WorktreeOutcomeSeverity,
 } from "@root/utils/formatWorktreeOutcome";
 import { sendMessage } from "@hooks/useMessageHandler";
-import { isStandalone } from "@hooks/useVsCodeApi";
+import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { Icon } from "../shared/Icon";
 
@@ -127,6 +128,15 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
     ? formatWorktreeOutcome(worktree)
     : undefined;
   const [copiedBranch, setCopiedBranch] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
+  const canOpenWorktree = useUiStore((state) =>
+    state.hostCapabilities.includes(
+      DASHBOARD_HOST_CAPABILITIES.openFolderWindow
+    )
+  );
+  const canOpenGitDiff = useUiStore((state) =>
+    state.hostCapabilities.includes(DASHBOARD_HOST_CAPABILITIES.openGitDiff)
+  );
   const branchName = worktree?.branchName;
 
   const handleCopyBranch = useCallback(async () => {
@@ -140,9 +150,20 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
     window.setTimeout(() => setCopiedBranch(false), 1200);
   }, [branchName]);
 
+  const handleCopyPath = useCallback(async () => {
+    if (!worktree?.worktreePath) return;
+    try {
+      await writeClipboardText(worktree.worktreePath);
+    } catch {
+      return;
+    }
+    setCopiedPath(true);
+    window.setTimeout(() => setCopiedPath(false), 1200);
+  }, [worktree?.worktreePath]);
+
   const hasDiffButton = Boolean(worktree?.baseCommit && branchName);
   const hasOpenButton = Boolean(
-    !isStandalone &&
+    canOpenWorktree &&
     worktree?.baseCommit &&
     branchName &&
     worktree.directoryState === WORKTREE_DIRECTORY_STATES.PRESENT
@@ -155,7 +176,8 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
     worktree.branchState === WORKTREE_BRANCH_STATES.PRESENT &&
     worktree.landingOutcome === WORKTREE_LANDING_OUTCOMES.LANDED
   );
-  const hasWorktreeButtons = hasDiffButton || hasOpenButton || hasMergeButton;
+  const hasWorktreeButtons =
+    hasDiffButton || hasOpenButton || hasMergeButton || !canOpenWorktree;
 
   return (
     <div
@@ -250,13 +272,27 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
               </span>
               {hasWorktreeButtons && (
                 <span className="flex shrink-0 flex-wrap items-center gap-1">
+                  {!canOpenWorktree && worktree.worktreePath && (
+                    <button
+                      type="button"
+                      onClick={handleCopyPath}
+                      title="Copy worktree path"
+                      aria-label="Copy worktree path"
+                      className={WORKTREE_BUTTON_CLASS}
+                    >
+                      <Icon
+                        name={copiedPath ? "codicon-check" : "codicon-copy"}
+                      />
+                      {copiedPath ? "Copied" : "Copy path"}
+                    </button>
+                  )}
                   {hasDiffButton && (
                     <button
                       type="button"
                       onClick={() => {
                         const baseCommit = worktree.baseCommit;
                         if (!baseCommit) return;
-                        if (isStandalone) {
+                        if (!canOpenGitDiff) {
                           void useWorkspaceViewerStore
                             .getState()
                             .openToWorktreeDiff(

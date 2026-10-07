@@ -568,6 +568,9 @@ export function createMessageHandlers(
     const workflowStore = useWorkflowStore.getState();
     const settingsStore = useSettingsStore.getState();
     const editorStore = useEditorStore.getState();
+    const uiStore = useUiStore.getState();
+
+    uiStore.setHostCapabilities(data.hostCapabilities ?? []);
 
     // Update model options from extension (dynamic from ModelRegistry)
     if (data.modelOptions) {

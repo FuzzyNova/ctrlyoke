@@ -2,7 +2,7 @@
 
 **Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
 server implementation has started: Track A (Stages 1–6) and Track B sub-stages
-7a1–7a2 are complete; Stage 7a remains in progress pending 7a3. Every fact in
+7a1–7a3 are complete; Stage 7a is complete. Every fact in
 this document was re-audited against `src/` on 2026-10-06, and every open
 question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
 
@@ -392,10 +392,13 @@ the browser uses its existing surface:
 | Reveal in OS, MCP gallery, reload window  | `unsupported`. The UI hides these actions when the host doesn't advertise them |
 
 The browser needs to know what the host supports before rendering those
-actions. The INIT payload therefore gains a `hostCapabilities` list (staging
-sub-stage 7a3; it doesn't exist yet) derived
-from the methods present on `DashboardHostActions`. It is a single source of
-truth: the browser never hard-codes host checks.
+actions. The INIT payload carries a typed `hostCapabilities` list derived
+from the optional methods present on the composed `DashboardHostActions`.
+A host with no optional methods advertises an empty list; the VS Code host
+advertises its full optional method set. The Node composition advertises its
+browser-side content-preview method and no host-native actions. The React
+client gates host-native actions from that list; when `openFolderWindow` is
+absent, the worktree path remains available with a copy action.
 
 ### Phase 8: prompt-editor completions (Stage 9)
 
@@ -538,9 +541,11 @@ scripts/build-npm-package.mjs, esbuild.js  CHANGED: ship server + webview assets
 
 ## Message Protocol Compatibility
 
-The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) is unchanged at the
-payload level. The only addition is the `hostCapabilities` list in the INIT
-payload (Phase 7). Both server modes keep the existing distinction between:
+The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) adds the typed
+`hostCapabilities` list to the INIT payload (Phase 7). It contains the names of
+optional `DashboardHostActions` methods present on the actual host object; the
+browser does not infer host support from server mode. Both server modes keep
+the existing distinction between:
 
 - **broadcast state updates** (workflow summaries, step progress, CLI output,
   active-workflow changes), and

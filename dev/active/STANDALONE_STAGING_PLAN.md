@@ -3,7 +3,7 @@
 **Status (2026-10-06):** Track A Stages 1–6 are complete, and the decoupling
 plan has moved to `dev/implemented/`. Its two remaining phases (Node
 composition and shim retirement) now live in the standalone plan as part of
-Stages 7a and 10. Continue at Stage 7a.
+Stages 7a and 10. Continue at Stage 7b.
 This document only sets the order of work. It contains no design. The design lives
 in the three plans below, and this file arranges their remaining work into
 stages that can each be shipped on their own. All four documents were
@@ -155,12 +155,13 @@ names the guard or test that proves it, not just the code change.
   - **7a2 — Done:** `createNodeHostServices`, `FileKeyValueStore`, the
     browser-only `DashboardHostActions`, shared hosted-server configuration,
     and the in-process two-client workflow boot test. `SourceAuditCounters`
-    confirms the Node composition root reaches no `vscode` load. Stage 7a
-    remains in progress until 7a3 adds INIT host capabilities.
-  - **7a3:** the INIT `hostCapabilities` list (Phase 7), derived from the
-    methods present on `DashboardHostActions`, with the UI hiding
-    host-native actions the host doesn't advertise. No earlier stage
-    assigned this work.
+    confirms the Node composition root reaches no `vscode` load.
+  - **7a3 — Done:** INIT advertises the optional `DashboardHostActions`
+    methods present on the composed host. The React client stores that list,
+    gates host-native actions from it, and offers a copy-path action when
+    opening a worktree in a new window is unavailable. Tests cover empty Node
+    capabilities for a host without optional methods, the full VS Code set,
+    and UI visibility.
   - **7b1:** static default themes, the guard test, the hosted fallback, and
     `server.theme`/`?theme=` selection.
   - **7b2:** shim `workspaceKey` plus `storageVersion`, and the

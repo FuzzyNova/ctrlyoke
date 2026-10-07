@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, ScopeToggle, SettingToggleRow } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { DASHBOARD_HOST_CAPABILITIES } from "@root/types/DashboardConstants";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
   WORKFLOW_FILE_FORMATS,
@@ -73,6 +74,11 @@ function joinSavePath(
  * dialog would open invisibly on the host's screen.
  */
 export const SaveWorkflowDialog: React.FC = () => {
+  const canSelectWorkspacePath = useUiStore((state) =>
+    state.hostCapabilities.includes(
+      DASHBOARD_HOST_CAPABILITIES.selectWorkspacePath
+    )
+  );
   const vscode = useVsCodeApi();
   const saveWorkflowDialogOpen = useUiStore((s) => s.saveWorkflowDialogOpen);
   const saveWorkflowDialogData = useUiStore((s) => s.saveWorkflowDialogData);
@@ -141,7 +147,7 @@ export const SaveWorkflowDialog: React.FC = () => {
   }, [saveLocationSelection, setSaveLocationSelection]);
 
   const handleBrowseLocation = useCallback(() => {
-    if (isStandalone) {
+    if (!canSelectWorkspacePath) {
       // `location` may hold an absolute filesystem path (SAVE_WORKFLOW_DIALOG_DATA's
       // defaultPath is extension-supplied and absolute) or a user-typed relative
       // path, but the hosted file browser's directory listing only understands
@@ -157,7 +163,7 @@ export const SaveWorkflowDialog: React.FC = () => {
       type: MESSAGE_TYPES.BROWSE_SAVE_LOCATION,
       defaultDir: location,
     });
-  }, [vscode, openFileBrowser, location, workspaceRoot]);
+  }, [vscode, openFileBrowser, location, workspaceRoot, canSelectWorkspacePath]);
 
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
