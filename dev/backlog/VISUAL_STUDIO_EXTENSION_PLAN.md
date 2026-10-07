@@ -6,7 +6,7 @@ Stage 11 of the decoupling plan's canonical order.
 
 **Related plans:**
 
-- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md): the Node process this
+- [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md): the Node process this
   extension hosts.
 - [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md): the
   canonical stage order and the `DashboardHostActions` port this plan implements for a

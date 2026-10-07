@@ -33,7 +33,7 @@ surface 21 new webview-side candidates — see "Sweep 1b" below.
 - [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md) — Site 1
   is the `handleExecutionError` precedent for how to verify-then-delete a
   candidate from this audit.
-- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md) — several
+- [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md) — several
   `WorkflowOrchestrator` methods below are scaffolding for this plan's
   unimplemented phases, not orphaned code; see the special case below before
   deleting any of them.
@@ -434,6 +434,11 @@ methods are marked `@keep` in `WorkflowOrchestrator.ts`, each pointing to
 that implementation begins. This resolves the audit item; revisit the tags
 only if the standalone-server plan is abandoned or its message-routing API
 changes materially.
+
+**Follow-up (2026-10-07):** the standalone server shipped without using this
+API, because it routes through the orchestrator's per-client methods. The
+review pass deleted the ten methods that still had no callers and dropped the
+`@keep` tag from `getActiveWorkflowId`, which does have one.
 
 ### `NotificationManager.notifyStartupComplete()` — confirmed no-op
 

@@ -41,12 +41,12 @@
 
 A schedule needs a live process to fire it. ctrlyoke's runtime hosts:
 
-| Host                                                                                 | Alive when…                            | Owns a `WorkflowOrchestrator`?                                          | Fires schedules?                                                           |
-| ------------------------------------------------------------------------------------ | -------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Extension host**                                                                   | VS Code open with the extension active | Yes                                                                     | **Yes**                                                                    |
-| **Hosted server** (`CtrlYokeHostedServer`)                                           | The extension boots it                 | No — it's a front-end transport handed the **extension's** orchestrator | Yes, but only because the extension host is already running (same process) |
-| **Standalone `ctrlyoke server`** (future — `STANDALONE_SERVER_PLAN.md`, not started) | The user runs `ctrlyoke server`        | Yes — constructs its own via `StandaloneServerAdapter`                  | **Yes**, once it ships                                                     |
-| **CLI** (`ctrlyoke run`)                                                             | One invocation only                    | No — uses `WorkflowInstance`/`IntegrationFactory` directly              | **No** (by design — one-shot, not a scheduling host)                       |
+| Host                                                                        | Alive when…                            | Owns a `WorkflowOrchestrator`?                                          | Fires schedules?                                                           |
+| --------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Extension host**                                                          | VS Code open with the extension active | Yes                                                                     | **Yes**                                                                    |
+| **Hosted server** (`CtrlYokeHostedServer`)                                  | The extension boots it                 | No — it's a front-end transport handed the **extension's** orchestrator | Yes, but only because the extension host is already running (same process) |
+| **Standalone `ctrlyoke server`** (`STANDALONE_SERVER_PLAN.md`, implemented) | The user runs `ctrlyoke server`        | Yes — `createNodeHostedServer` composes its own                         | **Yes**                                                                    |
+| **CLI** (`ctrlyoke run`)                                                    | One invocation only                    | No — uses `WorkflowInstance`/`IntegrationFactory` directly              | **No** (by design — one-shot, not a scheduling host)                       |
 
 The decisive simplification: **the hosted server is not a separate substrate** —
 it rides on the extension's orchestrator, so "VS Code open" and "hosted server

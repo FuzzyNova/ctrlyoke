@@ -732,7 +732,7 @@ The queue is complete and this document was moved to `dev/implemented/` on
   Stage D.~~ **Triggered and completed.** The Secrets plan landed, and code
   inspection confirmed the dry-run integration had already shipped; G.0 records
   it complete.
-- ~~Pulling [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
+- ~~Pulling [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md)
   forward — its Phase 5 needs the `PlatformAdapter` UI methods gone, which would
   promote Stage C.3 ahead of everything else in Stage C.~~ Moot: Stage C.3
   already deleted the five `PlatformAdapter` UI methods, so this dependency is

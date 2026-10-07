@@ -1,4 +1,8 @@
 import { Command, Option } from "commander";
+import {
+  SERVER_THEME_MODES,
+  type ServerThemeMode,
+} from "../types/DashboardConstants";
 
 export interface ServerOptions {
   cwd?: string;
@@ -8,7 +12,7 @@ export interface ServerOptions {
   https?: boolean;
   cert?: string;
   key?: string;
-  theme?: "auto" | "light" | "dark";
+  theme?: ServerThemeMode;
   open?: boolean;
   regenerateToken?: boolean;
   verbose?: boolean;
@@ -36,8 +40,8 @@ export function registerServerCommand(
     .addOption(
       new Option(
         "--theme <mode>",
-        "Dashboard theme (auto, light, dark)"
-      ).choices(["auto", "light", "dark"])
+        `Dashboard theme (${Object.values(SERVER_THEME_MODES).join(", ")})`
+      ).choices(Object.values(SERVER_THEME_MODES))
     )
     .option("--open", "Open the tokenized URL in the default browser")
     .option("--regenerate-token", "Rotate the persisted server token")

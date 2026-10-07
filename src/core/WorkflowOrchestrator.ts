@@ -789,21 +789,6 @@ export class WorkflowOrchestrator {
   // Dashboard provider registry
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Register an additional dashboard client to receive orchestrator and
-   * workflow-instance updates.
-   *
-   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
-   */
-  public addDashboardProvider(provider: DashboardClient): void {
-    this.dashboardBroadcastHub.addClient(provider);
-  }
-
-  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
-  public removeDashboardProvider(provider: DashboardClient): void {
-    this.dashboardBroadcastHub.removeClient(provider);
-  }
-
   public getDashboardBroadcastHub(): DashboardBroadcastHub {
     return this.dashboardBroadcastHub;
   }
@@ -883,21 +868,10 @@ export class WorkflowOrchestrator {
     return this.workflowInstanceRegistry.getWorkflow(workflowId);
   }
 
-  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
-  getAllWorkflows(): WorkflowInstance[] {
-    return this.workflowInstanceRegistry.getAllWorkflows();
-  }
-
   getUserFeedbackSink(): UserFeedbackSink {
     return this.userFeedbackSink;
   }
 
-  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
-  getActiveWorkflow(): WorkflowInstance | undefined {
-    return this.workflowInstanceRegistry.getActiveWorkflow();
-  }
-
-  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflowId(): string | null {
     return this.workflowInstanceRegistry.getActiveWorkflowId();
   }
@@ -920,7 +894,7 @@ export class WorkflowOrchestrator {
 
   /** Return the current queue state for the panel's active workflow, if any. */
   getActiveQueueState(): QueueState | undefined {
-    return this.getActiveWorkflow()?.getQueueState();
+    return this.workflowInstanceRegistry.getActiveWorkflow()?.getQueueState();
   }
 
   /**
@@ -1981,117 +1955,6 @@ export class WorkflowOrchestrator {
       throw new Error("The requested run is no longer executing");
     }
     return instance;
-  }
-
-  /**
-   * Pause a specific workflow by ID.
-   * Used by per-workflow controls in the dropdown; allows pausing non-active instances.
-   *
-   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
-   */
-  async pauseWorkflow(workflowId: string): Promise<void> {
-    const instance = this.instances.get(workflowId);
-    if (!instance) {
-      Log.warn(
-        `[WorkflowOrchestrator] pauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
-      );
-      return;
-    }
-    Log.info(
-      `[WorkflowOrchestrator] pauseWorkflow: inst:${workflowId.slice(0, 8)}`
-    );
-    return instance.pause();
-  }
-
-  /**
-   * Cancel a pending pause for a specific workflow by ID.
-   *
-   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
-   */
-  async cancelPauseWorkflow(workflowId: string): Promise<void> {
-    const instance = this.instances.get(workflowId);
-    if (!instance) {
-      Log.warn(
-        `[WorkflowOrchestrator] cancelPauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
-      );
-      return;
-    }
-    Log.info(
-      `[WorkflowOrchestrator] cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`
-    );
-    return instance.cancelPause();
-  }
-
-  /**
-   * Resume a specific workflow by ID.
-   * Used by per-workflow controls in the dropdown; allows resuming non-active instances.
-   *
-   * @param workingFilePath - Working file path forwarded from the webview. Used as a
-   *   fallback when the instance has been evicted from retiredInstances (e.g. after a
-   *   panel hide/show cycle disposed it). Reloads from disk so the resume can proceed.
-   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
-   */
-  async resumeWorkflow(
-    workflowId: string,
-    workingFilePath?: string
-  ): Promise<void> {
-    let instance = this.findInstance(workflowId);
-    if (!instance) {
-      if (workingFilePath && this.storedPanelSend) {
-        // Instance was evicted from retiredInstances. Reload from the working file so
-        // the resume can proceed. loadWorkflowForClient handles deduplication (reuses
-        // any existing retired instance by file path) and replays state to the panel.
-        Log.debug(
-          `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)} not found — reloading from ${path.basename(workingFilePath)}`
-        );
-        await this.loadWorkflowForClient(
-          workingFilePath,
-          this.storedPanelSend,
-          this.PANEL_CLIENT_ID
-        );
-        instance = [...this.retiredInstances.values()].find((w) =>
-          sameWorkingFilePath(w.getSummary().workingFilePath, workingFilePath)
-        );
-        if (!instance) {
-          Log.warn(
-            `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)} reload from working file produced no instance`
-          );
-          return;
-        }
-      } else {
-        Log.warn(
-          `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
-        );
-        return;
-      }
-    }
-    // If the instance is retired (terminal state reached but still alive),
-    // remove it from retiredInstances so it can re-register in this.instances
-    // when it transitions to RUNNING/PAUSED via the onDidChangeState listener.
-    if (this.retiredInstances.has(instance.id)) {
-      this.retiredInstances.delete(instance.id);
-    }
-    Log.info(
-      `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)}`
-    );
-    return instance.resume();
-  }
-
-  /**
-   * Stop a specific workflow by ID.
-   * Used by per-workflow controls in the dropdown; allows stopping non-active instances.
-   *
-   * @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md.
-   */
-  async stopWorkflow(workflowId: string): Promise<void> {
-    const instance = this.instances.get(workflowId);
-    if (!instance) {
-      Log.warn(
-        `[WorkflowOrchestrator] stopWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
-      );
-      return;
-    }
-    return instance.stop();
   }
 
   /**
@@ -3430,11 +3293,6 @@ export class WorkflowOrchestrator {
     return this.getBoundInstance(clientId)?.getCurrentPromptFile() ?? null;
   }
 
-  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
-  async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
-    return this.getActiveInstance().readWorkingFile(workingFilePath);
-  }
-
   getOutputHistoryManager(): OutputHistoryManager {
     return this.getActiveInstance().outputHistoryManager;
   }
@@ -4765,11 +4623,6 @@ export class WorkflowOrchestrator {
     await this.getDefaultIntegration().retryDetection();
   }
 
-  /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
-  getHarnessDetailedStatus() {
-    return this.getDefaultIntegration().getDetailedStatus();
-  }
-
   // ─────────────────────────────────────────────────────────────────────────
   // Dispose
   // ─────────────────────────────────────────────────────────────────────────
@@ -5175,7 +5028,9 @@ export class WorkflowOrchestrator {
   private updateStatusBar(): void {
     if (!this.statusBarSink) return;
     const activity = this.getWorkflowActivityTracker().buildSummary(
-      this.getAllWorkflows().map((instance) => instance.getSummary())
+      this.workflowInstanceRegistry
+        .getAllWorkflows()
+        .map((instance) => instance.getSummary())
     );
     const harnessId = ConfigurationUtils.getIntegrationMode();
     this.statusBarSink.updateStatusBar(activity, {

@@ -12,7 +12,7 @@ Run the whole loop by voice:
 3. Hear the response read back.
 
 The loop must work in the **hosted browser dashboard** and, once it exists, the **standalone
-server** ([`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)). It should also work
+server** ([`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md)). It should also work
 in the VS Code webview as far as VS Code allows. The phone case matters most, because the hosted
 dashboard is already used from phones (QR code, mobile layout, terminal control bar).
 

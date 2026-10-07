@@ -1,7 +1,7 @@
 # Localization Plan
 
 **Related plans:** [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md),
-[`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md),
+[`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md),
 [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md).
 **This plan must not reintroduce a `vscode` dependency into any file the
 decoupling plan classifies as shared/reusable** — see "Interaction with the

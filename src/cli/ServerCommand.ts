@@ -2,7 +2,10 @@ import * as path from "node:path";
 import { spawn } from "node:child_process";
 import { Command } from "commander";
 import QRCode from "qrcode";
-import { EXECUTION_MODES } from "../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  type ServerThemeMode,
+} from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import type { CtrlYokeGlobalSettings } from "../types/CtrlYokeSettings";
 import {
@@ -12,7 +15,7 @@ import {
 import { createNodeHostedServer } from "../platform/NodeHostServices";
 import { ServerCertificateService } from "../server/ServerCertificateService";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
-import { Log } from "../utils/Log";
+import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 import {
   registerServerCommand as registerDefinition,
   type ServerOptions,
@@ -26,7 +29,7 @@ export interface ResolvedServerSettings {
   https: boolean;
   certPath: string;
   keyPath: string;
-  theme: "auto" | "light" | "dark";
+  theme: ServerThemeMode;
   verbose: boolean;
 }
 
@@ -150,7 +153,6 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     diagnostics: { verboseLogging: initial.verbose },
     server: serverSettings,
   });
-  Log.initializeCli(cwd, initial.verbose);
 
   if (initial.https && (!certPath || !keyPath)) {
     const licenseStore = await import("../platform/OsCredentialStore.js");
@@ -158,11 +160,7 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     const service = new LicenseService(new licenseStore.OsCredentialStore());
     const allowed = await service.hasRemoteAccess();
     service.dispose();
-    if (
-      !allowed &&
-      initial.bindAddress !== "127.0.0.1" &&
-      initial.bindAddress !== "::1"
-    ) {
+    if (!allowed && !isLoopbackBindAddress(initial.bindAddress)) {
       console.warn(
         "Remote access is a Pro feature. HTTPS LAN certificate generation was skipped."
       );

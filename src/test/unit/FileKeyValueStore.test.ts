@@ -3,7 +3,10 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { FileKeyValueStore } from "../../platform/FileKeyValueStore";
-import { initializeRunHistoryLocation, resetRunHistoryLocationForTests } from "../../utils/RunHistoryStoragePolicy";
+import {
+  initializeRunHistoryLocation,
+  resetRunHistoryLocationForTests,
+} from "../../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
 
@@ -23,7 +26,10 @@ suite("FileKeyValueStore", () => {
   });
 
   teardown(async () => {
+    // Restore the suite-wide baseline from src/test/suite/index.ts; leaving the
+    // location uninitialized breaks later files that share this shard.
     resetRunHistoryLocationForTests();
+    initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
     if (previousHome === undefined) delete process.env.CTRLYOKE_HOME;
     else process.env.CTRLYOKE_HOME = previousHome;
     await fs.rm(tempRoot, { recursive: true, force: true });
@@ -43,9 +49,12 @@ suite("FileKeyValueStore", () => {
       projectStateRoot(workspaceRoot, RUN_HISTORY_LOCATIONS.USER),
       "host-state.json"
     );
-    assert.deepStrictEqual(JSON.parse(await fs.readFile(persistedPath, "utf8")), {
-      loaded: ["first.yaml"],
-    });
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(persistedPath, "utf8")),
+      {
+        loaded: ["first.yaml"],
+      }
+    );
   });
 
   test("serializes concurrent updates without dropping earlier keys", async () => {
@@ -57,6 +66,9 @@ suite("FileKeyValueStore", () => {
     ]);
     assert.deepStrictEqual(new FileKeyValueStore(workspaceRoot).get("one"), 1);
     assert.deepStrictEqual(new FileKeyValueStore(workspaceRoot).get("two"), 2);
-    assert.deepStrictEqual(new FileKeyValueStore(workspaceRoot).get("three"), 3);
+    assert.deepStrictEqual(
+      new FileKeyValueStore(workspaceRoot).get("three"),
+      3
+    );
   });
 });

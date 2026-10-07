@@ -24,6 +24,7 @@ import type { EditorContextSource } from "../completions/EditorContextSource";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
 import { Log } from "../utils/Log";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 import { configService } from "../config/CtrlYokeConfigService";
 import { initializeRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
 import { ProjectStateRegistry } from "../utils/ProjectStateRegistry";
@@ -255,6 +256,10 @@ export async function createNodeHostedServer(options: {
   dashboardApplication.setHub(hub);
   orchestrator.getDashboardBroadcastHub().addClient(dashboardApplication);
   dashboardApplication.start();
+  // There is no VS Code panel to send the READY that starts the startup
+  // auto-load, and browser tabs only get STARTUP_COMPLETE once it settles.
+  // Browser tabs are this host's only dashboard, so it is ready immediately.
+  void orchestrator.setDashboardReady();
   void orchestrator.initialize().catch((error: unknown) => {
     Log.error(
       `[NodeHostServices] Orchestrator initialization failed: ${String(error)}`
@@ -268,6 +273,9 @@ export async function createNodeHostedServer(options: {
     process.env.CTRLYOKE_SERVER_TOKEN,
     persistedToken
   );
+  // Exempt the connection token from heuristic redaction while the server is
+  // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.
+  const unprotectToken = secretRedactionService.protectValue(token);
   server = new CtrlYokeHostedServer(
     createHostedServerOptions({
       hub: orchestrator.getDashboardBroadcastHub(),
@@ -289,6 +297,7 @@ export async function createNodeHostedServer(options: {
     if (!url) throw new Error("The hosted server did not start.");
     runningUrl = url;
   } catch (error) {
+    unprotectToken();
     server.dispose();
     dashboardApplication.dispose();
     orchestrator.dispose();
@@ -308,6 +317,7 @@ export async function createNodeHostedServer(options: {
       await orchestrator.shutdown();
       orchestrator.dispose();
       services.dispose();
+      unprotectToken();
     },
   };
 }

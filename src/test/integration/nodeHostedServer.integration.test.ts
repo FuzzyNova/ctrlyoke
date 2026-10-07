@@ -4,7 +4,10 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { WebSocket, type RawData } from "ws";
-import { createNodeHostedServer, type NodeHostedServerRuntime } from "../../platform/NodeHostServices";
+import {
+  createNodeHostedServer,
+  type NodeHostedServerRuntime,
+} from "../../platform/NodeHostServices";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { MockHarnessIntegration } from "../helpers/mockHarness";
@@ -70,7 +73,9 @@ suite("Node hosted server composition", function () {
   let originalCreateCopilotCli: typeof IntegrationFactory.prototype.createCopilotCli;
 
   setup(async () => {
-    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-node-server-"));
+    tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-node-server-")
+    );
     workspaceRoot = path.join(tempRoot, "workspace");
     await fs.mkdir(workspaceRoot);
     await fs.mkdir(path.join(workspaceRoot, "src"), { recursive: true });
@@ -83,7 +88,13 @@ suite("Node hosted server composition", function () {
       { recursive: true }
     );
     await fs.writeFile(
-      path.join(workspaceRoot, ".ctrlyoke", "skills", "sample-skill", "SKILL.md"),
+      path.join(
+        workspaceRoot,
+        ".ctrlyoke",
+        "skills",
+        "sample-skill",
+        "SKILL.md"
+      ),
       "---\nname: sample-skill\ndescription: Test completion skill\n---\n"
     );
     originalHome = process.env.CTRLYOKE_HOME;
@@ -92,7 +103,10 @@ suite("Node hosted server composition", function () {
     process.env.CTRLYOKE_SERVER_TOKEN = "node-host-test-token";
     originalCreateCopilotCli = IntegrationFactory.prototype.createCopilotCli;
     IntegrationFactory.prototype.createCopilotCli = function () {
-      return new MockHarnessIntegration(undefined, false) as unknown as ReturnType<
+      return new MockHarnessIntegration(
+        undefined,
+        false
+      ) as unknown as ReturnType<
         typeof IntegrationFactory.prototype.createCopilotCli
       >;
     };
@@ -106,7 +120,10 @@ suite("Node hosted server composition", function () {
         tls: { enabled: false, certPath: "", keyPath: "" },
       },
     });
-    runtime = await createNodeHostedServer({ cwd: workspaceRoot, mode: "headless" });
+    runtime = await createNodeHostedServer({
+      cwd: workspaceRoot,
+      mode: "headless",
+    });
   });
 
   teardown(async () => {
@@ -121,12 +138,20 @@ suite("Node hosted server composition", function () {
     else process.env.CTRLYOKE_HOME = originalHome;
     if (originalToken === undefined) delete process.env.CTRLYOKE_SERVER_TOKEN;
     else process.env.CTRLYOKE_SERVER_TOKEN = originalToken;
-    await fs.rm(tempRoot, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 });
+    await fs.rm(tempRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 30,
+      retryDelay: 100,
+    });
   });
 
   test("boots from Node services, completes a fake-harness workflow, and scopes replies", async () => {
     assert.ok(runtime);
-    assert.strictEqual(runtime.services.platform.interactiveTerminal, "embedded-pty");
+    assert.strictEqual(
+      runtime.services.platform.interactiveTerminal,
+      "embedded-pty"
+    );
 
     const first = await openSocket(runtime.url, "first-tab");
     const second = await openSocket(runtime.url, "second-tab");
@@ -144,7 +169,10 @@ suite("Node hosted server composition", function () {
         message.type === MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT &&
         message.action === "showOutput",
       750
-    ).then(() => "received", () => "not-received");
+    ).then(
+      () => "received",
+      () => "not-received"
+    );
     first.send(JSON.stringify({ type: MESSAGE_TYPES.SHOW_OUTPUT }));
     const reply = await scopedReply;
     assert.strictEqual(reply.status, "unsupported");
@@ -182,14 +210,17 @@ suite("Node hosted server composition", function () {
         "browser-test-client"
       );
     } finally {
-      IntegrationFactory.prototype.createForExecution = originalCreateForExecution;
+      IntegrationFactory.prototype.createForExecution =
+        originalCreateForExecution;
     }
     assert.strictEqual(
       runtime.orchestrator.getQueueState("browser-test-client").status,
       EXECUTION_STATES.COMPLETED,
-      JSON.stringify(runtime.orchestrator.getQueueState("browser-test-client"), (_key, value) =>
-        value instanceof Set ? [...value] : value
-      ) + `; integrations=${executionIntegrations.length}; prompts=${JSON.stringify(executionIntegrations.flatMap((integration) => integration.sentPrompts))}`
+      JSON.stringify(
+        runtime.orchestrator.getQueueState("browser-test-client"),
+        (_key, value) => (value instanceof Set ? [...value] : value)
+      ) +
+        `; integrations=${executionIntegrations.length}; prompts=${JSON.stringify(executionIntegrations.flatMap((integration) => integration.sentPrompts))}`
     );
     assert.deepStrictEqual(
       executionIntegrations.flatMap((integration) => integration.sentPrompts),
@@ -199,13 +230,31 @@ suite("Node hosted server composition", function () {
     assert.ok((await secondBroadcast).summary);
   });
 
+  test("completes browser startup without a VS Code panel", async () => {
+    assert.ok(runtime);
+    const socket = await openSocket(runtime.url, "startup-client");
+    sockets.push(socket);
+    // With no panel READY to start the startup auto-load, a browser tab never
+    // received STARTUP_COMPLETE and sat behind the startup overlay.
+    const startupComplete = waitForMessage(
+      socket,
+      (message) => message.type === MESSAGE_TYPES.STARTUP_COMPLETE
+    );
+    socket.send(JSON.stringify({ type: MESSAGE_TYPES.READY }));
+    await startupComplete;
+  });
+
   test("serves standalone @, #, ~, and / prompt completions over WebSocket", async () => {
     assert.ok(runtime);
     const socket = await openSocket(runtime.url, "completion-client");
     sockets.push(socket);
     const requests = [
       { trigger: "@", prefix: "@Wid", expected: "Widget.ts" },
-      { trigger: "#", prefix: "#Wid", expected: "sym.class:src/Widget.ts:Widget:1-5" },
+      {
+        trigger: "#",
+        prefix: "#Wid",
+        expected: "sym.class:src/Widget.ts:Widget:1-5",
+      },
       { trigger: "~", prefix: "~", expected: "diff" },
       { trigger: "/", prefix: "/", expected: "/skill:sample-skill" },
     ];
@@ -216,15 +265,20 @@ suite("Node hosted server composition", function () {
           message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE &&
           message.seq === index + 1
       );
-      socket.send(JSON.stringify({
-        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
-        ...request,
-        position: request.prefix.length,
-        seq: index + 1,
-      }));
+      socket.send(
+        JSON.stringify({
+          type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+          ...request,
+          position: request.prefix.length,
+          seq: index + 1,
+        })
+      );
       const response = await responsePromise;
       const items = response.items as Array<{ insertText?: string }>;
-      assert.ok(Array.isArray(items), `missing completion items for ${request.trigger}`);
+      assert.ok(
+        Array.isArray(items),
+        `missing completion items for ${request.trigger}`
+      );
       assert.ok(
         items.some((item) => item.insertText?.includes(request.expected)),
         `expected ${request.expected} for ${request.trigger}, got ${JSON.stringify(items)}`

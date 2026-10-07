@@ -544,17 +544,6 @@ export function ServerSection({
           </SettingInputRow>
         )}
 
-        {/*
-          Standalone port intentionally not surfaced here. It configures the
-          `ctrlyoke server` headless CLI process, which does not exist yet
-          (STANDALONE_SERVER_PLAN.md Phases 5–10 are unimplemented), so the
-          setting is currently inert. The type/schema/default (4748) are kept
-          so the standalone feature can surface it later with no config
-          migration. It also does not belong in the VS Code server section —
-          it controls a non-VS-Code process. Re-expose it from the standalone
-          server's own surface when that ships.
-        */}
-
         {!isStandalone && (
           <div>
             <SettingInputRow

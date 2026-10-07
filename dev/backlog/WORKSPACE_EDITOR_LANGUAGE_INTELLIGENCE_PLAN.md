@@ -24,7 +24,7 @@ server class. Two pieces run earlier:
   end-condition gate and the harness-facing IDE MCP. This plan narrows its
   harness scope (see "Harness side" below) and gives its diagnostics gate a
   host-neutral source.
-- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md): its
+- [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md): its
   Phase 8 uses this plan's `SymbolIndex` port with `RegexSymbolIndex`. The
   one-off `LspSymbolClient` is not built. `LspSymbolIndex` (phase 7b here)
   later upgrades standalone `#` through the same port.
