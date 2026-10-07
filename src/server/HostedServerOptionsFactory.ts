@@ -20,6 +20,7 @@ type HostedServerOptionOverrides = Pick<
   | "namedWorkspaceRoots"
   | "token"
   | "hostKind"
+  | "languageIntelligenceHost"
 > & {
   fileWatcherFactory: FileWatcherFactory;
   licenseService: LicenseService;
@@ -62,6 +63,7 @@ export function createHostedServerOptions(
     onSiblingServerDetected: overrides.onSiblingServerDetected,
     hostKind: overrides.hostKind,
     fileWatcherFactory: overrides.fileWatcherFactory,
+    languageIntelligenceHost: overrides.languageIntelligenceHost,
     themeDefaults: loadHostedThemeDefaults(),
   };
 }

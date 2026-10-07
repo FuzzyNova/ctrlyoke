@@ -40,6 +40,8 @@ import {
   maskHostedServerUrlToken,
 } from "./server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "./server/HostedServerOptionsFactory";
+import { LanguageIntelligenceHost } from "./server/lsp/LanguageIntelligenceHost";
+import { EmptyLanguageServerBackend } from "./server/lsp/LanguageServerBackend";
 import {
   GIT_CHANGE_KINDS,
   HOST_KINDS,
@@ -1668,6 +1670,12 @@ function registerCommands(
             runnerHostIdentity,
             hostKind: HOST_KINDS.VSCODE,
             fileWatcherFactory: new VsCodeFileWatcherFactory(),
+            languageIntelligenceHost: new LanguageIntelligenceHost({
+              backend: new EmptyLanguageServerBackend(),
+              workspaceRoot,
+              namedWorkspaceRoots,
+              isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
+            }),
           })
         );
       } catch (err) {

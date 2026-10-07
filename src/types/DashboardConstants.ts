@@ -922,6 +922,27 @@ export const HOSTED_CONNECTION_LIVENESS = {
   BACKGROUND_REVALIDATE_MS: 30_000,
 } as const;
 
+/** LSP method names shared by the hosted server and its browser protocol proxy. */
+export const LSP_METHODS = {
+  INITIALIZE: "initialize",
+  INITIALIZED: "initialized",
+  SHUTDOWN: "shutdown",
+  EXIT: "exit",
+  DID_OPEN: "textDocument/didOpen",
+  DID_CHANGE: "textDocument/didChange",
+  DID_CLOSE: "textDocument/didClose",
+  PUBLISH_DIAGNOSTICS: "textDocument/publishDiagnostics",
+  DID_CHANGE_WATCHED_FILES: "workspace/didChangeWatchedFiles",
+  CANCEL_REQUEST: "$/cancelRequest",
+} as const;
+
+export const LSP_SESSION_LOOKUP_REASONS = {
+  NO_SERVER: "no server",
+  LIMIT_REACHED: "limit reached",
+  NEEDS_APPROVAL: "needs approval",
+  UNTRUSTED: "untrusted",
+} as const;
+
 export const HOSTED_ICON_FILES = {
   APP_ICON_PNG: "icon.png",
   // SVG used in the web app manifest and as the SVG apple-touch-icon. iOS 15+ uses

@@ -2,6 +2,7 @@ import {
   DIFF_PAYLOAD_KINDS,
   GIT_REF_LABEL_TYPES,
   WORKSPACE_ENTRY_KINDS,
+  LSP_SESSION_LOOKUP_REASONS,
   type WorkspaceSearchScope,
   type DiffChangeType,
   type DiffPayloadKind,
@@ -10,6 +11,11 @@ import {
 } from "./DashboardConstants";
 
 export type { WorkspaceSearchScope } from "./DashboardConstants";
+
+export interface LanguageIntelligenceSessionLookupResponse {
+  session: { id: string; languageId: string } | null;
+  reason?: (typeof LSP_SESSION_LOOKUP_REASONS)[keyof typeof LSP_SESSION_LOOKUP_REASONS];
+}
 
 /**
  * Types for the hosted workspace viewer feature.

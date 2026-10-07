@@ -116,6 +116,9 @@ import {
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
+import { LanguageIntelligenceHost } from "./lsp/LanguageIntelligenceHost";
+import { EmptyLanguageServerBackend } from "./lsp/LanguageServerBackend";
+import type { JsonRpcMessage } from "./lsp/LspProtocol";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
@@ -245,6 +248,7 @@ export interface HostedServerOptions {
   hostKind: HostKind;
   themeDefaults: HostedThemeDefaults;
   fileWatcherFactory: FileWatcherFactory;
+  languageIntelligenceHost?: LanguageIntelligenceHost;
 }
 
 export class CtrlYokeHostedServer
@@ -265,6 +269,7 @@ export class CtrlYokeHostedServer
   private app = express();
   private httpServer: Server;
   private wss: WebSocketServer;
+  private lspWss: WebSocketServer;
   private connections = new Set<WebSocket>();
   private readonly unregisterMemoryContext: () => void;
   private readonly socketLiveness = new WeakMap<WebSocket, boolean>();
@@ -298,6 +303,7 @@ export class CtrlYokeHostedServer
   private bindAddressFallback?: BindAddressFallbackInfo;
   private devServerUrlFileOwned = false;
   private readonly viewerService: HostedWorkspaceViewerService;
+  private readonly languageIntelligenceHost: LanguageIntelligenceHost;
   private readonly fileWatcherFactory: FileWatcherFactory;
   private readonly fileWatchers = new Map<
     string,
@@ -340,6 +346,7 @@ export class CtrlYokeHostedServer
       hostKind,
       themeDefaults,
       fileWatcherFactory,
+      languageIntelligenceHost,
     } = options;
     this.hub = hub;
     this.dashboardClient = endpoint;
@@ -355,6 +362,14 @@ export class CtrlYokeHostedServer
     this.hostKind = hostKind;
     this.themeDefaults = themeDefaults;
     this.fileWatcherFactory = fileWatcherFactory;
+    this.languageIntelligenceHost =
+      languageIntelligenceHost ??
+      new LanguageIntelligenceHost({
+        backend: new EmptyLanguageServerBackend(),
+        workspaceRoot,
+        namedWorkspaceRoots,
+        isWorkspaceTrusted: () => true,
+      });
     this.getRemoteAccess = remoteAccess.isAllowed;
     this.onRemoteAccessBlocked = remoteAccess.onBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
@@ -386,9 +401,13 @@ export class CtrlYokeHostedServer
       noServer: true,
       maxPayload: HOSTED_WEBSOCKET_MAX_PAYLOAD_BYTES,
     });
+    this.lspWss = new WebSocketServer({
+      noServer: true,
+      maxPayload: 1024 * 1024,
+    });
     this.httpServer.on("upgrade", (req, socket, head) => {
       const url = new URL(req.url ?? "", "http://localhost");
-      if (url.pathname !== "/ws") {
+      if (url.pathname !== "/ws" && url.pathname !== "/ws/lsp") {
         socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
         socket.destroy();
         return;
@@ -396,6 +415,18 @@ export class CtrlYokeHostedServer
       if (!timingSafeStringEqual(url.searchParams.get("token"), this.token)) {
         socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
         socket.destroy();
+        return;
+      }
+      if (url.pathname === "/ws/lsp") {
+        const serverId = url.searchParams.get("server");
+        if (!serverId) {
+          socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+        this.lspWss.handleUpgrade(req, socket, head, (ws) => {
+          this.lspWss.emit("connection", ws, req, serverId);
+        });
         return;
       }
       this.wss.handleUpgrade(req, socket, head, (ws) => {
@@ -407,6 +438,55 @@ export class CtrlYokeHostedServer
       Log.warn(
         `[CtrlYokeHostedServer] ctrlyoke WebSocket server error: ${err.message}`
       );
+    });
+    this.lspWss.on("error", (err: Error) => {
+      Log.warn(`[CtrlYokeHostedServer] LSP WebSocket server error: ${err.message}`);
+    });
+    this.lspWss.on("connection", (ws: WebSocket, _req: import("http").IncomingMessage, serverId: string) => {
+      let proxy: import("./lsp/LspSessionProxy").LspSessionProxy | undefined;
+      let socketClosed = false;
+      const pendingMessages: JsonRpcMessage[] = [];
+      ws.on("message", (data) => {
+        try {
+          const message = JSON.parse(data.toString()) as JsonRpcMessage;
+          if (proxy) void proxy.handleMessage(message);
+          else pendingMessages.push(message);
+        } catch {
+          ws.close(4400, "Invalid JSON-RPC message");
+        }
+      });
+      ws.on("close", () => {
+        socketClosed = true;
+        proxy?.dispose();
+      });
+      void this.languageIntelligenceHost
+        .createProxy(serverId, (message) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(message));
+          }
+        }, async (viewerPath) => {
+          const file = await this.viewerService.readFile(viewerPath);
+          return file.readOnly !== true;
+        })
+        .then((created) => {
+          proxy = created;
+          if (!created) {
+            if (!socketClosed) ws.close(4404, "Language server session not found");
+            return;
+          }
+          if (socketClosed || ws.readyState !== WebSocket.OPEN) {
+            created.dispose();
+            return;
+          }
+          for (const message of pendingMessages.splice(0)) {
+            void created.handleMessage(message);
+          }
+          ws.on("error", () => created.dispose());
+        })
+        .catch((error: unknown) => {
+          Log.warn(`[CtrlYokeHostedServer] Failed to open LSP session: ${String(error)}`);
+          ws.close(1011, "Language server unavailable");
+        });
     });
     const defaultJsonParser = express.json({ limit: DEFAULT_JSON_BODY_LIMIT });
     const workspaceFileJsonParser = express.json({
@@ -1286,6 +1366,21 @@ export class CtrlYokeHostedServer
         }
       }
     );
+
+    this.app.get("/api/lsp/session", requireToken, async (req, res) => {
+      const viewerPath =
+        typeof req.query.path === "string" ? req.query.path : "";
+      if (!viewerPath) {
+        res.status(400).json({ error: "path is required" });
+        return;
+      }
+      try {
+        res.json(await this.languageIntelligenceHost.lookupSession(viewerPath));
+      } catch (error) {
+        Log.warn(`[CtrlYokeHostedServer] LSP session lookup failed: ${String(error)}`);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
 
     this.app.get(WORKSPACE_FILE_ROUTE_PATH, requireToken, async (req, res) => {
       const filePath = typeof req.query.path === "string" ? req.query.path : "";
@@ -2697,6 +2792,7 @@ export class CtrlYokeHostedServer
           // A delete event has no current modification time.
         }
         this.broadcastWorkspaceFileChanged(viewerPath, modifiedAt);
+        void this.languageIntelligenceHost.notifyWorkspaceFileChanged(viewerPath);
       };
       watcher.onDidChange(() => void notify());
       watcher.onDidCreate(() => void notify());
@@ -3035,6 +3131,7 @@ export class CtrlYokeHostedServer
     this.unregisterMemoryContext();
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
+    this.languageIntelligenceHost.dispose();
     for (const { watcher } of this.fileWatchers.values()) watcher.dispose();
     this.fileWatchers.clear();
     this.watchedFilesByClient.clear();
@@ -3046,6 +3143,7 @@ export class CtrlYokeHostedServer
     for (const ws of this.connections) ws.close();
     this.connections.clear();
     this.wss.close();
+    this.lspWss.close();
     this.httpServer.close();
   }
 

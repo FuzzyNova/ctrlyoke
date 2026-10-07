@@ -1,7 +1,8 @@
 # Workspace Editor Language Intelligence Plan
 
 **Status (2026-10-07):** Proposed and decided. Phases 7a, 7-regex, and 7c
-are complete. The `SymbolIndex` port and
+are complete, as is the host half of phase 1 (staging Stage 12a). The browser
+half of phase 1 (Stage 12b) and later phases remain. The `SymbolIndex` port and
 `VsCodeSymbolIndex` (phase 7a) plus `RegexSymbolIndex` (phase 7-regex, staging
 Stage 9) are complete, along with the VS Code cold-start fallback and anchor
 warm-up. Remaining phases are ready to implement in sequence.

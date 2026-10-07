@@ -35,6 +35,8 @@ import { TemplateManager } from "../core/TemplateManager";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { CtrlYokeHostedServer } from "../server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "../server/HostedServerOptionsFactory";
+import { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
+import { EmptyLanguageServerBackend } from "../server/lsp/LanguageServerBackend";
 import { setRuntimeMode } from "../utils/RuntimeMode";
 import { initializeModelRegistry } from "../utils/ModelRegistry";
 
@@ -283,6 +285,12 @@ export async function createNodeHostedServer(options: {
   // Exempt the connection token from heuristic redaction while the server is
   // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.
   const unprotectToken = secretRedactionService.protectValue(token);
+  const languageIntelligenceHost = new LanguageIntelligenceHost({
+    backend: new EmptyLanguageServerBackend(),
+    workspaceRoot: cwd,
+    namedWorkspaceRoots: namedRoots,
+    isWorkspaceTrusted: () => true,
+  });
   server = new CtrlYokeHostedServer(
     createHostedServerOptions({
       hub: orchestrator.getDashboardBroadcastHub(),
@@ -295,6 +303,7 @@ export async function createNodeHostedServer(options: {
       getUserFeedbackSink: () => orchestrator.getUserFeedbackSink(),
       hostKind: HOST_KINDS.STANDALONE,
       fileWatcherFactory: services.fileWatcherFactory,
+      languageIntelligenceHost,
       strictPort: options.strictPort,
     })
   );
