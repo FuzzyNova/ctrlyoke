@@ -1931,6 +1931,10 @@ export type CliValidateStrictPolicy =
 /** Shared dot-notation paths for settings consumed across the extension and webview. */
 export const SETTING_PATHS = {
   STORAGE: "storage",
+  LANGUAGE_SERVERS: "languageServers",
+  LANGUAGE_SERVERS_IDLE_SHUTDOWN_MINUTES: "languageServers.idleShutdownMinutes",
+  LANGUAGE_SERVERS_MAX_RUNNING: "languageServers.maxRunning",
+  LANGUAGE_SERVERS_START_ON_LAUNCH: "languageServers.startOnLaunch",
   WORKTREES: "worktrees",
   COORDINATION: "coordination",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
@@ -1983,6 +1987,14 @@ export const SETTING_PATHS = {
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
 } as const;
+
+/** Install recipe kinds for curated language server catalog entries. */
+export const LANGUAGE_SERVER_INSTALL_KINDS = {
+  NPM: "npm",
+  COMMAND: "command",
+} as const;
+export type LanguageServerInstallKind =
+  (typeof LANGUAGE_SERVER_INSTALL_KINDS)[keyof typeof LANGUAGE_SERVER_INSTALL_KINDS];
 
 /**
  * Pseudo setting path under which workspace MCP registry entries are

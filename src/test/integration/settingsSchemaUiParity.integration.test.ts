@@ -249,6 +249,12 @@ function settingPathConstants(): Map<string, string> {
  * rather than silently masking future gaps in the same setting.
  */
 const PENDING_UI_PARITY: readonly string[] = [
+  "languageServers.definitions",
+  "languageServers.idleShutdownMinutes",
+  "languageServers.maxRunning",
+  "languageServers.settings",
+  "languageServers.startOnLaunch",
+  "languageServers.use",
   "server.theme",
   "terminal.mobileBarLayout.bar",
   "terminal.mobileBarLayout.hidden",

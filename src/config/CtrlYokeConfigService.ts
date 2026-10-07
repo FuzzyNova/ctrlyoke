@@ -58,6 +58,9 @@ const WORKSPACE_FORBIDDEN_SETTING_ROOTS = [
   SETTING_PATHS.STORAGE,
   SETTING_PATHS.STATUS_LINE,
   SETTING_PATHS.USAGE_TRACKING_ENABLED,
+  SETTING_PATHS.LANGUAGE_SERVERS_IDLE_SHUTDOWN_MINUTES,
+  SETTING_PATHS.LANGUAGE_SERVERS_MAX_RUNNING,
+  SETTING_PATHS.LANGUAGE_SERVERS_START_ON_LAUNCH,
 ] as const;
 
 function getWorkspaceForbiddenSettingRoot(
@@ -457,7 +460,10 @@ export class CtrlYokeConfigService {
     }
     if (
       forbiddenRoot === SETTING_PATHS.STATUS_LINE ||
-      forbiddenRoot === SETTING_PATHS.USAGE_TRACKING_ENABLED
+      forbiddenRoot === SETTING_PATHS.USAGE_TRACKING_ENABLED ||
+      forbiddenRoot === SETTING_PATHS.LANGUAGE_SERVERS_IDLE_SHUTDOWN_MINUTES ||
+      forbiddenRoot === SETTING_PATHS.LANGUAGE_SERVERS_MAX_RUNNING ||
+      forbiddenRoot === SETTING_PATHS.LANGUAGE_SERVERS_START_ON_LAUNCH
     ) {
       throw new Error(
         `The ${path} setting is machine-scoped and cannot be written at workspace scope.`

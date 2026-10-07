@@ -2,9 +2,9 @@
 
 **Status (2026-10-07):** Track A Stages 1–6 and Track B Stages 7a, 7b, 8,
 9, and 10 are complete; independent Stages I1 and I2 and Track C Stages 12a and
-12b are also complete. Track C Stage 13a is next. The LSP plan was re-audited
-and its settings UX defined on 2026-10-07, and independent Stage I2 (VS Code `#` cold
-start) was implemented. The decoupling plan
+12b and Track C Stage 13a are also complete. Track C Stage 13b is next. The LSP
+plan was re-audited and its settings UX defined on 2026-10-07, and independent
+Stage I2 (VS Code `#` cold start) was implemented. The decoupling plan
 has moved to `dev/implemented/`. Its two remaining phases (Node composition
 and shim retirement) now live in the standalone plan as Stages 7a and 10.
 This document only sets the order of work. It contains no design. The design lives
@@ -104,11 +104,12 @@ names the guard or test that proves it, not just the code change.
 | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 |   12a | **Done.** Host protocol spine: shared workspace-root containment, backend seam, `LanguageIntelligenceHost`, `LspSessionProxy`, token-gated session lookup, and a dedicated `/ws/lsp` server. Production composition resolves no server until Stage 13. | LSP phase 1 (host half)                     | Stage 8                       | Fake stdio-server tests cover id isolation, buffer resync, matching diagnostics, redaction, inbound URI containment, and read-only file rejection. LSP sockets use separate auth and never register as dashboard clients. |
 |   12b | **Done.** Browser: install `@codemirror/lsp-client`, a reconnecting WebSocket transport, session-keyed client/workspace, `useLanguageIntelligence`, and the `Compartment` slot in `WorkspaceFileEditor`. | LSP phase 1 (browser half)                   | Stage 12a                     | Fake-socket and null-session tests pass; a session extension reconfigures the compartment while preserving the existing editor DOM, document, and selection. |
-|    13 | Managed backend: the `languageServers` schema, approval of workspace definitions, built-in defaults, lifecycle, the cap, and the trust gate.                                                        | LSP phase 2                                            | Stage 12b                     | TypeScript completion, hover, rename, and diagnostics work in the browser editor in both hosts. The cap and idle shutdown are covered by tests. |
-|    14 | Editor UX: context menu, references panel, multi-file rename confirmation, F12, and capability gating.                                                                                              | LSP phase 3                                            | Stage 13                      | Every menu item is hidden when the session doesn't advertise its capability.                                                                    |
-|    15 | Language Servers settings section: live status, curated catalog (detected / not installed, npm one-click install, copyable install commands, homepage links), and local-config scan/import.         | LSP phase 4                                            | Stage 13                      | Scanning finds `.lsp.json`, Copilot, opencode, and cclsp configs, and imports them into the chosen scope.                                       |
-|    16 | `LspSymbolIndex` for standalone `#`, with the regex index as the per-language fallback.                                                                                                             | LSP phase 7b                                           | Stages 9 and 13               | The golden test covers all three indexes. Standalone `#` returns LSP symbols when a server is available.                                        |
-|    17 | Harness export and the `DiagnosticsSource` Node implementation.                                                                                                                                     | LSP phase 6, coordinated with `VSCODE_LSP_MCP_PLAN.md` | Stage 13; that plan's Phase 1 | `kind: "diagnostics"` works in a standalone run. Export writes each harness-native LSP config.                                                  |
+|   13a | **Done.** `languageServers` schema/settings, curated catalog, and pure selection/command resolver with PATH and `.bin` probing.                                                                              | LSP phase 2 (configuration/catalog half)               | Stage 12b                     | Settings round-trip and workspace lifecycle restrictions pass; resolver order and catalog/probe tests pass.                                  |
+|   13b | Managed backend lifecycle: approval of workspace definitions, spawn/idle/cap/LRU/restart, trust gate, and `startOnLaunch`.                                                                                 | LSP phase 2 (managed backend half)                     | Stage 13a                     | TypeScript completion, hover, rename, and diagnostics work in the browser editor in both hosts. The cap and idle shutdown are covered by tests. |
+|    14 | Editor UX: context menu, references panel, multi-file rename confirmation, F12, and capability gating.                                                                                              | LSP phase 3                                            | Stage 13b                     | Every menu item is hidden when the session doesn't advertise its capability.                                                                    |
+|    15 | Language Servers settings section: live status, curated catalog (detected / not installed, npm one-click install, copyable install commands, homepage links), and local-config scan/import.         | LSP phase 4                                            | Stage 13b                     | Scanning finds `.lsp.json`, Copilot, opencode, and cclsp configs, and imports them into the chosen scope.                                       |
+|    16 | `LspSymbolIndex` for standalone `#`, with the regex index as the per-language fallback.                                                                                                             | LSP phase 7b                                           | Stages 9 and 13b              | The golden test covers all three indexes. Standalone `#` returns LSP symbols when a server is available.                                        |
+|    17 | Harness export and the `DiagnosticsSource` Node implementation.                                                                                                                                     | LSP phase 6, coordinated with `VSCODE_LSP_MCP_PLAN.md` | Stage 13b; that plan's Phase 1 | `kind: "diagnostics"` works in a standalone run. Export writes each harness-native LSP config.                                                  |
 
 ### Independent stages (not on the critical path)
 
@@ -223,8 +224,14 @@ names the guard or test that proves it, not just the code change.
     positions. Fake-socket, null-session, and editor-compartment tests pass.
     Verification passed: `npm run typecheck`, `npm run lint`, and `npm test`
     (extension 5,616 passed/4 pending, UI 3,466 passed, packaging 80 passed).
-  - **13a:** `languageServers` schema/settings plumbing, curated catalog data,
-    command resolution/probe.
+  - **13a — done (2026-10-07):** `languageServers` schema/settings plumbing,
+    curated catalog data, and a pure resolver for selection, definition
+    precedence, PATH/tool/workspace-bin probing, and Windows launcher metadata.
+    `npm run typecheck`, `npm run lint`, `npm run check:docs`, and the focused
+    resolver suite pass. A full `npm test` run passed (extension 5,623 passing/
+    4 pending, UI 3,466 passing, packaging 80 passing). A later full run had
+    one unrelated `VsCodeDocuments > saves an open dirty document` failure;
+    its isolated rerun passed.
   - **13b:** `ManagedLanguageServerBackend` lifecycle (spawn, idle, cap/LRU,
     crash restart), workspace-definition approval, trust gate, `startOnLaunch`.
   - **14a:** proxy-applied `WorkspaceEdit` (unopened files via the viewer

@@ -93,6 +93,30 @@ export interface CoordinationSettings {
   allowExternalParticipants: boolean;
 }
 
+/** User or workspace definition for an LSP executable. */
+export interface LanguageServerDefinition {
+  command: string[];
+  languages: string[];
+  extensions: string[];
+  rootMarkers: string[];
+  env?: Record<string, string>;
+}
+
+export interface LanguageServersSettings {
+  /** Server id → executable definition. Workspace entries require approval before launch. */
+  definitions: Record<string, LanguageServerDefinition>;
+  /** Language id → selected server id, or false to disable language intelligence. */
+  use: Record<string, string | false>;
+  /** Server id → LSP initialization/configuration settings. */
+  settings: Record<string, Record<string, unknown>>;
+  /** User-only idle timeout in minutes. */
+  idleShutdownMinutes: number;
+  /** User-only maximum number of concurrently running servers. */
+  maxRunning: number;
+  /** User-only opt-in to start selected servers when the host launches. */
+  startOnLaunch: boolean;
+}
+
 export interface CtrlYokeGlobalSettings {
   /** Published schema URL used by editors to validate this settings file. */
   $schema?: string;
@@ -143,6 +167,9 @@ export interface CtrlYokeGlobalSettings {
 
   /** Cross-workflow, execution-root coordination board settings. */
   coordination: CoordinationSettings;
+
+  /** Managed language server definitions, selections, and lifecycle settings. */
+  languageServers: LanguageServersSettings;
 
   /** User-only location for persisted workflow run history. */
   storage: {
@@ -462,6 +489,14 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     maxEntryAgeDays: 7,
     cliParticipantTtlMinutes: 30,
     allowExternalParticipants: true,
+  },
+  languageServers: {
+    definitions: {},
+    use: {},
+    settings: {},
+    idleShutdownMinutes: 10,
+    maxRunning: 4,
+    startOnLaunch: false,
   },
   storage: {
     runHistoryLocation: RUN_HISTORY_LOCATIONS.USER,
