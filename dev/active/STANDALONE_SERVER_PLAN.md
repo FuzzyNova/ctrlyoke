@@ -158,9 +158,9 @@ reach no `vscode` load, as guarded by `SourceAuditCounters`.
   yet hidden based on the methods present on `DashboardHostActions` (Stage
   7a3).
 - No `src/cli/ServerCommand.ts`.
-- No static theme defaults. `src/server/themes/` doesn't exist. With no
-  captured vars, the hosted server emits an empty style block, and
-  `server.theme` (`auto|light|dark`) has no runtime consumer.
+- **Resolved in 7b1:** generated dark/light static theme defaults now cover the
+  webview's referenced variables. The hosted server applies `server.theme` and
+  per-client `?theme=`, with captured VS Code variables layered over defaults.
 - No `workspaceKey` or `storageVersion` in the shim. `fpState-*` keys are
   scoped only by origin, so two workspaces served on the same port at
   different times restore each other's drafts. The React adapter is still

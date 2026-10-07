@@ -141,6 +141,7 @@ function createHostedServer(
     remoteAccess: { isAllowed: async () => false, onBlocked: () => undefined },
     onSiblingServerDetected,
     hostKind: HOST_KINDS.VSCODE,
+    themeDefaults: { dark: ":root {}", light: ":root {}" },
   });
 }
 

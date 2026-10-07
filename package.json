@@ -641,6 +641,7 @@
     "schema:update": "npm run generate-schema && npm run generate-schema-ui-descriptions && npm run generate-schema-docs",
     "schema:bump": "node scripts/schema-bump.mjs",
     "generate-agent-files": "node scripts/generate-agent-files.mjs",
+    "generate-server-themes": "node scripts/generate-server-themes.mjs",
     "harness:version-floors": "npm run compile-tests && node scripts/harness-version-floors.mjs",
     "generate-compatibility-docs": "npm run compile-tests && node scripts/generate-compatibility-docs.mjs",
     "check:compatibility-docs": "npm run compile-tests && node scripts/generate-compatibility-docs.mjs --check",

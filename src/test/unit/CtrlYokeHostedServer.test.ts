@@ -50,6 +50,10 @@ function createHostedServer(options: Partial<HostedServerOptions> = {}) {
     token: "test-token",
     remoteAccess: { isAllowed: async () => false, onBlocked: () => undefined },
     hostKind: HOST_KINDS.VSCODE,
+    themeDefaults: {
+      dark: ":root { --theme-default: dark; }",
+      light: ":root { --theme-default: light; }",
+    },
     ...options,
   });
 }
@@ -341,6 +345,83 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
         "updated\n"
       );
     });
+  });
+});
+
+suite("CtrlYokeHostedServer theme defaults", () => {
+  async function withThemePage(
+    theme: "auto" | "light" | "dark",
+    query: string,
+    inspect: (html: string, token: string) => void,
+    capturedVars?: Record<string, string>
+  ): Promise<void> {
+    configService.setCliOverlay({ server: { theme } } as never);
+    const token = "0123456789abcdef0123456789abcdef";
+    const server = createHostedServer({ token });
+    if (capturedVars) server.updateThemeVars(capturedVars);
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const port = Number(new URL(serverUrl).port);
+      const page = await sendGetRequest(
+        port,
+        `/?token=${token}${query ? `&${query}` : ""}`
+      );
+      assert.strictEqual(page.statusCode, 200);
+      inspect(page.body, token);
+    } finally {
+      server.dispose();
+      configService.setCliOverlay({});
+    }
+  }
+
+  test("auto serves both defaults for the browser color preference", async () => {
+    await withThemePage("auto", "", (html) => {
+      assert.ok(html.includes("@media (prefers-color-scheme: dark)"));
+      assert.ok(html.includes("@media (prefers-color-scheme: light)"));
+      assert.ok(html.includes("--theme-default: dark"));
+      assert.ok(html.includes("--theme-default: light"));
+      assert.ok(html.includes('<body class="vscode-dark"'));
+    });
+  });
+
+  test("light and dark force one default theme", async () => {
+    await withThemePage("light", "", (html) => {
+      assert.ok(html.includes("--theme-default: light"));
+      assert.ok(!html.includes("--theme-default: dark"));
+      assert.ok(!html.includes("prefers-color-scheme"));
+      assert.ok(html.includes('<body class="vscode-light"'));
+    });
+    await withThemePage("dark", "", (html) => {
+      assert.ok(html.includes("--theme-default: dark"));
+      assert.ok(!html.includes("--theme-default: light"));
+      assert.ok(!html.includes("prefers-color-scheme"));
+      assert.ok(html.includes('<body class="vscode-dark"'));
+    });
+  });
+
+  test("valid query theme overrides the configured mode", async () => {
+    await withThemePage("dark", "theme=light", (html) => {
+      assert.ok(html.includes("--theme-default: light"));
+      assert.ok(!html.includes("--theme-default: dark"));
+      assert.ok(html.includes('<body class="vscode-light"'));
+    });
+  });
+
+  test("captured vars override defaults and determine the body class", async () => {
+    await withThemePage(
+      "dark",
+      "theme=light",
+      (html) => {
+        assert.ok(html.includes("--theme-default: light"));
+        assert.ok(html.includes("--vscode-editor-background: #123456;"));
+        assert.ok(html.includes('<body class="vscode-dark"'));
+      },
+      {
+        "--vscode-editor-background": "#123456",
+        "--cy-color-theme-kind": "dark",
+      }
+    );
   });
 });
 

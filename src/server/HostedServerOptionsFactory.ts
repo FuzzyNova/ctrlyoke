@@ -8,6 +8,7 @@ import {
   USER_FEEDBACK_SEVERITY,
 } from "../types/DashboardConstants";
 import type { RunnerHostIdentity } from "../types/CtrlYokeTypes";
+import { loadHostedThemeDefaults } from "./HostedThemeDefaults";
 
 type HostedServerOptionOverrides = Pick<
   HostedServerOptions,
@@ -57,6 +58,7 @@ export function createHostedServerOptions(
     runnerHostIdentity: overrides.runnerHostIdentity,
     onSiblingServerDetected: overrides.onSiblingServerDetected,
     hostKind: overrides.hostKind,
+    themeDefaults: loadHostedThemeDefaults(),
   };
 }
 

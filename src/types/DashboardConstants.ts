@@ -3084,6 +3084,16 @@ export const THEME_KINDS = {
 
 export type ThemeKind = (typeof THEME_KINDS)[keyof typeof THEME_KINDS];
 
+/** User-selected color theme for the hosted dashboard server. */
+export const SERVER_THEME_MODES = {
+  AUTO: "auto",
+  LIGHT: "light",
+  DARK: "dark",
+} as const;
+
+export type ServerThemeMode =
+  (typeof SERVER_THEME_MODES)[keyof typeof SERVER_THEME_MODES];
+
 // ============================================================================
 // APPLY PATCH FILE EDIT KINDS - Codex patch parser file-operation values
 // ============================================================================

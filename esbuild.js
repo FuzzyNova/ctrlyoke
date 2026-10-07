@@ -300,6 +300,11 @@ const copyServerPlugin = {
         fs.copyFileSync(srcFile, path.join(outServer, fileName));
         console.log(`[copy] ${fileName} -> out/server/${fileName}`);
       }
+
+      copyDirRecursive(
+        path.join(srcServer, "themes"),
+        path.join(outServer, "themes")
+      );
     });
   },
 };

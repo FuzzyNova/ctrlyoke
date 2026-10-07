@@ -54,7 +54,9 @@ import {
   WORKSPACE_SEARCH_SCOPES,
   NETWORK_INTERFACE_FAMILIES,
   THEME_KINDS,
+  SERVER_THEME_MODES,
   type HostKind,
+  type ServerThemeMode,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -100,6 +102,7 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
 import { buildHostedErrorPage } from "./HostedErrorPageTemplate";
+import type { HostedThemeDefaults } from "./HostedThemeDefaults";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import {
   bytesToMb,
@@ -235,6 +238,7 @@ export interface HostedServerOptions {
   runnerHostIdentity?: RunnerHostIdentity;
   onSiblingServerDetected?: (url: string) => void;
   hostKind: HostKind;
+  themeDefaults: HostedThemeDefaults;
 }
 
 export class CtrlYokeHostedServer
@@ -301,6 +305,7 @@ export class CtrlYokeHostedServer
   private readonly fallbackPorts: number[];
   private readonly onSiblingServerDetected?: (url: string) => void;
   private readonly hostKind: HostKind;
+  private readonly themeDefaults: HostedThemeDefaults;
 
   constructor(options: HostedServerOptions) {
     const {
@@ -318,6 +323,7 @@ export class CtrlYokeHostedServer
       runnerHostIdentity,
       onSiblingServerDetected,
       hostKind,
+      themeDefaults,
     } = options;
     this.hub = hub;
     this.dashboardClient = endpoint;
@@ -329,6 +335,7 @@ export class CtrlYokeHostedServer
     this.token = token;
     this.onSiblingServerDetected = onSiblingServerDetected;
     this.hostKind = hostKind;
+    this.themeDefaults = themeDefaults;
     this.getRemoteAccess = remoteAccess.isAllowed;
     this.onRemoteAccessBlocked = remoteAccess.onBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
@@ -976,7 +983,8 @@ export class CtrlYokeHostedServer
           "This ctrlyoke server isn't running with TLS enabled, so there's no certificate to download.",
           [
             "Enable TLS in your ctrlyoke server settings, or connect using the non-HTTPS link instead.",
-          ]
+          ],
+          this.getThemeOverride(_req)
         );
         return;
       }
@@ -992,7 +1000,9 @@ export class CtrlYokeHostedServer
       } catch {
         this.sendNotFoundPage(
           res,
-          "The ctrlyoke TLS certificate could not be read from disk."
+          "The ctrlyoke TLS certificate could not be read from disk.",
+          undefined,
+          this.getThemeOverride(_req)
         );
       }
     });
@@ -1032,7 +1042,7 @@ export class CtrlYokeHostedServer
     // bare "Unauthorized" string, since a human is looking at this in a browser tab.
     const requireTokenForPage: express.RequestHandler = (req, res, next) => {
       if (this.requestHasValidToken(req)) return next();
-      this.sendUnauthorizedPage(res);
+      this.sendUnauthorizedPage(res, this.getThemeOverride(req));
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);
@@ -1103,7 +1113,9 @@ export class CtrlYokeHostedServer
     this.app.get(["/", "/index.html"], requireTokenForPage, (req, res) => {
       this.setNoStore(res);
       res.locals.skipSecretRedaction = true;
-      res.send(this.buildHtml(webviewDist, req.get("host")));
+      res.send(
+        this.buildHtml(webviewDist, req.get("host"), this.getThemeOverride(req))
+      );
     });
     // Register static files after the explicit HTML entry route so /index.html
     // receives the same token check and hosted-page patching as /.
@@ -1935,7 +1947,11 @@ export class CtrlYokeHostedServer
     res.set("Pragma", "no-cache");
   }
 
-  private buildHtml(webviewDist: string, requestHost?: string): string {
+  private buildHtml(
+    webviewDist: string,
+    requestHost?: string,
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): string {
     const indexPath = path.join(webviewDist, "index.html");
     let html = fs.readFileSync(indexPath, "utf8");
 
@@ -1956,10 +1972,14 @@ export class CtrlYokeHostedServer
     // vscode-high-contrast) from the cached theme vars so that CSS rules that
     // gate on body class (e.g. harness-icon-adaptive inversion) work correctly
     // on first render, before the WebSocket THEME_VARS_UPDATED message arrives.
-    const themeBodyClass = this.resolveThemeBodyClass();
+    const themeBodyClass = this.resolveThemeBodyClass(themeOverride);
+    const themeClassScript =
+      this.resolveThemeSelection(themeOverride) === SERVER_THEME_MODES.AUTO
+        ? '<script>(()=>{const c=window.matchMedia("(prefers-color-scheme: light)").matches?"vscode-light":"vscode-dark";document.body.classList.remove("vscode-light","vscode-dark");document.body.classList.add(c)})()</script>'
+        : "";
     html = html.replace(
       "<body>",
-      `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/ctrlyoke-icon.svg">`
+      `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/ctrlyoke-icon.svg">${themeClassScript}`
     );
 
     // Replace the VS Code-specific CSP with a browser-compatible policy.
@@ -1992,7 +2012,7 @@ export class CtrlYokeHostedServer
     );
 
     // Inject theme vars and standalone shim before </head>.
-    const themeBlock = this.buildThemeStyleBlock();
+    const themeBlock = this.buildThemeStyleBlock(themeOverride);
     // Append current colors as query params to SVG icon URLs so that browsers (which cache
     // favicon/icon resources aggressively and often ignore Cache-Control headers) pick up the
     // new icon as soon as colors change. The server-side route ignores these params — they exist
@@ -2025,20 +2045,53 @@ export class CtrlYokeHostedServer
     );
   }
 
-  private buildThemeStyleBlock(): string {
+  private getThemeOverride(
+    req: express.Request
+  ): Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO> | undefined {
+    const value = req.query.theme;
+    return value === SERVER_THEME_MODES.LIGHT || value === SERVER_THEME_MODES.DARK
+      ? value
+      : undefined;
+  }
+
+  private resolveThemeSelection(
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): ServerThemeMode {
+    if (themeOverride) return themeOverride;
+    const configuredTheme = configService.getAll().server.theme;
+    return configuredTheme === SERVER_THEME_MODES.LIGHT ||
+      configuredTheme === SERVER_THEME_MODES.DARK
+      ? configuredTheme
+      : SERVER_THEME_MODES.AUTO;
+  }
+
+  private buildThemeStyleBlock(
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): string {
+    const selection = this.resolveThemeSelection(themeOverride);
+    const defaults =
+      selection === SERVER_THEME_MODES.AUTO
+        ? `@media (prefers-color-scheme: dark) {\n${this.themeDefaults.dark}\n}\n@media (prefers-color-scheme: light) {\n${this.themeDefaults.light}\n}`
+        : selection === SERVER_THEME_MODES.LIGHT
+          ? this.themeDefaults.light
+          : this.themeDefaults.dark;
     const vars = Object.entries(this.cachedThemeVars)
       .map(([k, v]) => `  ${k}: ${v};`)
       .join("\n");
-    return vars ? `<style>:root {\n${vars}\n}</style>\n` : "";
+    const captured = vars ? `\n:root {\n${vars}\n}` : "";
+    return `<style>${defaults}${captured}</style>\n`;
   }
 
-  private resolveThemeBodyClass(): string {
+  private resolveThemeBodyClass(
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): string {
     const themeKind = this.cachedThemeVars["--cy-color-theme-kind"];
-    return themeKind === THEME_KINDS.LIGHT
+    if (themeKind === THEME_KINDS.LIGHT) return "vscode-light";
+    if (themeKind === THEME_KINDS.HIGH_CONTRAST) return "vscode-high-contrast";
+    if (themeKind === THEME_KINDS.DARK) return "vscode-dark";
+    return this.resolveThemeSelection(themeOverride) === SERVER_THEME_MODES.LIGHT
       ? "vscode-light"
-      : themeKind === THEME_KINDS.HIGH_CONTRAST
-        ? "vscode-high-contrast"
-        : "vscode-dark";
+      : "vscode-dark";
   }
 
   /**
@@ -2046,7 +2099,10 @@ export class CtrlYokeHostedServer
    * token). Reuses the same theme vars/body class as the main app shell so it
    * never flashes an unstyled background before the user has a valid session.
    */
-  private sendUnauthorizedPage(res: express.Response): void {
+  private sendUnauthorizedPage(
+    res: express.Response,
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): void {
     this.setNoStore(res);
     res
       .status(401)
@@ -2058,8 +2114,8 @@ export class CtrlYokeHostedServer
           hints: [
             "Did you recently regenerate your ctrlyoke token? Old links stop working as soon as the token changes.",
           ],
-          themeBodyClass: this.resolveThemeBodyClass(),
-          themeStyleBlock: this.buildThemeStyleBlock(),
+          themeBodyClass: this.resolveThemeBodyClass(themeOverride),
+          themeStyleBlock: this.buildThemeStyleBlock(themeOverride),
           hostKind: this.hostKind,
         })
       );
@@ -2069,7 +2125,8 @@ export class CtrlYokeHostedServer
   private sendNotFoundPage(
     res: express.Response,
     message: string,
-    hints?: string[]
+    hints?: string[],
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
   ): void {
     this.setNoStore(res);
     res
@@ -2080,8 +2137,8 @@ export class CtrlYokeHostedServer
           statusCode: 404,
           message,
           hints,
-          themeBodyClass: this.resolveThemeBodyClass(),
-          themeStyleBlock: this.buildThemeStyleBlock(),
+          themeBodyClass: this.resolveThemeBodyClass(themeOverride),
+          themeStyleBlock: this.buildThemeStyleBlock(themeOverride),
           hostKind: this.hostKind,
         })
       );

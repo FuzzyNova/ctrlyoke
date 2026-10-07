@@ -162,8 +162,8 @@ names the guard or test that proves it, not just the code change.
     opening a worktree in a new window is unavailable. Tests cover empty Node
     capabilities for a host without optional methods, the full VS Code set,
     and UI visibility.
-  - **7b1:** static default themes, the guard test, the hosted fallback, and
-    `server.theme`/`?theme=` selection.
+  - **7b1 — Done:** generated static default themes and guard test, hosted
+    fallback, and `server.theme`/`?theme=` selection.
   - **7b2:** shim `workspaceKey` plus `storageVersion`, and the
     `webviewStateStorage` rename.
   - **I1:** save conflicts (independent; scheduled here).
