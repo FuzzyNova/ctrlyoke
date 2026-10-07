@@ -91,6 +91,49 @@ describe("ServerSection", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("warns when the generated cert doesn't cover the LAN address phones connect to", () => {
+    const props = {
+      activeScope: SETTING_SCOPES.USER,
+      onUpdate: vi.fn(),
+      onReset: vi.fn(),
+    };
+    const withTls = (bindAddress: string): FullGlobalSettings => {
+      const settings = createSettings(bindAddress);
+      return {
+        ...settings,
+        settings: {
+          ...settings.settings,
+          server: {
+            ...settings.settings.server,
+            tls: { ...settings.settings.server.tls, enabled: true },
+          },
+        },
+      };
+    };
+    useSettingsStore.setState({
+      licenseAccess: { isPro: true, hasRemoteAccess: true, trialEndsAt: null },
+      bindAddressFallback: null,
+      availableIps: ["192.168.55.25"],
+      lastCertGenerated: {
+        generatedAt: "2026-10-06T00:00:00.000Z",
+        expiresAt: "2099-10-06T00:00:00.000Z",
+        sans: ["localhost", "127.0.0.1"],
+      },
+    });
+    const { rerender } = render(
+      <ServerSection {...props} settings={withTls("0.0.0.0")} />
+    );
+
+    expect(
+      screen.getByText(/doesn't cover 192\.168\.55\.25/)
+    ).toBeInTheDocument();
+
+    rerender(<ServerSection {...props} settings={withTls("127.0.0.1")} />);
+    expect(screen.queryByText(/doesn't cover/)).not.toBeInTheDocument();
+
+    useSettingsStore.setState({ lastCertGenerated: null });
+  });
+
   it("shows the Pro unlock banner only for Free users", () => {
     const props = {
       activeScope: SETTING_SCOPES.USER,

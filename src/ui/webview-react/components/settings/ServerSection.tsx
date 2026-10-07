@@ -15,6 +15,7 @@ import {
   MESSAGE_TYPES,
   SETTING_PATHS,
   SETTING_SCOPES,
+  SERVER_BIND_ADDRESSES,
 } from "@root/types/DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -38,6 +39,7 @@ import { QrCode } from "lucide-react";
 import { downloadBlob } from "@utils/download";
 import { WebviewLog } from "@utils/logger";
 import { isIosDevice } from "@utils/platform";
+import { getServerCertLanCoverage } from "@utils/serverCertCoverage";
 
 function buildIconPreviewDataUrl(bgColor: string, fgColor: string): string {
   const svg = appIconSvg
@@ -147,6 +149,13 @@ export function ServerSection({
   const certExpired =
     lastCertGenerated != null &&
     new Date(lastCertGenerated.expiresAt) < new Date();
+  const certLanCoverage = lastCertGenerated
+    ? getServerCertLanCoverage(
+        server.bindAddress,
+        lastCertGenerated.sans,
+        selectedDisplayIp ?? availableIps[0] ?? null
+      )
+    : null;
 
   const handleGenerateCert = useCallback(() => {
     if (!licenseAccess.hasRemoteAccess) return;
@@ -198,7 +207,8 @@ export function ServerSection({
       : null;
 
   const showIpSelector =
-    server.bindAddress === "0.0.0.0" && availableIps.length > 1;
+    server.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES &&
+    availableIps.length > 1;
 
   const displayUrl = useMemo(() => {
     if (!serverUrl || !selectedDisplayIp) return serverUrl;
@@ -282,11 +292,14 @@ export function ServerSection({
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
   const displayIpOptions = availableIps.map((ip) => ({ label: ip, value: ip }));
   const bindAddressOptions = [
-    { label: "Localhost only (127.0.0.1)", value: "127.0.0.1" },
+    {
+      label: "Localhost only (127.0.0.1)",
+      value: SERVER_BIND_ADDRESSES.LOCALHOST,
+    },
     {
       label:
         "All interfaces (0.0.0.0) — LAN access (WAN access with VPN or port forwarding)",
-      value: "0.0.0.0",
+      value: SERVER_BIND_ADDRESSES.ALL_INTERFACES,
       disabled: !licenseAccess.hasRemoteAccess,
       description:
         "Pro feature — unlocks with a Pro license or an active remote-access trial",
@@ -553,7 +566,7 @@ export function ServerSection({
             >
               <CustomSelect
                 id="server-bind"
-                value={server.bindAddress ?? "127.0.0.1"}
+                value={server.bindAddress ?? SERVER_BIND_ADDRESSES.LOCALHOST}
                 onChange={(value) => onUpdate("server.bindAddress", value)}
                 schemaPath="server.bindAddress"
                 options={bindAddressOptions}
@@ -810,6 +823,18 @@ export function ServerSection({
                         className={`font-mono ${certFlash ? "" : "text-description-fg"}`}
                       >
                         {lastCertGenerated.sans.join(" · ")}
+                      </p>
+                    )}
+                    {certLanCoverage && !certLanCoverage.covered && (
+                      <p className="flex items-baseline gap-1 text-warning-fg">
+                        <Icon name="warning" />
+                        <span>
+                          {certLanCoverage.address
+                            ? `This certificate doesn't cover ${certLanCoverage.address}, so phones connecting to it will show a certificate warning.`
+                            : "This certificate only covers this computer, so phones on your network will show a certificate warning."}{" "}
+                          Generate the certificate again, then restart the
+                          server and reinstall it on your phone.
+                        </span>
                       </p>
                     )}
                   </div>

@@ -58,6 +58,7 @@ import {
   SERVER_THEME_MODES,
   type HostKind,
   type ServerThemeMode,
+  SERVER_BIND_ADDRESSES,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -2813,7 +2814,9 @@ export class CtrlYokeHostedServer
           this.port = addr.port;
           const scheme = this.isTls ? "https" : "http";
           this.availableIps =
-            this.bindAddress === "0.0.0.0" ? this.getLanIps() : [];
+            this.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
+              ? this.getLanIps()
+              : [];
           const host = this.availableIps[0] ?? "localhost";
           this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
           this.writeDevServerUrlFile(this.publicUrl);
@@ -2836,7 +2839,7 @@ export class CtrlYokeHostedServer
     }
 
     const requestedBindAddress = this.bindAddress;
-    this.bindAddress = "127.0.0.1";
+    this.bindAddress = SERVER_BIND_ADDRESSES.LOCALHOST;
     this.bindAddressFallback = {
       requestedBindAddress,
       actualBindAddress: this.bindAddress,
@@ -2898,7 +2901,10 @@ export class CtrlYokeHostedServer
 
   private buildPublicUrl(port: number): string {
     const scheme = this.isTls ? "https" : "http";
-    const availableIps = this.bindAddress === "0.0.0.0" ? this.getLanIps() : [];
+    const availableIps =
+      this.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
+        ? this.getLanIps()
+        : [];
     const host = availableIps[0] ?? "localhost";
     return `${scheme}://${host}:${port}/?token=${this.token}`;
   }
@@ -2956,7 +2962,8 @@ export class CtrlYokeHostedServer
   }
 
   private getProbeHost(): string {
-    if (this.bindAddress === "0.0.0.0") return "127.0.0.1";
+    if (this.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES)
+      return SERVER_BIND_ADDRESSES.LOCALHOST;
     if (this.bindAddress === "::") return "::1";
     return this.bindAddress;
   }

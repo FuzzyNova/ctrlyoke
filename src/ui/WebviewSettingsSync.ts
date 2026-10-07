@@ -27,6 +27,7 @@ import {
   TRUST_DECISIONS,
   getEffectiveParallelGroupWidth,
   getDashboardHostCapabilities,
+  SERVER_BIND_ADDRESSES,
 } from "../types/DashboardConstants";
 import type {
   DashboardHostActions,
@@ -1664,7 +1665,7 @@ export class WebviewSettingsSync {
       configService.get(CONFIG_KEYS.SERVER)?.bindAddress ?? "127.0.0.1";
     const certificate = await this.certificateService.generate(
       certsDir,
-      bindAddress === "0.0.0.0"
+      bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
     );
 
     await configService.set(

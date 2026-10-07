@@ -57,8 +57,10 @@ export type DashboardHostAction =
   (typeof DASHBOARD_HOST_ACTIONS)[keyof typeof DASHBOARD_HOST_ACTIONS];
 
 type OptionalDashboardHostAction = {
-  [Key in keyof DashboardHostActions]-?: Pick<DashboardHostActions, Key> extends
-    Required<Pick<DashboardHostActions, Key>>
+  [Key in keyof DashboardHostActions]-?: Pick<
+    DashboardHostActions,
+    Key
+  > extends Required<Pick<DashboardHostActions, Key>>
     ? never
     : Key;
 }[keyof DashboardHostActions];
@@ -219,6 +221,15 @@ export const LINE_ENDINGS = {
 export const NETWORK_INTERFACE_FAMILIES = {
   IPV4: "IPv4",
 } as const;
+
+/** Hosted-server `server.bindAddress` values: localhost only, or every interface (LAN). */
+export const SERVER_BIND_ADDRESSES = {
+  LOCALHOST: "127.0.0.1",
+  ALL_INTERFACES: "0.0.0.0",
+} as const;
+
+export type ServerBindAddress =
+  (typeof SERVER_BIND_ADDRESSES)[keyof typeof SERVER_BIND_ADDRESSES];
 
 /** Promise settlement states used when inspecting concurrent operations. */
 export const PROMISE_SETTLED_STATUSES = {

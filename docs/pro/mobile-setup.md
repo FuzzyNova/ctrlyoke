@@ -36,7 +36,8 @@ Settings**), and open the **Server** tab.
 
 3. Select **Generate self-signed certificate**. Check that the list of
    addresses under **Cert generated** includes your computer's network address
-   (such as `192.168.x.x`), not only `localhost` and `127.0.0.1`.
+   (such as `192.168.x.x`), not only `localhost` and `127.0.0.1`. ctrlyoke
+   shows a warning under the certificate when it doesn't.
 
    ![A generated certificate listing localhost, 127.0.0.1, and the computer's network addresses](/screenshots/desktop-server-setup-03-certificate-generated-628x400.png)
 

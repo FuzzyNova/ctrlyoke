@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import {
   EXECUTION_MODES,
   type ServerThemeMode,
+  SERVER_BIND_ADDRESSES,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import type { CtrlYokeGlobalSettings } from "../types/CtrlYokeSettings";
@@ -167,7 +168,7 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     } else {
       const generated = await new ServerCertificateService().generate(
         path.join(ctrlyokeStateHome(), "certs"),
-        initial.bindAddress === "0.0.0.0"
+        initial.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
       );
       certPath = generated.certPath;
       keyPath = generated.keyPath;
