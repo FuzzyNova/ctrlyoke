@@ -396,6 +396,42 @@ describe("MarkdownText", () => {
       await screen.findByRole("button", { name: /copied/i })
     ).toBeInTheDocument();
   });
+
+  it.each([
+    ["with a language", "```ts\nconst x = 1;\nconst y = 2;\n```"],
+    ["without a language", "```\nconst x = 1;\nconst y = 2;\n```"],
+  ])(
+    "copies a fenced code block %s to the clipboard",
+    async (_label, markdown) => {
+      const user = userEvent.setup();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      });
+
+      render(<MarkdownText>{markdown}</MarkdownText>);
+
+      await user.click(
+        await screen.findByRole("button", { name: /copy code/i })
+      );
+
+      expect(writeText).toHaveBeenCalledWith("const x = 1;\nconst y = 2;");
+    }
+  );
+
+  it("gives inline code and mermaid fences no code-block copy button", async () => {
+    render(
+      <MarkdownText>
+        {"Use `npm test` here.\n\n```mermaid\ngraph TD\n  A --> B\n```"}
+      </MarkdownText>
+    );
+
+    await screen.findByRole("button", { name: /copy source/i });
+    expect(
+      screen.queryByRole("button", { name: /copy code/i })
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("MarkdownText context references in replies", () => {

@@ -6,7 +6,11 @@ import React, {
   useRef,
   useEffect,
 } from "react";
-import { Streamdown, defaultRemarkPlugins } from "streamdown";
+import {
+  CodeBlockCopyButton,
+  Streamdown,
+  defaultRemarkPlugins,
+} from "streamdown";
 import type { ControlsConfig } from "streamdown";
 import mermaid from "mermaid";
 import { findAndReplace } from "mdast-util-find-and-replace";
@@ -947,6 +951,12 @@ let mermaidIdCounter = 0;
 const MERMAID_HEADER_BTN_CLASS =
   "inline-flex items-center justify-center rounded-sm px-1.5 py-0.5 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed";
 
+// Always visible, like the table and mermaid controls. Floated into the
+// fence's top-right corner (rather than absolutely positioned) so the first
+// lines of code wrap around it instead of running underneath.
+const CODE_BLOCK_COPY_BUTTON_CLASS =
+  "float-right -mr-1.5 -mt-1.5 ml-2 inline-flex items-center justify-center rounded-sm p-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
+
 // Module-level cache of rendered SVG keyed by diagram source. Mermaid blocks
 // unmount when virtualized out of view; caching lets a re-realized block show
 // the diagram instantly (and at its already-measured height) instead of
@@ -1496,11 +1506,25 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       // ── Code block wrapper ─────────────────────────────────────────────
       // Preserve indentation while still allowing long code lines to wrap
       // inside narrow output panes instead of forcing horizontal overflow.
-      pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
-        <pre className="bg-editor-bg border border-panel-border rounded-sm p-3 my-2 font-mono whitespace-pre-wrap wrap-anywhere">
-          {preChildren}
-        </pre>
-      ),
+      // Streamdown's own `controls.code` copy button lives in its default
+      // code renderer, which `code` above replaces, so the fence's copy
+      // button is added here instead. Mermaid blocks carry their own.
+      pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => {
+        const isMermaid =
+          React.isValidElement<{ className?: string }>(preChildren) &&
+          preChildren.props.className === "language-mermaid";
+        return (
+          <pre className="bg-editor-bg border border-panel-border rounded-sm p-3 my-2 font-mono whitespace-pre-wrap wrap-anywhere">
+            {!isMermaid && (
+              <CodeBlockCopyButton
+                code={getNodeText(preChildren).replace(/\n$/, "")}
+                className={CODE_BLOCK_COPY_BUTTON_CLASS}
+              />
+            )}
+            {preChildren}
+          </pre>
+        );
+      },
     }),
     [
       atomicContextReferences,
