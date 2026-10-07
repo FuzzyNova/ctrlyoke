@@ -611,6 +611,9 @@ suite("CompletionCore git change completions", function () {
 suite("VsCodeSymbolIndex completion golden", () => {
   const originalExecuteCommand = vscode.commands.executeCommand;
   const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+  const originalTextDocuments = vscode.workspace.textDocuments;
+  const originalOpenTextDocument = vscode.workspace.openTextDocument;
+  const originalShowTextDocument = vscode.window.showTextDocument;
   const originalGetConfiguration = vscode.workspace.getConfiguration;
   setup(() => {
     Object.defineProperty(vscode.workspace, "workspaceFolders", {
@@ -622,6 +625,10 @@ suite("VsCodeSymbolIndex completion golden", () => {
           index: 0,
         },
       ],
+    });
+    Object.defineProperty(vscode.workspace, "textDocuments", {
+      configurable: true,
+      value: [],
     });
     Object.defineProperty(vscode.workspace, "getConfiguration", {
       configurable: true,
@@ -637,10 +644,84 @@ suite("VsCodeSymbolIndex completion golden", () => {
       configurable: true,
       value: originalWorkspaceFolders,
     });
+    Object.defineProperty(vscode.workspace, "textDocuments", {
+      configurable: true,
+      value: originalTextDocuments,
+    });
+    Object.defineProperty(vscode.workspace, "openTextDocument", {
+      configurable: true,
+      value: originalOpenTextDocument,
+    });
+    Object.defineProperty(vscode.window, "showTextDocument", {
+      configurable: true,
+      value: originalShowTextDocument,
+    });
     Object.defineProperty(vscode.workspace, "getConfiguration", {
       configurable: true,
       value: originalGetConfiguration,
     });
+  });
+
+  test("opens a hidden TS anchor before querying symbols when no TS document is open", async () => {
+    const root = path.join(os.tmpdir(), "symbol-golden");
+    let opened: vscode.Uri | undefined;
+    let shown = false;
+    Object.defineProperty(vscode.workspace, "openTextDocument", {
+      configurable: true,
+      value: (uri: vscode.Uri) => {
+        opened = uri;
+        return Promise.resolve({} as vscode.TextDocument);
+      },
+    });
+    Object.defineProperty(vscode.window, "showTextDocument", {
+      configurable: true,
+      value: () => {
+        shown = true;
+        return Promise.resolve({} as vscode.TextEditor);
+      },
+    });
+    Object.defineProperty(vscode.commands, "executeCommand", {
+      configurable: true,
+      value: (() => Promise.resolve([])) as typeof originalExecuteCommand,
+    });
+
+    await new VsCodeSymbolIndex(async () => [
+      "tsconfig.json",
+      "src/index.ts",
+    ]).workspaceSymbols("Index", 20);
+
+    assert.strictEqual(
+      opened?.fsPath.toLowerCase(),
+      path.join(root, "src", "index.ts").toLowerCase()
+    );
+    assert.strictEqual(shown, false);
+  });
+
+  test("does not open an anchor when a TS document is already open", async () => {
+    const document = { languageId: "typescript" } as vscode.TextDocument;
+    let openCount = 0;
+    Object.defineProperty(vscode.workspace, "textDocuments", {
+      configurable: true,
+      value: [document],
+    });
+    Object.defineProperty(vscode.workspace, "openTextDocument", {
+      configurable: true,
+      value: () => {
+        openCount++;
+        return Promise.resolve(document);
+      },
+    });
+    Object.defineProperty(vscode.commands, "executeCommand", {
+      configurable: true,
+      value: (() => Promise.resolve([])) as typeof originalExecuteCommand,
+    });
+
+    await new VsCodeSymbolIndex(async () => [
+      "tsconfig.json",
+      "src/index.ts",
+    ]).workspaceSymbols("Index", 20);
+
+    assert.strictEqual(openCount, 0);
   });
 
   test("converts a VS Code Class symbol through LSP numbering to the legacy insertion and kind", async () => {

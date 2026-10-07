@@ -1,5 +1,7 @@
 # VS Code-hosted `#` symbol completions are empty until a file of that language is opened
 
+**Resolution:** fixed in this commit
+
 - **Found:** 2026-10-07 by Nathan (manual testing)
 - **Area:** `src/platform/VsCodeSymbolIndex.ts`, `src/completions/CompletionHelpers.ts`
 - **Severity:** medium

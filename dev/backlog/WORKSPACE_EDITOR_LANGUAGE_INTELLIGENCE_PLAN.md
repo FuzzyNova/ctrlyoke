@@ -1,8 +1,10 @@
 # Workspace Editor Language Intelligence Plan
 
-**Status (2026-10-07):** Proposed and decided. The `SymbolIndex` port and
+**Status (2026-10-07):** Proposed and decided. Phases 7a, 7-regex, and 7c
+are complete. The `SymbolIndex` port and
 `VsCodeSymbolIndex` (phase 7a) plus `RegexSymbolIndex` (phase 7-regex, staging
-Stage 9) are complete. Remaining phases are ready to implement in sequence.
+Stage 9) are complete, along with the VS Code cold-start fallback and anchor
+warm-up. Remaining phases are ready to implement in sequence.
 Every code reference was re-audited against `src/` on 2026-10-07, after the
 standalone server shipped. That pass corrected stale locations, fixed the
 standalone trust claim, and added three things:
@@ -879,8 +881,8 @@ Staging numbers refer to
      port landed in decoupling **Stage 5b**. VS Code behavior is preserved.
    - **Done — 7-regex (2026-10-06).** `RegexSymbolIndex` ships with standalone
      **Stage 9** as standalone v1's `#` source.
-   - **7c. VS Code cold start** (independent **Stage I2**; see "VS Code
-     cold start").
+   - **Done — 7c (2026-10-07).** VS Code cold start (independent **Stage I2**;
+     see "VS Code cold start").
      - Add `FallbackSymbolIndex` in `src/completions/`, wrapping
        `VsCodeSymbolIndex` with `RegexSymbolIndex` in
        `CompletionHelpers.getCompletionCore`.

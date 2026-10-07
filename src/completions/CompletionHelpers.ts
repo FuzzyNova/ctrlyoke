@@ -3,8 +3,13 @@ import { configService } from "../config/CtrlYokeConfigService";
 import { Log } from "../utils/Log";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
-import { isMultiRootWorkspace } from "../platform/VsCodeWorkspaceRoot";
+import {
+  getVsCodeWorkspaceRoot,
+  isMultiRootWorkspace,
+} from "../platform/VsCodeWorkspaceRoot";
 import { VsCodeSymbolIndex } from "../platform/VsCodeSymbolIndex";
+import { RegexSymbolIndex } from "./RegexSymbolIndex";
+import { FallbackSymbolIndex } from "./FallbackSymbolIndex";
 import { VsCodeEditorContextSource } from "../platform/VsCodeEditorContextSource";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
 import { CompletionCore, type PlainCompletionItem } from "./CompletionCore";
@@ -20,36 +25,41 @@ let completionCore: CompletionCore | undefined;
 /** VS Code composition root for the host-neutral completion engine. */
 export function getCompletionCore(): CompletionCore {
   if (!completionCore) {
+    const getCompletionFiles = async (): Promise<string[]> => {
+      const folders = vscode.workspace.workspaceFolders ?? [];
+      const results: string[] = [];
+      for (const folder of folders) {
+        let paths: string[];
+        try {
+          paths = await getGitTrackedFiles(folder.uri.fsPath);
+        } catch (error) {
+          Log.warn(
+            `[Completions] git ls-files failed for ${folder.name}, falling back to workspace walk:`,
+            error
+          );
+          paths = (
+            await walkSearchFiles(
+              folder.uri.fsPath,
+              Date.now(),
+              100_000,
+              10_000
+            )
+          ).files;
+        }
+        for (const file of paths) {
+          results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
+        }
+      }
+      return results;
+    };
+    const root = getVsCodeWorkspaceRoot();
     completionCore = new CompletionCore({
       isMultiRoot: isMultiRootWorkspace,
-      getFiles: async () => {
-        const folders = vscode.workspace.workspaceFolders ?? [];
-        const results: string[] = [];
-        for (const folder of folders) {
-          let paths: string[];
-          try {
-            paths = await getGitTrackedFiles(folder.uri.fsPath);
-          } catch (error) {
-            Log.warn(
-              `[Completions] git ls-files failed for ${folder.name}, falling back to workspace walk:`,
-              error
-            );
-            paths = (
-              await walkSearchFiles(
-                folder.uri.fsPath,
-                Date.now(),
-                100_000,
-                10_000
-              )
-            ).files;
-          }
-          for (const file of paths) {
-            results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
-          }
-        }
-        return results;
-      },
-      symbols: new VsCodeSymbolIndex(),
+      getFiles: getCompletionFiles,
+      symbols: new FallbackSymbolIndex(
+        new VsCodeSymbolIndex(getCompletionFiles),
+        new RegexSymbolIndex(root, getCompletionFiles)
+      ),
       editorContext: new VsCodeEditorContextSource(),
     });
   }

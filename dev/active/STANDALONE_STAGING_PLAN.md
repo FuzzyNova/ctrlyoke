@@ -1,9 +1,9 @@
 # Standalone Server Staging Plan
 
 **Status (2026-10-07):** Track A Stages 1–6 and Track B Stages 7a, 7b, 8,
-9, and 10 are complete; independent Stage I1 is also complete. Track C is
-next. The LSP plan was re-audited and its settings UX defined on 2026-10-07,
-and independent Stage I2 (VS Code `#` cold start) was added. The decoupling plan
+9, and 10 are complete; independent Stages I1 and I2 are also complete. Track C
+is next. The LSP plan was re-audited and its settings UX defined on 2026-10-07,
+and independent Stage I2 (VS Code `#` cold start) was implemented. The decoupling plan
 has moved to `dev/implemented/`. Its two remaining phases (Node composition
 and shim retirement) now live in the standalone plan as Stages 7a and 10.
 This document only sets the order of work. It contains no design. The design lives
@@ -113,7 +113,7 @@ names the guard or test that proves it, not just the code change.
 | Stage | Work                                                                                                                                                                                                                                                    | Owning plan / phase | Prerequisite                                                                                              | Done when                                                                                                                                                                                                                                                                      |
 | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 |    I1 | **Done.** Save conflicts and reload banner:<br>• `modifiedAt`/`baseModifiedAt` and 409 on a stale save.<br>• `WORKSPACE_FILE_CHANGED` broadcast, and a viewer refresh on external change.<br>• Reload/Compare/Keep-mine banner.                         | LSP phase 0         | None in the VS Code-hosted server (VS Code watcher). Standalone external-change detection needs Stage 7a. | Two-tab coverage proves the stale save returns 409 and file changes broadcast to both clients; editor coverage proves clean buffers reload silently and dirty buffers show the banner. Must land before Stage 11.                                                              |
-|    I2 | VS Code `#` cold start:<br>• `FallbackSymbolIndex` (VS Code primary, `RegexSymbolIndex` when it returns nothing).<br>• On-demand hidden anchor document (`openTextDocument`, never shown) so the TS extension activates and tsserver loads the project. | LSP phase 7c        | None (Stage 9's `RegexSymbolIndex` is already done).                                                      | Unit tests cover fallback on empty and no fallback otherwise. A `VsCodeSymbolIndex` test proves it opens the anchor without showing it and opens nothing when a TS document is already open. Fixes `dev/bugs/backlog/vscode-hash-symbols-empty-until-language-file-opened.md`. |
+|    I2 | **Done.** VS Code `#` cold start:<br>• `FallbackSymbolIndex` (VS Code primary, `RegexSymbolIndex` when it returns nothing).<br>• On-demand hidden anchor document (`openTextDocument`, never shown) so the TS extension activates and tsserver loads the project. | LSP phase 7c        | None (Stage 9's `RegexSymbolIndex` is already done).                                                      | Unit tests cover fallback on empty and no fallback otherwise. A `VsCodeSymbolIndex` test proves it opens the anchor without showing it and opens nothing when a TS document is already open. Resolves `dev/bugs/implemented/vscode-hash-symbols-empty-until-language-file-opened.md`. |
 
 ## Notes
 
