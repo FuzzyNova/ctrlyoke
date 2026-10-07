@@ -36,6 +36,7 @@ import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { CtrlYokeHostedServer } from "../server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "../server/HostedServerOptionsFactory";
 import { setRuntimeMode } from "../utils/RuntimeMode";
+import { initializeModelRegistry } from "../utils/ModelRegistry";
 
 class MemorySecretStore implements SecretStore {
   private readonly values = new Map<string, string>();
@@ -256,6 +257,14 @@ export async function createNodeHostedServer(options: {
   dashboardApplication.setHub(hub);
   orchestrator.getDashboardBroadcastHub().addClient(dashboardApplication);
   dashboardApplication.start();
+  // Discover the dynamic model lists (Copilot, OpenCode, Qwen, Antigravity)
+  // after start() subscribes to onModelsLoaded, so connected tabs get the
+  // refreshed dropdowns when discovery finishes.
+  initializeModelRegistry().catch((error: unknown) => {
+    Log.warn(
+      `[NodeHostServices] Model registry initialization failed: ${String(error)}`
+    );
+  });
   // There is no VS Code panel to send the READY that starts the startup
   // auto-load, and browser tabs only get STARTUP_COMPLETE once it settles.
   // Browser tabs are this host's only dashboard, so it is ready immediately.

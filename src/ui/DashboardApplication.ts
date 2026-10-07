@@ -207,8 +207,8 @@ export class DashboardApplication
     this.settingsSync.discoverSkills();
     this.disposables.push(
       onModelsLoaded(() => {
-        if (this.options.isPanelReady())
-          this.settingsSync.sendModelOptionsUpdate();
+        const broadcast = this.getSettingsBroadcast();
+        if (broadcast) this.settingsSync.sendModelOptionsUpdate(broadcast);
       }),
       this.options.licenseService?.onDidChangeEntitlement(() => {
         void this.settingsSync.sendLicenseAccessUpdate(
@@ -217,10 +217,8 @@ export class DashboardApplication
       }) ?? { dispose: () => undefined }
     );
     const sendGlobalSettingsUpdate = (): void => {
-      if (!this.options.isPanelReady()) return;
-      this.settingsSync.sendGlobalSettingsUpdate(
-        this.hub ? (message) => this.hub!.postMessage(message) : undefined
-      );
+      const broadcast = this.getSettingsBroadcast();
+      if (broadcast) this.settingsSync.sendGlobalSettingsUpdate(broadcast);
     };
     this.unsubscribers.push(
       configService.subscribe(sendGlobalSettingsUpdate),
@@ -236,6 +234,19 @@ export class DashboardApplication
 
   setHub(hub: DashboardBroadcastHub): void {
     this.hub = hub;
+  }
+
+  /**
+   * Where to send a host-initiated settings refresh, or undefined when no
+   * dashboard can receive it yet (INIT will carry the state instead).
+   *
+   * Prefers the hub so browser tabs get the refresh too — the standalone
+   * server has no panel at all, and a VS Code-hosted server's tabs may be
+   * connected while the panel is closed.
+   */
+  private getSettingsBroadcast(): PostMessageFn | undefined {
+    if (this.hub) return (message) => this.hub!.postMessage(message);
+    return this.options.isPanelReady() ? this.options.postMessage : undefined;
   }
 
   postMessage(message: unknown): void {

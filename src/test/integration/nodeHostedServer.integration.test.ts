@@ -244,6 +244,40 @@ suite("Node hosted server composition", function () {
     await startupComplete;
   });
 
+  test("delivers discovered model lists to browser tabs without a VS Code panel", async () => {
+    assert.ok(runtime);
+    const socket = await openSocket(runtime.url, "model-options-client");
+    sockets.push(socket);
+    // The model registry was only initialized by extension.ts, and its
+    // "loaded" refresh only reached a ready VS Code panel, so standalone tabs
+    // showed nothing but "None" for the dynamically discovered harnesses.
+    // Discovery may finish before or after this tab's INIT, so accept either
+    // carrier; both fall back to non-empty static lists when a CLI is absent.
+    const modelOptionsOf = (
+      message: ReceivedMessage
+    ): Record<string, unknown[]> | undefined => {
+      if (
+        message.type !== MESSAGE_TYPES.INIT &&
+        message.type !== MESSAGE_TYPES.MODEL_OPTIONS_UPDATE
+      ) {
+        return undefined;
+      }
+      return (message.data as { modelOptions?: Record<string, unknown[]> })
+        ?.modelOptions;
+    };
+    const isPopulated = (message: ReceivedMessage): boolean => {
+      const options = modelOptionsOf(message);
+      // Each list always starts with the "None" option.
+      return (
+        (options?.[HARNESS_IDS.COPILOT_CLI]?.length ?? 0) > 1 &&
+        (options?.[HARNESS_IDS.OPENCODE_CLI]?.length ?? 0) > 1
+      );
+    };
+    const populated = waitForMessage(socket, isPopulated, 50_000);
+    socket.send(JSON.stringify({ type: MESSAGE_TYPES.READY }));
+    await populated;
+  });
+
   test("serves standalone @, #, ~, and / prompt completions over WebSocket", async () => {
     assert.ok(runtime);
     const socket = await openSocket(runtime.url, "completion-client");
