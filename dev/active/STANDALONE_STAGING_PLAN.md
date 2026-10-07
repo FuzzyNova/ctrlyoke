@@ -200,6 +200,30 @@ names the guard or test that proves it, not just the code change.
     passed (extension 5596 passing/4 pending, UI 3454 passing, packaging 80
     passing). The packed-build `--open` bug was fixed and verified from the
     rebuilt tarball.
+- **Track C session split (2026-10-07).** Stages 12–15 are each too large
+  for one session. Run order: **I2 → 12a → 12b → 13a → 13b → 14a → 14b →
+  15a → 15b → 16 → 17**. Each sub-stage commits on its own.
+  - **12a:** host spine — shared workspace-root containment helper,
+    `LanguageServerBackend` seam with an in-memory fake, `LspSessionProxy`,
+    `LanguageIntelligenceHost`, `/ws/lsp` on its own `WebSocketServer`,
+    `GET /api/lsp/session`, both hosts' composition, `SourceAuditCounters` entry.
+  - **12b:** browser — install `@codemirror/lsp-client`, WebSocket transport,
+    `useLanguageIntelligence`, `Compartment` slot in `WorkspaceFileEditor`.
+  - **13a:** `languageServers` schema/settings plumbing, curated catalog data,
+    command resolution/probe.
+  - **13b:** `ManagedLanguageServerBackend` lifecycle (spawn, idle, cap/LRU,
+    crash restart), workspace-definition approval, trust gate, `startOnLaunch`.
+  - **14a:** proxy-applied `WorkspaceEdit` (unopened files via the viewer
+    service, cross-tab buffer edits, redacted-file rejection) and the
+    multi-file rename confirmation.
+  - **14b:** context-menu group, F12, references panel, capability gating.
+  - **15a:** `LanguageServerManagerService`, message constants, local-config
+    discovery, npm install, live status push.
+  - **15b:** `useLanguageServerStore`, `LanguageServersSection`, shared helper
+    extraction from `McpManagerSection`.
+  - Warm-on-`#` moved from 13 to **16** (its only consumer).
+  - **17** ships harness export only. The Node `DiagnosticsSource` becomes
+    **17b**, blocked on `VSCODE_LSP_MCP_PLAN.md` Phase 1 defining the port.
 - **Phase 5 of the LSP plan (the navigation-only VS Code provider backend) is
   dropped.** It isn't scheduled. The reasoning is in that plan's resolved open
   questions.

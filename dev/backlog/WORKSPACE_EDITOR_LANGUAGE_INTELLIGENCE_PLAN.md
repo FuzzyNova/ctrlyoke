@@ -800,6 +800,20 @@ Staging numbers refer to
    - A new `HostedServerOptions` field carries the `LanguageIntelligenceHost`,
      built in `createNodeHostServices` and in `extension.ts`'s hosted-server
      composition.
+   - **Session lookup (decided 2026-10-07).** The hook learns which session
+     serves a file from a token-gated HTTP route,
+     `GET /api/lsp/session?path=<viewerPath>`, returning
+     `{ session: { id, languageId } | null, reason? }` (`reason` covers "no
+     server", "limit reached", "needs approval", "untrusted"). Types live in
+     `src/types/HostedWorkspaceViewerTypes.ts`. The socket is then
+     `/ws/lsp?server=<id>&token=…`; one socket per session serves every file
+     of that language in the tab.
+   - **Backend seam.** `LanguageIntelligenceHost` gets its server connections
+     from an injected `LanguageServerBackend` interface (resolve a server for
+     a path, start/obtain a `MessageConnection`). Stage 12 ships only the
+     interface plus a test fake that speaks LSP over in-memory stdio streams;
+     production composition passes a backend that resolves nothing, so the
+     editor is unchanged until Stage 13 supplies `ManagedLanguageServerBackend`.
    - `LanguageIntelligenceHost` + `LspSessionProxy` in `src/server/lsp/`: id
      rewriting, didOpen ref-counting, URI ⇄ viewer-path translation,
      containment, and outbound secret redaction.
@@ -830,8 +844,9 @@ Staging numbers refer to
      each server's docs and Helix `languages.toml`.
    - PATH, tool-dir, and workspace `node_modules/.bin` resolution through
      `resolveCliCommand`.
-   - Spawn/idle/cap/restart lifecycle, `startOnLaunch`, warm-on-`#` with
-     anchor documents, and the trust gate.
+   - Spawn/idle/cap/restart lifecycle, `startOnLaunch`, and the trust gate.
+     Warm-on-`#` (first-`#` start and anchor documents) moved to phase 7b /
+     Stage 16 on 2026-10-07, because `LspSymbolIndex` is its only consumer.
 
    This delivers completion, hover, definition, references, rename, signature
    help, formatting, and diagnostics.
@@ -854,7 +869,10 @@ Staging numbers refer to
 5. ~~**VS Code provider backend.**~~ **Dropped 2026-10-06.** See Open
    Question 1.
 6. **Harness export + `DiagnosticsSource` port** (**Stage 17**, coordinated
-   with `VSCODE_LSP_MCP_PLAN.md`; see "Harness side" item 3).
+   with `VSCODE_LSP_MCP_PLAN.md`; see "Harness side" item 3). As of
+   2026-10-07 `DiagnosticsSource` doesn't exist, so Stage 17 ships the
+   export half only; the Node `DiagnosticsSource` waits for that plan's
+   Phase 1 (staging Stage 17b).
 7. **`SymbolIndex` port**, split across four stages:
    - **Done — 7a (2026-10-06).** `SymbolIndex`, `VsCodeSymbolIndex`, the
      one-time SymbolKind numbering conversion, and callers moved onto the
@@ -875,6 +893,9 @@ Staging numbers refer to
          With a TS document already open, it opens nothing.
    - **7b. `LspSymbolIndex`.** **Stage 16**, wired by the standalone
      composition root, with the regex index as the per-language fallback.
+     Includes the warm-on-`#` rules from "Standalone: servers must be warm
+     for `#`" (first-`#` start within the cap, anchor `didOpen` per root
+     marker, `#` counts as idle activity).
      Reuse `FallbackSymbolIndex` if per-language fallback reduces to it;
      otherwise extend it rather than adding a second wrapper.
    - Tests: a golden test that each index produces identical `#sym:` insert
