@@ -2,9 +2,8 @@
 
 **Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
 server implementation has started: Track A (Stages 1–6), Track B sub-stages
-7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stage 8a are complete.
-Stage 8b (packaging and CLI documentation) remains. Every fact in
-this document was re-audited against `src/` on 2026-10-06, and every open
+7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stage 8 are complete.
+Every fact in this document was re-audited against `src/` on 2026-10-06, and every open
 question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
 
 **Sequencing:** [`STANDALONE_STAGING_PLAN.md`](STANDALONE_STAGING_PLAN.md) is
@@ -434,10 +433,21 @@ factory.
 
 ### Phase 10: the `ctrlyoke server` command and launch UX (Stage 8)
 
-**8a complete:** the command, config resolution, tokenized launch output, TLS
-certificate generation, browser opening, and graceful signal shutdown are
-implemented. Packaging, npm artifact verification, and CLI documentation are
-owned by 8b.
+**Stage 8 complete.** 8a implemented the command, config resolution, tokenized
+launch output, TLS certificate generation, browser opening, and graceful
+signal shutdown. 8b ships the server assets and CLI reference.
+
+**8b verification:** `npm run build:prod` and `node
+scripts/build-npm-package.mjs` completed. The packed tarball installed into a
+clean temporary prefix outside the repository and `ctrlyoke server` served
+tokenized dashboard HTML, the standalone shim, and default theme CSS; an
+authenticated `/ws` connection opened. The package test also passed its file
+list, install, version, and validate checks. No Playwright MCP was attached, so
+no browser workflow was run. `npm run typecheck`, `npm run lint`, and
+`npm run check:docs` passed. The one `npm test` run passed UI and reported four
+extension failures because run-history location was not initialized, plus
+packaging assertion failures fixed and verified by the passing focused package
+test.
 
 Add a `server` subcommand in a new `src/cli/ServerCommandDefinitions.ts`,
 following the existing `*CommandDefinitions.ts` pattern. Config resolution

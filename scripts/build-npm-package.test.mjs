@@ -61,6 +61,14 @@ test("generated package.json is standalone and mirrors the root version", () => 
     ctrlyoke: "out/cli.js",
     "ctrlyoke-mcp": "out/mcp-server.js",
   });
+  assert.deepEqual(
+    NPM_PACKAGE_ENTRIES.filter((entry) =>
+      ["out/server/", "out/ui/webview-react/", "out/runtime-deps/"].includes(
+        entry
+      )
+    ),
+    ["out/server/", "out/ui/webview-react/", "out/runtime-deps/"]
+  );
   assert.equal(manifest.engines.node, ROOT_PACKAGE.engines.node);
   assert.equal(manifest.license, ROOT_PACKAGE.license);
   assert.deepEqual(manifest.repository, ROOT_PACKAGE.repository);
@@ -81,10 +89,13 @@ test("every packaged out/ entry also ships in the VSIX", () => {
     path.join(ROOT_DIR, ".vscodeignore"),
     "utf8"
   );
+  const allowlist = vscodeignore.replace(/\r\n/g, "\n").split("\n");
   for (const entry of NPM_PACKAGE_ENTRIES.filter((e) => e.startsWith("out/"))) {
-    const pattern = entry.endsWith("/") ? `!${entry}` : `!${entry}\n`;
+    const allowed = entry.endsWith("/")
+      ? allowlist.some((line) => line.startsWith(`!${entry}`))
+      : allowlist.includes(`!${entry}`);
     assert.ok(
-      vscodeignore.replace(/\r\n/g, "\n").includes(pattern),
+      allowed,
       `.vscodeignore must allowlist ${entry}`
     );
   }
@@ -117,14 +128,28 @@ test("the packed tarball installs and runs", async (t) => {
           `package must contain ${entry}`
         );
       }
+      for (const runtimeAsset of [
+        "out/server/standalone-shim.js",
+        "out/server/themes/vscode-default-dark.css",
+        "out/server/themes/vscode-default-light.css",
+        "out/ui/webview-react/index.html",
+      ]) {
+        assert.ok(
+          files.includes(runtimeAsset),
+          `package must contain ${runtimeAsset}`
+        );
+      }
+      assert.ok(
+        files.some((file) => file.startsWith("out/runtime-deps/node_modules/")),
+        "package must contain isolated runtime dependencies"
+      );
       assert.ok(files.includes("README.md") && files.includes("package.json"));
       for (const file of files) {
         assert.ok(!file.endsWith(".map"), `${file}: no source maps`);
       }
       for (const extensionOnly of [
         "out/extension.js",
-        "out/ui/",
-        "out/server/",
+        "out/ui/webview-scripts/",
         "node_modules/",
       ]) {
         assert.ok(

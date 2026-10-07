@@ -655,6 +655,7 @@
     "generate-icons": "npm run generate-sidebar-icon && npm run generate-app-icons && npm run generate-custom-icons",
     "precompile": "npm run generate-schema && npm run generate-schema-ui-descriptions && npm run generate-icons && node scripts/generate-step-palette.mjs",
     "compile": "npm run compile:extension && npm run compile:webview",
+    "server": "node out/cli.js server",
     "compile:extension": "npm run typecheck:extension && node esbuild.js",
     "compile:webview": "npm run generate-custom-icons && npm run typecheck:webview && vite build --config src/ui/webview-react/vite.config.ts --mode development",
     "compile:webview:react-debug": "npm run generate-custom-icons && vite build --config src/ui/webview-react/vite.config.ts --mode react-debug",

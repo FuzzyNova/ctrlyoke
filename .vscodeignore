@@ -47,6 +47,7 @@
 !out/server/standalone-shim.js
 !out/server/ctrlyoke-service-worker.js
 !out/server/hosted-error-page.html
+!out/server/**
 !out/ui/webview-scripts/*.js
 !out/ui/webview-react/index.html
 !out/ui/webview-react/*.css

@@ -31,6 +31,7 @@ ctrlyoke secret set <NAME> [--stdin] [--scope user|workspace] [--cwd <path>]
 ctrlyoke secret list [--cwd <path>]
 ctrlyoke secret rm <NAME> [--yes] [--scope user|workspace] [--cwd <path>]
 ctrlyoke secret check <file> [--cwd <path>]
+ctrlyoke server [--cwd <path>] [--port <n>] [--strict-port] [--bind <addr>] [--https] [--cert <path>] [--key <path>] [--theme <mode>] [--open] [--regenerate-token] [--verbose]
 ```
 
 `ctrlyoke --version` prints the CLI version. `ctrlyoke about` also shows
@@ -46,6 +47,39 @@ exact workflow name (case-insensitive). Exact keys take precedence. If a name
 matches one lineage, the CLI prints its key to stderr; ambiguous names list the
 matching keys and latest run dates. Use `ctrlyoke history list` to find a key
 when a name does not match.
+
+## `ctrlyoke server`
+
+Start the hosted dashboard for the current workspace. The server binds to
+`127.0.0.1` by default and prints a tokenized URL and terminal QR code. Keep
+the process running while using the dashboard; Ctrl+C stops it cleanly.
+
+```bash
+ctrlyoke server
+ctrlyoke server --cwd ./my-workspace --port 5000 --open
+ctrlyoke server --bind 0.0.0.0 --https
+```
+
+| Option | Meaning |
+| --- | --- |
+| `-d, --cwd <path>` | Workspace root (default: current directory) |
+| `-p, --port <n>` | Port to listen on; defaults to `server.port` (4747) |
+| `--strict-port` | Fail if the requested port is unavailable instead of trying fallback ports |
+| `--bind <addr>` | Bind address (default: `127.0.0.1`) |
+| `--https`, `--no-https` | Enable or disable HTTPS, overriding `server.tls.enabled` |
+| `--cert <path>` | TLS certificate path, overriding `server.tls.certPath` |
+| `--key <path>` | TLS private key path, overriding `server.tls.keyPath` |
+| `--theme <mode>` | Dashboard theme: `auto`, `light`, or `dark` |
+| `--open` | Open the tokenized dashboard URL in the default browser |
+| `--regenerate-token` | Rotate the persisted server token before starting |
+| `--verbose` | Enable diagnostic file logging |
+
+Options override matching `server.*` settings in `.ctrlyoke/settings.json`.
+For scripts, `npm run server` starts the dashboard from the current directory.
+`CTRLYOKE_SERVER_TOKEN` can supply a token without exposing it in process
+arguments. Non-loopback access is subject to the Pro remote-access gate. When
+HTTPS is enabled without a certificate pair, ctrlyoke can generate a
+certificate; phones may need to trust it before opening the dashboard.
 
 ## `ctrlyoke status`
 

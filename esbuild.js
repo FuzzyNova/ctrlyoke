@@ -524,6 +524,7 @@ async function main() {
       VERSION: JSON.stringify(packageJson.version || "0.0.0"),
       IS_DEV_MODE: "false", // CLI is always production-like
     },
+    plugins: [copyServerPlugin],
   });
 
   if (watch) {
