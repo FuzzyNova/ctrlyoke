@@ -63,7 +63,7 @@ suite("installSecretRedactionMiddleware", () => {
   // `token=[REDACTED]}`, so every browser client sent a literal "[REDACTED]"
   // as its auth token on `/ws` and never connected.
   test("serves the real standalone shim script byte-for-byte when opted out", async () => {
-    const script = buildHostedStandaloneShimScript();
+    const script = buildHostedStandaloneShimScript("test-workspace");
     assert.ok(
       script.includes("token=${encodeURIComponent(token)}"),
       "expected the shim's WebSocket URL builder to be present in the template"

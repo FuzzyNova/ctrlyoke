@@ -38,9 +38,10 @@ import {
   CtrlYokeHostedServer,
   maskHostedServerUrlToken,
 } from "./server/CtrlYokeHostedServer";
+import { createHostedServerOptions } from "./server/HostedServerOptionsFactory";
 import {
   GIT_CHANGE_KINDS,
-  LICENSE_UI,
+  HOST_KINDS,
   MESSAGE_TYPES,
   RUNNER_IDS,
   USER_FEEDBACK_SEVERITY,
@@ -1635,7 +1636,6 @@ function registerCommands(
     async () => {
       if (hostedServer) return;
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
-      const port = configService.get("server")?.port ?? 3000;
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
@@ -1643,45 +1643,26 @@ function registerCommands(
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
-      const bindAddress =
-        configService.get("server")?.bindAddress ?? "127.0.0.1";
-      const fallbackPorts = configService.get("server")?.fallbackPorts ?? [];
-      const tlsCfg = configService.get("server")?.tls;
-      const tlsConfig =
-        tlsCfg?.enabled && tlsCfg.certPath && tlsCfg.keyPath
-          ? { certPath: tlsCfg.certPath, keyPath: tlsCfg.keyPath }
-          : undefined;
-      const showRemoteAccessUpsell = () => {
-        const message = `ctrlyoke: ${LICENSE_UI.REMOTE_ACCESS_UPSELL}`;
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.WARNING,
-          message,
-          LICENSE_UI.PRICING_URL
-        );
-      };
       try {
-        hostedServer = new CtrlYokeHostedServer(
+        hostedServer = new CtrlYokeHostedServer(createHostedServerOptions({
           hub,
-          dashboardApplication,
-          () => workflowOrchestrator,
-          port,
+          endpoint: dashboardApplication,
+          getOrchestrator: () => workflowOrchestrator,
           workspaceRoot,
           namedWorkspaceRoots,
           token,
-          bindAddress,
-          tlsConfig,
-          (existingServerUrl) =>
+          licenseService,
+          getUserFeedbackSink: () => workflowOrchestrator.getUserFeedbackSink(),
+          onSiblingServerDetected: (existingServerUrl) =>
             notifyUserFeedback(
               workflowOrchestrator.getUserFeedbackSink(),
               USER_FEEDBACK_SEVERITY.WARNING,
               `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
             ),
-          () => licenseService.hasRemoteAccess(),
-          showRemoteAccessUpsell,
           runnerHostIdentity,
-          fallbackPorts
-        );
+          hostKind: HOST_KINDS.VSCODE,
+          fileWatcherFactory: new VsCodeFileWatcherFactory(),
+        }));
       } catch (err) {
         unprotectServerToken?.();
         unprotectServerToken = undefined;

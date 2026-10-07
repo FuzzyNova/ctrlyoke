@@ -289,7 +289,7 @@ from:
 
   A license is bound to the machine, not to one VS Code profile, and the
   same is eventually true for the CLI and the
-  [standalone server](../active/STANDALONE_SERVER_PLAN.md) — `CliAdapter`
+  [standalone server](../implemented/STANDALONE_SERVER_PLAN.md) — `CliAdapter`
   already defaults its `SecretStore` to `OsCredentialStore`
   (`src/platform/OsCredentialStore.ts`), the OS credential vault under a
   fixed `"ctrlyoke"` service name, shared by every process on the machine

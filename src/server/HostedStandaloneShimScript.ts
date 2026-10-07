@@ -12,11 +12,17 @@ const STANDALONE_SHIM_TEMPLATE_CANDIDATE_PATHS = [
   path.join(__dirname, "standalone-shim.js"),
 ];
 
-export function buildHostedStandaloneShimScript(): string {
-  return renderHostedStandaloneShimScript(getStandaloneShimTemplate());
+export function buildHostedStandaloneShimScript(workspaceKey: string): string {
+  return renderHostedStandaloneShimScript(
+    getStandaloneShimTemplate(),
+    workspaceKey
+  );
 }
 
-export function renderHostedStandaloneShimScript(template: string): string {
+export function renderHostedStandaloneShimScript(
+  template: string,
+  workspaceKey: string
+): string {
   const placeholderLiteral = JSON.stringify(CONNECTION_CONFIG_PLACEHOLDER);
   if (!template.includes(placeholderLiteral)) {
     throw new Error(
@@ -31,6 +37,7 @@ export function renderHostedStandaloneShimScript(template: string): string {
       heartbeatAckType: MESSAGE_TYPES.HOSTED_CONNECTION_HEARTBEAT_ACK,
       logMessageType: MESSAGE_TYPES.LOG_MESSAGE,
       readyType: MESSAGE_TYPES.READY,
+      workspaceKey,
       logLevels: {
         debug: LOG_LEVELS.DEBUG,
         info: LOG_LEVELS.INFO,

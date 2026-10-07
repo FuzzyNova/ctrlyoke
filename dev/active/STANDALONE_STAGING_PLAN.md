@@ -1,9 +1,9 @@
 # Standalone Server Staging Plan
 
-**Status (2026-10-06):** Track A Stages 1–6 are complete, and the decoupling
-plan has moved to `dev/implemented/`. Its two remaining phases (Node
-composition and shim retirement) now live in the standalone plan as part of
-Stages 7a and 10. Continue at Stage 7a.
+**Status (2026-10-06):** Track A Stages 1–6 and Track B Stages 7a, 7b, 8,
+9, and 10 are complete; independent Stage I1 is also complete. The decoupling plan
+has moved to `dev/implemented/`. Its two remaining phases (Node composition
+and shim retirement) now live in the standalone plan as Stages 7a and 10.
 This document only sets the order of work. It contains no design. The design lives
 in the three plans below, and this file arranges their remaining work into
 stages that can each be shipped on their own. All four documents were
@@ -14,7 +14,7 @@ re-audited against `src/` on 2026-10-06.
 - [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
   (implemented): the shared foundation. It owns the Node-only runtime graph, host ports, the
   host-neutral router, and the dashboard application.
-- [`STANDALONE_SERVER_PLAN.md`](STANDALONE_SERVER_PLAN.md): `ctrlyoke server`.
+- [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md): `ctrlyoke server`.
   It owns Node host composition, the shared HTTP/WebSocket server, launch UX,
   browser storage, themes, and packaging.
 - [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md):
@@ -86,14 +86,14 @@ names the guard or test that proves it, not just the code change.
 
 ### Track B: Standalone server
 
-| Stage | Work                                                                                                                                                                                                                                                                                                      | Owning plan / phase                                            | Prerequisite                         | Done when                                                                                                                                                                                                         |
-| ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    7a | Node host services and the shared server:<br>• `createNodeHostServices(cwd)`, including `FileKeyValueStore`, a persisted `ServerTokenStore` over `OsCredentialStore`, and the chokidar factory.<br>• Turn `CtrlYokeHostedServer` into the one options-object server class over `DashboardClientEndpoint`. | Standalone Phases 5–7                                          | Stage 6                              | An in-process test boots the server from Node host services alone, connects two WebSocket clients, and completes a workflow run. The VS Code-hosted server still passes its existing tests.                       |
-|    7b | Browser rendering and storage:<br>• Static default themes, with a guard test.<br>• Shim `workspaceKey` plus `storageVersion`.<br>• Rename `vsCodeStateStorage` → `webviewStateStorage`.<br>• Host-aware 401/error page text.                                                                              | Standalone Phase 4 and "State Persistence"                     | Stage 7a                             | Every `var(--vscode-*)` the webview references has a default, enforced by a test. With no captured vars, the hosted server serves the defaults. Drafts from two workspaces served on the same port don't collide. |
-|     8 | The `ctrlyoke server` command and launch UX:<br>• Flags.<br>• Tokenized URL, OSC 8 link, terminal QR, and TLS hint.<br>• `--open`.<br>• `--https` generates a cert through `ServerCertificateService`.<br>• npm package entries for `out/server/`, `out/ui/webview-react/`, and `out/runtime-deps/`.      | Standalone Phase 10                                            | Stage 7b                             | `npm pack` output runs `ctrlyoke server` from a clean temp directory, and a browser completes a workflow. The packaging test lists the new entries.                                                               |
-|     9 | Standalone prompt-editor completions: files from the Stage 5 core, `#` symbols from **`RegexSymbolIndex`**, and empty selection completions.                                                                                                                                                              | Standalone Phase 8, plus LSP plan phase 7 (`RegexSymbolIndex`) | Stage 8                              | The golden `#sym:` test covers `RegexSymbolIndex` on the shared fixture. `@`, `#`, `~`, and `/` completions work in a standalone browser.                                                                         |
-|    10 | Retire the Node-side shim: drop `registerCliAdapter`, remove the `vscode` alias from the cli/mcp/worker bundles, and delete `vscode-shim.ts`.                                                                                                                                                             | Standalone Phase 11                                            | Stage 9                              | `esbuild.js` contains no `vscode-shim` alias. A metafile check fails if any Node bundle includes `vscode` or a `src/platform/VsCode*` file.                                                                       |
-|    11 | Manual verification and user docs: `docs/` page for `ctrlyoke server`, the CLI reference, and the phone + laptop scenario.                                                                                                                                                                                | Standalone "Manual verification"                               | Stages 8–10 and Independent Stage I1 | The Track 3 checklist in the standalone plan passes on Windows and on Linux or macOS. Docs build and `npm run check:docs` passes.                                                                                 |
+| Stage | Work                                                                                                                                                                                                                                                                                                                                                         | Owning plan / phase                                            | Prerequisite                         | Done when                                                                                                                                                                                                                                                          |
+| ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|    7a | **Done.** Node host services and the shared server:<br>• `createNodeHostServices(cwd)`, including `FileKeyValueStore`, a persisted `ServerTokenStore` over `OsCredentialStore`, and the chokidar factory.<br>• Turn `CtrlYokeHostedServer` into the one options-object server class over `DashboardClientEndpoint`.                                          | Standalone Phases 5–7                                          | Stage 6                              | An in-process test boots the server from Node host services alone, connects two WebSocket clients, and completes a workflow run. The VS Code-hosted server still passes its existing tests.                                                                        |
+|    7b | **Done.** Browser rendering and storage:<br>• Static default themes, with a guard test.<br>• Shim `workspaceKey` plus `storageVersion`.<br>• Rename `vsCodeStateStorage` → `webviewStateStorage`.<br>• (Host-aware 401/error page text moved to 7a1.)                                                                                                        | Standalone Phase 4 and "State Persistence"                     | Stage 7a                             | Every `var(--vscode-*)` the webview references has a default, enforced by a test. With no captured vars, the hosted server serves the defaults. Drafts from two workspaces served on the same port don't collide.                                                  |
+|     8 | **Done.** The `ctrlyoke server` command and launch UX:<br>• 8a: flags, lifecycle, tokenized URL, OSC 8 link, terminal QR, TLS hint, `--open`, and HTTPS certificate generation.<br>• 8b: npm package entries for `out/server/`, `out/ui/webview-react/`, and `out/runtime-deps/`, CLI-build asset copy, packaging guard, smoke test, and CLI reference page. | Standalone Phase 10                                            | Stage 7b                             | Production build and packed install pass. Installed command serves tokenized HTML, shim, and theme CSS, and accepts an authenticated WebSocket connection. Browser workflow check is conditional on Playwright being attached.                                     |
+|     9 | **Done.** Standalone prompt-editor completions: files from the Stage 5 core, `#` symbols from **`RegexSymbolIndex`**, and empty selection completions.                                                                                                                                                                                                       | Standalone Phase 8, plus LSP plan phase 7 (`RegexSymbolIndex`) | Stage 8                              | The golden `#sym:` test covers `RegexSymbolIndex` on the shared fixture. `@`, `#`, `~`, and `/` completions work in a standalone browser.                                                                                                                          |
+|    10 | **Done.** Retire the Node-side shim: drop `registerCliAdapter`, remove the `vscode` alias from the cli/mcp/worker bundles, and delete `vscode-shim.ts`.                                                                                                                                                                                                      | Standalone Phase 11                                            | Stage 9                              | `esbuild.js` contains no `vscode-shim` alias. A metafile check fails if any Node bundle includes `vscode`, `@vscode/extension-telemetry`, or a `src/platform/VsCode*` file.                                                                                        |
+|    11 | **Docs and Windows packed-artifact checks complete; Nathan's browser/device/cross-OS checklist remains open.** Add the `ctrlyoke server` guide, CLI reference link, and phone + laptop scenario.                                                                                                                                                             | Standalone "Manual verification"                               | Stages 8–10 and Independent Stage I1 | Windows packed-artifact launch, `--open`, auth, HTTPS certificate serving, and clean SIGINT checks pass. Docs build, `npm run check:docs`, typecheck, lint, and the full `npm test` summary pass. Nathan's remaining checklist is recorded in the standalone plan. |
 
 ### Track C: Workspace editor language intelligence
 
@@ -108,9 +108,9 @@ names the guard or test that proves it, not just the code change.
 
 ### Independent stages (not on the critical path)
 
-| Stage | Work                                                                                                                                                                                                                  | Owning plan / phase | Prerequisite                                                                                              | Done when                                                                                                                                                                 |
-| ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    I1 | Save conflicts and reload banner:<br>• `modifiedAt`/`baseModifiedAt` and 409 on a stale save.<br>• `WORKSPACE_FILE_CHANGED` broadcast, and a viewer refresh on external change.<br>• Reload/Compare/Keep-mine banner. | LSP phase 0         | None in the VS Code-hosted server (VS Code watcher). Standalone external-change detection needs Stage 7a. | A two-tab test: the second save returns 409, and the other tab reloads silently when it has no unsaved edits or shows the banner when it does. Must land before Stage 11. |
+| Stage | Work                                                                                                                                                                                                                            | Owning plan / phase | Prerequisite                                                                                              | Done when                                                                                                                                                                                                         |
+| ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    I1 | **Done.** Save conflicts and reload banner:<br>• `modifiedAt`/`baseModifiedAt` and 409 on a stale save.<br>• `WORKSPACE_FILE_CHANGED` broadcast, and a viewer refresh on external change.<br>• Reload/Compare/Keep-mine banner. | LSP phase 0         | None in the VS Code-hosted server (VS Code watcher). Standalone external-change detection needs Stage 7a. | Two-tab coverage proves the stale save returns 409 and file changes broadcast to both clients; editor coverage proves clean buffers reload silently and dirty buffers show the banner. Must land before Stage 11. |
 
 ## Notes
 
@@ -142,6 +142,61 @@ names the guard or test that proves it, not just the code change.
     `CompletionCore.test.ts` using fake workspaces, and made the `#sym:`
     golden exercise the shared dashboard icon mapping and
     `VsCodeSymbolIndex`'s VS Code-to-LSP kind conversion.
+- **Track B session split (2026-10-06).** Stages 7a, 7b, and 8 are each too
+  large for one session. They run as the sub-stages below, in this order,
+  with I1 placed after 7b so standalone external-change detection is
+  available. Each sub-stage commits on its own.
+  - **7a1:** `HostedServerOptions` replaces the positional constructor
+    parameters (including `remoteAccess: { isAllowed, onBlocked }` and
+    `hostKind`). Remove `extension.ts`'s dead `?? 3000` port fallback. The
+    host-aware 401/error page text moves here from 7b, so that `hostKind`
+    has a consumer as soon as it exists. **Done:** shared options object,
+    host-aware 401 guidance, and updated tests.
+  - **7a2 — Done:** `createNodeHostServices`, `FileKeyValueStore`, the
+    browser-only `DashboardHostActions`, shared hosted-server configuration,
+    and the in-process two-client workflow boot test. `SourceAuditCounters`
+    confirms the Node composition root reaches no `vscode` load.
+  - **7a3 — Done:** INIT advertises the optional `DashboardHostActions`
+    methods present on the composed host. The React client stores that list,
+    gates host-native actions from it, and offers a copy-path action when
+    opening a worktree in a new window is unavailable. Tests cover empty Node
+    capabilities for a host without optional methods, the full VS Code set,
+    and UI visibility.
+  - **7b1 — Done:** generated static default themes and guard test, hosted
+    fallback, and `server.theme`/`?theme=` selection.
+  - **7b2 — Done:** shim `workspaceKey` plus `storageVersion`, workspace-scoped
+    tab and state keys, and the `webviewStateStorage` rename. Typecheck and lint
+    pass; all five focused shim persistence tests pass. The full test run's UI
+    and packaging suites pass; its extension suite also reports an unrelated
+    `AddressedPriorContextResolver` setup failure because run-history storage
+    was not initialized.
+  - **I1 — Done:** save conflicts (independent; scheduled here).
+  - **8a — Done:** the `server` subcommand, flags, lifecycle, launch banner,
+    QR, OSC 8, `--open`, and `--https` certificate generation. The focused
+    unit tests pass; the full `npm test` run has five unrelated extension
+    failures (run-history setup in PromptLinkProvider and host-dependent
+    default-harness detection).
+  - **8b — Done:** package entries and VSIX allowlist, CLI-build server-asset
+    copy, `SourceAuditCounters` guard root (already present with 8a),
+    tarball install and HTTP/WebSocket smoke verification, and CLI reference.
+    `typecheck`, lint, and docs checks pass. The single full test run passes
+    UI; four extension tests fail because run-history location was not
+    initialized. The package assertions were corrected and the focused
+    package test passes. No Playwright MCP was attached, so no browser
+    workflow was run.
+  - **Stage 11 verification (2026-10-06):** the `ctrlyoke server` guide and
+    navigation links are in place. The packed npm artifact was installed in a
+    clean Windows temp prefix; launch/banner/QR, token rejection, authenticated
+    HTML and shim, HTTPS `/cert`, SIGINT shutdown, and no stale `runner.json`
+    passed. A separate packed `--open` check invoked the Windows URL handler
+    without error. Docs build passed. No Playwright MCP was attached, and this
+    run had no TTY, so browser workflows, OSC 8, watch/completions,
+    workspace-viewer UI, phone/certificate install, and the second OS remain
+    explicit open checks in the standalone plan. `npm run check:docs`,
+    `npm run typecheck`, `npm run lint`, and the final `npm test` summary all
+    passed (extension 5596 passing/4 pending, UI 3454 passing, packaging 80
+    passing). The packed-build `--open` bug was fixed and verified from the
+    rebuilt tarball.
 - **Phase 5 of the LSP plan (the navigation-only VS Code provider backend) is
   dropped.** It isn't scheduled. The reasoning is in that plan's resolved open
   questions.

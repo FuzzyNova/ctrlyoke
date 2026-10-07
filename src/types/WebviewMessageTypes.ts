@@ -37,6 +37,7 @@ import {
   type CompletionNotificationSeverity,
   type UserFeedbackSeverity,
   type DashboardHostAction,
+  type DashboardHostCapability,
   type EndConditionScriptType,
   type HookEvent,
   type McpTransport,
@@ -513,6 +514,7 @@ export interface LicenseActionResultMessage {
  * Initial state message (extension -> webview on ready)
  */
 export interface InitMessageData {
+  hostCapabilities: DashboardHostCapability[];
   fileName: string;
   workflowName: string;
   steps: WorkflowStep[];

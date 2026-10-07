@@ -3,7 +3,7 @@
 **Status (2026-10-06): Implemented.** Staging Track A (Stages 1–6, run as
 sub-stages 3a–5c) is complete, and Phases 0–6 are done. The two phases that
 only the standalone server can finish moved to
-[`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md) when this
+[`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md) when this
 plan closed: Phase 7 is that plan's Phases 5–6 plus its Phase 10 guard root
 (Stage 7a), and Phase 8 is its Phase 11 (Stage 10). Done:
 
@@ -34,7 +34,7 @@ This is the shared foundation that lets `ctrlyoke run` and the future
 
 **Sequencing:** [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md)
 is the only authoritative order for this plan,
-[`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md), and
+[`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md), and
 [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md).
 This plan's phases mapped to staging Stages 1–6 (Track A). Phases 7 and 8
 moved to the standalone plan (Stages 7a and 10).
@@ -43,7 +43,7 @@ moved to the standalone plan (Stages 7a and 10).
 
 - [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md)
   (implemented)
-- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
+- [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md)
 - [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md):
   supplies the `SymbolIndex` port that Phase 6 item 4 adopts.
 - [`VISUAL_STUDIO_EXTENSION_PLAN.md`](../backlog/VISUAL_STUDIO_EXTENSION_PLAN.md): a

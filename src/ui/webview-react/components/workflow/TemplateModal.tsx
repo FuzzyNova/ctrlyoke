@@ -4,6 +4,7 @@ import {
   TEMPLATE_SOURCES,
   TEMPLATE_VARIABLE_TYPES,
   WORKSPACE_ENTRY_KINDS,
+  DASHBOARD_HOST_CAPABILITIES,
 } from "@root/types/DashboardConstants";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -16,7 +17,7 @@ import {
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
   HARNESS_IDS,
@@ -79,6 +80,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const canSelectWorkspacePath = useUiStore((state) =>
+    state.hostCapabilities.includes(
+      DASHBOARD_HOST_CAPABILITIES.selectWorkspacePath
+    )
+  );
   const vscode = useVsCodeApi();
   const filenameRef = useRef<HTMLInputElement>(null);
 
@@ -286,7 +292,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // would open invisibly on the host's screen (see MODAL_FILE_BROWSER_PLAN.md).
   const handleBrowseFile = useCallback(
     (variable: string, meta?: TemplateVariable) => {
-      if (isStandalone) {
+      if (!canSelectWorkspacePath) {
         openFileBrowser({
           mode:
             meta?.type === WORKSPACE_ENTRY_KINDS.DIRECTORY
@@ -304,7 +310,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         selectFolder: meta?.type === WORKSPACE_ENTRY_KINDS.DIRECTORY,
       });
     },
-    [vscode, openFileBrowser, applyPickedPath]
+    [vscode, openFileBrowser, applyPickedPath, canSelectWorkspacePath]
   );
 
   // Validate filename

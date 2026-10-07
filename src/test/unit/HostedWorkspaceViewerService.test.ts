@@ -4,7 +4,10 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
-import { HostedWorkspaceViewerService } from "../../server/HostedWorkspaceViewerService";
+import {
+  HostedWorkspaceViewerService,
+  WorkspaceFileConflictError,
+} from "../../server/HostedWorkspaceViewerService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   CommitMessageGenerator,
@@ -172,7 +175,11 @@ suite("HostedWorkspaceViewerService", function () {
 
       const openedFile = await svc.readFile("src/hello.txt");
       assert.strictEqual(openedFile.path, "src/hello.txt");
-      await svc.saveFile({ path: openedFile.path, content: "updated" });
+      await svc.saveFile({
+        path: openedFile.path,
+        content: "updated",
+        baseModifiedAt: openedFile.modifiedAt ?? 0,
+      });
       assert.strictEqual(
         fs.readFileSync(path.join(target, "src", "hello.txt"), "utf8"),
         "updated"
@@ -942,6 +949,10 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(result.readOnly, undefined);
       assert.strictEqual(result.content, "hello world");
       assert.strictEqual(result.name, "sample.txt");
+      assert.strictEqual(
+        result.modifiedAt,
+        fs.statSync(path.join(root, "sample.txt")).mtimeMs
+      );
     });
 
     test("returns readOnly for path traversal attempt", async () => {
@@ -1261,12 +1272,37 @@ suite("HostedWorkspaceViewerService", function () {
   // ── saveFile ───────────────────────────────────────────────────────────────
 
   suite("saveFile", () => {
+    test("rejects a stale base timestamp without overwriting the file", async () => {
+      const root = createWorkspace();
+      const filePath = path.join(root, "edit.txt");
+      fs.writeFileSync(filePath, "original");
+      const svc = new HostedWorkspaceViewerService(root);
+      const loaded = await svc.readFile("edit.txt");
+      fs.writeFileSync(filePath, "external update");
+      fs.utimesSync(filePath, new Date(), new Date(Date.now() + 2000));
+
+      await assert.rejects(
+        () =>
+          svc.saveFile({
+            path: "edit.txt",
+            content: "mine",
+            baseModifiedAt: loaded.modifiedAt ?? 0,
+          }),
+        (error: unknown) => error instanceof WorkspaceFileConflictError
+      );
+      assert.strictEqual(fs.readFileSync(filePath, "utf8"), "external update");
+    });
+
     test("writes content to an existing file", async () => {
       const root = createWorkspace();
       fs.writeFileSync(path.join(root, "edit.txt"), "original");
 
       const svc = new HostedWorkspaceViewerService(root);
-      await svc.saveFile({ path: "edit.txt", content: "updated" });
+      await svc.saveFile({
+        path: "edit.txt",
+        content: "updated",
+        baseModifiedAt: fs.statSync(path.join(root, "edit.txt")).mtimeMs,
+      });
 
       const written = fs.readFileSync(path.join(root, "edit.txt"), "utf8");
       assert.strictEqual(written, "updated");
@@ -1285,6 +1321,7 @@ suite("HostedWorkspaceViewerService", function () {
       await new HostedWorkspaceViewerService(root).saveFile({
         path: "edit.txt",
         content: "updated",
+        baseModifiedAt: fs.statSync(targetPath).mtimeMs,
       });
 
       assert.strictEqual(
@@ -1306,7 +1343,12 @@ suite("HostedWorkspaceViewerService", function () {
       const svc = new HostedWorkspaceViewerService(root);
 
       await assert.rejects(
-        () => svc.saveFile({ path: "../escape.txt", content: "pwned" }),
+        () =>
+          svc.saveFile({
+            path: "../escape.txt",
+            content: "pwned",
+            baseModifiedAt: 0,
+          }),
         /Path not allowed/
       );
     });
@@ -1318,7 +1360,11 @@ suite("HostedWorkspaceViewerService", function () {
 
       const svc = new HostedWorkspaceViewerService(root);
       // Submit content with mixed or LF endings
-      await svc.saveFile({ path: "crlf.txt", content: "line1\nline2\n" });
+      await svc.saveFile({
+        path: "crlf.txt",
+        content: "line1\nline2\n",
+        baseModifiedAt: fs.statSync(path.join(root, "crlf.txt")).mtimeMs,
+      });
 
       const written = fs.readFileSync(path.join(root, "crlf.txt"), "utf8");
       assert.ok(written.includes("\r\n"), "should normalise to CRLF");
@@ -2214,7 +2260,11 @@ suite("HostedWorkspaceViewerService", function () {
       const { svc, secondary } = createMultiRootService();
       fs.writeFileSync(path.join(secondary, "edit.txt"), "original");
 
-      await svc.saveFile({ path: "secondary/edit.txt", content: "updated" });
+      await svc.saveFile({
+        path: "secondary/edit.txt",
+        content: "updated",
+        baseModifiedAt: fs.statSync(path.join(secondary, "edit.txt")).mtimeMs,
+      });
 
       const written = fs.readFileSync(path.join(secondary, "edit.txt"), "utf8");
       assert.strictEqual(written, "updated");

@@ -1,12 +1,19 @@
 # Standalone ctrlyoke Server Plan
 
-**Status (2026-10-06):** The VS Code-hosted server has **shipped**. The
-standalone `ctrlyoke server` is **not started, but it is ready to implement**
-once its decoupling prerequisites land. Every fact in this document was
-re-audited against `src/` on 2026-10-06, and every open question has a
-decision. ROADMAP lists it as a P2 item for milestone 0.4.
+**Status (2026-10-07): Implemented.** The VS Code-hosted server has
+**shipped**. Standalone server implementation (Track B, Stages 7a–11) and
+Stage 11 documentation are complete; the review pass fixed browser startup
+without a panel. Windows packed
+artifact checks passed for launch/banner/QR, `--open`, token rejection,
+authenticated dashboard assets, HTTPS certificate serving, SIGINT shutdown,
+and absence of stale `runner.json`. `docs:build`, `check:docs`, `typecheck`,
+`lint`, and the full `npm test` summary passed. Cross-OS, device,
+browser-interaction, and remaining manual checks are listed below for Nathan.
+Every fact in this document was re-audited against `src/` on 2026-10-06, and
+every open question has a decision. ROADMAP lists it as a P2 item for milestone
+0.4.
 
-**Sequencing:** [`STANDALONE_STAGING_PLAN.md`](STANDALONE_STAGING_PLAN.md) is
+**Sequencing:** [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md) is
 the only authoritative order of work. The standalone work is staging Track B
 (Stages 7a–11). It starts after Track A (decoupling, Stages 1–6). The phase
 numbers in this document describe structure only.
@@ -87,9 +94,9 @@ dashboard application and the same HTTP/WebSocket server class.
 - **Dashboard fanout.** `IDashboardProvider`, `IDashboardSink`, and
   `DashboardBroadcastHub` drive multi-client fanout. The orchestrator and
   workflow instances publish only through the hub.
-- **`CtrlYokeHostedServer.ts` (2,815 lines)** is the reference
-  implementation. It is free of `vscode` imports except for one _type_ import
-  of `CtrlYokeWebviewProvider`. It provides:
+- **`CtrlYokeHostedServer.ts` (2,813 lines)** is the reference
+  implementation. Since Stage 6 it reaches no `vscode` load and routes through
+  `DashboardClientEndpoint`. It provides:
   - Express + `ws` with `noServer: true` and an `upgrade` handler. The handler
     returns 404 for any path except `/ws` and 401 unless `?token=` matches,
     using a timing-safe comparison (`c58b78580`).
@@ -143,46 +150,30 @@ dashboard application and the same HTTP/WebSocket server class.
   (`WorkflowLineageRepository.listLineageKeys()`), not from VS Code
   `globalState`.
 
-### Still missing
+### Delivered by Track B (2026-10-07)
 
-**Shared prerequisites.** These are owned by the decoupling plan and
-sequenced as staging Stages 1–6:
+Every gap listed in the original audit is closed:
 
-- `WebviewMessageRouter` imports `vscode` and makes 16 `executeCommand`
-  calls.
-- `CtrlYokeWebviewProvider` is the only composition root for the dashboard
-  application.
-- `CtrlYokeHostedServer` routes through the provider.
-- `WorkflowSerializer`, `WebviewSettingsSync`, `PromptEditorSupportService`,
-  and `CompletionHelpers` still read `vscode.workspace.workspaceFolders`.
-- `CliIntegration` picks the PTY path by checking for VS Code. A standalone
-  adapter would currently fall through to `stdio: inherit`.
-- `ExternalRunWatchSession` and `ExecutionRootCoordinationWatchSession` call
-  `createFileSystemWatcher` directly, and the Node `FileWatcherFactory` has no
-  implementation yet. `chokidar` was removed as unused in `d30015831`.
-
-**Standalone-only pieces (none exist yet):**
-
-- No `ctrlyoke server` subcommand. Today's commands are `run`, `rerun`,
-  `append`, `continue`, `validate`, `about`, three `trust-*` commands,
-  `commit`, `status`, `history …`, `step …`, and `secret …`.
-- No `createNodeHostServices`, no Node `KeyValueStore` implementation, and no
-  `src/cli/ServerCommand.ts`.
-- No static theme defaults. `src/server/themes/` doesn't exist. With no
-  captured vars, the hosted server emits an empty style block, and
-  `server.theme` (`auto|light|dark`) has no runtime consumer.
-- No `workspaceKey` or `storageVersion` in the shim. `fpState-*` keys are
-  scoped only by origin, so two workspaces served on the same port at
-  different times restore each other's drafts. The React adapter is still
-  named `vsCodeStateStorage.ts`.
-- TLS certificate generation lives in `WebviewSettingsSync.ts:1640-1728`,
-  rooted at the VS Code workspace.
-- **npm packaging.** `scripts/build-npm-package.mjs`'s `NPM_PACKAGE_ENTRIES`
-  doesn't include `out/server/`, `out/ui/webview-react/`, or
-  `out/runtime-deps/` (needed by `PngIconService`). `esbuild.js`'s
-  `copyServerPlugin` runs only for the extension bundle.
-- No launch UX: no terminal URL banner, OSC 8 link, terminal QR, or TLS hint.
-- The 401 error page tells users to "Open the ctrlyoke panel in VS Code".
+- **Shared prerequisites.** Decoupling Stages 1–6 are complete.
+- **Node composition.** `createNodeHostServices`/`createNodeHostedServer`
+  (`src/platform/NodeHostServices.ts`), `FileKeyValueStore`, and
+  `NodeDashboardHostActions` compose the orchestrator, `DashboardApplication`,
+  and the shared server with no `vscode` load (a `SourceAuditCounters` root).
+- **Shared server.** `CtrlYokeHostedServer` takes one `HostedServerOptions`
+  object (built by `HostedServerOptionsFactory.ts` for both hosts), with
+  host-aware 401 text from `hostKind`.
+- **Host capabilities.** INIT advertises `hostCapabilities`, and the React
+  client gates host-native actions from it.
+- **Themes and storage.** Generated dark/light defaults
+  (`npm run generate-server-themes`) with a guard test, `server.theme` and
+  `?theme=` selection, and workspace-scoped, versioned shim storage.
+- **Command and packaging.** `ctrlyoke server` (`src/cli/ServerCommand.ts`)
+  with the Phase 10 flags, launch banner, QR, OSC 8, `--open`, HTTPS
+  certificate generation, and npm package entries for the server and webview
+  assets.
+- **Completions.** `RegexSymbolIndex` backs standalone `#` symbols.
+- **Shim retirement.** `vscode-shim.ts` is deleted and a metafile guard keeps
+  `vscode` out of every Node bundle.
 
 **Corrections to older versions of this plan:**
 
@@ -402,9 +393,13 @@ the browser uses its existing surface:
 | Reveal in OS, MCP gallery, reload window  | `unsupported`. The UI hides these actions when the host doesn't advertise them |
 
 The browser needs to know what the host supports before rendering those
-actions. The INIT payload therefore gains a `hostCapabilities` list derived
-from the methods present on `DashboardHostActions`. It is a single source of
-truth: the browser never hard-codes host checks.
+actions. The INIT payload carries a typed `hostCapabilities` list derived
+from the optional methods present on the composed `DashboardHostActions`.
+A host with no optional methods advertises an empty list; the VS Code host
+advertises its full optional method set. The Node composition advertises its
+browser-side content-preview method and no host-native actions. The React
+client gates host-native actions from that list; when `openFolderWindow` is
+absent, the worktree path remains available with a copy action.
 
 ### Phase 8: prompt-editor completions (Stage 9)
 
@@ -438,6 +433,22 @@ injects it. `PromptFileWatcher`, `ExternalRunWatchSession` (formerly
 factory.
 
 ### Phase 10: the `ctrlyoke server` command and launch UX (Stage 8)
+
+**Stage 8 complete.** 8a implemented the command, config resolution, tokenized
+launch output, TLS certificate generation, browser opening, and graceful
+signal shutdown. 8b ships the server assets and CLI reference.
+
+**8b verification:** `npm run build:prod` and `node
+scripts/build-npm-package.mjs` completed. The packed tarball installed into a
+clean temporary prefix outside the repository and `ctrlyoke server` served
+tokenized dashboard HTML, the standalone shim, and default theme CSS; an
+authenticated `/ws` connection opened. The package test also passed its file
+list, install, version, and validate checks. No Playwright MCP was attached, so
+no browser workflow was run. `npm run typecheck`, `npm run lint`, and
+`npm run check:docs` passed. The one `npm test` run passed UI and reported four
+extension failures because run-history location was not initialized, plus
+packaging assertion failures fixed and verified by the passing focused package
+test.
 
 Add a `server` subcommand in a new `src/cli/ServerCommandDefinitions.ts`,
 following the existing `*CommandDefinitions.ts` pattern. Config resolution
@@ -475,9 +486,11 @@ goes in `src/cli/ServerCommand.ts`. Flags override `server.*` settings
     URL;
   - when HTTPS is on, a hint to install the certificate from `/cert` on the
     phone.
-- **`--open`:** add `open@^10` (bundled, so it adds no runtime dependency).
-  Don't hand-roll this. Passing a URL with `&` in its token query through
-  `cmd /c start` on Windows is a known trap.
+- **`--open`:** spawns the platform URL handler directly with the URL as a
+  single argument (`rundll32 url.dll,FileProtocolHandler` on Windows, `open`
+  on macOS, `xdg-open` elsewhere), never through a shell. `cmd /c start` would
+  split the token query at `&`. The bundled `open` package was tried first and
+  dropped because it failed from the packed CLI.
 - **Packaging:**
   - Add `out/server/`, `out/ui/webview-react/`, and `out/runtime-deps/` to
     `NPM_PACKAGE_ENTRIES` and the packaging test.
@@ -490,24 +503,37 @@ goes in `src/cli/ServerCommand.ts`. Flags override `server.*` settings
   `DashboardApplication.ts`, and `CtrlYokeHostedServer.ts` roots. (Moved here
   from the decoupling plan's Phase 7 item 4 when that plan was closed.)
 
-### Phase 11: retire the Node-side shim (Stage 10)
+### Phase 11: retire the Node-side shim (Stage 10 — done)
 
 Moved here from the decoupling plan's Phase 8 when that plan was closed on
-2026-10-06. Its Track A work is done, so this is the only decoupling work
-left, and it depends on `server` shipping first.
+2026-10-06. This phase depended on `server` shipping first and is now complete.
 
-1. Verify `ctrlyoke run`, `validate`, `commit`, `history`, `status`, `step`,
-   `secret`, and `server` with the real Node module graph. The CLI/MCP static
-   guard already passes.
-2. Remove `registerCliAdapter()`/`unregisterCliAdapter()` and their two
-   callers in `cli.ts` (`:911` and `:2339` on 2026-10-06). The only remaining
-   reader is the shim's own `getConfiguration`.
-3. Remove the `vscode` → `src/platform/vscode-shim.ts` alias from **all four**
+1. **Done:** Verify `ctrlyoke run`, `validate`, `commit`, `history`, `status`, `step`,
+   `secret`, and `server` with the real Node module graph. All eight `--help`
+   invocations passed; `validate` passed against a workflow file; `server`
+   started, listened, and stopped on Ctrl+C. The CLI/MCP source graph guard
+   passes.
+2. **Done:** Remove `registerCliAdapter()`/`unregisterCliAdapter()` and both
+   callers in `cli.ts`; the adapter's execution-mode lookup remains on the
+   `PlatformAdapter.getConfig()` host port.
+3. **Done:** Remove the `vscode` → `src/platform/vscode-shim.ts` alias from **all four**
    Node bundles in `esbuild.js`: `cli`, `mcp-server`,
    `historySearchRebuildWorker`, and `historySearchMatcherWorker`.
-4. Delete `vscode-shim.ts`.
-5. Fail the build if any Node bundle's metafile contains the `vscode` package,
+4. **Done:** Delete `vscode-shim.ts`.
+5. **Done:** Fail the build if any Node bundle's metafile contains the `vscode` package,
    `@vscode/extension-telemetry`, or a `src/platform/VsCode*` file.
+
+**Stage 10 gate (2026-10-07):** `npm run compile`, `npm run typecheck`, and
+`npm run lint` pass. The single `npm test` run passes UI (3454 tests) and
+packaging (80 tests); extension reports 5583 passing and 9 failures from the
+existing uninitialized run-history fixture (`Run history location has not been
+initialized` in `AddressedPriorContextResolver`, `CliSchemaRefusal`, and
+`StatusMessageReporter`). Its full output is in
+`.ctrlyoke/logs/test-runs/npm-test-2026-10-07T03-05-47-363Z.log`.
+The review pass traced those failures (and the similar ones reported in 7b2,
+8a, and 8b) to `FileKeyValueStore.test.ts`. It left the process-wide
+run-history location uninitialized in teardown, so whichever files shared its
+shard failed. Teardown now restores the suite baseline.
 
 The browser-side `standalone-shim.js` remains. It replaces
 `acquireVsCodeApi()` in the browser and is unrelated to the Node-side
@@ -535,21 +561,21 @@ scripts/build-npm-package.mjs, esbuild.js  CHANGED: ship server + webview assets
 
 - **No new bundle target.** `ctrlyoke server` lives in the existing `cli.js`
   bundle and npm `bin`.
-- **New bundled dependencies:** `chokidar@^5` (decoupling Stage 1) and
-  `open@^10`. Both are bundled by esbuild, so the npm package keeps zero
+- **New bundled dependency:** `chokidar@^5` (decoupling Stage 1). It is bundled by esbuild, so the npm package keeps zero
   runtime dependencies. `express`, `ws`, `qrcode`, and `selfsigned` are
   already present. No `fast-glob` or `ignore`.
-- **Server asset copying.** Today `copyServerPlugin` runs only on the
-  extension context. Make the CLI build copy the same server assets plus
-  `themes/`. The webview build output is already shared under `out/`.
-- **The Node-side `vscode-shim.ts` alias** is retired in Stage 10 (Phase 11
-  below), after `server` ships. The browser `standalone-shim.js` remains.
+- **Server asset copying.** The CLI build runs the same server-asset copy as
+  the extension build, including `themes/`.
+- **The Node-side `vscode-shim.ts` alias** was retired in Stage 10 (Phase 11
+  above), after `server` shipped. The browser `standalone-shim.js` remains.
 
 ## Message Protocol Compatibility
 
-The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) is unchanged at the
-payload level. The only addition is the `hostCapabilities` list in the INIT
-payload (Phase 7). Both server modes keep the existing distinction between:
+The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) adds the typed
+`hostCapabilities` list to the INIT payload (Phase 7). It contains the names of
+optional `DashboardHostActions` methods present on the actual host object; the
+browser does not infer host support from server mode. Both server modes keep
+the existing distinction between:
 
 - **broadcast state updates** (workflow summaries, step progress, CLI output,
   active-workflow changes), and
@@ -619,24 +645,58 @@ Implementation requirements (Stage 7b):
 
 ## Manual Verification (Stage 11)
 
-Run this on Windows and on one of Linux or macOS, from the **packed npm
-artifact**:
+Stage 11 verification on 2026-10-06 used the packed npm artifact installed in
+a clean Windows temp prefix. The checks below distinguish what ran from what
+still needs Nathan's device, browser, or second-OS access.
 
-- Launch `ctrlyoke server`. Check the banner URL, the OSC 8 link, the QR code,
-  and `--open`.
-- Open a desktop browser and a phone. Check token rejection without `?token=`
-  and the remote-access gate on a LAN bind.
-- Run with `--https`: certificate install on the phone and the reconnect
-  banner.
-- Run parallel workflows, the switcher, history, and an interactive step in
-  the dashboard terminal.
-- Check watch mode and an external run's live updates (chokidar).
-- Check `@`/`#`/`~`/`/` completions.
-- Check workspace-viewer edit, save, and conflict (Stage I1), plus git
-  stage/commit/push.
-- Check that unsaved drafts survive closing and reopening the tab, and don't
-  leak between two workspaces served on the same port.
-- Check that `Ctrl+C` exits cleanly with no stale `runner.json`.
+**Passed on Windows from the packed artifact:**
+
+- [x] Launch; verify banner URL and terminal QR code.
+- [x] Run `--open`; the packed CLI invoked the Windows URL handler and stayed
+      running. The browser display itself was not inspected.
+- [x] Request the dashboard without `?token=` and confirm HTTP 401; request it
+      with the token and confirm the HTML and standalone shim load.
+- [x] Launch with `--https`; confirm HTTPS and that `/cert` serves a PEM
+      certificate.
+- [x] Send SIGINT and confirm clean shutdown with no stale `runner.json`.
+
+**Passed in a desktop browser (Playwright Chromium, 2026-10-07 review),
+against `node out/cli.js server` from a repo build on a scratch workspace:**
+
+- [x] The dashboard loads and the startup overlay clears. The review found
+      that it didn't: with no VS Code panel to send READY, the startup auto-load
+      never ran, so browser tabs never got `STARTUP_COMPLETE` and waited out the
+      45 s safety timeout. `createNodeHostedServer` now marks the dashboard ready
+      itself, and the Node integration test covers it.
+- [x] `#` symbol completion returns `RegexSymbolIndex` symbols with exact
+      ranges, and `@` file completion works (`~` and `/` are covered over the
+      WebSocket by the integration test).
+- [x] `?theme=dark` applies the dark defaults and body class; the light
+      defaults render under `auto`.
+- [x] Browser storage keys are workspace-scoped
+      (`fpState-<workspaceKey>-<tabId>`, `fpLastTabId-<workspaceKey>`).
+
+**Open checklist for Nathan:**
+
+- [ ] On Windows, check the OSC 8 link in an interactive terminal.
+- [ ] Open the dashboard in a desktop browser and phone; verify the Pro
+      remote-access gate on a LAN bind.
+- [ ] Install/trust the generated certificate on a phone and verify the
+      reconnect banner after restarting the HTTPS server.
+- [ ] In a browser, run parallel workflows, use the switcher and history, and
+      run an interactive step in the dashboard terminal.
+- [ ] Verify watch mode reflects an external run's live updates (chokidar).
+- [ ] Verify `~`/`/` completions in the browser editor.
+- [ ] Verify workspace-viewer edit/save and stale-save conflict (Stage I1),
+      plus git stage/commit/push.
+- [ ] Verify unsaved drafts survive closing/reopening a tab and remain
+      isolated between two workspaces served on the same origin.
+- [ ] Repeat the packed-artifact launch and server checks on Linux or macOS.
+
+No browser workflow run was attempted, because it would drive a real AI
+harness. The fake-harness integration test covers a completed run with two
+WebSocket clients. The server launch test ran without a TTY, so OSC 8 and
+visual confirmation of the opened desktop page remain unchecked.
 
 ## Open Questions (all resolved 2026-10-06)
 

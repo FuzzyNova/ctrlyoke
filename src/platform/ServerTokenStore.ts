@@ -5,6 +5,13 @@ export type { SecretStore } from "./SecretStore";
 
 export const SERVER_TOKEN_SECRET_KEY = "ctrlyoke.server.token";
 
+export function resolveServerToken(
+  envToken: string | undefined,
+  persistedToken: string
+): string {
+  return envToken ?? persistedToken;
+}
+
 export class ServerTokenStore {
   constructor(
     private readonly secrets: SecretStore,

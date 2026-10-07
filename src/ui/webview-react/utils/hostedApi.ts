@@ -48,6 +48,9 @@ export async function hostedFetch<T>(
 ): Promise<T> {
   const method = options?.method?.toUpperCase();
   const headers: Record<string, string> = {};
+  const clientId = (window as Window & { __CTRLYOKE_CLIENT_ID__?: string })
+    .__CTRLYOKE_CLIENT_ID__;
+  if (clientId) headers["x-ctrlyoke-client-id"] = clientId;
   if (options?.headers) {
     const existing = options.headers;
     if (existing instanceof Headers) {
@@ -123,10 +126,17 @@ export async function workspaceFile(
 
 export async function workspaceSaveFile(
   req: WorkspaceFileSaveRequest
-): Promise<void> {
-  return hostedFetch<void>("/api/workspace-viewer/file", {
+): Promise<{ modifiedAt: number }> {
+  return hostedFetch<{ modifiedAt: number }>("/api/workspace-viewer/file", {
     method: "PUT",
     body: JSON.stringify(req),
+  });
+}
+
+export async function workspaceFileWatch(path: string | null): Promise<void> {
+  return hostedFetch<void>("/api/workspace-viewer/file/watch", {
+    method: "POST",
+    body: JSON.stringify({ path }),
   });
 }
 

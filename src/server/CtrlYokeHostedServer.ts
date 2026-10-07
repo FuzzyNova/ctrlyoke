@@ -14,6 +14,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { FileWatcher, FileWatcherFactory } from "../core/HostPorts";
 import type { DashboardClientEndpoint } from "../ui/DashboardClientEndpoint";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -54,6 +55,9 @@ import {
   WORKSPACE_SEARCH_SCOPES,
   NETWORK_INTERFACE_FAMILIES,
   THEME_KINDS,
+  SERVER_THEME_MODES,
+  type HostKind,
+  type ServerThemeMode,
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -71,6 +75,7 @@ import {
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
+import { projectKey } from "../utils/ProjectStatePaths";
 import { colorizeSvg, resolveHostedIconColors } from "./IconColorizer";
 import {
   WebPushService,
@@ -82,6 +87,7 @@ import {
   HostedWorkspaceViewerService,
   MAX_FILE_SIZE,
   RedactionMarkerSaveError,
+  WorkspaceFileConflictError,
 } from "./HostedWorkspaceViewerService";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
@@ -99,6 +105,7 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
 import { buildHostedErrorPage } from "./HostedErrorPageTemplate";
+import type { HostedThemeDefaults } from "./HostedThemeDefaults";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import {
   bytesToMb,
@@ -216,6 +223,29 @@ export function sanitizeBrowserClientId(
   return sanitized || null;
 }
 
+export interface HostedServerOptions {
+  hub: DashboardBroadcastHub;
+  endpoint: DashboardClientEndpoint;
+  getOrchestrator: () => WorkflowOrchestrator;
+  port: number;
+  fallbackPorts: number[];
+  strictPort?: boolean;
+  bindAddress: string;
+  tls?: { certPath: string; keyPath: string };
+  workspaceRoot: string;
+  namedWorkspaceRoots: ResolverWorkspaceFolder[];
+  token: string;
+  remoteAccess: {
+    isAllowed: () => Promise<boolean>;
+    onBlocked: () => void;
+  };
+  runnerHostIdentity?: RunnerHostIdentity;
+  onSiblingServerDetected?: (url: string) => void;
+  hostKind: HostKind;
+  themeDefaults: HostedThemeDefaults;
+  fileWatcherFactory: FileWatcherFactory;
+}
+
 export class CtrlYokeHostedServer
   implements IDashboardProvider, IDashboardSink
 {
@@ -267,28 +297,65 @@ export class CtrlYokeHostedServer
   private bindAddressFallback?: BindAddressFallbackInfo;
   private devServerUrlFileOwned = false;
   private readonly viewerService: HostedWorkspaceViewerService;
+  private readonly fileWatcherFactory: FileWatcherFactory;
+  private readonly fileWatchers = new Map<
+    string,
+    { watcher: FileWatcher; clients: Set<string> }
+  >();
+  private readonly watchedFilesByClient = new Map<string, string>();
   private readonly getRemoteAccess: (() => Promise<boolean>) | undefined;
   private readonly onRemoteAccessBlocked: (() => void) | undefined;
   private remoteAccessUpsellShown = false;
+  private readonly hub: DashboardBroadcastHub;
+  private readonly dashboardClient: DashboardClientEndpoint;
+  private readonly getOrchestrator: () => WorkflowOrchestrator;
+  private port: number;
+  private readonly workspaceRoot: string;
+  private readonly workspaceKey: string;
+  private readonly token: string;
+  private bindAddress: string;
+  private readonly fallbackPorts: number[];
+  private readonly strictPort: boolean;
+  private readonly onSiblingServerDetected?: (url: string) => void;
+  private readonly hostKind: HostKind;
+  private readonly themeDefaults: HostedThemeDefaults;
 
-  constructor(
-    private hub: DashboardBroadcastHub,
-    private dashboardClient: DashboardClientEndpoint,
-    private readonly getOrchestrator: () => WorkflowOrchestrator,
-    private port: number,
-    private workspaceRoot: string,
-    namedWorkspaceRoots: ResolverWorkspaceFolder[],
-    private token: string,
-    private bindAddress: string = "127.0.0.1",
-    tlsConfig?: { certPath: string; keyPath: string },
-    private readonly onSiblingServerDetected?: (url: string) => void,
-    getRemoteAccess?: () => Promise<boolean>,
-    onRemoteAccessBlocked?: () => void,
-    runnerHostIdentity?: RunnerHostIdentity,
-    private readonly fallbackPorts: number[] = []
-  ) {
-    this.getRemoteAccess = getRemoteAccess;
-    this.onRemoteAccessBlocked = onRemoteAccessBlocked;
+  constructor(options: HostedServerOptions) {
+    const {
+      hub,
+      endpoint,
+      getOrchestrator,
+      port,
+      fallbackPorts,
+      strictPort,
+      bindAddress,
+      tls,
+      workspaceRoot,
+      namedWorkspaceRoots,
+      token,
+      remoteAccess,
+      runnerHostIdentity,
+      onSiblingServerDetected,
+      hostKind,
+      themeDefaults,
+      fileWatcherFactory,
+    } = options;
+    this.hub = hub;
+    this.dashboardClient = endpoint;
+    this.getOrchestrator = getOrchestrator;
+    this.port = port;
+    this.fallbackPorts = fallbackPorts;
+    this.strictPort = strictPort ?? false;
+    this.bindAddress = bindAddress;
+    this.workspaceRoot = workspaceRoot;
+    this.workspaceKey = projectKey(workspaceRoot);
+    this.token = token;
+    this.onSiblingServerDetected = onSiblingServerDetected;
+    this.hostKind = hostKind;
+    this.themeDefaults = themeDefaults;
+    this.fileWatcherFactory = fileWatcherFactory;
+    this.getRemoteAccess = remoteAccess.isAllowed;
+    this.onRemoteAccessBlocked = remoteAccess.onBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.webPushService = new WebPushService(undefined, {
       hasRemoteAccess: () => this.resolveRemoteAccess(),
@@ -299,12 +366,12 @@ export class CtrlYokeHostedServer
       namedWorkspaceRoots,
       runnerHostIdentity
     );
-    if (tlsConfig) {
-      const cert = fs.readFileSync(tlsConfig.certPath);
-      const key = fs.readFileSync(tlsConfig.keyPath);
+    if (tls) {
+      const cert = fs.readFileSync(tls.certPath);
+      const key = fs.readFileSync(tls.keyPath);
       this.httpServer = createHttpsServer({ cert, key }, this.app);
       this.isTls = true;
-      this.tlsCertPath = tlsConfig.certPath;
+      this.tlsCertPath = tls.certPath;
     } else {
       this.httpServer = createHttpServer(this.app);
       this.isTls = false;
@@ -923,7 +990,7 @@ export class CtrlYokeHostedServer
       res.locals.skipSecretRedaction = true;
       res
         .type("application/javascript")
-        .send(buildHostedStandaloneShimScript());
+        .send(buildHostedStandaloneShimScript(this.workspaceKey));
     });
     // Cert download — no token required so iOS users can fetch and install it
     // before the WebSocket handshake can succeed. The cert is a public key only.
@@ -934,7 +1001,8 @@ export class CtrlYokeHostedServer
           "This ctrlyoke server isn't running with TLS enabled, so there's no certificate to download.",
           [
             "Enable TLS in your ctrlyoke server settings, or connect using the non-HTTPS link instead.",
-          ]
+          ],
+          this.getThemeOverride(_req)
         );
         return;
       }
@@ -950,7 +1018,9 @@ export class CtrlYokeHostedServer
       } catch {
         this.sendNotFoundPage(
           res,
-          "The ctrlyoke TLS certificate could not be read from disk."
+          "The ctrlyoke TLS certificate could not be read from disk.",
+          undefined,
+          this.getThemeOverride(_req)
         );
       }
     });
@@ -990,7 +1060,7 @@ export class CtrlYokeHostedServer
     // bare "Unauthorized" string, since a human is looking at this in a browser tab.
     const requireTokenForPage: express.RequestHandler = (req, res, next) => {
       if (this.requestHasValidToken(req)) return next();
-      this.sendUnauthorizedPage(res);
+      this.sendUnauthorizedPage(res, this.getThemeOverride(req));
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);
@@ -1061,7 +1131,9 @@ export class CtrlYokeHostedServer
     this.app.get(["/", "/index.html"], requireTokenForPage, (req, res) => {
       this.setNoStore(res);
       res.locals.skipSecretRedaction = true;
-      res.send(this.buildHtml(webviewDist, req.get("host")));
+      res.send(
+        this.buildHtml(webviewDist, req.get("host"), this.getThemeOverride(req))
+      );
     });
     // Register static files after the explicit HTML entry route so /index.html
     // receives the same token check and hosted-page patching as /.
@@ -1232,22 +1304,79 @@ export class CtrlYokeHostedServer
       }
     });
 
+    this.app.post(
+      `${WORKSPACE_FILE_ROUTE_PATH}/watch`,
+      requireToken,
+      (req, res) => {
+        const clientId = sanitizeBrowserClientId(
+          req.header("x-ctrlyoke-client-id") ?? null
+        );
+        if (!clientId) {
+          res.status(400).json({ error: "client id is required" });
+          return;
+        }
+        const body = req.body as { path?: unknown };
+        if (body.path !== null && typeof body.path !== "string") {
+          res.status(400).json({ error: "path must be a string or null" });
+          return;
+        }
+        if (typeof body.path === "string" && body.path.length > 0) {
+          this.watchWorkspaceFile(
+            `${BROWSER_CLIENT_PREFIX}${clientId}`,
+            body.path
+          );
+        } else {
+          this.unwatchWorkspaceFile(`${BROWSER_CLIENT_PREFIX}${clientId}`);
+        }
+        res.json({});
+      }
+    );
+
     this.app.put(WORKSPACE_FILE_ROUTE_PATH, requireToken, async (req, res) => {
-      const body = req.body as { path?: unknown; content?: unknown };
+      const body = req.body as {
+        path?: unknown;
+        content?: unknown;
+        baseModifiedAt?: unknown;
+      };
       if (typeof body.path !== "string" || typeof body.content !== "string") {
         res.status(400).json({ error: "path and content are required" });
         return;
       }
+      if (
+        body.baseModifiedAt !== undefined &&
+        body.baseModifiedAt !== null &&
+        typeof body.baseModifiedAt !== "number"
+      ) {
+        res
+          .status(400)
+          .json({ error: "baseModifiedAt must be a number or null" });
+        return;
+      }
+      if (body.baseModifiedAt === undefined) {
+        res.status(400).json({ error: "baseModifiedAt is required" });
+        return;
+      }
       try {
-        await this.viewerService.saveFile({
+        const modifiedAt = await this.viewerService.saveFile({
           path: body.path,
           content: body.content,
+          baseModifiedAt: body.baseModifiedAt,
         });
-        res.json({});
+        const clientId = sanitizeBrowserClientId(
+          req.header("x-ctrlyoke-client-id") ?? null
+        );
+        this.broadcastWorkspaceFileChanged(
+          body.path,
+          modifiedAt,
+          clientId ? `${BROWSER_CLIENT_PREFIX}${clientId}` : undefined
+        );
+        res.json({ modifiedAt });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (message === "Path not allowed") {
           res.status(403).json({ error: message });
+        } else if (err instanceof WorkspaceFileConflictError) {
+          res.status(409).json({ error: message, modifiedAt: err.modifiedAt });
         } else if (err instanceof RedactionMarkerSaveError) {
           res.status(400).json({ error: message });
         } else {
@@ -1893,7 +2022,11 @@ export class CtrlYokeHostedServer
     res.set("Pragma", "no-cache");
   }
 
-  private buildHtml(webviewDist: string, requestHost?: string): string {
+  private buildHtml(
+    webviewDist: string,
+    requestHost?: string,
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): string {
     const indexPath = path.join(webviewDist, "index.html");
     let html = fs.readFileSync(indexPath, "utf8");
 
@@ -1914,10 +2047,14 @@ export class CtrlYokeHostedServer
     // vscode-high-contrast) from the cached theme vars so that CSS rules that
     // gate on body class (e.g. harness-icon-adaptive inversion) work correctly
     // on first render, before the WebSocket THEME_VARS_UPDATED message arrives.
-    const themeBodyClass = this.resolveThemeBodyClass();
+    const themeBodyClass = this.resolveThemeBodyClass(themeOverride);
+    const themeClassScript =
+      this.resolveThemeSelection(themeOverride) === SERVER_THEME_MODES.AUTO
+        ? '<script>(()=>{const c=window.matchMedia("(prefers-color-scheme: light)").matches?"vscode-light":"vscode-dark";document.body.classList.remove("vscode-light","vscode-dark");document.body.classList.add(c)})()</script>'
+        : "";
     html = html.replace(
       "<body>",
-      `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/ctrlyoke-icon.svg">`
+      `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/ctrlyoke-icon.svg">${themeClassScript}`
     );
 
     // Replace the VS Code-specific CSP with a browser-compatible policy.
@@ -1950,7 +2087,7 @@ export class CtrlYokeHostedServer
     );
 
     // Inject theme vars and standalone shim before </head>.
-    const themeBlock = this.buildThemeStyleBlock();
+    const themeBlock = this.buildThemeStyleBlock(themeOverride);
     // Append current colors as query params to SVG icon URLs so that browsers (which cache
     // favicon/icon resources aggressively and often ignore Cache-Control headers) pick up the
     // new icon as soon as colors change. The server-side route ignores these params — they exist
@@ -1983,20 +2120,55 @@ export class CtrlYokeHostedServer
     );
   }
 
-  private buildThemeStyleBlock(): string {
+  private getThemeOverride(
+    req: express.Request
+  ): Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO> | undefined {
+    const value = req.query.theme;
+    return value === SERVER_THEME_MODES.LIGHT ||
+      value === SERVER_THEME_MODES.DARK
+      ? value
+      : undefined;
+  }
+
+  private resolveThemeSelection(
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): ServerThemeMode {
+    if (themeOverride) return themeOverride;
+    const configuredTheme = configService.getAll().server.theme;
+    return configuredTheme === SERVER_THEME_MODES.LIGHT ||
+      configuredTheme === SERVER_THEME_MODES.DARK
+      ? configuredTheme
+      : SERVER_THEME_MODES.AUTO;
+  }
+
+  private buildThemeStyleBlock(
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): string {
+    const selection = this.resolveThemeSelection(themeOverride);
+    const defaults =
+      selection === SERVER_THEME_MODES.AUTO
+        ? `@media (prefers-color-scheme: dark) {\n${this.themeDefaults.dark}\n}\n@media (prefers-color-scheme: light) {\n${this.themeDefaults.light}\n}`
+        : selection === SERVER_THEME_MODES.LIGHT
+          ? this.themeDefaults.light
+          : this.themeDefaults.dark;
     const vars = Object.entries(this.cachedThemeVars)
       .map(([k, v]) => `  ${k}: ${v};`)
       .join("\n");
-    return vars ? `<style>:root {\n${vars}\n}</style>\n` : "";
+    const captured = vars ? `\n:root {\n${vars}\n}` : "";
+    return `<style>${defaults}${captured}</style>\n`;
   }
 
-  private resolveThemeBodyClass(): string {
+  private resolveThemeBodyClass(
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): string {
     const themeKind = this.cachedThemeVars["--cy-color-theme-kind"];
-    return themeKind === THEME_KINDS.LIGHT
+    if (themeKind === THEME_KINDS.LIGHT) return "vscode-light";
+    if (themeKind === THEME_KINDS.HIGH_CONTRAST) return "vscode-high-contrast";
+    if (themeKind === THEME_KINDS.DARK) return "vscode-dark";
+    return this.resolveThemeSelection(themeOverride) ===
+      SERVER_THEME_MODES.LIGHT
       ? "vscode-light"
-      : themeKind === THEME_KINDS.HIGH_CONTRAST
-        ? "vscode-high-contrast"
-        : "vscode-dark";
+      : "vscode-dark";
   }
 
   /**
@@ -2004,7 +2176,10 @@ export class CtrlYokeHostedServer
    * token). Reuses the same theme vars/body class as the main app shell so it
    * never flashes an unstyled background before the user has a valid session.
    */
-  private sendUnauthorizedPage(res: express.Response): void {
+  private sendUnauthorizedPage(
+    res: express.Response,
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
+  ): void {
     this.setNoStore(res);
     res
       .status(401)
@@ -2015,10 +2190,10 @@ export class CtrlYokeHostedServer
           message: "You need a valid ctrlyoke access token to view this page.",
           hints: [
             "Did you recently regenerate your ctrlyoke token? Old links stop working as soon as the token changes.",
-            "Open the ctrlyoke panel in VS Code, go to its settings, and use the current link (with token) to reconnect.",
           ],
-          themeBodyClass: this.resolveThemeBodyClass(),
-          themeStyleBlock: this.buildThemeStyleBlock(),
+          themeBodyClass: this.resolveThemeBodyClass(themeOverride),
+          themeStyleBlock: this.buildThemeStyleBlock(themeOverride),
+          hostKind: this.hostKind,
         })
       );
   }
@@ -2027,7 +2202,8 @@ export class CtrlYokeHostedServer
   private sendNotFoundPage(
     res: express.Response,
     message: string,
-    hints?: string[]
+    hints?: string[],
+    themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
   ): void {
     this.setNoStore(res);
     res
@@ -2038,8 +2214,9 @@ export class CtrlYokeHostedServer
           statusCode: 404,
           message,
           hints,
-          themeBodyClass: this.resolveThemeBodyClass(),
-          themeStyleBlock: this.buildThemeStyleBlock(),
+          themeBodyClass: this.resolveThemeBodyClass(themeOverride),
+          themeStyleBlock: this.buildThemeStyleBlock(themeOverride),
+          hostKind: this.hostKind,
         })
       );
   }
@@ -2274,6 +2451,7 @@ export class CtrlYokeHostedServer
         // close of that stale socket must not strip control from the socket that
         // just inherited it.
         const clientStillConnected = this.hasLiveSocketForTag(clientTag);
+        if (!clientStillConnected) this.unwatchWorkspaceFile(clientTag);
         Log.debug(
           `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} terminationCause=${terminationCause ?? "peer-or-network"} remainingCount=${this.connections.size} clientStillConnected=${clientStillConnected}`
         );
@@ -2490,6 +2668,68 @@ export class CtrlYokeHostedServer
     }
   }
 
+  private watchWorkspaceFile(clientId: string, viewerPath: string): void {
+    const absolutePath = this.viewerService.resolveWorkspacePath(viewerPath);
+    if (!absolutePath) {
+      this.unwatchWorkspaceFile(clientId);
+      return;
+    }
+    const normalizedPath = path.resolve(absolutePath);
+    const currentPath = this.watchedFilesByClient.get(clientId);
+    if (currentPath === normalizedPath) return;
+    this.unwatchWorkspaceFile(clientId);
+
+    let subscription = this.fileWatchers.get(normalizedPath);
+    if (!subscription) {
+      const directory = path.dirname(normalizedPath);
+      const watcher = this.fileWatcherFactory.create(
+        directory,
+        path.basename(normalizedPath)
+      );
+      subscription = { watcher, clients: new Set() };
+      this.fileWatchers.set(normalizedPath, subscription);
+      const notify = async () => {
+        let modifiedAt: number | undefined;
+        try {
+          modifiedAt = (await fs.promises.stat(normalizedPath)).mtimeMs;
+        } catch {
+          // A delete event has no current modification time.
+        }
+        this.broadcastWorkspaceFileChanged(viewerPath, modifiedAt);
+      };
+      watcher.onDidChange(() => void notify());
+      watcher.onDidCreate(() => void notify());
+      watcher.onDidDelete(() => void notify());
+    }
+    subscription.clients.add(clientId);
+    this.watchedFilesByClient.set(clientId, normalizedPath);
+  }
+
+  private unwatchWorkspaceFile(clientId: string): void {
+    const currentPath = this.watchedFilesByClient.get(clientId);
+    if (!currentPath) return;
+    this.watchedFilesByClient.delete(clientId);
+    const subscription = this.fileWatchers.get(currentPath);
+    if (!subscription) return;
+    subscription.clients.delete(clientId);
+    if (subscription.clients.size > 0) return;
+    subscription.watcher.dispose();
+    this.fileWatchers.delete(currentPath);
+  }
+
+  private broadcastWorkspaceFileChanged(
+    filePath: string,
+    modifiedAt: number | undefined,
+    clientId?: string
+  ): void {
+    this.broadcast({
+      type: MESSAGE_TYPES.WORKSPACE_FILE_CHANGED,
+      path: filePath.replace(/\\/g, "/"),
+      ...(modifiedAt === undefined ? {} : { modifiedAt }),
+      ...(clientId ? { clientId } : {}),
+    });
+  }
+
   /**
    * Large sends and per-socket queue depth (`bufferedAmount`, which nothing
    * here bounds) are reported to the memory watchdog so a heap jump can be
@@ -2530,20 +2770,25 @@ export class CtrlYokeHostedServer
     this.portFellBack = false;
     this.bindAddressFallback = undefined;
     await this.enforceRemoteBindBeforeListen();
-    // Try the configured port, then each configured fallback port in order
-    // (so a workspace can pin a stable, bookmarkable URL even when the
-    // primary port is often taken), then finally an OS-assigned port.
-    const candidatePorts = [
-      this.port,
-      ...this.fallbackPorts.filter((port) => port !== this.port),
-      0,
-    ];
+    // In strict mode, try only the requested port. Otherwise try configured
+    // fallbacks in order, then an OS-assigned port.
+    const candidatePorts = this.strictPort
+      ? [this.port]
+      : [
+          this.port,
+          ...this.fallbackPorts.filter((port) => port !== this.port),
+          0,
+        ];
     let candidateIndex = 0;
     return new Promise((resolve, reject) => {
       const attemptListen = (port: number) => {
         const onError = (err: NodeJS.ErrnoException) => {
           this.httpServer.removeListener("listening", onListening);
           if (err.code === "EADDRINUSE") {
+            if (candidateIndex >= candidatePorts.length - 1) {
+              reject(err);
+              return;
+            }
             const tryNextCandidate = () => {
               this.portFellBack = true;
               candidateIndex += 1;
@@ -2620,6 +2865,14 @@ export class CtrlYokeHostedServer
 
   getAvailableIps(): string[] {
     return this.availableIps;
+  }
+
+  getServerUrl(): string | undefined {
+    return this.publicUrl;
+  }
+
+  hasConnectedClients(): boolean {
+    return this.connections.size > 0;
   }
 
   /**
@@ -2775,6 +3028,9 @@ export class CtrlYokeHostedServer
     this.unregisterMemoryContext();
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
+    for (const { watcher } of this.fileWatchers.values()) watcher.dispose();
+    this.fileWatchers.clear();
+    this.watchedFilesByClient.clear();
     this.hub.removeClient(this);
     if (this.heartbeatInterval !== undefined) {
       clearInterval(this.heartbeatInterval);

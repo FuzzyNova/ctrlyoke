@@ -1,7 +1,7 @@
 # Standalone Theme Snapshots Plan
 
 **Status (2026-10-06):** Backlog. Not started. Follow-up to
-[`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md) Phase 4
+[`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md) Phase 4
 (staging Stage 7b), which bundles only Dark 2026 and Light 2026.
 
 ## Goal

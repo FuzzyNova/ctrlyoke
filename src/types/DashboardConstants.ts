@@ -12,6 +12,7 @@ import {
   ANTIGRAVITY_CLI_MODELS as MC_ANTIGRAVITY_CLI_MODELS,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
+import type { DashboardHostActions } from "../core/HostPorts";
 
 /** Host capability describing where interactive harness terminals are shown. */
 export const INTERACTIVE_TERMINAL_MODES = {
@@ -21,6 +22,14 @@ export const INTERACTIVE_TERMINAL_MODES = {
 
 export type InteractiveTerminalMode =
   (typeof INTERACTIVE_TERMINAL_MODES)[keyof typeof INTERACTIVE_TERMINAL_MODES];
+
+/** Runtime host that composed a hosted dashboard server. */
+export const HOST_KINDS = {
+  VSCODE: "vscode",
+  STANDALONE: "standalone",
+} as const;
+
+export type HostKind = (typeof HOST_KINDS)[keyof typeof HOST_KINDS];
 
 /** Outcomes returned by host actions invoked from shared workflow code. */
 export const DASHBOARD_ACTION_RESULT_STATUSES = {
@@ -46,6 +55,40 @@ export const DASHBOARD_HOST_ACTIONS = {
 } as const;
 export type DashboardHostAction =
   (typeof DASHBOARD_HOST_ACTIONS)[keyof typeof DASHBOARD_HOST_ACTIONS];
+
+type OptionalDashboardHostAction = {
+  [Key in keyof DashboardHostActions]-?: Pick<DashboardHostActions, Key> extends
+    Required<Pick<DashboardHostActions, Key>>
+    ? never
+    : Key;
+}[keyof DashboardHostActions];
+
+/** Optional DashboardHostActions methods advertised to the dashboard client. */
+export const DASHBOARD_HOST_CAPABILITIES = {
+  openContentPreview: "openContentPreview",
+  selectWorkspacePath: "selectWorkspacePath",
+  revealOutput: "revealOutput",
+  focusDashboard: "focusDashboard",
+  openFolderWindow: "openFolderWindow",
+  openGitDiff: "openGitDiff",
+  revealInOs: "revealInOs",
+  browseMcpGallery: "browseMcpGallery",
+  reloadHost: "reloadHost",
+} as const satisfies Record<
+  OptionalDashboardHostAction,
+  OptionalDashboardHostAction
+>;
+
+export type DashboardHostCapability = OptionalDashboardHostAction;
+
+/** Derive advertised capabilities from the methods on the actual host object. */
+export function getDashboardHostCapabilities(
+  actions: Partial<Record<DashboardHostCapability, unknown>>
+): DashboardHostCapability[] {
+  return Object.values(DASHBOARD_HOST_CAPABILITIES).filter(
+    (capability) => typeof actions[capability] === "function"
+  );
+}
 
 /** Native workspace-path chooser modes used by dashboard host actions. */
 export const PATH_SELECTION_KINDS = {
@@ -312,6 +355,7 @@ export const SEARCH_HISTORY_ERROR_CODES = {
 } as const;
 
 export const MESSAGE_TYPES = {
+  WORKSPACE_FILE_CHANGED: "WORKSPACE_FILE_CHANGED",
   // Extension -> Webview
   INIT: "init",
   FILE_SELECTED: "fileSelected",
@@ -778,6 +822,9 @@ export const MESSAGE_TYPES = {
   /** Webview -> Extension: native VS Code operational user feedback */
   SHOW_NATIVE_FEEDBACK: "showNativeFeedback",
 } as const;
+
+export const HOSTED_WORKSPACE_FILE_CHANGED_EVENT =
+  "ctrlyoke-workspace-file-changed";
 
 /** Prompt-step fields supported by bulk property updates. */
 export const BULK_EDITABLE_PROMPT_STEP_KEYS = [
@@ -3040,6 +3087,16 @@ export const THEME_KINDS = {
 } as const;
 
 export type ThemeKind = (typeof THEME_KINDS)[keyof typeof THEME_KINDS];
+
+/** User-selected color theme for the hosted dashboard server. */
+export const SERVER_THEME_MODES = {
+  AUTO: "auto",
+  LIGHT: "light",
+  DARK: "dark",
+} as const;
+
+export type ServerThemeMode =
+  (typeof SERVER_THEME_MODES)[keyof typeof SERVER_THEME_MODES];
 
 // ============================================================================
 // APPLY PATCH FILE EDIT KINDS - Codex patch parser file-operation values

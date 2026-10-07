@@ -258,10 +258,10 @@ Start these after real launch feedback and the P1 safety contracts exist.
    Do not add workflow or per-step limit properties.
    ([plan](../backlog/EXECUTION_GUARDRAILS_PLAN.md))
 4. **Standalone server** — reuse the shipped hosted dashboard without requiring
-   VS Code. The hosted server is implemented; `ctrlyoke server` is not.
-   Sequenced after the remaining decoupling work, and followed by browser
-   workspace-editor language intelligence.
-   ([plan](../active/STANDALONE_SERVER_PLAN.md),
+   VS Code. **Implemented 2026-10-07** (`ctrlyoke server`). Phone, second-OS,
+   and certificate-install checks remain open in the plan's verification
+   checklist.
+   ([plan](../implemented/STANDALONE_SERVER_PLAN.md),
    [staging](../active/STANDALONE_STAGING_PLAN.md))
 5. **Workflow scheduling** — use the existing global execution limits and
    secrets. Keep the decided orchestrator-bound model; ctrlyoke must be running.
@@ -484,7 +484,7 @@ criteria matter more than speculative dates.
 | [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../implemented/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)               | P1                                                                  |
 | [`WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md)                                             | P2                                                                  |
 | [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                           | P2                                                                  |
-| [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)                                            | P2                                                                  |
+| [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md)                                       | P2 (implemented 2026-10-07)                                         |
 | [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md)                                          | P2 (sequences decoupling → standalone → language intelligence)      |
 | [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md) | P2 (after standalone server)                                        |
 | [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                                       | P2                                                                  |

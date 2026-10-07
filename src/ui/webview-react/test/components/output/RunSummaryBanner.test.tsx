@@ -14,6 +14,7 @@ import type {
   WorkflowTokenTotals,
 } from "@root/types/CtrlYokeTypes";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { useUiStore } from "@store/uiStore";
 
 const tokenTotals: WorkflowTokenTotals = {
   total: 410_000,
@@ -60,6 +61,9 @@ function renderBanner(
 describe("RunSummaryBanner", () => {
   beforeEach(() => {
     vi.mocked(window.vscodeApi!.postMessage).mockClear();
+    useUiStore.setState({
+      hostCapabilities: ["openFolderWindow", "openGitDiff"],
+    });
   });
 
   it("shows the run number, date, status, and token/cost totals", () => {
@@ -78,6 +82,18 @@ describe("RunSummaryBanner", () => {
     expect(
       screen.queryByTestId("workflow-token-usage")
     ).not.toBeInTheDocument();
+  });
+
+  it("hides native worktree opening and keeps a copy-path fallback without support", () => {
+    useUiStore.setState({ hostCapabilities: [] });
+    renderBanner({ worktree });
+
+    expect(
+      screen.queryByRole("button", { name: "Open Worktree in New Window" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy worktree path" })
+    ).toBeInTheDocument();
   });
 
   it("renders worktree details on their own row below the run summary", () => {

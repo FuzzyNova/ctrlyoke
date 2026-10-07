@@ -8,11 +8,13 @@ import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
 import {
   CtrlYokeHostedServer,
+  type HostedServerOptions,
   maskHostedServerUrlToken,
   sanitizeBrowserClientId,
 } from "../../server/CtrlYokeHostedServer";
 import {
   HARNESS_IDS,
+  HOST_KINDS,
   HOSTED_CONNECTION_LIVENESS,
   HARNESS_STATUS_STRINGS,
   HARNESS_VERSION_STATUSES,
@@ -34,12 +36,36 @@ import {
 } from "../../utils/SecretRedactionService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { NoopFileWatcherFactory } from "../helpers/NoopFileWatcherFactory";
+
+function createHostedServer(options: Partial<HostedServerOptions> = {}) {
+  return new CtrlYokeHostedServer({
+    hub: new DashboardBroadcastHub(),
+    endpoint: {} as never,
+    getOrchestrator: (() => ({})) as never,
+    port: 0,
+    fallbackPorts: [],
+    bindAddress: "127.0.0.1",
+    workspaceRoot: process.cwd(),
+    namedWorkspaceRoots: [],
+    token: "test-token",
+    remoteAccess: { isAllowed: async () => false, onBlocked: () => undefined },
+    hostKind: HOST_KINDS.VSCODE,
+    themeDefaults: {
+      dark: ":root { --theme-default: dark; }",
+      light: ":root { --theme-default: light; }",
+    },
+    fileWatcherFactory: new NoopFileWatcherFactory(),
+    ...options,
+  });
+}
 
 function sendJsonRequest(
   port: number,
   requestPath: string,
   method: "POST" | "PUT",
-  body: unknown
+  body: unknown,
+  headers: Record<string, string> = {}
 ): Promise<{ statusCode: number | undefined; body: string }> {
   return new Promise((resolve, reject) => {
     const request = httpRequest(
@@ -48,7 +74,7 @@ function sendJsonRequest(
         port,
         path: requestPath,
         method,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...headers },
       },
       (res) => {
         let responseBody = "";
@@ -91,28 +117,68 @@ function sendGetRequest(
 
 suite("CtrlYokeHostedServer workspace file redaction", () => {
   async function withServer(
-    testBody: (root: string, port: number, token: string) => Promise<void>
+    testBody: (
+      root: string,
+      port: number,
+      token: string,
+      watcherFactory: NoopFileWatcherFactory
+    ) => Promise<void>
   ): Promise<void> {
     const token =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-file-redaction-");
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
+    const watcherFactory = new NoopFileWatcherFactory();
+    const server = createHostedServer({
       workspaceRoot,
-      [],
-      token
-    );
+      token,
+      fileWatcherFactory: watcherFactory,
+    });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
-      await testBody(workspaceRoot, Number(new URL(serverUrl).port), token);
+      await testBody(
+        workspaceRoot,
+        Number(new URL(serverUrl).port),
+        token,
+        watcherFactory
+      );
     } finally {
       server.dispose();
       removeTempDir(workspaceRoot);
     }
+  }
+
+  function openBrowserTab(
+    port: number,
+    token: string,
+    clientId: string
+  ): Promise<WebSocket> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(
+        `ws://127.0.0.1:${port}/ws?token=${token}&clientId=${clientId}`
+      );
+      ws.once("open", () => resolve(ws));
+      ws.once("error", reject);
+    });
+  }
+
+  function nextWorkspaceFileChanged(
+    ws: WebSocket
+  ): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        ws.off("message", handleMessage);
+        reject(new Error("Timed out waiting for workspace file change"));
+      }, 3000);
+      const handleMessage = (raw: Buffer) => {
+        const message = JSON.parse(raw.toString()) as Record<string, unknown>;
+        if (message.type !== MESSAGE_TYPES.WORKSPACE_FILE_CHANGED) return;
+        clearTimeout(timeout);
+        ws.off("message", handleMessage);
+        resolve(message);
+      };
+      ws.on("message", handleMessage);
+    });
   }
 
   test("keeps the access token in the hosted page manifest link and start URL", async () => {
@@ -299,6 +365,7 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
         {
           path: "app.env",
           content: `API_KEY=${REDACTION_MARKER}\nPORT=4000\n`,
+          baseModifiedAt: fs.statSync(path.join(root, "app.env")).mtimeMs,
         }
       );
 
@@ -312,24 +379,193 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
 
   test("ordinary files still round-trip through GET and PUT", async () => {
     await withServer(async (root, port, token) => {
-      fs.writeFileSync(path.join(root, "notes.txt"), "hello\n");
+      const diskPath = path.join(root, "notes.txt");
+      fs.writeFileSync(diskPath, "hello\n");
+      fs.utimesSync(diskPath, new Date("2020-01-01"), new Date("2020-01-01"));
       const fileUrl = `/api/workspace-viewer/file?path=notes.txt&token=${encodeURIComponent(token)}`;
       const read = await sendGetRequest(port, fileUrl);
       assert.strictEqual(read.statusCode, 200);
-      assert.strictEqual(JSON.parse(read.body).content, "hello\n");
+      const original = JSON.parse(read.body) as {
+        content: string;
+        modifiedAt: number;
+      };
+      assert.strictEqual(original.content, "hello\n");
+      assert.strictEqual(original.modifiedAt, fs.statSync(diskPath).mtimeMs);
 
       const save = await sendJsonRequest(
         port,
         `/api/workspace-viewer/file?token=${encodeURIComponent(token)}`,
         "PUT",
-        { path: "notes.txt", content: "updated\n" }
+        {
+          path: "notes.txt",
+          content: "updated\n",
+          baseModifiedAt: original.modifiedAt,
+        }
       );
       assert.strictEqual(save.statusCode, 200);
-      assert.strictEqual(
-        fs.readFileSync(path.join(root, "notes.txt"), "utf8"),
-        "updated\n"
+      const saved = JSON.parse(save.body) as { modifiedAt: number };
+      assert.strictEqual(saved.modifiedAt, fs.statSync(diskPath).mtimeMs);
+      assert.strictEqual(fs.readFileSync(diskPath, "utf8"), "updated\n");
+
+      const staleSave = await sendJsonRequest(
+        port,
+        `/api/workspace-viewer/file?token=${encodeURIComponent(token)}`,
+        "PUT",
+        {
+          path: "notes.txt",
+          content: "stale overwrite\n",
+          baseModifiedAt: original.modifiedAt,
+        }
       );
+      assert.strictEqual(staleSave.statusCode, 409);
+      assert.strictEqual(fs.readFileSync(diskPath, "utf8"), "updated\n");
     });
+  });
+
+  test("two tabs receive file changes and the second stale save returns 409", async () => {
+    await withServer(async (root, port, token, watcherFactory) => {
+      const diskPath = path.join(root, "notes.txt");
+      fs.writeFileSync(diskPath, "hello\n");
+      fs.utimesSync(diskPath, new Date("2020-01-01"), new Date("2020-01-01"));
+      const tabA = await openBrowserTab(port, token, "tab-a");
+      const tabB = await openBrowserTab(port, token, "tab-b");
+      try {
+        for (const clientId of ["tab-a", "tab-b"]) {
+          const watch = await sendJsonRequest(
+            port,
+            `/api/workspace-viewer/file/watch?token=${token}`,
+            "POST",
+            { path: "notes.txt" },
+            { "x-ctrlyoke-client-id": clientId }
+          );
+          assert.strictEqual(watch.statusCode, 200);
+        }
+        assert.strictEqual(watcherFactory.watchers.length, 1);
+
+        const read = await sendGetRequest(
+          port,
+          `/api/workspace-viewer/file?path=notes.txt&token=${token}`
+        );
+        const loaded = JSON.parse(read.body) as { modifiedAt: number };
+        const tabAChange = nextWorkspaceFileChanged(tabA);
+        const tabBChange = nextWorkspaceFileChanged(tabB);
+        const saved = await sendJsonRequest(
+          port,
+          `/api/workspace-viewer/file?token=${token}`,
+          "PUT",
+          {
+            path: "notes.txt",
+            content: "tab A\n",
+            baseModifiedAt: loaded.modifiedAt,
+          },
+          { "x-ctrlyoke-client-id": "tab-a" }
+        );
+        assert.strictEqual(saved.statusCode, 200);
+        assert.strictEqual((await tabAChange).clientId, "browser:tab-a");
+        assert.strictEqual((await tabBChange).clientId, "browser:tab-a");
+
+        const stale = await sendJsonRequest(
+          port,
+          `/api/workspace-viewer/file?token=${token}`,
+          "PUT",
+          {
+            path: "notes.txt",
+            content: "tab B\n",
+            baseModifiedAt: loaded.modifiedAt,
+          },
+          { "x-ctrlyoke-client-id": "tab-b" }
+        );
+        assert.strictEqual(stale.statusCode, 409);
+        assert.strictEqual(fs.readFileSync(diskPath, "utf8"), "tab A\n");
+
+        const externalTabAChange = nextWorkspaceFileChanged(tabA);
+        const externalTabBChange = nextWorkspaceFileChanged(tabB);
+        fs.writeFileSync(diskPath, "external\n");
+        watcherFactory.fireChange(diskPath);
+        assert.strictEqual((await externalTabAChange).path, "notes.txt");
+        assert.strictEqual((await externalTabBChange).path, "notes.txt");
+      } finally {
+        tabA.close();
+        tabB.close();
+      }
+    });
+  });
+});
+
+suite("CtrlYokeHostedServer theme defaults", () => {
+  async function withThemePage(
+    theme: "auto" | "light" | "dark",
+    query: string,
+    inspect: (html: string, token: string) => void,
+    capturedVars?: Record<string, string>
+  ): Promise<void> {
+    configService.setCliOverlay({ server: { theme } } as never);
+    const token = "0123456789abcdef0123456789abcdef";
+    const server = createHostedServer({ token });
+    if (capturedVars) server.updateThemeVars(capturedVars);
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const port = Number(new URL(serverUrl).port);
+      const page = await sendGetRequest(
+        port,
+        `/?token=${token}${query ? `&${query}` : ""}`
+      );
+      assert.strictEqual(page.statusCode, 200);
+      inspect(page.body, token);
+    } finally {
+      server.dispose();
+      configService.setCliOverlay({});
+    }
+  }
+
+  test("auto serves both defaults for the browser color preference", async () => {
+    await withThemePage("auto", "", (html) => {
+      assert.ok(html.includes("@media (prefers-color-scheme: dark)"));
+      assert.ok(html.includes("@media (prefers-color-scheme: light)"));
+      assert.ok(html.includes("--theme-default: dark"));
+      assert.ok(html.includes("--theme-default: light"));
+      assert.ok(html.includes('<body class="vscode-dark"'));
+    });
+  });
+
+  test("light and dark force one default theme", async () => {
+    await withThemePage("light", "", (html) => {
+      assert.ok(html.includes("--theme-default: light"));
+      assert.ok(!html.includes("--theme-default: dark"));
+      assert.ok(!html.includes("prefers-color-scheme"));
+      assert.ok(html.includes('<body class="vscode-light"'));
+    });
+    await withThemePage("dark", "", (html) => {
+      assert.ok(html.includes("--theme-default: dark"));
+      assert.ok(!html.includes("--theme-default: light"));
+      assert.ok(!html.includes("prefers-color-scheme"));
+      assert.ok(html.includes('<body class="vscode-dark"'));
+    });
+  });
+
+  test("valid query theme overrides the configured mode", async () => {
+    await withThemePage("dark", "theme=light", (html) => {
+      assert.ok(html.includes("--theme-default: light"));
+      assert.ok(!html.includes("--theme-default: dark"));
+      assert.ok(html.includes('<body class="vscode-light"'));
+    });
+  });
+
+  test("captured vars override defaults and determine the body class", async () => {
+    await withThemePage(
+      "dark",
+      "theme=light",
+      (html) => {
+        assert.ok(html.includes("--theme-default: light"));
+        assert.ok(html.includes("--vscode-editor-background: #123456;"));
+        assert.ok(html.includes('<body class="vscode-dark"'));
+      },
+      {
+        "--vscode-editor-background": "#123456",
+        "--cy-color-theme-kind": "dark",
+      }
+    );
   });
 });
 
@@ -351,15 +587,11 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
       disconnectClient: () => undefined,
       routeClientMessage: async () => undefined,
     };
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      webviewProvider as never,
-      (() => ({})) as never,
-      0,
+    const server = createHostedServer({
+      endpoint: webviewProvider as never,
       workspaceRoot,
-      [],
-      token
-    );
+      token,
+    });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -470,15 +702,7 @@ suite("sanitizeBrowserClientId", () => {
 suite("CtrlYokeHostedServer file history route", () => {
   test("rejects a missing path before invoking the viewer service", async () => {
     const token = "route-test-token";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -517,15 +741,7 @@ suite("CtrlYokeHostedServer file history route", () => {
 
   test("rejects a missing commit before invoking the viewer service", async () => {
     const token = "route-test-token-commit";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -564,15 +780,7 @@ suite("CtrlYokeHostedServer file history route", () => {
 
   test("rejects a missing ref on the paged git-ref diff route", async () => {
     const token = "route-test-token-diff-page";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
     try {
       const serverUrl = await server.listen();
       if (!serverUrl) throw new Error("Hosted server did not start");
@@ -614,15 +822,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
   test("rejects unauthenticated workspace file PUT before the JSON body finishes", async () => {
     const token = "unauthenticated-large-file-token";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-unauth-save-");
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      workspaceRoot,
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot, token });
 
     try {
       const serverUrl = await server.listen();
@@ -671,15 +871,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
   test("saves a 1 MB workspace viewer file", async () => {
     const token = "large-file-save-token";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-large-save-");
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      workspaceRoot,
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot, token });
 
     try {
       const serverUrl = await server.listen();
@@ -690,7 +882,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
         Number(url.port),
         `/api/workspace-viewer/file?token=${encodeURIComponent(token)}`,
         "PUT",
-        { path: "large.txt", content }
+        { path: "large.txt", content, baseModifiedAt: null }
       );
 
       assert.strictEqual(response.statusCode, 200);
@@ -706,15 +898,7 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
 
   test("keeps the default JSON body limit for ordinary routes", async () => {
     const token = "default-json-limit-token";
-    const server = new CtrlYokeHostedServer(
-      new DashboardBroadcastHub(),
-      {} as never,
-      (() => ({})) as never,
-      0,
-      process.cwd(),
-      [],
-      token
-    );
+    const server = createHostedServer({ workspaceRoot: process.cwd(), token });
 
     try {
       const serverUrl = await server.listen();

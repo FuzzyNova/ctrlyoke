@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
+import { webviewRawStorage } from "@utils/webviewStateStorage";
 import type {
   SourceControlFile,
   DiffKind,
@@ -972,7 +972,7 @@ export const useWorkspaceViewerStore = create<
     {
       name: "ctrlyoke-workspace-viewer-state",
       skipHydration: true,
-      storage: createJSONStorage(() => vsCodeRawStorage),
+      storage: createJSONStorage(() => webviewRawStorage),
       partialize: (state) => ({
         fileDrafts: state.fileDrafts,
       }),

@@ -38,6 +38,9 @@ const NPM_README_SOURCE = path.join(
  */
 export const NPM_PACKAGE_ENTRIES = [
   "out/cli.js",
+  "out/server/",
+  "out/ui/webview-react/",
+  "out/runtime-deps/",
   "out/mcp-server.js",
   "out/historySearchRebuildWorker.js",
   "out/historySearchMatcherWorker.js",

@@ -408,6 +408,13 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
   return labels;
 }
 
+export class WorkspaceFileConflictError extends Error {
+  constructor(public readonly modifiedAt?: number) {
+    super("File changed on disk");
+    this.name = "WorkspaceFileConflictError";
+  }
+}
+
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator: CommitMessageGenerator;
   private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
@@ -427,6 +434,10 @@ export class HostedWorkspaceViewerService {
       undefined,
       runnerHostIdentity
     );
+  }
+
+  resolveWorkspacePath(requestedPath: string): string | undefined {
+    return this.safeResolve(requestedPath) ?? undefined;
   }
 
   /**
@@ -1341,6 +1352,7 @@ export class HostedWorkspaceViewerService {
           size: stat.size,
           eol: "lf",
           content: "",
+          modifiedAt: stat.mtimeMs,
           readOnly: true,
           imageDataUri: `data:${mimeType};base64,${bytes.toString("base64")}`,
         };
@@ -1365,6 +1377,7 @@ export class HostedWorkspaceViewerService {
       size: stat.size,
       eol,
       content: redactedContent,
+      modifiedAt: stat.mtimeMs,
       ...(wasRedacted
         ? {
             readOnly: true,
@@ -1409,7 +1422,7 @@ export class HostedWorkspaceViewerService {
 
   // ── File save ────────────────────────────────────────────────────────────
 
-  async saveFile(req: WorkspaceFileSaveRequest): Promise<void> {
+  async saveFile(req: WorkspaceFileSaveRequest): Promise<number> {
     const resolved = this.safeResolve(req.path);
     if (!resolved) {
       throw new Error("Path not allowed");
@@ -1419,7 +1432,13 @@ export class HostedWorkspaceViewerService {
     let originalEol: (typeof LINE_ENDINGS)[keyof typeof LINE_ENDINGS] =
       LINE_ENDINGS.LF;
     let existingContent: string | undefined;
+    let existingModifiedAt: number | undefined;
     try {
+      const stat = await fs.promises.stat(resolved);
+      existingModifiedAt = stat.mtimeMs;
+      if (req.baseModifiedAt !== (existingModifiedAt ?? null)) {
+        throw new WorkspaceFileConflictError(existingModifiedAt);
+      }
       if (await this.isBinaryFile(resolved)) {
         throw new Error("Cannot overwrite binary file");
       }
@@ -1431,9 +1450,13 @@ export class HostedWorkspaceViewerService {
     } catch (err) {
       if (
         err instanceof Error &&
-        err.message === "Cannot overwrite binary file"
+        (err.message === "Cannot overwrite binary file" ||
+          err instanceof WorkspaceFileConflictError)
       ) {
         throw err;
+      }
+      if (req.baseModifiedAt !== null) {
+        throw new WorkspaceFileConflictError();
       }
       // File doesn't exist yet — new file, keep LF
     }
@@ -1451,7 +1474,19 @@ export class HostedWorkspaceViewerService {
       content = content.replace(/\n/g, "\r\n");
     }
 
+    let latest: fs.Stats | undefined;
+    try {
+      latest = await fs.promises.stat(resolved);
+    } catch {
+      if (req.baseModifiedAt !== null) {
+        throw new WorkspaceFileConflictError();
+      }
+    }
+    if ((latest?.mtimeMs ?? null) !== req.baseModifiedAt) {
+      throw new WorkspaceFileConflictError(latest?.mtimeMs);
+    }
     await writeFileAtomic(resolved, content);
+    return (await fs.promises.stat(resolved)).mtimeMs;
   }
 
   // ── File operations ──────────────────────────────────────────────────────

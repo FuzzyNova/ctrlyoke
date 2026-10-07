@@ -24,7 +24,7 @@ import {
   serverToMcpServerFormState,
 } from "@components/shared/McpServerForm";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { isStandalone } from "@hooks/useVsCodeApi";
+import { useUiStore } from "@store/uiStore";
 import {
   KEYBOARD_KEYS,
   HARNESS_IDS,
@@ -32,6 +32,7 @@ import {
   SETTING_SCOPES,
   MCP_TRANSPORTS,
   SPECIAL_TARGET_IDS,
+  DASHBOARD_HOST_CAPABILITIES,
   getMcpLocalSource,
   type AnyTargetId,
   type HarnessId,
@@ -503,6 +504,11 @@ function ServerDetails({
 }
 
 export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
+  const canBrowseMcpGallery = useUiStore((state) =>
+    state.hostCapabilities.includes(
+      DASHBOARD_HOST_CAPABILITIES.browseMcpGallery
+    )
+  );
   const managedServers = useMcpManagerStore((state) => state.managedServers);
   const isLoadingManagedServers = useMcpManagerStore(
     (state) => state.isLoadingRegistry
@@ -1239,7 +1245,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             <Icon name="globe" className="text-xxs" />
             Registry
           </button>
-          {!isStandalone && (
+          {canBrowseMcpGallery && (
             <button
               type="button"
               onClick={() => sendMessage(MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER)}
