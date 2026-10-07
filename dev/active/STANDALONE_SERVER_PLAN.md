@@ -87,9 +87,9 @@ dashboard application and the same HTTP/WebSocket server class.
 - **Dashboard fanout.** `IDashboardProvider`, `IDashboardSink`, and
   `DashboardBroadcastHub` drive multi-client fanout. The orchestrator and
   workflow instances publish only through the hub.
-- **`CtrlYokeHostedServer.ts` (2,815 lines)** is the reference
-  implementation. It is free of `vscode` imports except for one _type_ import
-  of `CtrlYokeWebviewProvider`. It provides:
+- **`CtrlYokeHostedServer.ts` (2,813 lines)** is the reference
+  implementation. Since Stage 6 it reaches no `vscode` load and routes through
+  `DashboardClientEndpoint`. It provides:
   - Express + `ws` with `noServer: true` and an `upgrade` handler. The handler
     returns 404 for any path except `/ws` and 401 unless `?token=` matches,
     using a timing-safe comparison (`c58b78580`).
@@ -402,7 +402,8 @@ the browser uses its existing surface:
 | Reveal in OS, MCP gallery, reload window  | `unsupported`. The UI hides these actions when the host doesn't advertise them |
 
 The browser needs to know what the host supports before rendering those
-actions. The INIT payload therefore gains a `hostCapabilities` list derived
+actions. The INIT payload therefore gains a `hostCapabilities` list (staging
+sub-stage 7a3; it doesn't exist yet) derived
 from the methods present on `DashboardHostActions`. It is a single source of
 truth: the browser never hard-codes host checks.
 

@@ -89,7 +89,7 @@ names the guard or test that proves it, not just the code change.
 | Stage | Work                                                                                                                                                                                                                                                                                                      | Owning plan / phase                                            | Prerequisite                         | Done when                                                                                                                                                                                                         |
 | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 |    7a | Node host services and the shared server:<br>• `createNodeHostServices(cwd)`, including `FileKeyValueStore`, a persisted `ServerTokenStore` over `OsCredentialStore`, and the chokidar factory.<br>• Turn `CtrlYokeHostedServer` into the one options-object server class over `DashboardClientEndpoint`. | Standalone Phases 5–7                                          | Stage 6                              | An in-process test boots the server from Node host services alone, connects two WebSocket clients, and completes a workflow run. The VS Code-hosted server still passes its existing tests.                       |
-|    7b | Browser rendering and storage:<br>• Static default themes, with a guard test.<br>• Shim `workspaceKey` plus `storageVersion`.<br>• Rename `vsCodeStateStorage` → `webviewStateStorage`.<br>• Host-aware 401/error page text.                                                                              | Standalone Phase 4 and "State Persistence"                     | Stage 7a                             | Every `var(--vscode-*)` the webview references has a default, enforced by a test. With no captured vars, the hosted server serves the defaults. Drafts from two workspaces served on the same port don't collide. |
+|    7b | Browser rendering and storage:<br>• Static default themes, with a guard test.<br>• Shim `workspaceKey` plus `storageVersion`.<br>• Rename `vsCodeStateStorage` → `webviewStateStorage`.<br>• (Host-aware 401/error page text moved to 7a1.)                                                                              | Standalone Phase 4 and "State Persistence"                     | Stage 7a                             | Every `var(--vscode-*)` the webview references has a default, enforced by a test. With no captured vars, the hosted server serves the defaults. Drafts from two workspaces served on the same port don't collide. |
 |     8 | The `ctrlyoke server` command and launch UX:<br>• Flags.<br>• Tokenized URL, OSC 8 link, terminal QR, and TLS hint.<br>• `--open`.<br>• `--https` generates a cert through `ServerCertificateService`.<br>• npm package entries for `out/server/`, `out/ui/webview-react/`, and `out/runtime-deps/`.      | Standalone Phase 10                                            | Stage 7b                             | `npm pack` output runs `ctrlyoke server` from a clean temp directory, and a browser completes a workflow. The packaging test lists the new entries.                                                               |
 |     9 | Standalone prompt-editor completions: files from the Stage 5 core, `#` symbols from **`RegexSymbolIndex`**, and empty selection completions.                                                                                                                                                              | Standalone Phase 8, plus LSP plan phase 7 (`RegexSymbolIndex`) | Stage 8                              | The golden `#sym:` test covers `RegexSymbolIndex` on the shared fixture. `@`, `#`, `~`, and `/` completions work in a standalone browser.                                                                         |
 |    10 | Retire the Node-side shim: drop `registerCliAdapter`, remove the `vscode` alias from the cli/mcp/worker bundles, and delete `vscode-shim.ts`.                                                                                                                                                             | Standalone Phase 11                                            | Stage 9                              | `esbuild.js` contains no `vscode-shim` alias. A metafile check fails if any Node bundle includes `vscode` or a `src/platform/VsCode*` file.                                                                       |
@@ -142,6 +142,35 @@ names the guard or test that proves it, not just the code change.
     `CompletionCore.test.ts` using fake workspaces, and made the `#sym:`
     golden exercise the shared dashboard icon mapping and
     `VsCodeSymbolIndex`'s VS Code-to-LSP kind conversion.
+- **Track B session split (2026-10-06).** Stages 7a, 7b, and 8 are each too
+  large for one session. They run as the sub-stages below, in this order,
+  with I1 placed after 7b so standalone external-change detection is
+  available. Each sub-stage commits on its own.
+  - **7a1:** `HostedServerOptions` replaces the positional constructor
+    parameters (including `remoteAccess: { isAllowed, onBlocked }` and
+    `hostKind`). Remove `extension.ts`'s dead `?? 3000` port fallback. The
+    host-aware 401/error page text moves here from 7b, so that `hostKind`
+    has a consumer as soon as it exists.
+  - **7a2:** `createNodeHostServices`, `FileKeyValueStore`, the browser-only
+    `DashboardHostActions`, and the in-process boot test.
+  - **7a3:** the INIT `hostCapabilities` list (Phase 7), derived from the
+    methods present on `DashboardHostActions`, with the UI hiding
+    host-native actions the host doesn't advertise. No earlier stage
+    assigned this work.
+  - **7b1:** static default themes, the guard test, the hosted fallback, and
+    `server.theme`/`?theme=` selection.
+  - **7b2:** shim `workspaceKey` plus `storageVersion`, and the
+    `webviewStateStorage` rename.
+  - **I1:** save conflicts (independent; scheduled here).
+  - **8a:** the `server` subcommand, flags, lifecycle, launch banner, QR,
+    OSC 8, `--open`, and `--https` certificate generation.
+  - **8b:** packaging (`NPM_PACKAGE_ENTRIES`, the CLI-build server-asset
+    copy), the `SourceAuditCounters` guard root, the `npm pack` smoke run,
+    and the CLI reference page.
+  - **Stage 11 caveat:** an agent session can run the automated parts
+    (packed-artifact launch, browser checks through Playwright if attached).
+    Phone, second-OS, and certificate-install checks need Nathan and are
+    recorded as an open checklist in the standalone plan.
 - **Phase 5 of the LSP plan (the navigation-only VS Code provider backend) is
   dropped.** It isn't scheduled. The reasoning is in that plan's resolved open
   questions.
