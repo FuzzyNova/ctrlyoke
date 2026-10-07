@@ -105,6 +105,8 @@ export interface WorkspaceFileResponse {
   size: number;
   eol: "lf" | "crlf";
   content: string;
+  /** Last filesystem modification time in epoch milliseconds. */
+  modifiedAt?: number;
   readOnly?: boolean;
   reason?: string;
   /**
@@ -118,6 +120,15 @@ export interface WorkspaceFileResponse {
 export interface WorkspaceFileSaveRequest {
   path: string;
   content: string;
+  /** Disk version the editor loaded, or null when creating a new file. */
+  baseModifiedAt: number | null;
+}
+
+export interface WorkspaceFileChangedMessage {
+  path: string;
+  modifiedAt?: number;
+  /** Browser client that made the save; absent for external filesystem changes. */
+  clientId?: string;
 }
 
 /**

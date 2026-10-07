@@ -1661,6 +1661,7 @@ function registerCommands(
             ),
           runnerHostIdentity,
           hostKind: HOST_KINDS.VSCODE,
+          fileWatcherFactory: new VsCodeFileWatcherFactory(),
         }));
       } catch (err) {
         unprotectServerToken?.();

@@ -9,11 +9,14 @@
  * already-open file, render, and assert the toggle behaviour.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceExplorerPane } from "@components/workspace-viewer/WorkspaceExplorerPane";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
+import { workspaceFile } from "@utils/hostedApi";
+import { HOSTED_WORKSPACE_FILE_CHANGED_EVENT } from "@root/types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -58,8 +61,13 @@ vi.mock("@utils/hostedApi", () => ({
     totalEntries: 0,
     offset: 0,
   }),
-  workspaceFile: vi.fn().mockResolvedValue({ content: "", path: "" }),
-  workspaceSaveFile: vi.fn().mockResolvedValue(undefined),
+  workspaceFile: vi.fn().mockResolvedValue({
+    content: "",
+    path: "",
+    modifiedAt: 1,
+  }),
+  workspaceFileWatch: vi.fn().mockResolvedValue(undefined),
+  workspaceSaveFile: vi.fn().mockResolvedValue({ modifiedAt: 2 }),
   workspaceStatus: vi.fn().mockResolvedValue({ files: [] }),
 }));
 
@@ -84,6 +92,15 @@ function openFileInStore(path: string, content: string) {
 beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
   useSettingsStore.getState().updateGlobalSetting("workspaceRoot", "");
+  useUiStore.getState().setMyClientId("browser:current");
+  vi.mocked(workspaceFile).mockResolvedValue({
+    content: "external content",
+    path: "docs/readme.md",
+    modifiedAt: 2,
+    name: "readme.md",
+    size: 16,
+    eol: "lf",
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -143,5 +160,53 @@ describe("WorkspaceExplorerPane — markdown preview toggle", () => {
     expect(screen.queryByTestId("markdown-preview")).not.toBeInTheDocument();
     const editorWrapper = screen.getByTestId("file-editor").parentElement;
     expect(editorWrapper).not.toHaveClass("hidden");
+  });
+});
+
+describe("WorkspaceExplorerPane — external file changes", () => {
+  it("reloads a clean editor without showing the conflict banner", async () => {
+    openFileInStore("docs/readme.md", "old content");
+    render(<WorkspaceExplorerPane />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(HOSTED_WORKSPACE_FILE_CHANGED_EVENT, {
+          detail: { path: "docs/readme.md", modifiedAt: 2 },
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(useWorkspaceViewerStore.getState().fileContent).toBe(
+        "external content"
+      );
+    });
+    expect(
+      screen.queryByText("This file changed on disk.")
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Reload, Compare, and Keep mine for a dirty editor", () => {
+    openFileInStore("docs/readme.md", "old content");
+    useWorkspaceViewerStore.getState().setFileContent("my unsaved content");
+    render(<WorkspaceExplorerPane />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(HOSTED_WORKSPACE_FILE_CHANGED_EVENT, {
+          detail: { path: "docs/readme.md", modifiedAt: 2 },
+        })
+      );
+    });
+
+    expect(screen.getByText("This file changed on disk.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Keep mine" })
+    ).toBeInTheDocument();
+    expect(useWorkspaceViewerStore.getState().fileContent).toBe(
+      "my unsaved content"
+    );
   });
 });

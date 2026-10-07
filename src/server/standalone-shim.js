@@ -65,6 +65,7 @@
         : randomId();
     sessionStorage.setItem(TAB_ID_KEY, tabId);
   }
+  window.__CTRLYOKE_CLIENT_ID__ = tabId;
   localStorage.setItem(LAST_TAB_ID_KEY, tabId);
   const STATE_KEY = `fpState-${WORKSPACE_KEY}-${tabId}`;
 

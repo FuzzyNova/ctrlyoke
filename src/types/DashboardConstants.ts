@@ -355,6 +355,7 @@ export const SEARCH_HISTORY_ERROR_CODES = {
 } as const;
 
 export const MESSAGE_TYPES = {
+  WORKSPACE_FILE_CHANGED: "WORKSPACE_FILE_CHANGED",
   // Extension -> Webview
   INIT: "init",
   FILE_SELECTED: "fileSelected",
@@ -821,6 +822,9 @@ export const MESSAGE_TYPES = {
   /** Webview -> Extension: native VS Code operational user feedback */
   SHOW_NATIVE_FEEDBACK: "showNativeFeedback",
 } as const;
+
+export const HOSTED_WORKSPACE_FILE_CHANGED_EVENT =
+  "ctrlyoke-workspace-file-changed";
 
 /** Prompt-step fields supported by bulk property updates. */
 export const BULK_EDITABLE_PROMPT_STEP_KEYS = [

@@ -21,13 +21,21 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useWorkspaceEditorContextMenu } from "@hooks/useWorkspaceEditorContextMenu";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
 import { usePagedWorkspaceDirectory } from "@hooks/usePagedWorkspaceDirectory";
-import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
+import {
+  HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
+  MESSAGE_TYPES,
+  SETTING_SCOPES,
+  WORKSPACE_VIEWER_TABS,
+} from "@/types/messages";
 import type {
   WorkspaceEntry,
   SourceControlFile,
+  WorkspaceFileChangedMessage,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import {
+  HostedHttpError,
   workspaceFile,
+  workspaceFileWatch,
   workspaceSaveFile,
   workspaceStatus,
 } from "@utils/hostedApi";
@@ -97,6 +105,8 @@ function getEntryStatusColorClass(
 export const WorkspaceExplorerPane: React.FC = () => {
   const explorerPath = useWorkspaceViewerStore((s) => s.explorerPath);
   const setExplorerPath = useWorkspaceViewerStore((s) => s.setExplorerPath);
+  const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
+  const openToDiff = useWorkspaceViewerStore((s) => s.openToDiff);
   const sourceControlFiles = useWorkspaceViewerStore(
     (s) => s.sourceControlFiles
   );
@@ -104,11 +114,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
     (s) => s.setSourceControlFiles
   );
   const selectedFilePath = useWorkspaceViewerStore((s) => s.selectedFilePath);
+  const viewerOpen = useWorkspaceViewerStore((s) => s.isOpen);
+  const activeViewerTab = useWorkspaceViewerStore((s) => s.activeTab);
   const selectedFileExternal = useWorkspaceViewerStore(
     (s) => s.selectedFileExternal
   );
   const fileContent = useWorkspaceViewerStore((s) => s.fileContent);
   const fileDirty = useWorkspaceViewerStore((s) => s.fileDirty);
+  const myClientId = useUiStore((s) => s.myClientId);
   const fileLoading = useWorkspaceViewerStore((s) => s.fileLoading);
   const fileSaving = useWorkspaceViewerStore((s) => s.fileSaving);
   const fileReadOnly = useWorkspaceViewerStore((s) => s.fileReadOnly);
@@ -169,11 +182,20 @@ export const WorkspaceExplorerPane: React.FC = () => {
     useElementNarrow<HTMLDivElement>(FILE_BROWSER_NARROW_THRESHOLD);
 
   const editorRef = useRef<WorkspaceFileEditorHandle>(null);
+  const fileWatchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const modifiedAtRef = useRef<number | undefined>(undefined);
+  const [externalChange, setExternalChange] = useState<number | undefined>();
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [pendingEditorSelection, setPendingEditorSelection] =
     useState<WorkspaceFileEditorPendingSelection | null>(null);
+
+  const updateWorkspaceFileWatch = useCallback((path: string | null) => {
+    fileWatchQueueRef.current = fileWatchQueueRef.current
+      .then(() => workspaceFileWatch(path))
+      .catch(() => undefined);
+  }, []);
 
   // Markdown files can be toggled between the CodeMirror editor and a rendered
   // markdown preview (reusing MarkdownText). Non-markdown files never preview.
@@ -294,6 +316,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
         const canonicalPath = result.path.replace(/\\/g, "/");
         if (!isCurrentRequest()) return;
         selectedPath = canonicalPath;
+        modifiedAtRef.current = result.modifiedAt;
+        setExternalChange(undefined);
         if (result.imageDataUri) {
           setLoadedImage(canonicalPath, result.imageDataUri);
         } else if (result.readOnly) {
@@ -331,6 +355,77 @@ export const WorkspaceExplorerPane: React.FC = () => {
       setError,
     ]
   );
+
+  useEffect(() => {
+    if (
+      !viewerOpen ||
+      activeViewerTab !== WORKSPACE_VIEWER_TABS.EXPLORER ||
+      !selectedFilePath
+    ) {
+      updateWorkspaceFileWatch(null);
+      return;
+    }
+    updateWorkspaceFileWatch(selectedFileExternal ? null : selectedFilePath);
+    return () => {
+      updateWorkspaceFileWatch(null);
+    };
+  }, [
+    activeViewerTab,
+    selectedFileExternal,
+    selectedFilePath,
+    updateWorkspaceFileWatch,
+    viewerOpen,
+  ]);
+
+  useEffect(() => {
+    const handleFileChanged = (event: Event) => {
+      const changed = (event as CustomEvent<WorkspaceFileChangedMessage>)
+        .detail;
+      if (
+        changed.path.replace(/\\/g, "/") !==
+          selectedFilePath?.replace(/\\/g, "/") ||
+        changed.clientId === myClientId
+      ) {
+        refreshDirectory(changed.path);
+        return;
+      }
+      refreshDirectory(changed.path);
+      if (fileDirty) {
+        setExternalChange(changed.modifiedAt ?? Date.now());
+        return;
+      }
+      void workspaceFile(changed.path)
+        .then((result) => {
+          if (
+            useWorkspaceViewerStore
+              .getState()
+              .selectedFilePath?.replace(/\\/g, "/") !==
+              changed.path.replace(/\\/g, "/") ||
+            useWorkspaceViewerStore.getState().fileDirty
+          ) {
+            return;
+          }
+          modifiedAtRef.current = result.modifiedAt;
+          setLoadedFileContent(result.path, result.content);
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener(
+      HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
+      handleFileChanged
+    );
+    return () =>
+      window.removeEventListener(
+        HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
+        handleFileChanged
+      );
+  }, [
+    fileDirty,
+    myClientId,
+    refreshDirectory,
+    selectedFilePath,
+    setLoadedFileContent,
+  ]);
 
   // Keep the directory listing in sync with the selected file.
   // Whenever a file is opened by any means (explorer click, CodeMirror link,
@@ -461,10 +556,19 @@ export const WorkspaceExplorerPane: React.FC = () => {
     if (!selectedFilePath) return;
     setFileSaving(true);
     try {
-      await workspaceSaveFile({ path: selectedFilePath, content: fileContent });
+      const result = await workspaceSaveFile({
+        path: selectedFilePath,
+        content: fileContent,
+        baseModifiedAt: modifiedAtRef.current ?? null,
+      });
+      modifiedAtRef.current = result.modifiedAt;
+      setExternalChange(undefined);
       markFileSaved(fileContent);
       refreshDirectory(selectedFilePath);
     } catch (err) {
+      if (err instanceof HostedHttpError && err.status === 409) {
+        setExternalChange(Date.now());
+      }
       setError(String(err));
     } finally {
       setFileSaving(false);
@@ -477,6 +581,37 @@ export const WorkspaceExplorerPane: React.FC = () => {
     refreshDirectory,
     setError,
   ]);
+
+  const reloadChangedFile = useCallback(async () => {
+    if (!selectedFilePath) return;
+    try {
+      const result = await workspaceFile(selectedFilePath);
+      modifiedAtRef.current = result.modifiedAt;
+      discardFileDraft(selectedFilePath, result.content);
+      setExternalChange(undefined);
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [discardFileDraft, selectedFilePath, setError]);
+
+  const keepLocalFile = useCallback(async () => {
+    if (!selectedFilePath) return;
+    try {
+      const result = await workspaceFile(selectedFilePath);
+      modifiedAtRef.current = result.modifiedAt;
+      setExternalChange(undefined);
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [selectedFilePath, setError]);
+
+  const compareChangedFile = useCallback(() => {
+    if (!selectedFilePath) return;
+    openToDiff(selectedFilePath);
+    setActiveTab("sourceControl");
+  }, [openToDiff, selectedFilePath, setActiveTab]);
 
   const handleDiscardUnsaved = useCallback(async () => {
     if (!selectedFilePath) return;
@@ -871,6 +1006,24 @@ export const WorkspaceExplorerPane: React.FC = () => {
           )
         )}
       </div>
+
+      {externalChange !== undefined && (
+        <div
+          role="status"
+          className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning-fg/40 bg-severity-warning-bg px-3 py-2 text-xs text-warning-fg"
+        >
+          <span className="mr-auto">This file changed on disk.</span>
+          <button type="button" onClick={() => void reloadChangedFile()}>
+            Reload
+          </button>
+          <button type="button" onClick={compareChangedFile}>
+            Compare
+          </button>
+          <button type="button" onClick={() => void keepLocalFile()}>
+            Keep mine
+          </button>
+        </div>
+      )}
 
       {/* Content area */}
       {selectedFilePath ? (

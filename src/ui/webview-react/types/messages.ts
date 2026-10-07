@@ -9,6 +9,8 @@
 // Re-export all constants from DashboardConstants
 export {
   MESSAGE_TYPES,
+  HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
+  WORKSPACE_VIEWER_TABS,
   WORKFLOW_FILE_FORMATS,
   LOG_LEVELS,
   EXECUTION_STATES,

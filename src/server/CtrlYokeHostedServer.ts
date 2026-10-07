@@ -14,6 +14,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { FileWatcher, FileWatcherFactory } from "../core/HostPorts";
 import type { DashboardClientEndpoint } from "../ui/DashboardClientEndpoint";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -86,6 +87,7 @@ import {
   HostedWorkspaceViewerService,
   MAX_FILE_SIZE,
   RedactionMarkerSaveError,
+  WorkspaceFileConflictError,
 } from "./HostedWorkspaceViewerService";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
@@ -240,6 +242,7 @@ export interface HostedServerOptions {
   onSiblingServerDetected?: (url: string) => void;
   hostKind: HostKind;
   themeDefaults: HostedThemeDefaults;
+  fileWatcherFactory: FileWatcherFactory;
 }
 
 export class CtrlYokeHostedServer
@@ -293,6 +296,12 @@ export class CtrlYokeHostedServer
   private bindAddressFallback?: BindAddressFallbackInfo;
   private devServerUrlFileOwned = false;
   private readonly viewerService: HostedWorkspaceViewerService;
+  private readonly fileWatcherFactory: FileWatcherFactory;
+  private readonly fileWatchers = new Map<
+    string,
+    { watcher: FileWatcher; clients: Set<string> }
+  >();
+  private readonly watchedFilesByClient = new Map<string, string>();
   private readonly getRemoteAccess: (() => Promise<boolean>) | undefined;
   private readonly onRemoteAccessBlocked: (() => void) | undefined;
   private remoteAccessUpsellShown = false;
@@ -326,6 +335,7 @@ export class CtrlYokeHostedServer
       onSiblingServerDetected,
       hostKind,
       themeDefaults,
+      fileWatcherFactory,
     } = options;
     this.hub = hub;
     this.dashboardClient = endpoint;
@@ -339,6 +349,7 @@ export class CtrlYokeHostedServer
     this.onSiblingServerDetected = onSiblingServerDetected;
     this.hostKind = hostKind;
     this.themeDefaults = themeDefaults;
+    this.fileWatcherFactory = fileWatcherFactory;
     this.getRemoteAccess = remoteAccess.isAllowed;
     this.onRemoteAccessBlocked = remoteAccess.onBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
@@ -1289,22 +1300,79 @@ export class CtrlYokeHostedServer
       }
     });
 
+    this.app.post(
+      `${WORKSPACE_FILE_ROUTE_PATH}/watch`,
+      requireToken,
+      (req, res) => {
+        const clientId = sanitizeBrowserClientId(
+          req.header("x-ctrlyoke-client-id") ?? null
+        );
+        if (!clientId) {
+          res.status(400).json({ error: "client id is required" });
+          return;
+        }
+        const body = req.body as { path?: unknown };
+        if (body.path !== null && typeof body.path !== "string") {
+          res.status(400).json({ error: "path must be a string or null" });
+          return;
+        }
+        if (typeof body.path === "string" && body.path.length > 0) {
+          this.watchWorkspaceFile(
+            `${BROWSER_CLIENT_PREFIX}${clientId}`,
+            body.path
+          );
+        } else {
+          this.unwatchWorkspaceFile(`${BROWSER_CLIENT_PREFIX}${clientId}`);
+        }
+        res.json({});
+      }
+    );
+
     this.app.put(WORKSPACE_FILE_ROUTE_PATH, requireToken, async (req, res) => {
-      const body = req.body as { path?: unknown; content?: unknown };
+      const body = req.body as {
+        path?: unknown;
+        content?: unknown;
+        baseModifiedAt?: unknown;
+      };
       if (typeof body.path !== "string" || typeof body.content !== "string") {
         res.status(400).json({ error: "path and content are required" });
         return;
       }
+      if (
+        body.baseModifiedAt !== undefined &&
+        body.baseModifiedAt !== null &&
+        typeof body.baseModifiedAt !== "number"
+      ) {
+        res
+          .status(400)
+          .json({ error: "baseModifiedAt must be a number or null" });
+        return;
+      }
+      if (body.baseModifiedAt === undefined) {
+        res.status(400).json({ error: "baseModifiedAt is required" });
+        return;
+      }
       try {
-        await this.viewerService.saveFile({
+        const modifiedAt = await this.viewerService.saveFile({
           path: body.path,
           content: body.content,
+          baseModifiedAt: body.baseModifiedAt,
         });
-        res.json({});
+        const clientId = sanitizeBrowserClientId(
+          req.header("x-ctrlyoke-client-id") ?? null
+        );
+        this.broadcastWorkspaceFileChanged(
+          body.path,
+          modifiedAt,
+          clientId ? `${BROWSER_CLIENT_PREFIX}${clientId}` : undefined
+        );
+        res.json({ modifiedAt });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (message === "Path not allowed") {
           res.status(403).json({ error: message });
+        } else if (err instanceof WorkspaceFileConflictError) {
+          res.status(409).json({ error: message, modifiedAt: err.modifiedAt });
         } else if (err instanceof RedactionMarkerSaveError) {
           res.status(400).json({ error: message });
         } else {
@@ -2377,6 +2445,7 @@ export class CtrlYokeHostedServer
         // close of that stale socket must not strip control from the socket that
         // just inherited it.
         const clientStillConnected = this.hasLiveSocketForTag(clientTag);
+        if (!clientStillConnected) this.unwatchWorkspaceFile(clientTag);
         Log.debug(
           `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} terminationCause=${terminationCause ?? "peer-or-network"} remainingCount=${this.connections.size} clientStillConnected=${clientStillConnected}`
         );
@@ -2591,6 +2660,68 @@ export class CtrlYokeHostedServer
         this.noteLargeSend(message, json, ws);
       }
     }
+  }
+
+  private watchWorkspaceFile(clientId: string, viewerPath: string): void {
+    const absolutePath = this.viewerService.resolveWorkspacePath(viewerPath);
+    if (!absolutePath) {
+      this.unwatchWorkspaceFile(clientId);
+      return;
+    }
+    const normalizedPath = path.resolve(absolutePath);
+    const currentPath = this.watchedFilesByClient.get(clientId);
+    if (currentPath === normalizedPath) return;
+    this.unwatchWorkspaceFile(clientId);
+
+    let subscription = this.fileWatchers.get(normalizedPath);
+    if (!subscription) {
+      const directory = path.dirname(normalizedPath);
+      const watcher = this.fileWatcherFactory.create(
+        directory,
+        path.basename(normalizedPath)
+      );
+      subscription = { watcher, clients: new Set() };
+      this.fileWatchers.set(normalizedPath, subscription);
+      const notify = async () => {
+        let modifiedAt: number | undefined;
+        try {
+          modifiedAt = (await fs.promises.stat(normalizedPath)).mtimeMs;
+        } catch {
+          // A delete event has no current modification time.
+        }
+        this.broadcastWorkspaceFileChanged(viewerPath, modifiedAt);
+      };
+      watcher.onDidChange(() => void notify());
+      watcher.onDidCreate(() => void notify());
+      watcher.onDidDelete(() => void notify());
+    }
+    subscription.clients.add(clientId);
+    this.watchedFilesByClient.set(clientId, normalizedPath);
+  }
+
+  private unwatchWorkspaceFile(clientId: string): void {
+    const currentPath = this.watchedFilesByClient.get(clientId);
+    if (!currentPath) return;
+    this.watchedFilesByClient.delete(clientId);
+    const subscription = this.fileWatchers.get(currentPath);
+    if (!subscription) return;
+    subscription.clients.delete(clientId);
+    if (subscription.clients.size > 0) return;
+    subscription.watcher.dispose();
+    this.fileWatchers.delete(currentPath);
+  }
+
+  private broadcastWorkspaceFileChanged(
+    filePath: string,
+    modifiedAt: number | undefined,
+    clientId?: string
+  ): void {
+    this.broadcast({
+      type: MESSAGE_TYPES.WORKSPACE_FILE_CHANGED,
+      path: filePath.replace(/\\/g, "/"),
+      ...(modifiedAt === undefined ? {} : { modifiedAt }),
+      ...(clientId ? { clientId } : {}),
+    });
   }
 
   /**
@@ -2886,6 +3017,9 @@ export class CtrlYokeHostedServer
     this.unregisterMemoryContext();
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
+    for (const { watcher } of this.fileWatchers.values()) watcher.dispose();
+    this.fileWatchers.clear();
+    this.watchedFilesByClient.clear();
     this.hub.removeClient(this);
     if (this.heartbeatInterval !== undefined) {
       clearInterval(this.heartbeatInterval);

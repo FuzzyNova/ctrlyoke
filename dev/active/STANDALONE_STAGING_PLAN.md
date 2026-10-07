@@ -3,7 +3,8 @@
 **Status (2026-10-06):** Track A Stages 1–6 are complete, and the decoupling
 plan has moved to `dev/implemented/`. Its two remaining phases (Node
 composition and shim retirement) now live in the standalone plan as part of
-Stages 7a and 10. Continue at Stage 7b.
+Stages 7a and 10. Stages 7a and 7b and independent Stage I1 are complete.
+Continue at Stage 8.
 This document only sets the order of work. It contains no design. The design lives
 in the three plans below, and this file arranges their remaining work into
 stages that can each be shipped on their own. All four documents were
@@ -110,7 +111,7 @@ names the guard or test that proves it, not just the code change.
 
 | Stage | Work                                                                                                                                                                                                                  | Owning plan / phase | Prerequisite                                                                                              | Done when                                                                                                                                                                 |
 | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    I1 | Save conflicts and reload banner:<br>• `modifiedAt`/`baseModifiedAt` and 409 on a stale save.<br>• `WORKSPACE_FILE_CHANGED` broadcast, and a viewer refresh on external change.<br>• Reload/Compare/Keep-mine banner. | LSP phase 0         | None in the VS Code-hosted server (VS Code watcher). Standalone external-change detection needs Stage 7a. | A two-tab test: the second save returns 409, and the other tab reloads silently when it has no unsaved edits or shows the banner when it does. Must land before Stage 11. |
+|    I1 | **Done.** Save conflicts and reload banner:<br>• `modifiedAt`/`baseModifiedAt` and 409 on a stale save.<br>• `WORKSPACE_FILE_CHANGED` broadcast, and a viewer refresh on external change.<br>• Reload/Compare/Keep-mine banner. | LSP phase 0         | None in the VS Code-hosted server (VS Code watcher). Standalone external-change detection needs Stage 7a. | Two-tab coverage proves the stale save returns 409 and file changes broadcast to both clients; editor coverage proves clean buffers reload silently and dirty buffers show the banner. Must land before Stage 11. |
 
 ## Notes
 

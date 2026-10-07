@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   workspaceTree: vi.fn(),
   workspaceFile: vi.fn(),
   workspaceSaveFile: vi.fn(),
+  workspaceFileWatch: vi.fn(),
   workspaceStatus: vi.fn(),
   clipboard: null as { operation: "cut"; path: string } | null,
   contextOptions: null as {
@@ -40,6 +41,7 @@ vi.mock("@utils/hostedApi", async (importOriginal) => ({
   workspaceTree: mocks.workspaceTree,
   workspaceFile: mocks.workspaceFile,
   workspaceSaveFile: mocks.workspaceSaveFile,
+  workspaceFileWatch: mocks.workspaceFileWatch,
   workspaceStatus: mocks.workspaceStatus,
 }));
 
@@ -180,10 +182,15 @@ beforeEach(() => {
   mocks.workspaceTree.mockReset();
   mocks.workspaceFile.mockReset();
   mocks.workspaceSaveFile.mockReset();
+  mocks.workspaceFileWatch.mockReset().mockResolvedValue(undefined);
   mocks.workspaceStatus.mockReset();
   mocks.clipboard = null;
-  mocks.workspaceFile.mockResolvedValue({ content: "", path: "" });
-  mocks.workspaceSaveFile.mockResolvedValue(undefined);
+  mocks.workspaceFile.mockResolvedValue({
+    content: "",
+    path: "",
+    modifiedAt: 1,
+  });
+  mocks.workspaceSaveFile.mockResolvedValue({ modifiedAt: 2 });
   mocks.workspaceStatus.mockResolvedValue({ files: [] });
   mocks.contextOptions = null;
   installPagedServer();

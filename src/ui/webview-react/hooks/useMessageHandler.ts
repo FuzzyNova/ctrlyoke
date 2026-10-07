@@ -25,6 +25,7 @@ import { useEditorStore } from "../store/editorStore";
 import { useRunSummaryCacheStore } from "../store/runSummaryCacheStore";
 import {
   MESSAGE_TYPES,
+  HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
   EXECUTION_STATES,
   EXECUTION_MODES,
   STEP_STATUS,
@@ -3364,6 +3365,14 @@ export function useMessageHandler(): UseMessageHandlerReturn {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       notePanelMessage(message);
+      if (message?.type === MESSAGE_TYPES.WORKSPACE_FILE_CHANGED) {
+        window.dispatchEvent(
+          new CustomEvent(HOSTED_WORKSPACE_FILE_CHANGED_EVENT, {
+            detail: message,
+          })
+        );
+        return;
+      }
       const view = useUiStore.getState();
       // Definition/output sink messages still carry an in-memory instance id
       // rather than a run ref, so they cannot safely update a different

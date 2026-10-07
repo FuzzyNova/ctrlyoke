@@ -8,6 +8,7 @@ import {
   USER_FEEDBACK_SEVERITY,
 } from "../types/DashboardConstants";
 import type { RunnerHostIdentity } from "../types/CtrlYokeTypes";
+import type { FileWatcherFactory } from "../core/HostPorts";
 import { loadHostedThemeDefaults } from "./HostedThemeDefaults";
 
 type HostedServerOptionOverrides = Pick<
@@ -20,6 +21,7 @@ type HostedServerOptionOverrides = Pick<
   | "token"
   | "hostKind"
 > & {
+  fileWatcherFactory: FileWatcherFactory;
   licenseService: LicenseService;
   getUserFeedbackSink: () => UserFeedbackSink;
   runnerHostIdentity?: RunnerHostIdentity;
@@ -52,12 +54,12 @@ export function createHostedServerOptions(
       isAllowed: () => overrides.licenseService.hasRemoteAccess(),
       onBlocked:
         overrides.onRemoteAccessBlocked ??
-        (() =>
-          notifyRemoteAccessBlocked(overrides.getUserFeedbackSink())),
+        (() => notifyRemoteAccessBlocked(overrides.getUserFeedbackSink())),
     },
     runnerHostIdentity: overrides.runnerHostIdentity,
     onSiblingServerDetected: overrides.onSiblingServerDetected,
     hostKind: overrides.hostKind,
+    fileWatcherFactory: overrides.fileWatcherFactory,
     themeDefaults: loadHostedThemeDefaults(),
   };
 }

@@ -490,8 +490,8 @@ is far ahead of anything we would ship. Instead:
 Staging numbers refer to
 [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md).
 
-0. **Save conflicts and reload banner** (independent; **Stage I1**). This can
-   ship first, and it must ship before the standalone release.
+0. **Done. Save conflicts and reload banner** (independent; **Stage I1**).
+   This shipped before the standalone release.
    - `modifiedAt` on `WorkspaceFileResponse`.
    - `baseModifiedAt` on `WorkspaceFileSaveRequest`.
    - The save response returns the new `modifiedAt`.

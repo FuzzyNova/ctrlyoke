@@ -10,6 +10,7 @@ import { CtrlYokeHostedServer } from "../../server/CtrlYokeHostedServer";
 import * as BuildConfig from "../../utils/BuildConfig";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { NoopFileWatcherFactory } from "../helpers/NoopFileWatcherFactory";
 
 interface FakeHttpServerPort {
   listen(port: number, bindAddress: string): void;
@@ -142,6 +143,7 @@ function createHostedServer(
     onSiblingServerDetected,
     hostKind: HOST_KINDS.VSCODE,
     themeDefaults: { dark: ":root {}", light: ":root {}" },
+    fileWatcherFactory: new NoopFileWatcherFactory(),
   });
 }
 

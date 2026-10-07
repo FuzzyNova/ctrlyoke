@@ -258,6 +258,7 @@ export async function createNodeHostedServer(options: {
       licenseService: services.licenseService,
       getUserFeedbackSink: () => orchestrator.getUserFeedbackSink(),
       hostKind: HOST_KINDS.STANDALONE,
+      fileWatcherFactory: services.fileWatcherFactory,
     })
   );
   let runningUrl: string;
