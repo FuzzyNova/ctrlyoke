@@ -1,9 +1,10 @@
 # Workspace Editor Language Intelligence Plan
 
-**Status (2026-10-06):** Proposed, decided, and ready to implement in
-sequence. Not started. Every code reference was re-audited against `src/` on
-2026-10-06, and every open question is resolved. Phase 5, the VS Code provider
-backend, is **dropped**.
+**Status (2026-10-06):** Proposed and decided. The `SymbolIndex` port and
+`VsCodeSymbolIndex` (phase 7a) plus `RegexSymbolIndex` (phase 7-regex, staging
+Stage 9) are complete. Remaining phases are ready to implement in sequence.
+Every code reference was re-audited against `src/` on 2026-10-06, and every
+open question is resolved. Phase 5, the VS Code provider backend, is **dropped**.
 
 **Sequencing:**
 [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md) is the
@@ -404,8 +405,9 @@ interface IndexedSymbol {
   1. **`VsCodeSymbolIndex`** (extension-only). It wraps the two execute
      commands exactly as today, so VS Code behavior doesn't change. It lands
      in decoupling Stage 5.
-  2. **`RegexSymbolIndex`** (Node-only). It lands in staging Stage 9 and is
-     standalone v1's `#` source.
+  2. **Done — 7-regex (2026-10-06).** `RegexSymbolIndex` (Node-only) is
+     standalone v1's `#` source and the per-language fallback for later LSP
+     integration.
      - It scans source files by extension (TS/JS, Python, Go, Rust, Java,
        C#, and C/C++ patterns) and caches results per file by `mtime`.
      - `endLine` comes from bracket matching in brace languages and from
@@ -544,8 +546,8 @@ Staging numbers refer to
    - **Done — 7a (2026-10-06).** `SymbolIndex`, `VsCodeSymbolIndex`, the
      one-time SymbolKind numbering conversion, and callers moved onto the
      port landed in decoupling **Stage 5b**. VS Code behavior is preserved.
-   - **7-regex. `RegexSymbolIndex`.** Ships with standalone **Stage 9** as
-     standalone v1's `#` source.
+   - **Done — 7-regex (2026-10-06).** `RegexSymbolIndex` ships with standalone
+     **Stage 9** as standalone v1's `#` source.
    - **7b. `LspSymbolIndex`.** **Stage 16**, wired by the standalone
      composition root, with the regex index as the per-language fallback.
    - Tests: a golden test that each index produces identical `#sym:` insert

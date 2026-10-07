@@ -73,6 +73,19 @@ suite("Node hosted server composition", function () {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-node-server-"));
     workspaceRoot = path.join(tempRoot, "workspace");
     await fs.mkdir(workspaceRoot);
+    await fs.mkdir(path.join(workspaceRoot, "src"), { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceRoot, "src", "Widget.ts"),
+      "export class Widget {\n  run() {\n    return true;\n  }\n}\n"
+    );
+    await fs.mkdir(
+      path.join(workspaceRoot, ".ctrlyoke", "skills", "sample-skill"),
+      { recursive: true }
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, ".ctrlyoke", "skills", "sample-skill", "SKILL.md"),
+      "---\nname: sample-skill\ndescription: Test completion skill\n---\n"
+    );
     originalHome = process.env.CTRLYOKE_HOME;
     originalToken = process.env.CTRLYOKE_SERVER_TOKEN;
     process.env.CTRLYOKE_HOME = path.join(tempRoot, "state-home");
@@ -184,5 +197,39 @@ suite("Node hosted server composition", function () {
     );
     assert.ok((await broadcast).summary);
     assert.ok((await secondBroadcast).summary);
+  });
+
+  test("serves standalone @, #, ~, and / prompt completions over WebSocket", async () => {
+    assert.ok(runtime);
+    const socket = await openSocket(runtime.url, "completion-client");
+    sockets.push(socket);
+    const requests = [
+      { trigger: "@", prefix: "@Wid", expected: "Widget.ts" },
+      { trigger: "#", prefix: "#Wid", expected: "sym.class:src/Widget.ts:Widget:1-5" },
+      { trigger: "~", prefix: "~", expected: "diff" },
+      { trigger: "/", prefix: "/", expected: "/skill:sample-skill" },
+    ];
+    for (const [index, request] of requests.entries()) {
+      const responsePromise = waitForMessage(
+        socket,
+        (message) =>
+          message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE &&
+          message.seq === index + 1
+      );
+      socket.send(JSON.stringify({
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        ...request,
+        position: request.prefix.length,
+        seq: index + 1,
+      }));
+      const response = await responsePromise;
+      const items = response.items as Array<{ insertText?: string }>;
+      assert.ok(Array.isArray(items), `missing completion items for ${request.trigger}`);
+      assert.ok(
+        items.some((item) => item.insertText?.includes(request.expected)),
+        `expected ${request.expected} for ${request.trigger}, got ${JSON.stringify(items)}`
+      );
+      if (request.trigger === "#") assert.strictEqual(response.partial, false);
+    }
   });
 });

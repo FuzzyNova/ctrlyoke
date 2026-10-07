@@ -14,6 +14,7 @@ import type { EditorContextSource } from "../../completions/EditorContextSource"
 import type { IndexedSymbol, SymbolIndex } from "../../completions/SymbolIndex";
 import { LspSymbolKind } from "../../completions/SymbolIndex";
 import { VsCodeSymbolIndex } from "../../platform/VsCodeSymbolIndex";
+import { RegexSymbolIndex } from "../../completions/RegexSymbolIndex";
 import { toVSCodeCompletionItem } from "../../completions/CompletionHelpers";
 import {
   symbolCompletionGolden,
@@ -673,6 +674,63 @@ suite("VsCodeSymbolIndex completion golden", () => {
       symbolCompletionGoldenResult.icon
     );
     assert.strictEqual(native.kind, vscode.CompletionItemKind.Class);
+  });
+
+  test("indexes the shared #sym golden with RegexSymbolIndex", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "symbol-regex-golden-")
+    );
+    const source = [
+      "// fixture",
+      "",
+      "",
+      "export class Widget {",
+      "  first() {",
+      "    return 1;",
+      "  }",
+      "",
+      "  second() {",
+      "    return 2;",
+      "  }",
+      "",
+      "  third() {",
+      "    return 3;",
+      "  }",
+      "",
+      "  value = 4;",
+      "}",
+    ].join("\n");
+    try {
+      await fs.mkdir(path.join(root, "src"), { recursive: true });
+      await fs.writeFile(path.join(root, "src", "Widget.ts"), source);
+      const symbols = new RegexSymbolIndex(root, async () => ["src/Widget.ts"]);
+      const core = createCore({ symbols });
+      const [item] = await core.getHashCompletions("Wid");
+      assert.strictEqual(
+        item.insertText,
+        symbolCompletionGoldenResult.insertText
+      );
+      assert.strictEqual(
+        item.kind,
+        symbolCompletionGoldenResult.completionKind
+      );
+      assert.strictEqual(
+        COMPLETION_KIND_ICONS[item.kind],
+        symbolCompletionGoldenResult.icon
+      );
+      assert.ok(
+        (await symbols.documentSymbols("src/Widget.ts")).some(
+          (symbol) =>
+            symbol.name === symbolCompletionGolden.name &&
+            symbol.kind === symbolCompletionGolden.kind &&
+            symbol.viewerPath === symbolCompletionGolden.viewerPath &&
+            symbol.startLine === symbolCompletionGolden.startLine &&
+            symbol.endLine === symbolCompletionGolden.endLine
+        )
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   test("indexes nested document symbols for reference-kind lookup", async () => {

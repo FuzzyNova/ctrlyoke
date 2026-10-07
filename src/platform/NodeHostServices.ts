@@ -19,6 +19,8 @@ import { HostedWebSocketUserFeedbackSink } from "../server/HostedWebSocketUserFe
 import { resolveServerToken, ServerTokenStore } from "./ServerTokenStore";
 import { LicenseService } from "../license/LicenseService";
 import { CompletionCore } from "../completions/CompletionCore";
+import { RegexSymbolIndex } from "../completions/RegexSymbolIndex";
+import type { EditorContextSource } from "../completions/EditorContextSource";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
 import { Log } from "../utils/Log";
@@ -117,19 +119,26 @@ export async function createNodeHostServices(options: {
     new ConsoleUserFeedbackSink(),
     new HostedWebSocketUserFeedbackSink((message) => hub.postMessage(message)),
   ]);
+  const getCompletionFiles = async (): Promise<string[]> => {
+    try {
+      return await getGitTrackedFiles(cwd);
+    } catch (error) {
+      Log.warn(
+        "[Completions] git ls-files failed; falling back to workspace walk:",
+        error
+      );
+      return (await walkSearchFiles(cwd, Date.now(), 100_000, 10_000)).files;
+    }
+  };
+  const editorContext: EditorContextSource = {
+    getSelections: () => [],
+    getVisibleOutputChannels: () => [],
+  };
   const completionCore = new CompletionCore({
     isMultiRoot: () => false,
-    getFiles: async () => {
-      try {
-        return await getGitTrackedFiles(cwd);
-      } catch (error) {
-        Log.warn(
-          "[Completions] git ls-files failed; falling back to workspace walk:",
-          error
-        );
-        return (await walkSearchFiles(cwd, Date.now(), 100_000, 10_000)).files;
-      }
-    },
+    getFiles: getCompletionFiles,
+    symbols: new RegexSymbolIndex(cwd, getCompletionFiles),
+    editorContext,
   });
 
   return {

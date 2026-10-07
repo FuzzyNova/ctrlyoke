@@ -2,7 +2,7 @@
 
 **Status (2026-10-06):** The VS Code-hosted server has **shipped**. Standalone
 server implementation has started: Track A (Stages 1–6), Track B sub-stages
-7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stage 8 are complete.
+7a1–7a3, Stage 7a, Stage 7b, independent Stage I1, and Stages 8–9 are complete.
 Every fact in this document was re-audited against `src/` on 2026-10-06, and every open
 question has a decision. ROADMAP lists it as a P2 item for milestone 0.4.
 
