@@ -892,8 +892,8 @@ Staging numbers refer to
    insertion, and link gestures. Full verification passed: typecheck, lint, and
    `npm test` (extension 5,635 passing/4 pending, UI 3,476 passing, packaging
    80 passing).
-4. **Language Servers settings section** (**Stage 15**). Full UX in
-   "Settings section UX".
+4. **Language Servers settings section** (**Stage 15 — done 2026-10-07**).
+   Full UX in "Settings section UX".
    - Languages strip (`use` per language) and server rows with live status
      pushed from the host.
    - Catalog tab: detected / not installed, npm one-click install into the
@@ -903,8 +903,10 @@ Staging numbers refer to
      Copilot `lsp.json`/`lsp-config.json`, opencode `lsp`, and `cclsp.json`.
    - Add/edit form for hand-written definitions, and Approve for pending
      workspace definitions.
-   - Move `McpManagerSection`'s module-local helpers that both sections need
-     into `components/shared/`.
+   - Shared manager UI helpers are in `components/shared/` and used by both
+     sections. The drawer tab and settings-search landmark are registered.
+   - Verification passed: `npm run typecheck`, `npm run lint`, and `npm test`
+     (extension 5,640 passing/4 pending, UI 3,489 passing, packaging 80 passing).
 5. ~~**VS Code provider backend.**~~ **Dropped 2026-10-06.** See Open
    Question 1.
 6. **Harness export + `DiagnosticsSource` port** (**Stage 17**, coordinated

@@ -10,6 +10,7 @@ import {
   type MessageConnection,
 } from "vscode-jsonrpc/node";
 import { CTRLYOKE_SETTINGS_DEFAULTS, type CtrlYokeGlobalSettings, type LanguageServerDefinition, type LanguageServersSettings } from "../../types/CtrlYokeSettings";
+import { LANGUAGE_SERVER_STATUSES } from "../../types/DashboardConstants";
 import type { KeyValueStore } from "../../core/HostPorts";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import {
@@ -25,7 +26,7 @@ import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import { LANGUAGE_SERVER_CATALOG } from "./LanguageServerCatalog";
 import { ctrlyokeStateHome } from "../../utils/ProjectStatePaths";
 
-export type LanguageServerStatus = "running" | "starting" | "idle" | "stopped" | "not installed" | "limit reached" | "needs approval" | "crashed";
+export type LanguageServerStatus = (typeof LANGUAGE_SERVER_STATUSES)[keyof typeof LANGUAGE_SERVER_STATUSES];
 export interface LanguageServerStatusChange { readonly id: string; readonly rootPath: string; readonly status: LanguageServerStatus; readonly detail?: string; }
 export interface ManagedLanguageServerBackendOptions {
   readonly workspaceRoot: string;
@@ -87,7 +88,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       workspaceRoot: this.options.workspaceRoot, platform: this.options.platform ?? process.platform,
     }, this.deps);
     if (!resolved) {
-      this.emitStatus({ id: String(workspaceSettings.languageServers.use[languageId] ?? languageId), rootPath: this.options.workspaceRoot, status: "not installed" });
+      this.emitStatus({ id: String(workspaceSettings.languageServers.use[languageId] ?? languageId), rootPath: this.options.workspaceRoot, status: LANGUAGE_SERVER_STATUSES.NOT_INSTALLED });
       return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
     }
     const key = this.serverKey(resolved.id, this.options.workspaceRoot);
@@ -96,10 +97,10 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     else if (this.runningCount() >= Math.max(1, userSettings.languageServers.maxRunning)) {
       const victim = [...this.servers.values()].filter((server) => server.openDocuments === 0).sort((a, b) => a.lastUsed - b.lastUsed)[0];
       if (!victim) {
-        this.emitStatus({ id: resolved.id, rootPath: this.options.workspaceRoot, status: "limit reached" });
+        this.emitStatus({ id: resolved.id, rootPath: this.options.workspaceRoot, status: LANGUAGE_SERVER_STATUSES.LIMIT_REACHED });
         return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.LIMIT_REACHED };
       }
-      await this.stopServer(victim, "stopped");
+      await this.stopServer(victim, LANGUAGE_SERVER_STATUSES.STOPPED);
     }
     const descriptor: LanguageServerDescriptor = { id: resolved.id, languageId, rootPath: this.options.workspaceRoot, capabilities: {}, serverInfo: { name: resolved.id } };
     return { descriptor };
@@ -129,7 +130,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     if (!server) return;
     server.openDocuments = Math.max(0, server.openDocuments - 1); server.lastUsed = Date.now();
     if (server.openDocuments === 0) {
-      this.emitStatus({ id: server.resolved.id, rootPath: server.descriptor.rootPath, status: "idle" });
+      this.emitStatus({ id: server.resolved.id, rootPath: server.descriptor.rootPath, status: LANGUAGE_SERVER_STATUSES.IDLE });
       this.resetIdle(server);
     }
   }
@@ -153,8 +154,13 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     if (!server) throw new Error(`Language server ${id} is not running.`);
     const { descriptor, resolved, key } = server;
     const restartCount = server.restartCount;
-    await this.stopServer(server, "stopped");
+    await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
     await this.startServer(key, resolved, descriptor, restartCount);
+  }
+
+  async stopManagedServer(id: string): Promise<void> {
+    const server = [...this.servers.values()].find((entry) => entry.resolved.id === id);
+    if (server) await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
   }
 
   async dispose(): Promise<void> {
@@ -173,7 +179,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     this.statuses.removeAllListeners();
   }
 
-  private async approveWorkspaceDefinitions(): Promise<boolean> {
+  async requestWorkspaceApproval(): Promise<boolean> {
     const definitions = this.normalize(this.options.workspaceSettings().languageServers).definitions;
     const approvals = this.getApprovals();
     const pending = Object.entries(definitions).filter(([id, definition]) => {
@@ -181,7 +187,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       return approvals[id] !== hash && approvals[id] !== `!${hash}`;
     });
     if (!pending.length) return true;
-    this.emitStatus({ id: pending[0][0], rootPath: this.options.workspaceRoot, status: "needs approval" });
+    this.emitStatus({ id: pending[0][0], rootPath: this.options.workspaceRoot, status: LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL });
     if (!this.options.interactionPort.canPrompt()) return false;
     const hashes = new Map(pending.map(([id, definition]) => [id, this.definitionHash(definition)]));
     const response = await this.options.interactionPort.requestBatchApproval({
@@ -198,6 +204,10 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     // approved definition for this language. The resolver receives only the
     // definitions whose current executable hash was approved.
     return true;
+  }
+
+  private async approveWorkspaceDefinitions(): Promise<boolean> {
+    return this.requestWorkspaceApproval();
   }
 
   private getApprovals(): Record<string, string> {
@@ -222,7 +232,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     return resolveLanguageServer({ languageId: descriptor.languageId, userSettings, workspaceSettings, approvedWorkspaceDefinitionIds: ids, pathEntries: this.options.pathEntries ?? (process.env.PATH ?? "").split(path.delimiter), toolBinDirectory: this.options.toolBinDirectory ?? path.join(ctrlyokeStateHome(), "lsp", "node_modules", ".bin"), workspaceRoot: this.options.workspaceRoot, platform: this.options.platform ?? process.platform }, this.deps);
   }
   private async startServer(key: string, resolved: ResolvedLanguageServer, descriptor: LanguageServerDescriptor, restartCount: number): Promise<MessageConnection> {
-    this.emitStatus({ id: resolved.id, rootPath: descriptor.rootPath, status: "starting" });
+    this.emitStatus({ id: resolved.id, rootPath: descriptor.rootPath, status: LANGUAGE_SERVER_STATUSES.STARTING });
     const command = resolved.command;
     const env = { ...process.env, ...resolved.env } as NodeJS.ProcessEnv;
     const child = (this.options.spawnProcess ?? spawn)(command.command, command.args, {
@@ -251,11 +261,11 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       const caps = (initialized as { capabilities?: Record<string, unknown> }).capabilities ?? {};
       (server.descriptor as { capabilities: Record<string, unknown> }).capabilities = caps;
       connection.sendNotification("initialized", {});
-      this.emitStatus({ id: resolved.id, rootPath: descriptor.rootPath, status: "running" });
-      if (server.openDocuments === 0) this.emitStatus({ id: resolved.id, rootPath: descriptor.rootPath, status: "idle" });
+      this.emitStatus({ id: resolved.id, rootPath: descriptor.rootPath, status: LANGUAGE_SERVER_STATUSES.RUNNING });
+      if (server.openDocuments === 0) this.emitStatus({ id: resolved.id, rootPath: descriptor.rootPath, status: LANGUAGE_SERVER_STATUSES.IDLE });
       this.resetIdle(server);
       return connection;
-    } catch (error) { await this.stopServer(server, "crashed"); throw error; }
+    } catch (error) { await this.stopServer(server, LANGUAGE_SERVER_STATUSES.CRASHED); throw error; }
   }
   private configurationValue(settings: Record<string, unknown>, section?: string): unknown {
     if (!section) return settings;
@@ -268,10 +278,10 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
   private crashed(server: RunningServer, error: Error): void {
     if (this.servers.get(server.key) !== server) return;
     this.servers.delete(server.key); this.clearIdle(server);
-    this.emitStatus({ id: server.resolved.id, rootPath: server.descriptor.rootPath, status: "crashed", detail: error.message });
+    this.emitStatus({ id: server.resolved.id, rootPath: server.descriptor.rootPath, status: LANGUAGE_SERVER_STATUSES.CRASHED, detail: error.message });
     if (!this.disposed && server.openDocuments > 0 && server.restartCount < 5) {
       const delay = Math.min(30_000, 500 * 2 ** server.restartCount);
-      this.emitStatus({ id: server.resolved.id, rootPath: server.descriptor.rootPath, status: "starting", detail: `Restarting in ${delay} ms` });
+      this.emitStatus({ id: server.resolved.id, rootPath: server.descriptor.rootPath, status: LANGUAGE_SERVER_STATUSES.STARTING, detail: `Restarting in ${delay} ms` });
       (this.options.setTimer ?? setTimeout)(() => { if (!this.disposed) void this.startServer(server.key, server.resolved, server.descriptor, server.restartCount + 1).catch(() => undefined); }, delay);
     }
   }
@@ -279,7 +289,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     this.clearIdle(server);
     if (server.openDocuments > 0) return;
     const minutes = this.normalize(this.options.userSettings().languageServers).idleShutdownMinutes;
-    server.idleTimer = (this.options.setTimer ?? setTimeout)(() => { if (server.openDocuments === 0) void this.stopServer(server, "stopped"); }, Math.max(0, minutes) * 60_000);
+    server.idleTimer = (this.options.setTimer ?? setTimeout)(() => { if (server.openDocuments === 0) void this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED); }, Math.max(0, minutes) * 60_000);
   }
   private clearIdle(server: RunningServer): void { if (server.idleTimer) (this.options.clearTimer ?? clearTimeout)(server.idleTimer); server.idleTimer = undefined; }
   private async stopServer(server: RunningServer, status: LanguageServerStatus): Promise<void> {

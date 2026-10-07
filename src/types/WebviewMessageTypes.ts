@@ -60,6 +60,7 @@ import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
 import type { LanguageServerDefinition } from "./CtrlYokeSettings";
 import type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCatalog";
 import type { LanguageServerStatusChange } from "../server/lsp/ManagedLanguageServerBackend";
+export type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCatalog";
 import type {
   ErrorBehavior,
   WorkflowSummary,
@@ -2761,6 +2762,7 @@ export interface RestartLspServerMessage {
 
 export interface LspServersUpdateMessage {
   type: typeof MESSAGE_TYPES.LSP_SERVERS_UPDATE;
+  hostPlatform?: "win32" | "darwin" | "linux";
   definitions: ManagedLanguageServerDefinition[];
   catalog: readonly LanguageServerCatalogEntry[];
   probes: LanguageServerProbeResult[];

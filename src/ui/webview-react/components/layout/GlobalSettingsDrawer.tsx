@@ -38,6 +38,7 @@ import {
   DeveloperSection,
   AgentSkillsManagerSection,
   McpManagerSection,
+  LanguageServersSection,
   CommitSection,
   SecretsSection,
   StatusLineSection,
@@ -118,7 +119,8 @@ export function GlobalSettingsDrawer() {
     </div>
   );
   const isFullWidthSettingsTab =
-    effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER;
+    effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER ||
+    effectiveActiveTab === GLOBAL_SETTINGS_TABS.LANGUAGE_SERVERS;
 
   useEffect(() => {
     if (!globalSettingsOpen) closeSearch();
@@ -543,6 +545,10 @@ export function GlobalSettingsDrawer() {
                   {effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
                     <McpManagerSection activeScope={activeScope} />
                   )}
+                  {effectiveActiveTab ===
+                    GLOBAL_SETTINGS_TABS.LANGUAGE_SERVERS && (
+                    <LanguageServersSection activeScope={activeScope} />
+                  )}
                   {fullSettings &&
                     effectiveActiveTab === GLOBAL_SETTINGS_TABS.COMMIT && (
                       <CommitSection
@@ -558,7 +564,9 @@ export function GlobalSettingsDrawer() {
                     effectiveActiveTab !== GLOBAL_SETTINGS_TABS.DEVELOPER &&
                     effectiveActiveTab !==
                       GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER &&
-                    effectiveActiveTab !== GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
+                    effectiveActiveTab !== GLOBAL_SETTINGS_TABS.MCP_MANAGER &&
+                    effectiveActiveTab !==
+                      GLOBAL_SETTINGS_TABS.LANGUAGE_SERVERS && (
                       <div className="text-description-fg text-sm">
                         Loading settings…
                       </div>

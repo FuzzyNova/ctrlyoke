@@ -78,6 +78,11 @@ export const ALL_TABS = [
     label: "MCP Manager",
     icon: "codicon-mcp",
   },
+  {
+    id: GLOBAL_SETTINGS_TABS.LANGUAGE_SERVERS,
+    label: "Language Servers",
+    icon: "codicon-symbol-class",
+  },
   // Insights
   {
     id: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,

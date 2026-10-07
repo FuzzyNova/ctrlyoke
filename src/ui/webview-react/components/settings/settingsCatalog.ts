@@ -881,6 +881,18 @@ const STATIC_SETTINGS_CATALOG = {
     label: "MCP server",
     keywords: ["stdio", "http transport", "server catalog"],
   },
+  "landmark:language-servers:servers": {
+    id: "landmark:language-servers:servers",
+    tab: GLOBAL_SETTINGS_TABS.LANGUAGE_SERVERS,
+    label: "Language servers",
+    keywords: [
+      "LSP",
+      "language intelligence",
+      "completion",
+      "catalog",
+      "install",
+    ],
+  },
   "landmark:agent-skills:manager": {
     id: "landmark:agent-skills:manager",
     tab: GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER,

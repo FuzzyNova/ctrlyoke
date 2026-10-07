@@ -1425,6 +1425,8 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.DELETE_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleDelete(ctx, message as DeleteLspDefinitionMessage));
     table.set(MESSAGE_TYPES.INSTALL_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleInstall(ctx, message as InstallLspServerMessage));
     table.set(MESSAGE_TYPES.RESTART_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleRestart(ctx, message as RestartLspServerMessage));
+    table.set(MESSAGE_TYPES.REQUEST_LSP_APPROVAL, async (_message, ctx) => this.languageServerManager.handleRequestApproval(ctx));
+    table.set(MESSAGE_TYPES.STOP_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleStop(ctx, String(message.id ?? "")));
   }
 
   private registerSecretRegistry(table: DispatchTable): void {

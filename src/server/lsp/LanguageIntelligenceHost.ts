@@ -15,6 +15,7 @@ import { LspSessionProxy } from "./LspSessionProxy";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
 import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import type { LanguageServerStatusChange } from "./ManagedLanguageServerBackend";
+import { LANGUAGE_SERVER_STATUSES } from "../../types/DashboardConstants";
 
 interface SharedDocument {
   readonly uri: string;
@@ -59,7 +60,7 @@ export class LanguageIntelligenceHost {
     };
     this.backendStatusSubscription = statusSource.onStatusChanged?.((event) => {
       this.statusEvents.emit("change", event);
-      if (event.status === "crashed" || event.status === "stopped") {
+      if (event.status === LANGUAGE_SERVER_STATUSES.CRASHED || event.status === LANGUAGE_SERVER_STATUSES.STOPPED) {
         this.invalidateSession(event.id, event.rootPath);
       }
     });
@@ -77,6 +78,15 @@ export class LanguageIntelligenceHost {
   async restartServer(id: string): Promise<void> {
     if (!this.options.backend.restartServer) throw new Error("This language server host does not support restart.");
     await this.options.backend.restartServer(id);
+  }
+
+  async requestWorkspaceApproval(): Promise<boolean> {
+    return this.options.backend.requestWorkspaceApproval?.() ?? false;
+  }
+
+  async stopServer(id: string): Promise<void> {
+    if (!this.options.backend.stopManagedServer) throw new Error("This language server host does not support stop.");
+    await this.options.backend.stopManagedServer(id);
   }
 
   async lookupSession(viewerPath: string): Promise<LanguageIntelligenceSessionLookup> {

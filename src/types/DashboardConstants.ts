@@ -713,6 +713,8 @@ export const MESSAGE_TYPES = {
   INSTALL_LSP_SERVER: "installLspServer",
   LSP_INSTALL_PROGRESS: "lspInstallProgress",
   RESTART_LSP_SERVER: "restartLspServer",
+  REQUEST_LSP_APPROVAL: "requestLspApproval",
+  STOP_LSP_SERVER: "stopLspServer",
 
   // Harness File Manager — Webview ↔ Extension
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }
@@ -2000,6 +2002,18 @@ export const SETTING_PATHS = {
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
 } as const;
 
+/** Status values emitted by the managed language-server backend. */
+export const LANGUAGE_SERVER_STATUSES = {
+  RUNNING: "running",
+  STARTING: "starting",
+  IDLE: "idle",
+  STOPPED: "stopped",
+  NOT_INSTALLED: "not installed",
+  LIMIT_REACHED: "limit reached",
+  NEEDS_APPROVAL: "needs approval",
+  CRASHED: "crashed",
+} as const;
+
 /** Install recipe kinds for curated language server catalog entries. */
 export const LANGUAGE_SERVER_INSTALL_KINDS = {
   NPM: "npm",
@@ -3052,6 +3066,7 @@ export const GLOBAL_SETTINGS_TABS = {
   SERVER: "server",
   AGENT_SKILLS_MANAGER: "agentskillsmanager",
   MCP_MANAGER: "mcpmanager",
+  LANGUAGE_SERVERS: "languageservers",
   NOTIFICATIONS: "notifications",
   STATS: "stats",
   LICENSE: "license",

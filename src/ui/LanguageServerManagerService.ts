@@ -19,6 +19,12 @@ export interface LanguageServerStatusSource {
   onStatusChanged(listener: (event: LanguageServerStatusChange) => void): { dispose(): void };
 }
 
+function getHostPlatform(): "win32" | "darwin" | "linux" {
+  return process.platform === "win32" || process.platform === "darwin"
+    ? process.platform
+    : "linux";
+}
+
 function executablePath(name: string, entries: string[]): string | undefined {
   const extensions = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
   for (const entry of entries) for (const extension of extensions) {
@@ -57,7 +63,7 @@ export class LanguageServerManagerService {
     this.clients.set(ctx.clientId, ctx);
     const [definitions, probes] = await Promise.all([this.readDefinitions(), this.probeCatalog()]);
     this.definitions = definitions; this.probes = probes;
-    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, definitions, catalog: LANGUAGE_SERVER_CATALOG, probes, statuses: [...this.statuses.values()] });
+    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, hostPlatform: getHostPlatform(), definitions, catalog: LANGUAGE_SERVER_CATALOG, probes, statuses: [...this.statuses.values()] });
   }
 
   async handleRequestLocalScan(ctx: WebviewClientContext, _message: RequestLspLocalScanMessage): Promise<void> {
@@ -120,15 +126,34 @@ export class LanguageServerManagerService {
     }
   }
 
+  async handleRequestApproval(ctx: WebviewClientContext): Promise<void> {
+    try {
+      if (!this.host) throw new Error("The language server host is unavailable.");
+      await this.host.requestWorkspaceApproval();
+      await this.emitUpdate(ctx);
+    } catch (error) {
+      ctx.emit({ type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, action: "approve language servers", error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  async handleStop(ctx: WebviewClientContext, id: string): Promise<void> {
+    try {
+      if (!this.host) throw new Error("The language server host is unavailable.");
+      await this.host.stopServer(id);
+    } catch (error) {
+      ctx.emit({ type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, action: "stop language server", error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
   private pushStatus(event: LanguageServerStatusChange): void {
     this.statuses.set(`${event.id}\n${path.resolve(event.rootPath)}`, event);
-    const message = { type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] };
+    const message = { type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, hostPlatform: getHostPlatform(), definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] };
     for (const client of this.clients.values()) client.emit(message);
   }
 
   private async emitUpdate(ctx: WebviewClientContext): Promise<void> {
     this.definitions = await this.readDefinitions(); this.probes = await this.probeCatalog();
-    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] });
+    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, hostPlatform: getHostPlatform(), definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] });
   }
 
   private async readDefinitions(): Promise<Array<{ id: string; definition: LanguageServerDefinition; scope: SettingWriteScope }>> {
