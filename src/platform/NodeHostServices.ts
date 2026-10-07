@@ -302,6 +302,7 @@ export async function createNodeHostedServer(options: {
     namedWorkspaceRoots: namedRoots,
     isWorkspaceTrusted: () => true,
   });
+  dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);
   server = new CtrlYokeHostedServer(
     createHostedServerOptions({
       hub: orchestrator.getDashboardBroadcastHub(),

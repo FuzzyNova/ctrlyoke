@@ -251,8 +251,13 @@ names the guard or test that proves it, not just the code change.
     `openToFile`, and inserts its selection reference into the prompt editor.
     `npm run typecheck`, `npm run lint`, and `npm test` passed (extension
     5,635 passing/4 pending, UI 3,476 passing, packaging 80 passing).
-  - **15a:** `LanguageServerManagerService`, message constants, local-config
-    discovery, npm install, live status push.
+  - **15a — done (2026-10-07):** `LanguageServerManagerService`, shared
+    messages, descriptor-based local-config discovery, confirmed npm installs,
+    and pushed live status. `npm run typecheck` and `npm run lint` pass. The
+    full `npm test` run passed UI (3,476) and packaging (80); extension had
+    5,639 passing/4 pending and one unrelated `VsCodeDocuments > saves an open
+    dirty document` failure. That test passed in isolation, as did all six
+    focused Stage 15a/router tests.
   - **15b:** `useLanguageServerStore`, `LanguageServersSection`, shared helper
     extraction from `McpManagerSection`.
   - Warm-on-`#` moved from 13 to **16** (its only consumer).

@@ -35,6 +35,7 @@ export interface LanguageServerBackend {
   documentClosed?(descriptor: LanguageServerDescriptor): void;
   /** Optional eager start for the host's detected languages. */
   startLanguages?(languageIds: readonly string[]): Promise<void>;
+  restartServer?(id: string): Promise<void>;
   dispose?(): void | Promise<void>;
 }
 

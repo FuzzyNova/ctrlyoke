@@ -23,6 +23,7 @@ import { LANGUAGE_SERVER_RESOLUTION_REASONS } from "./LanguageServerBackend";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
 import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import { LANGUAGE_SERVER_CATALOG } from "./LanguageServerCatalog";
+import { ctrlyokeStateHome } from "../../utils/ProjectStatePaths";
 
 export type LanguageServerStatus = "running" | "starting" | "idle" | "stopped" | "not installed" | "limit reached" | "needs approval" | "crashed";
 export interface LanguageServerStatusChange { readonly id: string; readonly rootPath: string; readonly status: LanguageServerStatus; readonly detail?: string; }
@@ -82,7 +83,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     const resolved = await resolveLanguageServer({
       languageId, userSettings, workspaceSettings, approvedWorkspaceDefinitionIds: ids,
       pathEntries: this.options.pathEntries ?? (process.env.PATH ?? "").split(path.delimiter),
-      toolBinDirectory: this.options.toolBinDirectory ?? path.join(this.options.workspaceRoot, ".ctrlyoke", "tools", "bin"),
+      toolBinDirectory: this.options.toolBinDirectory ?? path.join(ctrlyokeStateHome(), "lsp", "node_modules", ".bin"),
       workspaceRoot: this.options.workspaceRoot, platform: this.options.platform ?? process.platform,
     }, this.deps);
     if (!resolved) {
@@ -142,6 +143,18 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
         try { await this.getConnection(result.descriptor); } catch { /* status carries the failure */ }
       }
     }
+  }
+
+  async restartServer(id: string): Promise<void> {
+    if (!this.options.isWorkspaceTrusted()) {
+      throw new Error("The workspace must be trusted before restarting a language server.");
+    }
+    const server = [...this.servers.values()].find((entry) => entry.resolved.id === id);
+    if (!server) throw new Error(`Language server ${id} is not running.`);
+    const { descriptor, resolved, key } = server;
+    const restartCount = server.restartCount;
+    await this.stopServer(server, "stopped");
+    await this.startServer(key, resolved, descriptor, restartCount);
   }
 
   async dispose(): Promise<void> {
@@ -206,7 +219,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
   private async resolveByDescriptor(descriptor: LanguageServerDescriptor): Promise<ResolvedLanguageServer | undefined> {
     const userSettings = { languageServers: this.normalize(this.options.userSettings().languageServers) }; const workspaceSettings = { languageServers: this.normalize(this.options.workspaceSettings().languageServers) }; const approvals = this.getApprovals();
     const ids = new Set(Object.entries(workspaceSettings.languageServers.definitions).filter(([id, def]) => approvals[id] === this.definitionHash(def)).map(([id]) => id));
-    return resolveLanguageServer({ languageId: descriptor.languageId, userSettings, workspaceSettings, approvedWorkspaceDefinitionIds: ids, pathEntries: this.options.pathEntries ?? (process.env.PATH ?? "").split(path.delimiter), toolBinDirectory: this.options.toolBinDirectory ?? path.join(this.options.workspaceRoot, ".ctrlyoke", "tools", "bin"), workspaceRoot: this.options.workspaceRoot, platform: this.options.platform ?? process.platform }, this.deps);
+    return resolveLanguageServer({ languageId: descriptor.languageId, userSettings, workspaceSettings, approvedWorkspaceDefinitionIds: ids, pathEntries: this.options.pathEntries ?? (process.env.PATH ?? "").split(path.delimiter), toolBinDirectory: this.options.toolBinDirectory ?? path.join(ctrlyokeStateHome(), "lsp", "node_modules", ".bin"), workspaceRoot: this.options.workspaceRoot, platform: this.options.platform ?? process.platform }, this.deps);
   }
   private async startServer(key: string, resolved: ResolvedLanguageServer, descriptor: LanguageServerDescriptor, restartCount: number): Promise<MessageConnection> {
     this.emitStatus({ id: resolved.id, rootPath: descriptor.rootPath, status: "starting" });
@@ -226,7 +239,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       const detail = errors.map((error) => error instanceof Error ? error.message : String(error)).join("; ");
       this.crashed(server, new Error(detail || "Language server JSON-RPC connection failed."));
     });
-    child.stderr?.on("data", (data: Buffer) => { const lines = `${server.stderrLine ?? ""}${data.toString("utf8")}`.split(/\r?\n/); server.stderrLine = lines.pop(); const line = lines.filter(Boolean).at(-1); if (line) server.stderrLine = line; });
+    child.stderr?.on("data", (data: Buffer) => { const lines = `${server.stderrLine ?? ""}${data.toString("utf8")}`.split(/\r?\n/); server.stderrLine = lines.pop(); const nonEmpty = lines.filter(Boolean); const line = nonEmpty[nonEmpty.length - 1]; if (line) server.stderrLine = line; });
     child.once("error", (error) => this.crashed(server, error));
     child.once("exit", (code, signal) => { if (!server.intentionalStop) this.crashed(server, new Error(`Language server exited (${code ?? signal}). ${server.stderrLine ?? ""}`)); });
     connection.onRequest("workspace/configuration", (params: { items?: Array<{ section?: string }> }) => (params.items ?? []).map((item) => this.configurationValue(resolved.settings, item.section)));

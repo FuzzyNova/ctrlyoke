@@ -1,0 +1,176 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { configService } from "../config/CtrlYokeConfigService";
+import { LANGUAGE_SERVER_INSTALL_KINDS, MESSAGE_TYPES, SETTING_SCOPES, type SettingWriteScope } from "../types/DashboardConstants";
+import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
+import type { DeleteLspDefinitionMessage, InstallLspServerMessage, LanguageServerProbeResult, RequestLspLocalScanMessage, SaveLspDefinitionMessage } from "../types/WebviewMessageTypes";
+import type { RestartLspServerMessage } from "../types/WebviewMessageTypes";
+import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
+import type { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
+import type { LanguageServerStatusChange } from "../server/lsp/ManagedLanguageServerBackend";
+import { safeDiscoverLocalLanguageServers } from "../utils/LspDiscoveryUtils";
+import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
+import type { WebviewClientContext } from "./WebviewClientContext";
+
+export type LanguageServerSpawn = typeof spawn;
+
+export interface LanguageServerStatusSource {
+  onStatusChanged(listener: (event: LanguageServerStatusChange) => void): { dispose(): void };
+}
+
+function executablePath(name: string, entries: string[]): string | undefined {
+  const extensions = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
+  for (const entry of entries) for (const extension of extensions) {
+    const candidate = path.join(entry, `${name}${extension}`);
+    try { if (fs.statSync(candidate).isFile()) return candidate; } catch { /* not installed in this PATH entry */ }
+  }
+  return undefined;
+}
+
+export class LanguageServerManagerService {
+  private readonly clients = new Map<string, WebviewClientContext>();
+  private readonly statuses = new Map<string, LanguageServerStatusChange>();
+  private definitions: Array<{ id: string; definition: LanguageServerDefinition; scope: SettingWriteScope }> = [];
+  private probes: LanguageServerProbeResult[] = [];
+  private host?: LanguageIntelligenceHost;
+  private statusSubscription?: { dispose(): void };
+
+  constructor(private readonly getWorkspaceRoot: () => string, private readonly spawnProcess: LanguageServerSpawn = spawn) {}
+
+  bindHost(host: LanguageIntelligenceHost | undefined): void {
+    this.host = host;
+    this.bindStatusSource(host);
+  }
+
+  bindStatusSource(source: LanguageServerStatusSource | undefined): void {
+    this.statusSubscription?.dispose();
+    this.statusSubscription = source?.onStatusChanged((event) => this.pushStatus(event));
+  }
+
+  dispose(): void { this.statusSubscription?.dispose(); this.clients.clear(); }
+
+  disposeClient(clientId: string): void { this.clients.delete(clientId); }
+  closeManager(clientId: string): void { this.clients.delete(clientId); }
+
+  async handleRequestServers(ctx: WebviewClientContext): Promise<void> {
+    this.clients.set(ctx.clientId, ctx);
+    const [definitions, probes] = await Promise.all([this.readDefinitions(), this.probeCatalog()]);
+    this.definitions = definitions; this.probes = probes;
+    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, definitions, catalog: LANGUAGE_SERVER_CATALOG, probes, statuses: [...this.statuses.values()] });
+  }
+
+  async handleRequestLocalScan(ctx: WebviewClientContext, _message: RequestLspLocalScanMessage): Promise<void> {
+    const result = await safeDiscoverLocalLanguageServers(this.getWorkspaceRoot());
+    ctx.emit({ type: MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT, servers: result.servers, ...(result.error ? { error: result.error } : {}) });
+  }
+
+  async handleSave(ctx: WebviewClientContext, message: SaveLspDefinitionMessage): Promise<void> {
+    await this.validateAndWrite(message.id, message.definition, message.scope);
+    await this.emitUpdate(ctx);
+  }
+
+  async handleDelete(ctx: WebviewClientContext, message: DeleteLspDefinitionMessage): Promise<void> {
+    const settings = this.getScopedLanguageServers(message.scope);
+    delete settings.definitions[message.id];
+    await configService.set("languageServers.definitions", settings.definitions, message.scope);
+    await this.emitUpdate(ctx);
+  }
+
+  async handleInstall(ctx: WebviewClientContext, message: InstallLspServerMessage): Promise<void> {
+    const catalog = LANGUAGE_SERVER_CATALOG.find((entry) => entry.id === message.id);
+    if (!catalog || catalog.install.kind !== LANGUAGE_SERVER_INSTALL_KINDS.NPM) throw new Error("Only catalog npm packages can be installed here.");
+    const packageNames = catalog.install.packages;
+    const installDirectory = path.join(ctrlyokeStateHome(), "lsp");
+    const args = ["install", "--prefix", installDirectory, ...packageNames];
+    const pathEntries = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+    const npm = executablePath("npm", pathEntries);
+    const copyableCommand = `npm ${args.map((part) => /\s/.test(part) ? JSON.stringify(part) : part).join(" ")}`;
+    if (!npm) {
+      ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, error: "npm was not found on PATH.", copyableCommand, complete: true });
+      return;
+    }
+    const accepted = await ctx.interactionPort?.requestChoice({
+      id: `lsp-install-${message.id}-${Date.now()}`,
+      title: "Install language server packages?",
+      detail: `Packages: ${packageNames.join(", ")}\nInstall directory: ${installDirectory}`,
+      choices: [{ value: "install", label: "Install" }, { value: "cancel", label: "Cancel" }],
+    });
+    if (accepted !== "install") return;
+    ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, output: `Installing ${packageNames.join(", ")} in ${installDirectory}` });
+    await fs.promises.mkdir(installDirectory, { recursive: true });
+    await new Promise<void>((resolve) => {
+      let child: ChildProcess;
+      try { child = this.spawnProcess(npm, args, { cwd: this.getWorkspaceRoot(), stdio: ["ignore", "pipe", "pipe"], ...(process.platform === "win32" ? { shell: true } : {}) }); }
+      catch (error) { ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, error: String(error), complete: true }); resolve(); return; }
+      const send = (chunk: Buffer | string): void => ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, output: chunk.toString() });
+      child.stdout?.on("data", send); child.stderr?.on("data", send);
+      child.once("error", (error) => { ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, error: error.message, complete: true }); resolve(); });
+      child.once("close", (code) => { ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, complete: true, ...(code === 0 ? {} : { error: `npm install exited with code ${code}.` }) }); resolve(); });
+    });
+    await this.emitUpdate(ctx);
+  }
+
+  async handleRestart(ctx: WebviewClientContext, message: RestartLspServerMessage): Promise<void> {
+    try {
+      if (!this.host) throw new Error("The language server host is unavailable.");
+      await this.host.restartServer(message.id);
+    } catch (error) {
+      ctx.emit({ type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, action: "restart language server", error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private pushStatus(event: LanguageServerStatusChange): void {
+    this.statuses.set(`${event.id}\n${path.resolve(event.rootPath)}`, event);
+    const message = { type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] };
+    for (const client of this.clients.values()) client.emit(message);
+  }
+
+  private async emitUpdate(ctx: WebviewClientContext): Promise<void> {
+    this.definitions = await this.readDefinitions(); this.probes = await this.probeCatalog();
+    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] });
+  }
+
+  private async readDefinitions(): Promise<Array<{ id: string; definition: LanguageServerDefinition; scope: SettingWriteScope }>> {
+    const entries: Array<{ id: string; definition: LanguageServerDefinition; scope: SettingWriteScope }> = [];
+    for (const scope of [SETTING_SCOPES.WORKSPACE, SETTING_SCOPES.USER] as const) {
+      const definitions = this.getScopedLanguageServers(scope).definitions;
+      for (const [id, definition] of Object.entries(definitions)) entries.push({ id, definition, scope });
+    }
+    return entries;
+  }
+
+  private getScopedLanguageServers(scope: SettingWriteScope): { definitions: Record<string, LanguageServerDefinition> } {
+    const value = configService.getScoped("languageServers", scope);
+    const definitions: Record<string, LanguageServerDefinition> = {};
+    for (const [id, definition] of Object.entries(value?.definitions ?? {})) {
+      if (
+        definition &&
+        Array.isArray(definition.command) &&
+        Array.isArray(definition.languages) &&
+        Array.isArray(definition.extensions) &&
+        Array.isArray(definition.rootMarkers)
+      ) definitions[id] = definition as LanguageServerDefinition;
+    }
+    return { definitions };
+  }
+
+  private async validateAndWrite(id: string, definition: LanguageServerDefinition, scope: SettingWriteScope): Promise<void> {
+    if (!id.trim() || !Array.isArray(definition.command) || definition.command.length === 0 || !Array.isArray(definition.languages) || !Array.isArray(definition.extensions)) throw new Error("A language server requires an id, command, languages, and extensions.");
+    const current = this.getScopedLanguageServers(scope).definitions;
+    await configService.set("languageServers.definitions", { ...current, [id]: definition }, scope);
+  }
+
+  private async probeCatalog(): Promise<LanguageServerProbeResult[]> {
+    const root = this.getWorkspaceRoot();
+    const dirs = [
+      ...(process.env.PATH ?? "").split(path.delimiter).filter(Boolean),
+      path.join(ctrlyokeStateHome(), "lsp", "node_modules", ".bin"),
+      path.join(root, "node_modules", ".bin"),
+    ];
+    return LANGUAGE_SERVER_CATALOG.map((entry) => {
+      const resolvedPath = executablePath(entry.command[0]!, dirs);
+      return { id: entry.id, detected: Boolean(resolvedPath), ...(resolvedPath ? { resolvedPath } : {}) };
+    });
+  }
+}

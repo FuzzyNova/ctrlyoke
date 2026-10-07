@@ -1651,6 +1651,20 @@ function registerCommands(
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
+      const languageIntelligenceHost = new LanguageIntelligenceHost({
+        backend: new ManagedLanguageServerBackend({
+          workspaceRoot,
+          userSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.USER) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
+          workspaceSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.WORKSPACE) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
+          approvalStore: new VsCodeKeyValueStore(context.globalState),
+          interactionPort: webviewProvider.getUserInteractionPort(),
+          isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
+        }),
+        workspaceRoot,
+        namedWorkspaceRoots,
+        isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
+      });
+      dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);
       try {
         hostedServer = new CtrlYokeHostedServer(
           createHostedServerOptions({
@@ -1672,19 +1686,7 @@ function registerCommands(
             runnerHostIdentity,
             hostKind: HOST_KINDS.VSCODE,
             fileWatcherFactory: new VsCodeFileWatcherFactory(),
-            languageIntelligenceHost: new LanguageIntelligenceHost({
-              backend: new ManagedLanguageServerBackend({
-                workspaceRoot,
-                userSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.USER) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
-                workspaceSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.WORKSPACE) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
-                approvalStore: new VsCodeKeyValueStore(context.globalState),
-                interactionPort: webviewProvider.getUserInteractionPort(),
-                isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
-              }),
-              workspaceRoot,
-              namedWorkspaceRoots,
-              isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
-            }),
+            languageIntelligenceHost,
           })
         );
       } catch (err) {

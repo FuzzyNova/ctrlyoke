@@ -1,7 +1,8 @@
 # Workspace Editor Language Intelligence Plan
 
 **Status (2026-10-07):** Phase 2 managed backend is implemented (staging
-Stage 13b), and Stage 14a applies rename/server workspace edits across open and
+Stage 13b), the Phase 4 manager backend and message plumbing are implemented
+(staging Stage 15a), and Stage 14a applies rename/server workspace edits across open and
 unopened workspace files. Rename confirmation uses the LSP request
 `ctrlyoke/confirmWorkspaceRename` (params `{ fileCount }`, boolean result);
 open-buffer edits use the `ctrlyoke/applyWorkspaceTextEdits` notification

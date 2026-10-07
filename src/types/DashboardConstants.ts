@@ -702,6 +702,18 @@ export const MESSAGE_TYPES = {
   REQUEST_MCP_CONFIG_PREVIEW: "requestMcpConfigPreview", // Webview -> Extension: request a /mcp:<name> reference's resolved server config for the preview modal
   MCP_CONFIG_PREVIEW_RESULT: "mcpConfigPreviewResult", // Extension -> Webview: { mcpServerName, content, found } JSON for modal
 
+  // Language server manager — Webview ↔ Extension
+  REQUEST_LSP_SERVERS: "requestLspServers",
+  CLOSE_LSP_MANAGER: "closeLspManager",
+  LSP_SERVERS_UPDATE: "lspServersUpdate",
+  REQUEST_LSP_LOCAL_SCAN: "requestLspLocalScan",
+  LSP_LOCAL_SCAN_RESULT: "lspLocalScanResult",
+  SAVE_LSP_DEFINITION: "saveLspDefinition",
+  DELETE_LSP_DEFINITION: "deleteLspDefinition",
+  INSTALL_LSP_SERVER: "installLspServer",
+  LSP_INSTALL_PROGRESS: "lspInstallProgress",
+  RESTART_LSP_SERVER: "restartLspServer",
+
   // Harness File Manager — Webview ↔ Extension
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }
   HARNESS_FILES_RESULT: "harnessFilesResult", // Extension -> Webview: { files: ManagedFile[] }
@@ -1992,6 +2004,25 @@ export const SETTING_PATHS = {
 export const LANGUAGE_SERVER_INSTALL_KINDS = {
   NPM: "npm",
   COMMAND: "command",
+} as const;
+
+/** Normalized format discriminants consumed by local LSP config discovery. */
+export const LSP_DISCOVERY_FORMATS = {
+  QWEN: "qwen",
+  CLAUDE_PLUGIN: "claude-plugin",
+  COPILOT: "copilot",
+  OPENCODE: "opencode",
+  CCLSP: "cclsp",
+} as const;
+
+export const LSP_DISCOVERY_SOURCES = {
+  QWEN_CODE: "qwen-code",
+  CLAUDE_CODE_PLUGIN: "claude-code-plugin",
+  COPILOT_CLI: "copilot-cli",
+  COPILOT_CLI_USER: "copilot-cli-user",
+  OPENCODE: "opencode",
+  OPENCODE_USER: "opencode-user",
+  CCLSP: "cclsp",
 } as const;
 export type LanguageServerInstallKind =
   (typeof LANGUAGE_SERVER_INSTALL_KINDS)[keyof typeof LANGUAGE_SERVER_INSTALL_KINDS];

@@ -74,6 +74,11 @@ export class LanguageIntelligenceHost {
     await this.options.backend.startLanguages?.(languageIds);
   }
 
+  async restartServer(id: string): Promise<void> {
+    if (!this.options.backend.restartServer) throw new Error("This language server host does not support restart.");
+    await this.options.backend.restartServer(id);
+  }
+
   async lookupSession(viewerPath: string): Promise<LanguageIntelligenceSessionLookup> {
     if (!this.options.isWorkspaceTrusted()) {
       return { session: null, reason: LANGUAGE_SERVER_RESOLUTION_REASONS.UNTRUSTED };

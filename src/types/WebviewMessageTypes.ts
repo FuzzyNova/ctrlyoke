@@ -57,6 +57,9 @@ import {
   type HarnessStatusString,
 } from "./DashboardConstants";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
+import type { LanguageServerDefinition } from "./CtrlYokeSettings";
+import type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCatalog";
+import type { LanguageServerStatusChange } from "../server/lsp/ManagedLanguageServerBackend";
 import type {
   ErrorBehavior,
   WorkflowSummary,
@@ -2696,6 +2699,87 @@ export interface McpConfigPreviewResultMessage {
   mcpServerName: string;
   content: string;
   found: boolean;
+}
+
+// ============================================================================
+// LANGUAGE SERVER MANAGER
+// ============================================================================
+
+export interface LocalLanguageServerEntry {
+  id: string;
+  definition: LanguageServerDefinition;
+  source: string;
+  path: string;
+}
+
+export interface ManagedLanguageServerDefinition {
+  id: string;
+  definition: LanguageServerDefinition;
+  scope: SettingWriteScope;
+}
+
+export interface LanguageServerProbeResult {
+  id: string;
+  detected: boolean;
+  resolvedPath?: string;
+}
+
+export interface RequestLspServersMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_LSP_SERVERS;
+}
+
+export interface CloseLspManagerMessage {
+  type: typeof MESSAGE_TYPES.CLOSE_LSP_MANAGER;
+}
+
+export interface RequestLspLocalScanMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_LSP_LOCAL_SCAN;
+}
+
+export interface SaveLspDefinitionMessage {
+  type: typeof MESSAGE_TYPES.SAVE_LSP_DEFINITION;
+  id: string;
+  definition: LanguageServerDefinition;
+  scope: SettingWriteScope;
+}
+
+export interface DeleteLspDefinitionMessage {
+  type: typeof MESSAGE_TYPES.DELETE_LSP_DEFINITION;
+  id: string;
+  scope: SettingWriteScope;
+}
+
+export interface InstallLspServerMessage {
+  type: typeof MESSAGE_TYPES.INSTALL_LSP_SERVER;
+  id: string;
+}
+
+export interface RestartLspServerMessage {
+  type: typeof MESSAGE_TYPES.RESTART_LSP_SERVER;
+  id: string;
+}
+
+export interface LspServersUpdateMessage {
+  type: typeof MESSAGE_TYPES.LSP_SERVERS_UPDATE;
+  definitions: ManagedLanguageServerDefinition[];
+  catalog: readonly LanguageServerCatalogEntry[];
+  probes: LanguageServerProbeResult[];
+  statuses: LanguageServerStatusChange[];
+}
+
+export interface LspLocalScanResultMessage {
+  type: typeof MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT;
+  servers: LocalLanguageServerEntry[];
+  error?: string;
+}
+
+export interface LspInstallProgressMessage {
+  type: typeof MESSAGE_TYPES.LSP_INSTALL_PROGRESS;
+  id: string;
+  output?: string;
+  complete?: boolean;
+  error?: string;
+  copyableCommand?: string;
 }
 
 // ============================================================================
