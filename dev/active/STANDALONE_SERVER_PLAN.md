@@ -280,9 +280,29 @@ Standalone has no VS Code webview to capture `--vscode-*` variables from.
 
 1. Add `src/server/themes/vscode-default-dark.css` and
    `vscode-default-light.css`. Take their values from VS Code's current
-   default themes, **Dark Modern** and **Light Modern** (not the older
-   Dark+/Light+). Set `--vscode-codicon-font-path` to the served codicon
-   asset.
+   default themes, **Dark 2026** and **Light 2026** (`2026-dark.json` and
+   `2026-light.json` in the built-in `theme-defaults` extension, which
+   include Dark Modern/Light Modern). Don't translate the theme JSON: a theme
+   file only lists its explicit colors, and VS Code's color registry derives
+   the rest.
+   - **The source values are already captured.**
+     [`dev/reference/vscode-css-vars-defaultdark.json`](../reference/vscode-css-vars-defaultdark.json)
+     (Dark 2026) and
+     [`vscode-css-vars-defaultlight.json`](../reference/vscode-css-vars-defaultlight.json)
+     (Light 2026) hold the 955 computed `--vscode-*` values from a real VS Code
+     1.140 webview, dumped with the dev-only `ctrlyoke.dumpCssVars` command
+     (`src/dev/DevCommands.ts`). To refresh them after a VS Code theme update,
+     switch theme, rerun the dump, and rename its output to the matching file.
+   - Generate the two CSS files from those dumps rather than hand-copying
+     values, so a refreshed dump is a one-command update. Keep every captured
+     variable, matching what the hosted server serves from a live capture.
+   - The dumps were taken on Windows, so `--vscode-font-family` and
+     `--vscode-editor-font-family` name Segoe/Consolas. Replace them with
+     cross-platform stacks during generation.
+   - Set `--vscode-codicon-font-path` to the served codicon asset.
+   - Named VS Code themes beyond this pair, captured from the user's own VS
+     Code, are a follow-up:
+     [`STANDALONE_THEME_SNAPSHOTS_PLAN.md`](../backlog/STANDALONE_THEME_SNAPSHOTS_PLAN.md).
 2. **Generate the variable list rather than hand-maintaining it.** The webview
    references about 130 distinct `var(--vscode-*)` names after the Tailwind 4
    migration. A unit test collects every `var(--vscode-…)` in
