@@ -4,8 +4,8 @@
 **F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
 merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
 review filed. **Wave 3 is done** (M2, F4 and F7), merged to `main` and reviewed; its review
-fixes are on `main`. **Wave 4 can start**: F5 now, then D3. **Wave 5 waits for F5** because
-both edit `WorkspaceFileEditor.tsx`. This plan only orders the work. The design lives in the
+fixes are on `main`. **Wave 4 can start**: F5 now, then D3. **Wave 5 runs after Wave 4**:
+M2b (the Wave 3 review's M2 follow-ups) first, then F6 + M3. This plan only orders the work. The design lives in the
 three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -179,23 +179,24 @@ against its plan, and every finding below was reproduced with a probe or a test.
 
 Each row lists what must land before that phase.
 
-| Phase      | Needs            | Why                                                                                                                             |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| M0, M1, F2 | none             | Self-contained                                                                                                                  |
-| F1         | none             | New pure modules plus the server-side exclusion                                                                                 |
-| D1         | none             | Characterization tests, then extraction                                                                                         |
-| F0         | D1               | Same file as D1. Run serially so the two extractions don't conflict.                                                            |
-| F1b        | F1, F2           | Fixes their review bugs and adds `getWorkflowTextSpans`                                                                         |
-| F3         | F1b              | Completion items need a correct location and outline; the F1b bugs all land on key completions                                  |
-| B          | F1b              | Decoded prompt ranges come from `getWorkflowTextSpans`, so no throwaway extractor                                               |
-| M4         | F1, ships with B | The grammar is generated from `WORKFLOW_TEXT_FIELDS`. Shipping it without B makes backticks look literal while they still link. |
-| D2         | D1, F1b          | Prompt values, `.prompt.md` bodies included, come from `getWorkflowTextSpans`                                                   |
-| M2         | M1, D1, F0       | Palette; lint precedence over the D1 adapters; same file as F0                                                                  |
-| F4         | F0, F1, F3       | As stated in plan F                                                                                                             |
-| F5         | F4, D1           | Workspace lint uses D1's rules. The compartment comes from F4.                                                                  |
-| F7         | F3               | VS Code value completions share F3                                                                                              |
-| D3         | D2, F5           | Needs the side-effect-free `PromptFileParser` validate added in F5                                                              |
-| F6 + M3    | F4, M2           | YAML chips and nested markdown share the same `PROMPT_TEXT` ranges and compartment, so they are planned as one change           |
+| Phase      | Needs            | Why                                                                                                                                                                                                       |
+| ---------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0, M1, F2 | none             | Self-contained                                                                                                                                                                                            |
+| F1         | none             | New pure modules plus the server-side exclusion                                                                                                                                                           |
+| D1         | none             | Characterization tests, then extraction                                                                                                                                                                   |
+| F0         | D1               | Same file as D1. Run serially so the two extractions don't conflict.                                                                                                                                      |
+| F1b        | F1, F2           | Fixes their review bugs and adds `getWorkflowTextSpans`                                                                                                                                                   |
+| F3         | F1b              | Completion items need a correct location and outline; the F1b bugs all land on key completions                                                                                                            |
+| B          | F1b              | Decoded prompt ranges come from `getWorkflowTextSpans`, so no throwaway extractor                                                                                                                         |
+| M4         | F1, ships with B | The grammar is generated from `WORKFLOW_TEXT_FIELDS`. Shipping it without B makes backticks look literal while they still link.                                                                           |
+| D2         | D1, F1b          | Prompt values, `.prompt.md` bodies included, come from `getWorkflowTextSpans`                                                                                                                             |
+| M2         | M1, D1, F0       | Palette; lint precedence over the D1 adapters; same file as F0                                                                                                                                            |
+| F4         | F0, F1, F3       | As stated in plan F                                                                                                                                                                                       |
+| F5         | F4, D1           | Workspace lint uses D1's rules. The compartment comes from F4.                                                                                                                                            |
+| F7         | F3               | VS Code value completions share F3                                                                                                                                                                        |
+| D3         | D2, F5           | Needs the side-effect-free `PromptFileParser` validate added in F5                                                                                                                                        |
+| M2b        | M2               | Follow-ups from the Wave 3 review of M2; see Wave 5                                                                                                                                                       |
+| F6 + M3    | F4, M2b, F5      | YAML chips and nested markdown share the same `PROMPT_TEXT` ranges and compartment, so they are planned as one change. M3 reuses M2's code colouring, so M2b settles it first; F5 holds the same hot file |
 
 ## Waves
 
@@ -249,17 +250,34 @@ nothing needs fixing first. D3 starts once F5 lands, since it needs F5's side-ef
 | **F5:** workspace editor diagnostics and hover                        | `WorkspaceFileEditor.tsx` | Adds the `PromptFileParser` validate entry point |
 | **D3:** workflow-aware context and YAML schema diagnostics in VS Code | —                         | After F5                                         |
 
-### Wave 5: prompt-text polish in the workspace editor
+### Wave 5: prompt-text polish
 
-**Not yet.** Its inputs (F4, M2) are on `main`, but F6 + M3 edit `WorkspaceFileEditor.tsx`,
-which F5 holds, so it starts after F5 merges. It can run alongside D3. M3 brings Lezer's
-code colouring to workspace prompt values, so fix
-[`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md)
-first or as part of it, rather than spreading the mismatch to a second editor.
+**Runs after Wave 4**, in this order. M2b and F6 + M3 are on different hot files, but M3
+must not start until M2b has settled what the editor colours as code, or the mismatch
+spreads to a second editor. F6 + M3 also waits for F5, which holds `WorkspaceFileEditor.tsx`.
 
-| Phase                                                                                                       | Hot file                  | Notes                                            |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------ |
-| **F6 + M3:** YAML chips, nested markdown in prompt values, `.prompt.md` markdown, `$step:` names, `{{var}}` | `WorkspaceFileEditor.tsx` | One change, since both work over the same ranges |
+| Phase                                                                                                       | Hot file                                         | Notes                                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| **M2b:** M2 follow-ups from the Wave 3 review                                                               | `CodeMirrorEditor.tsx`, `FileReferenceParser.ts` | All three items below, in one change or in order                                       |
+| **F6 + M3:** YAML chips, nested markdown in prompt values, `.prompt.md` markdown, `$step:` names, `{{var}}` | `WorkspaceFileEditor.tsx`                        | One change, since both work over the same ranges. Split it if it won't fit one session |
+
+M2b covers:
+
+1. **[`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md)**
+   (medium). Decide, case by case, whether `findCodeRanges` should match CommonMark (this
+   changes runtime expansion everywhere) or the editor should stop colouring the text as code.
+   Flip each `agree: false` entry in the parity corpus in
+   `CodeMirrorEditorMarkdown.test.tsx` to agree, or document why the gap is intended.
+2. **[`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/backlog/prompt-editor-reference-link-split-by-markdown-emphasis.md)**
+   (low, cosmetic).
+3. **The deferred code-range restyle** from plan M's "Code ranges" section: inline spans get
+   the `codeSpan.border` box, and fences lose their background so nested-language colours
+   show through. Keep the code-range mark at default precedence (see
+   `webview-react-components.instructions.md`), so the suppressed-expansion squiggle stays
+   visible.
+
+Move each bug to `dev/bugs/implemented/` in the commit that fixes it, and mark the restyle
+done in plan M's Phase 2 entry.
 
 ## Release-relevance
 
@@ -277,3 +295,7 @@ value is:
 
 When a phase lands, mark it done here and in its own plan. When a plan gains or splits a
 phase, update the edge table first. That table is the contract between the three plans.
+
+When Wave 5 is done, move this plan to `dev/implemented/` together with the three plans it
+stages (F, M and D), once each one's remaining phases are marked done. Fix the relative links
+between them in the same commit.
