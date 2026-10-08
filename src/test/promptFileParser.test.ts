@@ -799,6 +799,56 @@ suite("PromptFileParser Tests", () => {
       }
     });
 
+    test("names the step from the frontmatter description and ignores foreign keys", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-description-")
+      );
+
+      try {
+        const described = path.join(tempDir, "described.prompt.md");
+        await fs.writeFile(
+          described,
+          "---\ndescription: |\n  Review the\n  staged diff\nmodel: GPT-4o\ntools: [codebase]\nagent: agent\n---\nReview it.",
+          "utf8"
+        );
+        const long = path.join(tempDir, "long.prompt.md");
+        await fs.writeFile(
+          long,
+          `---\ndescription: ${"x".repeat(150)}\n---\nBody`,
+          "utf8"
+        );
+        const nonString = path.join(tempDir, "non-string.prompt.md");
+        await fs.writeFile(
+          nonString,
+          "---\ndescription: 42\n---\nBody",
+          "utf8"
+        );
+
+        const describedResult = await parser.parsePromptFile(described);
+        assertValidResult(describedResult);
+        const step = describedResult.steps[0] as PromptStep;
+        assert.strictEqual(step.name, "Review the staged diff");
+        assert.strictEqual(step.prompt, "Review it.");
+        assert.strictEqual(step.model, undefined);
+        assert.strictEqual(step.agent, undefined);
+
+        const longResult = await parser.parsePromptFile(long);
+        assertValidResult(longResult);
+        const longName = (longResult.steps[0] as PromptStep).name ?? "";
+        assert.strictEqual(longName.length, 100);
+        assert.ok(longName.endsWith("…"));
+
+        const nonStringResult = await parser.parsePromptFile(nonString);
+        assertValidResult(nonStringResult);
+        assert.strictEqual(
+          (nonStringResult.steps[0] as PromptStep).name,
+          undefined
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("parses empty frontmatter and closing fences with trailing whitespace", async () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-markdown-frontmatter-shapes-")

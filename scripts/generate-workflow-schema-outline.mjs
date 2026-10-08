@@ -57,11 +57,7 @@ const OBJECT_SOURCES = {
   hook: { pointers: ["#/$defs/userHookConfig"] },
   worktree: { pointers: ["#/$defs/worktreeConfig"] },
   templateMeta: { pointers: ["#/$defs/templateMetadata"] },
-  // A `.prompt.md` file's frontmatter only carries the format version.
-  promptFileFrontmatter: {
-    pointers: ["#/oneOf/1"],
-    only: ["schemaVersion"],
-  },
+  promptFileFrontmatter: { pointers: ["#/$defs/promptFileFrontmatter"] },
 };
 
 function isObject(value) {

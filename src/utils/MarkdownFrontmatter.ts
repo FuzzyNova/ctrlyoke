@@ -55,3 +55,13 @@ export function splitMarkdownFrontmatter(
     body: content.slice(bodyStart),
   };
 }
+
+/**
+ * The prompt text of a `.prompt.md` file: the body after any frontmatter,
+ * trimmed. The loader and a step that names the file both use it, so the
+ * harness receives the same text either way and never the frontmatter.
+ */
+export function getPromptMarkdownText(content: string): string {
+  const split = splitMarkdownFrontmatter(content);
+  return stripLeadingBom(split ? split.body : content).trim();
+}

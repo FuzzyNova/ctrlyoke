@@ -50,6 +50,7 @@ say what it does.
 | [End condition](#end-condition) | Validation that runs after the prompt completes. |
 | [Shared script fields](#script-fields) | Shared script execution properties used by endCondition, preCondition, and scriptStep. |
 | [Error behavior](#error-behavior) | Policy for internal errors in any step phase, including pre-conditions, prompts/harnesses, end-conditions, and script steps. |
+| [Prompt Markdown frontmatter](#prompt-file-frontmatter) | The optional YAML frontmatter block at the top of a `.prompt.md` file. |
 | [Worktree](#worktree) | Where the workflow runs: the working checkout or a Git worktree. |
 | [Variables](#vars) | Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. |
 | [Hook entry](#hook-entry) | One user-defined hook in a `hooks` array. |
@@ -742,6 +743,23 @@ Maximum retry attempts when onError is retry. When omitted, one retry is allowed
 - **Type:** `number`
 
 Delay before retrying, in seconds.
+
+## Prompt Markdown frontmatter {#prompt-file-frontmatter}
+
+The optional YAML frontmatter block at the top of a `.prompt.md` file. ctrlyoke reads only the fields listed here and ignores any other key, so a prompt file written for another tool (for example a GitHub Copilot prompt file with `model`, `tools` or `agent`) still loads. The block is never sent to the harness, whether the file runs on its own or a step's `prompt` names it.
+
+### `schemaVersion` {#prompt-file-frontmatter-schemaversion}
+
+- **Type:** `integer`
+- **Constraints:** minimum 1
+
+Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version.
+
+### `description` {#prompt-file-frontmatter-description}
+
+- **Type:** `string`
+
+Short summary of the prompt. When the file runs on its own, it becomes the step's `name` in the dashboard (cut to 100 characters). It is display metadata only and is never sent to the harness.
 
 ## Worktree {#worktree}
 

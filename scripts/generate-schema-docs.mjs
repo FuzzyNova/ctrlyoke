@@ -164,6 +164,12 @@ const WORKFLOW_PAGES = [
         properties: [{ pointer: "#/$defs/errorBehavior/properties" }],
       },
       {
+        id: "prompt-file-frontmatter",
+        title: "Prompt Markdown frontmatter",
+        refs: ["#/$defs/promptFileFrontmatter"],
+        properties: [{ pointer: "#/$defs/promptFileFrontmatter/properties" }],
+      },
+      {
         id: "worktree",
         title: "Worktree",
         summary:

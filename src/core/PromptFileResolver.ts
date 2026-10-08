@@ -10,7 +10,12 @@ import {
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { looksLikeFilePath } from "../utils/promptPathUtils";
 import { resolveSourceRuntimeArtifacts } from "../utils/SourceRuntimeArtifactResolver";
-import { PROMPT_FILE_RESOLUTION_STATUSES } from "../types/DashboardConstants";
+import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
+import { getPromptMarkdownText } from "../utils/MarkdownFrontmatter";
+import {
+  CTRLYOKE_FILE_KINDS,
+  PROMPT_FILE_RESOLUTION_STATUSES,
+} from "../types/DashboardConstants";
 
 export interface PromptFileResolverOptions {
   workspaceRoot?: string;
@@ -119,9 +124,10 @@ export class PromptFileResolver {
   }
 
   /**
-   * Resolve a reference and load its raw content. Whitespace-only content is
-   * returned as `empty`; non-empty content is returned as `resolved` without
-   * trimming it.
+   * Resolve a reference and load its prompt text. Whitespace-only text is
+   * returned as `empty`; non-empty text is returned as `resolved` without
+   * trimming it, except a `.prompt.md` file, whose frontmatter is removed and
+   * whose body is trimmed exactly as when the file runs on its own.
    */
   async resolve(
     filePath: string,
@@ -141,7 +147,12 @@ export class PromptFileResolver {
     }
 
     try {
-      const content = await fsp.readFile(readable.path, "utf8");
+      const raw = await fsp.readFile(readable.path, "utf8");
+      const content =
+        getCtrlYokeFileKind(readable.path) ===
+        CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN
+          ? getPromptMarkdownText(raw)
+          : raw;
       return content.trim().length === 0
         ? {
             ...readable,
@@ -164,7 +175,7 @@ export class PromptFileResolver {
   }
 
   /**
-   * Resolve a standalone prompt-file reference to its raw content.
+   * Resolve a standalone prompt-file reference to its prompt text.
    *
    * Literal prompt text passes through unchanged. A path that looks like an
    * intentional prompt-file reference must resolve successfully; missing and

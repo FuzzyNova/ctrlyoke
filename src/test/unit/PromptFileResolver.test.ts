@@ -45,7 +45,7 @@ suite("PromptFileResolver", () => {
   });
 
   test("resolves an absolute path", async () => {
-    const filePath = path.join(workspaceRoot, "absolute.prompt.md");
+    const filePath = path.join(workspaceRoot, "absolute.md");
     await fs.writeFile(filePath, "  absolute content  ", "utf8");
 
     const result = await new PromptFileResolver({ workspaceRoot }).resolve(
@@ -120,14 +120,14 @@ suite("PromptFileResolver", () => {
   });
 
   test("reports missing, empty, and resolved-with-content distinctly", async () => {
-    const emptyFile = path.join(workspaceRoot, "empty.prompt.md");
+    const emptyFile = path.join(workspaceRoot, "empty.md");
     const contentFile = path.join(workspaceRoot, "content.prompt.md");
     await fs.writeFile(emptyFile, " \n\t ", "utf8");
     await fs.writeFile(contentFile, "content", "utf8");
     const resolver = new PromptFileResolver({ workspaceRoot });
 
     const missing = await resolver.resolve("./missing.prompt.md");
-    const empty = await resolver.resolve("./empty.prompt.md");
+    const empty = await resolver.resolve("./empty.md");
     const content = await resolver.resolve("./content.prompt.md");
 
     assert.strictEqual(missing.status, PROMPT_FILE_RESOLUTION_STATUSES.MISSING);
@@ -141,17 +141,62 @@ suite("PromptFileResolver", () => {
   });
 
   test("returns raw content for prompt values and rejects missing references", async () => {
-    const promptFile = path.join(workspaceRoot, "raw.prompt.md");
+    const promptFile = path.join(workspaceRoot, "raw.md");
     await fs.writeFile(promptFile, "  raw content  ", "utf8");
     const resolver = new PromptFileResolver({ workspaceRoot });
 
     assert.strictEqual(
-      await resolver.resolvePromptValue("./raw.prompt.md"),
+      await resolver.resolvePromptValue("./raw.md"),
       "  raw content  "
     );
     await assert.rejects(
       resolver.resolvePromptValue("./missing.prompt.md"),
       /could not be found/
+    );
+  });
+
+  test("a .prompt.md reference yields the body the file runs as, never its frontmatter", async () => {
+    await fs.writeFile(
+      path.join(workspaceRoot, "described.prompt.md"),
+      "﻿---\ndescription: Review the diff\nmodel: GPT-4o\n---\n\n  Review @src/a.ts\n\n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, "plain.prompt.md"),
+      "  Plain body  \n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, "frontmatter-only.prompt.md"),
+      "---\ndescription: Nothing to send\n---\n  \n",
+      "utf8"
+    );
+    // Only ctrlyoke's own format is stripped; any other file stays raw.
+    await fs.writeFile(
+      path.join(workspaceRoot, "notes.md"),
+      "---\ntitle: kept\n---\nBody",
+      "utf8"
+    );
+    const resolver = new PromptFileResolver({ workspaceRoot });
+
+    assert.strictEqual(
+      await resolver.resolvePromptValue("./described.prompt.md"),
+      "Review @src/a.ts"
+    );
+    assert.strictEqual(
+      await resolver.resolvePromptValue("./plain.prompt.md"),
+      "Plain body"
+    );
+    const frontmatterOnly = await resolver.resolve(
+      "./frontmatter-only.prompt.md"
+    );
+    assert.strictEqual(
+      frontmatterOnly.status,
+      PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
+    );
+    assert.strictEqual(
+      await resolver.resolvePromptValue("./notes.md"),
+      "---\ntitle: kept\n---\nBody"
     );
   });
 

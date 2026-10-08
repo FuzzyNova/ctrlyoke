@@ -938,7 +938,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
     "properties": {
       "schemaVersion": {
         "valueKind": "number",
-        "description": "Workflow definition format version. Absent means format 1. Run files use this root field for the workflow definition and `_runtime.schemaVersion` independently for run metadata."
+        "description": "Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to load a file with a newer version."
+      },
+      "description": {
+        "valueKind": "string",
+        "description": "Short summary of the prompt. When the file runs on its own, it becomes the step's `name` in the dashboard (cut to 100 characters). It is display metadata only and is never sent to the harness."
       }
     },
     "forbiddenKeys": []

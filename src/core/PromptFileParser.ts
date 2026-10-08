@@ -24,8 +24,11 @@ import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
-import { stripLeadingBom } from "../utils/TextUtils";
-import { splitMarkdownFrontmatter } from "../utils/MarkdownFrontmatter";
+import { stripLeadingBom, truncateText } from "../utils/TextUtils";
+import {
+  getPromptMarkdownText,
+  splitMarkdownFrontmatter,
+} from "../utils/MarkdownFrontmatter";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
@@ -72,6 +75,22 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+/** A prompt step's `name` is capped at this length by the workflow schema. */
+const PROMPT_STEP_NAME_MAX_LENGTH = 100;
+
+/**
+ * The step `name` for a `.prompt.md` file's frontmatter `description`: one
+ * line, cut to the schema's limit. Anything that isn't a non-empty string
+ * gives no name, so the dashboard falls back to the prompt preview.
+ */
+function promptFileStepName(description: unknown): string | undefined {
+  if (typeof description !== "string") return undefined;
+  const oneLine = description.replace(/\s+/g, " ").trim();
+  return oneLine
+    ? truncateText(oneLine, PROMPT_STEP_NAME_MAX_LENGTH - 1)
+    : undefined;
 }
 
 /**
@@ -571,7 +590,7 @@ export class PromptFileParser {
       const content = await this.readWorkflowFileContent(filePath);
 
       const frontmatterSplit = splitMarkdownFrontmatter(content);
-      let promptContent = content;
+      let description: unknown;
       if (frontmatterSplit) {
         const frontmatterText = frontmatterSplit.frontmatter;
         const frontmatter = frontmatterText.trim()
@@ -594,14 +613,14 @@ export class PromptFileParser {
           filePath,
           "Markdown frontmatter"
         );
-        if (frontmatter !== null && frontmatter !== undefined) {
+        if (isObject(frontmatter)) {
           migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
+          description = frontmatter.description;
         }
-        promptContent = frontmatterSplit.body;
       }
 
-      // Trim whitespace but preserve the prompt text as-is.
-      const promptText = promptContent.trim();
+      const promptText = getPromptMarkdownText(content);
+      const name = promptFileStepName(description);
 
       if (!promptText) {
         throw new Error("Prompt file is empty");
@@ -613,6 +632,7 @@ export class PromptFileParser {
             CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
           steps: [
             {
+              ...(name ? { name } : {}),
               prompt: promptText,
               // Properties omitted will be undefined - global setting used at execution time
             },

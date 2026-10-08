@@ -267,9 +267,9 @@ suite("WorkflowFileCompletionCore: keys", () => {
     );
   });
 
-  test(".prompt.md frontmatter offers schemaVersion", () => {
+  test(".prompt.md frontmatter offers only the keys ctrlyoke reads", () => {
     const keys = labels(complete("---\n§\n---\nBody", PROMPT_MARKDOWN));
-    assert.deepStrictEqual(keys, ["schemaVersion"]);
+    assert.deepStrictEqual(keys, ["schemaVersion", "description"]);
   });
 
   test("prompt text, script text and comments get no items", () => {

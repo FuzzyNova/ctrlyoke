@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), while fixing `vscode-prompt-diagnostics-symbol-lookups-and-trust-refresh`
 - **Area:** `src/core/PromptFileResolver.ts` (`resolvePromptValue`), `src/core/WorkflowExecutor.ts` (`resolveEffectivePrompt`)
-- **Severity:** low (unconfirmed whether intended)
+- **Resolution:** fixed in this commit. `PromptFileResolver.resolve` returns a `.prompt.md` file's trimmed body through `getPromptMarkdownText`, the same helper the loader uses, so runtime, preview, bundle export and file-ref validation all see the same text. Folded in: frontmatter `description` becomes the step `name` when the file runs on its own.
 
 ## Symptom
 

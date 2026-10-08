@@ -210,6 +210,26 @@ $defs:
         type: boolean
         description: Render a text variable as a multiline input.
     additionalProperties: false
+  promptFileFrontmatter:
+    type: object
+    description: >-
+      The optional YAML frontmatter block at the top of a `.prompt.md` file. ctrlyoke reads only the
+      fields listed here and ignores any other key, so a prompt file written for another tool (for
+      example a GitHub Copilot prompt file with `model`, `tools` or `agent`) still loads. The block
+      is never sent to the harness, whether the file runs on its own or a step's `prompt` names it.
+    properties:
+      schemaVersion:
+        type: integer
+        minimum: 1
+        description: >-
+          Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to
+          load a file with a newer version.
+      description:
+        type: string
+        description: >-
+          Short summary of the prompt. When the file runs on its own, it becomes the step's `name`
+          in the dashboard (cut to 100 characters). It is display metadata only and is never sent to
+          the harness.
   worktreeConfig:
     oneOf:
       - type: boolean
