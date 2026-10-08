@@ -245,6 +245,12 @@ names the guard or test that proves it, not just the code change.
     language-intelligence plan. `npm run typecheck`, `npm run lint`, and
     `npm test` passed (extension 5,635 passing/4 pending, UI 3,468 passing,
     packaging 80 passing).
+  - **14a review fixes (2026-10-07):** serialized per-proxy message handling;
+    browser `didChange` now owns open-buffer edits, with one edit notification
+    per tab and a `null` rename result; server document versions stay monotonic
+    across tabs; cancellation ids, watcher event kinds, and viewer-readable
+    request validation are handled. Shared LSP methods, document state, and
+    viewer-URI encoding are single-sourced. Regression coverage added.
   - **14b:** context-menu group, F12, references panel, capability gating.
     **Done (2026-10-07):** menu actions use the advertised session capabilities;
     F12 navigates to definitions without changing `.cm-link` gestures. The

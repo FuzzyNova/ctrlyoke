@@ -12,17 +12,11 @@ import type {
 } from "./LanguageServerBackend";
 import { LANGUAGE_SERVER_RESOLUTION_REASONS } from "./LanguageServerBackend";
 import { LspSessionProxy } from "./LspSessionProxy";
+import type { SharedDocument } from "./LspSharedDocument";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
 import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import type { LanguageServerStatusChange } from "./ManagedLanguageServerBackend";
 import { LANGUAGE_SERVER_STATUSES } from "../../types/DashboardConstants";
-
-interface SharedDocument {
-  readonly uri: string;
-  readonly tabs: Map<LspSessionProxy, { text: string; version: number }>;
-  syncedText?: string;
-  syncedVersion?: number;
-}
 
 interface SharedServerSession {
   readonly id: string;
@@ -180,7 +174,7 @@ export class LanguageIntelligenceHost {
     return proxy;
   }
 
-  async notifyWorkspaceFileChanged(viewerPath: string): Promise<void> {
+  async notifyWorkspaceFileChanged(viewerPath: string, type = 2): Promise<void> {
     const absolutePath = safeResolveWorkspacePath(viewerPath, this.roots);
     if (!absolutePath) return;
     const uri = pathToFileURL(absolutePath).toString();
@@ -188,7 +182,7 @@ export class LanguageIntelligenceHost {
       const session = await pending;
       void session.connection.sendNotification(
         LSP_METHODS.DID_CHANGE_WATCHED_FILES,
-        { changes: [{ uri, type: 2 }] }
+        { changes: [{ uri, type }] }
       );
     }
   }

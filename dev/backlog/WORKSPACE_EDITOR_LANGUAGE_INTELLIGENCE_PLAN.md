@@ -326,8 +326,12 @@ UX, including where the catalog comes from, is in "Settings section UX" below.
   request with `{ fileCount }`; the browser replies with a boolean result.
   Edits to open buffers are sent as the LSP notification
   `ctrlyoke/applyWorkspaceTextEdits` with `{ uri, edits }`, then flow back to
-  the proxy through the normal `didChange` stream. Code-action edits are applied
-  when the server sends `workspace/applyEdit` after the user executes an action.
+  the proxy through the normal `didChange` stream, which is the single source of
+  truth for open-buffer text. After applying a rename edit, the proxy answers the
+  browser's `textDocument/rename` request with `null` so the browser LSP client
+  does not apply the same `WorkspaceEdit` a second time. Code-action edits are
+  applied when the server sends `workspace/applyEdit` after the user executes an
+  action.
 
 ### Multiple tabs and external changes: best effort, never read-only
 

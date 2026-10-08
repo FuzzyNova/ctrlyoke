@@ -4,6 +4,7 @@ import {
   StreamMessageReader,
   StreamMessageWriter,
   type MessageConnection,
+  type CancellationToken,
 } from "vscode-jsonrpc/node";
 import type {
   LanguageServerBackend,
@@ -21,6 +22,7 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
     params: unknown;
   }> = [];
   readonly serverConnections: MessageConnection[] = [];
+  readonly requestTokens: CancellationToken[] = [];
   requestHandler: (method: string, params: unknown) => unknown = () => null;
 
   constructor(
@@ -55,9 +57,10 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
       this.notifications.push({ method, params });
       this.events.push({ isNotification: true, method, params });
     });
-    server.onRequest((method, params) => {
+    server.onRequest((method, params, token) => {
       this.requests.push({ method, params });
       this.events.push({ isNotification: false, method, params });
+      this.requestTokens.push(token);
       return this.requestHandler(
         method,
         Array.isArray(params) ? params[0] : params

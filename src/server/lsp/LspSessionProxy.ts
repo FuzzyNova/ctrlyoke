@@ -1,15 +1,17 @@
 import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { MessageConnection } from "vscode-jsonrpc";
+import { CancellationTokenSource, type MessageConnection } from "vscode-jsonrpc";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 import { toViewerPath } from "../../platform/WorkspaceViewerPath";
 import type { LanguageServerDescriptor } from "./LanguageServerBackend";
 import {
   LSP_METHODS,
   LSP_READ_ONLY_URI_SCHEME,
-  LSP_VIEWER_URI_PREFIX,
+  fromLspViewerUri,
+  toLspViewerUri,
   type JsonRpcMessage,
 } from "./LspProtocol";
+import type { SharedDocument } from "./LspSharedDocument";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
 import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 
@@ -19,13 +21,6 @@ interface BufferState {
   readonly languageId: string;
   text: string;
   version: number;
-}
-
-interface SharedDocument {
-  readonly uri: string;
-  readonly tabs: Map<LspSessionProxy, { text: string; version: number }>;
-  syncedText?: string;
-  syncedVersion?: number;
 }
 
 interface ProxyOptions {
@@ -52,13 +47,21 @@ export class LspSessionProxy {
     string | number,
     { resolve(value: unknown): void; reject(error: Error): void }
   >();
+  private readonly pendingClientRequests = new Map<string | number, CancellationTokenSource>();
+  private messageQueue: Promise<void> = Promise.resolve();
   private nextServerRequestId = 1;
   private nextClientRequestId = 1;
   private disposed = false;
 
   constructor(private readonly options: ProxyOptions) {}
 
-  async handleMessage(message: JsonRpcMessage): Promise<void> {
+  handleMessage(message: JsonRpcMessage): Promise<void> {
+    const handling = this.messageQueue.then(() => this.processMessage(message));
+    this.messageQueue = handling.catch(() => undefined);
+    return handling;
+  }
+
+  private async processMessage(message: JsonRpcMessage): Promise<void> {
     if (this.disposed || !message || message.jsonrpc !== "2.0") return;
     if ("method" in message) {
       if ("id" in message) {
@@ -73,7 +76,7 @@ export class LspSessionProxy {
 
   async forwardServerRequest(method: string, params: unknown): Promise<unknown> {
     if (this.disposed) throw new Error("LSP client is disconnected.");
-    if (method === "workspace/applyEdit") {
+    if (method === LSP_METHODS.APPLY_EDIT) {
       const edit = (params as { edit?: unknown } | undefined)?.edit;
       await this.applyWorkspaceEdit(edit, false);
       return { applied: true };
@@ -112,6 +115,8 @@ export class LspSessionProxy {
       pending.reject(new Error("LSP client disconnected."));
     }
     this.pendingServerRequests.clear();
+    for (const source of this.pendingClientRequests.values()) source.cancel();
+    this.pendingClientRequests.clear();
     this.options.onDispose();
   }
 
@@ -135,29 +140,35 @@ export class LspSessionProxy {
     let params: unknown;
     try {
       params = await this.rewriteUris(request.params, true);
+      await this.validateRequestDocument(request.params);
       await this.resyncForRequest(request.method, params);
     } catch (error) {
       this.sendError(request.id, INVALID_REQUEST, String(error));
       return;
     }
 
-    try {
-      const result = await this.options.connection.sendRequest(
-        request.method,
-        params
-      );
-      if (request.method === "textDocument/rename") {
-        await this.applyWorkspaceEdit(result, true);
-      }
-      const rewrittenResult = await this.rewriteUris(result, false);
-      this.sendToClient({
-        jsonrpc: "2.0",
-        id: request.id,
-        result: rewrittenResult,
+    const cancellation = new CancellationTokenSource();
+    this.pendingClientRequests.set(request.id, cancellation);
+    void this.options.connection
+      .sendRequest(request.method, params, cancellation.token)
+      .then(async (result) => {
+        let rewrittenResult = result;
+        if (request.method === LSP_METHODS.RENAME) {
+          await this.applyWorkspaceEdit(result, true);
+          // Open-buffer text is updated through the browser's didChange event.
+          rewrittenResult = null;
+        } else {
+          rewrittenResult = await this.rewriteUris(result, false);
+        }
+        this.sendToClient({ jsonrpc: "2.0", id: request.id, result: rewrittenResult });
+      })
+      .catch((error: unknown) => {
+        this.sendError(request.id, INVALID_REQUEST, String(error));
+      })
+      .finally(() => {
+        this.pendingClientRequests.delete(request.id);
+        cancellation.dispose();
       });
-    } catch (error) {
-      this.sendError(request.id, INVALID_REQUEST, String(error));
-    }
   }
 
   private async handleNotification(
@@ -178,6 +189,13 @@ export class LspSessionProxy {
     }
     if (notification.method === LSP_METHODS.DID_CLOSE) {
       await this.closeDocument(notification.params);
+      return;
+    }
+    if (notification.method === LSP_METHODS.CANCEL_REQUEST) {
+      const id = (notification.params as { id?: unknown } | undefined)?.id;
+      if (typeof id === "string" || typeof id === "number") {
+        this.pendingClientRequests.get(id)?.cancel();
+      }
       return;
     }
     let params: unknown;
@@ -236,7 +254,7 @@ export class LspSessionProxy {
     let shared = this.options.documents.get(state.serverUri);
     const isFirstOpen = !shared;
     if (!shared) {
-      shared = { uri: state.serverUri, tabs: new Map() };
+      shared = { uri: state.serverUri, tabs: new Map(), serverVersion: 1 };
       this.options.documents.set(state.serverUri, shared);
     }
     shared.tabs.set(this, { text: state.text, version: state.version });
@@ -246,12 +264,12 @@ export class LspSessionProxy {
         textDocument: {
           uri: state.serverUri,
           languageId: state.languageId,
-          version: state.version,
+          version: shared.serverVersion,
           text: state.text,
         },
       });
       shared.syncedText = state.text;
-      shared.syncedVersion = state.version;
+      shared.syncedVersion = shared.serverVersion;
     }
   }
 
@@ -314,16 +332,26 @@ export class LspSessionProxy {
     void method;
   }
 
+  private async validateRequestDocument(params: unknown): Promise<void> {
+    const clientUri = findTextDocumentUri(params);
+    if (!clientUri || this.buffers.has(clientUri)) return;
+    const translated = this.resolveClientUri(clientUri);
+    if (!translated || !(await this.options.canOpenPath(translated.viewerPath))) {
+      throw new Error("Language server request targets a file unavailable in the workspace viewer.");
+    }
+  }
+
   private async sendFullTextChange(
     shared: SharedDocument,
     state: BufferState
   ): Promise<void> {
+    shared.serverVersion += 1;
     await this.options.connection.sendNotification(LSP_METHODS.DID_CHANGE, {
-      textDocument: { uri: state.serverUri, version: state.version },
+      textDocument: { uri: state.serverUri, version: shared.serverVersion },
       contentChanges: [{ text: state.text }],
     });
     shared.syncedText = state.text;
-    shared.syncedVersion = state.version;
+    shared.syncedVersion = shared.serverVersion;
   }
 
   private resolveClientUri(clientUri: string):
@@ -332,10 +360,7 @@ export class LspSessionProxy {
     try {
       const parsed = new URL(clientUri);
       if (parsed.protocol !== "file:") return undefined;
-      const uriPath = decodeURIComponent(parsed.pathname);
-      const viewerPath = uriPath.startsWith("/__ctrlyoke_workspace__/")
-        ? uriPath.slice("/__ctrlyoke_workspace__/".length)
-        : toViewerPath(fileURLToPath(parsed), {
+      const viewerPath = fromLspViewerUri(clientUri) ?? toViewerPath(fileURLToPath(parsed), {
             primaryRoot: this.options.roots.workspaceRoot,
             namedRoots: this.options.roots.namedRoots,
           });
@@ -387,10 +412,7 @@ export class LspSessionProxy {
       if (!safeResolveWorkspacePath(viewerPath, this.options.roots)) {
         return `${LSP_READ_ONLY_URI_SCHEME}${encodeURIComponent(path.basename(absolutePath))}`;
       }
-      return `${LSP_VIEWER_URI_PREFIX}${viewerPath
-        .split("/")
-        .map(encodeURIComponent)
-        .join("/")}`;
+      return toLspViewerUri(viewerPath);
     } catch {
       return uri;
     }
@@ -420,8 +442,7 @@ export class LspSessionProxy {
 
     // Validate the whole edit before mutating any buffer or file.
     const resolved = [...byPath].map(([viewerPath, edits]) => {
-      const serverUri = this.resolveClientUri(`${LSP_VIEWER_URI_PREFIX}${viewerPath
-        .split("/").map(encodeURIComponent).join("/")}`)?.serverUri;
+      const serverUri = this.resolveClientUri(toLspViewerUri(viewerPath))?.serverUri;
       if (!serverUri) throw new Error(`Workspace edit path is outside the workspace: ${viewerPath}`);
       return { viewerPath, serverUri, edits };
     });
@@ -438,9 +459,7 @@ export class LspSessionProxy {
     for (const file of resolved) {
       const shared = this.options.documents.get(file.serverUri);
       if (shared?.tabs.size) {
-        for (const proxy of shared.tabs.keys()) {
-          proxy.applyEditsToOpenBuffer(file.serverUri, file.edits);
-        }
+        this.applyEditsToOpenBuffer(file.serverUri, file.edits);
       } else {
         const response = await this.options.readFile(file.viewerPath);
         if (response.readOnly) throw new Error(`Workspace edit targets a read-only file: ${file.viewerPath}`);
@@ -457,19 +476,14 @@ export class LspSessionProxy {
   ): void {
     const shared = this.options.documents.get(serverUri);
     if (!shared) return;
-    for (const [proxy, tab] of shared.tabs) {
+    for (const [proxy] of shared.tabs) {
       const state = [...proxy.buffers.values()].find((buffer) => buffer.serverUri === serverUri);
       if (!state) continue;
-      state.text = applyLspTextEdits(state.text, edits);
-      state.version += 1;
-      shared.tabs.set(proxy, { text: state.text, version: state.version });
       proxy.sendToClient({
         jsonrpc: "2.0",
-        method: "ctrlyoke/applyWorkspaceTextEdits",
-        params: { uri: `${LSP_VIEWER_URI_PREFIX}${state.viewerPath.split("/").map(encodeURIComponent).join("/")}`, edits },
+        method: LSP_METHODS.APPLY_WORKSPACE_TEXT_EDITS,
+        params: { uri: toLspViewerUri(state.viewerPath), edits },
       });
-      void proxy.sendFullTextChange(shared, state);
-      void tab;
     }
   }
 
@@ -494,7 +508,7 @@ export class LspSessionProxy {
     this.sendToClient({
       jsonrpc: "2.0",
       id,
-      method: "ctrlyoke/confirmWorkspaceRename",
+      method: LSP_METHODS.CONFIRM_WORKSPACE_RENAME,
       params: { fileCount },
     });
     return (await response) === true;

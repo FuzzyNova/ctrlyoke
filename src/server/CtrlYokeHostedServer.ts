@@ -2800,7 +2800,7 @@ export class CtrlYokeHostedServer
       );
       subscription = { watcher, clients: new Set() };
       this.fileWatchers.set(normalizedPath, subscription);
-      const notify = async () => {
+      const notify = async (type = 2) => {
         let modifiedAt: number | undefined;
         try {
           modifiedAt = (await fs.promises.stat(normalizedPath)).mtimeMs;
@@ -2808,11 +2808,11 @@ export class CtrlYokeHostedServer
           // A delete event has no current modification time.
         }
         this.broadcastWorkspaceFileChanged(viewerPath, modifiedAt);
-        void this.languageIntelligenceHost.notifyWorkspaceFileChanged(viewerPath);
+        void this.languageIntelligenceHost.notifyWorkspaceFileChanged(viewerPath, type);
       };
-      watcher.onDidChange(() => void notify());
-      watcher.onDidCreate(() => void notify());
-      watcher.onDidDelete(() => void notify());
+      watcher.onDidChange(() => void notify(2));
+      watcher.onDidCreate(() => void notify(1));
+      watcher.onDidDelete(() => void notify(3));
     }
     subscription.clients.add(clientId);
     this.watchedFilesByClient.set(clientId, normalizedPath);

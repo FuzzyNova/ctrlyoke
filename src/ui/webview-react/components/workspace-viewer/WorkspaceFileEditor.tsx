@@ -42,6 +42,7 @@ import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 import {
   ATOMIC_REFERENCE_KINDS,
+  LSP_METHODS,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,
 } from "@root/types/DashboardConstants";
@@ -226,7 +227,7 @@ export const WorkspaceFileEditor = forwardRef<
       const oldName = view.state.sliceDoc(word.from, word.to);
       const newName = window.prompt("Rename symbol", oldName);
       if (!newName || newName === oldName) return;
-      await requestLanguageIntelligence(sessionId, "textDocument/rename", {
+      await requestLanguageIntelligence(sessionId, LSP_METHODS.RENAME, {
         textDocument: { uri: workspaceFileUri(filePath) },
         position: toLspPosition(view, word.from),
         newName,

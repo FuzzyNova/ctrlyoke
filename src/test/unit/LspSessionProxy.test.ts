@@ -62,8 +62,8 @@ suite("LspSessionProxy", () => {
     await open(proxyA!, "client-a");
     await open(proxyB!, "client-b");
     await flushMessages();
-    await requestHover(proxyA!, 1, "client-a");
-    await requestHover(proxyB!, 1, "client-b");
+    await requestHover(proxyA!, clientA, 1, "client-a");
+    await requestHover(proxyB!, clientB, 1, "client-b");
 
     assert.ok(backend.requests.length >= 2, `requests=${JSON.stringify(backend.requests)}`);
     assert.strictEqual((clientA[0] as { id: number }).id, 1);
@@ -126,7 +126,7 @@ suite("LspSessionProxy", () => {
       })
     );
     const eventOffset = backend.events.length;
-    await requestHover(proxyB!, 2, "second buffer");
+    await requestHover(proxyB!, clientB, 2, "second buffer");
 
     assert.deepStrictEqual(
       backend.events
@@ -179,6 +179,21 @@ suite("LspSessionProxy", () => {
     assert.strictEqual(clientB.length, 0);
   });
 
+  test("preserves created, changed, and deleted watched-file event kinds", async () => {
+    await open(proxyA!, "text");
+    const watchedEvents = () => backend.notifications.filter(
+      ({ method }) => method === LSP_METHODS.DID_CHANGE_WATCHED_FILES
+    );
+    for (const type of [1, 2, 3]) {
+      await host.notifyWorkspaceFileChanged("src/main.ts", type);
+      await waitFor(() => watchedEvents().length >= type);
+    }
+    assert.deepStrictEqual(
+      watchedEvents().map(({ params }) => (params as { changes: Array<{ type: number }> }).changes[0].type),
+      [1, 2, 3]
+    );
+  });
+
   test("redacts secret values in server hover responses", async () => {
     const secret = "lsp-super-secret-value";
     const redactor = new RunSecretRedactor();
@@ -186,9 +201,9 @@ suite("LspSessionProxy", () => {
     releaseRedactor = secretRedactionService.register(redactor);
     backend.requestHandler = () => ({ contents: { kind: "markdown", value: secret } });
     await open(proxyA!, "text");
-    await requestHover(proxyA!, 4, "text");
+    await requestHover(proxyA!, clientA, 4, "text");
 
-    assert.ok(!JSON.stringify(clientA[0]).includes(secret));
+    assert.ok(!JSON.stringify(clientA.find((message) => (message as { id?: number }).id === 4)).includes(secret));
   });
 
   test("rejects inbound file URIs outside every workspace root", async () => {
@@ -207,14 +222,31 @@ suite("LspSessionProxy", () => {
     assert.strictEqual(backend.requests.length, 0);
   });
 
+  test("rejects requests for files the workspace viewer marks read-only", async () => {
+    const guardedProxy = await host.createProxy(
+      sessionId,
+      (message) => clientA.push(message),
+      async (viewerPath) => viewerPath !== "src/main.ts"
+    );
+    await guardedProxy!.handleMessage({
+      jsonrpc: "2.0",
+      id: 91,
+      method: "textDocument/hover",
+      params: { textDocument: { uri: viewerUri }, position: { line: 0, character: 0 } },
+    });
+    assert.ok((clientA.at(-1) as { error?: unknown }).error);
+    assert.strictEqual(backend.requests.length, 0);
+    guardedProxy?.dispose();
+  });
+
   test("turns out-of-root server locations into read-only locations", async () => {
     const outsideUri = pathToFileURL(
       path.resolve(workspaceRoot, "..", "outside-library.d.ts")
     ).toString();
     backend.requestHandler = () => ({ uri: outsideUri });
     await open(proxyA!, "text");
-    await requestHover(proxyA!, 12, "text");
-    const result = (clientA[0] as { result: { uri: string } }).result;
+    await requestHover(proxyA!, clientA, 12, "text");
+    const result = (clientA.find((message) => (message as { id?: number }).id === 12) as { result: { uri: string } }).result;
 
     assert.ok(result.uri.startsWith(LSP_READ_ONLY_URI_SCHEME));
     assert.ok(!result.uri.includes(workspaceRoot));
@@ -245,6 +277,61 @@ suite("LspSessionProxy", () => {
     redactedProxy?.dispose();
   });
 
+  test("serializes didChange behind an open that is still checking viewer access", async () => {
+    let releaseOpen!: () => void;
+    let startedOpen!: () => void;
+    const openStarted = new Promise<void>((resolve) => (startedOpen = resolve));
+    const openAllowed = new Promise<void>((resolve) => (releaseOpen = resolve));
+    const orderedProxy = await host.createProxy(sessionId, () => undefined, async () => {
+      startedOpen();
+      await openAllowed;
+      return true;
+    });
+    const opening = orderedProxy!.handleMessage({
+      jsonrpc: "2.0",
+      method: LSP_METHODS.DID_OPEN,
+      params: { textDocument: { uri: viewerUri, languageId: "typescript", version: 1, text: "before" } },
+    });
+    await openStarted;
+    const changing = orderedProxy!.handleMessage({
+      jsonrpc: "2.0",
+      method: LSP_METHODS.DID_CHANGE,
+      params: { textDocument: { uri: viewerUri, version: 2 }, contentChanges: [{ text: "after" }] },
+    });
+    assert.strictEqual(backend.notifications.some(({ method }) => method === LSP_METHODS.DID_OPEN), false);
+    releaseOpen();
+    await Promise.all([opening, changing]);
+    await waitFor(() => backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN || method === LSP_METHODS.DID_CHANGE).length === 2);
+    const documentEvents = backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN || method === LSP_METHODS.DID_CHANGE);
+    assert.deepStrictEqual(documentEvents.map(({ method }) => method), [LSP_METHODS.DID_OPEN, LSP_METHODS.DID_CHANGE]);
+    assert.strictEqual((documentEvents[1].params as { contentChanges: Array<{ text: string }> }).contentChanges[0].text, "after");
+    orderedProxy?.dispose();
+  });
+
+  test("keeps server document versions monotonic when tabs alternate changes", async () => {
+    await open(proxyA!, "tab A");
+    await open(proxyB!, "tab B");
+    await proxyA!.handleMessage({ jsonrpc: "2.0", method: LSP_METHODS.DID_CHANGE, params: { textDocument: { uri: viewerUri, version: 40 }, contentChanges: [{ text: "tab A update" }] } });
+    await proxyB!.handleMessage({ jsonrpc: "2.0", method: LSP_METHODS.DID_CHANGE, params: { textDocument: { uri: viewerUri, version: 2 }, contentChanges: [{ text: "tab B update" }] } });
+    await waitFor(() => backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_CHANGE).length === 2);
+    const versions = backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_CHANGE).map(({ params }) => (params as { textDocument: { version: number } }).textDocument.version);
+    assert.deepStrictEqual(versions, [2, 3]);
+  });
+
+  test("maps cancellation to the active server request and ignores unknown ids", async () => {
+    let finishRequest!: (value: unknown) => void;
+    backend.requestHandler = () => new Promise((resolve) => (finishRequest = resolve));
+    await open(proxyA!, "text");
+    await proxyA!.handleMessage({ jsonrpc: "2.0", id: "browser-request", method: "textDocument/hover", params: { textDocument: { uri: viewerUri } } });
+    await waitFor(() => backend.requestTokens.length > 0);
+    let cancelled = false;
+    backend.requestTokens[0].onCancellationRequested(() => (cancelled = true));
+    await proxyA!.handleMessage({ jsonrpc: "2.0", method: LSP_METHODS.CANCEL_REQUEST, params: { id: "missing" } });
+    await proxyA!.handleMessage({ jsonrpc: "2.0", method: LSP_METHODS.CANCEL_REQUEST, params: { id: "browser-request" } });
+    await waitFor(() => cancelled);
+    finishRequest(null);
+  });
+
   test("applies rename edits to the requesting tab buffer", async () => {
     await open(proxyA!, "const value = 1;\n");
     backend.requestHandler = () => ({ changes: {
@@ -252,12 +339,15 @@ suite("LspSessionProxy", () => {
         { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 11 } }, newText: "renamed" },
       ],
     } });
-    await proxyA!.handleMessage({ jsonrpc: "2.0", id: 31, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
-    assert.ok(clientA.some((message) => (message as { method?: string }).method === "ctrlyoke/applyWorkspaceTextEdits"));
+    await proxyA!.handleMessage({ jsonrpc: "2.0", id: 31, method: LSP_METHODS.RENAME, params: { textDocument: { uri: viewerUri } } });
+    await waitFor(() => clientA.some((message) => (message as { method?: string }).method === LSP_METHODS.APPLY_WORKSPACE_TEXT_EDITS));
+    await waitFor(() => clientA.some((message) => (message as { id?: number }).id === 31));
+    assert.strictEqual((clientA.find((message) => (message as { id?: number }).id === 31) as { result: unknown }).result, null);
+    assert.strictEqual(backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_CHANGE).length, 0);
+    await proxyA!.handleMessage({ jsonrpc: "2.0", method: LSP_METHODS.DID_CHANGE, params: { textDocument: { uri: viewerUri, version: 2 }, contentChanges: [{ text: "const renamed = 1;\n" }] } });
     await waitFor(() => backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
       (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 1;\n"));
-    assert.ok(backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
-      (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 1;\n"));
+    assert.strictEqual(backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_CHANGE).length, 1);
   });
 
   test("applies edits to a dirty cross-tab buffer without replacing its unsaved text", async () => {
@@ -268,11 +358,11 @@ suite("LspSessionProxy", () => {
         { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 11 } }, newText: "renamed" },
       ],
     } });
-    await proxyA!.handleMessage({ jsonrpc: "2.0", id: 32, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
-    assert.ok(clientB.some((message) => (message as { method?: string }).method === "ctrlyoke/applyWorkspaceTextEdits"));
+    await proxyA!.handleMessage({ jsonrpc: "2.0", id: 32, method: LSP_METHODS.RENAME, params: { textDocument: { uri: viewerUri } } });
+    await waitFor(() => clientB.some((message) => (message as { method?: string }).method === LSP_METHODS.APPLY_WORKSPACE_TEXT_EDITS));
+    assert.strictEqual(clientB.filter((message) => (message as { method?: string }).method === LSP_METHODS.APPLY_WORKSPACE_TEXT_EDITS).length, 1);
+    await proxyB!.handleMessage({ jsonrpc: "2.0", method: LSP_METHODS.DID_CHANGE, params: { textDocument: { uri: viewerUri, version: 2 }, contentChanges: [{ text: "const renamed = 2; // unsaved\n" }] } });
     await waitFor(() => backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
-      (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 2; // unsaved\n"));
-    assert.ok(backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE &&
       (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 2; // unsaved\n"));
   });
 
@@ -290,11 +380,12 @@ suite("LspSessionProxy", () => {
         { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 11 } }, newText: "renamed" },
       ],
     } });
-    const pending = editProxy!.handleMessage({ jsonrpc: "2.0", id: 33, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
-    await waitFor(() => clientA.some((message) => (message as { method?: string }).method === "ctrlyoke/confirmWorkspaceRename"));
-    const confirmation = clientA.find((message) => (message as { method?: string }).method === "ctrlyoke/confirmWorkspaceRename") as { id: string };
+    const pending = editProxy!.handleMessage({ jsonrpc: "2.0", id: 33, method: LSP_METHODS.RENAME, params: { textDocument: { uri: viewerUri } } });
+    await waitFor(() => clientA.some((message) => (message as { method?: string }).method === LSP_METHODS.CONFIRM_WORKSPACE_RENAME));
+    const confirmation = clientA.find((message) => (message as { method?: string }).method === LSP_METHODS.CONFIRM_WORKSPACE_RENAME) as { id: string };
     await editProxy!.handleMessage({ jsonrpc: "2.0", id: confirmation.id, result: true });
     await pending;
+    await waitFor(() => saved.length > 0);
     assert.strictEqual(saved, "const renamed = 1;\r\n");
     await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_CHANGE_WATCHED_FILES));
     assert.ok(backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE_WATCHED_FILES &&
@@ -316,9 +407,10 @@ suite("LspSessionProxy", () => {
         { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: "changed" },
       ],
     } });
-    await readOnlyProxy!.handleMessage({ jsonrpc: "2.0", id: 34, method: "textDocument/rename", params: { textDocument: { uri: viewerUri } } });
+    await readOnlyProxy!.handleMessage({ jsonrpc: "2.0", id: 34, method: LSP_METHODS.RENAME, params: { textDocument: { uri: viewerUri } } });
+    await waitFor(() => clientA.some((message) => (message as { id?: number }).id === 34));
     assert.deepStrictEqual(writes, []);
-    assert.ok((clientA.at(-1) as { error?: unknown }).error);
+    assert.ok((clientA.find((message) => (message as { id?: number }).id === 34) as { error?: unknown }).error);
     readOnlyProxy?.dispose();
   });
 });
@@ -345,6 +437,7 @@ async function open(
 
 async function requestHover(
   proxy: NonNullable<Awaited<ReturnType<LanguageIntelligenceHost["createProxy"]>>>,
+  messages: unknown[],
   id: number,
   marker: string
 ): Promise<void> {
@@ -358,6 +451,7 @@ async function requestHover(
       position: { line: 0, character: 0 },
     },
   });
+  await waitFor(() => messages.some((message) => (message as { id?: number }).id === id));
 }
 
 function flushMessages(): Promise<void> {

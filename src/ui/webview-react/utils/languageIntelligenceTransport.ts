@@ -1,5 +1,6 @@
 import type { Transport } from "@codemirror/lsp-client";
 import { confirmWorkspaceRename } from "./workspaceEditConfirmation";
+import { LSP_METHODS } from "@root/types/DashboardConstants";
 
 let workspaceEditHandler: ((uri: string, edits: unknown[]) => void) | undefined;
 export function setWorkspaceEditHandler(
@@ -93,14 +94,14 @@ export class LanguageIntelligenceTransport implements Transport {
   private handleProxyMessage(raw: string): boolean {
     let message: { id?: string | number; method?: string; params?: unknown };
     try { message = JSON.parse(raw) as typeof message; } catch { return false; }
-    if (message.method === "ctrlyoke/confirmWorkspaceRename" && message.id !== undefined) {
+    if (message.method === LSP_METHODS.CONFIRM_WORKSPACE_RENAME && message.id !== undefined) {
       const fileCount = (message.params as { fileCount?: unknown } | undefined)?.fileCount;
       void confirmWorkspaceRename(typeof fileCount === "number" ? fileCount : 0).then((confirmed) => {
         this.send(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: confirmed }));
       });
       return true;
     }
-    if (message.method === "ctrlyoke/applyWorkspaceTextEdits") {
+    if (message.method === LSP_METHODS.APPLY_WORKSPACE_TEXT_EDITS) {
       const params = message.params as { uri?: unknown; edits?: unknown } | undefined;
       if (typeof params?.uri === "string" && Array.isArray(params.edits)) {
         workspaceEditHandler?.(params.uri, params.edits);
