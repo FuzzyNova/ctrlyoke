@@ -5,7 +5,10 @@ import {
   LANGUAGE_SERVER_CATALOG,
   type LanguageServerCatalogEntry,
 } from "../server/lsp/LanguageServerCatalog";
-import { LSP_METHODS } from "../types/DashboardConstants";
+import {
+  LANGUAGE_SERVER_STATUSES,
+  LSP_METHODS,
+} from "../types/DashboardConstants";
 import {
   LspSymbolKind,
   type IndexedSymbol,
@@ -23,24 +26,50 @@ export interface LspSymbolQueryHost {
     | { descriptor: { capabilities: Record<string, unknown> }; result: unknown }
     | undefined
   >;
+  resolveForPath?(viewerPath: string): Promise<{
+    id: string;
+    languageId: string;
+    rootPath: string;
+  } | undefined>;
+  onStatusChanged?(listener: (event: { status: string }) => void): { dispose(): void };
 }
 
 /** Standalone symbol source backed by the managed language-server host. */
 export class LspSymbolIndex implements SymbolIndex {
   private warmup?: Promise<void>;
   private ready = false;
-  private readonly queriedLanguages = new Set<string>();
+  private lifecycleGeneration = 0;
+  private readonly servedLanguages = new Set<string>();
+  private readonly servedExtensions = new Set<string>();
 
   constructor(
     private readonly workspaceRoot: string,
     private readonly getFiles: () => Promise<string[]>,
     private readonly host: LspSymbolQueryHost,
     private readonly catalog: readonly LanguageServerCatalogEntry[] = LANGUAGE_SERVER_CATALOG
-  ) {}
+  ) {
+    host.onStatusChanged?.((event) => {
+      if (
+        event.status === LANGUAGE_SERVER_STATUSES.STOPPED ||
+        event.status === LANGUAGE_SERVER_STATUSES.CRASHED
+      ) {
+        this.ready = false;
+        this.lifecycleGeneration++;
+        this.warmup = undefined;
+        this.servedLanguages.clear();
+        this.servedExtensions.clear();
+      } else if (event.status === LANGUAGE_SERVER_STATUSES.RUNNING) {
+        void this.ensureWarmup().catch(() => undefined);
+      }
+    });
+  }
 
   isReadyForPath(viewerPath: string): boolean {
     const entry = this.entryForFile(viewerPath);
-    return !!entry && this.queriedLanguages.has(entry.languages[0]);
+    return (
+      this.servedExtensions.has(path.posix.extname(viewerPath).toLowerCase()) ||
+      (!!entry && entry.languages.some((language) => this.servedLanguages.has(language)))
+    );
   }
 
   shouldUseRegexFallback(symbol: IndexedSymbol): boolean {
@@ -55,21 +84,27 @@ export class LspSymbolIndex implements SymbolIndex {
     if (signal?.aborted) return [];
     const files = await this.getFiles();
     if (!this.ready) {
-      this.warmup ??= this.startDetected(files)
-        .then(() => {
-          this.ready = true;
-        })
-        .catch(() => undefined);
+      void this.ensureWarmup(files).catch(() => undefined);
       return [];
     }
     const symbols: IndexedSymbol[] = [];
     const seenServers = new Set<string>();
+    const rootMarkerCache = new Map<string, Promise<boolean>>();
     for (const file of files) {
       if (signal?.aborted) break;
       const entry = this.entryForFile(file);
-      if (!entry || !(await this.hasRootMarker(entry, files))) continue;
-      const key = entry.id;
+      const descriptor = await this.host.resolveForPath?.(file);
+      if (this.host.resolveForPath && !descriptor) continue;
+      const key = descriptor
+        ? `${descriptor.id}\n${path.resolve(descriptor.rootPath)}`
+        : entry?.id;
+      if (!key) continue;
       if (seenServers.has(key)) continue;
+      if (
+        !this.host.resolveForPath &&
+        entry &&
+        !(await this.cachedRootMarker(entry, files, rootMarkerCache))
+      ) continue;
       seenServers.add(key);
       try {
         const response = await this.host.requestForPath(
@@ -78,10 +113,10 @@ export class LspSymbolIndex implements SymbolIndex {
           { query }
         );
         if (!response || signal?.aborted) continue;
-        this.queriedLanguages.add(entry.languages[0]);
         const entries = Array.isArray(response.result)
           ? (response.result as unknown[])
           : [];
+        const resultCount = symbols.length;
         for (const rawItem of entries) {
           if (!isWorkspaceSymbol(rawItem)) continue;
           let item: WorkspaceSymbolLike = rawItem;
@@ -100,6 +135,11 @@ export class LspSymbolIndex implements SymbolIndex {
           }
           const symbol = toIndexedSymbol(item, this.workspaceRoot);
           if (symbol) symbols.push(symbol);
+        }
+        if (symbols.length > resultCount) {
+          const language = descriptor?.languageId ?? entry?.languages[0];
+          if (language) this.servedLanguages.add(language);
+          this.servedExtensions.add(path.posix.extname(file).toLowerCase());
         }
       } catch {
         /* one unavailable server must not hide other languages */
@@ -127,20 +167,42 @@ export class LspSymbolIndex implements SymbolIndex {
       );
       if (signal?.aborted || !response || !Array.isArray(response.result))
         return [];
-      const entry = this.entryForFile(viewerPath);
-      if (entry) this.queriedLanguages.add(entry.languages[0]);
       const symbols: IndexedSymbol[] = [];
       flattenDocumentSymbols(response.result, viewerPath, symbols);
+      const entry = this.entryForFile(viewerPath);
+      if (entry && symbols.length > 0) {
+        for (const language of entry.languages)
+          this.servedLanguages.add(language);
+        this.servedExtensions.add(path.posix.extname(viewerPath).toLowerCase());
+      }
       return symbols;
     } catch {
       return [];
     }
   }
 
+  private async ensureWarmup(files?: string[]): Promise<void> {
+    if (this.ready) return;
+    if (this.warmup) return this.warmup;
+    const pending = (async () => {
+      const generation = this.lifecycleGeneration;
+      await this.startDetected(files ?? (await this.getFiles()));
+      if (generation === this.lifecycleGeneration) this.ready = true;
+    })();
+    this.warmup = pending;
+    try {
+      await pending;
+    } catch (error) {
+      if (this.warmup === pending) this.warmup = undefined;
+      throw error;
+    }
+  }
+
   private async startDetected(files: string[]): Promise<void> {
+    const markerCache = new Map<string, Promise<boolean>>();
     const entries = await Promise.all(
       this.catalog.map(async (entry) =>
-        (await this.hasRootMarker(entry, files)) &&
+        (await this.cachedRootMarker(entry, files, markerCache)) &&
         files.some((file) => this.matchesExtension(entry, file))
           ? entry
           : undefined
@@ -164,6 +226,34 @@ export class LspSymbolIndex implements SymbolIndex {
         }
       }
     }
+    if (this.host.resolveForPath) {
+      const seen = new Set<string>();
+      for (const file of files) {
+        const descriptor = await this.host.resolveForPath(file);
+        if (!descriptor) continue;
+        const key = `${descriptor.id}\n${path.resolve(descriptor.rootPath)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        try {
+          await this.host.openWarmupDocument(file, descriptor.languageId);
+        } catch {
+          /* unavailable or deleted custom-server anchors retain regex fallback */
+        }
+      }
+    }
+  }
+
+  private cachedRootMarker(
+    entry: LanguageServerCatalogEntry,
+    files: string[],
+    cache: Map<string, Promise<boolean>>
+  ): Promise<boolean> {
+    let result = cache.get(entry.id);
+    if (!result) {
+      result = this.hasRootMarker(entry, files);
+      cache.set(entry.id, result);
+    }
+    return result;
   }
 
   private entryForFile(file: string): LanguageServerCatalogEntry | undefined {

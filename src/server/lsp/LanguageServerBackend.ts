@@ -23,7 +23,8 @@ export type LanguageServerResolution =
 export interface LanguageServerBackend {
   resolveForPath(
     viewerPath: string,
-    roots: WorkspacePathContext
+    roots: WorkspacePathContext,
+    promptForApproval?: boolean
   ): Promise<LanguageServerResolution> | LanguageServerResolution;
   getConnection(
     descriptor: LanguageServerDescriptor

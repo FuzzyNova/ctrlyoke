@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { Log } from "../utils/Log";
 import type { IndexedSymbol, SymbolIndex } from "../completions/SymbolIndex";
 import { LspSymbolKind } from "../completions/SymbolIndex";
 import {
@@ -46,6 +47,7 @@ function indexedSymbol(
 }
 
 export class VsCodeSymbolIndex implements SymbolIndex {
+  private warmup?: Promise<void>;
   constructor(
     private readonly getFiles: () => Promise<string[]> = async () => []
   ) {}
@@ -54,7 +56,7 @@ export class VsCodeSymbolIndex implements SymbolIndex {
     query: string,
     _maxResults: number
   ): Promise<IndexedSymbol[]> {
-    await this.warmLanguageFamilies();
+    await this.warmupLanguageFamilies();
     const root = getVsCodeWorkspaceRoot();
     const namedRoots = getVsCodeNamedWorkspaceRoots();
     const symbols = await vscode.commands.executeCommand<
@@ -63,6 +65,22 @@ export class VsCodeSymbolIndex implements SymbolIndex {
     return (symbols ?? []).map((symbol) =>
       indexedSymbol(symbol, root, namedRoots)
     );
+  }
+
+  invalidateWarmupCache(): void {
+    this.warmup = undefined;
+  }
+
+  private warmupLanguageFamilies(): Promise<void> {
+    if (!this.warmup) {
+      const pending = this.warmLanguageFamilies();
+      const tracked = pending.catch((error: unknown) => {
+        if (this.warmup === tracked) this.warmup = undefined;
+        throw error;
+      });
+      this.warmup = tracked;
+    }
+    return this.warmup;
   }
 
   private async warmLanguageFamilies(): Promise<void> {
@@ -90,7 +108,7 @@ export class VsCodeSymbolIndex implements SymbolIndex {
         );
       if (configDirectories.length === 0) continue;
 
-      const anchor = files.find((viewerPath) => {
+      const anchors = files.filter((viewerPath) => {
         const absolutePath = fromViewerPath(viewerPath, {
           primaryRoot,
           namedRoots: roots,
@@ -107,12 +125,20 @@ export class VsCodeSymbolIndex implements SymbolIndex {
           );
         });
       });
-      if (anchor) {
-        await vscode.workspace.openTextDocument(
-          vscode.Uri.file(
-            fromViewerPath(anchor, { primaryRoot, namedRoots: roots })
-          )
-        );
+      for (const anchor of anchors) {
+        try {
+          await vscode.workspace.openTextDocument(
+            vscode.Uri.file(
+              fromViewerPath(anchor, { primaryRoot, namedRoots: roots })
+            )
+          );
+          break;
+        } catch (error) {
+          Log.warn(
+            `[Completions] Could not open language-server warm-up file ${anchor}; trying another candidate:`,
+            error
+          );
+        }
       }
     }
   }

@@ -30,6 +30,7 @@ import {
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
   GIT_CHANGE_KINDS,
+  LANGUAGE_SERVER_STATUSES,
   LSP_METHODS,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
@@ -61,6 +62,17 @@ function makeSymbol(
   endLine = 3
 ): IndexedSymbol {
   return { name, kind, viewerPath, startLine, endLine };
+}
+
+async function waitForCondition(
+  condition: () => boolean,
+  description: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if (condition()) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`Timed out waiting for ${description}`);
 }
 
 suite("CompletionCore", () => {
@@ -728,6 +740,54 @@ suite("VsCodeSymbolIndex completion golden", () => {
     assert.strictEqual(openCount, 0);
   });
 
+  test("tries another warm-up anchor after a tracked file cannot be opened", async () => {
+    let opened: string[] = [];
+    Object.defineProperty(vscode.workspace, "openTextDocument", {
+      configurable: true,
+      value: (uri: vscode.Uri) => {
+        opened.push(uri.fsPath);
+        return opened.length === 1
+          ? Promise.reject(new Error("file was deleted"))
+          : Promise.resolve({} as vscode.TextDocument);
+      },
+    });
+    Object.defineProperty(vscode.commands, "executeCommand", {
+      configurable: true,
+      value: (() => Promise.resolve([])) as typeof originalExecuteCommand,
+    });
+    const index = new VsCodeSymbolIndex(async () => [
+      "tsconfig.json",
+      "src/first.ts",
+      "src/second.ts",
+    ]);
+
+    await index.workspaceSymbols("Widget", 10);
+
+    assert.strictEqual(opened.length, 2);
+    assert.ok(opened[1].endsWith(path.join("src", "second.ts")));
+  });
+
+  test("resolves multi-root viewer paths against their named root in regex fallback", async () => {
+    const first = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-root-one-"));
+    const second = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-root-two-"));
+    try {
+      await fs.writeFile(path.join(second, "Widget.ts"), "export class Widget {}\n");
+      const index = new RegexSymbolIndex(first, async () => ["root2/Widget.ts"], (viewerPath) => {
+        assert.strictEqual(viewerPath, "root2/Widget.ts");
+        return {
+          absolutePath: path.join(second, "Widget.ts"),
+          workspaceRoot: second,
+        };
+      });
+      const [symbol] = await index.workspaceSymbols("Widget", 10);
+      assert.strictEqual(symbol?.viewerPath, "root2/Widget.ts");
+      assert.strictEqual(symbol?.name, "Widget");
+    } finally {
+      await fs.rm(first, { recursive: true, force: true });
+      await fs.rm(second, { recursive: true, force: true });
+    }
+  });
+
   test("converts a VS Code Class symbol through LSP numbering to the legacy insertion and kind", async () => {
     const root = path.join(os.tmpdir(), "symbol-golden");
     const symbol = new vscode.SymbolInformation(
@@ -849,6 +909,133 @@ suite("VsCodeSymbolIndex completion golden", () => {
       assert.strictEqual(ready.insertText, symbolCompletionGoldenResult.insertText);
       assert.strictEqual(ready.kind, symbolCompletionGoldenResult.completionKind);
       assert.strictEqual(COMPLETION_KIND_ICONS[ready.kind], symbolCompletionGoldenResult.icon);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("retries rejected warm-up and does not mark empty LSP results as served", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-retry-"));
+    const files = ["tsconfig.json", "src/Widget.ts"];
+    await fs.mkdir(path.join(root, "src"), { recursive: true });
+    await fs.writeFile(path.join(root, "tsconfig.json"), "{}");
+    await fs.writeFile(path.join(root, "src", "Widget.ts"), "export class Widget {}\n");
+    let starts = 0;
+    let requests = 0;
+    const host: LspSymbolQueryHost = {
+      startLanguages: async () => {
+        starts++;
+        if (starts === 1) throw new Error("startup failed");
+      },
+      openWarmupDocument: async () => undefined,
+      requestForPath: async () => {
+        requests++;
+        return { descriptor: { capabilities: {} }, result: [] };
+      },
+    };
+    try {
+      const index = new LspSymbolIndex(root, async () => files, host);
+      await index.workspaceSymbols("Widget", 10);
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      assert.strictEqual(starts, 1);
+      await index.workspaceSymbols("Widget", 10);
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      assert.strictEqual(starts, 2, "failed warm-up should be retried");
+      await index.workspaceSymbols("Widget", 10);
+      assert.strictEqual(requests, 1);
+      assert.strictEqual(
+        index.shouldUseRegexFallback(symbolCompletionGolden),
+        true,
+        "an empty LSP result must leave regex fallback enabled"
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("re-warms anchors after managed servers stop and restart", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-lifecycle-"));
+    const files = ["tsconfig.json", "src/Widget.ts"];
+    await fs.mkdir(path.join(root, "src"), { recursive: true });
+    await fs.writeFile(path.join(root, "tsconfig.json"), "{}");
+    await fs.writeFile(path.join(root, "src", "Widget.ts"), "export class Widget {}\n");
+    let statusListener: ((event: { status: string }) => void) | undefined;
+    let opens = 0;
+    const catalog: LanguageServerCatalogEntry = {
+      id: "typescript-test-server",
+      displayName: "TypeScript test server",
+      description: "",
+      homepage: "",
+      license: "",
+      masonName: "",
+      command: [],
+      languages: ["typescript"],
+      extensions: ["ts"],
+      rootMarkers: ["tsconfig.json"],
+      warmup: { anchorExtensions: ["ts"], configMarkers: ["tsconfig.json"] },
+      install: { kind: "npm", packages: [], bin: "ts" },
+    };
+    const host: LspSymbolQueryHost = {
+      startLanguages: async () => undefined,
+      openWarmupDocument: async () => { opens++; },
+      requestForPath: async () => ({ descriptor: { capabilities: {} }, result: [] }),
+      onStatusChanged: (listener) => {
+        statusListener = listener;
+        return { dispose: () => { statusListener = undefined; } };
+      },
+    };
+    try {
+      const index = new LspSymbolIndex(root, async () => files, host, [catalog]);
+      await index.workspaceSymbols("Widget", 10);
+      await waitForCondition(() => opens === 1, "initial LSP anchor warm-up");
+      assert.strictEqual(opens, 1);
+      statusListener?.({ status: LANGUAGE_SERVER_STATUSES.STOPPED });
+      statusListener?.({ status: LANGUAGE_SERVER_STATUSES.RUNNING });
+      await waitForCondition(() => opens === 2, "restarted LSP anchor warm-up");
+      assert.strictEqual(opens, 2);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves approved custom server selections through the host resolver", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-custom-"));
+    const files = ["schema.proto"];
+    await fs.writeFile(path.join(root, "schema.proto"), "message Widget {}\n");
+    let requested = "";
+    const host: LspSymbolQueryHost = {
+      startLanguages: async () => undefined,
+      openWarmupDocument: async () => undefined,
+      resolveForPath: async (viewerPath) => viewerPath.endsWith(".proto")
+        ? { id: "approved-proto", languageId: "proto", rootPath: root }
+        : undefined,
+      requestForPath: async (viewerPath) => {
+        requested = viewerPath;
+        return {
+          descriptor: { capabilities: {} },
+          result: [{
+            name: "Widget",
+            kind: LspSymbolKind.Class,
+            location: {
+              uri: vscode.Uri.file(path.join(root, "schema.proto")).toString(),
+              range: { start: { line: 0 }, end: { line: 0 } },
+            },
+          }],
+        };
+      },
+    };
+    try {
+      const index = new LspSymbolIndex(root, async () => files, host, []);
+      await index.workspaceSymbols("Widget", 10);
+      let symbol: IndexedSymbol | undefined;
+      for (let attempt = 0; attempt < 200 && !symbol; attempt++) {
+        [symbol] = await index.workspaceSymbols("Widget", 10);
+        if (!symbol) await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+      assert.ok(symbol, "custom LSP server should serve its configured file");
+      assert.strictEqual(requested, "schema.proto");
+      assert.strictEqual(symbol?.viewerPath, "schema.proto");
+      assert.strictEqual(index.shouldUseRegexFallback(symbol!), false);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

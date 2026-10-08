@@ -74,6 +74,7 @@ export interface NodeHostServices {
   tokenStore: ServerTokenStore;
   licenseService: LicenseService;
   completionCore: CompletionCore;
+  regexSymbolIndex: RegexSymbolIndex;
   getCompletionFiles(): Promise<string[]>;
   disposableRegistry: {
     add(disposable: { dispose(): void }): void;
@@ -167,6 +168,7 @@ export async function createNodeHostServices(options: {
     tokenStore: new ServerTokenStore(secretStore, cwd),
     licenseService,
     completionCore,
+    regexSymbolIndex,
     getCompletionFiles,
     disposableRegistry,
     dispose: () => disposableRegistry.dispose(),
@@ -308,11 +310,10 @@ export async function createNodeHostedServer(options: {
     namedWorkspaceRoots: namedRoots,
     isWorkspaceTrusted: () => true,
   });
-  const regexSymbolIndex = new RegexSymbolIndex(cwd, services.getCompletionFiles);
   const lspSymbolIndex = new LspSymbolIndex(cwd, services.getCompletionFiles, languageIntelligenceHost);
   services.completionCore.setSymbolIndex(new FallbackSymbolIndex(
     lspSymbolIndex,
-    regexSymbolIndex,
+    services.regexSymbolIndex,
     (symbol) => lspSymbolIndex.shouldUseRegexFallback(symbol)
   ));
   dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);

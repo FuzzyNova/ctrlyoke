@@ -41,11 +41,14 @@ interface FileCacheEntry {
 /** Lightweight, dependency-free workspace symbols for headless hosts. */
 export class RegexSymbolIndex implements SymbolIndex {
   private readonly fileCache = new Map<string, FileCacheEntry>();
-  private realWorkspaceRoot?: Promise<string>;
+  private readonly realWorkspaceRoots = new Map<string, Promise<string>>();
 
   constructor(
     private readonly workspaceRoot: string,
-    private readonly getFiles: () => Promise<string[]>
+    private readonly getFiles: () => Promise<string[]>,
+    private readonly resolveViewerPath?: (
+      viewerPath: string
+    ) => { absolutePath: string; workspaceRoot: string } | undefined
   ) {}
 
   async workspaceSymbols(
@@ -88,8 +91,12 @@ export class RegexSymbolIndex implements SymbolIndex {
       path.isAbsolute(viewerPath)
     )
       return [];
-    const absolutePath = path.resolve(this.workspaceRoot, viewerPath);
-    const relativeCheck = path.relative(this.workspaceRoot, absolutePath);
+    const resolved = this.resolveViewerPath?.(viewerPath);
+    if (this.resolveViewerPath && !resolved) return [];
+    const workspaceRoot = resolved?.workspaceRoot ?? this.workspaceRoot;
+    const absolutePath =
+      resolved?.absolutePath ?? path.resolve(this.workspaceRoot, viewerPath);
+    const relativeCheck = path.relative(workspaceRoot, absolutePath);
     if (relativeCheck === ".." || relativeCheck.startsWith(`..${path.sep}`))
       return [];
 
@@ -97,9 +104,13 @@ export class RegexSymbolIndex implements SymbolIndex {
       const stat = await fs.stat(absolutePath);
       if (!stat.isFile()) return [];
       const realPath = await fs.realpath(absolutePath);
-      this.realWorkspaceRoot ??= fs.realpath(this.workspaceRoot);
+      let realWorkspaceRoot = this.realWorkspaceRoots.get(workspaceRoot);
+      if (!realWorkspaceRoot) {
+        realWorkspaceRoot = fs.realpath(workspaceRoot);
+        this.realWorkspaceRoots.set(workspaceRoot, realWorkspaceRoot);
+      }
       const realRelative = path.relative(
-        await this.realWorkspaceRoot,
+        await realWorkspaceRoot,
         realPath
       );
       if (

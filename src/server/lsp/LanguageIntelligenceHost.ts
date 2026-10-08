@@ -74,6 +74,17 @@ export class LanguageIntelligenceHost {
     await this.options.backend.startLanguages?.(languageIds);
   }
 
+  /** Resolve a file through the managed backend without prompting for approval. */
+  async resolveForPath(viewerPath: string): Promise<LanguageServerDescriptor | undefined> {
+    if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
+    const resolution = await this.options.backend.resolveForPath(
+      viewerPath,
+      this.roots,
+      false
+    );
+    return "descriptor" in resolution ? resolution.descriptor : undefined;
+  }
+
   async requestForPath(viewerPath: string, method: string, params: unknown): Promise<{ descriptor: LanguageServerDescriptor; result: unknown } | undefined> {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
     const resolution = await this.options.backend.resolveForPath(viewerPath, this.roots);
