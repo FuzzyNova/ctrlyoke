@@ -9,6 +9,9 @@ gets anywhere else in the product.
 
 **Related plans:**
 
+- [`PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md`](PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md):
+  markdown highlighting for prompt text. Its Phase 3 nests markdown inside this plan's YAML
+  `PROMPT_TEXT` ranges. Schedule it with Phase 6 here.
 - [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md):
   generic LSP features for `WorkspaceFileEditor.tsx`. This plan is its ctrlyoke-specific sibling.
   It shares the editor's extension-slot design, but it does not depend on any LSP phase and can
