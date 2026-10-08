@@ -25,6 +25,9 @@
 # Getting Started walkthrough step content.
 !walkthroughs/**
 
+# Prompt markdown injection grammar (contributes.grammars).
+!syntaxes/**
+
 # Bundled extension, MCP server and CLI entrypoints. The CLI ships here as well
 # as on npm (dev/backlog/CLI_DISTRIBUTION_PLAN.md); bin/ holds the launcher
 # shims the extension puts on PATH for terminals and harness processes.

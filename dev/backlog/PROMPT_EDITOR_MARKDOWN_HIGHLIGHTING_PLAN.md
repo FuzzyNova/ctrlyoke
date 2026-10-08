@@ -1,7 +1,8 @@
 # Prompt Editor Markdown Highlighting Plan
 
-**Status (2026-10-08):** Phases 0 (readable code ranges) and 1 (single-source palette) are
-done. Phases 2, 3 and 4 are not started.
+**Status (2026-10-08):** Phases 0 (readable code ranges), 1 (single-source palette) and 4
+(VS Code injection grammar, with the literal-reference bug fix) are done. Phases 2 and 3 are
+not started.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -361,8 +362,40 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
    - YAML `prompt:` block scalars get nested markdown, scheduled with the ctrlyoke file support
      plan's Phase 6.
 
-5. **Phase 4: VS Code injection grammar.** This is independent of the webview phases and can
-   land at any point.
+5. **Phase 4: VS Code injection grammar.** **Done 2026-10-08**, together with the bug fix
+   below. This is independent of the webview phases and can land at any point.
+   - **As built:**
+     - `scripts/generate-prompt-markdown-injection.mjs` bundles `WorkflowLocationTypes.ts`
+       with esbuild in memory, takes every `promptText` key and writes
+       `syntaxes/ctrlyoke-prompt-markdown.injection.json`. It runs in `precompile`, has its
+       own `generate-prompt-markdown-injection` script, and `--check` is part of `check:docs`.
+       The output is in `.prettierignore`. `contributes.grammars` injects it into
+       `source.yaml`, and `.vscodeignore` allows `!syntaxes/**`.
+     - **The VS Code YAML grammar is `while`-based, so the injection must not consume the
+       key line.** A first attempt matched `^(\s*)(- )?prompt: |` itself. That removed the
+       sequence and mapping frames the YAML grammar pushes on that line, and every later line
+       was mis-scoped as a multi-line plain scalar. The rules now start from a fixed-width
+       lookbehind on `prompt: ` (one alternative per key) and consume nothing before the
+       value, so YAML still tokenizes the key, colon and dash.
+     - **The block-scalar rule is a copy of the YAML 1.2 grammar's own** (`yaml-1.2.tmLanguage.json`,
+       form without an indentation indicator) with markdown patterns added to the content
+       leaf, so it ends on exactly the lines YAML's would. A header with an explicit
+       indentation digit (`|2`) is left to YAML. If a VS Code update changes that rule, the
+       integration test below is what notices.
+     - The single-line rule consumes the separating space: the markdown rules mis-scan from a
+       zero-width start. Quoted values, anchors, tags and flow collections stay with YAML.
+     - The markdown grammar's own heading and fence rules allow three columns of indent, so
+       the injection brings its own heading rule anchored on `\G` and relies on the fence
+       rule's `(\s*)`.
+     - Not covered: `|` followed by two spaces after the colon (`prompt:  |`), and multi-line
+       plain or folded-plain scalars (only the first line is coloured).
+   - **Test:** `src/test/integration/promptMarkdownGrammar.integration.test.ts` reads tokens
+     with `_workbench.captureSyntaxTokens` (it still exists in VS Code 1.141). It covers
+     headings, emphasis, inline code and a typed fence in `prompt: |`, `prompt: >-` nested
+     under `parallel`, `retryPrompt: |`, a single-line prompt, plain scopes on keys, comments
+     and the following line, and a quoted prompt staying a YAML string.
+   - **Not done:** checking the packaged VSIX's file list (`vsce ls`). The allowlist line is in
+     place; confirm it at the next package.
    - Add `syntaxes/ctrlyoke-prompt-markdown.injection.json`, generated from
      `WORKFLOW_TEXT_FIELDS`, plus the `contributes.grammars` entry and the `.vscodeignore` line.
    - The prompt-field list is `WORKFLOW_TEXT_FIELDS` (`src/completions/WorkflowLocationTypes.ts`,
@@ -384,7 +417,7 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      - a quoted `prompt: "…"` stays a YAML string
      - a nested `steps[].parallel[].prompt` block is covered
    - Check the published VSIX's file list contains the grammar.
-   - **Fix [`vscode-prompt-references-active-inside-code`](../bugs/backlog/vscode-prompt-references-active-inside-code.md) in the same phase,
+   - **Done:** fix [`vscode-prompt-references-active-inside-code`](../bugs/implemented/vscode-prompt-references-active-inside-code.md) in the same phase,
      if it hasn't already been fixed on its own.** The grammar makes backticks look like code
      in VS Code. Today `PromptLinkProvider` and `PromptCompletionProvider` still link and
      complete references inside them, though they're sent literally. Both providers must skip

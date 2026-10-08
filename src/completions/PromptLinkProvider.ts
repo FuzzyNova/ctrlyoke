@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
+import { getPromptCodeRanges, isRangeInPromptCode } from "./PromptCodeRanges";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeNamedWorkspaceRoots,
@@ -65,6 +66,34 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       return undefined;
     }
 
+    const links = await this.collectLinks(document);
+    if (!links || links.length === 0) {
+      return links;
+    }
+
+    // A reference inside code is sent literally, so it must not look attached.
+    const codeRanges = getPromptCodeRanges(
+      document.getText(),
+      document.fileName,
+      document.languageId
+    );
+    if (codeRanges.length === 0) {
+      return links;
+    }
+    const literalFree = links.filter(
+      (link) =>
+        !isRangeInPromptCode(
+          document.offsetAt(link.range.start),
+          document.offsetAt(link.range.end),
+          codeRanges
+        )
+    );
+    return literalFree;
+  }
+
+  private async collectLinks(
+    document: vscode.TextDocument
+  ): Promise<vscode.DocumentLink[] | undefined> {
     const links: vscode.DocumentLink[] = [];
     const text = document.getText();
     const workspaceRoot = this.getWorkspaceRoot();

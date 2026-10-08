@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), while reviewing the prompt editor markdown highlighting plan
 - **Area:** `src/completions/PromptLinkProvider.ts`, `src/completions/PromptCompletionProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

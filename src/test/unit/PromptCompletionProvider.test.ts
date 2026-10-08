@@ -7,6 +7,7 @@ import { afterEach, suite, test } from "mocha";
 import { PromptCompletionProvider } from "../../completions/PromptCompletionProvider";
 import { clearFilesCache } from "../../completions/CompletionHelpers";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { PromptDocumentStub } from "../helpers/PromptDocumentStub";
 
 interface SelectionEditorLike {
   selection: vscode.Selection;
@@ -163,5 +164,96 @@ suite("PromptCompletionProvider", () => {
       "symbol completion should escape path and name quotes for JSON"
     );
     await fs.rm(root, { recursive: true, force: true });
+  });
+
+  suite("references inside code", () => {
+    /** Completions at the end of the first occurrence of `marker`. */
+    const completeAfter = async (
+      fileName: string,
+      languageId: string,
+      text: string,
+      marker: string
+    ): Promise<vscode.CompletionList | undefined> => {
+      clearFilesCache();
+      ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
+      const root = path.join(os.tmpdir(), "completion-provider-code");
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        configurable: true,
+        value: [{ uri: vscode.Uri.file(root), name: "workspace", index: 0 }],
+      });
+      Object.defineProperty(vscode.workspace, "findFiles", {
+        configurable: true,
+        value: async () => [],
+      });
+      const document = new PromptDocumentStub(
+        path.join(root, fileName),
+        languageId,
+        text
+      );
+      return new PromptCompletionProvider().provideCompletionItems(
+        document.asDocument(),
+        document.positionAt(document.offsetAfter(marker)),
+        new MockCancellationToken(),
+        {
+          triggerKind: vscode.CompletionTriggerKind.Invoke,
+          triggerCharacter: undefined,
+        }
+      );
+    };
+
+    test("offers nothing inside inline code or a fence", async () => {
+      const fenced = ["Read:", "", "```", "@src/ext", "```"].join("\n");
+      assert.strictEqual(
+        await completeAfter("p.prompt.md", "markdown", fenced, "```\n@src/ext"),
+        undefined
+      );
+      const inline = "Read `@src/ext` now";
+      assert.strictEqual(
+        await completeAfter("p.prompt.md", "markdown", inline, "`@src/ext"),
+        undefined
+      );
+    });
+
+    test("offers nothing inside an indented fence in a YAML block scalar", async () => {
+      const text = [
+        "steps:",
+        "  - prompt: |",
+        "      ```",
+        "      @src/ext",
+        "      ```",
+      ].join("\n");
+      assert.strictEqual(
+        await completeAfter("w.ctrlyoke.yaml", "yaml", text, "@src/ext"),
+        undefined
+      );
+    });
+
+    test("offers nothing inside inline code in a JSON prompt string", async () => {
+      const text = '{ "prompt": "Read `@src/ext` now" }';
+      assert.strictEqual(
+        await completeAfter("w.ctrlyoke.json", "json", text, "`@src/ext"),
+        undefined
+      );
+    });
+
+    test("still completes a reference just outside the code", async () => {
+      const text = "Read `code` then @src/ext";
+      assert.ok(
+        await completeAfter("p.prompt.md", "markdown", text, "then @src/ext")
+      );
+      const yamlText = [
+        "steps:",
+        "  - prompt: |",
+        "      `code` then @src/ext",
+      ].join("\n");
+      assert.ok(
+        await completeAfter(
+          "w.ctrlyoke.yaml",
+          "yaml",
+          yamlText,
+          "then @src/ext"
+        )
+      );
+    });
   });
 });

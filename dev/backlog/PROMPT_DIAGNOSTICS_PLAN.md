@@ -18,7 +18,7 @@ against the ctrlyoke file support and markdown highlighting plans.
   this plan reuses in Phase 3.
 - [`PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md`](PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md):
   its Phase 2 precedence rule keeps these diagnostics above markdown styling.
-- [`vscode-prompt-references-active-inside-code`](../bugs/backlog/vscode-prompt-references-active-inside-code.md):
+- [`vscode-prompt-references-active-inside-code`](../bugs/implemented/vscode-prompt-references-active-inside-code.md):
   fixes VS Code links and completions inside code. Its warning follow-up is this plan's
   Phase 2.
 

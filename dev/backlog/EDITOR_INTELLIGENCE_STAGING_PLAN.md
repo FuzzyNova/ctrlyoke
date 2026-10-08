@@ -1,8 +1,8 @@
 # Editor Intelligence Staging Plan
 
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
-**F1b**, the follow-up the Wave 1 review added. Wave 2 can start: nothing in it waits on
-anything else. This plan only orders the work. The design lives in the three plans it
+**F1b**, the follow-up the Wave 1 review added. In Wave 2, **B and M4 are done**; F3, F0 and
+D2 are not started. This plan only orders the work. The design lives in the three plans it
 stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -12,7 +12,7 @@ This plan is the authoritative order for three overlapping plans:
 | **F** | [`WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md`](WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md): ctrlyoke completions, chips and diagnostics for workflow files in the hosted workspace editor, plus VS Code parity | F0–F7 = its Phases 0–7, plus F1b = its Phase 1b |
 | **M** | [`PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md`](PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md): markdown highlighting for prompt text, the shared syntax palette, and the VS Code injection grammar                      | M0–M4 = its Phases 0–4                          |
 | **D** | [`PROMPT_DIAGNOSTICS_PLAN.md`](PROMPT_DIAGNOSTICS_PLAN.md): shared prompt-text lint rules and VS Code's diagnostics provider                                                                                           | D1–D3 = its Phases 1–3                          |
-| **B** | [`vscode-prompt-references-active-inside-code`](../bugs/backlog/vscode-prompt-references-active-inside-code.md): VS Code links and completes references inside code                                                    | one fix                                         |
+| **B** | [`vscode-prompt-references-active-inside-code`](../bugs/implemented/vscode-prompt-references-active-inside-code.md): VS Code links and completes references inside code                                                | one fix                                         |
 
 The language intelligence plan these build on is already implemented
 (`dev/implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`), so nothing here waits on
@@ -20,15 +20,17 @@ it.
 
 ## Progress
 
-| Phase           | State                 | Notes                                                                                                                                                                                                                                |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. Deviations in plan F's Phase 1 entry; the review's bugs were fixed in F1b.              |
-| F2              | **Done** (2026-10-08) | Generated `WorkflowSchemaOutline` (`schema:update`, `precompile`, `check:docs` drift check), hand-authored `WorkflowPropertySnippets.ts`, and `PromptPropertyCompletionProvider` moved onto both. Details in plan F's Phase 2 entry. |
-| D1              | **Done** (2026-10-08) | `src/utils/PromptDiagnosticRules.ts` and `src/utils/PromptReferenceScanner.ts`; CodeMirror linters are adapters. Characterization tests pass against the pre-extraction code too. Details in plan D's "Phase 1 as built".            |
-| M1              | **Done** (2026-10-08) | `--cy-syntax-*` in `globals.css`, one role table in `utils/syntaxPalette.ts`, `resolveCodeMirrorLanguage`. Visual check done. Its one hosted regression is fixed: `hosted-high-contrast-light-syntax-colours`.                       |
-| M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                              |
-| F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                             |
-| Everything else | Not started           |                                                                                                                                                                                                                                      |
+| Phase           | State                 | Notes                                                                                                                                                                                                                                                                                           |
+| --------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. Deviations in plan F's Phase 1 entry; the review's bugs were fixed in F1b.                                                                         |
+| F2              | **Done** (2026-10-08) | Generated `WorkflowSchemaOutline` (`schema:update`, `precompile`, `check:docs` drift check), hand-authored `WorkflowPropertySnippets.ts`, and `PromptPropertyCompletionProvider` moved onto both. Details in plan F's Phase 2 entry.                                                            |
+| D1              | **Done** (2026-10-08) | `src/utils/PromptDiagnosticRules.ts` and `src/utils/PromptReferenceScanner.ts`; CodeMirror linters are adapters. Characterization tests pass against the pre-extraction code too. Details in plan D's "Phase 1 as built".                                                                       |
+| M1              | **Done** (2026-10-08) | `--cy-syntax-*` in `globals.css`, one role table in `utils/syntaxPalette.ts`, `resolveCodeMirrorLanguage`. Visual check done. Its one hosted regression is fixed: `hosted-high-contrast-light-syntax-colours`.                                                                                  |
+| M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                                                                                         |
+| F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                                                                                        |
+| B               | **Done** (2026-10-08) | VS Code links and completions skip code. `src/completions/PromptCodeRanges.ts` runs `findCodeRanges` over each `getWorkflowTextSpans` span and maps back; `PromptLinkProvider` filters its links, `PromptCompletionProvider` returns nothing inside code. Bug moved to `dev/bugs/implemented/`. |
+| M4              | **Done** (2026-10-08) | `scripts/generate-prompt-markdown-injection.mjs` writes `syntaxes/ctrlyoke-prompt-markdown.injection.json` from `WORKFLOW_TEXT_FIELDS`. Details and the YAML-grammar gotcha in plan M's Phase 4 entry.                                                                                          |
+| Everything else | Not started           |                                                                                                                                                                                                                                                                                                 |
 
 ### Wave 1 review (2026-10-08)
 
@@ -117,14 +119,14 @@ hosted high-contrast light fix, were then committed on `main` directly.
 ### Wave 2: consumers of the core
 
 Every input is on `main`. The only ordering left is the worktree split: D2 follows F0 in
-`small-feature`.
+`small-feature`. **B + M4 are done** (2026-10-08, in `bug-fix`).
 
 | Phase                                                           | Hot file                                | Suggested worktree | Notes                                                                                                                 |
 | --------------------------------------------------------------- | --------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | **F3:** completion items                                        | —                                       | `big-feature`      | Plan F's Phase 3 lists what the Phase 1/2 API leaves to it (root mode filtering, step-type keys, per-object snippets) |
 | **F0:** completion-client extraction                            | `CodeMirrorEditor.tsx`                  | `small-feature`    |                                                                                                                       |
 | **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | After F0 in the same worktree. Uses `getWorkflowTextSpans` for every file kind. Takes plan D's listed cleanups.       |
-| **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | Merge them together. B uses `getWorkflowTextSpans`; M4's generator reads `WORKFLOW_TEXT_FIELDS`                       |
+| **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | **Done.** Merge them together. B uses `getWorkflowTextSpans`; M4's generator reads `WORKFLOW_TEXT_FIELDS`             |
 
 ### Wave 3: the two editors
 
