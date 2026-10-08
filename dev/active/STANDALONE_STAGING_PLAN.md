@@ -112,7 +112,8 @@ names the guard or test that proves it, not just the code change.
 |    14 | **Done.** Editor UX: capability-gated context actions, F12 definition navigation, references panel with workflow context insertion, and cross-file navigation.                                      | LSP phase 3                                            | Stage 13b                     | Vitest covers missing-capability hiding, F12 dispatch, reference formatting/navigation/context insertion, and preserved reference-link gestures. |
 |    15 | **Done.** Language Servers settings section: live status, curated catalog (detected / not installed, confirmed npm install, copyable install commands, homepage links), and local-config scan/import. | LSP phase 4                                            | Stage 13b                     | The Languages strip writes the active scope; server rows cover lifecycle/status actions, catalog installation, and local config import. `npm test` passes (extension 5,640/4 pending, UI 3,489, packaging 80). |
 |    16 | **Done.** `LspSymbolIndex` for standalone `#`, with regex fallback per language. First `#` starts detected servers within the managed cap; regex answers during startup; catalog anchors stay open for each root marker. | LSP phase 7b | Stages 9 and 13b | Golden coverage matches all three indexes; fake-host coverage checks fan-out, range resolution, max results, startup fallback, and anchor opening. |
-|    17 | Harness export and the `DiagnosticsSource` Node implementation.                                                                                                                                     | LSP phase 6, coordinated with `VSCODE_LSP_MCP_PLAN.md` | Stage 13b; that plan's Phase 1 | `kind: "diagnostics"` works in a standalone run. Export writes each harness-native LSP config.                                                  |
+|    17 | **Done (2026-10-07).** Harness export: Qwen-compatible project `.lsp.json`, Copilot workspace/user, opencode workspace/user, and generated `cclsp.json`; shared Save flyout in Language Servers. | LSP phase 6 | Stage 13b | Typecheck/lint and export coverage pass. Full suite passed once; final run passed UI (3,490) and packaging (80), with the known dirty-document race isolated and passing on rerun. |
+|   17b | **Blocked.** Node `DiagnosticsSource` implementation.                                                                                                                                                 | `VSCODE_LSP_MCP_PLAN.md` Phase 1 | That plan defines the host-neutral `DiagnosticsSource` port | Standalone `kind: "diagnostics"` works through the managed language-server backend. |
 
 ### Independent stages (not on the critical path)
 
@@ -260,8 +261,9 @@ names the guard or test that proves it, not just the code change.
     focused Stage 15a/router tests.
   - **15b — done (2026-10-07):** `useLanguageServerStore`, `LanguageServersSection`, shared manager UI helpers extracted from `McpManagerSection`, and settings drawer/catalog integration. Status rendering, scoped language choices, install confirmation, and MCP regression coverage pass. `npm run typecheck`, `npm run lint`, and `npm test` pass (extension 5,640/4 pending, UI 3,489, packaging 80).
   - Warm-on-`#` moved from 13 to **16** (its only consumer).
-  - **17** ships harness export only. The Node `DiagnosticsSource` becomes
-    **17b**, blocked on `VSCODE_LSP_MCP_PLAN.md` Phase 1 defining the port.
+  - **17 — done 2026-10-07:** harness export only. Node `DiagnosticsSource`
+    remains **17b**, blocked on `VSCODE_LSP_MCP_PLAN.md` Phase 1 defining the
+    port.
 - **Phase 5 of the LSP plan (the navigation-only VS Code provider backend) is
   dropped.** It isn't scheduled. The reasoning is in that plan's resolved open
   questions.
@@ -271,5 +273,5 @@ names the guard or test that proves it, not just the code change.
   `npm test` plus the named guards are the bar.
 - **`VSCODE_LSP_MCP_PLAN.md` Phase 1 (diagnostics end condition) is a
   separate ROADMAP P1 item.** It doesn't depend on this sequence. It should
-  define the `DiagnosticsSource` port with a VS Code implementation, so that
-  Stage 17 only adds the Node implementation.
+  define the `DiagnosticsSource` port with a VS Code implementation, which is
+  the prerequisite for staging 17b.

@@ -10,11 +10,9 @@ import {
   ActionDropdown,
   type ActionDropdownItem,
 } from "@components/shared/ActionDropdown";
-import {
-  FlyoutActionDropdown,
-  type FlyoutGroup,
-} from "@components/shared/FlyoutActionDropdown";
+import { FlyoutActionDropdown } from "@components/shared/FlyoutActionDropdown";
 import { BulkSelectionActionsBar } from "@components/shared/BulkSelectionActionsBar";
+import { buildManagerExportGroups } from "@components/shared/ManagerExportGroups";
 import {
   EMPTY_MCP_SERVER_FORM_STATE,
   McpServerForm,
@@ -326,44 +324,6 @@ function getExportTargetDescription(
       : "~/.gemini/config/mcp_config.json";
   }
   return scope;
-}
-
-function buildExportGroups(
-  hasWorkspaceRoot: boolean,
-  presentKeys?: Set<string>
-): FlyoutGroup[] {
-  const workspaceItems: ActionDropdownItem[] = hasWorkspaceRoot
-    ? EXPORT_TARGET_IDS.map((id) => {
-        const encoded = encodeTarget(id, SETTING_SCOPES.WORKSPACE);
-        const alreadyPresent = presentKeys?.has(encoded) ?? false;
-        return {
-          label: getExportTargetLabel(id),
-          value: encoded,
-          description: getExportTargetDescription(id, SETTING_SCOPES.WORKSPACE),
-          disabled: alreadyPresent,
-          title: alreadyPresent ? "Already exported" : undefined,
-        };
-      })
-    : [];
-
-  const userItems: ActionDropdownItem[] = EXPORT_TARGET_IDS.map((id) => {
-    const encoded = encodeTarget(id, SETTING_SCOPES.USER);
-    const alreadyPresent = presentKeys?.has(encoded) ?? false;
-    return {
-      label: getExportTargetLabel(id),
-      value: encoded,
-      description: getExportTargetDescription(id, SETTING_SCOPES.USER),
-      disabled: alreadyPresent,
-      title: alreadyPresent ? "Already exported" : undefined,
-    };
-  });
-
-  return [
-    ...(workspaceItems.length > 0
-      ? [{ id: "workspace", label: "Workspace", items: workspaceItems }]
-      : []),
-    { id: "user", label: "User", items: userItems },
-  ];
 }
 
 function getTargetForLocalSource(
@@ -981,10 +941,15 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 encodeTarget(location.targetId, location.scope)
               )
             );
-            const exportGroups = buildExportGroups(
+            const exportGroups = buildManagerExportGroups({
               hasWorkspaceRoot,
-              exportPresentKeys
-            );
+              workspaceTargetIds: EXPORT_TARGET_IDS,
+              userTargetIds: EXPORT_TARGET_IDS,
+              labelForTarget: (id) => getExportTargetLabel(id as AnyTargetId),
+              descriptionForTarget: (id, scope) =>
+                getExportTargetDescription(id as AnyTargetId, scope),
+              presentKeys: exportPresentKeys,
+            });
             const deleteItems: ActionDropdownItem[] = allLocations.map(
               (location) => ({
                 label: `${getExportTargetLabel(location.targetId)} (${formatScopeLabel(

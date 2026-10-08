@@ -1421,6 +1421,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.REQUEST_LSP_SERVERS, async (_message, ctx) => this.languageServerManager.handleRequestServers(ctx));
     table.set(MESSAGE_TYPES.CLOSE_LSP_MANAGER, async (_message, ctx) => this.languageServerManager.closeManager(ctx.clientId));
     table.set(MESSAGE_TYPES.REQUEST_LSP_LOCAL_SCAN, async (message, ctx) => this.languageServerManager.handleRequestLocalScan(ctx, message));
+    table.set(MESSAGE_TYPES.EXPORT_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleExport(ctx, message));
     table.set(MESSAGE_TYPES.SAVE_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleSave(ctx, message as SaveLspDefinitionMessage));
     table.set(MESSAGE_TYPES.DELETE_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleDelete(ctx, message as DeleteLspDefinitionMessage));
     table.set(MESSAGE_TYPES.INSTALL_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleInstall(ctx, message as InstallLspServerMessage));

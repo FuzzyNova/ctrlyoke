@@ -564,9 +564,12 @@ Verified 2026-10-07. Each format maps onto our definition shape:
 | ----------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Qwen Code   | `.lsp.json` / none                                                                                                | top-level keys are names (the docs use language ids): `{ command, args, extensionToLanguage, env, initializationOptions, settings, trustRequired }` |
 | Claude Code | none at project level; **installed plugins** carry `.lsp.json` or `plugin.json` `lspServers` (same shape as Qwen) | `{ command, args, extensionToLanguage: { ".go": "go" }, … }`. Unknown keys fail its validation, which matters for export.                           |
-| Copilot CLI | `.github/lsp.json` (and root `lsp.json`, per the `lsp-setup` skill) / `~/.copilot/lsp-config.json`                | `{ lspServers: { name: { command, args, fileExtensions: { ".ts": "typescript" }, env, rootUri, initializationOptions } } }`                         |
-| opencode    | `opencode.json` / `~/.config/opencode/opencode.json`, `lsp` key (`true` or an object)                             | `{ lsp: { name: { command: [exe, ...args], extensions: [".rs"], env, initialization, disabled } } }`                                                |
-| cclsp       | `cclsp.json` or `CCLSP_CONFIG_PATH`                                                                               | `{ servers: [ { extensions: ["py"], command: [exe, ...args], rootDir, initializationOptions } ] }`                                                  |
+
+| Copilot CLI | `.github/lsp.json` (and root `lsp.json`, per the `lsp-setup` skill) / `~/.copilot/lsp-config.json` | `{ lspServers: { name: { command, args, fileExtensions: { ".ts": "typescript" }, env, rootUri, initializationOptions } } }` |
+| opencode | `opencode.json` / `~/.config/opencode/opencode.json`, `lsp` key (`true` or an object) | `{ lsp: { name: { command: [exe, ...args], extensions: [".rs"], env, initialization, disabled } } }` |
+| cclsp | `cclsp.json` or `CCLSP_CONFIG_PATH` | `{ servers: [ { extensions: ["py"], command: [exe, ...args], rootDir, initializationOptions } ] }` |
+
+Re-checked 2026-10-07 against Anthropic's [code intelligence plugin guide](https://code.claude.com/docs/en/plugins/code-intelligence) and [LSP plugin component reference](https://code.claude.com/docs/en/plugins/components#lsp-servers): standalone `.lsp.json` is described at the plugin root, and `plugin.json`'s `lspServers` accepts inline configs or a plugin-relative JSON path. The docs do not describe a project-root `.lsp.json` loader. Keep Claude's export routed through the Qwen-compatible project `.lsp.json`; direct Claude support would require generating/installing a plugin.
 
 - Our `command` is one array, matching opencode and cclsp.
 - `extensionToLanguage` / `fileExtensions` maps convert to `extensions` plus
@@ -919,11 +922,16 @@ Staging numbers refer to
      (extension 5,640 passing/4 pending, UI 3,489 passing, packaging 80 passing).
 5. ~~**VS Code provider backend.**~~ **Dropped 2026-10-06.** See Open
    Question 1.
-6. **Harness export + `DiagnosticsSource` port** (**Stage 17**, coordinated
-   with `VSCODE_LSP_MCP_PLAN.md`; see "Harness side" item 3). As of
-   2026-10-07 `DiagnosticsSource` doesn't exist, so Stage 17 ships the
-   export half only; the Node `DiagnosticsSource` waits for that plan's
-   Phase 1 (staging Stage 17b).
+6. **Harness export** (**Stage 17**, done 2026-10-07): target-native exports
+   for Qwen-compatible project `.lsp.json`, Copilot workspace/user configs,
+   opencode workspace/user configs, and generated `cclsp.json`; the language
+   server row has a shared Save flyout. `npm run typecheck` and `npm run lint`
+   pass. A full `npm test` passed once (extension 5,646 passing/4 pending, UI
+   3,490 passing, packaging 80 passing). The final run passed UI and packaging
+   but hit the known `VsCodeDocuments > saves an open dirty document` race;
+   that test passed in isolation. The Node `DiagnosticsSource` remains
+   **Stage 17b, blocked** until `VSCODE_LSP_MCP_PLAN.md` Phase 1 defines the
+   port.
 7. **`SymbolIndex` port**, split across four stages:
    - **Done — 7a (2026-10-06).** `SymbolIndex`, `VsCodeSymbolIndex`, the
      one-time SymbolKind numbering conversion, and callers moved onto the

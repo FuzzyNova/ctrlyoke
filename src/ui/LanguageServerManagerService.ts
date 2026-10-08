@@ -4,12 +4,13 @@ import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
 import { LANGUAGE_SERVER_INSTALL_KINDS, MESSAGE_TYPES, SETTING_SCOPES, type SettingWriteScope } from "../types/DashboardConstants";
 import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
-import type { DeleteLspDefinitionMessage, InstallLspServerMessage, LanguageServerProbeResult, RequestLspLocalScanMessage, SaveLspDefinitionMessage } from "../types/WebviewMessageTypes";
+import type { DeleteLspDefinitionMessage, ExportLspDefinitionMessage, InstallLspServerMessage, LanguageServerProbeResult, RequestLspLocalScanMessage, SaveLspDefinitionMessage } from "../types/WebviewMessageTypes";
 import type { RestartLspServerMessage } from "../types/WebviewMessageTypes";
 import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
 import type { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
 import type { LanguageServerStatusChange } from "../server/lsp/ManagedLanguageServerBackend";
 import { safeDiscoverLocalLanguageServers } from "../utils/LspDiscoveryUtils";
+import { HarnessLspExporter } from "../utils/HarnessLspExporter";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import type { WebviewClientContext } from "./WebviewClientContext";
 
@@ -69,6 +70,14 @@ export class LanguageServerManagerService {
   async handleRequestLocalScan(ctx: WebviewClientContext, _message: RequestLspLocalScanMessage): Promise<void> {
     const result = await safeDiscoverLocalLanguageServers(this.getWorkspaceRoot());
     ctx.emit({ type: MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT, servers: result.servers, ...(result.error ? { error: result.error } : {}) });
+  }
+
+  async handleExport(ctx: WebviewClientContext, message: ExportLspDefinitionMessage): Promise<void> {
+    try {
+      await new HarnessLspExporter(this.getWorkspaceRoot() || undefined).export(message.id, message.definition, message.targetId, message.scope);
+    } catch (error) {
+      ctx.emit({ type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, action: "export language server", error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   async handleSave(ctx: WebviewClientContext, message: SaveLspDefinitionMessage): Promise<void> {

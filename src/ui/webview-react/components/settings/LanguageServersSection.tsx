@@ -8,6 +8,7 @@ import type { LanguageServerDefinition } from "@root/types/CtrlYokeSettings";
 import {
   LANGUAGE_SERVER_INSTALL_KINDS,
   LANGUAGE_SERVER_STATUSES,
+  LSP_EXPORT_TARGET_IDS,
 } from "@root/types/DashboardConstants";
 import {
   useLanguageServerStore,
@@ -20,7 +21,10 @@ import {
   ManagerConfirmModal,
   ScopeBadge,
   encodeManagerTarget,
+  decodeManagerTarget,
 } from "@components/shared/ManagerUi";
+import { FlyoutActionDropdown } from "@components/shared/FlyoutActionDropdown";
+import { buildManagerExportGroups } from "@components/shared/ManagerExportGroups";
 
 const STATUS_LABELS: Record<LanguageServerStatus, string> = {
   [LANGUAGE_SERVER_STATUSES.RUNNING]: "Running",
@@ -89,6 +93,7 @@ export function LanguageServersSection({ activeScope }: Props) {
   const fullSettings = useSettingsStore((s) => s.fullGlobalSettings);
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const currentSettings = fullSettings ?? globalSettings;
+  const hasWorkspaceRoot = Boolean(globalSettings.workspaceRoot?.trim());
   const selections = useMemo(
     () =>
       (
@@ -165,11 +170,11 @@ export function LanguageServersSection({ activeScope }: Props) {
       entry.install.kind === LANGUAGE_SERVER_INSTALL_KINDS.COMMAND
         ? entry.install.commands[
             hostPlatform ??
-            (window.navigator.platform.startsWith("Win")
-              ? "win32"
-              : window.navigator.platform.startsWith("Mac")
-                ? "darwin"
-                : "linux")
+              (window.navigator.platform.startsWith("Win")
+                ? "win32"
+                : window.navigator.platform.startsWith("Mac")
+                  ? "darwin"
+                  : "linux")
           ]
         : `npm install --prefix <ctrlyokeStateHome>/lsp ${entry.install.packages.join(" ")}`;
     if (command) await navigator.clipboard?.writeText(command);
@@ -268,6 +273,40 @@ export function LanguageServersSection({ activeScope }: Props) {
                     ? LANGUAGE_SERVER_STATUSES.STOPPED
                     : LANGUAGE_SERVER_STATUSES.NOT_INSTALLED);
               const definition = row.managed?.definition ?? row.catalogEntry;
+              const exportGroups = buildManagerExportGroups({
+                hasWorkspaceRoot,
+                workspaceTargetIds: [
+                  LSP_EXPORT_TARGET_IDS.QWEN_WORKSPACE,
+                  LSP_EXPORT_TARGET_IDS.COPILOT_WORKSPACE,
+                  LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE,
+                  LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE,
+                ],
+                userTargetIds: [
+                  LSP_EXPORT_TARGET_IDS.COPILOT_USER,
+                  LSP_EXPORT_TARGET_IDS.OPENCODE_USER,
+                ],
+                labelForTarget: (id) =>
+                  ({
+                    [LSP_EXPORT_TARGET_IDS.QWEN_WORKSPACE]: "Qwen Code",
+                    [LSP_EXPORT_TARGET_IDS.COPILOT_WORKSPACE]: "Copilot CLI",
+                    [LSP_EXPORT_TARGET_IDS.COPILOT_USER]: "Copilot CLI",
+                    [LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE]: "opencode",
+                    [LSP_EXPORT_TARGET_IDS.OPENCODE_USER]: "opencode",
+                    [LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE]: "cclsp",
+                  })[id] ?? id,
+                descriptionForTarget: (id) =>
+                  ({
+                    [LSP_EXPORT_TARGET_IDS.QWEN_WORKSPACE]: ".lsp.json",
+                    [LSP_EXPORT_TARGET_IDS.COPILOT_WORKSPACE]:
+                      ".github/lsp.json",
+                    [LSP_EXPORT_TARGET_IDS.COPILOT_USER]:
+                      "~/.copilot/lsp-config.json",
+                    [LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE]: "opencode.json",
+                    [LSP_EXPORT_TARGET_IDS.OPENCODE_USER]:
+                      "~/.config/opencode/opencode.json",
+                    [LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE]: "cclsp.json",
+                  })[id] ?? id,
+              });
               const envKeys = row.managed?.definition.env
                 ? Object.keys(row.managed.definition.env)
                 : [];
@@ -337,6 +376,22 @@ export function LanguageServersSection({ activeScope }: Props) {
                       )}
                       {row.managed && (
                         <>
+                          <FlyoutActionDropdown
+                            label="Save"
+                            icon="save"
+                            iconOnly
+                            groups={exportGroups}
+                            onSelect={(encoded) => {
+                              const { id: targetId, scope } =
+                                decodeManagerTarget(encoded);
+                              sendMessage(MESSAGE_TYPES.EXPORT_LSP_DEFINITION, {
+                                id: row.id,
+                                definition: row.managed!.definition,
+                                targetId,
+                                scope,
+                              });
+                            }}
+                          />
                           <button
                             type="button"
                             onClick={() =>

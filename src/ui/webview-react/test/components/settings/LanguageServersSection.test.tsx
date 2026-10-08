@@ -125,6 +125,25 @@ describe("LanguageServersSection", () => {
     );
   });
 
+  it("exports a managed definition through the Save flyout", () => {
+    seed(LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL);
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "User" }));
+    fireEvent.click(screen.getByRole("button", { name: /Copilot CLI/ }));
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.EXPORT_LSP_DEFINITION,
+      expect.objectContaining({
+        id: "pyright",
+        targetId: "copilot-user-lsp",
+        scope: SETTING_SCOPES.USER,
+        definition: expect.objectContaining({
+          command: ["pyright-langserver", "--stdio"],
+        }),
+      })
+    );
+  });
+
   it("confirms before installing an npm catalog entry", () => {
     seed(LANGUAGE_SERVER_STATUSES.NOT_INSTALLED);
     render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);

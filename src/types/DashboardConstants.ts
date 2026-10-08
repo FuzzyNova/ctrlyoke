@@ -715,6 +715,7 @@ export const MESSAGE_TYPES = {
   RESTART_LSP_SERVER: "restartLspServer",
   REQUEST_LSP_APPROVAL: "requestLspApproval",
   STOP_LSP_SERVER: "stopLspServer",
+  EXPORT_LSP_DEFINITION: "exportLspDefinition",
 
   // Harness File Manager — Webview ↔ Extension
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }
@@ -1427,6 +1428,17 @@ export const HARNESS_IDS = {
   QWEN_CLI: "qwen-cli",
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
+
+export const LSP_EXPORT_TARGET_IDS = {
+  QWEN_WORKSPACE: "qwen-workspace-lsp",
+  COPILOT_WORKSPACE: "copilot-workspace-lsp",
+  COPILOT_USER: "copilot-user-lsp",
+  OPENCODE_WORKSPACE: "opencode-workspace-lsp",
+  OPENCODE_USER: "opencode-user-lsp",
+  CCLSP_WORKSPACE: "cclsp-workspace",
+} as const;
+export type LspExportTargetId =
+  (typeof LSP_EXPORT_TARGET_IDS)[keyof typeof LSP_EXPORT_TARGET_IDS];
 
 /**
  * Every harness in alphabetical order. ctrlyoke favours no harness: pickers

@@ -44,6 +44,7 @@ import {
   type NotificationKind,
   type SettingScope,
   type SettingWriteScope,
+  type LspExportTargetId,
   type SecretRegistryActionState,
   type SecretRegistryState,
   type StatusLineHarnessId,
@@ -2741,6 +2742,14 @@ export interface SaveLspDefinitionMessage {
   type: typeof MESSAGE_TYPES.SAVE_LSP_DEFINITION;
   id: string;
   definition: LanguageServerDefinition;
+  scope: SettingWriteScope;
+}
+
+export interface ExportLspDefinitionMessage {
+  type: typeof MESSAGE_TYPES.EXPORT_LSP_DEFINITION;
+  id: string;
+  definition: LanguageServerDefinition;
+  targetId: LspExportTargetId;
   scope: SettingWriteScope;
 }
 
