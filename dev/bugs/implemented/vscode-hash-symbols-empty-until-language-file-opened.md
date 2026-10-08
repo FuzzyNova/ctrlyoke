@@ -37,7 +37,7 @@ behaviors that make the result empty before a TS document opens:
   projects that an open file has loaded.
 
 No VS Code or TypeScript setting preloads projects. The full analysis is in
-`dev/backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`, "VS Code cold
+`dev/implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`, "VS Code cold
 start".
 
 ## Suggested Fix

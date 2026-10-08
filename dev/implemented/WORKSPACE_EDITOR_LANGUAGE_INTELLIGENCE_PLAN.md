@@ -1,38 +1,31 @@
 # Workspace Editor Language Intelligence Plan
 
-**Status (2026-10-07):** Phase 2 managed backend is implemented (staging
-Stage 13b), the Phase 4 manager backend and message plumbing are implemented
-(staging Stage 15a), and Stage 14a applies rename/server workspace edits across open and
-unopened workspace files. Rename confirmation uses the LSP request
-`ctrlyoke/confirmWorkspaceRename` (params `{ fileCount }`, boolean result);
-open-buffer edits use the `ctrlyoke/applyWorkspaceTextEdits` notification
-(`{ uri, edits }`). The browser intercepts these messages on the LSP socket and
-answers/applies them through the viewer modal and CodeMirror buffer. Its trust,
-approval/hash renewal, lifecycle, cap/LRU, restart, and edit contracts have
-automated coverage. The 2026-10-07 browser review fixes cover editor
-compartment reseeding, grace-period client disposal, session invalidation
-lookup, whole-document formatting, settings scope and approval UX, and
-workspace-language discovery. Browser completion/hover/rename/diagnostics
-verification remains a manual follow-up in both hosts. Phases 7a, 7-regex, and
-7c are complete, as is phase 1 (staging Stages 12a and 12b). Later phases
-remain.
-The `SymbolIndex` port and `VsCodeSymbolIndex` (phase 7a) plus
-`RegexSymbolIndex` (phase 7-regex, staging Stage 9) are complete, along with
-the VS Code cold-start fallback and anchor warm-up. Remaining phases are ready
-to implement in sequence.
-Every code reference was re-audited against `src/` on 2026-10-07, after the
-standalone server shipped. That pass corrected stale locations, fixed the
-standalone trust claim, and added three things:
+**Status (2026-10-08): Implemented**, except phase 6's Node
+`DiagnosticsSource` (staging Stage 17b), which is blocked until
+[`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md) Phase 1 defines
+the port; that plan now carries the follow-up. Phases 0–4, 6 (harness export),
+7a, 7b, 7c, and 7-regex shipped through staging Stages I1, I2, and 12a–17.
+Phase 5 is dropped.
 
-- the Language Servers settings UX and catalog decision (see
-  "Settings section UX");
-- the VS Code `#` cold-start fix (phase 7c, staging Stage I2);
-- standalone warm-up rules.
+- **Verified against a real server (2026-10-08):** `ctrlyoke server` with
+  `typescript-language-server` on Windows served session lookup, initialize
+  capabilities, hover, completion, definition, and diagnostics to two
+  `/ws/lsp` clients. Killing the server process closed both sockets with
+  `4410`, `ctrlyoke server` stayed up, and a fresh lookup restored hover.
+  That check found that Windows servers publish `file:///c%3A/...` URIs, so
+  every server URI now goes through `toServerFileUri`/`canonicalServerFileUri`
+  in `src/server/lsp/LspProtocol.ts`.
+- **Not yet checked by hand:** the browser editor UI itself (menus, references
+  panel, rename confirmation) and the VS Code-hosted server.
+- **Known limitation:** the workspace `languageServers.settings` filter blocks
+  path, plugin, command, env, and exec-like keys, but not every
+  server-specific launch key (for example `rust-analyzer.procMacro.server`)
+  or command keys nested in arrays.
 
 Phase 5, the VS Code provider backend, is **dropped**.
 
 **Sequencing:**
-[`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md) is the
+[`STANDALONE_STAGING_PLAN.md`](./STANDALONE_STAGING_PLAN.md) is the
 authoritative order. Most of this plan runs **after** the standalone server
 (Track C, Stages 12–17), so the `/ws/lsp` socket is added once, to the shared
 server class. Two pieces run earlier:
@@ -48,15 +41,15 @@ server class. Two pieces run earlier:
 
 **Related plans:**
 
-- [`VSCODE_LSP_MCP_PLAN.md`](./VSCODE_LSP_MCP_PLAN.md): the diagnostics
+- [`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md): the diagnostics
   end-condition gate and the harness-facing IDE MCP. This plan narrows its
   harness scope (see "Harness side" below) and gives its diagnostics gate a
   host-neutral source.
-- [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md): its
+- [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md): its
   Phase 8 uses this plan's `SymbolIndex` port with `RegexSymbolIndex`. The
   one-off `LspSymbolClient` is not built. `LspSymbolIndex` (phase 7b here)
   later upgrades standalone `#` through the same port.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
   the managed language-server host must stay in the Node-only graph. Phase 6
   item 4 of that plan is where `VsCodeSymbolIndex` and the completion core
   land.
@@ -840,7 +833,7 @@ is far ahead of anything we would ship. Instead:
 ## Implementation phases
 
 Staging numbers refer to
-[`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md).
+[`STANDALONE_STAGING_PLAN.md`](./STANDALONE_STAGING_PLAN.md).
 
 0. **Done. Save conflicts and reload banner** (independent; **Stage I1**).
    This shipped before the standalone release.
@@ -913,7 +906,7 @@ Staging numbers refer to
    - Spawn/idle/cap/restart lifecycle, `startOnLaunch`, and the trust gate.
      When a managed session stops or crashes, its `/ws/lsp` clients are closed
      with WebSocket code `4410` and reason `Language server session ended;
-     reconnect to refresh`; the browser must repeat HTTP session lookup before
+reconnect to refresh`; the browser must repeat HTTP session lookup before
      reconnecting. Pending workspace definitions are skipped by `startOnLaunch`.
      Stage 13b is implemented in `ManagedLanguageServerBackend`; tests cover
      trust refusal, remembered and hash-invalidated approvals, open-document

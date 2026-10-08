@@ -2,6 +2,16 @@
 
 ## Summary
 
+> **Follow-up owned here (2026-10-08):** Phase 1 should define the gate's
+> source as a host-neutral `DiagnosticsSource` port with a VS Code
+> implementation (`vscode.languages.getDiagnostics()`). Once it exists, add the
+> Node implementation over the managed language-server backend
+> (`src/server/lsp/`, pull diagnostics) so `kind: "diagnostics"` works in
+> `ctrlyoke server` and CLI runs. This was staging Stage 17b of
+> [`STANDALONE_STAGING_PLAN.md`](../implemented/STANDALONE_STAGING_PLAN.md);
+> see "Harness side" item 3 of
+> [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md).
+
 Expose VS Code's diagnostic (LSP) state to the AI agents ctrlyoke runs — not as a generic VS Code MCP bridge, but as a tight workflow integration: diagnostics as end-condition gates, `{diagnostics}` interpolation in retry prompts, and auto-injection into every harness MCP config with zero user setup.
 
 ---

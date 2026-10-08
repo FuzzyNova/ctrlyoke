@@ -464,6 +464,12 @@ export class CtrlYokeHostedServer
         socketClosed = true;
         proxy?.dispose();
       });
+      // Registered before the proxy exists: an unhandled 'error' event on a
+      // socket would crash the process.
+      ws.on("error", (error: Error) => {
+        Log.warn(`[CtrlYokeHostedServer] LSP socket error: ${error.message}`);
+        proxy?.dispose();
+      });
       void this.languageIntelligenceHost
         .createProxy(serverId, (message) => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -508,7 +514,6 @@ export class CtrlYokeHostedServer
               Log.warn(`[CtrlYokeHostedServer] LSP message failed: ${String(error)}`);
             });
           }
-          ws.on("error", () => created.dispose());
         })
         .catch((error: unknown) => {
           Log.warn(`[CtrlYokeHostedServer] Failed to open LSP session: ${String(error)}`);

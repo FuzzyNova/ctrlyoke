@@ -365,10 +365,73 @@ suite("ManagedLanguageServerBackend", () => {
     await backend.getConnection(ts.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     const json = await backend.resolveForPath("package.json", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in json);
-    assert.ok(statuses.includes("typescript-language-server:stopped"));
+    // Resolution only checks capacity; the slot is reserved when starting.
+    assert.ok(!statuses.includes("typescript-language-server:stopped"));
     await backend.getConnection(json.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    assert.ok(statuses.includes("typescript-language-server:stopped"));
     assert.strictEqual(backend.runningServerCount, 1);
     await backend.dispose();
+  });
+
+  test("concurrent editor starts never exceed the cap", async () => {
+    let spawnCount = 0;
+    const backend = createBackend({ maxRunning: 1, onSpawn: () => { spawnCount += 1; } });
+    const ts = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    const json = await backend.resolveForPath("package.json", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    assert.ok("descriptor" in ts && "descriptor" in json);
+    const results = await Promise.allSettled([
+      backend.getConnection(ts.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR),
+      backend.getConnection(json.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR),
+    ]);
+    assert.deepStrictEqual(results.map((result) => result.status), ["fulfilled", "rejected"]);
+    assert.strictEqual(spawnCount, 1);
+    assert.strictEqual(backend.runningServerCount, 1);
+    await backend.dispose();
+  });
+
+  test("a crash restart does not start beyond the cap", async () => {
+    const timers: Array<() => void> = [];
+    const children: EventEmitter[] = [];
+    const statuses: string[] = [];
+    const backend = createBackend({
+      maxRunning: 1,
+      children,
+      setTimer: ((callback: () => void) => { timers.push(callback); return callback as unknown as ReturnType<typeof setTimeout>; }) as typeof setTimeout,
+      clearTimer: (() => undefined) as typeof clearTimeout,
+    });
+    backend.onStatusChanged((event) => statuses.push(`${event.id}:${event.status}`));
+    const ts = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    assert.ok("descriptor" in ts);
+    await backend.getConnection(ts.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    backend.documentOpened(ts.descriptor);
+    children[0].emit("exit", 1, null);
+    const json = await backend.resolveForPath("package.json", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    assert.ok("descriptor" in json);
+    await backend.getConnection(json.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    backend.documentOpened(json.descriptor);
+    timers.splice(0).forEach((timer) => timer());
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(backend.runningServerCount, 1);
+    assert.strictEqual(children.length, 2);
+    assert.ok(statuses.includes("typescript-language-server:stopped"));
+    backend.documentClosed(json.descriptor);
+    await backend.dispose();
+  });
+
+  test("a start in flight during dispose leaves no running server", async () => {
+    let releaseInitialize: (value: unknown) => void = () => undefined;
+    const backend = createBackend({
+      initializeResponse: new Promise((resolve) => { releaseInitialize = resolve; }),
+    });
+    const ts = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    assert.ok("descriptor" in ts);
+    const connecting = backend.getConnection(ts.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    await new Promise((resolve) => setImmediate(resolve));
+    const disposing = backend.dispose();
+    releaseInitialize({ capabilities: {} });
+    await assert.rejects(connecting);
+    await disposing;
+    assert.strictEqual(backend.runningServerCount, 0);
   });
 
   test("restarts a crashed server with a backoff while a document remains open", async () => {

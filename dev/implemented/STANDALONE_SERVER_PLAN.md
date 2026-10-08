@@ -13,7 +13,7 @@ Every fact in this document was re-audited against `src/` on 2026-10-06, and
 every open question has a decision. ROADMAP lists it as a P2 item for milestone
 0.4.
 
-**Sequencing:** [`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md) is
+**Sequencing:** [`STANDALONE_STAGING_PLAN.md`](./STANDALONE_STAGING_PLAN.md) is
 the only authoritative order of work. The standalone work is staging Track B
 (Stages 7a–11). It starts after Track A (decoupling, Stages 1–6). The phase
 numbers in this document describe structure only.
@@ -28,7 +28,7 @@ numbers in this document describe structure only.
 - [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md)
   is implemented. It provides the toast and interaction parity standalone
   depends on.
-- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md)
+- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](./WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md)
   owns the `SymbolIndex` port. Standalone v1 ships its `RegexSymbolIndex`, and
   the LSP plan adds `LspSymbolIndex` later.
 - [`CLI_DISTRIBUTION_PLAN.md`](../backlog/CLI_DISTRIBUTION_PLAN.md). The

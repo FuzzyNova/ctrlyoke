@@ -401,14 +401,14 @@ export class LanguageIntelligenceHost {
       return session;
     });
     this.sessions.set(key, created);
+    // The backend reports its own failures (crash, limit, stop) through
+    // status events; the host only drops the failed session so the next
+    // request retries.
     void created.catch((error: unknown) => {
       if (this.sessions.get(key) === created) this.sessions.delete(key);
-      this.statusEvents.emit("change", {
-        id: descriptor.id,
-        rootPath: root,
-        status: LANGUAGE_SERVER_STATUSES.CRASHED,
-        detail: error instanceof Error ? error.message : String(error),
-      } satisfies LanguageServerStatusChange);
+      Log.warn(
+        `[LanguageIntelligenceHost] Session for ${descriptor.id} failed: ${error instanceof Error ? error.message : String(error)}`
+      );
     });
     void created
       .then((session) => {

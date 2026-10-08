@@ -273,27 +273,22 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
         };
       }
     }
+    // Capacity is only checked here; the slot is reserved (and any eviction
+    // happens) synchronously in startRegistered, the one path every start
+    // takes, so concurrent starts cannot both pass the cap.
     if (
       !this.servers.has(key) &&
-      this.runningCount() >=
-        Math.max(1, userSettings.languageServers.maxRunning)
+      !this.starting.has(key) &&
+      this.occupiedSlots(key) >= this.maxRunning() &&
+      !this.evictionCandidate(key, origin)
     ) {
-      const victim =
-        origin === LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
-          ? [...this.servers.values()]
-              .filter((server) => server.initialized && server.openDocuments === 0)
-              .sort((a, b) => a.lastUsed - b.lastUsed)[0]
-          : undefined;
-      if (!victim) {
-        if (origin === LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)
-          this.emitStatus({
-            id: resolved.id,
-            rootPath,
-            status: LANGUAGE_SERVER_STATUSES.LIMIT_REACHED,
-          });
-        return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.LIMIT_REACHED };
-      }
-      await this.stopServer(victim, LANGUAGE_SERVER_STATUSES.STOPPED);
+      if (origin === LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)
+        this.emitStatus({
+          id: resolved.id,
+          rootPath,
+          status: LANGUAGE_SERVER_STATUSES.LIMIT_REACHED,
+        });
+      return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.LIMIT_REACHED };
     }
     const descriptor: LanguageServerDescriptor = {
       id: resolved.id,
@@ -351,32 +346,12 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       });
       throw error;
     }
-    const maxRunning = Math.max(
-      1,
-      this.normalize(this.options.userSettings().languageServers).maxRunning
-    );
-    if (this.runningCount() >= maxRunning) {
-      const victim = origin === LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
-        ? [...this.servers.values()]
-            .filter((server) => server.initialized && server.openDocuments === 0)
-            .sort((a, b) => a.lastUsed - b.lastUsed)[0]
-        : undefined;
-      if (!victim) {
-        if (origin === LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)
-          this.emitStatus({
-            id: descriptor.id,
-            rootPath: descriptor.rootPath,
-            status: LANGUAGE_SERVER_STATUSES.LIMIT_REACHED,
-          });
-        throw new Error(`Language server limit (${maxRunning}) reached.`);
-      }
-      await this.stopServer(victim, LANGUAGE_SERVER_STATUSES.STOPPED);
-    }
     const connection = await this.startRegistered(
       key,
       resolved,
       descriptor,
-      this.restartCounts.get(key) ?? 0
+      this.restartCounts.get(key) ?? 0,
+      origin
     );
     const initialized = this.servers.get(key);
     if (!initialized?.initialized || this.userStoppedServers.has(descriptor.id))
@@ -390,10 +365,18 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     key: string,
     resolved: ResolvedLanguageServer,
     descriptor: LanguageServerDescriptor,
-    restartCount: number
+    restartCount: number,
+    origin: LanguageServerRequestOrigin
   ): Promise<MessageConnection> {
     const pending = this.starting.get(key);
     if (pending) return pending;
+    if (this.disposed)
+      return Promise.reject(new Error("Language server backend is disposed."));
+    try {
+      this.reserveSlot(key, origin, resolved.id, descriptor.rootPath);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     const starting = Promise.resolve().then(async () => {
       if (this.userStoppedServers.has(resolved.id))
         throw new Error(`Language server ${resolved.id} is stopped.`);
@@ -404,6 +387,10 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
         restartCount
       );
       const server = this.servers.get(key);
+      if (this.disposed) {
+        if (server) await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
+        throw new Error("Language server backend is disposed.");
+      }
       if (this.userStoppedServers.has(resolved.id) || !server?.initialized) {
         if (server) await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
         throw new Error(`Language server ${resolved.id} stopped during startup.`);
@@ -495,7 +482,13 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       const { descriptor, resolved, key } = server;
       const restartCount = server.restartCount;
       await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
-      await this.startRegistered(key, resolved, descriptor, restartCount);
+      await this.startRegistered(
+        key,
+        resolved,
+        descriptor,
+        restartCount,
+        LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+      );
       return;
     }
     if (stopped) {
@@ -503,7 +496,8 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
         stopped.key,
         stopped.resolved,
         stopped.descriptor,
-        stopped.restartCount
+        stopped.restartCount,
+        LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
       );
       return;
     }
@@ -545,6 +539,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    await Promise.allSettled([...this.starting.values()]);
     for (const timer of this.restartTimers.values())
       (this.options.clearTimer ?? clearTimeout)(timer);
     this.restartTimers.clear();
@@ -1021,10 +1016,8 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       if (this.servers.get(key) === server) {
         await this.stopServer(server, LANGUAGE_SERVER_STATUSES.CRASHED);
       } else {
-        const restartTimer = this.restartTimers.get(key);
-        if (restartTimer)
-          (this.options.clearTimer ?? clearTimeout)(restartTimer);
-        this.restartTimers.delete(key);
+        // crashed() already removed this server and may have scheduled a
+        // backoff restart; leave that timer in place.
         server.intentionalStop = true;
         server.connection.dispose();
         if (server.child.exitCode === null) server.child.kill();
@@ -1074,6 +1067,8 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       status: LANGUAGE_SERVER_STATUSES.CRASHED,
       detail: error.message,
     });
+    // Status listeners have invalidated proxies; the transport is dead.
+    server.connection.dispose();
     if (
       !this.disposed &&
       (server.openDocuments > 0 || server.restartCount > 0) &&
@@ -1100,8 +1095,18 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
           server.key,
           server.resolved,
           server.descriptor,
-          restartCount
-        ).catch(() => undefined);
+          restartCount,
+          LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
+        ).catch((error: unknown) => {
+          if (this.servers.has(server.key) || this.starting.has(server.key))
+            return;
+          this.emitStatus({
+            id: server.resolved.id,
+            rootPath: server.descriptor.rootPath,
+            status: LANGUAGE_SERVER_STATUSES.STOPPED,
+            detail: `Not restarted: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        });
       }, delay);
       this.restartTimers.set(server.key, timer);
     }
@@ -1163,8 +1168,58 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     if (server.child.exitCode === null) server.child.kill();
     server.connection.dispose();
   }
-  private runningCount(): number {
-    return this.servers.size;
+  private maxRunning(): number {
+    return Math.max(
+      1,
+      this.normalize(this.options.userSettings().languageServers).maxRunning
+    );
+  }
+  /** Slots held by running and starting servers, other than `key` itself. */
+  private occupiedSlots(key: string): number {
+    const keys = new Set([...this.servers.keys(), ...this.starting.keys()]);
+    keys.delete(key);
+    return keys.size;
+  }
+  /** Only an editor request may evict, and only an idle initialized server. */
+  private evictionCandidate(
+    key: string,
+    origin: LanguageServerRequestOrigin
+  ): RunningServer | undefined {
+    if (origin !== LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR) return undefined;
+    return [...this.servers.values()]
+      .filter(
+        (server) =>
+          server.key !== key && server.initialized && server.openDocuments === 0
+      )
+      .sort((a, b) => a.lastUsed - b.lastUsed)[0];
+  }
+  /**
+   * Reserve a server slot synchronously, evicting for editor requests. The
+   * caller registers in `starting` in the same tick, and stopServer frees the
+   * victim's slot before its first await, so no other start can take it.
+   */
+  private reserveSlot(
+    key: string,
+    origin: LanguageServerRequestOrigin,
+    id: string,
+    rootPath: string
+  ): void {
+    const maxRunning = this.maxRunning();
+    if (this.occupiedSlots(key) < maxRunning) return;
+    const victim = this.evictionCandidate(key, origin);
+    if (!victim) {
+      if (origin === LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)
+        this.emitStatus({
+          id,
+          rootPath,
+          status: LANGUAGE_SERVER_STATUSES.LIMIT_REACHED,
+        });
+      throw new Error(`Language server limit (${maxRunning}) reached.`);
+    }
+    void this.stopServer(victim, LANGUAGE_SERVER_STATUSES.STOPPED).catch(
+      (error: unknown) =>
+        Log.warn("[LanguageServerBackend] Eviction stop failed:", error)
+    );
   }
   private async waitForExit(child: ChildProcess): Promise<void> {
     if (child.exitCode !== null) return;
