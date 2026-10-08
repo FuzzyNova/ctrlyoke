@@ -1,7 +1,8 @@
 # Editor Intelligence Staging Plan
 
-**Status (2026-10-08):** Proposed. Nothing is implemented yet. This plan only orders the work.
-The design lives in the three plans it stages.
+**Status (2026-10-08):** In progress. **M1 is done** (single-source palette, in `bug-fix`). Every
+other phase is not started. This plan only orders the work. The design lives in the three
+plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
 
@@ -68,7 +69,7 @@ lists a suggested split across the long-lived worktrees (`big-feature`, `small-f
 | **F1:** location, file predicate, LSP exclusion    | —                                                                    | `big-feature`                              |
 | **F2:** schema outline and shared snippets         | —                                                                    | `big-feature` after F1, or `small-feature` |
 | **D1:** characterization tests and rule extraction | `CodeMirrorEditor.tsx`                                               | `small-feature`                            |
-| **M1:** single-source palette                      | — (`codemirrorLanguage.ts`, `syntaxHighlighting.tsx`, `globals.css`) | `bug-fix`                                  |
+| **M1:** single-source palette ✅ done 2026-10-08   | — (`codemirrorLanguage.ts`, `syntaxHighlighting.tsx`, `globals.css`) | `bug-fix`                                  |
 | **M0:** readable code ranges                       | `CodeMirrorEditor.tsx`, a one-rule theme change                      | run after D1, or before D1 starts          |
 
 M0 is the cheapest visible win. It can land on day one, before D1 starts.

@@ -733,6 +733,145 @@
   --safe-area-top: env(safe-area-inset-top, 0px);
 }
 
+/* ============================================================================
+   Syntax palette — --cy-syntax-<role>
+   ============================================================================
+   The single source for code and markdown token colours. Roles and their
+   Lezer tag / refractor token mapping live in utils/syntaxPalette.ts; the
+   output code blocks, the workspace editor and the prompt editor all read
+   these variables.
+
+   VS Code does not expose a theme's TextMate tokenColors to webviews, so each
+   role uses a real VS Code variable where one exists (only `url`, via
+   textLink.foreground) and otherwise the value from VS Code's built-in themes
+   in microsoft/vscode extensions/theme-defaults/themes/ (dark_vs + dark_plus,
+   light_vs + light_plus, hc_black, hc_light), verified 2026-10-08:
+
+   | Role            | TextMate scope                         | Dark    | Light   | HC dark | HC light |
+   | --------------- | -------------------------------------- | ------- | ------- | ------- | -------- |
+   | keyword         | keyword, storage.modifier              | #569cd6 | #0000ff | #569cd6 | #0f4a85  |
+   | control-keyword | keyword.control (dark_plus/light_plus) | #c586c0 | #af00db | #c586c0 | #b5200d  |
+   | string          | string                                 | #ce9178 | #a31515 | #ce9178 | #0f4a85  |
+   | number          | constant.numeric                       | #b5cea8 | #098658 | #b5cea8 | #096d48  |
+   | comment         | comment                                | #6a9955 | #008000 | #7ca668 | #515151  |
+   | function        | entity.name.function                   | #dcdcaa | #795e26 | #dcdcaa | #5e2cbc  |
+   | type            | entity.name.type, support.class        | #4ec9b0 | #267f99 | #4ec9b0 | #185e73  |
+   | variable        | variable                               | #9cdcfe | #001080 | #9cdcfe | #001080  |
+   | property        | support.type.property-name(.json)      | #9cdcfe | #0451a5 | #d4d4d4 | #0451a5  |
+   | attribute       | entity.other.attribute-name            | #9cdcfe | #e50000 | #9cdcfe | #264f78  |
+   | boolean         | constant.language                      | #569cd6 | #0000ff | #569cd6 | #0f4a85  |
+   | regexp          | string.regexp                          | #d16969 | #811f3f | #d16969 | #811f3f  |
+   | tag             | entity.name.tag                        | #569cd6 | #800000 | #569cd6 | #0f4a85  |
+   | selector        | entity.name.tag.css, attr-name.class   | #d7ba7d | #800000 | #d7ba7d | #0f4a85  |
+   | heading (bold)  | markup.heading                         | #569cd6 | #800000 | #6796e6 | #0f4a85  |
+   | strong (bold)   | markup.bold                            | #569cd6 | #000080 | —       | #000080  |
+   | emphasis (ital) | markup.italic                          | #c586c0 | #800080 | —       | #800080  |
+   | inline-code     | markup.inline.raw                      | #ce9178 | #800000 | —       | #0f4a85  |
+   | quote           | punctuation.definition.quote.begin.md  | #6a9955 | #0451a5 | —       | #0451a5  |
+   | list-marker     | punctuation.definition.list.begin.md   | #6796e6 | #0451a5 | —       | #0451a5  |
+
+   "—" means the theme leaves the scope uncoloured, so the role keeps the
+   surrounding text colour (currentColor). Markdown link text uses `string`,
+   matching string.other.link.title.markdown. Dark values sit on :root too so
+   a page without a theme body class still gets a readable palette.
+   ============================================================================ */
+:root,
+body.vscode-dark {
+  --cy-syntax-keyword: #569cd6;
+  --cy-syntax-control-keyword: #c586c0;
+  --cy-syntax-string: #ce9178;
+  --cy-syntax-number: #b5cea8;
+  --cy-syntax-comment: #6a9955;
+  --cy-syntax-function: #dcdcaa;
+  --cy-syntax-type: #4ec9b0;
+  --cy-syntax-variable: #9cdcfe;
+  --cy-syntax-property: #9cdcfe;
+  --cy-syntax-attribute: #9cdcfe;
+  --cy-syntax-boolean: #569cd6;
+  --cy-syntax-regexp: #d16969;
+  --cy-syntax-tag: #569cd6;
+  --cy-syntax-selector: #d7ba7d;
+  --cy-syntax-url: var(--vscode-textLink-foreground, #4daafc);
+  --cy-syntax-heading: #569cd6;
+  --cy-syntax-strong: #569cd6;
+  --cy-syntax-emphasis: #c586c0;
+  --cy-syntax-inline-code: #ce9178;
+  --cy-syntax-quote: #6a9955;
+  --cy-syntax-list-marker: #6796e6;
+}
+
+body.vscode-light {
+  --cy-syntax-keyword: #0000ff;
+  --cy-syntax-control-keyword: #af00db;
+  --cy-syntax-string: #a31515;
+  --cy-syntax-number: #098658;
+  --cy-syntax-comment: #008000;
+  --cy-syntax-function: #795e26;
+  --cy-syntax-type: #267f99;
+  --cy-syntax-variable: #001080;
+  --cy-syntax-property: #0451a5;
+  --cy-syntax-attribute: #e50000;
+  --cy-syntax-boolean: #0000ff;
+  --cy-syntax-regexp: #811f3f;
+  --cy-syntax-tag: #800000;
+  --cy-syntax-selector: #800000;
+  --cy-syntax-url: var(--vscode-textLink-foreground, #005fb8);
+  --cy-syntax-heading: #800000;
+  --cy-syntax-strong: #000080;
+  --cy-syntax-emphasis: #800080;
+  --cy-syntax-inline-code: #800000;
+  --cy-syntax-quote: #0451a5;
+  --cy-syntax-list-marker: #0451a5;
+}
+
+body.vscode-high-contrast {
+  --cy-syntax-keyword: #569cd6;
+  --cy-syntax-control-keyword: #c586c0;
+  --cy-syntax-string: #ce9178;
+  --cy-syntax-number: #b5cea8;
+  --cy-syntax-comment: #7ca668;
+  --cy-syntax-function: #dcdcaa;
+  --cy-syntax-type: #4ec9b0;
+  --cy-syntax-variable: #9cdcfe;
+  --cy-syntax-property: #d4d4d4;
+  --cy-syntax-attribute: #9cdcfe;
+  --cy-syntax-boolean: #569cd6;
+  --cy-syntax-regexp: #d16969;
+  --cy-syntax-tag: #569cd6;
+  --cy-syntax-selector: #d7ba7d;
+  --cy-syntax-url: var(--vscode-textLink-foreground, #21a6ff);
+  --cy-syntax-heading: #6796e6;
+  --cy-syntax-strong: currentColor;
+  --cy-syntax-emphasis: currentColor;
+  --cy-syntax-inline-code: currentColor;
+  --cy-syntax-quote: currentColor;
+  --cy-syntax-list-marker: currentColor;
+}
+
+body.vscode-high-contrast-light {
+  --cy-syntax-keyword: #0f4a85;
+  --cy-syntax-control-keyword: #b5200d;
+  --cy-syntax-string: #0f4a85;
+  --cy-syntax-number: #096d48;
+  --cy-syntax-comment: #515151;
+  --cy-syntax-function: #5e2cbc;
+  --cy-syntax-type: #185e73;
+  --cy-syntax-variable: #001080;
+  --cy-syntax-property: #0451a5;
+  --cy-syntax-attribute: #264f78;
+  --cy-syntax-boolean: #0f4a85;
+  --cy-syntax-regexp: #811f3f;
+  --cy-syntax-tag: #0f4a85;
+  --cy-syntax-selector: #0f4a85;
+  --cy-syntax-url: var(--vscode-textLink-foreground, #0f4a85);
+  --cy-syntax-heading: #0f4a85;
+  --cy-syntax-strong: #000080;
+  --cy-syntax-emphasis: #800080;
+  --cy-syntax-inline-code: #0f4a85;
+  --cy-syntax-quote: #0451a5;
+  --cy-syntax-list-marker: #0451a5;
+}
+
 /* Generated by scripts/generate-step-palette.mjs. */
 :root {
   --cy-step-hue-0: #ff8fb4;

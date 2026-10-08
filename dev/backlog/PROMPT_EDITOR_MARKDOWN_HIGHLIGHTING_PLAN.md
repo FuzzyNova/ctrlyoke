@@ -1,6 +1,7 @@
 # Prompt Editor Markdown Highlighting Plan
 
-**Status (2026-10-07):** Proposed. Nothing is implemented yet.
+**Status (2026-10-08):** Phase 1 (single-source palette) is implemented. Phases 0, 2, 3 and 4
+are not started.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -157,20 +158,22 @@ These were verified against `src/` on 2026-10-07.
   This removes the duplicate in fact 4. Correct the keyword mapping while consolidating.
 
 - The fallback values come from VS Code's built-in themes: `dark_vs.json`/`dark_plus.json` and
-  their light counterparts in `microsoft/vscode`, `extensions/theme-defaults/themes/`. **Re-verify
-  them against those files when implementing.** As remembered on 2026-10-07, Default Dark uses:
+  their light counterparts in `microsoft/vscode`, `extensions/theme-defaults/themes/`. Verified
+  against those files on 2026-10-08 (Phase 1). Default Dark uses:
 
-  | Role                   | Default Dark    |
-  | ---------------------- | --------------- |
-  | `markup.heading`       | `#569cd6`, bold |
-  | `markup.inline.raw`    | `#ce9178`       |
-  | `markup.bold`          | bold            |
-  | `markup.italic`        | italic          |
-  | `markup.strikethrough` | strikethrough   |
-  | quote punctuation      | `#6a9955`       |
-  | list punctuation       | `#6796e6`       |
+  | Role                   | Default Dark      |
+  | ---------------------- | ----------------- |
+  | `markup.heading`       | `#569cd6`, bold   |
+  | `markup.inline.raw`    | `#ce9178`         |
+  | `markup.bold`          | `#569cd6`, bold   |
+  | `markup.italic`        | `#c586c0`, italic |
+  | `markup.strikethrough` | strikethrough     |
+  | quote punctuation      | `#6a9955`         |
+  | list punctuation       | `#6796e6`         |
 
-  Light themes use the light-theme equivalents.
+  The 2026-10-07 draft of this table remembered bold and italic as style-only; the theme files
+  colour them too. Light themes use the light-theme equivalents. The full four-theme table is
+  in `globals.css` next to the variables.
 
 - Record the chosen mapping in a short table next to the variables, so the next contributor
   knows why each colour was chosen.
@@ -267,7 +270,7 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      checks the class still lands on inline and fenced ranges, and that no reference inside them
      is decorated.
 
-2. **Phase 1: Single-source the palette.**
+2. **Phase 1: Single-source the palette.** **Done 2026-10-08.**
    - Add the `--cy-syntax-*` variables with per-theme fallbacks.
    - Point `SYNTAX_TOKEN_STYLES` and `createWorkspaceEditorHighlightExtension` at them through
      `createCtrlYokeHighlightStyle()`.
@@ -276,6 +279,37 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
    - Tests: a vitest snapshot of the generated CSS and HighlightStyle spec. Check visually in
      Default Dark, Default Light and one high-contrast theme, both in VS Code and in the hosted
      browser with a theme snapshot.
+   - **As built:**
+     - `utils/syntaxPalette.ts` holds `SYNTAX_ROLES` and one `SYNTAX_ROLE_SPECS` table (role →
+       Lezer tags + refractor token classes + font style). `createCtrlYokeHighlightStyle()`
+       (cached) and `buildSyntaxTokenStyles()` (the refractor CSS that replaced the
+       hand-written `SYNTAX_TOKEN_STYLES`) are both generated from it. The values are in
+       `globals.css` under `:root, body.vscode-dark`, `body.vscode-light`,
+       `body.vscode-high-contrast` and `body.vscode-high-contrast-light`, with the source table
+       in a comment.
+     - `resolveCodeMirrorLanguage(name)` in `codemirrorLanguage.ts` resolves any alias or fence
+       info string through `normalizeSyntaxLanguage`; `getLanguageExtension(path)` delegates to
+       it.
+     - Only `url` uses a real VS Code variable (`textLink.foreground`). The others have no
+       theme-tracking equivalent: the `debugTokenExpression`/`symbolIcon`/`charts` variables
+       the old copies borrowed don't follow the editor's token colours, which is how keywords
+       came out purple.
+     - **Roles changed from the list above.** Added `control-keyword`, `property`, `attribute`
+       and `selector`, so Dark+'s purple control keywords and the old CSS's selector and
+       attribute colours survive. Link text uses `string` (VS Code's
+       `string.other.link.title.markdown`), and link URLs share `url`, because Lezer tags code
+       URLs and markdown link destinations with the same `tags.url`. Strikethrough is style-only.
+     - **Left for Phase 2:** `fence-marker`, `fence-info` and `formatting-mark` have no variable,
+       because VS Code's default themes leave those scopes uncoloured. Lezer also tags every
+       markdown mark as `processingInstruction`, so the `quote` and `list-marker` variables reach
+       only refractor until Phase 2's markdown configuration gives `QuoteMark`/`ListMark` their
+       own tags.
+     - Comments are no longer italic, matching the theme files.
+     - Tests: `test/utils/syntaxPalette.test.ts` covers inline snapshots of both generated
+       outputs, every role defined for all four theme selectors in `globals.css`, the
+       keyword-colour regression, tag-to-variable resolution, and `resolveCodeMirrorLanguage`.
+     - **Not yet done:** the visual check in VS Code and the hosted browser. Do it before or
+       alongside Phase 2.
 
 3. **Phase 2: Markdown in the prompt editor.**
    - Add the `markdown()` compartment with GFM, lazy nested languages and the markdown roles of

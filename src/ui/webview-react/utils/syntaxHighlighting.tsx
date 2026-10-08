@@ -29,6 +29,7 @@ import {
   OUTPUT_FIND_ACTIVE_ATTRIBUTE,
   OUTPUT_FIND_ACTIVE_CLASS,
 } from "@utils/outputFind";
+import { buildSyntaxTokenStyles } from "@utils/syntaxPalette";
 
 const REGISTERED_SYNTAXES = [
   refractorTypescript,
@@ -167,131 +168,6 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   yml: "yaml",
 };
 
-const SYNTAX_TOKEN_STYLES = `
-/* ctrlyoke - VS Code themed refractor tokens */
-.cy-syntax {
-  color: var(--vscode-editor-foreground, #d4d4d4);
-}
-
-.cy-syntax .token,
-.diff .token {
-  color: inherit;
-}
-
-.cy-syntax .token.keyword,
-.cy-syntax .token.atrule,
-.diff .token.keyword,
-.diff .token.atrule {
-  color: var(--vscode-symbolIcon-functionForeground, #569cd6);
-}
-
-.cy-syntax .token.string,
-.cy-syntax .token.char,
-.cy-syntax .token.attr-value,
-.diff .token.string,
-.diff .token.char,
-.diff .token.attr-value {
-  color: var(--vscode-debugTokenExpression-string, #ce9178);
-}
-
-.cy-syntax .token.number,
-.diff .token.number {
-  color: var(--vscode-debugTokenExpression-number, #b5cea8);
-}
-
-.cy-syntax .token.comment,
-.cy-syntax .token.prolog,
-.cy-syntax .token.doctype,
-.cy-syntax .token.cdata,
-.diff .token.comment,
-.diff .token.prolog,
-.diff .token.doctype,
-.diff .token.cdata {
-  color: var(--vscode-charts-green, #6a9955);
-  font-style: italic;
-}
-
-.cy-syntax .token.function,
-.diff .token.function {
-  color: var(--vscode-debugTokenExpression-string, #dcdcaa);
-}
-
-.cy-syntax .token.class-name,
-.cy-syntax .token.maybe-class-name,
-.diff .token.class-name,
-.diff .token.maybe-class-name {
-  color: var(--vscode-chat-editedFileForeground, #4ec9b0);
-}
-
-.cy-syntax .token.variable,
-.cy-syntax .token.parameter,
-.cy-syntax .token.property,
-.cy-syntax .token.attr-name,
-.diff .token.variable,
-.diff .token.parameter,
-.diff .token.property,
-.diff .token.attr-name {
-  color: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
-}
-
-.cy-syntax .token.builtin,
-.cy-syntax .token.constant,
-.cy-syntax .token.namespace,
-.diff .token.builtin,
-.diff .token.constant,
-.diff .token.namespace {
-  color: var(--vscode-scmGraph-foreground4, #4ec9b0);
-}
-
-.cy-syntax .token.boolean,
-.cy-syntax .token.null,
-.cy-syntax .token.symbol,
-.diff .token.boolean,
-.diff .token.null,
-.diff .token.symbol {
-  color: var(--vscode-debugTokenExpression-boolean, #4e94ce);
-}
-
-.cy-syntax .token.regex,
-.diff .token.regex {
-  color: var(--vscode-charts-red, #d16969);
-}
-
-.cy-syntax .token.annotation,
-.cy-syntax .token.decorator,
-.cy-syntax .token.important,
-.diff .token.annotation,
-.diff .token.decorator,
-.diff .token.important {
-  color: var(--vscode-editorCodeLens-foreground, #c9b299);
-}
-
-.cy-syntax .token.tag,
-.diff .token.tag {
-  color: var(--vscode-symbolIcon-constructorForeground, #4ec9b0);
-}
-
-.cy-syntax .token.selector,
-.cy-syntax .token.selector-class,
-.cy-syntax .token.selector-id,
-.cy-syntax .token.selector-pseudo-class,
-.cy-syntax .token.selector-pseudo-element,
-.diff .token.selector,
-.diff .token.selector-class,
-.diff .token.selector-id,
-.diff .token.selector-pseudo-class,
-.diff .token.selector-pseudo-element {
-  color: var(--vscode-chat-editedFileForeground, #d7ba7d);
-}
-
-.cy-syntax .token.entity,
-.cy-syntax .token.url,
-.diff .token.entity,
-.diff .token.url {
-  color: var(--vscode-textLink-foreground, #4e94ce);
-}
-`;
-
 // Mirrors the shared "find in output" styling that highlightText() applies to
 // plain-text rows so markdown and non-markdown rows use the same VS Code
 // editor.findMatch palette.
@@ -323,7 +199,7 @@ function injectStyle(id: string, cssText: string): void {
 }
 
 export function injectSyntaxHighlightStyles(): void {
-  injectStyle("cy-syntax-theme", SYNTAX_TOKEN_STYLES);
+  injectStyle("cy-syntax-theme", buildSyntaxTokenStyles());
 }
 
 export function injectFindHighlightStyles(): void {
