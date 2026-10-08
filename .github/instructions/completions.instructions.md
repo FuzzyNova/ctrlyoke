@@ -40,6 +40,12 @@ If you add a new trigger or reference form, update all of these together:
 **The injection must never consume the key line.** VS Code's YAML grammar is `while`-based: the `- ` and `key:` of a line push sequence/mapping frames, and a rule that swallows them leaves every later line scoped as a multi-line plain scalar. So the rules start from a fixed-width lookbehind on `prompt: ` and consume nothing before the value, and the block-scalar rule is a copy of the YAML 1.2 grammar's own (same `while`s) with markdown patterns added. The markdown grammar's heading rule allows only three columns of indent, so the injection carries its own. `promptMarkdownGrammar.integration.test.ts` reads real tokens and is what notices a VS Code YAML grammar change.
 </promptMarkdownGrammar>
 
+<workflowFileCompletions>
+`WorkflowFileCompletionCore.ts` (`getWorkflowFileCompletions`) turns a `WorkflowLocation` plus the parsed document (`parseWorkflowDocumentRoot`) into key and value `PlainCompletionItem`s and the range they replace. It is pure; the host supplies dynamic lists through `WorkflowValueDataSource` and routes prompt text, script text, permission, branch and path completions itself (the core returns nothing for those roles). Keys come from the generated outline filtered by the document, never from a hand list: a step with no `prompt`/`script`/`type`/`parallel` yet is undecided and gets the union, and a root's single-step and multi-step keys are filtered by what the file already contains.
+
+Multi-line key inserts are re-indented to the key's column in the core, because CodeMirror does not adjust snippets the way VS Code does. Hand-authored text goes in `WorkflowPropertySnippets.ts`; a key whose meaning differs per object belongs in `WORKFLOW_KIND_PROPERTY_SNIPPETS`, and `getWorkflowPropertySnippet(objectKind, key)` is the only lookup. Do not write `onPass`/`onFail` detail text by hand: the allowed actions differ per object, so the detail comes from that object's outline enum. Step numbers for `priorContext`/`sessionId` are counted after parallel groups are flattened, matching the loader. JSON string escaping for inserted text is `escapeJsonStringFragment` (`src/utils/JsonStringEscape.ts`) for every host.
+</workflowFileCompletions>
+
 <promptCompletionProvider>
 `PromptCompletionProvider` is intentionally context-gated:
 - JSON/JSONC: only inside `"prompt"` strings, plus model completions inside `"model"` strings

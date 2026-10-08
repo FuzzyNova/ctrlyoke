@@ -102,11 +102,11 @@ export function getTextRole(
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function valueAt(root: unknown, path: WorkflowPath): unknown {
+export function valueAt(root: unknown, path: WorkflowPath): unknown {
   let node = root;
   for (const segment of path) {
     if (Array.isArray(node) && typeof segment === "number") {
@@ -121,7 +121,7 @@ function valueAt(root: unknown, path: WorkflowPath): unknown {
 }
 
 /** How many leading segments address a step (0 = the workflow root itself). */
-function stepPrefixLength(path: WorkflowPath): number {
+export function stepPrefixLength(path: WorkflowPath): number {
   if (path[0] === PROMPT_PROPERTIES.FINAL_STEP) return 1;
   if (path[0] === PROMPT_PROPERTIES.STEPS && typeof path[1] === "number") {
     return path[2] === PROMPT_PROPERTIES.PARALLEL && typeof path[3] === "number"

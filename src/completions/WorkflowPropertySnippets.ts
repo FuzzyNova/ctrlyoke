@@ -1,10 +1,21 @@
-import { PROMPT_PROPERTIES, STEP_TYPES } from "../types/DashboardConstants";
+import {
+  PROMPT_PROPERTIES,
+  STEP_TYPES,
+  WORKFLOW_OBJECT_KINDS,
+  type WorkflowObjectKind,
+} from "../types/DashboardConstants";
 
 /**
  * Editorial completion polish for a workflow key. The generated
  * `WorkflowSchemaOutline` owns which keys exist and what they accept; this
  * only adds the short detail line, the long documentation and the insertion
  * snippet. A key with no entry here is still offered, with outline data.
+ *
+ * `documentation` is a fallback: completion shows the schema's own
+ * description when the outline has one. Keys that mean different things in
+ * different objects (`script`, `onPass`, `onFail`) are keyed by object kind in
+ * `WORKFLOW_KIND_PROPERTY_SNIPPETS`; look snippets up with
+ * `getWorkflowPropertySnippet`.
  */
 export interface WorkflowPropertySnippet {
   readonly detail?: string;
@@ -49,9 +60,9 @@ export const WORKFLOW_PROPERTY_SNIPPETS: Readonly<
     insertSnippet: `${PROMPT_PROPERTIES.MODEL}: `,
   },
   [PROMPT_PROPERTIES.AGENT]: {
-    detail: "Path to .agent.md custom agent file",
+    detail: "Custom agent name",
     documentation:
-      "Path to a custom agent definition (`.agent.md`) used for this step.",
+      "Name of a custom agent (without the `.agent.md` extension) attached to this step.",
     insertSnippet: `${PROMPT_PROPERTIES.AGENT}: `,
   },
   [PROMPT_PROPERTIES.SKILLS]: {
@@ -80,7 +91,7 @@ export const WORKFLOW_PROPERTY_SNIPPETS: Readonly<
   [PROMPT_PROPERTIES.HOOKS]: {
     detail: "Pre/post execution hooks",
     documentation: "User-defined hooks executed before and after this step.",
-    insertSnippet: `${PROMPT_PROPERTIES.HOOKS}:\n  `,
+    insertSnippet: `${PROMPT_PROPERTIES.HOOKS}:\n  - event: stop\n    command: `,
   },
   [PROMPT_PROPERTIES.END_CONDITION]: {
     detail: "Validation script run after AI response",
@@ -137,15 +148,48 @@ export const WORKFLOW_PROPERTY_SNIPPETS: Readonly<
     insertSnippet: `${PROMPT_PROPERTIES.IGNORE_CASE}: `,
   },
   [PROMPT_PROPERTIES.ON_PASS]: {
-    detail: "Action on script pass: continue | stopWorkflow",
-    documentation:
-      "What to do when the script passes. `continue`: advance the queue (default). `stopWorkflow`: halt execution.",
     insertSnippet: `${PROMPT_PROPERTIES.ON_PASS}: `,
   },
   [PROMPT_PROPERTIES.ON_FAIL]: {
-    detail: "Action on script fail: continue | stopWorkflow",
-    documentation:
-      "What to do when the script fails. `stopWorkflow`: halt execution (default). `continue`: log a warning and advance the queue.",
     insertSnippet: `${PROMPT_PROPERTIES.ON_FAIL}: `,
   },
 };
+
+/**
+ * Overrides for keys whose meaning depends on the owning object. The bare table
+ * above applies to a kind with no entry here. `onPass`/`onFail` accept
+ * different actions per object, so they carry no detail text: completion
+ * builds it from the object's own outline enum.
+ */
+export const WORKFLOW_KIND_PROPERTY_SNIPPETS: Readonly<
+  Partial<
+    Record<
+      WorkflowObjectKind,
+      Readonly<Record<string, WorkflowPropertySnippet>>
+    >
+  >
+> = {
+  [WORKFLOW_OBJECT_KINDS.END_CONDITION]: {
+    [PROMPT_PROPERTIES.SCRIPT]: {
+      detail: "Validation script run after the AI response (required)",
+      insertSnippet: `${PROMPT_PROPERTIES.SCRIPT}: `,
+    },
+  },
+  [WORKFLOW_OBJECT_KINDS.PRE_CONDITION]: {
+    [PROMPT_PROPERTIES.SCRIPT]: {
+      detail: "Gate script run before the prompt (required)",
+      insertSnippet: `${PROMPT_PROPERTIES.SCRIPT}: `,
+    },
+  },
+};
+
+/** The snippet for `key` in an `objectKind` object: the kind's override over the bare entry. */
+export function getWorkflowPropertySnippet(
+  objectKind: WorkflowObjectKind,
+  key: string
+): WorkflowPropertySnippet {
+  return {
+    ...WORKFLOW_PROPERTY_SNIPPETS[key],
+    ...WORKFLOW_KIND_PROPERTY_SNIPPETS[objectKind]?.[key],
+  };
+}

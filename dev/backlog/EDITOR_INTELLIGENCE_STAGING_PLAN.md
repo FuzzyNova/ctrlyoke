@@ -1,7 +1,7 @@
 # Editor Intelligence Staging Plan
 
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
-**F1b**, the follow-up the Wave 1 review added. In Wave 2, **B and M4 are done**; F3, F0 and
+**F1b**, the follow-up the Wave 1 review added. In Wave 2, **B, M4 and F3 are done**; F0 and
 D2 are not started. This plan only orders the work. The design lives in the three plans it
 stages.
 
@@ -30,6 +30,7 @@ it.
 | F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                                                                                        |
 | B               | **Done** (2026-10-08) | VS Code links and completions skip code. `src/completions/PromptCodeRanges.ts` runs `findCodeRanges` over each `getWorkflowTextSpans` span and maps back; `PromptLinkProvider` filters its links, `PromptCompletionProvider` returns nothing inside code. Bug moved to `dev/bugs/implemented/`. |
 | M4              | **Done** (2026-10-08) | `scripts/generate-prompt-markdown-injection.mjs` writes `syntaxes/ctrlyoke-prompt-markdown.injection.json` from `WORKFLOW_TEXT_FIELDS`. Details and the YAML-grammar gotcha in plan M's Phase 4 entry.                                                                                          |
+| F3              | **Done** (2026-10-08) | `WorkflowFileCompletionCore`: key and value items, `WorkflowValueDataSource`, document-aware step numbers and effective-harness models, per-object snippets, shared JSON escape. Details in plan F's Phase 3 entry.                                                                             |
 | Everything else | Not started           |                                                                                                                                                                                                                                                                                                 |
 
 ### Wave 1 review (2026-10-08)
