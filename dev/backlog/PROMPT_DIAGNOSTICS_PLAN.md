@@ -65,7 +65,8 @@ These were verified against `src/` on 2026-10-08.
 
 2. **The building blocks underneath are already shared and pure.**
    - Token scanners: `findInlinePriorContextRefs`, `findConditionOutputRefs`,
-     `findUnknownConditionOutputFields`, `findContextReferenceMatches` (`utils/atomicReferences.ts`).
+     `findUnknownConditionOutputFields`, `findContextReferenceMatches` (were in the webview's
+     `utils/atomicReferences.ts`; Phase 1 moved them to `src/utils/PromptReferenceScanner.ts`).
    - The literal rule: `findCodeRanges` in `src/utils/FileReferenceParser.ts`.
    - Some of these are webview utilities over shared `src/utils/` parsers. The extraction
      moves the rule logic onto the shared side so both hosts call it.
@@ -94,26 +95,29 @@ These were verified against `src/` on 2026-10-08.
 
 ### Shared rules: `src/utils/PromptDiagnosticRules.ts`
 
-A pure module that the webview can import: no `vscode`, no `fs`.
+A pure module that the webview can import: no `vscode`, no `fs`. (It is built; see "Phase 1
+as built" for the exact exports.)
 
 - `getPromptDiagnostics(text, context): PromptDiagnostic[]` runs the synchronous rules (prior
   context, condition output) over the **whole** text.
-- `getReferenceDiagnostics(text, context, resolve): Promise<PromptDiagnostic[]>` runs the
-  reference rules. `resolve` is injected:
+- `getReferenceDiagnostics(text, resolve): Promise<PromptDiagnostic[]>` runs the reference
+  rules. They don't depend on workflow position, so they take no context. `resolve` is
+  injected:
   - the webview passes the `VALIDATE_CONTEXT_REFS` round trip
   - VS Code passes `PromptEditorSupportService.validateContextReference`
-- `context` is `{ stepIndex, stepCount, hasFinalStep, hasPreCondition, hasEndCondition,
-field }`, where `field` is `PROMPT` or `RETRY_PROMPT`.
-- `PromptDiagnostic` is `{ from, to, severity, code, message, detail? }`.
+- `context` (`PromptDiagnosticContext`) is `{ stepIndex, stepCount, hasFinalStep,
+hasPreCondition, hasEndCondition, field }`, where `field` is a `PROMPT_DIAGNOSTIC_FIELDS`
+  value (`PROMPT` or `RETRY_PROMPT`). No rule reads `stepIndex` or `hasEndCondition` yet.
+- `PromptDiagnostic` is `{ from, to, severity, code, message, detail?, replacements? }`.
   - `code` is a constant in `PROMPT_DIAGNOSTIC_CODES` (`DashboardConstants.ts`), e.g.
-    `REFERENCE_UNRESOLVED`, `EXPANSION_SUPPRESSED_IN_CODE`, `PRIOR_CONTEXT_STEP_MISSING`,
-    `CONDITION_FIELD_UNKNOWN`. Both hosts can then filter, test and map severity by code
-    instead of by message text.
-  - `detail` carries the reference text that the CodeMirror adapter renders on its own line
-    today.
-- Messages move into the module **verbatim**, so the dashboard's output doesn't change.
-- Code ranges come from `findCodeRanges` inside the module, never from the caller. That keeps
-  one definition of literal text (the markdown plan's parity rule).
+    `UNRESOLVED_REFERENCE` or `prompt.prior-context.step-missing`. Both hosts can then filter,
+    test and map severity by code instead of by message text.
+  - `detail` carries the reference text that the CodeMirror adapter renders on its own line.
+  - `replacements` carries quick-fix text ("Change to ...").
+- Messages moved into the module **verbatim**, so the dashboard's output didn't change.
+- Code ranges come from `findCodeRanges` (through `PromptReferenceScanner.getCodeRanges`)
+  inside the module, never from the caller. That keeps one definition of literal text (the
+  markdown plan's parity rule).
 
 ### CodeMirror adapter
 
@@ -137,7 +141,12 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
   - `.prompt.md`: the body after frontmatter.
   - `.ctrlyoke.yaml`/`.yml`/`.json`: every `PROMPT_TEXT` range from `getWorkflowLocation`,
     with offsets mapped back through the decoded value. Block scalars are dedented and JSON
-    strings decoded, the same mapping the bug fix needs. Put it in one shared helper.
+    strings decoded, the same mapping the bug fix needs. That shared helper is
+    `WorkflowPromptRanges`, from the file support plan's Phase 1b.
+- **Field mapping:** `prompt` maps to `PROMPT_DIAGNOSTIC_FIELDS.PROMPT`; both `retryPrompt`
+  and `passRetryPrompt` map to `RETRY_PROMPT`. The schema allows `$endCondition:` in
+  `passRetryPrompt` too, and `PROMPT_DIAGNOSTIC_FIELDS` has no separate value for it, so
+  mapping it to `PROMPT` would wrongly flag every `$endCondition:` there.
 - **Severity:** error → Error, warning → Warning, info → Information. The `$previous:N` cap
   stays Information.
 - **Trust:** `validateContextReference` applies trust and containment policy. A reference
@@ -170,7 +179,8 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
    - The provider, its triggers and severity mapping, registered in `extension.ts` on the same
      file predicate (`getCtrlYokeFileKind`) as the completion and link providers.
    - Start with `.prompt.md`, which needs only the frontmatter split. Workflow-file prompt
-     ranges follow once the file support plan's Phase 1 (`getWorkflowLocation`) exists.
+     ranges need the file support plan's Phase 1b (`WorkflowPromptRanges`); Phase 1 alone
+     answers only one cursor position at a time and returns undecoded spans.
    - Tests: unit tests with a stubbed resolver. Add an extension-host integration test that
      opens a fixture with a missing file, a backticked existing file and `$step:9`, and checks
      the collection's diagnostics.
@@ -200,9 +210,23 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
   runtime context-preparation codes) and use its dotted style, e.g.
   `prompt.prior-context.step-missing`. The unresolved-reference rule reuses
   `UNRESOLVED_REFERENCE`. `PROMPT_DIAGNOSTIC_FIELDS` and `PROMPT_DIAGNOSTIC_SEVERITIES` are new.
-- Linting now scans the whole document rather than the visible ranges.
-- Tests: characterization tests in `CodeMirrorEditor.test.tsx` (passed unchanged across the
-  extraction) and `src/test/unit/PromptDiagnosticRules.test.ts`.
+- Other exports: `getPriorContextDiagnostics`, `getConditionOutputDiagnostics` (the two halves
+  of `getPromptDiagnostics`), `ContextReferenceResolver`, `ContextReferenceValidationResult`
+  (moved here; `CodeMirrorEditor.tsx` re-exports it), `IdentifiedContextReference`,
+  `ResolvedPromptReference` and `PriorContextRefCheck`.
+- The CodeMirror adapter drops `code` when mapping to a CodeMirror `Diagnostic`.
+- Linting now scans the whole document rather than the visible ranges, so every reference
+  goes to the host on each lint pass.
+- **Cleanups left for D2** (it is the next consumer, so tidy these as it lands):
+  - `PROMPT_DIAGNOSTIC_SEVERITIES` has the same values as `COMPATIBILITY_DIAGNOSTIC_SEVERITIES`,
+    which the runtime's `CliPromptPreparer` already uses with the same codes. Fold the new one
+    into the existing one.
+  - `PROMPT_DIAGNOSTIC_FIELDS` repeats `"prompt"`/`"retryPrompt"` literals instead of reusing
+    `PROMPT_PROPERTIES.PROMPT` and `END_CONDITION_PROPERTIES.RETRY_PROMPT`.
+  - `getCodeRanges` is a pass-through over `findCodeRanges`.
+- Tests: characterization tests in `CodeMirrorEditor.test.tsx` (verified to pass against the
+  pre-extraction code too) and `src/test/unit/PromptDiagnosticRules.test.ts`, which covers
+  every code. Not covered: the tooltip's `detail` line and the "Change to" actions.
 
 ## Open questions
 

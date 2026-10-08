@@ -40,7 +40,8 @@ Nothing on the VS Code side consults the shared literal-range rule.
 
 - `findCodeRanges` (`src/utils/FileReferenceParser.ts:73`) is the single source of truth for
   what is literal. Its only consumers are `FileReferenceParser.ts` itself (host expansion) and
-  the webview (`atomicReferences.ts` `getCodeRanges`, used throughout `CodeMirrorEditor.tsx`).
+  the shared prompt scanners (`src/utils/PromptReferenceScanner.ts` `getCodeRanges`, used by
+  `PromptDiagnosticRules.ts` and throughout `CodeMirrorEditor.tsx`).
 - `PromptLinkProvider.provideDocumentLinks` (`PromptLinkProvider.ts:59`) emits a link for every
   reference match.
 - `PromptCompletionProvider.shouldProvideCompletions` (`PromptCompletionProvider.ts:252`)
@@ -60,8 +61,11 @@ Nothing on the VS Code side consults the shared literal-range rule.
     dedented first, as the host's parser does, and offsets mapped back per line.
   - JSON prompt strings need decoding with an escape-aware offset map.
   - `.prompt.md` can be scanned after its frontmatter.
-  - Use `getWorkflowLocation` from `WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md` if it has
-    landed. Otherwise use a small block-scalar extractor that plan's Phase 1 later absorbs.
+  - The file support plan's Phase 1 has landed (`src/completions/WorkflowDocumentLocation.ts`).
+    Its `valueRange` is the raw scalar content, not decoded text, and it answers one cursor
+    position at a time. The decoded prompt ranges come from the shared `WorkflowPromptRanges`
+    helper that the staging plan schedules at the start of Wave 2, which D2 uses too. Don't
+    write a private extractor.
 - **Warning (follow-up):** the dashboard's warning reaches VS Code through
   [`PROMPT_DIAGNOSTICS_PLAN.md`](../../backlog/PROMPT_DIAGNOSTICS_PLAN.md) Phase 2, a
   prompt-file diagnostics provider fed by the shared rules. That provider is new

@@ -1,8 +1,7 @@
 # Prompt Editor Markdown Highlighting Plan
 
-**Status (2026-10-08):** Phase 0 is done. Phases 1–4 are proposed.
-**Status (2026-10-08):** Phase 1 (single-source palette) is implemented. Phases 0, 2, 3 and 4
-are not started.
+**Status (2026-10-08):** Phases 0 (readable code ranges) and 1 (single-source palette) are
+done. Phases 2, 3 and 4 are not started.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -45,10 +44,12 @@ does, and fenced code becomes readable, highlighted code instead of grey italics
 These were verified against `src/` on 2026-10-07.
 
 1. **The prompt editor has no language today.** It builds on `minimalSetup` with no
-   `LanguageSupport`. The grey styling comes from `createCodeRangeDecorationExtension()`, which
-   marks every range from `getCodeRanges()` with the `.cm-code-range` theme rule.
+   `LanguageSupport`. Code styling comes from `createCodeRangeDecorationExtension()`, which
+   marks every range from `getCodeRanges()` with the `.cm-code-range` theme rule (grey italics
+   until Phase 0 restyled it).
 
-2. **Code ranges carry meaning beyond styling.** `getCodeRanges()` wraps `findCodeRanges` from
+2. **Code ranges carry meaning beyond styling.** `getCodeRanges()`
+   (`src/utils/PromptReferenceScanner.ts`) wraps `findCodeRanges` from
    `src/utils/FileReferenceParser.ts`. The host uses the same function to decide that references
    inside backticks or a fence are **not expanded** (the "Writing references literally" rule in
    `docs/workflows/context-files.md`). The prompt editor uses it in about eight places to skip
@@ -86,7 +87,8 @@ These were verified against `src/` on 2026-10-07.
    (purple)** in Default Dark. The intended `#569cd6` blue is only the fallback, and the
    fallback never applies because the variable always exists. Both copies use dark-only hex
    fallbacks, so a missing variable in a light theme picks a dark-theme colour. This plan
-   single-sources the palette and fixes those choices in one place.
+   single-sources the palette and fixes those choices in one place. _(Fixed by Phase 1:
+   `SYNTAX_TOKEN_STYLES` is gone, and both outputs are generated from `utils/syntaxPalette.ts`.)_
 
 5. **Streamdown is a renderer, not a highlighter.** The output pane renders markdown to HTML
    (`MarkdownText.tsx`, streamdown styles in `globals.css`). Two pieces are reusable here: the
@@ -142,21 +144,25 @@ These were verified against `src/` on 2026-10-07.
 ### One palette, three consumers
 
 - Define the token palette once, as CSS custom properties in `globals.css`.
-- Name them `--cy-syntax-<role>`. Code roles: keyword, string, number, comment, function, type,
-  variable, boolean, regexp, tag, url. Markdown roles: heading, strong, emphasis,
-  strikethrough, inline-code, link-text, link-url, quote, list-marker, fence-marker,
-  fence-info, formatting-mark.
+- Name them `--cy-syntax-<role>`. As built in Phase 1, the roles are `SYNTAX_ROLES` in
+  `utils/syntaxPalette.ts`: the code roles keyword, control-keyword, string, number, comment,
+  function, type, variable, property, attribute, selector, boolean, regexp, tag and url, and
+  the markdown roles heading, strong, emphasis, inline-code, quote and list-marker. Link text
+  reuses `string` and link URLs reuse `url`; strikethrough is style-only. Fence markers, fence
+  info and formatting marks have no role, because VS Code's default themes leave them
+  uncoloured.
 - Each one resolves to a real VS Code variable where one exists (fact 3). Otherwise it
   resolves to a per-theme fallback, set under `body.vscode-dark`, `body.vscode-light`,
   `body.vscode-high-contrast` and `body.vscode-high-contrast-light`, never one dark hex for all
   themes.
-- Three consumers read the same variables:
-  - `SYNTAX_TOKEN_STYLES` (output code blocks)
-  - the workspace editor's `HighlightStyle`
-  - the new prompt-editor markdown `HighlightStyle`, built from one
-    `createCtrlYokeHighlightStyle()` that maps Lezer `tags` to the variables
+- Three consumers read the same variables, all generated from one `SYNTAX_ROLE_SPECS` table:
+  - output code blocks: `buildSyntaxTokenStyles()` (refractor CSS, injected by
+    `injectSyntaxHighlightStyles()`)
+  - the workspace editor's `HighlightStyle`: `createCtrlYokeHighlightStyle()`
+  - the prompt editor's markdown highlighting (Phase 2): the same
+    `createCtrlYokeHighlightStyle()`
 
-  This removes the duplicate in fact 4. Correct the keyword mapping while consolidating.
+  This removed the duplicate in fact 4 and corrected the keyword mapping.
 
 - The fallback values come from VS Code's built-in themes: `dark_vs.json`/`dark_plus.json` and
   their light counterparts in `microsoft/vscode`, `extensions/theme-defaults/themes/`. Verified
@@ -225,8 +231,8 @@ These were verified against `src/` on 2026-10-07.
 ### Where else it applies
 
 - **Workspace editor, `.prompt.md`.** `getLanguageExtension` already gives `.md` files
-  `markdown()`. Switch it to the same configured markdown, with nested languages, and the
-  shared `HighlightStyle`, so a prompt looks the same in both editors.
+  `markdown()`, and since Phase 1 the shared `HighlightStyle`. Switch it to the same configured
+  markdown, with nested languages, so a prompt looks the same in both editors.
 - **YAML prompt values.** In `.ctrlyoke.yaml` opened in the workspace editor, a
   `prompt: |` block scalar is markdown. Use `parseMixed` on lang-yaml's block-literal nodes,
   limited to the `PROMPT_TEXT` ranges from the ctrlyoke file support plan's
@@ -264,27 +270,17 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
 
 ## Implementation phases
 
-1. **Phase 0: Readable code ranges (done 2026-10-08).** Ship this first, as it's small.
-   - As built: `.cm-code-range` now uses `--vscode-editor-font-family`, the normal foreground and
-     `--vscode-textPreformat-background` with a 3px radius. It applies to inline and fenced
-     ranges alike. Phase 2 replaces the shared background with the inline-only box and the
-     background-free fence described above. `createCodeRangeDecorationExtension` and
-     `createLinkDecorationExtension` are now exported for tests.
-   - Restyle `.cm-code-range` as in "Code ranges" above, using only existing VS Code variables.
-   - No parser change.
-   - Tests: no test asserts `.cm-code-range` today. Add one in `CodeMirrorEditor.test.tsx` that
-     checks the class still lands on inline and fenced ranges, and that no reference inside them
-     is decorated.
+1. **Phase 0: Readable code ranges.** **Done 2026-10-08.**
+   - `.cm-code-range` now uses `--vscode-editor-font-family`, the normal foreground and
+     `--vscode-textPreformat-background` with a 3px radius, using only existing VS Code
+     variables and no parser change. It applies to inline and fenced ranges alike. Phase 2
+     replaces the shared background with the inline-only box and the background-free fence
+     described in "Code ranges" above.
+   - `createCodeRangeDecorationExtension` and `createLinkDecorationExtension` are exported for
+     tests. `CodeMirrorEditor.test.tsx` checks the class lands on inline and fenced ranges and
+     that no reference inside them is decorated.
 
 2. **Phase 1: Single-source the palette.** **Done 2026-10-08.**
-   - Add the `--cy-syntax-*` variables with per-theme fallbacks.
-   - Point `SYNTAX_TOKEN_STYLES` and `createWorkspaceEditorHighlightExtension` at them through
-     `createCtrlYokeHighlightStyle()`.
-   - Fix the keyword mapping, and merge the language-name mapping into
-     `resolveCodeMirrorLanguage`.
-   - Tests: a vitest snapshot of the generated CSS and HighlightStyle spec. Check visually in
-     Default Dark, Default Light and one high-contrast theme, both in VS Code and in the hosted
-     browser with a theme snapshot.
    - **As built:**
      - `utils/syntaxPalette.ts` holds `SYNTAX_ROLES` and one `SYNTAX_ROLE_SPECS` table (role →
        Lezer tags + refractor token classes + font style). `createCtrlYokeHighlightStyle()`
@@ -311,15 +307,35 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
        only refractor until Phase 2's markdown configuration gives `QuoteMark`/`ListMark` their
        own tags.
      - Comments are no longer italic, matching the theme files.
+     - **Deliberate class remaps beyond the old copies:** refractor `builtin` and `namespace`
+       use the type colour and `constant` the variable colour; `annotation`/`decorator` use the
+       function colour and `important`/`entity` the keyword colour (all four were the old
+       `#c9b299`/link colour). New CodeMirror tags: `atom` (boolean), `operatorKeyword` and
+       `moduleKeyword` (keyword), `function(propertyName)`. `.md` files in the workspace editor
+       now get heading, bold and link colours. The `selector` role has no Lezer tags, so it
+       colours only refractor output. `tags.self` and `escape` are uncoloured, as before.
      - Tests: `test/utils/syntaxPalette.test.ts` covers inline snapshots of both generated
        outputs, every role defined for all four theme selectors in `globals.css`, the
        keyword-colour regression, tag-to-variable resolution, and `resolveCodeMirrorLanguage`.
-     - **Not yet done:** the visual check in VS Code and the hosted browser. Do it before or
-       alongside Phase 2.
+     - **Not yet done:** the visual check in VS Code (Default Dark, Default Light, one
+       high-contrast theme) and in the hosted browser with a theme snapshot. Do it before or
+       alongside Phase 2. In the hosted browser, check high-contrast light specifically: see
+       [`hosted-high-contrast-light-syntax-colours`](../bugs/backlog/hosted-high-contrast-light-syntax-colours.md).
 
 3. **Phase 2: Markdown in the prompt editor.**
-   - Add the `markdown()` compartment with GFM, lazy nested languages and the markdown roles of
-     the shared `HighlightStyle`.
+   - Add the `markdown()` compartment with GFM and lazy nested languages.
+   - **The markdown roles mostly exist already** (Phase 1 maps heading, strong, emphasis,
+     strikethrough, monospace, link and url). What's left: give `QuoteMark`, `ListMark` and
+     probably `HeaderMark` their own tags through the markdown config's `styleTags` (Lezer
+     tags every mark `processingInstruction`), then fill the empty `tags: []` of the `quote`
+     and `list-marker` entries in `SYNTAX_ROLE_SPECS`.
+   - **`codeLanguages` needs a wrapper around `resolveCodeMirrorLanguage`.** As built, that
+     function imports every language package statically and returns a new `LanguageSupport`
+     on each call. Phase 2 needs `LanguageDescription`s (or a memoised resolver) so nested
+     languages load lazily and are not rebuilt per fence, and it must take only the first word
+     of the info string (`ts title=a.ts` resolves to null today). Refractor-only aliases that
+     `LANGUAGE_ALIAS_MAP` lacks (`cxx`, `cc`, `webmanifest`) also resolve to null; add them if
+     they matter.
    - Raise ctrlyoke decorations to `Prec.high`, and make spellcheck exclude fence info strings
      and link URLs.
    - Tests:
@@ -337,7 +353,8 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      - a performance check on a ~25K-token prompt, where the typing-latency budget must hold
 
 4. **Phase 3: Workspace editor and YAML prompts.**
-   - `.prompt.md` gets the shared configuration.
+   - `.prompt.md` gets the shared markdown configuration with nested languages. It already
+     uses the shared `HighlightStyle` (Phase 1 did that for every `.md` file).
    - YAML `prompt:` block scalars get nested markdown, scheduled with the ctrlyoke file support
      plan's Phase 6.
 
@@ -345,10 +362,14 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
    land at any point.
    - Add `syntaxes/ctrlyoke-prompt-markdown.injection.json`, generated from
      `WORKFLOW_TEXT_FIELDS`, plus the `contributes.grammars` entry and the `.vscodeignore` line.
-   - If this phase lands before the ctrlyoke file support plan's Phase 1, it introduces the
-     prompt-field list as a constant itself, and that plan reuses it. Don't write a second
-     list.
-   - Generate the grammar in the build, with a drift check like the schema docs have.
+   - The prompt-field list is `WORKFLOW_TEXT_FIELDS` (`src/completions/WorkflowLocationTypes.ts`,
+     landed with the file support plan's Phase 1); take every `PROMPT_TEXT` key. Don't write a
+     second list. It is a TypeScript module and the other generators are plain `.mjs`
+     scripts, so the generator has to load it through the compiled output or a TS loader
+     (no `tsx` is installed; `esbuild` is).
+   - Generate the grammar in the build, with a drift check like the schema docs have
+     (`scripts/generate-workflow-schema-outline.mjs --check` in `check:docs` is the nearest
+     model).
    - Tests: an extension-host integration test in `src/test/integration/`. It opens a fixture
      `.ctrlyoke.yaml` and reads tokens with VS Code's `_workbench.captureSyntaxTokens` command,
      the one VS Code's own colorization tests use. Check that the command still exists when
@@ -366,7 +387,8 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      complete references inside them, though they're sent literally. Both providers must skip
      `findCodeRanges` ranges, computed on the decoded prompt value: dedent YAML block scalars
      and decode JSON strings. Phase 2's precedence rule applies here too: what looks literal
-     must behave literally. The fix and its tests are in the bug doc. The VS Code diagnostics
+     must behave literally. The fix and its tests are in the bug doc; its decoded prompt
+     ranges come from `WorkflowPromptRanges` (file support plan Phase 1b). The VS Code diagnostics
      provider that carries the suppressed-expansion warning is
      [`PROMPT_DIAGNOSTICS_PLAN.md`](PROMPT_DIAGNOSTICS_PLAN.md) Phase 2. It is not a blocker
      for this phase.

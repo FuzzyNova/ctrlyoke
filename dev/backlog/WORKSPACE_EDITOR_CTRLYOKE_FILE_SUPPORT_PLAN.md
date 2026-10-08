@@ -1,7 +1,10 @@
 # Workspace Editor ctrlyoke File Support Plan
 
 **Status (2026-10-08):** Phases 1 and 2 are implemented (see their entries under
-"Implementation phases"). Phases 0 and 3–7 are not started. _Refreshed 2026-10-08:_ the language intelligence plan
+"Implementation phases"). The Wave 1 review found bugs in both; Phase 1b fixes them and adds
+the decoded prompt-range helper Wave 2 needs. Phases 0, 1b and 3–7 are not started.
+_Refreshed 2026-10-08:_ the
+language intelligence plan
 shipped (`dev/implemented/`). Facts 2 and 9, "Editor integration" and "Coexistence with
 language servers" were re-audited against the merged code.
 
@@ -300,7 +303,7 @@ already use.
 
 - **Host-backed values** stay host-side and reuse existing requests rather than new ones:
   - `SCRIPT_TEXT` → `SCRIPT_COMPLETIONS_REQUEST`
-  - `toolPermissions.allow[]`/`deny[]` → `PERMISSION_COMPLETIONS_REQUEST`
+  - `toolPermissions.allowedTools[]`/`deniedTools[]` → `PERMISSION_COMPLETIONS_REQUEST`
   - `worktree` branch names → the branch completion helper
   - a prompt path → `REQUEST_COMPLETIONS` with `trigger: path`
 
@@ -352,8 +355,10 @@ source }])` for `workflowPropertySource`, `workflowValueSource` and `promptToken
 - **Lazy-load the YAML support.** The location module's YAML half, and the `yaml` package with
   it, is loaded with a dynamic `import()` the first time a `.ctrlyoke.yaml`/`.yml` file opens
   in the workspace editor. Vite puts it in its own chunk, so the dashboard's first paint never
-  pays for it. Until the chunk resolves, the indentation-scan fallback answers location
-  queries, so the first keystroke still gets completions. The VS Code host imports it
+  pays for it. Until the chunk resolves, an indentation-scan fallback answers location
+  queries, so the first keystroke still gets completions. As built in Phase 1, that scan lives
+  inside the YAML half and needs its parse tree, so Phase 4 must split a parser-free scan out
+  of it (or accept no YAML completions until the chunk loads). The VS Code host imports it
   statically.
 
 ### Atomic reference chips in YAML
@@ -455,11 +460,17 @@ Every phase lands with tests and leaves both editors working.
      in the facade). The kind, role and object-kind constants are in `DashboardConstants.ts`.
    - **`WorkflowLocation` shape:** `path` is the node under the cursor (for a new key not yet
      typed, the owning object). It adds `key` (nearest enclosing key) and `scalarStyle` (YAML) to
-     what the design listed. `valueRange` is the scalar _content_ (inside quotes, after a
-     block-scalar header), so a consumer never re-parses quoting.
+     what the design listed. `valueRange` is the **raw source span** of the scalar content
+     (inside quotes, after a block-scalar header). It is not decoded: escapes stay (`a\"b`,
+     `it''s`), and block bodies keep their indentation and line breaks with no chomping. On the
+     indentation-scan path it covers only the cursor line up to the cursor. Phase 1b adds the
+     decoded form.
+   - **`WORKFLOW_TEXT_FIELDS`** also lists root `prompt` and `script`, for single-step
+     workflows.
    - **Kinds:** `.prompt.json` is a `WORKFLOW_JSON` file, matching the existing
      `**/*.{prompt,ctrlyoke}.json` selector. `PromptLinkProvider` now matches it too; before, it
-     only checked `.ctrlyoke.json`.
+     only checked `.ctrlyoke.json`. **This is wrong** (`PromptFileParser` no longer loads
+     `.prompt.json`); Phase 1b fixes it.
    - **Language-server exclusion:** `lookupSession` returns the new `CTRLYOKE_FILE` reason.
      `resolveForPath`, `requestForPath` and `openWarmupDocument` also refuse ctrlyoke files, so no
      path can feed one to a server. `useLanguageIntelligence` needed no change: an unknown reason
@@ -473,7 +484,10 @@ Every phase lands with tests and leaves both editors working.
      chunk. Nothing in the webview imports these modules until Phase 4, so there is no chunk to
      check; do it there. `WorkflowDocumentLocation.ts` imports the YAML half statically for the
      Node and VS Code hosts; the webview must import `WorkflowLocationJson` directly and
-     `WorkflowLocationYaml` via `import()`.
+     `WorkflowLocationYaml` via `import()`. Two gaps for Phase 4, both from the module split:
+     the indentation scan lives inside `WorkflowLocationYaml.ts` (it needs `parsed.root`), so
+     it can't answer before the lazy chunk loads; and the `.prompt.md` handling lives in the
+     facade, which imports the YAML half statically, so markdown has no lazy-safe entry point.
    - **Scan not yet merged:** `YamlBlockScalarContext.ts` and
      `PromptPropertyCompletionProvider`'s `findPromptStepBlock` are still used by the VS Code
      providers. The new scan is a separate implementation, so for now there are two. Phase 7 moves
@@ -481,18 +495,6 @@ Every phase lands with tests and leaves both editors working.
    - **Tests:** `CtrlYokeFileKind.test.ts`, `LanguageIntelligenceHost.test.ts` and
      `WorkflowDocumentLocation.test.ts` in `src/test/unit/`. Fixtures use a `§` cursor marker,
      because `|` is also the YAML block-scalar header.
-   - Add `yaml` as a direct dependency. Keep the YAML half of the location module in its own
-     file so the webview can `import()` it lazily, and confirm with a bundle check that it
-     lands in a separate chunk.
-   - Add `getCtrlYokeFileKind` and its constants, and move `extension.ts` and
-     `PromptLinkProvider` onto it.
-   - Add the language-server exclusion in `LanguageIntelligenceHost.lookupSession` and its
-     test. See "Coexistence with language servers".
-   - Add `getWorkflowLocation` and `findRangeForPath` for YAML, JSON and Markdown, and move the
-     indentation-scan fallback in.
-   - Tests: fixture-driven Mocha tests in `src/test/unit/`, alongside
-     `YamlBlockScalarContext.test.ts`. Cover complete, half-typed and invalid documents, every
-     `objectKind`, parallel members, `finalStep`, flow vs block YAML, and JSON escapes.
 
 3. **Phase 2: `WorkflowSchemaOutline` and shared snippets.** **Done 2026-10-08.**
    Built as planned, with these specifics and deviations:
@@ -509,7 +511,10 @@ Every phase lands with tests and leaves both editors working.
      `endCondition`, `preCondition`, `toolPermissions`, `errorBehavior`, `hook`, `worktree`,
      `templateMeta`, `promptFileFrontmatter` (just `schemaVersion`). `vars` is omitted because it
      has no fixed keys; `promptFileBody` and `unknown` have no schema.
-   - **Resolution rules:** keys merge through `$ref`, `allOf`, `oneOf` and `anyOf`. A `$ref` with
+   - **Resolution rules:** keys merge through `$ref`, `allOf`, `oneOf` and `anyOf`, but the
+     first branch to define a key wins and later branches' enums are not merged (so root
+     `type` is `["prompt"]`; Phase 1b fixes it). An `enum` can hold suggested literals rather
+     than a closed set (`maxSteps` has `[-1]`), so never validate against it. A `$ref` with
      a sibling `description` takes the sibling (`worktree`, `maxSteps`). Forbidden keys come from
      `allOf` `not: { required: [key] }` branches, and a step also inherits `workflowStep`'s.
      Runtime-only keys (`_runtime`, `startedAt`, `definitionRevision`, `parallelGroups`) are a
@@ -524,13 +529,76 @@ Every phase lands with tests and leaves both editors working.
    - **Not yet used:** `valueKind`, `enum`, `default` and `forbiddenKeys` have no consumer until
      Phase 3.
 
-4. **Phase 3: `WorkflowFileCompletionCore`.**
+4. **Phase 1b: Location and outline fixes, and decoded prompt ranges.** Added 2026-10-08 after
+   the Wave 1 review. It lands first in Wave 2, because F3, B and D2 all build on it. Each bug
+   below was reproduced against the Phase 1/2 code.
+   - **YAML location bugs** (`WorkflowLocationYaml.ts`). Each leaves F3 with no key
+     completions:
+     - The first key typed under a new nested mapping (`endCondition:\n      ret§`, and the
+       same for `worktree`, `errorBehavior`, `vars`, `_templateMeta`) parses as the parent's
+       plain value, so it returns `VALUE` in the parent instead of `KEY` in the child. The
+       `- pro` special case needs a mapping equivalent.
+     - An empty new item `- §` in `steps`, `parallel` or `hooks` returns `VALUE` in the root
+       (the half-typed-item check requires a string value; an empty item is `null`).
+     - A new key in a flow mapping (`- { prompt: "hi", §}`) falls through to the scan and is
+       misread.
+     - A flow sequence (`skills: [a, §]`) gives no item index, and `valueRange` covers
+       `[a, `.
+     - A trailing comment counts as prompt text (`prompt: hi # a §`).
+     - A cursor just after a closing quote (`prompt: "x"§`) counts as inside the string.
+   - **JSON location bugs** (`WorkflowLocationJson.ts`): a cursor just before the opening or
+     after the closing `"` returns `PROMPT_TEXT` with `jsonString: true`; a cursor inside a
+     `/* comment */` returns `KEY` instead of `NONE`; `findJsonRangeForPath` returns the whole
+     subtree for an array-item object or the root, where YAML clips to one line, so an error on
+     `/steps/0` would paint the whole step.
+   - **`.prompt.md` frontmatter:** the facade's regex duplicates `splitMarkdownFrontmatter`
+     (`src/utils/DiscoveryUtils.ts`) and disagrees with it on a leading BOM and an empty
+     `---\n---` block. Use the shared splitter.
+   - **File predicate:** drop `.prompt.json` (`PromptFileParser` no longer loads it), and make
+     `WorkflowFileDiscovery.ts` derive from the same table. It keeps its own suffix list and
+     also accepts the bare names `ctrlyoke.yaml`/`.yml`/`.json` and `prompt.md`, which the
+     predicate rejects. Decide once which list is right; the predicate and discovery must
+     agree.
+   - **Root classification:** a single-step `type: script` root is classified as
+     `SCRIPT_STEP`, whose outline forbids `worktree`, `maxSteps` and
+     `trustedExternalRoots`, which a root allows. Classify roots as `WORKFLOW_ROOT`, with the
+     prompt/script distinction carried separately.
+   - **Outline generator:** merge a key's enum across `oneOf`/`anyOf` branches instead of
+     taking the first (root `type` must be `["prompt", "script"]`).
+   - **Constants:** `WORKFLOW_TEXT_FIELDS` and the YAML module hard-code `"retryPrompt"`,
+     `"passRetryPrompt"`, `"command"`, `"_templateMeta"` and a local `SCRIPT_STEP_TYPE`; use
+     `END_CONDITION_PROPERTIES`, `STEP_TYPES` and `PROMPT_PROPERTIES` (adding constants where
+     missing). `LanguageIntelligenceHost` calls `getCtrlYokeFileKind(viewerPath)` in four
+     places; make it one guard.
+   - **New shared helper, `WorkflowPromptRanges`** (pure, `src/completions/`). B, D2 and later
+     F5/F6 all need _every_ `PROMPT_TEXT` range in a document as decoded text with an offset
+     map back to the source; F1 only answers one cursor at a time and returns raw spans. It
+     returns, per prompt field, `{ path, field, decodedText, toSourceOffset(i) }`: YAML block
+     scalars dedented (so `findCodeRanges`' three-space fence rule holds) with chomping
+     applied, quoted scalars and JSON strings unescaped, and the `.prompt.md` body after
+     frontmatter. Build it on the parsers F1 already uses.
+   - Tests: a case for each bug above in `WorkflowDocumentLocation.test.ts`, coverage for the
+     `VARS`, `TEMPLATE_META`, `ERROR_BEHAVIOR` and `TOOL_PERMISSIONS` object kinds the Phase 1
+     suite missed, and a `WorkflowPromptRanges` suite covering a dedented block with an
+     indented fence, CRLF, escaped quotes, a JSON `\n`, and offsets mapped back to the source.
+
+5. **Phase 3: `WorkflowFileCompletionCore`.**
    - Key and value items, and the `WorkflowValueDataSource` interface.
    - Effective-harness model resolution, document-derived step numbers, and the JSON escape
      lifted from `CompletionHelpers`.
+   - **Things the Phase 1/2 API leaves to this phase:**
+     - The root outline mixes single-step and multi-step keys (`prompt`, `script` and `steps`
+       together). Filter by the document's mode.
+     - A new item directly under `steps` resolves to `promptStep`, so it must also offer the
+       `parallelGroup` and `scriptStep` keys.
+     - `WORKFLOW_PROPERTY_SNIPPETS` is keyed by bare key, but `onPass`, `onFail`, `mode` and
+       `script` mean different things in `scriptStep`, `endCondition` and `preCondition`.
+       Key snippets by object kind and key. Prefer the schema description over snippet
+       documentation where they disagree (the `agent` snippet says "Path to .agent.md"; the
+       schema says an agent name), and make the `hooks` snippet insert a list.
    - Tests: pure Mocha tests with a stub data source.
 
-5. **Phase 4: Workspace editor completions.**
+6. **Phase 4: Workspace editor completions.**
    - The `ctrlyokeFileSupport` compartment, and the three sources registered through language
      data next to `basicSetup` and the LSP compartment, with body-mounted tooltips.
    - A webview `WorkflowValueDataSource` built from the stores.
@@ -541,15 +609,18 @@ Every phase lands with tests and leaves both editors working.
      `nodeHostedServer.integration.test.ts` for a prompt-token request from a workflow-file
      context.
 
-6. **Phase 5: Diagnostics and hover.**
+7. **Phase 5: Diagnostics and hover.**
    - `VALIDATE_WORKFLOW_DOCUMENT` / `WORKFLOW_DOCUMENT_DIAGNOSTICS`, including the type
      definitions in `WebviewMessageTypes.ts` and the router entry.
    - A side-effect-free validate in `PromptFileParser`.
+   - An `instancePath` → `WorkflowPath` converter (numeric segments, `~1`/`~0` unescaping).
+     ajv's segments are strings, and `findRangeForPath(["steps", "0"])` silently falls back to
+     `steps`.
    - Lint rendering and outline hover.
    - Prompt-text lint through `PROMPT_DIAGNOSTICS_PLAN.md`'s CodeMirror adapter. That plan's
      Phase 1 has to land first.
 
-7. **Phase 6: Prompt-text polish.**
+8. **Phase 6: Prompt-text polish.**
    - Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md` bodies, gated by
      `ui.atomicContextReferences` and never in JSON. This includes the range limiter for
      `createAtomicReferenceExtension`.
@@ -562,7 +633,7 @@ Every phase lands with tests and leaves both editors working.
    - `$step:` items with step names, and `$endCondition:`/`$preCondition:` scoping.
    - `{{var}}` completions, adopted by the prompt editor too.
 
-8. **Phase 7: VS Code parity.** This can be done on its own schedule.
+9. **Phase 7: VS Code parity.** This can be done on its own schedule.
    - `PromptPropertyCompletionProvider` gains value completions and covers JSON through
      `WorkflowFileCompletionCore`, with a VS Code `WorkflowValueDataSource`.
    - `PromptCompletionProvider` gates on `getWorkflowLocation`. That adds `retryPrompt` and
@@ -571,7 +642,8 @@ Every phase lands with tests and leaves both editors working.
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 0–2 can land in any order (Phases 1 and 2 are done). Phase 4 needs 0, 1 and 3. The cross-plan order is in
+Phases 0–2 can land in any order (Phases 1 and 2 are done). Phase 1b needs 1 and 2. Phase 3
+needs 1b. Phase 4 needs 0, 1b and 3. The cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 
 ## Open questions
