@@ -766,6 +766,14 @@ full fidelity without user action.
 
 ### Standalone: servers must be warm for `#`
 
+**Review fix (2026-10-07):** `LspSymbolIndex` caches route representatives by
+the tracked-file snapshot, groups known extensions by language and root marker,
+and resolves custom extensions once per extension. Workspace-symbol requests
+query each resolved server/root once. Background resolution remains quiet when
+a server is unavailable, and VS Code symbol lookup continues when warm-up file
+discovery fails. Completion watcher invalidation shares the search walker's
+directory exclusions and ignores `.ctrlyoke/logs/**`.
+
 - **Opening a file isn't enough.** Starting servers on file open (see
   "Lifecycle") doesn't cover `#`, because `#` in the prompt editor never opens
   a workspace file.

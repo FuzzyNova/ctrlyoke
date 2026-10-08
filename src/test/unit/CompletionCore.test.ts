@@ -767,6 +767,24 @@ suite("VsCodeSymbolIndex completion golden", () => {
     assert.ok(opened[1].endsWith(path.join("src", "second.ts")));
   });
 
+  test("continues workspace symbol lookup when warm-up file discovery fails", async () => {
+    let queried = false;
+    Object.defineProperty(vscode.commands, "executeCommand", {
+      configurable: true,
+      value: ((command: string) => {
+        if (command === "vscode.executeWorkspaceSymbolProvider") queried = true;
+        return Promise.resolve([]);
+      }) as typeof originalExecuteCommand,
+    });
+    const index = new VsCodeSymbolIndex(async () => {
+      throw new Error("file discovery unavailable");
+    });
+
+    await index.workspaceSymbols("Widget", 10);
+
+    assert.strictEqual(queried, true);
+  });
+
   test("resolves multi-root viewer paths against their named root in regex fallback", async () => {
     const first = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-root-one-"));
     const second = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-root-two-"));
@@ -1071,6 +1089,47 @@ suite("VsCodeSymbolIndex completion golden", () => {
       assert.strictEqual(symbols[0].name, "Widget");
       assert.strictEqual(calls.filter((call) => call.startsWith(`${LSP_METHODS.WORKSPACE_SYMBOL}:`)).length, 2);
       assert.strictEqual(calls.filter((call) => call.startsWith(`${LSP_METHODS.WORKSPACE_SYMBOL_RESOLVE}:`)).length, 1);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves and queries one representative for many files of a language", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-routing-"));
+    const files = Array.from({ length: 96 }, (_, index) => `src/file-${index}.proto`);
+    let resolutions = 0;
+    let requests = 0;
+    let statusEvents = 0;
+    let emitStatus: ((event: { status: string }) => void) | undefined;
+    const host: LspSymbolQueryHost = {
+      startLanguages: async () => undefined,
+      openWarmupDocument: async () => undefined,
+      resolveForPath: async () => {
+        resolutions++;
+        return { id: "proto", languageId: "proto", rootPath: root };
+      },
+      requestForPath: async () => {
+        requests++;
+        return { descriptor: { capabilities: {} }, result: [] };
+      },
+      onStatusChanged: (listener) => {
+        emitStatus = (event) => {
+          statusEvents++;
+          listener(event);
+        };
+        return { dispose: () => undefined };
+      },
+    };
+    try {
+      const index = new LspSymbolIndex(root, async () => files, host, []);
+      await index.workspaceSymbols("Widget", 10);
+      await waitForCondition(() => resolutions > 0, "initial custom server warm-up");
+      await index.workspaceSymbols("Widget", 10);
+
+      assert.ok(resolutions <= 2, `expected O(languages × roots) resolution, got ${resolutions}`);
+      assert.strictEqual(requests, 1, "the resolved server should be queried once");
+      assert.strictEqual(statusEvents, 0, "a symbol query must not emit status events");
+      assert.ok(emitStatus, "the index should subscribe to lifecycle status");
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

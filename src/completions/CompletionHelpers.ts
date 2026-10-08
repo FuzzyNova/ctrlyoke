@@ -3,7 +3,10 @@ import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
 import { Log } from "../utils/Log";
 import { getGitTrackedFiles } from "../utils/GitUtils";
-import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
+import {
+  isSearchPathIgnored,
+  walkSearchFiles,
+} from "../utils/WorkspaceSearchFileWalker";
 import {
   getVsCodeNamedWorkspaceRoots,
   getVsCodeWorkspaceRoot,
@@ -104,7 +107,19 @@ export function initializeCompletionHelpers(
   });
   context.subscriptions.push({ dispose: unsubscribe });
   const watcher = vscode.workspace.createFileSystemWatcher("**/*");
-  const invalidate = (): void => clearFilesCache();
+  const invalidate = (uri: vscode.Uri): void => {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const relevant = folders.some((folder) => {
+      const relative = path.relative(folder.uri.fsPath, uri.fsPath);
+      return (
+        relative !== ".." &&
+        !relative.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relative) &&
+        !isSearchPathIgnored(relative)
+      );
+    });
+    if (relevant) clearFilesCache();
+  };
   context.subscriptions.push(
     watcher,
     watcher.onDidCreate(invalidate),

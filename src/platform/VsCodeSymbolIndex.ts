@@ -93,7 +93,16 @@ export class VsCodeSymbolIndex implements SymbolIndex {
     );
     if (families.length === 0) return;
 
-    const files = await this.getFiles();
+    let files: string[];
+    try {
+      files = await this.getFiles();
+    } catch (error) {
+      Log.warn(
+        "[Completions] Could not discover files for language-server warm-up; continuing with workspace symbols:",
+        error
+      );
+      return;
+    }
     const roots = getVsCodeNamedWorkspaceRoots();
     const primaryRoot = getVsCodeWorkspaceRoot();
     for (const family of families) {

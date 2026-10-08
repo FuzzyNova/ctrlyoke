@@ -221,13 +221,17 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       this.deps
     );
     if (!resolved) {
-      this.emitStatus({
-        id: String(
-          workspaceSettings.languageServers.use[languageId] ?? languageId
-        ),
-        rootPath,
-        status: LANGUAGE_SERVER_STATUSES.NOT_INSTALLED,
-      });
+      // Background lookups (completion warm-up and symbol queries) must stay
+      // quiet; status rows are refreshed by explicit catalog/manager actions.
+      if (promptForApproval) {
+        this.emitStatus({
+          id: String(
+            workspaceSettings.languageServers.use[languageId] ?? languageId
+          ),
+          rootPath,
+          status: LANGUAGE_SERVER_STATUSES.NOT_INSTALLED,
+        });
+      }
       return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
     }
     const key = this.serverKey(resolved.id, rootPath);

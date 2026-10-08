@@ -25,6 +25,24 @@ suite("ManagedLanguageServerBackend", () => {
     await backend.dispose();
   });
 
+  test("keeps background unresolved lookups quiet while explicit lookup reports status", async () => {
+    const backend = createBackend({ installed: false });
+    const statuses: string[] = [];
+    backend.onStatusChanged((event) => statuses.push(event.status));
+    try {
+      assert.deepStrictEqual(
+        await backend.resolveForPath("src/app.ts", roots, false),
+        { reason: "no server" }
+      );
+      assert.deepStrictEqual(statuses, []);
+
+      await backend.resolveForPath("src/app.ts", roots);
+      assert.deepStrictEqual(statuses, ["not installed"]);
+    } finally {
+      await backend.dispose();
+    }
+  });
+
   test("requires approval, remembers it, and asks again when executable fields change", async () => {
     let decisions = 0;
     const store = new Map<string, unknown>();
@@ -386,6 +404,7 @@ function createBackend(options: {
   children?: EventEmitter[];
   ignoreShutdown?: boolean;
   ignoreExit?: boolean;
+  installed?: boolean;
 } = {}): ManagedLanguageServerBackend {
   const state = options.store ?? new Map<string, unknown>();
   const child = () => {
@@ -411,7 +430,7 @@ function createBackend(options: {
     approvalStore: { get: <T>(key: string) => state.get(key) as T | undefined, update: async (key: string, value: unknown) => { state.set(key, value); } },
     interactionPort: options.interaction ?? { canPrompt: () => false, requestBatchApproval: async () => undefined, requestChoice: async () => undefined },
     isWorkspaceTrusted: () => options.trusted ?? true,
-    resolverDependencies: { fileExists: async () => true, resolveCommand: async (command, args) => ({ command, args, displayCommand: command, launcherKind: "direct" }) },
+    resolverDependencies: { fileExists: async () => options.installed !== false, resolveCommand: async (command, args) => ({ command, args, displayCommand: command, launcherKind: "direct" }) },
     spawnProcess: ((..._args: unknown[]) => { options.onSpawn?.(); return child() as never; }) as typeof import("child_process").spawn,
     setTimer: options.setTimer,
     clearTimer: options.clearTimer,
