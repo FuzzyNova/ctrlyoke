@@ -18,7 +18,10 @@ import {
  * Model options for every harness, `None` first. The dashboard's model
  * pickers and VS Code's workflow-file `model` completions read this one list.
  */
-export function buildHarnessModelOptions(): Record<string, CapabilitiesModel[]> {
+export function buildHarnessModelOptions(): Record<
+  string,
+  CapabilitiesModel[]
+> {
   const cliModelIds = getCliSupportedModelIdsSync();
   const hiddenModels = new Set(["copilot-fast"]);
 
