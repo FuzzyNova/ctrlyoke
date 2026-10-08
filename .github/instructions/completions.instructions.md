@@ -15,7 +15,7 @@ Prompt-file completion and navigation layer. This directory owns VS Code complet
 </architecture>
 
 <registration>
-`src/extension.ts` registers the same `PromptCompletionProvider` four times for `@`, `#`, `~`, and `$` on prompt files (the globs from `getCtrlYokeFileGlobs()`, plus the `prompt` language). `PromptLinkProvider` uses the same selector set.
+`src/extension.ts` registers the same `PromptCompletionProvider` once per trigger (`@`, `#`, `~`, `$`, `!`, `/`) on prompt files (the globs from `getCtrlYokeFileGlobs()`, plus the `prompt` language). `PromptLinkProvider` uses the same selector set.
 
 If you add a new trigger or reference form, update all of these together:
 
@@ -29,7 +29,7 @@ If you add a new trigger or reference form, update all of these together:
 <ctrlyokeFileDetection>
 `CtrlYokeFileKind.ts` is the single "is this a ctrlyoke file" predicate (`getCtrlYokeFileKind`) and the source of the VS Code globs (`getCtrlYokeFileGlobs`). Add a new workflow or prompt suffix there only; workflow discovery (`WorkflowFileDiscovery`), the secret registry scan and the bundle analyzer all call it, so a bare `ctrlyoke.yaml` or `prompt.md` (no stem) is deliberately not a workflow file anywhere. The Node language-server host imports it too: `LanguageIntelligenceHost` refuses ctrlyoke files (reason `CTRLYOKE_FILE`) so a generic YAML, JSON or Markdown server never attaches next to ctrlyoke's own support.
 
-`WorkflowDocumentLocation.ts` (`getWorkflowLocation`, `findRangeForPath`) answers "where is the cursor and which schema object owns it" for all three kinds. Prompt- and script-bearing fields are listed once in `WORKFLOW_TEXT_FIELDS` (`WorkflowLocationTypes.ts`); add a new text field there. Everything is pure (no `vscode`, no `fs`). Keep the YAML half in `WorkflowLocationYaml.ts` so the webview can `import()` it lazily; the facade imports it statically and is for the Node and VS Code hosts. The existing VS Code providers still use their own scanners until the file-support plan's Phase 7.
+`WorkflowDocumentLocation.ts` (`getWorkflowLocation`, `findRangeForPath`) answers "where is the cursor and which schema object owns it" for all three kinds. Prompt- and script-bearing fields are listed once in `WORKFLOW_TEXT_FIELDS` (`WorkflowLocationTypes.ts`); add a new text field there. Everything is pure (no `vscode`, no `fs`). Keep the YAML half in `WorkflowLocationYaml.ts` so the webview can `import()` it lazily; the facade imports it statically and is for the Node and VS Code hosts. Both VS Code completion providers gate on it; no provider keeps a private scanner.
 
 **Run prompt-text rules on decoded spans, never on the raw file.** `WorkflowLocation.valueRange` is a raw source span (escapes, block indentation and unchomped line breaks included). Anything that applies a prompt rule across a document (`findCodeRanges`, reference scanning, prompt lint, chips) takes `getWorkflowTextSpans()` (`WorkflowPromptRanges.ts`) instead: each span's `text` is the value exactly as the loader decodes it (dedented, folded, chomped, unescaped; a `.prompt.md` body trimmed), and `toSourceOffset()` maps a result back to the document. A YAML block body in the raw file is indented, so a fence inside it looks indented past CommonMark's three spaces and `findCodeRanges` misses it. `PromptCodeRanges.ts` (`getPromptCodeRanges`) is that rule applied to literal code: `findCodeRanges` over each span, mapped back to document offsets. `PromptLinkProvider` drops links inside it and `PromptCompletionProvider` returns nothing with the cursor inside it, because a reference in code is sent as text and never expanded. Non-ctrlyoke files are scanned whole only for the `markdown`/`prompt` languages. The decoders live in `WorkflowTextDecoding.ts` and are checked against the `yaml` parser's own value. An explicit indentation indicator (`|2`) counts from the parent node's column (the key's column for `  - prompt: |2`), not the header line's indent. On a mismatch the span carries the parser's text with `exact: false`, and its `toSourceOffset` is only approximate. No known layout mismatches any more, but a consumer that maps results back must still check `exact`: code ranges fall back to the raw source slice, VS Code lint skips the span, because a range on the wrong characters (a suppressed live reference, a misplaced squiggle) is worse than none.
 
@@ -49,14 +49,11 @@ Multi-line key inserts are re-indented to the key's column in the core, because 
 </workflowFileCompletions>
 
 <promptCompletionProvider>
-`PromptCompletionProvider` is intentionally context-gated:
-- JSON/JSONC: only inside `"prompt"` strings, plus model completions inside `"model"` strings
-- YAML/YML: only inside `prompt:` values, including block scalars
-- Markdown / `prompt` language: anywhere
+`PromptCompletionProvider` completes prompt tokens in prompt text only, decided by `getWorkflowLocation` for a ctrlyoke file (role `PROMPT_TEXT`: a step's `prompt`, `finalStep`, `retryPrompt`, `passRetryPrompt` and a `.prompt.md` body, never frontmatter, script text or comments) and by language for any other markdown / `prompt` document, which is prompt text throughout. The gate runs after the trigger is found, so ordinary typing never parses the file.
 
-For YAML, explicit replacement ranges are required; without `calculateCompletionRange()` the YAML extension suppresses completions. Keep `CompletionList(..., true)` for trigger-based completions even though VS Code may visually duplicate entries; `false` breaks live refresh for symbol filtering.
+For YAML, explicit replacement ranges are required; without them the YAML extension suppresses completions. Keep `CompletionList(..., true)` for trigger-based completions even though VS Code may visually duplicate entries; `false` breaks live refresh for symbol filtering.
 
-Model completions are JSON/JSONC-only and replace the entire quoted model value, sourced from `COPILOT_CLI_MODEL_IDS`/`COPILOT_CLI_MODEL_LABELS` in `ModelConstants.ts` — ctrlyoke doesn't query VS Code's Language Model API.
+`/` opens the ctrlyoke `/skill:` and `/mcp:` tokens (`getCtrlYokeSlashCompletions`, the same source as the dashboard). Unlike the other triggers its item text includes the trigger, so its range starts on the `/`, and it only fires at a line start or after whitespace (`findSlashTokenStart`), so `./` and `src/` never open the list.
 </promptCompletionProvider>
 
 <completionHelpers>
@@ -82,17 +79,13 @@ It tries `executeDocumentSymbolProvider` (exact name+range match, see `findDocum
 `CodeMirrorEditor`'s completion `apply` also seeds `symbolIconCache` synchronously, from the picked completion item's own (already-known) `kind`, before the round trip ever runs — this is what prevents the visible flash to `symbol-misc` in the common case of picking a `#sym:` completion. It cannot help a pasted or hand-typed reference, which has no completion item to draw a kind from; those still rely on the round trip above.
 </completionHelpers>
 
-<yamlWorkflowKeys>
-`PromptPropertyCompletionProvider` is narrowly scoped to YAML workflow editing:
-- only activates in `.ctrlyoke.yaml` / `.ctrlyoke.yml`
-- only offers keys inside `steps:` list items
-- branches on whether the current item contains `type: script`
-- also owns `type: prompt | script` enum-value completions
+<workflowFileCompletionProvider>
+`WorkflowFileCompletionProvider` is the VS Code host of `getWorkflowFileCompletions`: key and value completions for YAML, JSON and `.prompt.md` frontmatter, registered on every ctrlyoke glob with ` ` and `"` as triggers so a value list opens right after `key: ` or `"key": "`. It returns nothing for prompt text (that is `PromptCompletionProvider`'s), script text, comments and unknown objects. Its `WorkflowValueDataSource` reads the services the dashboard's pickers read: models come from `buildHarnessModelOptions()` (`utils/HarnessModelOptions.ts`, also what `WebviewSettingsSync` sends the webview, `None` dropped), the default harness from `ConfigurationUtils.getIntegrationMode()`. The data source is synchronous, so agents, skills, MCP servers and secret names are fetched before the call and only for the field under the cursor (discovery touches the file system). Insert text goes through `toVSCodeWorkflowCompletionItem` unescaped: the core already quotes JSON keys and values, while prompt-token items still go through `toVSCodeCompletionItem`, which JSON-escapes.
 
-Its prompt and script key sets come from the generated `WORKFLOW_SCHEMA_OUTLINE` (`src/types/generated/WorkflowSchemaOutline.ts`), so the provider no longer reads the schema file from disk. The outline is built from `schemas/workflow-schema.json` by `scripts/generate-workflow-schema-outline.mjs` (part of `npm run schema:update` and `precompile`; `check:docs` fails on drift). It records, per `WORKFLOW_OBJECT_KINDS` entry, the authorable keys with value kind, enum, default, description and `deprecated`, plus the keys the schema forbids there (`worktree`, `maxSteps`, `trustedExternalRoots` on steps). Runtime-only fields (`_runtime`, `startedAt`, `definitionRevision`, `parallelGroups`) are excluded in the generator's `RUNTIME_ONLY_KEYS`; a new object kind needs an entry in its `OBJECT_SOURCES`. A new schema property is offered automatically.
+Its key sets come from the generated `WORKFLOW_SCHEMA_OUTLINE` (`src/types/generated/WorkflowSchemaOutline.ts`), built from `schemas/workflow-schema.json` by `scripts/generate-workflow-schema-outline.mjs` (part of `npm run schema:update` and `precompile`; `check:docs` fails on drift). It records, per `WORKFLOW_OBJECT_KINDS` entry, the authorable keys with value kind, enum, default, description and `deprecated`, plus the keys the schema forbids there. Runtime-only fields are excluded in the generator's `RUNTIME_ONLY_KEYS`; a new object kind needs an entry in its `OBJECT_SOURCES`. A new schema property is offered automatically. Display details and insertion text are hand-authored in `WorkflowPropertySnippets.ts`, which is pure so both hosts can import it; a test fails if a snippet's key leaves the schema.
 
-Display details and insertion snippets are hand-authored in `WorkflowPropertySnippets.ts` (`WORKFLOW_PROPERTY_SNIPPETS`), which is pure so both hosts can import it; a test fails if a snippet's key leaves the schema.
-</yamlWorkflowKeys>
+Tests use `PromptDocumentStub` with a real ctrlyoke file name: an untitled `openTextDocument` has no ctrlyoke file kind, so both providers decline it.
+</workflowFileCompletionProvider>
 
 <referenceContracts>
 All emitted references must stay workspace-relative and use forward slashes. Paths with spaces are quoted; directory refs always keep a trailing slash because that is how ctrlyoke distinguishes structure-only attachment from file attachment.

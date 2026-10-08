@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
-import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
+import { WorkflowFileCompletionProvider } from "./completions/WorkflowFileCompletionProvider";
 import { getCtrlYokeFileGlobs } from "./completions/CtrlYokeFileKind";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { PromptDiagnosticsProvider } from "./completions/PromptDiagnosticsProvider";
@@ -46,7 +46,6 @@ import { LanguageIntelligenceHost } from "./server/lsp/LanguageIntelligenceHost"
 import { ManagedLanguageServerBackend } from "./server/lsp/ManagedLanguageServerBackend";
 import { createLanguageServerSettingsReaders } from "./server/lsp/LanguageServerSettingsAccess";
 import {
-  CTRLYOKE_FILE_KINDS,
   GIT_CHANGE_KINDS,
   HOST_KINDS,
   MESSAGE_TYPES,
@@ -727,27 +726,35 @@ export async function activate(context: vscode.ExtensionContext) {
         "$" // Trigger on $ character for prior-context references
       )
     );
-    Log.debug(
-      "[Extension] ctrlyoke: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, $, and ! triggers"
-    );
 
-    // Register property key completion provider for YAML workflow files.
-    // No trigger character — activates on demand to offer prompt item property keys,
-    // with context-aware branching based on type: script vs. AI prompt steps.
-    const promptPropertyCompletionProvider =
-      new PromptPropertyCompletionProvider();
-    const yamlWorkflowPatterns = getCtrlYokeFileGlobs([
-      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
-    ]).map((pattern) => ({ pattern }));
+    // Register / trigger for ctrlyoke /skill: and /mcp: tokens
     context.subscriptions.push(
       vscode.languages.registerCompletionItemProvider(
-        yamlWorkflowPatterns,
-        promptPropertyCompletionProvider
-        // No trigger character — VS Code invokes on Ctrl+Space or natural typing
+        promptFilePatterns,
+        promptCompletionProvider,
+        "/"
       )
     );
     Log.debug(
-      "[Extension] ctrlyoke: Registered property key completion provider for YAML workflow files"
+      "[Extension] ctrlyoke: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, $, /, and ! triggers"
+    );
+
+    // Register key and value completions for ctrlyoke workflow files (YAML, JSON and
+    // .prompt.md frontmatter). Space and quote re-trigger so a value list opens right
+    // after `key: ` or `"key": "`; elsewhere VS Code invokes it on Ctrl+Space or typing.
+    const workflowFileCompletionProvider = new WorkflowFileCompletionProvider(
+      () => webviewProvider.getSecretRegistryService()
+    );
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        getCtrlYokeFileGlobs().map((pattern) => ({ pattern })),
+        workflowFileCompletionProvider,
+        " ",
+        '"'
+      )
+    );
+    Log.debug(
+      "[Extension] ctrlyoke: Registered key and value completion provider for ctrlyoke workflow files"
     );
 
     // Register link provider for prompt files (enables Ctrl+Click navigation)

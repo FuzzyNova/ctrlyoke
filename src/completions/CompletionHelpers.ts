@@ -157,20 +157,20 @@ export function toVSCodeCompletionItem(
   range?: vscode.Range,
   document?: vscode.TextDocument
 ): vscode.CompletionItem {
-  const vscodeItem = new vscode.CompletionItem(
-    item.label,
-    toVSCodeCompletionItemKind(item.kind)
-  );
   const insertText = item.captureId
     ? CAPTURING_OUTPUT_PLACEHOLDER
     : item.insertText;
-  vscodeItem.insertText =
-    document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
-    document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
-      ? escapeJsonStringFragment(insertText)
-      : insertText;
-  vscodeItem.detail = item.detail;
-
+  const vscodeItem = toVSCodeWorkflowCompletionItem(
+    {
+      ...item,
+      insertText:
+        document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
+        document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
+          ? escapeJsonStringFragment(insertText)
+          : insertText,
+    },
+    range
+  );
   if (item.captureId) {
     vscodeItem.command = {
       command: VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,
@@ -178,6 +178,24 @@ export function toVSCodeCompletionItem(
       arguments: [item.captureId],
     };
   }
+  return vscodeItem;
+}
+
+/**
+ * Convert a workflow-file key or value completion. Unlike prompt-token items
+ * these arrive already escaped for their document (the core quotes JSON keys
+ * and values itself), so the insert text is used as given.
+ */
+export function toVSCodeWorkflowCompletionItem(
+  item: PlainCompletionItem,
+  range?: vscode.Range
+): vscode.CompletionItem {
+  const vscodeItem = new vscode.CompletionItem(
+    item.label,
+    toVSCodeCompletionItemKind(item.kind)
+  );
+  vscodeItem.insertText = item.insertText;
+  vscodeItem.detail = item.detail;
   if (item.documentation) {
     vscodeItem.documentation = new vscode.MarkdownString(item.documentation);
   }
