@@ -10,7 +10,9 @@ import {
   createAtomicReferenceExtension,
   createClickHandlerExtension,
   createConditionOutputLintExtension,
+  createCodeRangeDecorationExtension,
   createContextReferenceLintExtension,
+  createLinkDecorationExtension,
   createPriorContextLintExtension,
   createSlashTokenDecorationExtension,
   destroyOrphanedMouseSelection,
@@ -1193,6 +1195,63 @@ describe("CodeMirrorEditor orphaned mouse-selection guard", () => {
     expect(() =>
       destroyOrphanedMouseSelection({} as unknown as EditorView)
     ).not.toThrow();
+  });
+});
+
+describe("CodeMirrorEditor literal code ranges", () => {
+  function mountWithCodeRanges(doc: string) {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      doc,
+      extensions: [
+        createCodeRangeDecorationExtension(),
+        createLinkDecorationExtension(),
+        createAtomicReferenceExtension(),
+      ],
+    });
+    return {
+      view,
+      cleanup: () => {
+        view.destroy();
+        parent.remove();
+      },
+    };
+  }
+
+  const codeRangeTexts = (view: EditorView) =>
+    Array.from(view.dom.querySelectorAll(".cm-code-range")).map(
+      (el) => el.textContent
+    );
+
+  it("marks inline code spans and fenced blocks, and no reference inside them is decorated", () => {
+    const doc = [
+      "use `@src/inline.ts` here",
+      "```",
+      "@src/fenced.ts",
+      "```",
+    ].join("\n");
+    const { view, cleanup } = mountWithCodeRanges(doc);
+    try {
+      const marked = codeRangeTexts(view).join("");
+      expect(marked).toContain("`@src/inline.ts`");
+      expect(marked).toContain("@src/fenced.ts");
+      expect(view.dom.querySelector(".cm-link")).toBeNull();
+      expect(view.dom.querySelector(".cm-atomic-ref")).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("still decorates a reference outside code", () => {
+    const { view, cleanup } = mountWithCodeRanges("see @src/real.ts");
+    try {
+      expect(codeRangeTexts(view)).toEqual([]);
+      expect(view.dom.querySelector(".cm-link, .cm-atomic-ref")).not.toBeNull();
+    } finally {
+      cleanup();
+    }
   });
 });
 

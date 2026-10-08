@@ -1951,9 +1951,12 @@ function createPromptDecorationThemeExtension() {
       textDecoration: "underline",
       fontFamily: "var(--vscode-editor-font-family)",
     },
+    // Literal (unexpanded) ranges: readable code, not greyed out. The
+    // suppressed-expansion lint warning is what flags a mistaken reference.
     ".cm-code-range": {
-      color: "var(--vscode-disabledForeground)",
-      fontStyle: "italic",
+      fontFamily: "var(--vscode-editor-font-family)",
+      backgroundColor: "var(--vscode-textPreformat-background)",
+      borderRadius: "3px",
     },
     ".cm-prior-context-ref": {
       fontStyle: "italic",
@@ -2377,8 +2380,8 @@ function splitCamelCaseWord(
   return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
-// Apply disabled/italic styling to fenced blocks and inline code spans
-function createCodeRangeDecorationExtension() {
+// Mark fenced blocks and inline code spans as literal (`.cm-code-range`)
+export function createCodeRangeDecorationExtension() {
   return ViewPlugin.fromClass(
     class implements PluginValue {
       decorations;
@@ -2423,7 +2426,7 @@ function createCodeRangeDecorationExtension() {
 }
 
 // Decorate links (@file, @dir/, #selection:, #sym:)
-function createLinkDecorationExtension(
+export function createLinkDecorationExtension(
   referenceValidity?: Map<string, boolean>
 ) {
   const linkPlugin = ViewPlugin.fromClass(
