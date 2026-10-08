@@ -5,6 +5,8 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROMPT_DIAGNOSTIC_DEBOUNCE_MS,
   PROMPT_DIAGNOSTICS_SOURCE,
+  VSCODE_URI_SCHEMES,
+  type CtrlYokeFileKind,
   type PromptDiagnosticSeverity,
 } from "../types/DashboardConstants";
 import type {
@@ -35,35 +37,49 @@ function toVsCodeSeverity(
   }
 }
 
+/** The ctrlyoke kind of an on-disk document, or null when it is not linted. */
+function lintableKind(document: vscode.TextDocument): CtrlYokeFileKind | null {
+  return document.uri.scheme === VSCODE_URI_SCHEMES.FILE
+    ? getCtrlYokeFileKind(document.fileName)
+    : null;
+}
+
 /**
  * Squiggles for the prompt-text lint rules the dashboard editor already runs
  * (unresolved or code-suppressed references, prior-context and condition-output
  * misuse), in ctrlyoke prompt and workflow files.
  *
- * Runs on open, on change (debounced), on save, and again for every open file
- * when workspace files are created, deleted or renamed, so "file not found"
- * clears when the file appears. Spelling is deliberately left to spell-check
- * extensions.
+ * Runs on open, on change (debounced), on save, and again (debounced) for
+ * every open file when any workspace file is created or deleted, so "file not
+ * found" clears when the file appears. That uses a file system watcher, not
+ * `onDidCreateFiles`, because those events only fire for edits made through
+ * VS Code and the usual writer here is a harness. Only `file:` documents are
+ * linted, so a `git:` diff side does not duplicate every entry. Spelling is
+ * deliberately left to spell-check extensions.
  */
 export class PromptDiagnosticsProvider implements vscode.Disposable {
   private readonly collection = vscode.languages.createDiagnosticCollection(
     PROMPT_DIAGNOSTICS_SOURCE
   );
   private readonly timers = new Map<string, NodeJS.Timeout>();
+  /** Latest refresh per document; an older pass that finishes late is dropped. */
+  private readonly generations = new Map<string, number>();
+  private refreshAllTimer: NodeJS.Timeout | undefined;
   private readonly disposables: vscode.Disposable[] = [this.collection];
 
   constructor(private readonly validateReferences: PromptReferenceValidator) {
-    const refreshFiles = () => this.refreshAll();
+    const watcher = vscode.workspace.createFileSystemWatcher("**/*");
+    const refreshFiles = () => this.scheduleRefreshAll();
     this.disposables.push(
+      watcher,
+      watcher.onDidCreate(refreshFiles),
+      watcher.onDidDelete(refreshFiles),
       vscode.workspace.onDidOpenTextDocument((doc) => void this.refresh(doc)),
       vscode.workspace.onDidChangeTextDocument((event) =>
         this.schedule(event.document)
       ),
       vscode.workspace.onDidSaveTextDocument((doc) => void this.refresh(doc)),
-      vscode.workspace.onDidCloseTextDocument((doc) => this.clear(doc)),
-      vscode.workspace.onDidCreateFiles(refreshFiles),
-      vscode.workspace.onDidDeleteFiles(refreshFiles),
-      vscode.workspace.onDidRenameFiles(refreshFiles)
+      vscode.workspace.onDidCloseTextDocument((doc) => this.clear(doc))
     );
     this.refreshAll();
   }
@@ -75,9 +91,12 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
 
   /** Recompute now, bypassing the debounce. */
   async refresh(document: vscode.TextDocument): Promise<void> {
-    const kind = getCtrlYokeFileKind(document.fileName);
+    const kind = lintableKind(document);
     if (!kind) return;
     this.cancelTimer(document);
+    const key = document.uri.toString();
+    const generation = (this.generations.get(key) ?? 0) + 1;
+    this.generations.set(key, generation);
     const version = document.version;
     try {
       const diagnostics = await getWorkflowPromptDiagnostics(
@@ -86,7 +105,13 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
         (references) => this.validateReferences(references, document.fileName)
       );
       // The text moved on while references resolved; the newer pass owns the result.
-      if (document.version !== version || document.isClosed) return;
+      if (
+        document.version !== version ||
+        document.isClosed ||
+        this.generations.get(key) !== generation
+      ) {
+        return;
+      }
       this.collection.set(
         document.uri,
         diagnostics.map((diagnostic) => this.toDiagnostic(document, diagnostic))
@@ -102,6 +127,7 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
   dispose(): void {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    clearTimeout(this.refreshAllTimer);
     for (const disposable of this.disposables) disposable.dispose();
   }
 
@@ -111,8 +137,17 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
     }
   }
 
+  /** Coalesces a burst of file events (a harness writing many files) into one pass. */
+  private scheduleRefreshAll(): void {
+    clearTimeout(this.refreshAllTimer);
+    this.refreshAllTimer = setTimeout(
+      () => this.refreshAll(),
+      PROMPT_DIAGNOSTIC_DEBOUNCE_MS
+    );
+  }
+
   private schedule(document: vscode.TextDocument): void {
-    if (!getCtrlYokeFileKind(document.fileName)) return;
+    if (!lintableKind(document)) return;
     this.cancelTimer(document);
     this.timers.set(
       document.uri.toString(),
@@ -132,6 +167,7 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
 
   private clear(document: vscode.TextDocument): void {
     this.cancelTimer(document);
+    this.generations.delete(document.uri.toString());
     this.collection.delete(document.uri);
   }
 

@@ -103,3 +103,13 @@ test("a .prompt.md frontmatter only offers schemaVersion", () => {
     "schemaVersion",
   ]);
 });
+
+test("a removed key (`not: {}`) is forbidden, never offered", () => {
+  for (const [kind, object] of Object.entries(outline)) {
+    assert.ok(
+      !("returns" in object.properties),
+      `${kind} must not offer returns`
+    );
+  }
+  assert.ok(outline.scriptStep.forbiddenKeys.includes("returns"));
+});

@@ -10,7 +10,10 @@ import { getCompletionCore } from "./CompletionHelpers";
 import type { SecretRegistryService } from "../ui/SecretRegistryService";
 import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
-import { getPromptCodeRanges, isCursorInPromptCode } from "./PromptCodeRanges";
+import {
+  getDocumentPromptCodeRanges,
+  isCursorInPromptCode,
+} from "./PromptCodeRanges";
 
 /**
  * Trigger character types for context-aware completions
@@ -63,20 +66,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return undefined;
     }
 
-    // References inside code are sent literally, so don't offer to build one.
-    if (
-      isCursorInPromptCode(
-        document.offsetAt(position),
-        getPromptCodeRanges(
-          document.getText(),
-          document.fileName,
-          document.languageId
-        )
-      )
-    ) {
-      return undefined;
-    }
-
     // Determine which trigger character is active
     const line = document.lineAt(position.line).text;
     const textBeforeCursor = line.substring(0, position.character);
@@ -100,6 +89,16 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     if (maxIndex === -1) {
       return undefined; // No trigger found
+    }
+
+    // References inside code are sent literally, so don't offer to build one.
+    if (
+      isCursorInPromptCode(
+        document.offsetAt(position),
+        getDocumentPromptCodeRanges(document)
+      )
+    ) {
+      return undefined;
     }
 
     if (maxIndex === lastAtIndex) {

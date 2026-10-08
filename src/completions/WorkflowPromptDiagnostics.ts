@@ -1,5 +1,3 @@
-import { parse as parseJsonc } from "jsonc-parser";
-import { parse as parseYaml } from "yaml";
 import {
   CTRLYOKE_FILE_KINDS,
   END_CONDITION_PROPERTIES,
@@ -15,8 +13,9 @@ import {
   type PromptDiagnostic,
   type PromptDiagnosticContext,
 } from "../utils/PromptDiagnosticRules";
+import { parseWorkflowDocumentRoot } from "./WorkflowDocumentLocation";
 import { getWorkflowTextSpans } from "./WorkflowPromptRanges";
-import type { WorkflowPath } from "./WorkflowLocationTypes";
+import { isRecord, type WorkflowPath } from "./WorkflowLocationTypes";
 import type { WorkflowTextSpan } from "./WorkflowTextDecoding";
 
 /**
@@ -24,20 +23,6 @@ import type { WorkflowTextSpan } from "./WorkflowTextDecoding";
  * through the shared rules on its decoded text, and each result is mapped back
  * to a document offset. Pure: the host injects reference resolution.
  */
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseWorkflowRoot(text: string, kind: CtrlYokeFileKind): unknown {
-  try {
-    return kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
-      ? parseJsonc(text, [], { allowTrailingComma: true })
-      : parseYaml(text);
-  } catch {
-    return undefined;
-  }
-}
 
 /** The members of a parallel group entry, or undefined for a plain step. */
 function parallelMembers(entry: unknown): unknown[] | undefined {
@@ -62,7 +47,9 @@ function promptField(span: WorkflowTextSpan): PromptDiagnosticField {
 /**
  * What the file says about where a prompt sits. `stepCount` counts the flat
  * steps before it (a parallel group's members share the group's start, and the
- * final step sees every step). A `.prompt.md` file is one step with no final
+ * final step sees every step). A workflow-level default such as the root
+ * `endCondition.retryPrompt` applies to every step, so it is judged from the
+ * most permissive one, the final step's view. A `.prompt.md` file is one step with no final
  * step. `hasPreCondition` is always true: a step can inherit a pre-condition
  * from the workflow or the global default, and the file cannot say which, so
  * the "no pre-condition" rule stays quiet rather than guess.
@@ -77,10 +64,13 @@ function getSpanContext(
     : [];
   const path: WorkflowPath = span.path;
   let stepIndex = 0;
-  let stepCount = 0;
+  // Final-step and workflow-level text see every step.
+  let stepCount = steps.reduce<number>(
+    (n, entry) => n + flatStepCount(entry),
+    0
+  );
   let owner: unknown = root;
   if (path[0] === PROMPT_PROPERTIES.FINAL_STEP) {
-    stepCount = steps.reduce<number>((n, entry) => n + flatStepCount(entry), 0);
     owner = fields[PROMPT_PROPERTIES.FINAL_STEP];
   } else if (
     path[0] === PROMPT_PROPERTIES.STEPS &&
@@ -119,12 +109,16 @@ export async function getWorkflowPromptDiagnostics(
   kind: CtrlYokeFileKind,
   resolve: ContextReferenceResolver
 ): Promise<PromptDiagnostic[]> {
-  const spans = getWorkflowTextSpans(text, kind);
+  // An inexact span (a decoder gap) maps offsets only approximately; a squiggle
+  // on the wrong characters is worse than none.
+  const spans = getWorkflowTextSpans(text, kind).filter((span) => span.exact);
   if (spans.length === 0) return [];
+  // Tolerant parse: one syntax error elsewhere in a half-typed file must not
+  // drop the steps and flag every `$step:` reference as missing.
   const root =
     kind === CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN
       ? undefined
-      : parseWorkflowRoot(text, kind);
+      : parseWorkflowDocumentRoot(text, kind);
 
   const perSpan = await Promise.all(
     spans.map(async (span) => {

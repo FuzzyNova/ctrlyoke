@@ -17,6 +17,7 @@ interface CapturedToken {
 
 const CAPTURE_COMMAND = "_workbench.captureSyntaxTokens";
 const FIXTURE = [
+  "# Set prompt: | for a multi-line value",
   "name: demo # plain yaml",
   "steps:",
   "  - prompt: |",
@@ -97,6 +98,9 @@ suite("Prompt markdown injection grammar", () => {
   });
 
   test("leaves YAML scopes on keys, comments and the line after the block", () => {
+    // The first line is a comment mentioning `prompt: |`; it must not open a block.
+    assert.ok(scopesOf("multi-line").includes("comment"));
+    assert.ok(!scopesOf("multi-line").includes("markdown"));
     assert.ok(scopesOf("demo").includes("source.yaml"));
     assert.ok(!scopesOf("demo").includes("markdown"));
     assert.ok(scopesOf("plain yaml").includes("comment"));

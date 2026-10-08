@@ -36,12 +36,56 @@ export function getPromptCodeRanges(
       ? findCodeRanges(text)
       : [];
   }
-  return getWorkflowTextSpans(text, kind).flatMap((span) =>
-    findCodeRanges(span.text).map((range) => ({
+  return getWorkflowTextSpans(text, kind).flatMap((span) => {
+    // An inexact span's offsets are only approximate, so mapping would land
+    // ranges on the wrong characters. Scan its raw source instead: inline code
+    // stays exact, and a fence lost to block indentation errs toward "live".
+    if (!span.exact) {
+      const { start, end } = span.sourceRange;
+      return findCodeRanges(text.slice(start, end)).map((range) => ({
+        from: start + range.from,
+        to: start + range.to,
+      }));
+    }
+    return findCodeRanges(span.text).map((range) => ({
       from: span.toSourceOffset(range.from),
       to: span.toSourceOffset(range.to),
-    }))
+    }));
+  });
+}
+
+/** The parts of a text document `getDocumentPromptCodeRanges` reads. */
+export interface PromptCodeRangeDocument {
+  readonly uri: { toString(): string };
+  readonly version: number;
+  readonly fileName: string;
+  readonly languageId: string;
+  getText(): string;
+}
+
+const CACHE_LIMIT = 8;
+const cache = new Map<string, { version: number; ranges: PromptCodeRange[] }>();
+
+/**
+ * `getPromptCodeRanges` for an open document, cached per URI and version. The
+ * link provider and every completion trigger ask for the same version, and
+ * each uncached call re-parses the whole file.
+ */
+export function getDocumentPromptCodeRanges(
+  document: PromptCodeRangeDocument
+): PromptCodeRange[] {
+  const key = document.uri.toString();
+  const hit = cache.get(key);
+  if (hit?.version === document.version) return hit.ranges;
+  const ranges = getPromptCodeRanges(
+    document.getText(),
+    document.fileName,
+    document.languageId
   );
+  cache.delete(key);
+  cache.set(key, { version: document.version, ranges });
+  if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!);
+  return ranges;
 }
 
 /** True when `[from, to]` lies entirely inside one range. */

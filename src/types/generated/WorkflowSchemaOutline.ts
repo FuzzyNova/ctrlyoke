@@ -311,10 +311,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "boolean",
         "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
       },
-      "returns": {
-        "valueKind": "string",
-        "description": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
-      },
       "steps": {
         "valueKind": "array",
         "description": "The ordered step queue. Each item is a prompt step, a script step, or a parallel group."
@@ -324,7 +320,9 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "A step that always runs after all queued prompts complete. Can be an AI prompt or a script step. If mcpServers includes \"ctrlyoke\" and the finalStep appends prompts, those prompts run before finalStep executes again. Working files store resolved harness/model/session metadata on finalStep._runtime; workflow phase/status remains in the root _runtime.finalStep block."
       }
     },
-    "forbiddenKeys": []
+    "forbiddenKeys": [
+      "returns"
+    ]
   },
   "promptStep": {
     "properties": {
@@ -607,14 +605,11 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "ignoreCase": {
         "valueKind": "boolean",
         "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
-      },
-      "returns": {
-        "valueKind": "string",
-        "description": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
       }
     },
     "forbiddenKeys": [
       "maxSteps",
+      "returns",
       "trustedExternalRoots",
       "worktree"
     ]
@@ -651,10 +646,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "exitCode"
         ],
         "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
-      },
-      "returns": {
-        "valueKind": "string",
-        "description": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
       },
       "timeoutSec": {
         "valueKind": "number",
@@ -733,7 +724,9 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry."
       }
     },
-    "forbiddenKeys": []
+    "forbiddenKeys": [
+      "returns"
+    ]
   },
   "preCondition": {
     "properties": {
@@ -753,10 +746,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "exitCode"
         ],
         "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
-      },
-      "returns": {
-        "valueKind": "string",
-        "description": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
       },
       "timeoutSec": {
         "valueKind": "number",
@@ -816,7 +805,9 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "description": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution."
       }
     },
-    "forbiddenKeys": []
+    "forbiddenKeys": [
+      "returns"
+    ]
   },
   "toolPermissions": {
     "properties": {

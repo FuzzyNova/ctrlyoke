@@ -1,7 +1,17 @@
 import * as vscode from "vscode";
 
 type StubbedDocumentMembers =
-  "fileName" | "languageId" | "getText" | "offsetAt" | "positionAt" | "lineAt";
+  | "uri"
+  | "version"
+  | "fileName"
+  | "languageId"
+  | "getText"
+  | "offsetAt"
+  | "positionAt"
+  | "lineAt";
+
+/** Unique per stub, so per-version caches never serve one test's text to another. */
+let nextVersion = 1;
 
 /** A text document with real line/offset arithmetic, for provider tests. */
 export class PromptDocumentStub implements Pick<
@@ -9,6 +19,8 @@ export class PromptDocumentStub implements Pick<
   StubbedDocumentMembers
 > {
   private readonly lines: string[];
+  readonly uri: vscode.Uri;
+  readonly version = nextVersion++;
 
   constructor(
     readonly fileName: string,
@@ -16,6 +28,7 @@ export class PromptDocumentStub implements Pick<
     private readonly text: string
   ) {
     this.lines = text.split("\n");
+    this.uri = vscode.Uri.file(fileName);
   }
 
   getText(): string {

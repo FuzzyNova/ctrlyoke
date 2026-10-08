@@ -87,9 +87,12 @@ const DYNAMIC_VALUE_OWNERS: readonly WorkflowObjectKind[] = [
 const FINAL_STEP_SESSION = PROMPT_PROPERTIES.FINAL_STEP;
 const MODEL_NONE = "none";
 const WORD_CHARACTER = /[\w.\-@$]/;
-/** A plain YAML scalar that would parse as another type or special syntax. */
+/**
+ * A plain YAML scalar that would parse as another type or special syntax. `@`
+ * is reserved as a first character, and a leading `.` reads `.inf`/`.nan` as numbers.
+ */
 const YAML_UNSAFE_PLAIN =
-  /^(?![A-Za-z_./@][\w./@-]*$)|^(true|false|null|yes|no|on|off|y|n)$/i;
+  /^(?![A-Za-z_/][\w./@-]*$)|^(true|false|null|yes|no|on|off|y|n)$/i;
 const SORT_DYNAMIC = "0";
 const SORT_ENUM = "1";
 const SORT_DEPRECATED = "9";
@@ -169,11 +172,14 @@ function rootKeyIsRelevant(root: unknown): (key: string) => boolean {
   const promptKeys = Object.keys(
     WORKFLOW_SCHEMA_OUTLINE[WORKFLOW_OBJECT_KINDS.PROMPT_STEP]?.properties ?? {}
   );
+  const scriptKeys = Object.keys(
+    WORKFLOW_SCHEMA_OUTLINE[WORKFLOW_OBJECT_KINDS.SCRIPT_STEP]?.properties ?? {}
+  );
   const scriptOnly = new Set(
-    Object.keys(
-      WORKFLOW_SCHEMA_OUTLINE[WORKFLOW_OBJECT_KINDS.SCRIPT_STEP]?.properties ??
-        {}
-    ).filter((key) => !promptKeys.includes(key))
+    scriptKeys.filter((key) => !promptKeys.includes(key))
+  );
+  const promptOnly = new Set(
+    promptKeys.filter((key) => !scriptKeys.includes(key))
   );
   const multiStepKeys: string[] = [
     PROMPT_PROPERTIES.STEPS,
@@ -191,8 +197,7 @@ function rootKeyIsRelevant(root: unknown): (key: string) => boolean {
       key !== PROMPT_PROPERTIES.STEP_TYPE;
   }
   if (isScript)
-    return (key) =>
-      !multiStepKeys.includes(key) && key !== PROMPT_PROPERTIES.PROMPT;
+    return (key) => !multiStepKeys.includes(key) && !promptOnly.has(key);
   if (isPrompt)
     return (key) => !multiStepKeys.includes(key) && !scriptOnly.has(key);
   return () => true;
@@ -205,16 +210,23 @@ function leadingKeyIndent(text: string, offset: number): string {
   return " ".repeat(width);
 }
 
+/** True when the key being completed already has its `:` (renaming an existing key). */
+function hasKeyColon(text: string, replaceEnd: number): boolean {
+  return /^[ \t]*:/.test(text.slice(replaceEnd));
+}
+
 function keyInsertText(
   request: WorkflowFileCompletionRequest,
   key: string,
   property: WorkflowOutlineProperty,
-  snippetText: string | undefined
+  snippetText: string | undefined,
+  keyOnly: boolean
 ): string {
   const { location, text, offset } = request;
   if (location.kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON) {
-    return `"${key}": `;
+    return keyOnly ? `"${key}"` : `"${key}": `;
   }
+  if (keyOnly) return key;
   const body =
     snippetText ?? (isCollectionOnly(property) ? `${key}:\n  ` : `${key}: `);
   return body.replace(/\n/g, `\n${leadingKeyIndent(text, offset)}`);
@@ -231,6 +243,7 @@ function getKeyItems(
     location.objectKind === WORKFLOW_OBJECT_KINDS.WORKFLOW_ROOT
       ? rootKeyIsRelevant(documentRoot)
       : () => true;
+  const keyOnly = hasKeyColon(request.text, getReplaceRange(request).end);
 
   for (const sourceKind of keySourceKinds(location, documentRoot)) {
     const outline: WorkflowObjectOutline | undefined =
@@ -256,7 +269,8 @@ function getKeyItems(
           request,
           key,
           property,
-          snippet.insertSnippet
+          snippet.insertSnippet,
+          keyOnly
         ),
         detail: property.deprecated ? `Deprecated · ${detail}` : detail,
         documentation: property.description ?? snippet.documentation,
@@ -319,6 +333,13 @@ function flattenSteps(root: unknown): FlatStep[] {
     });
   });
   return flat;
+}
+
+function isScriptStep(node: Record<string, unknown>): boolean {
+  return (
+    node[PROMPT_PROPERTIES.STEP_TYPE] === STEP_TYPES.SCRIPT ||
+    node[PROMPT_PROPERTIES.SCRIPT] !== undefined
+  );
 }
 
 function describeStep(step: FlatStep): string {
@@ -423,10 +444,13 @@ function getDynamicCandidates(
         ...(final
           ? [{ value: FINAL_STEP_SESSION, detail: "Session of the final step" }]
           : []),
-        ...earlierSteps(root, ownerPath).map((step) => ({
-          value: step.number,
-          detail: describeStep(step),
-        })),
+        // A script step has no session to resume.
+        ...earlierSteps(root, ownerPath)
+          .filter((step) => !isScriptStep(step.node))
+          .map((step) => ({
+            value: step.number,
+            detail: describeStep(step),
+          })),
       ];
     }
     default:
@@ -457,12 +481,13 @@ function formatValue(
   candidate: ValueCandidate,
   location: WorkflowLocation
 ): string | undefined {
-  if (candidate.raw)
-    return location.jsonString ? undefined : String(candidate.value);
-  const { value } = candidate;
   const quoted =
     location.scalarStyle === YAML_SCALAR_STYLES.DOUBLE_QUOTED ||
     location.scalarStyle === YAML_SCALAR_STYLES.SINGLE_QUOTED;
+  // `[1]` is structure; inside any string it would become text.
+  if (candidate.raw)
+    return location.jsonString || quoted ? undefined : String(candidate.value);
+  const { value } = candidate;
   if (location.kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON) {
     if (location.jsonString) {
       // Inside a string only text fits; a number would change the value's type.

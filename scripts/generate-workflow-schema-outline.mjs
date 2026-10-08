@@ -227,6 +227,19 @@ function describeProperty(schema, definitions) {
   return entry;
 }
 
+/**
+ * True when every definition of a key is `not: {}`, the schema's way of saying
+ * a key was removed (`returns`): it accepts no value, so it is forbidden.
+ */
+function acceptsNothing(schema, definitions) {
+  return definitions.every((raw) => {
+    const node = deref(schema, raw);
+    return (
+      isObject(node) && isObject(node.not) && Object.keys(node.not).length === 0
+    );
+  });
+}
+
 export function buildWorkflowSchemaOutline(schema) {
   const outline = {};
   for (const [objectKind, source] of Object.entries(OBJECT_SOURCES)) {
@@ -244,6 +257,9 @@ export function buildWorkflowSchemaOutline(schema) {
     }
     for (const pointer of source.forbiddenFrom ?? []) {
       collectForbiddenKeys(schema, resolvePointer(schema, pointer), forbidden);
+    }
+    for (const [key, definitions] of properties) {
+      if (acceptsNothing(schema, definitions)) forbidden.add(key);
     }
     // A key the schema both lists and forbids is forbidden (`worktree` on a step).
     const keys = [...properties.keys()].filter(

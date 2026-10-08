@@ -51,12 +51,11 @@ suite("PromptLinkProvider slash-token links", () => {
 
   test("links explicit skills while leaving native slash commands alone", async () => {
     const text = "/skill:commit /commit /mcp";
-    const document = {
-      fileName: path.join(workspaceRoot, "prompt.prompt.md"),
-      languageId: "markdown",
-      getText: () => text,
-      positionAt: (offset: number) => new vscode.Position(0, offset),
-    } as unknown as vscode.TextDocument;
+    const document = new PromptDocumentStub(
+      path.join(workspaceRoot, "prompt.prompt.md"),
+      "markdown",
+      text
+    ).asDocument();
 
     const links = await new PromptLinkProvider().provideDocumentLinks(
       document,
@@ -76,12 +75,11 @@ suite("PromptLinkProvider slash-token links", () => {
 
   test("links secret references to the Secrets settings page", async () => {
     const text = "Use !SERVICE_TOKEN here";
-    const document = {
-      fileName: path.join(workspaceRoot, "prompt.prompt.md"),
-      languageId: "markdown",
-      getText: () => text,
-      positionAt: (offset: number) => new vscode.Position(0, offset),
-    } as unknown as vscode.TextDocument;
+    const document = new PromptDocumentStub(
+      path.join(workspaceRoot, "prompt.prompt.md"),
+      "markdown",
+      text
+    ).asDocument();
 
     const links = await new PromptLinkProvider().provideDocumentLinks(
       document,
@@ -97,12 +95,11 @@ suite("PromptLinkProvider slash-token links", () => {
 
   test("links symbol references with definition-relative paths", async () => {
     const text = "#sym:./a.ts:foo:1-5";
-    const document = {
-      fileName: path.join(workspaceRoot, "workflow.ctrlyoke.yaml"),
-      languageId: "yaml",
-      getText: () => text,
-      positionAt: (offset: number) => new vscode.Position(0, offset),
-    } as unknown as vscode.TextDocument;
+    const document = new PromptDocumentStub(
+      path.join(workspaceRoot, "workflow.ctrlyoke.yaml"),
+      "yaml",
+      text
+    ).asDocument();
 
     const links = await new PromptLinkProvider().provideDocumentLinks(
       document,
@@ -118,12 +115,11 @@ suite("PromptLinkProvider slash-token links", () => {
 
   test("does not link partial git-change references inside longer tokens", async () => {
     const text = "~differently ~1500000x ~staged_files ~stash:1a";
-    const document = {
-      fileName: path.join(workspaceRoot, "prompt.prompt.md"),
-      languageId: "markdown",
-      getText: () => text,
-      positionAt: (offset: number) => new vscode.Position(0, offset),
-    } as unknown as vscode.TextDocument;
+    const document = new PromptDocumentStub(
+      path.join(workspaceRoot, "prompt.prompt.md"),
+      "markdown",
+      text
+    ).asDocument();
 
     const links = await new PromptLinkProvider().provideDocumentLinks(
       document,

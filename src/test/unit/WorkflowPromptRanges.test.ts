@@ -86,6 +86,8 @@ suite("WorkflowPromptRanges: YAML", () => {
       'prompt: "a\\"b \\n c \\u00e9 \\x41\\\n   joined \\t end  "\n',
       "prompt: |\r\n  crlf `@a.ts`\r\n  y\r\n",
       "prompt: |\n",
+      // A tab after the indentation is content, not indent.
+      "prompt: |\n  \tintro\n  see `code`\n",
     ];
     for (const text of fixtures) {
       const [span] = getWorkflowTextSpans(text, WORKFLOW_YAML);

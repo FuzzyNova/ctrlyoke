@@ -325,7 +325,8 @@ export function decodeYamlBlockScalar(
         ? BLOCK_CHOMPING.KEEP
         : BLOCK_CHOMPING.CLIP;
   const lines = splitBlockLines(text, contentStart, end);
-  const leadingSpaces = (line: string) => line.length - line.trimStart().length;
+  // YAML indentation is spaces only; a tab after it is content.
+  const leadingSpaces = (line: string) => /^ */.exec(line)![0].length;
   const explicitIndent = Number(indicators?.[2] || 0);
   let indent: number;
   if (explicitIndent > 0) {

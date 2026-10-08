@@ -142,6 +142,32 @@ suite("WorkflowFileCompletionCore: keys", () => {
     assert.ok(keys.includes("worktree"));
     assert.ok(!keys.includes("steps"));
     assert.ok(!keys.includes("prompt"));
+    // rootScriptStep rejects prompt-only keys (unevaluatedProperties: false).
+    for (const key of ["harness", "model", "agent", "sessionId"]) {
+      assert.ok(!keys.includes(key), `script root must not offer ${key}`);
+    }
+  });
+
+  test("a removed key (returns) is never offered", () => {
+    assert.ok(
+      !labels(complete("steps:\n  - type: script\n    §\n")).includes("returns")
+    );
+  });
+
+  test("completing an existing key replaces only the key, keeping its colon", () => {
+    const yaml = complete("steps:\n  - prompt: hi\n    harn§ess: claude-cli\n");
+    assert.strictEqual(
+      yaml.items.find((item) => item.label === "harness")?.insertText,
+      "harness"
+    );
+    const json = complete(
+      '{ "steps": [ { "prompt": "x", "harn§ess": "claude-cli" } ] }',
+      WORKFLOW_JSON
+    );
+    assert.strictEqual(
+      json.items.find((item) => item.label === "harness")?.insertText,
+      '"harness"'
+    );
   });
 
   test("an empty root offers both shapes", () => {
@@ -418,6 +444,13 @@ suite("WorkflowFileCompletionCore: values", () => {
     assert.deepStrictEqual(labels(none), ["1"]);
   });
 
+  test("sessionId skips script steps, which have no session", () => {
+    const result = complete(
+      "steps:\n  - type: script\n    script: x\n  - prompt: a\n  - prompt: b\n    sessionId: §\n"
+    );
+    assert.deepStrictEqual(labels(result), ["2"]);
+  });
+
   test("the final step can reference every queue step", () => {
     const result = complete(
       "steps:\n  - prompt: a\n  - prompt: b\nfinalStep:\n  prompt: z\n  sessionId: §\n"
@@ -430,6 +463,13 @@ suite("WorkflowFileCompletionCore: values", () => {
       'steps:\n  - prompt: a\n  - prompt: b\n    sessionId: "§"\n'
     );
     assert.deepStrictEqual(labels(result), []);
+    const priorContext = complete(
+      'steps:\n  - prompt: a\n  - prompt: b\n    priorContext: "§"\n'
+    );
+    assert.ok(
+      !labels(priorContext).includes("[1]"),
+      "a [N] array inside a string would become text"
+    );
   });
 
   test("values with YAML-special text are quoted; quoted scalars are escaped", () => {
@@ -446,6 +486,19 @@ suite("WorkflowFileCompletionCore: values", () => {
     assert.strictEqual(insert("a: b"), '"a: b"');
     assert.strictEqual(insert("yes"), '"yes"');
     assert.strictEqual(insert("none"), "none");
+    const reserved = complete(
+      "steps:\n  - prompt: hi\n    mcpServers:\n      - §\n",
+      WORKFLOW_YAML,
+      new (class extends StubData {
+        override getMcpServers(): readonly string[] {
+          return ["@scope/srv", ".inf"];
+        }
+      })()
+    );
+    const reservedInsert = (label: string) =>
+      reserved.items.find((item) => item.label === label)?.insertText;
+    assert.strictEqual(reservedInsert("@scope/srv"), '"@scope/srv"');
+    assert.strictEqual(reservedInsert(".inf"), '".inf"');
     const double = complete(
       'harness: claude-cli\nsteps:\n  - prompt: hi\n    model: "§"\n',
       WORKFLOW_YAML,

@@ -260,8 +260,10 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
     name. `.ctrlyoke.yaml` files are plain `yaml`. Giving them their own language id would cut
     them off from the Red Hat YAML extension and the bundled `yamlValidation` schema, so the
     injection applies to every YAML file. A `prompt: |` block in some other tool's YAML gets
-    markdown colours too. That is harmless, since such prompt text is almost always markdown,
-    and the key-anchored rule never touches anything else.
+    markdown colours too. That is harmless, since such prompt text is almost always markdown.
+    The key-anchored rule touches nothing else only because the selector excludes comments and
+    quoted strings (`L:source.yaml -comment -string.quoted`). Without that, the Wave 2 review
+    found that a comment mentioning `prompt: |` turned the rest of any YAML file into markdown.
   - **References:** `PromptLinkProvider` already turns ctrlyoke references in these files into
     links, so the grammar doesn't scope them. The markdown colours sit underneath, and the link
     underline sits on top.

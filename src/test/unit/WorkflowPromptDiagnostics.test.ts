@@ -160,6 +160,41 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
+  test("judges a workflow-level retryPrompt from the final step's view", async () => {
+    const text = [
+      "endCondition:",
+      "  script: t.sh",
+      "  retryPrompt: see $previous and $step:2, not $step:3",
+      "steps:",
+      "  - prompt: a",
+      "  - prompt: b",
+      "",
+    ].join("\n");
+    assert.deepStrictEqual(
+      await diagnose(text, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML),
+      [
+        {
+          code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_STEP_MISSING,
+          text: "$step:3",
+        },
+      ]
+    );
+  });
+
+  test("still counts earlier steps when a later line is half-typed", async () => {
+    const text = [
+      "steps:",
+      "  - prompt: first",
+      "  - prompt: use $step:1 output",
+      "  - prompt: [unclosed",
+      "",
+    ].join("\n");
+    assert.deepStrictEqual(
+      await diagnose(text, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML),
+      []
+    );
+  });
+
   test("returns nothing for an unparseable document", async () => {
     assert.deepStrictEqual(
       await diagnose("steps: [", CTRLYOKE_FILE_KINDS.WORKFLOW_YAML),

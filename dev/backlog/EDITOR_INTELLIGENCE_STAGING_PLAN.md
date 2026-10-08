@@ -1,9 +1,10 @@
 # Editor Intelligence Staging Plan
 
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
-**F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4), and
-its review is recorded below. This plan only orders the work. The design lives in the three plans it
-stages.
+**F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
+merged and reviewed; its review fixes are on `main`. **Wave 3 can start.** F4 opens with the
+one F3 bug the review filed (see the Wave 2 review). This plan only orders the work. The
+design lives in the three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
 
@@ -60,6 +61,52 @@ below were reproduced with probe documents. What the review changed:
   returns raw spans. Without a shared helper, B and D2 would each write one in parallel. F1b
   added it: `getWorkflowTextSpans` in `src/completions/WorkflowPromptRanges.ts`.
 
+### Wave 2 review (2026-10-08)
+
+All five phases were merged to `main` (the conflicts were the shared progress tables and
+`completions.instructions.md`, which every branch edited) and reviewed against their plans.
+Every finding below was reproduced with a probe. The full `npm test` passed apart from one
+unrelated, pre-existing flake (filed as
+[`vscode-documents-dirty-save-test-flake`](../bugs/backlog/vscode-documents-dirty-save-test-flake.md)).
+
+- **F0:** no regressions. The completion client's stale-response guard, progressive `#` cache
+  and icon seeding match the old code; the global sequence numbers fix an old two-editor
+  collision.
+- **D2, fixed:**
+  - A syntax error anywhere in a YAML file flagged every valid `$step:N`. D2 had its own strict
+    parser; it now uses the tolerant `parseWorkflowDocumentRoot` that F3 uses.
+  - A workflow-level `endCondition.retryPrompt` was judged as if it ran before step 1. It is
+    now judged from the final step's view.
+  - `git:` diff sides were linted, duplicating Problems entries.
+  - "File not found" never cleared when a harness, rather than VS Code, created the file. It
+    now uses a file system watcher.
+  - An older pass could overwrite a newer one at the same document version.
+- **D2, filed:**
+  [`vscode-prompt-diagnostics-symbol-lookups-and-trust-refresh`](../bugs/backlog/vscode-prompt-diagnostics-symbol-lookups-and-trust-refresh.md)
+  covers unused symbol-kind lookups on every pass, and no refresh when trust changes.
+- **B and M4, fixed:**
+  - **High:** a YAML comment containing `prompt: |` turned the rest of the file into markdown,
+    in any YAML file. The injection selector now excludes comments and quoted strings.
+  - Inexactly decoded spans mapped code ranges onto the wrong characters, which suppressed
+    live references. Both consumers now check `span.exact`. One of the decoder's two causes,
+    a leading tab counted as indent, is fixed; the other is filed as
+    [`yaml-block-scalar-indent-indicator-measured-from-wrong-column`](../bugs/backlog/yaml-block-scalar-indent-indicator-measured-from-wrong-column.md).
+  - Every completion request re-parsed the whole file. Code ranges are now cached per
+    document version, and computed only once a trigger is found.
+- **F3, fixed:**
+  - A single-step script root offered prompt-only keys that the schema rejects.
+  - The removed `returns` key was offered everywhere. The outline generator now treats a
+    `not: {}` property as forbidden.
+  - Completing an existing key doubled its colon.
+  - `[N]` was offered inside a quoted `priorContext`.
+  - YAML-reserved `@…` and `.inf`-like values were inserted unquoted.
+  - `sessionId` offered script steps, which have no session.
+- **F3, filed:**
+  [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/backlog/workflow-completion-core-json-arrays-flow-maps-and-commas.md)
+  covers JSON arrays without a typed quote, multi-line inserts inside YAML flow mappings, and
+  missing JSON commas. Nothing consumes the core yet, so **fix it at the start of F4**, which
+  is the first consumer.
+
 ## Short answer
 
 - **The three plans can run in parallel, with three ordering constraints:**
@@ -94,7 +141,7 @@ Each row lists what must land before that phase.
 | M4         | F1, ships with B | The grammar is generated from `WORKFLOW_TEXT_FIELDS`. Shipping it without B makes backticks look literal while they still link. |
 | D2         | D1, F1b          | Prompt values, `.prompt.md` bodies included, come from `getWorkflowTextSpans`                                                   |
 | M2         | M1, D1, F0       | Palette; lint precedence over the D1 adapters; same file as F0                                                                  |
-| F4         | F0, F1, F3       | As stated in plan F                                                                                                             |
+| F4         | F0, F1, F3       | As stated in plan F. Starts by fixing `workflow-completion-core-json-arrays-flow-maps-and-commas`                               |
 | F5         | F4, D1           | Workspace lint uses D1's rules. The compartment comes from F4.                                                                  |
 | F7         | F3               | VS Code value completions share F3                                                                                              |
 | D3         | D2, F5           | Needs the side-effect-free `PromptFileParser` validate added in F5                                                              |
@@ -121,23 +168,26 @@ hosted high-contrast light fix, were then committed on `main` directly.
 
 ### Wave 2: consumers of the core
 
-Every input is on `main`. The only ordering left is the worktree split: D2 follows F0 in
-`small-feature`. **B + M4 are done** (2026-10-08, in `bug-fix`).
+**Done 2026-10-08.** All five phases merged to `main`; the review's fixes were committed on
+`main` directly.
 
 | Phase                                                           | Hot file                                | Suggested worktree | Notes                                                                                                                 |
 | --------------------------------------------------------------- | --------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | **F3:** completion items                                        | —                                       | `big-feature`      | Plan F's Phase 3 lists what the Phase 1/2 API leaves to it (root mode filtering, step-type keys, per-object snippets) |
-| **F0:** completion-client extraction                            | `CodeMirrorEditor.tsx`                  | `small-feature`    | **Done 2026-10-08.**                                                                                                  |
-| **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | **Done 2026-10-08.** Uses `getWorkflowTextSpans` for every file kind; took plan D's listed cleanups.                  |
-| **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | **Done.** Merge them together. B uses `getWorkflowTextSpans`; M4's generator reads `WORKFLOW_TEXT_FIELDS`             |
+| **F0:** completion-client extraction                            | `CodeMirrorEditor.tsx`                  | `small-feature`    |                                                                                                                       |
+| **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | After F0 in the same worktree. Uses `getWorkflowTextSpans` for every file kind; took plan D's listed cleanups.        |
+| **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | Merged together. B uses `getWorkflowTextSpans`; M4's generator reads `WORKFLOW_TEXT_FIELDS`                           |
 
 ### Wave 3: the two editors
 
-| Phase                                 | Hot file                  | Notes                           |
-| ------------------------------------- | ------------------------- | ------------------------------- |
-| **M2:** markdown in the prompt editor | `CodeMirrorEditor.tsx`    | After F0                        |
-| **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` |                                 |
-| **F7:** VS Code completion parity     | —                         | Can run alongside anything here |
+**Ready to start.** Every input is on `main`, and no two phases share a hot file. M2 is the
+only Wave 3 phase that touches `CodeMirrorEditor.tsx`.
+
+| Phase                                 | Hot file                  | Suggested worktree | Notes                                                                                                                            |
+| ------------------------------------- | ------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| **M2:** markdown in the prompt editor | `CodeMirrorEditor.tsx`    | `small-feature`    | Needs the lazy, memoised `resolveCodeMirrorLanguage` wrapper noted in the Wave 1 review                                          |
+| **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` | `big-feature`      | First fix `workflow-completion-core-json-arrays-flow-maps-and-commas`; F4 is the core's first consumer                           |
+| **F7:** VS Code completion parity     | —                         | `bug-fix`          | Moves the VS Code providers onto the F3 core. If it lands before F4, it needs that same fix first; coordinate with `big-feature` |
 
 ### Wave 4: diagnostics everywhere
 

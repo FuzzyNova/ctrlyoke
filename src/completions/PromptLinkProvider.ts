@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
-import { getPromptCodeRanges, isRangeInPromptCode } from "./PromptCodeRanges";
+import {
+  getDocumentPromptCodeRanges,
+  isRangeInPromptCode,
+} from "./PromptCodeRanges";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeNamedWorkspaceRoots,
@@ -72,11 +75,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     }
 
     // A reference inside code is sent literally, so it must not look attached.
-    const codeRanges = getPromptCodeRanges(
-      document.getText(),
-      document.fileName,
-      document.languageId
-    );
+    const codeRanges = getDocumentPromptCodeRanges(document);
     if (codeRanges.length === 0) {
       return links;
     }
