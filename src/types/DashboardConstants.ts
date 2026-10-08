@@ -958,6 +958,12 @@ export const LSP_METHODS = {
   CANCEL_REQUEST: "$/cancelRequest",
 } as const;
 
+/** Server-side close tells hosted LSP clients to look up and attach again. */
+export const LSP_SESSION_INVALIDATION_CLOSE = {
+  CODE: 4410,
+  REASON: "Language server session ended; reconnect to refresh",
+} as const;
+
 export const LSP_SESSION_LOOKUP_REASONS = {
   NO_SERVER: "no server",
   LIMIT_REACHED: "limit reached",

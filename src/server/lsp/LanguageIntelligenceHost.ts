@@ -17,6 +17,7 @@ import type { WorkspacePathContext } from "./WorkspacePathContainment";
 import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import type { LanguageServerStatusChange } from "./ManagedLanguageServerBackend";
 import { LANGUAGE_SERVER_STATUSES } from "../../types/DashboardConstants";
+import { secretRedactionService } from "../../utils/SecretRedactionService";
 
 interface SharedServerSession {
   readonly id: string;
@@ -25,6 +26,9 @@ interface SharedServerSession {
   readonly documents: Map<string, SharedDocument>;
   readonly proxies: Set<LspSessionProxy>;
 }
+
+const MAX_WARMUP_DOCUMENT_BYTES = 2 * 1024 * 1024;
+const BINARY_CHECK_BYTES = 8_192;
 
 export type LanguageIntelligenceSessionLookup = LanguageIntelligenceSessionLookupResponse;
 
@@ -76,7 +80,6 @@ export class LanguageIntelligenceHost {
     if (!("descriptor" in resolution)) return undefined;
     const session = await this.getOrCreateSession(resolution.descriptor);
     if (!this.options.isWorkspaceTrusted()) return undefined;
-    session.descriptor = resolution.descriptor;
     return { descriptor: session.descriptor, result: await session.connection.sendRequest(method, params) };
   }
 
@@ -91,11 +94,25 @@ export class LanguageIntelligenceHost {
     const opened = this.warmupDocuments.get(session.id) ?? new Set<string>();
     if (opened.has(uri)) return;
     const fs = await import("node:fs/promises");
-    const text = await fs.readFile(absolutePath, "utf8");
-    await session.connection.sendNotification(LSP_METHODS.DID_OPEN, { textDocument: { uri, languageId, version: 1, text } });
+    const stat = await fs.stat(absolutePath);
+    if (stat.size > MAX_WARMUP_DOCUMENT_BYTES) return;
+    const handle = await fs.open(absolutePath, "r");
+    try {
+      const sample = Buffer.alloc(BINARY_CHECK_BYTES);
+      const { bytesRead } = await handle.read(sample, 0, BINARY_CHECK_BYTES, 0);
+      if (sample.subarray(0, bytesRead).includes(0)) return;
+    } finally { await handle.close(); }
+    const text = secretRedactionService.redactText(await fs.readFile(absolutePath, "utf8"));
+    let document = session.documents.get(uri);
+    if (!document) {
+      document = { uri, tabs: new Map(), serverVersion: 1, syncedText: text, syncedVersion: 1, warmupReferences: 1 };
+      session.documents.set(uri, document);
+      await session.connection.sendNotification(LSP_METHODS.DID_OPEN, { textDocument: { uri, languageId, version: 1, text } });
+    } else {
+      document.warmupReferences = (document.warmupReferences ?? 0) + 1;
+    }
     opened.add(uri);
     this.warmupDocuments.set(session.id, opened);
-    this.options.backend.documentOpened?.(session.descriptor);
   }
 
   async restartServer(id: string): Promise<void> {
@@ -134,7 +151,7 @@ export class LanguageIntelligenceHost {
       session: {
         id: session.id,
         languageId: resolution.descriptor.languageId,
-        capabilities: resolution.descriptor.capabilities,
+        capabilities: session.descriptor.capabilities,
       },
     };
   }
@@ -151,7 +168,8 @@ export class LanguageIntelligenceHost {
       readFile: async () => ({ content: "", readOnly: true }),
       writeFile: async () => undefined,
       notifyFileChanged: async () => undefined,
-    }
+    },
+    invalidateClient?: (code: number, reason: string) => void
   ): Promise<LspSessionProxy | undefined> {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
     const pending = this.sessionsById.get(serverId);
@@ -169,6 +187,7 @@ export class LanguageIntelligenceHost {
       onDispose: () => session.proxies.delete(proxy),
       onDocumentOpened: () => this.options.backend.documentOpened?.(session.descriptor),
       onDocumentClosed: () => this.options.backend.documentClosed?.(session.descriptor),
+      onSessionInvalidated: invalidateClient,
     });
     session.proxies.add(proxy);
     return proxy;
@@ -179,11 +198,12 @@ export class LanguageIntelligenceHost {
     if (!absolutePath) return;
     const uri = pathToFileURL(absolutePath).toString();
     for (const pending of this.sessions.values()) {
-      const session = await pending;
+      const session = await pending.catch(() => undefined);
+      if (!session) continue;
       void session.connection.sendNotification(
         LSP_METHODS.DID_CHANGE_WATCHED_FILES,
         { changes: [{ uri, type }] }
-      );
+      ).catch(() => undefined);
     }
   }
 
@@ -264,6 +284,15 @@ export class LanguageIntelligenceHost {
       }
     );
     this.sessions.set(key, created);
+    void created.catch((error: unknown) => {
+      if (this.sessions.get(key) === created) this.sessions.delete(key);
+      this.statusEvents.emit("change", {
+        id: descriptor.id,
+        rootPath: root,
+        status: LANGUAGE_SERVER_STATUSES.CRASHED,
+        detail: error instanceof Error ? error.message : String(error),
+      } satisfies LanguageServerStatusChange);
+    });
     void created.then((session) => {
       this.sessionsById.set(session.id, created);
     }).catch(() => undefined);
@@ -278,7 +307,7 @@ export class LanguageIntelligenceHost {
     void pending.then((session) => {
       this.sessionsById.delete(session.id);
       void this.closeWarmupDocuments(session);
-      for (const proxy of [...session.proxies]) proxy.dispose();
+      for (const proxy of [...session.proxies]) proxy.invalidateSession();
       session.connection.dispose();
     }).catch(() => undefined);
   }
@@ -288,12 +317,15 @@ export class LanguageIntelligenceHost {
     if (!uris) return;
     this.warmupDocuments.delete(session.id);
     for (const uri of uris) {
+      const document = session.documents.get(uri);
+      if (document) document.warmupReferences = Math.max(0, (document.warmupReferences ?? 0) - 1);
+      if (document && (document.tabs.size > 0 || (document.warmupReferences ?? 0) > 0)) continue;
       try {
         await session.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
           textDocument: { uri },
         });
       } catch { /* server may already have exited */ }
-      this.options.backend.documentClosed?.(session.descriptor);
+      session.documents.delete(uri);
     }
   }
 }

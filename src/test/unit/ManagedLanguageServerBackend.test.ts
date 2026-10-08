@@ -7,6 +7,7 @@ import { PassThrough } from "stream";
 import { pathToFileURL } from "url";
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import { LSP_SESSION_INVALIDATION_CLOSE } from "../../types/DashboardConstants";
 import { ManagedLanguageServerBackend } from "../../server/lsp/ManagedLanguageServerBackend";
 import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
@@ -35,7 +36,7 @@ suite("ManagedLanguageServerBackend", () => {
         return { approvedValues: request.items.map((item) => item.value), deniedValues: [] };
       },
     };
-    const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp", "--stdio"], languages: ["typescript"], extensions: ["ts"], rootMarkers: [], env: { MODE: "one" } } }, use: { typescript: "custom" } };
+    const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp", "--stdio"], languages: ["typescript"], extensions: ["ts"], rootMarkers: [], env: { MODE: "one" } } }, use: { typescript: "custom" }, settings: { custom: { typescript: { tsdk: "./node_modules/typescript/lib" } } } };
     const backend = createBackend({ store, interaction, workspaceSettings: settings });
     const result = await backend.resolveForPath("src/app.ts", roots);
     assert.ok("descriptor" in result);
@@ -45,7 +46,148 @@ suite("ManagedLanguageServerBackend", () => {
     settings.definitions.custom.env.MODE = "two";
     await backend.resolveForPath("src/app.ts", roots);
     assert.strictEqual(decisions, 2);
+    settings.settings.custom.typescript.tsdk = "./vendor/typescript/lib";
+    await backend.resolveForPath("src/app.ts", roots);
+    assert.strictEqual(decisions, 3, "path-bearing initialization settings are bound to the approval hash");
     await backend.dispose();
+  });
+
+  test("keeps initialize capabilities across session lookup and later requests", async () => {
+    const backend = createBackend();
+    const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
+    try {
+      const first = await host.lookupSession("src/app.ts");
+      assert.ok(first.session);
+      assert.deepStrictEqual(first.session.capabilities, { completionProvider: {}, hoverProvider: true });
+      await host.requestForPath("src/app.ts", "textDocument/hover", {});
+      const second = await host.lookupSession("src/app.ts");
+      assert.deepStrictEqual(second.session?.capabilities, { completionProvider: {}, hoverProvider: true });
+    } finally { await host.dispose(); }
+  });
+
+  test("coalesces concurrent connection requests for one server root", async () => {
+    const children: EventEmitter[] = [];
+    const backend = createBackend({ children });
+    const result = await backend.resolveForPath("src/app.ts", roots);
+    assert.ok("descriptor" in result);
+    const [first, second] = await Promise.all([backend.getConnection(result.descriptor), backend.getConnection(result.descriptor)]);
+    assert.strictEqual(first, second);
+    assert.strictEqual(children.length, 1);
+    await backend.dispose();
+  });
+
+  test("bounds shutdown, sends exit, and kills a child before a late shutdown reply", async () => {
+    const children: EventEmitter[] = [];
+    const backend = createBackend({
+      children,
+      ignoreShutdown: true,
+      ignoreExit: true,
+      setTimer: ((callback: () => void, delay?: number) => {
+        if (delay === 1_000) setImmediate(callback);
+        return callback as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout,
+      clearTimer: (() => undefined) as typeof clearTimeout,
+    });
+    const result = await backend.resolveForPath("src/app.ts", roots);
+    assert.ok("descriptor" in result);
+    await backend.getConnection(result.descriptor);
+    await backend.dispose();
+    assert.strictEqual((children[0] as EventEmitter & { killCount: number }).killCount, 1);
+  });
+
+  test("evicts a failed startup session so a later lookup retries and reports the crash", async () => {
+    let attempts = 0;
+    const backend = createBackend({ onSpawn: () => { attempts += 1; throw new Error("spawn failed"); } });
+    const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
+    const statuses: string[] = [];
+    host.onStatusChanged((event) => statuses.push(event.status));
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await assert.rejects(host.lookupSession("src/app.ts"), /spawn failed/);
+      }
+      assert.strictEqual(attempts, 2);
+      assert.ok(statuses.includes("crashed"));
+    } finally { await host.dispose(); }
+  });
+
+  test("closes attached proxies with the documented reconnect code when a session stops", async () => {
+    const backend = createBackend();
+    const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
+    let close: { code: number; reason: string } | undefined;
+    try {
+      const lookup = await host.lookupSession("src/app.ts");
+      assert.ok(lookup.session);
+      await host.createProxy(lookup.session.id, () => undefined, async () => true, undefined, (code, reason) => { close = { code, reason }; });
+      await backend.stopManagedServer("typescript-language-server");
+      assert.deepStrictEqual(close, { code: LSP_SESSION_INVALIDATION_CLOSE.CODE, reason: LSP_SESSION_INVALIDATION_CLOSE.REASON });
+    } finally { await host.dispose(); }
+  });
+
+  test("does not prompt for an unrelated pending workspace definition", async () => {
+    let prompts = 0;
+    const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp"], languages: ["python"], extensions: ["py"], rootMarkers: [] } } };
+    const backend = createBackend({ workspaceSettings: settings, interaction: { canPrompt: () => true, requestChoice: async () => undefined, requestBatchApproval: async () => { prompts += 1; return undefined; } } });
+    const result = await backend.resolveForPath("src/app.ts", roots);
+    assert.ok("descriptor" in result);
+    assert.strictEqual(prompts, 0);
+    await backend.dispose();
+  });
+
+  test("deduplicates a pending definition prompt and remembers dismissal for the host session", async () => {
+    let prompts = 0;
+    const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp"], languages: ["typescript"], extensions: ["ts"], rootMarkers: [] } }, use: { typescript: "custom" } };
+    const backend = createBackend({ workspaceSettings: settings, interaction: { canPrompt: () => true, requestChoice: async () => undefined, requestBatchApproval: async () => { prompts += 1; return undefined; } } });
+    const results = await Promise.all([backend.resolveForPath("src/app.ts", roots), backend.resolveForPath("src/other.ts", roots)]);
+    assert.deepStrictEqual(results, [{ reason: "needs approval" }, { reason: "needs approval" }]);
+    await backend.resolveForPath("src/app.ts", roots);
+    assert.strictEqual(prompts, 1);
+    await backend.dispose();
+  });
+
+  test("uses the nearest root marker within the workspace", async () => {
+    const workspace = await fs.promises.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-lsp-root-"));
+    const projectRoot = path.join(workspace, "packages", "app");
+    await fs.promises.mkdir(path.join(projectRoot, "src"), { recursive: true });
+    await fs.promises.writeFile(path.join(projectRoot, "app.sln"), "", "utf8");
+    const backend = createBackend({ root: workspace });
+    try {
+      const result = await backend.resolveForPath(path.join(projectRoot, "src", "app.cs"), { workspaceRoot: workspace, namedRoots: [] });
+      assert.ok("descriptor" in result);
+      assert.strictEqual(result.descriptor.rootPath, projectRoot);
+    } finally {
+      await backend.dispose();
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("warm-up anchors do not protect idle servers, while a browser open of the same URI does", async () => {
+    const workspace = await fs.promises.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-lsp-anchor-"));
+    await fs.promises.writeFile(path.join(workspace, "anchor.ts"), "export const anchor = 1;", "utf8");
+    const timers: Array<() => void> = [];
+    const children: EventEmitter[] = [];
+    const backend = createBackend({ root: workspace, children, setTimer: ((callback: () => void) => { timers.push(callback); return callback as unknown as ReturnType<typeof setTimeout>; }) as typeof setTimeout, clearTimer: (() => undefined) as typeof clearTimeout });
+    const host = new LanguageIntelligenceHost({ backend, workspaceRoot: workspace, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
+    let proxy: Awaited<ReturnType<LanguageIntelligenceHost["createProxy"]>>;
+    try {
+      await host.openWarmupDocument("anchor.ts", "typescript");
+      const lookup = await host.lookupSession("anchor.ts");
+      assert.ok(lookup.session);
+      proxy = await host.createProxy(lookup.session.id, () => undefined, async () => true);
+      assert.ok(proxy);
+      const uri = pathToFileURL(path.join(workspace, "anchor.ts")).toString();
+      await proxy?.handleMessage({ jsonrpc: "2.0", method: "textDocument/didOpen", params: { textDocument: { uri, languageId: "typescript", version: 1, text: "export const anchor = 1;" } } });
+      timers.splice(0).forEach((timer) => timer());
+      await Promise.resolve();
+      assert.strictEqual(backend.runningServerCount, 1, "the browser document protects the server");
+      await proxy?.handleMessage({ jsonrpc: "2.0", method: "textDocument/didClose", params: { textDocument: { uri } } });
+      timers.splice(0).forEach((timer) => timer());
+      for (let attempt = 0; attempt < 20 && backend.runningServerCount; attempt += 1) await new Promise((resolve) => setImmediate(resolve));
+      assert.strictEqual(backend.runningServerCount, 0, "the warm-up reference alone does not prevent idle shutdown");
+    } finally {
+      proxy?.dispose();
+      await host.dispose();
+      await fs.promises.rm(workspace, { recursive: true, force: true });
+    }
   });
 
   test("idle shutdown never stops a server while a document is open", async () => {
@@ -99,12 +241,18 @@ suite("ManagedLanguageServerBackend", () => {
     await backend.getConnection(result.descriptor);
     backend.documentOpened(result.descriptor);
     children[0].emit("exit", 1, null);
+    assert.strictEqual((children[0] as EventEmitter & { exitCode: number | null }).exitCode, 0, "crashed child is killed before restart");
     assert.strictEqual(backend.runningServerCount, 0);
     assert.ok(timers.length >= 2, "idle callback and crash retry should both be queued");
-    timers.at(-1)?.();
-    for (let attempt = 0; attempt < 20 && backend.runningServerCount === 0; attempt += 1) await Promise.resolve();
+    await backend.getConnection(result.descriptor);
+    timers.at(-2)?.();
     assert.strictEqual(backend.runningServerCount, 1);
     assert.strictEqual(children.length, 2);
+    children[1].emit("exit", 1, null);
+    assert.ok(timers.length >= 3, "restart policy survives the new instance's zero document count");
+    timers.at(-1)?.();
+    for (let attempt = 0; attempt < 20 && children.length < 3; attempt += 1) await Promise.resolve();
+    assert.strictEqual(children.length, 3);
     await backend.dispose();
     children[0].emit("exit", 1, null);
   });
@@ -175,6 +323,7 @@ async function waitForMessage(messages: Array<Record<string, unknown>>, predicat
 }
 
 function createBackend(options: {
+  root?: string;
   trusted?: boolean;
   onSpawn?: () => void;
   store?: Map<string, unknown>;
@@ -184,25 +333,28 @@ function createBackend(options: {
   clearTimer?: typeof clearTimeout;
   maxRunning?: number;
   children?: EventEmitter[];
+  ignoreShutdown?: boolean;
+  ignoreExit?: boolean;
 } = {}): ManagedLanguageServerBackend {
   const state = options.store ?? new Map<string, unknown>();
   const child = () => {
     const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
     let server: ReturnType<typeof createMessageConnection> | undefined;
-    const emitter = new EventEmitter() as EventEmitter & { stdin: PassThrough; stdout: PassThrough; stderr: PassThrough; exitCode: number | null; kill(): boolean };
-    Object.assign(emitter, { stdin, stdout, stderr, exitCode: null, kill: () => { emitter.exitCode = 0; server?.dispose(); stdin.destroy(); stdout.destroy(); stderr.destroy(); emitter.emit("exit", 0, null); return true; } });
+    const emitter = new EventEmitter() as EventEmitter & { stdin: PassThrough; stdout: PassThrough; stderr: PassThrough; exitCode: number | null; killCount: number; kill(): boolean };
+    Object.assign(emitter, { stdin, stdout, stderr, exitCode: null, killCount: 0, kill: () => { emitter.killCount += 1; emitter.exitCode = 0; server?.dispose(); stdin.destroy(); stdout.destroy(); stderr.destroy(); emitter.emit("exit", 0, null); return true; } });
     options.children?.push(emitter);
     emitter.once("exit", () => { server?.dispose(); stdin.destroy(); stdout.destroy(); stderr.destroy(); });
     server = createMessageConnection(new StreamMessageReader(stdin), new StreamMessageWriter(stdout));
     server.onRequest("initialize", () => ({ capabilities: { completionProvider: {}, hoverProvider: true } }));
-    server.onRequest("shutdown", () => null);
-    server.onNotification("exit", () => { emitter.exitCode = 0; emitter.emit("exit", 0, null); });
+    server.onRequest("textDocument/hover", () => ({ contents: "hover" }));
+    server.onRequest("shutdown", () => options.ignoreShutdown ? new Promise<null>((resolve) => setTimeout(() => resolve(null), 25)) : null);
+    server.onNotification("exit", () => { if (!options.ignoreExit) setImmediate(() => { emitter.exitCode = 0; emitter.emit("exit", 0, null); }); });
     server.listen();
     return emitter;
   };
   const languageServers = options.workspaceSettings ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers;
   return new ManagedLanguageServerBackend({
-    workspaceRoot: "/workspace",
+    workspaceRoot: options.root ?? "/workspace",
     userSettings: () => ({ languageServers: { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, maxRunning: options.maxRunning ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers.maxRunning } }),
     workspaceSettings: () => ({ languageServers }),
     approvalStore: { get: <T>(key: string) => state.get(key) as T | undefined, update: async (key: string, value: unknown) => { state.set(key, value); } },

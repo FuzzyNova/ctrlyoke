@@ -109,6 +109,7 @@ names the guard or test that proves it, not just the code change.
 |   12b | **Done.** Browser: install `@codemirror/lsp-client`, a reconnecting WebSocket transport, session-keyed client/workspace, `useLanguageIntelligence`, and the `Compartment` slot in `WorkspaceFileEditor`. | LSP phase 1 (browser half)                   | Stage 12a                     | Fake-socket and null-session tests pass; a session extension reconfigures the compartment while preserving the existing editor DOM, document, and selection. |
 |   13a | **Done.** `languageServers` schema/settings, curated catalog, and pure selection/command resolver with PATH and `.bin` probing.                                                                              | LSP phase 2 (configuration/catalog half)               | Stage 12b                     | Settings round-trip and workspace lifecycle restrictions pass; resolver order and catalog/probe tests pass.                                  |
 |   13b | **Done.** Managed backend lifecycle: hash-bound workspace-definition approval, stdio spawn, idle/cap/LRU/restart, trust gate, status events, and standalone `startOnLaunch`.                                     | LSP phase 2 (managed backend half)                     | Stage 13a                     | Unit tests cover approval/hash renewal, trust, open-document protection, cap rejection, idle shutdown, LRU eviction, and crash restart. Browser completion/hover/rename/diagnostics still need manual verification in both hosts. |
+|       | **Review fix (2026-10-07):** invalidated `/ws/lsp` connections close with code `4410` and reason `Language server session ended; reconnect to refresh`. The browser reconnect path must treat `4410` as a signal to repeat session lookup. | | | |
 |    14 | **Done.** Editor UX: capability-gated context actions, F12 definition navigation, references panel with workflow context insertion, and cross-file navigation.                                      | LSP phase 3                                            | Stage 13b                     | Vitest covers missing-capability hiding, F12 dispatch, reference formatting/navigation/context insertion, and preserved reference-link gestures. |
 |    15 | **Done.** Language Servers settings section: live status, curated catalog (detected / not installed, confirmed npm install, copyable install commands, homepage links), and local-config scan/import. | LSP phase 4                                            | Stage 13b                     | The Languages strip writes the active scope; server rows cover lifecycle/status actions, catalog installation, and local config import. `npm test` passes (extension 5,640/4 pending, UI 3,489, packaging 80). |
 |    16 | **Done.** `LspSymbolIndex` for standalone `#`, with regex fallback per language. First `#` starts detected servers within the managed cap; regex answers during startup; catalog anchors stay open for each root marker. | LSP phase 7b | Stages 9 and 13b | Golden coverage matches all three indexes; fake-host coverage checks fan-out, range resolution, max results, startup fallback, and anchor opening. |
@@ -238,6 +239,13 @@ names the guard or test that proves it, not just the code change.
     its isolated rerun passed.
   - **13b:** `ManagedLanguageServerBackend` lifecycle (spawn, idle, cap/LRU,
     crash restart), workspace-definition approval, trust gate, `startOnLaunch`.
+    **Review fixes (2026-10-07):** retain initialize capabilities; close invalidated
+    sockets with `4410`; coalesce starts; bound shutdown; resolve roots from
+    markers; separate warm-up anchors from browser documents; scope standalone
+    approvals to user state; and dedupe/limit approval prompts. Regression tests
+    cover these paths. Typecheck and lint pass. Full `npm test` had one unrelated
+    `VsCodeDocuments > saves an open dirty document` failure (extension 5,658
+    passing/4 pending, UI 3,490, packaging 80); its isolated rerun passed.
   - **14a — done (2026-10-07):** proxy-applied rename and server
     `workspace/applyEdit` `WorkspaceEdit`s (unopened files via the viewer
     service, cross-tab buffer edits, redacted-file rejection) and the

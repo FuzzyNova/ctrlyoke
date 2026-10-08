@@ -42,13 +42,12 @@ import {
 import { createHostedServerOptions } from "./server/HostedServerOptionsFactory";
 import { LanguageIntelligenceHost } from "./server/lsp/LanguageIntelligenceHost";
 import { ManagedLanguageServerBackend } from "./server/lsp/ManagedLanguageServerBackend";
-import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
+import { createLanguageServerSettingsReaders } from "./server/lsp/LanguageServerSettingsAccess";
 import {
   GIT_CHANGE_KINDS,
   HOST_KINDS,
   MESSAGE_TYPES,
   RUNNER_IDS,
-  SETTING_SCOPES,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
   VSCODE_GIT_COMMANDS,
@@ -1651,11 +1650,11 @@ function registerCommands(
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
+      const languageServerSettings = createLanguageServerSettingsReaders(configService);
       const languageIntelligenceHost = new LanguageIntelligenceHost({
         backend: new ManagedLanguageServerBackend({
           workspaceRoot,
-          userSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.USER) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
-          workspaceSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.WORKSPACE) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
+          ...languageServerSettings,
           approvalStore: new VsCodeKeyValueStore(context.globalState),
           interactionPort: webviewProvider.getUserInteractionPort(),
           isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),

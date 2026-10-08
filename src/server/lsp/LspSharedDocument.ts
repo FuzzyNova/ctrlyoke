@@ -5,6 +5,7 @@ export interface SharedDocument {
   readonly uri: string;
   readonly tabs: Map<LspSessionProxy, { text: string; version: number }>;
   serverVersion: number;
+  warmupReferences?: number;
   syncedText?: string;
   syncedVersion?: number;
 }

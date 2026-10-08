@@ -39,9 +39,9 @@ import { CtrlYokeHostedServer } from "../server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "../server/HostedServerOptionsFactory";
 import { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
 import { ManagedLanguageServerBackend } from "../server/lsp/ManagedLanguageServerBackend";
+import { createLanguageServerSettingsReaders } from "../server/lsp/LanguageServerSettingsAccess";
+import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
-import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
-import { SETTING_SCOPES } from "../types/DashboardConstants";
 import { setRuntimeMode } from "../utils/RuntimeMode";
 import { initializeModelRegistry } from "../utils/ModelRegistry";
 
@@ -293,11 +293,12 @@ export async function createNodeHostedServer(options: {
   // Exempt the connection token from heuristic redaction while the server is
   // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.
   const unprotectToken = secretRedactionService.protectValue(token);
+  const languageServerSettings = createLanguageServerSettingsReaders(configService);
   const languageServerBackend = new ManagedLanguageServerBackend({
     workspaceRoot: cwd,
-    userSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.USER) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
-    workspaceSettings: () => ({ languageServers: (configService.getScoped("languageServers", SETTING_SCOPES.WORKSPACE) ?? CTRLYOKE_SETTINGS_DEFAULTS.languageServers) as typeof CTRLYOKE_SETTINGS_DEFAULTS.languageServers }),
-    approvalStore: services.workspaceState,
+    ...languageServerSettings,
+    // Approval hashes are machine/user trust decisions, never workspace data.
+    approvalStore: new FileKeyValueStore(ctrlyokeStateHome()),
     interactionPort: dashboardApplication.interactionPort,
     isWorkspaceTrusted: () => orchestrator.isWorkspaceTrusted(),
   });

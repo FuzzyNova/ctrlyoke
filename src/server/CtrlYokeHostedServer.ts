@@ -483,6 +483,10 @@ export class CtrlYokeHostedServer
           },
           notifyFileChanged: (viewerPath) =>
             this.languageIntelligenceHost.notifyWorkspaceFileChanged(viewerPath),
+        }, (code, reason) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(code, reason);
+          }
         })
         .then((created) => {
           proxy = created;

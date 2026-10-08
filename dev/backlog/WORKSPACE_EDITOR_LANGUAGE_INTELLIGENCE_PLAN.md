@@ -886,6 +886,10 @@ Staging numbers refer to
    - PATH, tool-dir, and workspace `node_modules/.bin` resolution through
      `resolveCliCommand`.
    - Spawn/idle/cap/restart lifecycle, `startOnLaunch`, and the trust gate.
+     When a managed session stops or crashes, its `/ws/lsp` clients are closed
+     with WebSocket code `4410` and reason `Language server session ended;
+     reconnect to refresh`; the browser must repeat HTTP session lookup before
+     reconnecting. Pending workspace definitions are skipped by `startOnLaunch`.
      Stage 13b is implemented in `ManagedLanguageServerBackend`; tests cover
      trust refusal, remembered and hash-invalidated approvals, open-document
      protection, cap rejection, idle shutdown, LRU eviction, and crash restart.

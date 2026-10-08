@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { CancellationTokenSource, type MessageConnection } from "vscode-jsonrpc";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
+import { LSP_SESSION_INVALIDATION_CLOSE } from "../../types/DashboardConstants";
 import { toViewerPath } from "../../platform/WorkspaceViewerPath";
 import type { LanguageServerDescriptor } from "./LanguageServerBackend";
 import {
@@ -36,6 +37,7 @@ interface ProxyOptions {
   readonly onDispose: () => void;
   readonly onDocumentOpened?: () => void;
   readonly onDocumentClosed?: () => void;
+  readonly onSessionInvalidated?: (code: number, reason: string) => void;
 }
 
 const INVALID_REQUEST = -32600;
@@ -59,6 +61,11 @@ export class LspSessionProxy {
     const handling = this.messageQueue.then(() => this.processMessage(message));
     this.messageQueue = handling.catch(() => undefined);
     return handling;
+  }
+
+  invalidateSession(): void {
+    this.options.onSessionInvalidated?.(LSP_SESSION_INVALIDATION_CLOSE.CODE, LSP_SESSION_INVALIDATION_CLOSE.REASON);
+    this.dispose();
   }
 
   private async processMessage(message: JsonRpcMessage): Promise<void> {
@@ -103,11 +110,13 @@ export class LspSessionProxy {
       if (!document) continue;
       document.tabs.delete(this);
       if (document.tabs.size === 0) {
-        this.options.documents.delete(buffer.serverUri);
-        void this.options.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
-          textDocument: { uri: buffer.serverUri },
-        }).catch(() => undefined);
         this.options.onDocumentClosed?.();
+        if ((document.warmupReferences ?? 0) === 0) {
+          this.options.documents.delete(buffer.serverUri);
+          void this.options.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
+            textDocument: { uri: buffer.serverUri },
+          }).catch(() => undefined);
+        }
       }
     }
     this.buffers.clear();
@@ -258,8 +267,8 @@ export class LspSessionProxy {
       this.options.documents.set(state.serverUri, shared);
     }
     shared.tabs.set(this, { text: state.text, version: state.version });
+    if (shared.tabs.size === 1) this.options.onDocumentOpened?.();
     if (isFirstOpen) {
-      this.options.onDocumentOpened?.();
       await this.options.connection.sendNotification(LSP_METHODS.DID_OPEN, {
         textDocument: {
           uri: state.serverUri,
@@ -310,12 +319,12 @@ export class LspSessionProxy {
     const shared = this.options.documents.get(state.serverUri);
     if (!shared) return;
     shared.tabs.delete(this);
-    if (shared.tabs.size > 0) return;
+    if (shared.tabs.size === 0) this.options.onDocumentClosed?.();
+    if (shared.tabs.size > 0 || (shared.warmupReferences ?? 0) > 0) return;
     this.options.documents.delete(state.serverUri);
     await this.options.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
       textDocument: { uri: state.serverUri },
     });
-    this.options.onDocumentClosed?.();
   }
 
   private async resyncForRequest(method: string, params: unknown): Promise<void> {
