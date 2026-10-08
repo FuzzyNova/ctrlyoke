@@ -1,8 +1,8 @@
 # Editor Intelligence Staging Plan
 
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
-**F1b**, the follow-up the Wave 1 review added. Wave 2 can start: nothing in it waits on
-anything else. This plan only orders the work. The design lives in the three plans it
+**F1b**, the follow-up the Wave 1 review added. **Wave 2 has started: F3 is done.** F0, D2
+and B + M4 remain, and nothing in them waits on anything else. This plan only orders the work. The design lives in the three plans it
 stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -28,6 +28,7 @@ it.
 | M1              | **Done** (2026-10-08) | `--cy-syntax-*` in `globals.css`, one role table in `utils/syntaxPalette.ts`, `resolveCodeMirrorLanguage`. Visual check done. Its one hosted regression is fixed: `hosted-high-contrast-light-syntax-colours`.                       |
 | M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                              |
 | F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                             |
+| F3              | **Done** (2026-10-08) | `WorkflowFileCompletionCore`: key and value items, `WorkflowValueDataSource`, document-aware step numbers and effective-harness models, per-object snippets, shared JSON escape. Details in plan F's Phase 3 entry.                  |
 | Everything else | Not started           |                                                                                                                                                                                                                                      |
 
 ### Wave 1 review (2026-10-08)

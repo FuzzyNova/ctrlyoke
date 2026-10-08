@@ -4,6 +4,7 @@ import {
   WORKFLOW_OBJECT_KINDS,
   type CtrlYokeFileKind,
 } from "../types/DashboardConstants";
+import { parse as parseJsonc } from "jsonc-parser";
 import { locateMarkdownFrontmatter } from "../utils/MarkdownFrontmatter";
 import {
   findJsonRangeForPath,
@@ -17,6 +18,7 @@ import type {
 import {
   findYamlRangeForPath,
   getYamlWorkflowLocation,
+  parseYamlRoot,
 } from "./WorkflowLocationYaml";
 
 export {
@@ -65,6 +67,30 @@ export function findRangeForPath(
       if (path.length === 0 || !frontmatter) return body;
       const range = findYamlRangeForPath(frontmatter.text, path);
       return range && shiftRange(range, frontmatter.start);
+    }
+  }
+}
+
+/**
+ * The partially parsed document as plain data, tolerant of a half-typed file.
+ * A `.prompt.md` file yields its frontmatter. Completion needs it to read
+ * sibling steps, so it is separate from the cursor lookup.
+ */
+export function parseWorkflowDocumentRoot(
+  text: string,
+  kind: CtrlYokeFileKind
+): unknown {
+  switch (kind) {
+    case CTRLYOKE_FILE_KINDS.WORKFLOW_JSON:
+      return parseJsonc(text, [], {
+        allowTrailingComma: true,
+        disallowComments: false,
+      }) as unknown;
+    case CTRLYOKE_FILE_KINDS.WORKFLOW_YAML:
+      return parseYamlRoot(text);
+    case CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN: {
+      const { frontmatter } = splitPromptMarkdown(text);
+      return frontmatter ? parseYamlRoot(frontmatter.text) : undefined;
     }
   }
 }

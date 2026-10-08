@@ -54,6 +54,11 @@ interface YamlParse {
   readonly root: unknown;
 }
 
+/** The partially parsed document as plain data (undefined if the parser gives up). */
+export function parseYamlRoot(text: string): unknown {
+  return parseYaml(text).root;
+}
+
 function parseYaml(text: string): YamlParse {
   const doc = parseDocument(text, { prettyErrors: false });
   let root: unknown;

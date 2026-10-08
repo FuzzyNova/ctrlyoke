@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { WORKFLOW_PROPERTY_SNIPPETS } from "../../completions/WorkflowPropertySnippets";
+import {
+  WORKFLOW_KIND_PROPERTY_SNIPPETS,
+  WORKFLOW_PROPERTY_SNIPPETS,
+} from "../../completions/WorkflowPropertySnippets";
 import { WORKFLOW_OBJECT_KINDS } from "../../types/DashboardConstants";
 import { WORKFLOW_SCHEMA_OUTLINE } from "../../types/generated/WorkflowSchemaOutline";
 
@@ -24,6 +27,18 @@ suite("WorkflowPropertySnippets", () => {
           snippet.insertSnippet.startsWith(`${key}:`),
           `${key} snippet: ${snippet.insertSnippet}`
         );
+      }
+    }
+  });
+
+  test("every per-object snippet key exists in that object's outline", () => {
+    for (const [kind, snippets] of Object.entries(
+      WORKFLOW_KIND_PROPERTY_SNIPPETS
+    )) {
+      const outline =
+        WORKFLOW_SCHEMA_OUTLINE[kind as keyof typeof WORKFLOW_SCHEMA_OUTLINE];
+      for (const key of Object.keys(snippets)) {
+        assert.ok(outline?.properties[key], `${kind}.${key} left the schema`);
       }
     }
   });

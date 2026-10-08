@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
 import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
-import { WORKFLOW_PROPERTY_SNIPPETS } from "./WorkflowPropertySnippets";
+import { getWorkflowPropertySnippet } from "./WorkflowPropertySnippets";
 import {
   CTRLYOKE_FILE_KINDS,
   STEP_TYPES,
@@ -36,10 +36,13 @@ function getStepPropertyDefinitions(
   const outline = WORKFLOW_SCHEMA_OUTLINE[objectKind];
   if (!outline) return [];
   return Object.entries(outline.properties).map(([key, property]) => {
-    const snippet = WORKFLOW_PROPERTY_SNIPPETS[key] ?? {};
+    const snippet = getWorkflowPropertySnippet(objectKind, key);
     return {
       key,
-      detail: snippet.detail ?? "Workflow step property",
+      detail:
+        snippet.detail ??
+        property.enum?.join(" | ") ??
+        "Workflow step property",
       documentation:
         snippet.documentation ??
         property.description ??

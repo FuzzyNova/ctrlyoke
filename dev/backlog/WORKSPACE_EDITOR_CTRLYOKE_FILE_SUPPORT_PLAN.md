@@ -584,11 +584,54 @@ Every phase lands with tests and leaves both editors working.
      a dedented block found by `findCodeRanges`, CRLF, escapes and offset round trips);
      `MarkdownFrontmatter.test.ts`; and the generator's enum-merge case.
 
-5. **Phase 3: `WorkflowFileCompletionCore`.**
+5. **Phase 3: `WorkflowFileCompletionCore`.** **Done 2026-10-08.**
    - Key and value items, and the `WorkflowValueDataSource` interface.
    - Effective-harness model resolution, document-derived step numbers, and the JSON escape
      lifted from `CompletionHelpers`.
-   - **Things the Phase 1/2 API leaves to this phase:**
+   - **As built:**
+     - `src/completions/WorkflowFileCompletionCore.ts`: `getWorkflowFileCompletions({ text,
+offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
+       signature differs from the design (`location, outline, data`): the core also needs the
+       text (key indentation, replace range) and the parsed document (siblings, mode, step
+       numbers). `parseWorkflowDocumentRoot(text, kind)` in `WorkflowDocumentLocation.ts`
+       produces the document; its YAML half is `parseYamlRoot`, so the webview can load it
+       lazily as it does for location. Only `KEY` and `VALUE` roles produce items; prompt
+       text, script text, permissions, branches and prompt paths stay host-backed.
+     - `replaceRange` is computed in the core so adapters need no word-boundary logic. A
+       single-line scalar replaces its whole value; otherwise it is the word at the cursor. A
+       JSON key also swallows its quotes (`"ha|"` becomes `"harness": `).
+     - **Key items:** multi-line inserts are re-indented to the key's column, which a
+       CodeMirror adapter needs (VS Code adjusts snippets itself). A new item with no
+       `prompt`, `script`, `type` or `parallel` yet offers prompt, script and (directly under
+       `steps`) parallel-group keys; `finalStep` and group members offer prompt and script.
+       Root keys are filtered by the document's mode (multi-step, single prompt, single script
+       or undecided), with "script-only" derived from the outline (script-step keys that
+       prompt steps lack). Deprecated keys sort last.
+     - **Value items:** outline enums and booleans, plus dynamic lists for `harness`,
+       `model` (the step's, then the workflow's, then the default harness's list, plus
+       `none`), `agent`, and `skills`, `mcpServers` and `secrets` list items (minus those
+       already listed; `ctrlyoke` is always an MCP choice). `priorContext` and `sessionId`
+       offer earlier step numbers counted the way the loader flattens groups, with each step's
+       name (or first line) as detail; a parallel member cannot point at its own group;
+       `sessionId` adds `finalStep` when one exists. The dynamic lists apply only on the
+       workflow root and on prompt and script steps. YAML values are quoted when plain would
+       change type; quoted scalars and JSON strings are escaped; numbers are not offered
+       inside a quoted string.
+     - **Snippets by object kind:** `getWorkflowPropertySnippet(objectKind, key)` merges
+       `WORKFLOW_KIND_PROPERTY_SNIPPETS` (per-condition `script` text) over the bare table.
+       `onPass`/`onFail` carry no hand-written detail, since their actions differ per object;
+       the detail is the object's own outline enum. Item documentation is the schema
+       description, falling back to the snippet's. The `agent` snippet now says an agent name,
+       and `hooks` inserts a list item with its required `event` and `command`.
+       `PromptPropertyCompletionProvider` uses the same lookup.
+     - **JSON escape:** `escapeJsonStringFragment` (`src/utils/JsonStringEscape.ts`) replaces
+       `CompletionHelpers`' quote-and-backslash replace, and now also escapes line breaks.
+     - **Not in this phase:** `$step:N`/`$endCondition:` prompt-token items and `{{var}}`
+       (Phase 6), and the adapters (Phases 4 and 7). A `priorContext` flow item such as
+       `[1, |]` offers nothing yet.
+     - **Tests:** `WorkflowFileCompletionCore.test.ts` (pure Mocha, stub data source) and a
+       per-object case in `WorkflowPropertySnippets.test.ts`.
+   - **Things the Phase 1/2 API left to this phase (all handled above):**
      - The root outline mixes single-step and multi-step keys (`prompt`, `script` and `steps`
        together). Filter by the document's mode.
      - A new item directly under `steps` resolves to `promptStep`, so it must also offer the
@@ -644,7 +687,7 @@ Every phase lands with tests and leaves both editors working.
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 1, 2 and 1b are done. Phase 0 and Phase 3 can start now. Phase 4 needs 0 and 3. The
+Phases 1, 2, 1b and 3 are done. Phase 0 can start now; Phase 4 needs 0. The
 cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 

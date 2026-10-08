@@ -21,6 +21,7 @@ import {
   rootForViewerPath,
 } from "../platform/WorkspaceViewerPath";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
+import { escapeJsonStringFragment } from "../utils/JsonStringEscape";
 import { CompletionCore, type PlainCompletionItem } from "./CompletionCore";
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
@@ -166,7 +167,7 @@ export function toVSCodeCompletionItem(
   vscodeItem.insertText =
     document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
     document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
-      ? insertText.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+      ? escapeJsonStringFragment(insertText)
       : insertText;
   vscodeItem.detail = item.detail;
 
