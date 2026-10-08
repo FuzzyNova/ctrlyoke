@@ -121,16 +121,18 @@ suite("PromptCompletionProvider", () => {
 
     const provider = new PromptCompletionProvider();
     const complete = async (prompt: string, trigger: "@" | "#") => {
-      const document = await vscode.workspace.openTextDocument({
-        language: "json",
-        content: `{"prompt":"review ${trigger}"}`,
-      });
+      const content = `{"prompt":"review ${trigger}"}`;
+      const document = new PromptDocumentStub(
+        path.join(root, "w.ctrlyoke.json"),
+        "json",
+        content
+      );
       const position = new vscode.Position(
         0,
         `{"prompt":"review ${trigger}`.length
       );
       const list = await provider.provideCompletionItems(
-        document,
+        document.asDocument(),
         position,
         new MockCancellationToken(),
         {
@@ -253,6 +255,129 @@ suite("PromptCompletionProvider", () => {
           yamlText,
           "then @src/ext"
         )
+      );
+    });
+  });
+
+  suite("where prompt tokens complete", () => {
+    const completeAt = async (
+      fileName: string,
+      languageId: string,
+      text: string,
+      marker: string
+    ): Promise<vscode.CompletionList | undefined> => {
+      clearFilesCache();
+      ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
+      const root = path.join(os.tmpdir(), "completion-provider-where");
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        configurable: true,
+        value: [{ uri: vscode.Uri.file(root), name: "workspace", index: 0 }],
+      });
+      Object.defineProperty(vscode.workspace, "findFiles", {
+        configurable: true,
+        value: async () => [],
+      });
+      const document = new PromptDocumentStub(
+        path.join(root, fileName),
+        languageId,
+        text
+      );
+      return new PromptCompletionProvider().provideCompletionItems(
+        document.asDocument(),
+        document.positionAt(document.offsetAfter(marker)),
+        new MockCancellationToken(),
+        {
+          triggerKind: vscode.CompletionTriggerKind.Invoke,
+          triggerCharacter: undefined,
+        }
+      );
+    };
+
+    test("completes in a retryPrompt and a passRetryPrompt, which the old scanner skipped", async () => {
+      const yamlText = [
+        "steps:",
+        "  - prompt: hi",
+        "    endCondition:",
+        "      script: npm test",
+        "      retryPrompt: fix $prev",
+      ].join("\n");
+      assert.ok(
+        await completeAt("w.ctrlyoke.yaml", "yaml", yamlText, "fix $prev")
+      );
+      const jsonText =
+        '{ "steps": [{ "prompt": "hi", "endCondition": { "script": "npm test", "passRetryPrompt": "see $prev" } }] }';
+      assert.ok(
+        await completeAt("w.ctrlyoke.json", "json", jsonText, "see $prev")
+      );
+    });
+
+    test("offers nothing in script text, other YAML values, or comments", async () => {
+      const script = [
+        "steps:",
+        "  - type: script",
+        "    script: echo @src/ext",
+      ].join("\n");
+      assert.strictEqual(
+        await completeAt("w.ctrlyoke.yaml", "yaml", script, "@src/ext"),
+        undefined
+      );
+      const name = ["steps:", "  - name: see @src/ext", "    prompt: hi"].join(
+        "\n"
+      );
+      assert.strictEqual(
+        await completeAt("w.ctrlyoke.yaml", "yaml", name, "@src/ext"),
+        undefined
+      );
+      const comment = ["# note @src/ext", "steps:", "  - prompt: hi"].join(
+        "\n"
+      );
+      assert.strictEqual(
+        await completeAt("w.ctrlyoke.yaml", "yaml", comment, "@src/ext"),
+        undefined
+      );
+    });
+
+    test("offers nothing in .prompt.md frontmatter but completes in the body", async () => {
+      const text = ["---", "name: see @src/ext", "---", "Read @src/ext"].join(
+        "\n"
+      );
+      assert.strictEqual(
+        await completeAt("p.prompt.md", "markdown", text, "name: see @src/ext"),
+        undefined
+      );
+      assert.ok(
+        await completeAt("p.prompt.md", "markdown", text, "Read @src/ext")
+      );
+    });
+
+    test("no longer offers model ids inside a JSON model string", async () => {
+      const text = '{ "model": "gpt", "steps": [{ "prompt": "hi" }] }';
+      assert.strictEqual(
+        await completeAt("w.ctrlyoke.json", "json", text, '"model": "gpt'),
+        undefined
+      );
+    });
+
+    test("/ opens ctrlyoke skill and MCP tokens at a word start only", async () => {
+      const list = await completeAt(
+        "p.prompt.md",
+        "markdown",
+        "Use /mcp:ctrl",
+        "/mcp:ctrl"
+      );
+      assert.ok(list);
+      const item = list.items.find((entry) => entry.label === "ctrlyoke");
+      assert.ok(item, "built-in ctrlyoke MCP server");
+      assert.strictEqual(item.insertText, "/mcp:ctrlyoke");
+      assert.deepStrictEqual(
+        item.range && "start" in item.range
+          ? [item.range.start.character, item.range.end.character]
+          : undefined,
+        [4, 13]
+      );
+      assert.strictEqual(
+        await completeAt("p.prompt.md", "markdown", "see ./src/", "./src/"),
+        undefined
       );
     });
   });

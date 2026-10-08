@@ -1,15 +1,16 @@
 import * as vscode from "vscode";
-import {
-  COPILOT_CLI_MODEL_IDS,
-  COPILOT_CLI_MODEL_LABELS,
-} from "../utils/ModelConstants";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
 import { toVSCodeCompletionItem } from "./CompletionHelpers";
 import { getCompletionCore } from "./CompletionHelpers";
 import type { SecretRegistryService } from "../ui/SecretRegistryService";
-import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
-import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
+import {
+  PROMPT_FILE_LANGUAGE_IDS,
+  WORKFLOW_LOCATION_ROLES,
+} from "../types/DashboardConstants";
+import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
+import { getWorkflowLocation } from "./WorkflowDocumentLocation";
+import { getCtrlYokeSlashCompletions } from "./SlashTokenCompletionHelpers";
 import {
   getDocumentPromptCodeRanges,
   isCursorInPromptCode,
@@ -18,7 +19,18 @@ import {
 /**
  * Trigger character types for context-aware completions
  */
-type TriggerChar = "@" | "#" | "~" | "$" | "!";
+type TriggerChar = "@" | "#" | "~" | "$" | "!" | "/";
+
+/**
+ * Start of the `/skill:`-style token being typed. Unlike the other triggers a
+ * slash begins a token only at the start of a line or after whitespace, so
+ * paths (`src/`, `./`, `../`) never open the list.
+ */
+function findSlashTokenStart(textBeforeCursor: string): number {
+  const index = textBeforeCursor.search(/(?:^|\s)\/[\w:.-]*$/);
+  if (index === -1) return -1;
+  return textBeforeCursor[index] === "/" ? index : index + 1;
+}
 
 /**
  * Provides context-aware completions for ctrlyoke prompt files
@@ -28,7 +40,7 @@ type TriggerChar = "@" | "#" | "~" | "$" | "!";
  * - Triggers on `#` character for snippet references (line ranges, selections)
  * - Offers workspace files as completions
  * - Special handling for current selection (inserts #selection:path:line-line)
- * - Dynamic model completions inside "model" string values (JSON files)
+ * - Triggers on `/` for ctrlyoke `/skill:` and `/mcp:` tokens
  *
  * Syntax Reference (see docs/PROMPT_SYNTAX.md):
  * - @path/to/file.ts          → Full file (CLI handles natively)
@@ -51,21 +63,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     _token: vscode.CancellationToken,
     _context: vscode.CompletionContext
   ): Promise<vscode.CompletionList | undefined> {
-    // For JSON files, check for model context first
-    if (
-      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
-      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
-    ) {
-      if (this.isInsideModelString(document, position)) {
-        return this.getModelCompletions(document, position);
-      }
-    }
-
-    // Check if we should provide file/selection completions
-    if (!this.shouldProvideCompletions(document, position)) {
-      return undefined;
-    }
-
     // Determine which trigger character is active
     const line = document.lineAt(position.line).text;
     const textBeforeCursor = line.substring(0, position.character);
@@ -74,6 +71,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const lastTildeIndex = findWordStartTriggerIndex(textBeforeCursor, "~");
     const lastDollarIndex = findWordStartTriggerIndex(textBeforeCursor, "$");
     const lastBangIndex = findWordStartTriggerIndex(textBeforeCursor, "!");
+    const lastSlashIndex = findSlashTokenStart(textBeforeCursor);
 
     // Determine which trigger is most recent (closest to cursor)
     let triggerChar: TriggerChar | undefined;
@@ -84,11 +82,16 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       lastHashIndex,
       lastTildeIndex,
       lastDollarIndex,
-      lastBangIndex
+      lastBangIndex,
+      lastSlashIndex
     );
 
     if (maxIndex === -1) {
       return undefined; // No trigger found
+    }
+
+    if (!this.shouldProvideCompletions(document, position)) {
+      return undefined;
     }
 
     // References inside code are sent literally, so don't offer to build one.
@@ -113,9 +116,12 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     } else if (maxIndex === lastDollarIndex) {
       triggerChar = "$";
       afterTrigger = textBeforeCursor.substring(lastDollarIndex + 1);
-    } else {
+    } else if (maxIndex === lastBangIndex) {
       triggerChar = "!";
       afterTrigger = textBeforeCursor.substring(lastBangIndex + 1);
+    } else {
+      triggerChar = "/";
+      afterTrigger = textBeforeCursor.substring(lastSlashIndex + 1);
     }
 
     // Don't provide completions if there's a space after trigger
@@ -133,6 +139,9 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     if (triggerChar === "!" && !/^[A-Z0-9_]*$/.test(afterTrigger)) {
       return undefined;
     }
+    if (triggerChar === "/" && !/^[\w:.-]*$/.test(afterTrigger)) {
+      return undefined;
+    }
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
@@ -143,6 +152,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return this.getTildeCompletions(afterTrigger, document);
     } else if (triggerChar === "!") {
       return this.getSecretCompletions(afterTrigger, document);
+    } else if (triggerChar === "/") {
+      return this.getSlashCompletions(afterTrigger, document, position);
     } else {
       return this.getDollarCompletions(afterTrigger, document);
     }
@@ -239,6 +250,34 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     return new vscode.CompletionList(items, true);
   }
 
+  /**
+   * `/skill:` and `/mcp:` tokens. Unlike the other triggers the item text
+   * includes the `/`, so the replacement range starts on it.
+   */
+  private async getSlashCompletions(
+    afterSlash: string,
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): Promise<vscode.CompletionList> {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    const plainItems = await getCtrlYokeSlashCompletions(
+      workspaceRoot,
+      `/${afterSlash}`
+    );
+    const range = new vscode.Range(
+      position.line,
+      position.character - afterSlash.length - 1,
+      position.line,
+      position.character
+    );
+    const items = plainItems.map((item) =>
+      toVSCodeCompletionItem(item, "/", range, document)
+    );
+    return new vscode.CompletionList(items, true);
+  }
+
   private async getSecretCompletions(
     filterText: string,
     document: vscode.TextDocument
@@ -261,216 +300,29 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   }
 
   /**
-   * Check if we should provide completions based on file type and cursor position
+   * Prompt tokens complete in prompt text only. A ctrlyoke file asks
+   * `getWorkflowLocation` (so `retryPrompt`, `passRetryPrompt` and a
+   * `.prompt.md` body count and frontmatter, scripts and comments do not);
+   * any other markdown or `prompt`-language document is prompt text throughout.
    */
   private shouldProvideCompletions(
     document: vscode.TextDocument,
     position: vscode.Position
   ): boolean {
-    // For Markdown and Prompt files, always provide completions
-    if (
+    const kind = getCtrlYokeFileKind(document.fileName);
+    if (kind) {
+      return (
+        getWorkflowLocation(
+          document.getText(),
+          document.offsetAt(position),
+          kind
+        ).role === WORKFLOW_LOCATION_ROLES.PROMPT_TEXT
+      );
+    }
+    return (
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT
-    ) {
-      return true;
-    }
-
-    // For YAML files, only provide completions inside "prompt:" values
-    if (
-      document.languageId === PROMPT_FILE_LANGUAGE_IDS.YAML ||
-      document.languageId === PROMPT_FILE_LANGUAGE_IDS.YML
-    ) {
-      return this.isInsideYamlPromptValue(document, position);
-    }
-
-    // For JSON files, only provide completions inside "prompt" string values
-    if (
-      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
-      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
-    ) {
-      return this.isInsidePromptString(document, position);
-    }
-
-    // For other file types, don't provide completions
-    return false;
-  }
-
-  /**
-   * Check if cursor position is inside a YAML prompt value
-   */
-  private isInsideYamlPromptValue(
-    document: vscode.TextDocument,
-    position: vscode.Position
-  ): boolean {
-    const currentLineText = document.lineAt(position.line).text;
-    if (
-      isPositionInsideYamlBlockScalar(
-        (line) => document.lineAt(line).text,
-        position.line,
-        position.character,
-        "prompt"
-      )
-    ) {
-      return true;
-    }
-
-    const currentPromptHeader = /^\s*(?:-\s+)?prompt:\s*(.*)$/.exec(
-      currentLineText
     );
-    if (currentPromptHeader) {
-      return currentPromptHeader[1].trim() !== "";
-    }
-
-    for (
-      let line = position.line - 1;
-      line >= Math.max(0, position.line - 50);
-      line--
-    ) {
-      const text = document.lineAt(line).text;
-      const promptHeader = /^\s*(?:-\s+)?prompt:\s*(.*)$/.exec(text);
-      if (!promptHeader) continue;
-      if (promptHeader[1].trim() !== "") return false;
-
-      const promptIndent = text.indexOf("prompt");
-      for (
-        let contentLine = line + 1;
-        contentLine <= position.line;
-        contentLine++
-      ) {
-        const content = document.lineAt(contentLine).text;
-        if (content.trim() === "") continue;
-        const indent = content.search(/\S/);
-        if (indent <= promptIndent) return false;
-      }
-      return true;
-    }
-
-    return false;
-  }
-  /**
-   * Check if cursor position is inside a "prompt" string value (JSON files only)
-   */
-  private isInsidePromptString(
-    document: vscode.TextDocument,
-    position: vscode.Position
-  ): boolean {
-    const line = document.lineAt(position.line).text;
-    const charIndex = position.character;
-
-    // Check if line contains "prompt":
-    const promptMatch = line.match(/\"prompt\"\s*:\s*\"/);
-    if (!promptMatch) {
-      return false;
-    }
-
-    // Find the opening quote of the value
-    const colonIndex = line.indexOf(":", promptMatch.index!);
-    const openQuoteIndex = line.indexOf('"', colonIndex);
-
-    if (openQuoteIndex === -1 || charIndex <= openQuoteIndex) {
-      return false;
-    }
-
-    // Check if there's a closing quote after the cursor
-    const closeQuoteIndex = line.indexOf('"', charIndex);
-
-    // We're inside the string if:
-    // - We're after the opening quote
-    // - Either no closing quote exists, or we're before it
-    return (
-      charIndex > openQuoteIndex &&
-      (closeQuoteIndex === -1 || charIndex <= closeQuoteIndex)
-    );
-  }
-
-  /**
-   * Check if cursor position is inside a "model" string value (JSON files only)
-   */
-  private isInsideModelString(
-    document: vscode.TextDocument,
-    position: vscode.Position
-  ): boolean {
-    const line = document.lineAt(position.line).text;
-    const charIndex = position.character;
-
-    // Check if line contains "model":
-    const modelMatch = line.match(/\"model\"\s*:\s*\"/);
-    if (!modelMatch) {
-      return false;
-    }
-
-    // Find the opening quote of the value
-    const colonIndex = line.indexOf(":", modelMatch.index!);
-    const openQuoteIndex = line.indexOf('"', colonIndex);
-
-    if (openQuoteIndex === -1 || charIndex <= openQuoteIndex) {
-      return false;
-    }
-
-    // We're inside the string if we're after the opening quote
-    return charIndex > openQuoteIndex;
-  }
-
-  /**
-   * Get model completions from ModelRegistry
-   */
-  private getModelCompletions(
-    document: vscode.TextDocument,
-    position: vscode.Position
-  ): vscode.CompletionList {
-    const items: vscode.CompletionItem[] = [];
-
-    // Get the current partial text for filtering
-    const line = document.lineAt(position.line).text;
-    const modelMatch = line.match(/\"model\"\s*:\s*\"/);
-    if (!modelMatch) {
-      return new vscode.CompletionList(items, false);
-    }
-
-    const colonIndex = line.indexOf(":", modelMatch.index!);
-    const openQuoteIndex = line.indexOf('"', colonIndex);
-
-    for (const modelId of COPILOT_CLI_MODEL_IDS) {
-      const label = COPILOT_CLI_MODEL_LABELS[modelId] ?? modelId;
-      const item = new vscode.CompletionItem(
-        modelId,
-        vscode.CompletionItemKind.EnumMember
-      );
-
-      // Replace the entire value inside the quotes
-      const startPos = new vscode.Position(position.line, openQuoteIndex + 1);
-      const endQuoteIndex = line.indexOf('"', position.character);
-      const endPos =
-        endQuoteIndex > position.character
-          ? new vscode.Position(position.line, endQuoteIndex)
-          : position;
-
-      item.range = new vscode.Range(startPos, endPos);
-      item.insertText = modelId;
-      item.detail = label;
-
-      const doc = new vscode.MarkdownString();
-      doc.appendMarkdown(`**${label}**\n\n`);
-      doc.appendMarkdown(`- Model ID: \`${modelId}\`\n`);
-      item.documentation = doc;
-
-      item.filterText = modelId;
-
-      items.push(item);
-    }
-
-    // If no models available, show a helpful message
-    if (items.length === 0) {
-      const noModelsItem = new vscode.CompletionItem(
-        "No models available",
-        vscode.CompletionItemKind.Text
-      );
-      noModelsItem.detail = "Model registry not initialized";
-      noModelsItem.insertText = "";
-      items.push(noModelsItem);
-    }
-
-    return new vscode.CompletionList(items, false);
   }
 
   /**

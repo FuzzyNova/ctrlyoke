@@ -50,19 +50,7 @@ import {
   type ExternalRootTrustDecision,
 } from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
-import {
-  getCliSupportedModelIdsSync,
-  getOpenCodeModelIdsSync,
-  getQwenModelIdsSync,
-  getAntigravityModelIdsSync,
-  getAntigravityModelLabelSync,
-} from "../utils/ModelRegistry";
-import {
-  getModelDisplayName,
-  CLAUDE_CLI_MODEL_LABELS,
-  CODEX_CLI_MODEL_LABELS,
-  ANTIGRAVITY_CLI_MODEL_LABELS,
-} from "../utils/ModelConstants";
+import { buildHarnessModelOptions } from "../utils/HarnessModelOptions";
 import {
   McpServerConfig,
   ToolPermissionsOverride,
@@ -1011,72 +999,7 @@ export class WebviewSettingsSync {
    * Build model options for all harnesses.
    */
   buildModelOptions(): Record<string, CapabilitiesModel[]> {
-    const cliModelIds = getCliSupportedModelIdsSync();
-    const hiddenModels = new Set(["copilot-fast"]);
-
-    const noneOption = { value: MODEL_OPTION_VALUES.NONE, label: "None" };
-
-    const copilotCliOptions = [
-      noneOption,
-      ...cliModelIds
-        .filter((id) => !hiddenModels.has(id))
-        .map((id) => ({
-          value: id,
-          label: getModelDisplayName(id),
-        })),
-    ];
-
-    const claudeCliOptions = [
-      noneOption,
-      ...Object.entries(CLAUDE_CLI_MODEL_LABELS).map(([value, label]) => ({
-        value,
-        label,
-      })),
-    ];
-
-    const codexCliOptions = [
-      noneOption,
-      ...Object.entries(CODEX_CLI_MODEL_LABELS).map(([value, label]) => ({
-        value,
-        label,
-      })),
-    ];
-
-    const openCodeCliOptions = [
-      noneOption,
-      ...getOpenCodeModelIdsSync().map((id) => ({
-        value: id,
-        label: id,
-      })),
-    ];
-
-    const qwenCliOptions = [
-      noneOption,
-      ...getQwenModelIdsSync().map((id) => ({
-        value: id,
-        label: id,
-      })),
-    ];
-
-    const antigravityCliOptions = [
-      noneOption,
-      ...getAntigravityModelIdsSync().map((id) => ({
-        value: id,
-        label:
-          getAntigravityModelLabelSync(id) ??
-          ANTIGRAVITY_CLI_MODEL_LABELS[id] ??
-          id,
-      })),
-    ];
-
-    return {
-      [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
-      [HARNESS_IDS.CLAUDE_CLI]: claudeCliOptions,
-      [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
-      [HARNESS_IDS.OPENCODE_CLI]: openCodeCliOptions,
-      [HARNESS_IDS.QWEN_CLI]: qwenCliOptions,
-      [HARNESS_IDS.ANTIGRAVITY_CLI]: antigravityCliOptions,
-    };
+    return buildHarnessModelOptions();
   }
 
   /**

@@ -704,7 +704,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
    - `$step:` items with step names, and `$endCondition:`/`$preCondition:` scoping.
    - `{{var}}` completions, adopted by the prompt editor too.
 
-9. **Phase 7: VS Code parity.** This can be done on its own schedule.
+9. **Phase 7: VS Code parity.** **Done 2026-10-08.** This can be done on its own schedule.
    - `PromptPropertyCompletionProvider` gains value completions and covers JSON through
      `WorkflowFileCompletionCore`, with a VS Code `WorkflowValueDataSource`.
    - `PromptCompletionProvider` gates on `getWorkflowLocation`. That adds `retryPrompt` and
@@ -713,7 +713,29 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 0, 1, 2, 1b and 3 are done. Phase 4 can start now. The F3 bug the Wave 2 review filed,
+   As built:
+   - **`WorkflowFileCompletionProvider`** replaces `PromptPropertyCompletionProvider` (deleted,
+     with its test) and is registered on every ctrlyoke glob, so JSON and `.prompt.md`
+     frontmatter get key and value completions too. Triggers are ` ` and `"`, so a value list
+     opens after `key: `. Its data source uses `buildHarnessModelOptions()`, a new
+     `utils/HarnessModelOptions.ts` lifted out of `WebviewSettingsSync.buildModelOptions` so the
+     dashboard and VS Code read one model list. Agents, skills, MCP servers and secrets are
+     fetched only for the field under the cursor, because the core's data source is synchronous.
+   - **`PromptCompletionProvider`** gates on `getWorkflowLocation` (role `PROMPT_TEXT`) for
+     ctrlyoke files, which adds `retryPrompt`/`passRetryPrompt` and excludes `.prompt.md`
+     frontmatter. The trigger is found first, so ordinary typing doesn't parse the file. The
+     hardcoded Copilot JSON `model` list is gone; the workflow-file provider's harness-aware
+     list replaces it.
+   - **`/` trigger** registered for `/skill:` and `/mcp:` tokens through
+     `getCtrlYokeSlashCompletions`, at a line start or after whitespace only.
+   - **Deleted:** `YamlBlockScalarContext.ts` and its test (no callers left),
+     `PromptPropertyCompletionProvider`'s step-block scan, and the provider's YAML/JSON
+     prompt-value and model scanners.
+   - **Behaviour change to know about:** an untitled or non-ctrlyoke-named YAML/JSON document of
+     language `yaml`/`json` no longer gets prompt-token completions; both providers key off the
+     ctrlyoke file name. Tests need `PromptDocumentStub` with a real file name.
+
+Phases 0, 1, 2, 1b, 3 and 7 are done. Phase 4 can start now. The F3 bug the Wave 2 review filed,
 [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md),
 is already fixed. The cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
