@@ -1,0 +1,89 @@
+import {
+  autocompletion,
+  type CompletionContext,
+  type CompletionResult,
+  type CompletionSource,
+} from "@codemirror/autocomplete";
+import { EditorState, type Extension } from "@codemirror/state";
+import { tooltips } from "@codemirror/view";
+import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
+import { DEFAULT_COMPLETION_ICON } from "@utils/atomicReferences";
+
+export interface PromptTokenCompletionOptions {
+  sources: readonly CompletionSource[];
+  /**
+   * Restricts where the sources answer (e.g. only inside prompt-text ranges of
+   * a workflow file). A source is skipped where the gate returns false.
+   */
+  gate?: (context: CompletionContext) => boolean;
+}
+
+function gateSources({
+  sources,
+  gate,
+}: PromptTokenCompletionOptions): CompletionSource[] {
+  if (!gate) return [...sources];
+  return sources.map(
+    (source): CompletionSource =>
+      (context): CompletionResult | Promise<CompletionResult | null> | null =>
+        gate(context) ? source(context) : null
+  );
+}
+
+/**
+ * Tooltip + autocompletion config for an editor whose only completion sources
+ * are the prompt-token ones (`override`). Fine for the prompt editor, which has
+ * no language server; an editor that already has other sources must use
+ * {@link promptTokenLanguageDataExtension} so they combine.
+ */
+export function promptTokenCompletionExtension(
+  options: PromptTokenCompletionOptions
+): Extension {
+  return [
+    // Mount autocomplete tooltips on document.body so they escape the
+    // overflow:hidden ancestors (critical on iOS where CodeMirror forces
+    // position:absolute for tooltips, which causes them to be clipped and
+    // hidden behind the EditorFooter). The body container is outside any
+    // overflow:hidden chain, so the tooltip renders above the footer.
+    tooltips({
+      parent: document.body,
+      tooltipSpace: keyboardTooltipSpace,
+    }),
+    autocompletion({
+      override: gateSources(options),
+      activateOnTyping: true,
+      closeOnBlur: true,
+      optionClass: (completion) =>
+        `cm-completion-${completion.type || DEFAULT_COMPLETION_ICON}`,
+      // `type` is a codicon name (see COMPLETION_KIND_ICONS), not
+      // CodeMirror's own semantic bucket vocabulary — icons:false turns
+      // off CM's built-in char-glyph icon renderer (ƒ, ○, 𝑥, ...) so
+      // this is the only icon source, for every completion kind, not
+      // just file/folder.
+      icons: false,
+      addToOptions: [
+        {
+          render: (completion) => {
+            const icon = document.createElement("span");
+            icon.className = `cm-completionIcon codicon codicon-${completion.type || DEFAULT_COMPLETION_ICON}`;
+            return icon;
+          },
+          position: 20, // Position before label
+        },
+      ],
+    }),
+  ];
+}
+
+/**
+ * The same sources registered as language data (`languageData.of({ autocomplete })`),
+ * the mechanism language-server completion also uses, so they merge into one
+ * dropdown beside whatever `basicSetup` and other sources contribute.
+ */
+export function promptTokenLanguageDataExtension(
+  options: PromptTokenCompletionOptions
+): Extension {
+  return gateSources(options).map((source) =>
+    EditorState.languageData.of(() => [{ autocomplete: source }])
+  );
+}

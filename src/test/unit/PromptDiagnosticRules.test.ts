@@ -11,7 +11,7 @@ import {
 import {
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTIC_FIELDS,
-  PROMPT_DIAGNOSTIC_SEVERITIES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   RETRY_PROMPT_PLACEHOLDERS,
 } from "../../types/DashboardConstants";
 
@@ -54,7 +54,7 @@ suite("PromptDiagnosticRules", () => {
           [
             {
               code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_NO_PRIOR_STEPS,
-              severity: PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+              severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
               text: token,
             },
           ],
@@ -75,7 +75,7 @@ suite("PromptDiagnosticRules", () => {
       );
       assert.strictEqual(
         diagnostic.severity,
-        PROMPT_DIAGNOSTIC_SEVERITIES.INFO
+        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
       );
       assert.strictEqual(
         diagnostic.message,
@@ -101,7 +101,7 @@ suite("PromptDiagnosticRules", () => {
           [
             {
               code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_NO_FINAL_STEP,
-              severity: PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+              severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
               text: token,
             },
           ],

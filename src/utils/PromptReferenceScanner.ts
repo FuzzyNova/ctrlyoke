@@ -17,7 +17,7 @@ import {
   createReferencePatterns,
 } from "./ReferencePatterns";
 import {
-  findCodeRanges as findSharedCodeRanges,
+  findCodeRanges,
   scanInlinePriorContextRefs,
   type InlinePriorContextRef,
 } from "./FileReferenceParser";
@@ -288,11 +288,7 @@ export function findContextReferenceMatches(
   ].sort((a, b) => a.from - b.from);
 }
 
-export function getCodeRanges(
-  text: string
-): Array<{ from: number; to: number }> {
-  return findSharedCodeRanges(text);
-}
+export { findCodeRanges };
 
 export function isInCodeRange(
   from: number,

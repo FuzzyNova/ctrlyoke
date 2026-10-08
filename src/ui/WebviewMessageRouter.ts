@@ -95,6 +95,10 @@ import type {
 import { UndoRedoCoordinator } from "./UndoRedoCoordinator";
 import { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
 import { PromptEditorSupportService } from "./PromptEditorSupportService";
+import type {
+  ContextReferenceValidationResult,
+  IdentifiedContextReference,
+} from "../utils/PromptDiagnosticRules";
 import { HarnessFileMessageService } from "./HarnessFileMessageService";
 import { McpManagerService } from "./McpManagerService";
 import { LanguageServerManagerService } from "./LanguageServerManagerService";
@@ -333,6 +337,17 @@ export class WebviewMessageRouter {
     );
     this.licenseHandlers = new LicenseSettingsHandlers(licenseService);
     this.handlers = this.buildDispatchTable();
+  }
+
+  /** Validate prompt references for a host with no webview client (VS Code diagnostics). */
+  validateContextReferences(
+    references: IdentifiedContextReference[],
+    sourceDefinitionPath?: string
+  ): Promise<ContextReferenceValidationResult[]> {
+    return this.promptEditorSupport.validateContextReferences(
+      references,
+      sourceDefinitionPath
+    );
   }
 
   setThemeVarsCapturedCallback(

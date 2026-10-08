@@ -438,7 +438,33 @@ but it shipped without it (fact 9), so this plan builds it.
 
 Every phase lands with tests and leaves both editors working.
 
-1. **Phase 0: Extract the prompt-editor completion client.** The behaviour must not change.
+1. **Phase 0: Extract the prompt-editor completion client.** **Done 2026-10-08.** The
+   behaviour did not change. Built as planned, with these specifics:
+   - **Modules, under `webview-react/utils/promptCompletion/`:** `promptCompletionResult.ts`
+     (pure: `buildCodeMirrorCompletionResult`, `findCustomCompletionContext`,
+     `findSlashCompletionContext`, `symbolIconCacheKey` and the request/item types, moved
+     verbatim; `CodeMirrorEditor.tsx` re-exports the first three because its tests import them
+     from there), `createPromptCompletionClient.ts` (`PromptCompletionClient` with
+     `customSource`, `pathSource`, `handleResponse` and `dispose`) and
+     `promptTokenCompletionExtension.ts`.
+   - **Dispatcher:** seq numbers come from one module-level counter and one window `message`
+     listener maps seq → client. It is installed while any request is pending and removed when
+     none is, so there is no lifecycle to get wrong under StrictMode.
+   - **Extension forms:** `promptTokenCompletionExtension({ sources, gate })` is the
+     `override` form (tooltips + `autocompletion()`), used by the prompt editor.
+     `promptTokenLanguageDataExtension({ sources, gate })` is the language-data form F4 needs.
+     `gate` is new and unused so far; the editor passes none.
+   - **Editor wiring:** the client is built once per component (`useMemo`) and reads the
+     multi-root flag, the symbol icon cache and the capture-pick handler through refs, so none
+     of them recreate the view.
+   - **Tests:** `createPromptCompletionClient.test.ts` (request/response, partial-then-full
+     cache, per-source cancellation, cross-editor routing, dispose) and
+     `promptTokenCompletionExtension.test.ts`; the existing `CodeMirrorEditor.test.tsx`
+     passes unchanged.
+   - **Not done, deliberately:** the "LSP source and ctrlyoke source reach one dropdown" test
+     belongs to F4, which is the first consumer of the language-data form.
+
+   Original scope:
    - Move `customCompletions` and `pathCompletions` and their seq, pending, cache and
      partial/full state out of `CodeMirrorEditor.tsx` into
      `utils/promptCompletion/createPromptCompletionClient(transport)`. Move the tooltip and
@@ -687,7 +713,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 1, 2, 1b and 3 are done. Phase 0 can start now; Phase 4 needs 0. The
+Phases 0, 1, 2, 1b and 3 are done. Phase 4 can start now. The
 cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 

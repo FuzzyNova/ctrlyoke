@@ -42,6 +42,10 @@ import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryMa
 import type { WebviewSettingsSync } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type { WebviewMessageRouter } from "./WebviewMessageRouter";
+import type {
+  ContextReferenceValidationResult,
+  IdentifiedContextReference,
+} from "../utils/PromptDiagnosticRules";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
   WorkflowViewAddress,
@@ -1294,6 +1298,17 @@ export class CtrlYokeWebviewProvider
 
   public getSecretRegistryService(): SecretRegistryService {
     return this.dashboardApplication?.secretRegistry ?? this.secretRegistry;
+  }
+
+  /** Reference resolver for `PromptDiagnosticsProvider`; same policy as the dashboard editor. */
+  public validateContextReferences(
+    references: IdentifiedContextReference[],
+    sourceDefinitionPath?: string
+  ): Promise<ContextReferenceValidationResult[]> {
+    return this.router.validateContextReferences(
+      references,
+      sourceDefinitionPath
+    );
   }
 
   public getUserInteractionPort(): UserInteractionPort {

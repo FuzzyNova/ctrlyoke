@@ -15,7 +15,7 @@ import {
   PRIOR_CONTEXT_REFERENCE_KINDS,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTIC_FIELDS,
-  PROMPT_DIAGNOSTIC_SEVERITIES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
   type PromptDiagnosticCode,
@@ -27,7 +27,7 @@ import {
   findContextReferenceMatches,
   findInlinePriorContextRefs,
   findUnknownConditionOutputFields,
-  getCodeRanges,
+  findCodeRanges,
   isInCodeRange,
   type ContextReferenceMatch,
 } from "./PromptReferenceScanner";
@@ -113,7 +113,7 @@ export function checkPriorContextRefs(
   context: Pick<PromptDiagnosticContext, "stepCount" | "hasFinalStep">
 ): PriorContextRefCheck[] {
   const { stepCount, hasFinalStep } = context;
-  const codeRanges = getCodeRanges(text);
+  const codeRanges = findCodeRanges(text);
   const checks: PriorContextRefCheck[] = [];
 
   for (const ref of findInlinePriorContextRefs(text)) {
@@ -173,8 +173,8 @@ export function checkPriorContextRefs(
               from: ref.from,
               to: ref.to,
               severity: resolvable
-                ? PROMPT_DIAGNOSTIC_SEVERITIES.INFO
-                : PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+                ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+                : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
               code,
               message,
             }
@@ -201,7 +201,7 @@ export function getConditionOutputDiagnostics(
   context: Pick<PromptDiagnosticContext, "hasPreCondition" | "field">
 ): PromptDiagnostic[] {
   const diagnostics: PromptDiagnostic[] = [];
-  const codeRanges = getCodeRanges(text);
+  const codeRanges = findCodeRanges(text);
 
   for (const ref of findConditionOutputRefs(text)) {
     if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
@@ -213,7 +213,7 @@ export function getConditionOutputDiagnostics(
       diagnostics.push({
         from: ref.from,
         to: ref.to,
-        severity: PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
         code: PROMPT_DIAGNOSTIC_CODES.CONDITION_NO_PRE_CONDITION,
         message: `$preCondition:${ref.field} has no effect — this step has no pre-condition configured`,
       });
@@ -224,7 +224,7 @@ export function getConditionOutputDiagnostics(
       diagnostics.push({
         from: ref.from,
         to: ref.to,
-        severity: PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
         code: PROMPT_DIAGNOSTIC_CODES.CONDITION_END_CONDITION_OUTSIDE_RETRY,
         message: `$endCondition:${ref.field} is only available in the retry prompt, not the initial prompt`,
       });
@@ -239,7 +239,7 @@ export function getConditionOutputDiagnostics(
     diagnostics.push({
       from: ref.from,
       to: ref.to,
-      severity: PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       code: PROMPT_DIAGNOSTIC_CODES.CONDITION_FIELD_UNKNOWN,
       message: `Unknown field "${ref.field}" for $${ref.phase} — it will not be expanded${
         replacement ? `. Did you mean ${replacement}?` : ""
@@ -267,7 +267,7 @@ export async function resolvePromptReferences(
   text: string,
   resolve: ContextReferenceResolver
 ): Promise<ResolvedPromptReference[]> {
-  const codeRanges = getCodeRanges(text);
+  const codeRanges = findCodeRanges(text);
   const references: IdentifiedContextReference[] = findContextReferenceMatches(
     text
   ).map((match, index) => ({
@@ -300,7 +300,7 @@ export function diagnoseResolvedReferences(
               {
                 from: reference.from,
                 to: reference.to,
-                severity: PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+                severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
                 code: PROMPT_DIAGNOSTIC_CODES.EXPANSION_SUPPRESSED_IN_CODE,
                 message: EXPANSION_SUPPRESSED_MESSAGE,
               },
@@ -314,7 +314,7 @@ export function diagnoseResolvedReferences(
         {
           from: reference.from,
           to: reference.to,
-          severity: PROMPT_DIAGNOSTIC_SEVERITIES.WARNING,
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
           code: PROMPT_DIAGNOSTIC_CODES.UNRESOLVED_REFERENCE,
           message: result.message || "context not found",
           detail: text,

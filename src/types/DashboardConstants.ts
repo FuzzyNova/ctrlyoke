@@ -3150,23 +3150,9 @@ export type CodeMirrorEditorMode =
 // ============================================================================
 // PROMPT DIAGNOSTICS - Codes and fields for the shared prompt-text lint rules
 // ============================================================================
-/** Which prompt of a step the text belongs to. */
-export const PROMPT_DIAGNOSTIC_FIELDS = {
-  PROMPT: "prompt",
-  RETRY_PROMPT: "retryPrompt",
-} as const;
-
-export type PromptDiagnosticField =
-  (typeof PROMPT_DIAGNOSTIC_FIELDS)[keyof typeof PROMPT_DIAGNOSTIC_FIELDS];
-
-export const PROMPT_DIAGNOSTIC_SEVERITIES = {
-  ERROR: "error",
-  WARNING: "warning",
-  INFO: "info",
-} as const;
-
+/** Prompt diagnostics share the runtime's severity scale. */
 export type PromptDiagnosticSeverity =
-  (typeof PROMPT_DIAGNOSTIC_SEVERITIES)[keyof typeof PROMPT_DIAGNOSTIC_SEVERITIES];
+  (typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES)[keyof typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES];
 
 // ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type
@@ -3867,6 +3853,21 @@ export const END_CONDITION_PROPERTIES = {
   PASS_RETRY_PROMPT: "passRetryPrompt",
   RESUME_SESSION_ON_RETRY: "resumeSessionOnRetry",
 } as const;
+
+/** Which prompt of a step the text belongs to. */
+export const PROMPT_DIAGNOSTIC_FIELDS = {
+  PROMPT: PROMPT_PROPERTIES.PROMPT,
+  RETRY_PROMPT: END_CONDITION_PROPERTIES.RETRY_PROMPT,
+} as const;
+
+export type PromptDiagnosticField =
+  (typeof PROMPT_DIAGNOSTIC_FIELDS)[keyof typeof PROMPT_DIAGNOSTIC_FIELDS];
+
+/** Name of VS Code's prompt diagnostics collection and each diagnostic's `source`. */
+export const PROMPT_DIAGNOSTICS_SOURCE = "ctrlyoke";
+
+/** Quiet time after an edit before VS Code re-lints a prompt file (matches the dashboard lint delay). */
+export const PROMPT_DIAGNOSTIC_DEBOUNCE_MS = 300;
 
 // Retry prompt placeholder names for EndConditionEvaluator.buildRetryPrompt().
 export const RETRY_PROMPT_PLACEHOLDERS = {

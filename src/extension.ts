@@ -8,6 +8,7 @@ import { PromptCompletionProvider } from "./completions/PromptCompletionProvider
 import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
 import { getCtrlYokeFileGlobs } from "./completions/CtrlYokeFileKind";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
+import { PromptDiagnosticsProvider } from "./completions/PromptDiagnosticsProvider";
 import {
   getCompletionCore,
   initializeCompletionHelpers,
@@ -758,6 +759,14 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     Log.debug(
       "[Extension] ctrlyoke: Registered link provider for prompt files"
+    );
+
+    // Prompt-text diagnostics (broken references, prior-context and condition
+    // misuse) in ctrlyoke files, using the dashboard editor's rules and resolver.
+    context.subscriptions.push(
+      new PromptDiagnosticsProvider((references, documentPath) =>
+        webviewProvider.validateContextReferences(references, documentPath)
+      )
     );
 
     // Initialize completion helpers with config watcher
