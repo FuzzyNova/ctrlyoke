@@ -317,12 +317,13 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      - Tests: `test/utils/syntaxPalette.test.ts` covers inline snapshots of both generated
        outputs, every role defined for all four theme selectors in `globals.css`, the
        keyword-colour regression, tag-to-variable resolution, and `resolveCodeMirrorLanguage`.
-     - **Not yet done:** the visual check in VS Code (Default Dark, Default Light, one
-       high-contrast theme) and in the hosted browser with a theme snapshot. Do it before or
-       alongside Phase 2. In the hosted browser, include high-contrast light, whose body
-       classes were wrong until
-       [`hosted-high-contrast-light-syntax-colours`](../bugs/implemented/hosted-high-contrast-light-syntax-colours.md)
-       was fixed (tests cover it; no one has looked at it yet).
+     - **Visual check: done 2026-10-08.** Output code blocks and the workspace editor were
+       checked in VS Code and in the hosted browser, high-contrast light included (its body
+       classes were fixed by
+       [`hosted-high-contrast-light-syntax-colours`](../bugs/implemented/hosted-high-contrast-light-syntax-colours.md)).
+       One known gap was left as is: in the hosted browser on a light theme with no theme
+       snapshot, untokenised text in output code blocks falls back to the dark-theme
+       `#d4d4d4` (`buildSyntaxTokenStyles()`'s `.cy-syntax` base colour).
 
 3. **Phase 2: Markdown in the prompt editor.**
    - Add the `markdown()` compartment with GFM and lazy nested languages.

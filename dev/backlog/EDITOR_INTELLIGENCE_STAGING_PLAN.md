@@ -20,15 +20,15 @@ it.
 
 ## Progress
 
-| Phase           | State                 | Notes                                                                                                                                                                                                                                             |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. Deviations in plan F's Phase 1 entry; the review's bugs were fixed in F1b.                           |
-| F2              | **Done** (2026-10-08) | Generated `WorkflowSchemaOutline` (`schema:update`, `precompile`, `check:docs` drift check), hand-authored `WorkflowPropertySnippets.ts`, and `PromptPropertyCompletionProvider` moved onto both. Details in plan F's Phase 2 entry.              |
-| D1              | **Done** (2026-10-08) | `src/utils/PromptDiagnosticRules.ts` and `src/utils/PromptReferenceScanner.ts`; CodeMirror linters are adapters. Characterization tests pass against the pre-extraction code too. Details in plan D's "Phase 1 as built".                         |
-| M1              | **Done** (2026-10-08) | `--cy-syntax-*` in `globals.css`, one role table in `utils/syntaxPalette.ts`, `resolveCodeMirrorLanguage`. Visual check still owed (see plan M's Phase 1 entry). Its one hosted regression is fixed: `hosted-high-contrast-light-syntax-colours`. |
-| M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                                           |
-| F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                                          |
-| Everything else | Not started           |                                                                                                                                                                                                                                                   |
+| Phase           | State                 | Notes                                                                                                                                                                                                                                |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. Deviations in plan F's Phase 1 entry; the review's bugs were fixed in F1b.              |
+| F2              | **Done** (2026-10-08) | Generated `WorkflowSchemaOutline` (`schema:update`, `precompile`, `check:docs` drift check), hand-authored `WorkflowPropertySnippets.ts`, and `PromptPropertyCompletionProvider` moved onto both. Details in plan F's Phase 2 entry. |
+| D1              | **Done** (2026-10-08) | `src/utils/PromptDiagnosticRules.ts` and `src/utils/PromptReferenceScanner.ts`; CodeMirror linters are adapters. Characterization tests pass against the pre-extraction code too. Details in plan D's "Phase 1 as built".            |
+| M1              | **Done** (2026-10-08) | `--cy-syntax-*` in `globals.css`, one role table in `utils/syntaxPalette.ts`, `resolveCodeMirrorLanguage`. Visual check done. Its one hosted regression is fixed: `hosted-high-contrast-light-syntax-colours`.                       |
+| M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                              |
+| F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                             |
+| Everything else | Not started           |                                                                                                                                                                                                                                      |
 
 ### Wave 1 review (2026-10-08)
 
@@ -125,8 +125,6 @@ Every input is on `main`. The only ordering left is the worktree split: D2 follo
 | **F0:** completion-client extraction                            | `CodeMirrorEditor.tsx`                  | `small-feature`    |                                                                                                                       |
 | **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | After F0 in the same worktree. Uses `getWorkflowTextSpans` for every file kind. Takes plan D's listed cleanups.       |
 | **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | Merge them together. B uses `getWorkflowTextSpans`; M4's generator reads `WORKFLOW_TEXT_FIELDS`                       |
-
-M1's visual check (plan M, Phase 1) is still owed; do it before M2 in Wave 3.
 
 ### Wave 3: the two editors
 
