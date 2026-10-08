@@ -204,6 +204,13 @@ These were verified against `src/` on 2026-10-07.
 - A reference that sits inside emphasis or link syntax renders as a reference, and the
   surrounding markdown styles only the text outside it.
 - Chips still replace their range entirely, as they do today.
+- **The suppressed-expansion warning is what tells the user a reference is literal, so it must
+  survive.** The prompt editor already warns on a reference inside code when its target exists
+  (`CodeMirrorEditor.tsx`: "Context expansion suppressed — this reference won't be expanded
+  inside code"). That warning, not the code colour, catches the real mistake: writing
+  `` `@real/file.ts` `` and expecting it to attach. Polished code styling looks intentional, so
+  the warning matters more after this plan than before. Running the lint at `Prec.high` keeps
+  its underline and tooltip above the markdown styling.
 - Spellcheck keeps skipping `findCodeRanges` ranges. It also skips fence info strings and link
   URLs.
 
@@ -277,6 +284,10 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      - `#selection:` at the start of a line is not a heading
      - fenced JSON gets string and number classes
      - typing inside a fence keeps completions suppressed exactly as today
+     - the suppressed-expansion warning still appears, with its message and range, on a
+       backticked reference to an existing file, both inline and in a fence. It does not appear
+       for a reference to a missing file. No test asserts this warning today, and the
+       2026-10-06 coverage report shows the branch uncovered, so this is its first test.
      - a performance check on a ~25K-token prompt, where the typing-latency budget must hold
 
 4. **Phase 3: Workspace editor and YAML prompts.**
@@ -303,6 +314,15 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      - a quoted `prompt: "…"` stays a YAML string
      - a nested `steps[].parallel[].prompt` block is covered
    - Check the published VSIX's file list contains the grammar.
+   - **Fix [`vscode-prompt-references-active-inside-code`](../bugs/backlog/vscode-prompt-references-active-inside-code.md) in the same phase,
+     if it hasn't already been fixed on its own.** The grammar makes backticks look like code
+     in VS Code. Today `PromptLinkProvider` and `PromptCompletionProvider` still link and
+     complete references inside them, though they're sent literally. Both providers must skip
+     `findCodeRanges` ranges, computed on the decoded prompt value: dedent YAML block scalars
+     and decode JSON strings. Phase 2's precedence rule applies here too: what looks literal
+     must behave literally. The fix and its tests are in the bug doc. The prompt-file
+     `DiagnosticCollection` that would carry the suppressed-expansion warning into VS Code is a
+     follow-up there, not a blocker for this phase.
 
 ## Open questions
 
