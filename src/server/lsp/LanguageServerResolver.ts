@@ -10,6 +10,7 @@ import {
   LANGUAGE_SERVER_CATALOG,
   type LanguageServerCatalogEntry,
 } from "./LanguageServerCatalog";
+import { Log } from "../../utils/Log";
 
 export type LanguageServerDefinitionSource = "user" | "workspace" | "built-in";
 
@@ -210,6 +211,13 @@ async function resolveDefinition(
   const foundPath = await findExecutable(executable, options, dependencies);
   if (!foundPath) return undefined;
 
+  const workspaceSettings = options.approvedWorkspaceDefinitionIds.has(id)
+    ? options.workspaceSettings.languageServers.settings[id] ?? {}
+    : stripUnapprovedWorkspaceOptions(
+        id,
+        options.workspaceSettings.languageServers.settings[id] ?? {}
+      );
+
   return {
     id,
     source,
@@ -219,13 +227,51 @@ async function resolveDefinition(
     rootMarkers: [...definition.rootMarkers],
     settings: {
       ...options.userSettings.languageServers.settings[id],
-      ...options.workspaceSettings.languageServers.settings[id],
+      ...workspaceSettings,
     },
     ...("env" in definition && definition.env
       ? { env: { ...definition.env } }
       : {}),
     ...(catalogEntry ? { catalogEntry } : {}),
   };
+}
+
+const warnedWorkspaceOptionKeys = new Set<string>();
+
+/** Path and plugin options can execute workspace-controlled code or load code. */
+function isWorkspaceExecutionOptionKey(key: string): boolean {
+  return /path|tsdk|plugin/i.test(key);
+}
+
+function stripUnapprovedWorkspaceOptions(
+  id: string,
+  settings: Record<string, unknown>,
+  prefix = ""
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (isWorkspaceExecutionOptionKey(key)) {
+      const warningKey = `${id}:${fullKey}`;
+      if (!warnedWorkspaceOptionKeys.has(warningKey)) {
+        warnedWorkspaceOptionKeys.add(warningKey);
+        Log.warn(
+          `[LanguageServerResolver] Ignoring unapproved workspace language-server option ${id}.${fullKey}.`
+        );
+      }
+      continue;
+    }
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      result[key] = stripUnapprovedWorkspaceOptions(
+        id,
+        value as Record<string, unknown>,
+        fullKey
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 async function findExecutable(

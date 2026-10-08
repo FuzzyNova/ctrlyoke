@@ -970,6 +970,7 @@ export const LSP_SESSION_LOOKUP_REASONS = {
   LIMIT_REACHED: "limit reached",
   NEEDS_APPROVAL: "needs approval",
   UNTRUSTED: "untrusted",
+  STOPPED: "stopped",
 } as const;
 
 export const HOSTED_ICON_FILES = {

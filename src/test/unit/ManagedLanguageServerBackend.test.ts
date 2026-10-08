@@ -52,14 +52,21 @@ suite("ManagedLanguageServerBackend", () => {
     await backend.dispose();
   });
 
-  test("keeps initialize capabilities across session lookup and later requests", async () => {
+  test("keeps initialize capabilities after startLanguages warmup", async () => {
     const backend = createBackend();
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
     try {
+      await backend.startLanguages(["typescript"]);
       const first = await host.lookupSession("src/app.ts");
       assert.ok(first.session);
       assert.deepStrictEqual(first.session.capabilities, { completionProvider: {}, hoverProvider: true });
-      await host.requestForPath("src/app.ts", "textDocument/hover", {});
+      const messages: unknown[] = [];
+      const proxy = await host.createProxy(first.session.id, (message) => messages.push(message), async () => true);
+      await proxy?.handleMessage({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+      assert.deepStrictEqual((messages[0] as { result: unknown }).result, {
+        capabilities: { completionProvider: {}, hoverProvider: true },
+        serverInfo: { name: "typescript-language-server" },
+      });
       const second = await host.lookupSession("src/app.ts");
       assert.deepStrictEqual(second.session?.capabilities, { completionProvider: {}, hoverProvider: true });
     } finally { await host.dispose(); }
@@ -110,16 +117,60 @@ suite("ManagedLanguageServerBackend", () => {
     } finally { await host.dispose(); }
   });
 
-  test("closes attached proxies with the documented reconnect code when a session stops", async () => {
+  test("closes every attached proxy with the reconnect code before connection disposal", async () => {
     const backend = createBackend();
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
-    let close: { code: number; reason: string } | undefined;
+    const closes: Array<{ code: number; reason: string }> = [];
     try {
       const lookup = await host.lookupSession("src/app.ts");
       assert.ok(lookup.session);
-      await host.createProxy(lookup.session.id, () => undefined, async () => true, undefined, (code, reason) => { close = { code, reason }; });
+      await host.createProxy(lookup.session.id, () => undefined, async () => true, undefined, (code, reason) => { closes.push({ code, reason }); });
+      await host.createProxy(lookup.session.id, () => undefined, async () => true, undefined, (code, reason) => { closes.push({ code, reason }); });
       await backend.stopManagedServer("typescript-language-server");
-      assert.deepStrictEqual(close, { code: LSP_SESSION_INVALIDATION_CLOSE.CODE, reason: LSP_SESSION_INVALIDATION_CLOSE.REASON });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.deepStrictEqual(closes, [
+        { code: LSP_SESSION_INVALIDATION_CLOSE.CODE, reason: LSP_SESSION_INVALIDATION_CLOSE.REASON },
+        { code: LSP_SESSION_INVALIDATION_CLOSE.CODE, reason: LSP_SESSION_INVALIDATION_CLOSE.REASON },
+      ]);
+    } finally { await host.dispose(); }
+  });
+
+  test("user stop prevents lookup respawn until restart", async () => {
+    let spawnCount = 0;
+    const backend = createBackend({ onSpawn: () => { spawnCount += 1; } });
+    const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
+    try {
+      assert.ok((await host.lookupSession("src/app.ts")).session);
+      await host.stopServer("typescript-language-server");
+      assert.deepStrictEqual(await host.lookupSession("src/app.ts"), {
+        session: null,
+        reason: "stopped",
+      });
+      assert.strictEqual(spawnCount, 1);
+      await host.restartServer("typescript-language-server");
+      assert.ok((await host.lookupSession("src/app.ts")).session);
+      assert.strictEqual(spawnCount, 2);
+    } finally { await host.dispose(); }
+  });
+
+  test("warmup starts do not evict at the running server cap", async () => {
+    let spawnCount = 0;
+    const backend = createBackend({ maxRunning: 1, onSpawn: () => { spawnCount += 1; } });
+    await backend.startLanguages(["typescript", "json"]);
+    assert.strictEqual(spawnCount, 1);
+    assert.strictEqual(backend.runningServerCount, 1);
+    await backend.dispose();
+  });
+
+  test("background warmup and path requests do not prompt for workspace definitions", async () => {
+    let prompts = 0;
+    const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp"], languages: ["typescript"], extensions: ["ts"], rootMarkers: [] } }, use: { typescript: "custom" } };
+    const backend = createBackend({ workspaceSettings: settings, interaction: { canPrompt: () => true, requestChoice: async () => undefined, requestBatchApproval: async () => { prompts += 1; return undefined; } } });
+    const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
+    try {
+      await host.openWarmupDocument("src/app.ts", "typescript");
+      await host.requestForPath("src/app.ts", "textDocument/completion", {});
+      assert.strictEqual(prompts, 0);
     } finally { await host.dispose(); }
   });
 

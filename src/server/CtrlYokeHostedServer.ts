@@ -449,7 +449,11 @@ export class CtrlYokeHostedServer
       ws.on("message", (data) => {
         try {
           const message = JSON.parse(data.toString()) as JsonRpcMessage;
-          if (proxy) void proxy.handleMessage(message);
+          if (proxy) {
+            void proxy.handleMessage(message).catch((error: unknown) => {
+              Log.warn(`[CtrlYokeHostedServer] LSP message failed: ${String(error)}`);
+            });
+          }
           else pendingMessages.push(message);
         } catch {
           ws.close(4400, "Invalid JSON-RPC message");
@@ -499,7 +503,9 @@ export class CtrlYokeHostedServer
             return;
           }
           for (const message of pendingMessages.splice(0)) {
-            void created.handleMessage(message);
+            void created.handleMessage(message).catch((error: unknown) => {
+              Log.warn(`[CtrlYokeHostedServer] LSP message failed: ${String(error)}`);
+            });
           }
           ws.on("error", () => created.dispose());
         })

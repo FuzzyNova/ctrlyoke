@@ -176,6 +176,13 @@ describe("LanguageServersSection", () => {
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
   });
 
+  it("offers restart after a server was stopped by the user", () => {
+    seed(LANGUAGE_SERVER_STATUSES.STOPPED);
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+    expect(screen.getByRole("button", { name: "Restart" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  });
+
   it("parses environment values at the first equals sign from a multiline field", () => {
     render(<LanguageServersSection activeScope={SETTING_SCOPES.USER} />);
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));

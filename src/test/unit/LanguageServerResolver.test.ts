@@ -66,6 +66,48 @@ function commandResult(command: string, args: string[]): CliResolvedCommand {
 }
 
 suite("LanguageServerResolver", () => {
+  test("drops unapproved workspace initialization options that load paths or plugins", async () => {
+    const workspaceSettings = emptyLanguageServers();
+    workspaceSettings.settings["typescript-language-server"] = {
+      typescript: {
+        tsdk: "./node_modules/typescript/lib",
+        tsserver: { path: "./workspace/tsserver.js" },
+        plugins: ["workspace-plugin"],
+        format: { semicolons: "insert" },
+      },
+    };
+    const resolved = await resolveLanguageServer(
+      options({ workspaceSettings: { languageServers: workspaceSettings } }),
+      {
+        fileExists: async () => true,
+        resolveCommand: async (command, args) => commandResult(command, args),
+      }
+    );
+    assert.deepStrictEqual(resolved?.settings, {
+      typescript: { tsserver: {}, format: { semicolons: "insert" } },
+    });
+  });
+
+  test("allows workspace initialization paths after matching approval", async () => {
+    const workspaceSettings = emptyLanguageServers();
+    workspaceSettings.settings["typescript-language-server"] = {
+      typescript: { tsdk: "./node_modules/typescript/lib" },
+    };
+    const resolved = await resolveLanguageServer(
+      options({
+        workspaceSettings: { languageServers: workspaceSettings },
+        approvedWorkspaceDefinitionIds: new Set(["typescript-language-server"]),
+      }),
+      {
+        fileExists: async () => true,
+        resolveCommand: async (command, args) => commandResult(command, args),
+      }
+    );
+    assert.deepStrictEqual(resolved?.settings, {
+      typescript: { tsdk: "./node_modules/typescript/lib" },
+    });
+  });
+
   test("prefers executable Windows shims over extensionless npm shim files", async () => {
     const resolved = await resolveLanguageServer(
       options({ platform: "win32" }),

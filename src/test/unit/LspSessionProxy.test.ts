@@ -97,6 +97,25 @@ suite("LspSessionProxy", () => {
     assert.strictEqual(backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN).length, 1);
   });
 
+  test("claims a warmup URI before concurrent file reads", async () => {
+    await Promise.all([
+      host.openWarmupDocument("src/main.ts", "typescript"),
+      host.openWarmupDocument("src/main.ts", "typescript"),
+    ]);
+    await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_OPEN));
+    await host.dispose();
+    await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_CLOSE));
+    assert.strictEqual(
+      backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN).length,
+      1
+    );
+    assert.strictEqual(
+      backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_CLOSE).length,
+      1,
+      "a concurrent duplicate must not leave a leaked warmup reference"
+    );
+  });
+
   test("resyncs the requesting tab's full text before forwarding its request", async () => {
     await open(proxyA!, "first buffer");
     await open(proxyB!, "second buffer");
@@ -387,6 +406,7 @@ suite("LspSessionProxy", () => {
   test("confirms and writes edits to unopened files then notifies watched files", async () => {
     const unopened = path.join(workspaceRoot, "src", "other.ts");
     fs.writeFileSync(unopened, "const value = 1;\r\n");
+    await host.openWarmupDocument("src/other.ts", "typescript");
     let saved = "";
     const editProxy = await host.createProxy(sessionId, (message) => clientA.push(message), async () => true, {
       readFile: async () => ({ content: "const value = 1;\r\n" }),
@@ -406,6 +426,10 @@ suite("LspSessionProxy", () => {
     await waitFor(() => saved.length > 0);
     assert.strictEqual(saved, "const renamed = 1;\r\n");
     await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_CHANGE_WATCHED_FILES));
+    await waitFor(() => backend.notifications.some(({ method, params }) =>
+      method === LSP_METHODS.DID_CHANGE &&
+      (params as { contentChanges?: Array<{ text?: string }> }).contentChanges?.[0].text === "const renamed = 1;\r\n"
+    ));
     assert.ok(backend.notifications.some(({ method, params }) => method === LSP_METHODS.DID_CHANGE_WATCHED_FILES &&
       (params as { changes?: unknown[] }).changes?.length === 1));
     editProxy?.dispose();

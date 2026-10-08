@@ -104,14 +104,16 @@ export class LanguageIntelligenceHost {
   async requestForPath(
     viewerPath: string,
     method: string,
-    params: unknown
+    params: unknown,
+    promptForApproval = false
   ): Promise<
     { descriptor: LanguageServerDescriptor; result: unknown } | undefined
   > {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
-      this.roots
+      this.roots,
+      promptForApproval
     );
     if (!("descriptor" in resolution)) return undefined;
     const session = await this.getOrCreateSession(resolution.descriptor);
@@ -131,46 +133,64 @@ export class LanguageIntelligenceHost {
     if (!absolutePath) return;
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
-      this.roots
+      this.roots,
+      false
     );
     if (!("descriptor" in resolution)) return;
     const session = await this.getOrCreateSession(resolution.descriptor);
     const uri = toServerFileUri(absolutePath);
     const opened = this.warmupDocuments.get(session.id) ?? new Set<string>();
     if (opened.has(uri)) return;
-    const fs = await import("node:fs/promises");
-    const stat = await fs.stat(absolutePath);
-    if (stat.size > MAX_WARMUP_DOCUMENT_BYTES) return;
-    const handle = await fs.open(absolutePath, "r");
-    try {
-      const sample = Buffer.alloc(BINARY_CHECK_BYTES);
-      const { bytesRead } = await handle.read(sample, 0, BINARY_CHECK_BYTES, 0);
-      if (sample.subarray(0, bytesRead).includes(0)) return;
-    } finally {
-      await handle.close();
-    }
-    const text = secretRedactionService.redactText(
-      await fs.readFile(absolutePath, "utf8")
-    );
-    let document = session.documents.get(uri);
-    if (!document) {
-      document = {
-        uri,
-        tabs: new Map(),
-        serverVersion: 1,
-        syncedText: text,
-        syncedVersion: 1,
-        warmupReferences: 1,
-      };
-      session.documents.set(uri, document);
-      await session.connection.sendNotification(LSP_METHODS.DID_OPEN, {
-        textDocument: { uri, languageId, version: 1, text },
-      });
-    } else {
-      document.warmupReferences = (document.warmupReferences ?? 0) + 1;
-    }
     opened.add(uri);
     this.warmupDocuments.set(session.id, opened);
+    const fs = await import("node:fs/promises");
+    try {
+      const stat = await fs.stat(absolutePath);
+      if (stat.size > MAX_WARMUP_DOCUMENT_BYTES) {
+        opened.delete(uri);
+        return;
+      }
+      const handle = await fs.open(absolutePath, "r");
+      try {
+        const sample = Buffer.alloc(BINARY_CHECK_BYTES);
+        const { bytesRead } = await handle.read(
+          sample,
+          0,
+          BINARY_CHECK_BYTES,
+          0
+        );
+        if (sample.subarray(0, bytesRead).includes(0)) {
+          opened.delete(uri);
+          return;
+        }
+      } finally {
+        await handle.close();
+      }
+      const text = secretRedactionService.redactText(
+        await fs.readFile(absolutePath, "utf8")
+      );
+      let document = session.documents.get(uri);
+      if (!document) {
+        document = {
+          uri,
+          tabs: new Map(),
+          serverVersion: 1,
+          syncedText: text,
+          syncedVersion: 1,
+          warmupReferences: 1,
+        };
+        session.documents.set(uri, document);
+        await session.connection.sendNotification(LSP_METHODS.DID_OPEN, {
+          textDocument: { uri, languageId, version: 1, text },
+        });
+      } else {
+        document.warmupReferences = (document.warmupReferences ?? 0) + 1;
+      }
+    } catch (error) {
+      opened.delete(uri);
+      if (opened.size === 0) this.warmupDocuments.delete(session.id);
+      throw error;
+    }
   }
 
   async restartServer(id: string): Promise<void> {
@@ -282,11 +302,16 @@ export class LanguageIntelligenceHost {
     for (const pending of this.sessions.values()) {
       const session = await pending.catch(() => undefined);
       if (!session) continue;
-      void session.connection
-        .sendNotification(LSP_METHODS.DID_CHANGE_WATCHED_FILES, {
-          changes: [{ uri, type }],
-        })
-        .catch(() => undefined);
+      try {
+        void Promise.resolve(
+          session.connection.sendNotification(
+            LSP_METHODS.DID_CHANGE_WATCHED_FILES,
+            { changes: [{ uri, type }] }
+          )
+        ).catch(() => undefined);
+      } catch {
+        /* session may have been invalidated between lookup and send */
+      }
     }
   }
 
@@ -297,7 +322,13 @@ export class LanguageIntelligenceHost {
     for (const result of results) {
       if (result.status !== "fulfilled") continue;
       await this.closeWarmupDocuments(result.value);
-      for (const proxy of [...result.value.proxies]) proxy.dispose();
+      for (const proxy of [...result.value.proxies]) {
+        try {
+          proxy.dispose();
+        } catch {
+          /* one broken client must not prevent invalidating the rest */
+        }
+      }
     }
     await new Promise<void>((resolve) => setImmediate(resolve));
     await this.options.backend.dispose?.();
@@ -393,9 +424,17 @@ export class LanguageIntelligenceHost {
     void pending
       .then((session) => {
         this.sessionsById.delete(session.id);
-        void this.closeWarmupDocuments(session);
-        for (const proxy of [...session.proxies]) proxy.invalidateSession();
-        session.connection.dispose();
+        void (async () => {
+          await this.closeWarmupDocuments(session);
+          for (const proxy of [...session.proxies]) {
+            try {
+              proxy.invalidateSession();
+            } catch {
+              /* invalidate every tab even if one client callback throws */
+            }
+          }
+          session.connection.dispose();
+        })();
       })
       .catch(() => undefined);
   }

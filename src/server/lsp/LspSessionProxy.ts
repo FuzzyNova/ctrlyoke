@@ -128,11 +128,9 @@ export class LspSessionProxy {
         this.options.onDocumentClosed?.();
         if ((document.warmupReferences ?? 0) === 0) {
           this.options.documents.delete(buffer.serverUri);
-          void this.options.connection
-            .sendNotification(LSP_METHODS.DID_CLOSE, {
-              textDocument: { uri: buffer.serverUri },
-            })
-            .catch(() => undefined);
+          safelyNotify(this.options.connection, LSP_METHODS.DID_CLOSE, {
+            textDocument: { uri: buffer.serverUri },
+          });
         }
       }
     }
@@ -175,8 +173,14 @@ export class LspSessionProxy {
 
     const cancellation = new CancellationTokenSource();
     this.pendingClientRequests.set(request.id, cancellation);
-    void this.options.connection
-      .sendRequest(request.method, params, cancellation.token)
+    void Promise.resolve()
+      .then(() =>
+        this.options.connection.sendRequest(
+          request.method,
+          params,
+          cancellation.token
+        )
+      )
       .then(async (result) => {
         let rewrittenResult = result;
         if (request.method === LSP_METHODS.RENAME) {
@@ -545,6 +549,19 @@ export class LspSessionProxy {
           );
         const content = applyLspTextEdits(response.content, file.edits);
         await this.options.writeFile(file.viewerPath, content);
+        const anchor = this.options.documents.get(file.serverUri);
+        if (anchor && (anchor.warmupReferences ?? 0) > 0) {
+          anchor.serverVersion += 1;
+          await this.options.connection.sendNotification(LSP_METHODS.DID_CHANGE, {
+            textDocument: {
+              uri: file.serverUri,
+              version: anchor.serverVersion,
+            },
+            contentChanges: [{ text: content }],
+          });
+          anchor.syncedText = content;
+          anchor.syncedVersion = anchor.serverVersion;
+        }
         await this.options.notifyFileChanged(file.viewerPath);
       }
     }
@@ -610,6 +627,20 @@ export class LspSessionProxy {
 
   private sendToClient(message: unknown): void {
     this.options.send(secretRedactionService.redactValue(message));
+  }
+}
+
+function safelyNotify(
+  connection: MessageConnection,
+  method: string,
+  params: unknown
+): void {
+  try {
+    void Promise.resolve(connection.sendNotification(method, params)).catch(
+      () => undefined
+    );
+  } catch {
+    // vscode-jsonrpc may throw synchronously after connection.dispose().
   }
 }
 

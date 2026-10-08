@@ -90,6 +90,16 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
   private readonly deps: LanguageServerResolverDependencies;
   private readonly starting = new Map<string, Promise<MessageConnection>>();
   private readonly restartCounts = new Map<string, number>();
+  private readonly userStoppedServers = new Set<string>();
+  private readonly userStoppedDetails = new Map<
+    string,
+    {
+      key: string;
+      resolved: ResolvedLanguageServer;
+      descriptor: LanguageServerDescriptor;
+      restartCount: number;
+    }
+  >();
   private readonly restartTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -136,7 +146,8 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
   async resolveForPath(
     viewerPath: string,
     roots: WorkspacePathContext,
-    promptForApproval = true
+    promptForApproval = true,
+    allowEviction = true
   ): Promise<LanguageServerResolution> {
     if (this.disposed)
       return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
@@ -220,7 +231,43 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
     }
     const key = this.serverKey(resolved.id, rootPath);
+    if (this.userStoppedServers.has(resolved.id)) {
+      return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.STOPPED };
+    }
+    const running = this.servers.get(key);
+    if (running?.initialized) {
+      return {
+        descriptor: {
+          id: resolved.id,
+          languageId,
+          rootPath,
+          capabilities: running.descriptor.capabilities,
+          serverInfo: running.descriptor.serverInfo,
+        },
+      };
+    }
+    const inFlight = this.starting.get(key);
+    if (inFlight) {
+      try {
+        await inFlight;
+      } catch {
+        return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
+      }
+      const initialized = this.servers.get(key);
+      if (initialized?.initialized) {
+        return {
+          descriptor: {
+            id: resolved.id,
+            languageId,
+            rootPath,
+            capabilities: initialized.descriptor.capabilities,
+            serverInfo: initialized.descriptor.serverInfo,
+          },
+        };
+      }
+    }
     if (
+      allowEviction &&
       !this.servers.has(key) &&
       this.runningCount() >=
         Math.max(1, userSettings.languageServers.maxRunning)
@@ -254,6 +301,16 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     const key = this.serverKey(descriptor.id, descriptor.rootPath);
     const existing = this.servers.get(key);
     if (existing) {
+      if (!existing.initialized) {
+        const pending = this.starting.get(key);
+        if (pending) await pending;
+      }
+      const initialized = this.servers.get(key);
+      if (!initialized?.initialized) {
+        throw new Error(`Language server ${descriptor.id} is not initialized.`);
+      }
+      (descriptor as { capabilities: Record<string, unknown> }).capabilities =
+        initialized.descriptor.capabilities;
       existing.lastUsed = Date.now();
       this.resetIdle(existing);
       return existing.connection;
@@ -350,9 +407,27 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
           `__ctrlyoke_start__.${extension}`
         ),
         this.roots,
+        false,
         false
       );
       if ("descriptor" in result) {
+        const key = this.serverKey(
+          result.descriptor.id,
+          result.descriptor.rootPath
+        );
+        if (this.servers.has(key) || this.starting.has(key)) continue;
+        const maxRunning = Math.max(
+          1,
+          this.normalize(this.options.userSettings().languageServers).maxRunning
+        );
+        if (this.runningCount() >= maxRunning) {
+          this.emitStatus({
+            id: result.descriptor.id,
+            rootPath: result.descriptor.rootPath,
+            status: LANGUAGE_SERVER_STATUSES.LIMIT_REACHED,
+          });
+          continue;
+        }
         try {
           await this.getConnection(result.descriptor);
         } catch {
@@ -371,18 +446,42 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     const server = [...this.servers.values()].find(
       (entry) => entry.resolved.id === id
     );
-    if (!server) throw new Error(`Language server ${id} is not running.`);
-    const { descriptor, resolved, key } = server;
-    const restartCount = server.restartCount;
-    await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
-    await this.startServer(key, resolved, descriptor, restartCount);
+    this.userStoppedServers.delete(id);
+    const stopped = this.userStoppedDetails.get(id);
+    this.userStoppedDetails.delete(id);
+    if (server) {
+      const { descriptor, resolved, key } = server;
+      const restartCount = server.restartCount;
+      await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
+      await this.startServer(key, resolved, descriptor, restartCount);
+      return;
+    }
+    if (stopped) {
+      await this.startServer(
+        stopped.key,
+        stopped.resolved,
+        stopped.descriptor,
+        stopped.restartCount
+      );
+      return;
+    }
+    throw new Error(`Language server ${id} is not running.`);
   }
 
   async stopManagedServer(id: string): Promise<void> {
     const server = [...this.servers.values()].find(
       (entry) => entry.resolved.id === id
     );
-    if (server) await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
+    if (server) {
+      this.userStoppedServers.add(id);
+      this.userStoppedDetails.set(id, {
+        key: server.key,
+        resolved: server.resolved,
+        descriptor: server.descriptor,
+        restartCount: server.restartCount,
+      });
+      await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
+    }
   }
 
   async dispose(): Promise<void> {
@@ -949,6 +1048,13 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     this.restartCounts.delete(server.key);
     if (this.servers.get(server.key) === server)
       this.servers.delete(server.key);
+    // The host invalidates browser proxies while the connection is still
+    // alive, so their didClose notifications cannot hit a disposed transport.
+    this.emitStatus({
+      id: server.resolved.id,
+      rootPath: server.descriptor.rootPath,
+      status,
+    });
     try {
       await this.withTimeout(
         server.connection.sendRequest(LSP_METHODS.SHUTDOWN),
@@ -965,11 +1071,6 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     await this.waitForExit(server.child);
     if (server.child.exitCode === null) server.child.kill();
     server.connection.dispose();
-    this.emitStatus({
-      id: server.resolved.id,
-      rootPath: server.descriptor.rootPath,
-      status,
-    });
   }
   private runningCount(): number {
     return this.servers.size;

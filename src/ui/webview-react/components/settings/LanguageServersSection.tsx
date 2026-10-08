@@ -398,7 +398,8 @@ export function LanguageServersSection({ activeScope }: Props) {
                         )}
                       {(status === LANGUAGE_SERVER_STATUSES.RUNNING ||
                         status === LANGUAGE_SERVER_STATUSES.IDLE ||
-                        status === LANGUAGE_SERVER_STATUSES.CRASHED) && (
+                        status === LANGUAGE_SERVER_STATUSES.CRASHED ||
+                        status === LANGUAGE_SERVER_STATUSES.STOPPED) && (
                         <>
                           <button
                             type="button"
@@ -407,13 +408,17 @@ export function LanguageServersSection({ activeScope }: Props) {
                           >
                             Restart
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => stop(row.id)}
-                            className="rounded-sm border border-panel-border px-1.5 py-0.5 text-xxs"
-                          >
-                            Stop
-                          </button>
+                          {(status === LANGUAGE_SERVER_STATUSES.RUNNING ||
+                            status === LANGUAGE_SERVER_STATUSES.IDLE ||
+                            status === LANGUAGE_SERVER_STATUSES.CRASHED) && (
+                            <button
+                              type="button"
+                              onClick={() => stop(row.id)}
+                              className="rounded-sm border border-panel-border px-1.5 py-0.5 text-xxs"
+                            >
+                              Stop
+                            </button>
+                          )}
                         </>
                       )}
                       {row.managed && (
