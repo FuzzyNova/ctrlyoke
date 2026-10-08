@@ -55,7 +55,10 @@ import {
   BOOLEAN_STRING_VALUES,
   WORKSPACE_SEARCH_SCOPES,
   NETWORK_INTERFACE_FAMILIES,
-  THEME_KINDS,
+  THEME_KIND_BODY_CLASSES,
+  THEME_KIND_CSS_VAR,
+  VSCODE_THEME_BODY_CLASSES,
+  isThemeKind,
   SERVER_THEME_MODES,
   type HostKind,
   type ServerThemeMode,
@@ -2204,14 +2207,17 @@ export class CtrlYokeHostedServer
     );
 
     // Add spell-checker dictionary paths as data attributes on <body>.
-    // Also inject the VS Code theme body class (vscode-dark / vscode-light /
-    // vscode-high-contrast) from the cached theme vars so that CSS rules that
-    // gate on body class (e.g. harness-icon-adaptive inversion) work correctly
-    // on first render, before the WebSocket THEME_VARS_UPDATED message arrives.
+    // Also inject the VS Code theme body classes (THEME_KIND_BODY_CLASSES) from
+    // the cached theme vars so that CSS rules that gate on body class (e.g.
+    // harness-icon-adaptive inversion, the --cy-syntax-* palette) work
+    // correctly on first render, before the WebSocket THEME_VARS_UPDATED
+    // message arrives.
     const themeBodyClass = this.resolveThemeBodyClass(themeOverride);
+    const lightClass = JSON.stringify(VSCODE_THEME_BODY_CLASSES.LIGHT);
+    const darkClass = JSON.stringify(VSCODE_THEME_BODY_CLASSES.DARK);
     const themeClassScript =
       this.resolveThemeSelection(themeOverride) === SERVER_THEME_MODES.AUTO
-        ? '<script>(()=>{const c=window.matchMedia("(prefers-color-scheme: light)").matches?"vscode-light":"vscode-dark";document.body.classList.remove("vscode-light","vscode-dark");document.body.classList.add(c)})()</script>'
+        ? `<script>(()=>{const c=window.matchMedia("(prefers-color-scheme: light)").matches?${lightClass}:${darkClass};document.body.classList.remove(${lightClass},${darkClass});document.body.classList.add(c)})()</script>`
         : "";
     html = html.replace(
       "<body>",
@@ -2322,14 +2328,14 @@ export class CtrlYokeHostedServer
   private resolveThemeBodyClass(
     themeOverride?: Exclude<ServerThemeMode, typeof SERVER_THEME_MODES.AUTO>
   ): string {
-    const themeKind = this.cachedThemeVars["--cy-color-theme-kind"];
-    if (themeKind === THEME_KINDS.LIGHT) return "vscode-light";
-    if (themeKind === THEME_KINDS.HIGH_CONTRAST) return "vscode-high-contrast";
-    if (themeKind === THEME_KINDS.DARK) return "vscode-dark";
+    const themeKind = this.cachedThemeVars[THEME_KIND_CSS_VAR];
+    if (isThemeKind(themeKind)) {
+      return THEME_KIND_BODY_CLASSES[themeKind].join(" ");
+    }
     return this.resolveThemeSelection(themeOverride) ===
       SERVER_THEME_MODES.LIGHT
-      ? "vscode-light"
-      : "vscode-dark";
+      ? VSCODE_THEME_BODY_CLASSES.LIGHT
+      : VSCODE_THEME_BODY_CLASSES.DARK;
   }
 
   /**

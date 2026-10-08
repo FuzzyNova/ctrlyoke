@@ -4,6 +4,9 @@ import { suite, test } from "mocha";
 import {
   HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
+  THEME_KINDS,
+  THEME_KIND_CSS_VAR,
+  VSCODE_THEME_BODY_CLASSES,
 } from "../../types/DashboardConstants";
 import {
   buildHostedStandaloneShimScript,
@@ -39,7 +42,7 @@ type WebSocketEventListenerOptions = Parameters<
  * `window.vscodeApi`. Returns the sockets it opened so a test can drive the
  * connect/reconnect lifecycle by hand.
  */
-function loadShim(): {
+function loadShim(body: FakeBody | null = null): {
   api: any;
   sockets: FakeSocket[];
   dispatched: any[];
@@ -116,7 +119,7 @@ function loadShim(): {
       addEventListener: noop,
       getElementById: () => null,
       createElement: () => ({ setAttribute: noop, querySelector: () => null }),
-      body: null,
+      body,
       documentElement: { style: { setProperty: noop } },
       querySelector: () => null,
     },
@@ -142,6 +145,16 @@ function loadShim(): {
     context
   );
   return { api: context.window.vscodeApi, sockets, dispatched };
+}
+
+/** Set-backed stand-in for `document.body`, enough for theme class replay. */
+class FakeBody {
+  readonly classes = new Set<string>();
+  readonly classList = {
+    add: (...tokens: string[]) => tokens.forEach((t) => this.classes.add(t)),
+    remove: (...tokens: string[]) =>
+      tokens.forEach((t) => this.classes.delete(t)),
+  };
 }
 
 /** Brings the shim's current socket to OPEN, which flushes pendingOutbound. */
@@ -273,6 +286,38 @@ suite("HostedStandaloneShimScript", () => {
       dispatched[0].data.data.snapshot,
       capabilitySnapshot,
       "hosted clients receive the same capability snapshot used by the VS Code webview"
+    );
+  });
+
+  test("replays both high-contrast body classes for a high-contrast light theme", () => {
+    const body = new FakeBody();
+    body.classList.add(VSCODE_THEME_BODY_CLASSES.DARK);
+    const { sockets } = loadShim(body);
+    openSocket(sockets[0]);
+
+    const sendThemeKind = (kind: string) =>
+      sockets[0].emit("message", {
+        currentTarget: sockets[0],
+        data: JSON.stringify({
+          type: MESSAGE_TYPES.THEME_VARS_UPDATED,
+          vars: { [THEME_KIND_CSS_VAR]: kind },
+        }),
+      });
+
+    sendThemeKind(THEME_KINDS.HIGH_CONTRAST_LIGHT);
+    assert.deepStrictEqual(
+      [...body.classes].sort(),
+      [
+        VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST,
+        VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST_LIGHT,
+      ].sort()
+    );
+
+    sendThemeKind(THEME_KINDS.HIGH_CONTRAST);
+    assert.deepStrictEqual(
+      [...body.classes],
+      [VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST],
+      "switching to high-contrast dark drops the light class"
     );
   });
 });

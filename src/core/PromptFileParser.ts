@@ -25,7 +25,7 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
 import { stripLeadingBom } from "../utils/TextUtils";
-import { splitMarkdownFrontmatter } from "../utils/DiscoveryUtils";
+import { splitMarkdownFrontmatter } from "../utils/MarkdownFrontmatter";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";

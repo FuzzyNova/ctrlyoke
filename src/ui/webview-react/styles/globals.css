@@ -1027,15 +1027,17 @@ body.vscode-high-contrast-light {
     line-height: 1.4;
   }
 
-  /* Color scheme hint for native form controls */
-  body.vscode-light,
-  body.vscode-high-contrast-light {
-    color-scheme: light;
-  }
-
+  /* Color scheme hint for native form controls. The light rule must follow
+     the dark one: high-contrast light bodies also carry vscode-high-contrast,
+     so source order is what makes them resolve to light. */
   body.vscode-dark,
   body.vscode-high-contrast {
     color-scheme: dark;
+  }
+
+  body.vscode-light,
+  body.vscode-high-contrast-light {
+    color-scheme: light;
   }
 
   /* Dark-only harness icons (white fills) get inverted on light themes */

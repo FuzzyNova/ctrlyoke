@@ -319,8 +319,10 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
        keyword-colour regression, tag-to-variable resolution, and `resolveCodeMirrorLanguage`.
      - **Not yet done:** the visual check in VS Code (Default Dark, Default Light, one
        high-contrast theme) and in the hosted browser with a theme snapshot. Do it before or
-       alongside Phase 2. In the hosted browser, check high-contrast light specifically: see
-       [`hosted-high-contrast-light-syntax-colours`](../bugs/backlog/hosted-high-contrast-light-syntax-colours.md).
+       alongside Phase 2. In the hosted browser, include high-contrast light, whose body
+       classes were wrong until
+       [`hosted-high-contrast-light-syntax-colours`](../bugs/implemented/hosted-high-contrast-light-syntax-colours.md)
+       was fixed (tests cover it; no one has looked at it yet).
 
 3. **Phase 2: Markdown in the prompt editor.**
    - Add the `markdown()` compartment with GFM and lazy nested languages.
@@ -388,7 +390,7 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      `findCodeRanges` ranges, computed on the decoded prompt value: dedent YAML block scalars
      and decode JSON strings. Phase 2's precedence rule applies here too: what looks literal
      must behave literally. The fix and its tests are in the bug doc; its decoded prompt
-     ranges come from `WorkflowPromptRanges` (file support plan Phase 1b). The VS Code diagnostics
+     ranges come from `getWorkflowTextSpans` (file support plan Phase 1b). The VS Code diagnostics
      provider that carries the suppressed-expansion warning is
      [`PROMPT_DIAGNOSTICS_PLAN.md`](PROMPT_DIAGNOSTICS_PLAN.md) Phase 2. It is not a blocker
      for this phase.

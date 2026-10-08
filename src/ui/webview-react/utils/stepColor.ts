@@ -5,11 +5,12 @@ import {
   SCRIPT_STEP_DEFAULT_COLOR,
   STEP_COLOR_PALETTES,
   STEP_COLOR_MODES,
-  THEME_KINDS,
+  isLightThemeKind,
   type HarnessId,
   type ThemeKind,
   type StepColorMode,
 } from "@root/types/DashboardConstants";
+import { getDocumentThemeKind } from "@utils/themeKind";
 import type { WorkflowStep } from "@store/workflowStore";
 
 /** The information needed to compare one group member's base color. */
@@ -57,46 +58,14 @@ export function getUniqueStepColor(stepIndex: number): string {
   return `var(--cy-step-hue-${paletteIndex}, ${UNIQUE_PALETTE.dark[paletteIndex]})`;
 }
 
-function getDocumentThemeKind(): ThemeKind {
-  if (typeof document !== "undefined") {
-    const bodyClasses = document.body?.classList;
-    if (bodyClasses?.contains("vscode-high-contrast-light")) {
-      return THEME_KINDS.LIGHT;
-    }
-    if (bodyClasses?.contains("vscode-light")) return THEME_KINDS.LIGHT;
-    if (bodyClasses?.contains("vscode-high-contrast")) {
-      return THEME_KINDS.HIGH_CONTRAST;
-    }
-    if (bodyClasses?.contains("vscode-dark")) return THEME_KINDS.DARK;
-
-    const forwardedThemeKind =
-      typeof window === "undefined"
-        ? ""
-        : window
-            .getComputedStyle(document.documentElement)
-            .getPropertyValue("--cy-color-theme-kind")
-            .trim();
-    if (
-      forwardedThemeKind === THEME_KINDS.LIGHT ||
-      forwardedThemeKind === THEME_KINDS.DARK ||
-      forwardedThemeKind === THEME_KINDS.HIGH_CONTRAST
-    ) {
-      return forwardedThemeKind;
-    }
-  }
-
-  return THEME_KINDS.DARK;
-}
-
 /** Return a literal palette color suitable for an HTML color input. */
 export function getStepPaletteHex(
   stepIndex: number,
   themeKind: ThemeKind = getDocumentThemeKind()
 ): string {
-  const palette =
-    themeKind === THEME_KINDS.LIGHT
-      ? UNIQUE_PALETTE.light
-      : UNIQUE_PALETTE.dark;
+  const palette = isLightThemeKind(themeKind)
+    ? UNIQUE_PALETTE.light
+    : UNIQUE_PALETTE.dark;
   return palette[wrapUniquePaletteIndex(stepIndex)];
 }
 

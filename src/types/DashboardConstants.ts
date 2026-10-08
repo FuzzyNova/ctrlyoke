@@ -3249,9 +3249,52 @@ export const THEME_KINDS = {
   LIGHT: "light",
   DARK: "dark",
   HIGH_CONTRAST: "high-contrast",
+  HIGH_CONTRAST_LIGHT: "high-contrast-light",
 } as const;
 
 export type ThemeKind = (typeof THEME_KINDS)[keyof typeof THEME_KINDS];
+
+/** Synthetic CSS custom property that carries the forwarded theme kind. */
+export const THEME_KIND_CSS_VAR = "--cy-color-theme-kind";
+
+export function isThemeKind(value: unknown): value is ThemeKind {
+  return (Object.values(THEME_KINDS) as unknown[]).includes(value);
+}
+
+/** True for theme kinds painted on a light background. */
+export function isLightThemeKind(kind: ThemeKind): boolean {
+  return kind === THEME_KINDS.LIGHT || kind === THEME_KINDS.HIGH_CONTRAST_LIGHT;
+}
+
+/** Classes VS Code puts on a webview's `<body>` to signal the active theme. */
+export const VSCODE_THEME_BODY_CLASSES = {
+  LIGHT: "vscode-light",
+  DARK: "vscode-dark",
+  HIGH_CONTRAST: "vscode-high-contrast",
+  HIGH_CONTRAST_LIGHT: "vscode-high-contrast-light",
+} as const;
+
+export type VsCodeThemeBodyClass =
+  (typeof VSCODE_THEME_BODY_CLASSES)[keyof typeof VSCODE_THEME_BODY_CLASSES];
+
+/**
+ * The full body class set VS Code applies for each theme kind. High-contrast
+ * light carries both high-contrast classes, and `globals.css` relies on its
+ * `body.vscode-high-contrast-light` rules following `body.vscode-high-contrast`
+ * so the light values win. The hosted server and standalone shim replay these
+ * exact sets so the browser dashboard matches the VS Code webview.
+ */
+export const THEME_KIND_BODY_CLASSES: Readonly<
+  Record<ThemeKind, readonly VsCodeThemeBodyClass[]>
+> = {
+  [THEME_KINDS.LIGHT]: [VSCODE_THEME_BODY_CLASSES.LIGHT],
+  [THEME_KINDS.DARK]: [VSCODE_THEME_BODY_CLASSES.DARK],
+  [THEME_KINDS.HIGH_CONTRAST]: [VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST],
+  [THEME_KINDS.HIGH_CONTRAST_LIGHT]: [
+    VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST,
+    VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST_LIGHT,
+  ],
+};
 
 /** User-selected color theme for the hosted dashboard server. */
 export const SERVER_THEME_MODES = {
@@ -3695,6 +3738,14 @@ export const PROMPT_PROPERTIES = {
   EXECUTION_MODE: "executionMode",
   TOOL_PERMISSIONS: "toolPermissions",
   ERROR_BEHAVIOR: "errorBehavior",
+
+  // Template metadata (removed when a template is instantiated)
+  TEMPLATE_META: "_templateMeta",
+} as const;
+
+/** Keys of one entry in a step's `hooks` list. */
+export const WORKFLOW_HOOK_PROPERTIES = {
+  COMMAND: "command",
 } as const;
 
 /**
@@ -3813,6 +3864,7 @@ export const END_CONDITION_PROPERTIES = {
   TIMEOUT: "timeoutSec",
   MAX_RETRIES: "maxRetries",
   RETRY_PROMPT: "retryPrompt",
+  PASS_RETRY_PROMPT: "passRetryPrompt",
   RESUME_SESSION_ON_RETRY: "resumeSessionOnRetry",
 } as const;
 

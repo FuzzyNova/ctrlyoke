@@ -20,6 +20,9 @@ import {
   HARNESS_VERSION_STATUSES,
   MESSAGE_TYPES,
   BROWSER_NOTIFICATION_MODES,
+  THEME_KINDS,
+  THEME_KIND_CSS_VAR,
+  VSCODE_THEME_BODY_CLASSES,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import {
@@ -565,6 +568,33 @@ suite("CtrlYokeHostedServer theme defaults", () => {
         "--vscode-editor-background": "#123456",
         "--cy-color-theme-kind": "dark",
       }
+    );
+  });
+
+  test("high-contrast light emits both high-contrast body classes", async () => {
+    await withThemePage(
+      "dark",
+      "",
+      (html) => {
+        assert.ok(
+          html.includes(
+            `<body class="${VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST} ${VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST_LIGHT}"`
+          )
+        );
+      },
+      { [THEME_KIND_CSS_VAR]: THEME_KINDS.HIGH_CONTRAST_LIGHT }
+    );
+    await withThemePage(
+      "light",
+      "",
+      (html) => {
+        assert.ok(
+          html.includes(
+            `<body class="${VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST}"`
+          )
+        );
+      },
+      { [THEME_KIND_CSS_VAR]: THEME_KINDS.HIGH_CONTRAST }
     );
   });
 });

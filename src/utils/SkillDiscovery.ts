@@ -3,11 +3,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as yaml from "js-yaml";
 import { Log } from "./Log";
-import {
-  formatDisplayName,
-  isAccessibleDirectory,
-  splitMarkdownFrontmatter,
-} from "./DiscoveryUtils";
+import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import { splitMarkdownFrontmatter } from "./MarkdownFrontmatter";
 import {
   getHarnessSkillDirs,
   getCtrlYokeSkillDir,

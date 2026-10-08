@@ -11,6 +11,7 @@ import {
   type FileReference,
 } from "./FileReferenceParser";
 import { PromptFileResolver } from "../core/PromptFileResolver";
+import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { type ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -1082,10 +1083,7 @@ function getWorkflowFileStem(fileName: string): string | undefined {
 }
 
 function isWorkflowFileName(fileName: string): boolean {
-  return (
-    /\.ctrlyoke\.(?:json|ya?ml)$/i.test(fileName) ||
-    /\.prompt\.md$/i.test(fileName)
-  );
+  return getCtrlYokeFileKind(fileName) !== null;
 }
 
 async function getManifestedAssetsDirectory(

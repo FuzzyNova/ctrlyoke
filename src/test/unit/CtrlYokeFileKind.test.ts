@@ -15,7 +15,6 @@ suite("CtrlYokeFileKind", () => {
         CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
       ],
       ["flow.ctrlyoke.json", CTRLYOKE_FILE_KINDS.WORKFLOW_JSON],
-      ["flow.prompt.json", CTRLYOKE_FILE_KINDS.WORKFLOW_JSON],
       ["docs/intro.prompt.md", CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN],
       ["FLOW.CTRLYOKE.YAML", CTRLYOKE_FILE_KINDS.WORKFLOW_YAML],
       ["dir\\sub\\flow.ctrlyoke.yaml", CTRLYOKE_FILE_KINDS.WORKFLOW_YAML],
@@ -32,6 +31,9 @@ suite("CtrlYokeFileKind", () => {
       "README.md",
       "notes.prompt.txt",
       "ctrlyoke.yaml",
+      "prompt.md",
+      // `.prompt.json` was removed; the loader rejects it.
+      "flow.prompt.json",
       ".prompt.md",
       "dir.ctrlyoke.yaml/inner.yaml",
     ]) {
@@ -48,7 +50,6 @@ suite("CtrlYokeFileKind", () => {
       "**/*.ctrlyoke.yaml",
       "**/*.ctrlyoke.yml",
       "**/*.ctrlyoke.json",
-      "**/*.prompt.json",
       "**/*.prompt.md",
     ]);
   });

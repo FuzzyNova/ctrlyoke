@@ -1,12 +1,11 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-08):** Phases 1 and 2 are implemented (see their entries under
-"Implementation phases"). The Wave 1 review found bugs in both; Phase 1b fixes them and adds
-the decoded prompt-range helper Wave 2 needs. Phases 0, 1b and 3–7 are not started.
-_Refreshed 2026-10-08:_ the
-language intelligence plan
-shipped (`dev/implemented/`). Facts 2 and 9, "Editor integration" and "Coexistence with
-language servers" were re-audited against the merged code.
+**Status (2026-10-08):** Phases 1, 2 and 1b are implemented (see their entries under
+"Implementation phases"). Phase 1b fixed the bugs the Wave 1 review found in 1 and 2 and added
+the decoded prompt ranges Wave 2 needs. Phases 0 and 3–7 are not started. _Refreshed
+2026-10-08:_ the language intelligence plan shipped (`dev/implemented/`). Facts 2 and 9,
+"Editor integration" and "Coexistence with language servers" were re-audited against the
+merged code.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -462,15 +461,13 @@ Every phase lands with tests and leaves both editors working.
      typed, the owning object). It adds `key` (nearest enclosing key) and `scalarStyle` (YAML) to
      what the design listed. `valueRange` is the **raw source span** of the scalar content
      (inside quotes, after a block-scalar header). It is not decoded: escapes stay (`a\"b`,
-     `it''s`), and block bodies keep their indentation and line breaks with no chomping. On the
-     indentation-scan path it covers only the cursor line up to the cursor. Phase 1b adds the
-     decoded form.
+     `it''s`), and block bodies keep their indentation and line breaks with no chomping. Phase
+     1b added the decoded form (`getWorkflowTextSpans`).
    - **`WORKFLOW_TEXT_FIELDS`** also lists root `prompt` and `script`, for single-step
      workflows.
-   - **Kinds:** `.prompt.json` is a `WORKFLOW_JSON` file, matching the existing
-     `**/*.{prompt,ctrlyoke}.json` selector. `PromptLinkProvider` now matches it too; before, it
-     only checked `.ctrlyoke.json`. **This is wrong** (`PromptFileParser` no longer loads
-     `.prompt.json`); Phase 1b fixes it.
+   - **Kinds:** Phase 1 treated `.prompt.json` as a workflow file, copying the old
+     `**/*.{prompt,ctrlyoke}.json` selector. The loader no longer accepts it, so Phase 1b
+     removed it.
    - **Language-server exclusion:** `lookupSession` returns the new `CTRLYOKE_FILE` reason.
      `resolveForPath`, `requestForPath` and `openWarmupDocument` also refuse ctrlyoke files, so no
      path can feed one to a server. `useLanguageIntelligence` needed no change: an unknown reason
@@ -511,10 +508,11 @@ Every phase lands with tests and leaves both editors working.
      `endCondition`, `preCondition`, `toolPermissions`, `errorBehavior`, `hook`, `worktree`,
      `templateMeta`, `promptFileFrontmatter` (just `schemaVersion`). `vars` is omitted because it
      has no fixed keys; `promptFileBody` and `unknown` have no schema.
-   - **Resolution rules:** keys merge through `$ref`, `allOf`, `oneOf` and `anyOf`, but the
-     first branch to define a key wins and later branches' enums are not merged (so root
-     `type` is `["prompt"]`; Phase 1b fixes it). An `enum` can hold suggested literals rather
-     than a closed set (`maxSteps` has `[-1]`), so never validate against it. A `$ref` with
+   - **Resolution rules:** keys merge through `$ref`, `allOf`, `oneOf` and `anyOf`, and since
+     Phase 1b a key defined in several branches unions their kinds and enums (the first
+     definition still supplies the description and default). An `enum` can hold suggested
+     literals rather than a closed set (`maxSteps` has `[-1]`), so never validate against it.
+     A `$ref` with
      a sibling `description` takes the sibling (`worktree`, `maxSteps`). Forbidden keys come from
      `allOf` `not: { required: [key] }` branches, and a step also inherits `workflowStep`'s.
      Runtime-only keys (`_runtime`, `startedAt`, `definitionRevision`, `parallelGroups`) are a
@@ -529,58 +527,62 @@ Every phase lands with tests and leaves both editors working.
    - **Not yet used:** `valueKind`, `enum`, `default` and `forbiddenKeys` have no consumer until
      Phase 3.
 
-4. **Phase 1b: Location and outline fixes, and decoded prompt ranges.** Added 2026-10-08 after
-   the Wave 1 review. It lands first in Wave 2, because F3, B and D2 all build on it. Each bug
-   below was reproduced against the Phase 1/2 code.
-   - **YAML location bugs** (`WorkflowLocationYaml.ts`). Each leaves F3 with no key
-     completions:
-     - The first key typed under a new nested mapping (`endCondition:\n      ret§`, and the
-       same for `worktree`, `errorBehavior`, `vars`, `_templateMeta`) parses as the parent's
-       plain value, so it returns `VALUE` in the parent instead of `KEY` in the child. The
-       `- pro` special case needs a mapping equivalent.
-     - An empty new item `- §` in `steps`, `parallel` or `hooks` returns `VALUE` in the root
-       (the half-typed-item check requires a string value; an empty item is `null`).
-     - A new key in a flow mapping (`- { prompt: "hi", §}`) falls through to the scan and is
-       misread.
-     - A flow sequence (`skills: [a, §]`) gives no item index, and `valueRange` covers
-       `[a, `.
-     - A trailing comment counts as prompt text (`prompt: hi # a §`).
-     - A cursor just after a closing quote (`prompt: "x"§`) counts as inside the string.
-   - **JSON location bugs** (`WorkflowLocationJson.ts`): a cursor just before the opening or
-     after the closing `"` returns `PROMPT_TEXT` with `jsonString: true`; a cursor inside a
-     `/* comment */` returns `KEY` instead of `NONE`; `findJsonRangeForPath` returns the whole
-     subtree for an array-item object or the root, where YAML clips to one line, so an error on
-     `/steps/0` would paint the whole step.
-   - **`.prompt.md` frontmatter:** the facade's regex duplicates `splitMarkdownFrontmatter`
-     (`src/utils/DiscoveryUtils.ts`) and disagrees with it on a leading BOM and an empty
-     `---\n---` block. Use the shared splitter.
-   - **File predicate:** drop `.prompt.json` (`PromptFileParser` no longer loads it), and make
-     `WorkflowFileDiscovery.ts` derive from the same table. It keeps its own suffix list and
-     also accepts the bare names `ctrlyoke.yaml`/`.yml`/`.json` and `prompt.md`, which the
-     predicate rejects. Decide once which list is right; the predicate and discovery must
-     agree.
-   - **Root classification:** a single-step `type: script` root is classified as
-     `SCRIPT_STEP`, whose outline forbids `worktree`, `maxSteps` and
-     `trustedExternalRoots`, which a root allows. Classify roots as `WORKFLOW_ROOT`, with the
-     prompt/script distinction carried separately.
-   - **Outline generator:** merge a key's enum across `oneOf`/`anyOf` branches instead of
-     taking the first (root `type` must be `["prompt", "script"]`).
-   - **Constants:** `WORKFLOW_TEXT_FIELDS` and the YAML module hard-code `"retryPrompt"`,
-     `"passRetryPrompt"`, `"command"`, `"_templateMeta"` and a local `SCRIPT_STEP_TYPE`; use
-     `END_CONDITION_PROPERTIES`, `STEP_TYPES` and `PROMPT_PROPERTIES` (adding constants where
-     missing). `LanguageIntelligenceHost` calls `getCtrlYokeFileKind(viewerPath)` in four
-     places; make it one guard.
-   - **New shared helper, `WorkflowPromptRanges`** (pure, `src/completions/`). B, D2 and later
-     F5/F6 all need _every_ `PROMPT_TEXT` range in a document as decoded text with an offset
-     map back to the source; F1 only answers one cursor at a time and returns raw spans. It
-     returns, per prompt field, `{ path, field, decodedText, toSourceOffset(i) }`: YAML block
-     scalars dedented (so `findCodeRanges`' three-space fence rule holds) with chomping
-     applied, quoted scalars and JSON strings unescaped, and the `.prompt.md` body after
-     frontmatter. Build it on the parsers F1 already uses.
-   - Tests: a case for each bug above in `WorkflowDocumentLocation.test.ts`, coverage for the
-     `VARS`, `TEMPLATE_META`, `ERROR_BEHAVIOR` and `TOOL_PERMISSIONS` object kinds the Phase 1
-     suite missed, and a `WorkflowPromptRanges` suite covering a dedented block with an
-     indented fence, CRLF, escaped quotes, a JSON `\n`, and offsets mapped back to the source.
+4. **Phase 1b: Location and outline fixes, and decoded prompt ranges.** **Done 2026-10-08.**
+   Added by the Wave 1 review, which reproduced each bug below against the Phase 1/2 code, and
+   landed before Wave 2 so F3, B and D2 build on the fixed API.
+   - **YAML location** (`WorkflowLocationYaml.ts`):
+     - The first key typed under a new nested object (`endCondition:` then `ret§` on the next
+       line) parses as the parent's plain value. It is now `KEY` in the child object whenever
+       the slot is a known object kind (`endCondition`, `preCondition`, `toolPermissions`,
+       `errorBehavior`, `worktree`, `vars`, `_templateMeta`). A text field's value on the next
+       line (`prompt:` then `Fix it`) is still text.
+     - An empty item `- §` in `steps`, `parallel` or `hooks` is a new item's first key, like
+       `- pro§`.
+     - A new key in a flow mapping (`{ prompt: "hi", §}`) is `KEY` in that mapping; a new item
+       in a flow sequence (`[a, §]`) is `VALUE` at the next index.
+     - A trailing comment, a cursor after a closing quote and a cursor before an opening quote
+       are not text. On the scan path a `#` starts a comment only at the start or after
+       whitespace, never inside quotes; an unclosed quoted value's range starts after the
+       quote.
+     - The scan path's block-scalar `valueRange` now spans the whole body, as the parser path
+       does, instead of the cursor line.
+   - **JSON location** (`WorkflowLocationJson.ts`): a cursor on either quote boundary is
+     `VALUE`, not text; a cursor inside `//` or `/* */` is `NONE`; `findJsonRangeForPath` clips
+     a keyless object (an array item or the root) to its first line.
+   - **`.prompt.md` frontmatter:** `splitMarkdownFrontmatter` moved from the `fs`-importing
+     `DiscoveryUtils.ts` into a pure `src/utils/MarkdownFrontmatter.ts`, which adds
+     `locateMarkdownFrontmatter` (offsets, BOM included). The location facade uses it, so a BOM
+     and an empty block split exactly as the loader splits them.
+   - **File predicate:** `.prompt.json` is gone (the loader rejects it). Workflow discovery,
+     the secret registry scan and the bundle analyzer now call `getCtrlYokeFileKind`. Decision:
+     a name needs a stem, so the bare `ctrlyoke.yaml`/`.yml`/`.json` and `prompt.md` that
+     discovery alone used to accept are not workflow files. No doc mentioned them, and a bare
+     `prompt.md` is too generic a name to claim.
+   - **Root classification:** the root is always `WORKFLOW_ROOT`. Telling a single-step prompt
+     from a script root is F3's job (it already has to filter the root outline by mode).
+   - **Outline generator:** each key keeps every branch's definition and their kinds and enums
+     are unioned. That fixed root `type` (`["prompt", "script"]`) and `worktree.mode`
+     (`["managed", "named"]`, which was also missing a value). The generated `enum` doc now
+     says it is a suggestion list, not a closed set.
+   - **Constants:** `END_CONDITION_PROPERTIES.PASS_RETRY_PROMPT`,
+     `PROMPT_PROPERTIES.TEMPLATE_META` and `WORKFLOW_HOOK_PROPERTIES.COMMAND` replace the
+     hard-coded keys, and `STEP_TYPES.SCRIPT` the local `SCRIPT_STEP_TYPE`.
+     `LanguageIntelligenceHost` has one `servesPath` guard for its three early returns.
+   - **Decoded prompt ranges:** `getWorkflowTextSpans(text, kind, role = PROMPT_TEXT)` in
+     `src/completions/WorkflowPromptRanges.ts` returns every prompt (or script) value as a
+     `WorkflowTextSpan`: `path`, `field`, `objectKind`, the raw `sourceRange`, the decoded
+     `text`, and `toSourceOffset(i)`. YAML block scalars are dedented, folded and chomped,
+     quoted and plain scalars are unescaped and line-folded, JSON strings are unescaped, and a
+     `.prompt.md` body is trimmed as `PromptFileParser` trims it. The decoders
+     (`WorkflowTextDecoding.ts`) are checked against the `yaml` parser's own value; on a
+     mismatch the span carries the parser's text with `exact: false` and approximate offsets.
+     The walkers live in each format's half (`getJsonTextSpans`, `getYamlTextSpans`), so the
+     webview can keep the YAML half lazy.
+   - **Tests:** new cases in `WorkflowDocumentLocation.test.ts` for every bug above and the
+     `VARS`, `TEMPLATE_META`, `ERROR_BEHAVIOR` and `TOOL_PERMISSIONS` kinds;
+     `WorkflowPromptRanges.test.ts` (every scalar style against the parser's value, a fence in
+     a dedented block found by `findCodeRanges`, CRLF, escapes and offset round trips);
+     `MarkdownFrontmatter.test.ts`; and the generator's enum-merge case.
 
 5. **Phase 3: `WorkflowFileCompletionCore`.**
    - Key and value items, and the `WorkflowValueDataSource` interface.
@@ -642,8 +644,8 @@ Every phase lands with tests and leaves both editors working.
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 0–2 can land in any order (Phases 1 and 2 are done). Phase 1b needs 1 and 2. Phase 3
-needs 1b. Phase 4 needs 0, 1b and 3. The cross-plan order is in
+Phases 1, 2 and 1b are done. Phase 0 and Phase 3 can start now. Phase 4 needs 0 and 3. The
+cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 
 ## Open questions

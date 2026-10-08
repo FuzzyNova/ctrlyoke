@@ -61,11 +61,12 @@ Nothing on the VS Code side consults the shared literal-range rule.
     dedented first, as the host's parser does, and offsets mapped back per line.
   - JSON prompt strings need decoding with an escape-aware offset map.
   - `.prompt.md` can be scanned after its frontmatter.
-  - The file support plan's Phase 1 has landed (`src/completions/WorkflowDocumentLocation.ts`).
-    Its `valueRange` is the raw scalar content, not decoded text, and it answers one cursor
-    position at a time. The decoded prompt ranges come from the shared `WorkflowPromptRanges`
-    helper that the staging plan schedules at the start of Wave 2, which D2 uses too. Don't
-    write a private extractor.
+  - All of this exists: `getWorkflowTextSpans(text, kind)`
+    (`src/completions/WorkflowPromptRanges.ts`) returns every prompt value, `.prompt.md` body
+    included, as decoded `text` with `toSourceOffset()` back to the document. Run
+    `findCodeRanges` on `span.text` and map the ranges back. For completions, find the span
+    whose `sourceRange` holds the cursor. D2 uses the same spans. Don't write a private
+    extractor.
 - **Warning (follow-up):** the dashboard's warning reaches VS Code through
   [`PROMPT_DIAGNOSTICS_PLAN.md`](../../backlog/PROMPT_DIAGNOSTICS_PLAN.md) Phase 2, a
   prompt-file diagnostics provider fed by the shared rules. That provider is new

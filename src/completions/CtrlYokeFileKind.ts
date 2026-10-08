@@ -11,7 +11,7 @@ const CTRLYOKE_FILE_SUFFIXES: Readonly<
   Record<CtrlYokeFileKind, readonly string[]>
 > = {
   [CTRLYOKE_FILE_KINDS.WORKFLOW_YAML]: [".ctrlyoke.yaml", ".ctrlyoke.yml"],
-  [CTRLYOKE_FILE_KINDS.WORKFLOW_JSON]: [".ctrlyoke.json", ".prompt.json"],
+  [CTRLYOKE_FILE_KINDS.WORKFLOW_JSON]: [".ctrlyoke.json"],
   [CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN]: [".prompt.md"],
 };
 

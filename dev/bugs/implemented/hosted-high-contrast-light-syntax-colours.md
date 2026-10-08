@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), while reviewing Wave 1 of the editor intelligence staging plan (M1)
 - **Area:** `src/server/CtrlYokeHostedServer.ts`, `src/types/DashboardConstants.ts`, `src/ui/webview-react/styles/globals.css`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -42,3 +42,19 @@ generic high-contrast check, and have `resolveThemeBodyClass` emit
 `vscode-high-contrast vscode-high-contrast-light` for it. Add a `syntaxPalette.test.ts` case
 that the high-contrast light values win when both classes are present, and a hosted-server test
 for the body class.
+
+## Fix
+
+- `THEME_KINDS.HIGH_CONTRAST_LIGHT`, plus `THEME_KIND_BODY_CLASSES` (the body class set per
+  kind; high-contrast light carries both classes) and `isThemeKind`/`isLightThemeKind` in
+  `DashboardConstants.ts`.
+- The hosted server's first render and the standalone shim's theme updates both apply
+  `THEME_KIND_BODY_CLASSES`. The shim needed the change too: it re-applied a single class on
+  every theme update, which would have undone the server fix.
+- The webview detects the kind with one helper, `utils/themeKind.ts`, that checks
+  high-contrast light first. Mermaid's theme and the CodeMirror `dark` flag now treat
+  high-contrast light as light.
+- Same root cause, also inside VS Code: `globals.css` set `color-scheme: dark` for
+  `body.vscode-high-contrast` _after_ the light rule, so high-contrast light got dark native
+  form controls. The rules are swapped, and `syntaxPalette.test.ts` now asserts that every
+  property set for both classes is set for high-contrast light later in the file.

@@ -4,6 +4,7 @@ import {
   WORKFLOW_OBJECT_KINDS,
   type CtrlYokeFileKind,
 } from "../types/DashboardConstants";
+import { locateMarkdownFrontmatter } from "../utils/MarkdownFrontmatter";
 import {
   findJsonRangeForPath,
   getJsonWorkflowLocation,
@@ -68,21 +69,25 @@ export function findRangeForPath(
   }
 }
 
-interface PromptMarkdownParts {
+export interface PromptMarkdownParts {
   readonly frontmatter?: { readonly text: string; readonly start: number };
   readonly body: WorkflowTextRange;
 }
 
-const FRONTMATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
-
-/** `.prompt.md` is an optional YAML frontmatter block, then prompt text. */
-function splitPromptMarkdown(text: string): PromptMarkdownParts {
-  const match = FRONTMATTER.exec(text);
-  if (!match) return { body: { start: 0, end: text.length } };
-  const start = match[0].indexOf(match[1]);
+/**
+ * `.prompt.md` is an optional YAML frontmatter block, then prompt text. Uses
+ * the loader's own splitter, so a BOM or an empty block is handled the same.
+ */
+export function splitPromptMarkdown(text: string): PromptMarkdownParts {
+  const { frontmatter, bodyStart } = locateMarkdownFrontmatter(text);
+  const body = { start: bodyStart, end: text.length };
+  if (!frontmatter) return { body };
   return {
-    frontmatter: { text: match[1], start },
-    body: { start: match[0].length, end: text.length },
+    frontmatter: {
+      text: text.slice(frontmatter.start, frontmatter.end),
+      start: frontmatter.start,
+    },
+    body,
   };
 }
 

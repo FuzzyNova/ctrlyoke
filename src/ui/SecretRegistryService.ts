@@ -26,6 +26,7 @@ import { collectSecretInterpolationNames } from "../utils/SecretResolver";
 import { parseSecretReferences } from "../utils/SecretReferenceParser";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
+import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
 
 export interface SecretRegistryWorkflowReference {
   workflow: string;
@@ -56,13 +57,6 @@ interface SecretMetadata {
 interface ScannedWorkflowReference extends SecretRegistryWorkflowReference {
   mcpServers: SecretRegistryMcpReference[];
 }
-
-const WORKFLOW_EXTENSIONS = [
-  ".ctrlyoke.json",
-  ".ctrlyoke.yaml",
-  ".ctrlyoke.yml",
-  ".prompt.md",
-] as const;
 
 function isWriteScope(value: unknown): value is SettingWriteScope {
   return value === SETTING_SCOPES.USER || value === SETTING_SCOPES.WORKSPACE;
@@ -152,10 +146,6 @@ function workflowFileName(filePath: string, workspaceRoot: string): string {
   return relative || path.basename(filePath);
 }
 
-function isWorkflowFile(fileName: string): boolean {
-  return WORKFLOW_EXTENSIONS.some((extension) => fileName.endsWith(extension));
-}
-
 async function readWorkflowReference(
   filePath: string,
   workspaceRoot: string
@@ -214,7 +204,10 @@ async function discoverWorkflowFiles(root: string): Promise<string[]> {
           continue;
         }
         await visit(fullPath);
-      } else if (isWorkflowFile(entry.name) && !visited.has(fullPath)) {
+      } else if (
+        getCtrlYokeFileKind(entry.name) !== null &&
+        !visited.has(fullPath)
+      ) {
         visited.add(fullPath);
         files.push(fullPath);
       }

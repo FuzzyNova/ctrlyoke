@@ -255,25 +255,19 @@
   function applyThemeVars(vars) {
     const style = document.documentElement.style;
     for (const [k, v] of Object.entries(vars)) style.setProperty(k, v);
-    // Replicate VS Code's body class so dark-mode detection works in the browser
-    // (e.g. CodeMirror reads document.body.classList.contains("vscode-dark")).
-    const kind = vars["--cy-color-theme-kind"];
+    // Replicate VS Code's body classes so theme detection and body-class CSS
+    // (e.g. the --cy-syntax-* palette) work in the browser. High-contrast
+    // light carries both high-contrast classes, exactly as in VS Code.
+    const kind = vars[CONNECTION_CONFIG.themeKindCssVar];
     if (!kind) return;
+    const bodyClasses =
+      CONNECTION_CONFIG.themeBodyClassesByKind[kind] ||
+      CONNECTION_CONFIG.fallbackThemeBodyClasses;
 
     const applyBodyClass = () => {
       if (!document.body) return;
-      document.body.classList.remove(
-        "vscode-dark",
-        "vscode-light",
-        "vscode-high-contrast"
-      );
-      document.body.classList.add(
-        kind === "dark"
-          ? "vscode-dark"
-          : kind === "high-contrast"
-            ? "vscode-high-contrast"
-            : "vscode-light"
-      );
+      document.body.classList.remove(...CONNECTION_CONFIG.allThemeBodyClasses);
+      document.body.classList.add(...bodyClasses);
     };
 
     if (document.body) {
@@ -322,7 +316,7 @@
     }
 
     // Theme var updates: apply directly to :root without going through React
-    if (msg.type === "themeVarsUpdated") {
+    if (msg.type === CONNECTION_CONFIG.themeVarsUpdatedType) {
       applyThemeVars(msg.vars || {});
       return;
     }

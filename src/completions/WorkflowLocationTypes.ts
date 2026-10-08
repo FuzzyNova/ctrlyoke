@@ -1,5 +1,8 @@
 import {
+  END_CONDITION_PROPERTIES,
   PROMPT_PROPERTIES,
+  STEP_TYPES,
+  WORKFLOW_HOOK_PROPERTIES,
   WORKFLOW_LOCATION_ROLES,
   WORKFLOW_OBJECT_KINDS,
   type CtrlYokeFileKind,
@@ -62,12 +65,12 @@ export const WORKFLOW_TEXT_FIELDS: readonly {
   })),
   {
     objectKind: WORKFLOW_OBJECT_KINDS.END_CONDITION,
-    key: "retryPrompt",
+    key: END_CONDITION_PROPERTIES.RETRY_PROMPT,
     role: WORKFLOW_LOCATION_ROLES.PROMPT_TEXT,
   },
   {
     objectKind: WORKFLOW_OBJECT_KINDS.END_CONDITION,
-    key: "passRetryPrompt",
+    key: END_CONDITION_PROPERTIES.PASS_RETRY_PROMPT,
     role: WORKFLOW_LOCATION_ROLES.PROMPT_TEXT,
   },
   ...[
@@ -82,7 +85,7 @@ export const WORKFLOW_TEXT_FIELDS: readonly {
   })),
   {
     objectKind: WORKFLOW_OBJECT_KINDS.HOOK,
-    key: "command",
+    key: WORKFLOW_HOOK_PROPERTIES.COMMAND,
     role: WORKFLOW_LOCATION_ROLES.SCRIPT_TEXT,
   },
 ];
@@ -98,8 +101,6 @@ export function getTextRole(
     )?.role ?? WORKFLOW_LOCATION_ROLES.VALUE
   );
 }
-
-const SCRIPT_STEP_TYPE = "script";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -139,13 +140,13 @@ const NESTED_OBJECT_KINDS: Readonly<Record<string, WorkflowObjectKind>> = {
 const ROOT_ONLY_OBJECT_KINDS: Readonly<Record<string, WorkflowObjectKind>> = {
   [PROMPT_PROPERTIES.WORKTREE]: WORKFLOW_OBJECT_KINDS.WORKTREE,
   [PROMPT_PROPERTIES.VARS]: WORKFLOW_OBJECT_KINDS.VARS,
-  _templateMeta: WORKFLOW_OBJECT_KINDS.TEMPLATE_META,
+  [PROMPT_PROPERTIES.TEMPLATE_META]: WORKFLOW_OBJECT_KINDS.TEMPLATE_META,
 };
 
 /**
  * Which schema object lives at `objectPath`, given the (possibly partial)
- * parsed document. `type: script`, or a `script` without a `prompt`, makes a
- * script step; a `parallel` list makes a group.
+ * parsed document. On a step, `type: script`, or a `script` without a
+ * `prompt`, makes a script step; a `parallel` list makes a group.
  */
 export function classifyWorkflowObject(
   objectPath: WorkflowPath,
@@ -156,18 +157,15 @@ export function classifyWorkflowObject(
   if (rest.length === 0) {
     const node = valueAt(root, objectPath);
     const fields = isRecord(node) ? node : {};
-    if (prefix === 0) {
-      return fields.type === SCRIPT_STEP_TYPE &&
-        fields[PROMPT_PROPERTIES.STEPS] === undefined
-        ? WORKFLOW_OBJECT_KINDS.SCRIPT_STEP
-        : WORKFLOW_OBJECT_KINDS.WORKFLOW_ROOT;
-    }
+    // The root stays the root even in a single-step script workflow: it still
+    // allows root-only keys (`worktree`, `maxSteps`) that a script step forbids.
+    if (prefix === 0) return WORKFLOW_OBJECT_KINDS.WORKFLOW_ROOT;
     if (prefix === 2 && fields[PROMPT_PROPERTIES.PARALLEL] !== undefined) {
       return WORKFLOW_OBJECT_KINDS.PARALLEL_GROUP;
     }
     const isScript =
-      fields.type === SCRIPT_STEP_TYPE ||
-      (fields.type === undefined &&
+      fields[PROMPT_PROPERTIES.STEP_TYPE] === STEP_TYPES.SCRIPT ||
+      (fields[PROMPT_PROPERTIES.STEP_TYPE] === undefined &&
         fields[PROMPT_PROPERTIES.SCRIPT] !== undefined &&
         fields[PROMPT_PROPERTIES.PROMPT] === undefined);
     return isScript
@@ -199,6 +197,12 @@ export function getObjectKeys(
 ): string[] {
   const node = valueAt(root, objectPath);
   return isRecord(node) ? Object.keys(node) : [];
+}
+
+/** Offset of the line break ending the line that holds `offset` (or the text end). */
+export function lineEndFrom(text: string, offset: number): number {
+  const end = text.indexOf("\n", offset);
+  return end < 0 ? text.length : end;
 }
 
 /** Splits a value path at its nearest object key: `steps,0,skills,1` -> owner `steps,0`, key `skills`. */

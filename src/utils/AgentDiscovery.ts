@@ -2,11 +2,8 @@ import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
 import { Log } from "./Log";
-import {
-  formatDisplayName,
-  isAccessibleDirectory,
-  splitMarkdownFrontmatter,
-} from "./DiscoveryUtils";
+import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import { splitMarkdownFrontmatter } from "./MarkdownFrontmatter";
 import {
   getHarnessAgentDirs,
   getCtrlYokeAgentDir,

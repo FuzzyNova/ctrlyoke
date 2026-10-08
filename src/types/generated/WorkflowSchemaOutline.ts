@@ -16,6 +16,11 @@ export interface WorkflowOutlineProperty {
   readonly valueKind: WorkflowOutlineValueKind;
   /** The kinds accepted when `valueKind` is `oneOf`. */
   readonly alternatives?: readonly Exclude<WorkflowOutlineValueKind, "oneOf">[];
+  /**
+   * Literal values to suggest. Not always a closed set: with `oneOf` a literal
+   * can sit beside a free-form kind (`maxSteps` is `-1` or any number), so
+   * never validate against it.
+   */
   readonly enum?: readonly (string | number | boolean)[];
   readonly default?: string | number | boolean | null;
   readonly description?: string;
@@ -181,7 +186,8 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "type": {
         "valueKind": "string",
         "enum": [
-          "prompt"
+          "prompt",
+          "script"
         ],
         "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible)."
       },
@@ -893,7 +899,8 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "mode": {
         "valueKind": "string",
         "enum": [
-          "managed"
+          "managed",
+          "named"
         ]
       },
       "merge": {

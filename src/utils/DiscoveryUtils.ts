@@ -1,34 +1,4 @@
 import * as fs from "fs";
-import { stripLeadingBom } from "./TextUtils";
-
-export interface MarkdownFrontmatter {
-  /** YAML text between the opening and closing fences. */
-  frontmatter: string;
-  /** Markdown body following the closing fence. */
-  body: string;
-}
-
-/**
- * Split a Markdown YAML frontmatter block from its body.
- * The fences must occupy their own lines; an initial UTF-8 BOM is ignored.
- */
-export function splitMarkdownFrontmatter(
-  content: string
-): MarkdownFrontmatter | null {
-  const normalizedContent = stripLeadingBom(content);
-  const match =
-    /^---\r?\n(?:(?=---[ \t]*(?:\r?\n|$))|([\s\S]*?)\r?\n)---[ \t]*(?:\r?\n|$)/u.exec(
-      normalizedContent
-    );
-  if (!match) {
-    return null;
-  }
-
-  return {
-    frontmatter: match[1] ?? "",
-    body: normalizedContent.slice(match[0].length),
-  };
-}
 
 /**
  * DiscoveryUtils

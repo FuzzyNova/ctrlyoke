@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
 import { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 
 export interface WorkflowFileEntry {
@@ -8,20 +9,6 @@ export interface WorkflowFileEntry {
   /** True if this file is ignored by .gitignore. Only set by hosted-server callers. */
   gitIgnored?: boolean;
 }
-
-const WORKFLOW_FILE_NAMES = new Set([
-  "ctrlyoke.json",
-  "ctrlyoke.yaml",
-  "ctrlyoke.yml",
-  "prompt.md",
-]);
-
-const WORKFLOW_FILE_SUFFIXES = [
-  ".ctrlyoke.json",
-  ".ctrlyoke.yaml",
-  ".ctrlyoke.yml",
-  ".prompt.md",
-];
 
 const IGNORED_WORKFLOW_SCAN_DIRS = new Set([
   ".git",
@@ -33,13 +20,6 @@ const IGNORED_WORKFLOW_SCAN_DIRS = new Set([
 
 function toPortablePath(filePath: string): string {
   return filePath.replace(/\\/g, "/");
-}
-
-function isWorkflowFileName(fileName: string): boolean {
-  return (
-    WORKFLOW_FILE_NAMES.has(fileName) ||
-    WORKFLOW_FILE_SUFFIXES.some((suffix) => fileName.endsWith(suffix))
-  );
 }
 
 export function findWorkflowFilesInWorkspace(
@@ -70,7 +50,7 @@ export function findWorkflowFilesInWorkspace(
         continue;
       }
 
-      if (!isWorkflowFileName(entry.name)) {
+      if (getCtrlYokeFileKind(entry.name) === null) {
         continue;
       }
 

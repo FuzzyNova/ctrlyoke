@@ -78,6 +78,15 @@ test("enums, defaults and value kinds come through $ref and oneOf", () => {
   assert.ok(priorContext.enum.includes("previous"));
 });
 
+test("a key defined in several oneOf branches merges every branch's enum", () => {
+  // The root is a prompt step in one branch and a script step in another.
+  assert.deepEqual(outline.workflowRoot.properties.type.enum, [
+    "prompt",
+    "script",
+  ]);
+  assert.deepEqual(outline.worktree.properties.mode.enum, ["managed", "named"]);
+});
+
 test("the empty-string agent sentinel is not offered as a value", () => {
   assert.equal(outline.promptStep.properties.agent.enum, undefined);
 });

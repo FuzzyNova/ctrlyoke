@@ -29,6 +29,8 @@
  * approximation, and a very good one for a utility-class app.
  */
 
+import { THEME_KIND_CSS_VAR } from "@root/types/DashboardConstants";
+
 const MAX_ATTR_VALUE_LENGTH = 200;
 const MAX_TEXT_LENGTH = 200;
 const MAX_MATCHED_RULES_PER_ELEMENT = 40;
@@ -96,7 +98,7 @@ export function captureUxSnapshot(root?: HTMLElement): UxSnapshotResult {
 
 export function buildHeaderSection(rootEl: HTMLElement): string {
   const vv = typeof visualViewport !== "undefined" ? visualViewport : undefined;
-  const themeKind = getCssVar("--cy-color-theme-kind") || "(unset)";
+  const themeKind = getCssVar(THEME_KIND_CSS_VAR) || "(unset)";
   const bodyClasses = document.body.className || "(none)";
   const standalone = Boolean(
     (window as unknown as Record<string, unknown>).__ctrlyokeStandalone
@@ -115,7 +117,7 @@ export function buildHeaderSection(rootEl: HTMLElement): string {
           `(${Math.round(vv.offsetLeft)}, ${Math.round(vv.offsetTop)}), scale ${vv.scale}`
         : "(unavailable)"
     }`,
-    `- **Theme kind (--cy-color-theme-kind):** ${themeKind}`,
+    `- **Theme kind (${THEME_KIND_CSS_VAR}):** ${themeKind}`,
     `- **Body classes:** \`${bodyClasses}\``,
     `- **User agent:** ${navigator.userAgent}`,
   ];

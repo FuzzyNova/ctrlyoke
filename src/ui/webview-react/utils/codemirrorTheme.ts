@@ -1,6 +1,11 @@
 import { EditorView } from "@codemirror/view";
 import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
-import { THEME_KINDS } from "@root/types/DashboardConstants";
+import {
+  THEME_KIND_CSS_VAR,
+  VSCODE_THEME_BODY_CLASSES,
+  isLightThemeKind,
+  isThemeKind,
+} from "@root/types/DashboardConstants";
 
 const CODEMIRROR_THEME_SURFACES = {
   EDITOR: "editor",
@@ -236,11 +241,17 @@ export function createThemeExtension(
     },
     {
       dark:
-        document.body.classList.contains("vscode-dark") ||
-        window
-          .getComputedStyle(document.documentElement)
-          .getPropertyValue("--cy-color-theme-kind")
-          .trim() !== THEME_KINDS.LIGHT,
+        document.body.classList.contains(VSCODE_THEME_BODY_CLASSES.DARK) ||
+        !isForwardedThemeLight(),
     }
   );
+}
+
+/** True only when the forwarded theme kind names a light theme. */
+function isForwardedThemeLight(): boolean {
+  const forwarded = window
+    .getComputedStyle(document.documentElement)
+    .getPropertyValue(THEME_KIND_CSS_VAR)
+    .trim();
+  return isThemeKind(forwarded) && isLightThemeKind(forwarded);
 }

@@ -85,11 +85,13 @@ import {
   COMPLETION_NOTIFICATION_SEVERITY,
   NOTIFICATION_KINDS,
   THEME_KINDS,
+  THEME_KIND_CSS_VAR,
   USER_FEEDBACK_SEVERITY,
   UX_SNAPSHOT_STATUSES,
   type UserFeedbackSeverity,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { themeKindFromBodyClasses } from "@utils/themeKind";
 import type {
   CompletionNotificationEventPayload,
   UserFeedbackMessage,
@@ -292,13 +294,8 @@ export function captureAndSendThemeVars(
   // Capture theme kind from body class so browser-hosted clients can replicate it.
   // Stored as a synthetic CSS custom property so it flows through the same
   // cachedThemeVars / buildThemeStyleBlock pipeline as the --vscode-* vars.
-  const bodyClasses = document.body.classList;
-  const themeKind = bodyClasses.contains("vscode-high-contrast")
-    ? THEME_KINDS.HIGH_CONTRAST
-    : bodyClasses.contains("vscode-dark")
-      ? THEME_KINDS.DARK
-      : THEME_KINDS.LIGHT;
-  vars["--cy-color-theme-kind"] = themeKind;
+  vars[THEME_KIND_CSS_VAR] =
+    themeKindFromBodyClasses(document.body.classList) ?? THEME_KINDS.LIGHT;
 
   vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
 }

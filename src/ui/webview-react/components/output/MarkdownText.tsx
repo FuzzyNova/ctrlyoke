@@ -39,7 +39,9 @@ import {
 import {
   ATOMIC_REFERENCE_KINDS,
   isImageRefPath,
+  isLightThemeKind,
 } from "@root/types/DashboardConstants";
+import { themeKindFromBodyClasses } from "@utils/themeKind";
 import { asAtomicReferenceKind } from "@utils/contextReferenceActions";
 import { AtomicReferenceChip } from "./AtomicReferenceChip";
 import { ContextReference } from "./ContextReference";
@@ -936,12 +938,13 @@ const REPLY_REMARK_PLUGINS = [
 ];
 
 // Initialise mermaid once at module load. Theme matched to VS Code body class
-// which is set by the host before any scripts run.
+// which is set by the host before any scripts run. High-contrast light carries
+// the generic high-contrast class too, so it must resolve through the kind.
+const initialBodyThemeKind = themeKindFromBodyClasses(document.body.classList);
 mermaid.initialize({
   startOnLoad: false,
   theme:
-    document.body.classList.contains("vscode-dark") ||
-    document.body.classList.contains("vscode-high-contrast")
+    initialBodyThemeKind && !isLightThemeKind(initialBodyThemeKind)
       ? "dark"
       : "default",
 });

@@ -5,13 +5,16 @@
  * Strategy: dispatch real window MessageEvents, assert store state mutations.
  * Each test resets all stores to a clean state so tests are independent.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
   OUTPUT_TABS,
   SEARCH_HISTORY_ERROR_CODES,
+  THEME_KINDS,
+  THEME_KIND_CSS_VAR,
+  VSCODE_THEME_BODY_CLASSES,
 } from "@root/types/DashboardConstants";
 
 const { handleCompletionNotificationEventMock } = vi.hoisted(() => ({
@@ -43,6 +46,7 @@ vi.mock("@utils/logger", () => ({
 }));
 
 import {
+  captureAndSendThemeVars,
   createMessageHandlers,
   useMessageHandler,
 } from "@hooks/useMessageHandler";
@@ -5542,5 +5546,53 @@ describe("Recently deleted messages", () => {
       bytes: 3,
       liveLineages: [],
     });
+  });
+});
+
+describe("captureAndSendThemeVars theme kind", () => {
+  const originalBodyClass = document.body.className;
+
+  afterEach(() => {
+    document.body.className = originalBodyClass;
+  });
+
+  function capturedThemeKind(bodyClasses: string[]): unknown {
+    document.body.className = bodyClasses.join(" ");
+    const vscodeApi = getVsCodeApi();
+    const postMessage = vi.spyOn(vscodeApi, "postMessage");
+    try {
+      captureAndSendThemeVars(vscodeApi);
+      expect(postMessage).toHaveBeenCalledTimes(1);
+      const message = postMessage.mock.calls[0][0] as {
+        type: string;
+        vars: Record<string, string>;
+      };
+      expect(message.type).toBe(MESSAGE_TYPES.THEME_VARS_CAPTURED);
+      return message.vars[THEME_KIND_CSS_VAR];
+    } finally {
+      postMessage.mockRestore();
+    }
+  }
+
+  it("maps a high-contrast light body (both HC classes) to high-contrast-light", () => {
+    expect(
+      capturedThemeKind([
+        VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST,
+        VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST_LIGHT,
+      ])
+    ).toBe(THEME_KINDS.HIGH_CONTRAST_LIGHT);
+  });
+
+  it("maps the remaining VS Code body classes to their theme kinds", () => {
+    expect(capturedThemeKind([VSCODE_THEME_BODY_CLASSES.HIGH_CONTRAST])).toBe(
+      THEME_KINDS.HIGH_CONTRAST
+    );
+    expect(capturedThemeKind([VSCODE_THEME_BODY_CLASSES.DARK])).toBe(
+      THEME_KINDS.DARK
+    );
+    expect(capturedThemeKind([VSCODE_THEME_BODY_CLASSES.LIGHT])).toBe(
+      THEME_KINDS.LIGHT
+    );
+    expect(capturedThemeKind([])).toBe(THEME_KINDS.LIGHT);
   });
 });

@@ -11,10 +11,17 @@ import {
   CTRLYOKE_FILE_KINDS,
   PROMPT_PROPERTIES,
   WORKFLOW_LOCATION_ROLES,
+  WORKFLOW_OBJECT_KINDS,
 } from "../types/DashboardConstants";
-import type { CtrlYokeFileKind } from "../types/DashboardConstants";
+import type {
+  CtrlYokeFileKind,
+  WorkflowLocationRole,
+} from "../types/DashboardConstants";
 import {
   buildWorkflowLocation,
+  classifyWorkflowObject,
+  getTextRole,
+  lineEndFrom,
   splitValuePath,
   YAML_SCALAR_STYLES,
   type WorkflowLocation,
@@ -23,6 +30,15 @@ import {
   type WorkflowTextRange,
   type YamlScalarStyle,
 } from "./WorkflowLocationTypes";
+import {
+  createTextSpan,
+  decodeYamlBlockScalar,
+  decodeYamlFlowScalar,
+  YAML_FLOW_STYLES,
+  type DecodedText,
+  type WorkflowTextSpan,
+  type YamlFlowStyle,
+} from "./WorkflowTextDecoding";
 
 /**
  * The YAML half of workflow location, kept in its own file so the hosted
@@ -100,7 +116,12 @@ function scalarGeometry(
     valueRange: quoted
       ? { start: start + 1, end: terminated ? valueEnd - 1 : valueEnd }
       : { start, end: valueEnd },
-    contains: (offset) => offset >= start && offset <= valueEnd,
+    // Before an opening or past a closing quote the cursor is not in the string.
+    contains: (offset) =>
+      quoted
+        ? offset > start &&
+          (terminated ? offset < valueEnd : offset <= valueEnd)
+        : offset >= start && offset <= valueEnd,
   };
 }
 
@@ -110,6 +131,9 @@ const OBJECT_LIST_KEYS: ReadonlySet<string> = new Set([
   PROMPT_PROPERTIES.PARALLEL,
   PROMPT_PROPERTIES.HOOKS,
 ]);
+
+/** What a key looks like while it is still being typed. */
+const PARTIAL_KEY = /^[\w.$-]*$/;
 
 function rangeContains(node: YamlNode | null | undefined, offset: number) {
   return !!node?.range && offset >= node.range[0] && offset <= node.range[1];
@@ -141,13 +165,23 @@ function locateInAst(
         }
         const value = pair.value as YamlNode | null;
         if (isScalar(value)) {
+          const firstKey = halfTypedFirstKey(pair.key, value, [...path, key]);
+          if (firstKey) return firstKey;
           const hit = scalarHit(value, path, key, undefined);
           if (hit) return hit;
         } else if (value && rangeContains(value, offset)) {
           return visit(value, [...path, key]);
         }
       }
-      return undefined;
+      // `{ prompt: x, § }`: a new key in a flow mapping.
+      return node.flow && insideFlowBrackets(node)
+        ? buildWorkflowLocation({
+            kind,
+            root: parsed.root,
+            ownerPath: path,
+            isKey: true,
+          })
+        : undefined;
     }
     if (isSeq(node)) {
       for (const [index, item] of node.items.entries()) {
@@ -157,15 +191,16 @@ function locateInAst(
           if (
             key !== undefined &&
             OBJECT_LIST_KEYS.has(key) &&
-            typeof item.value === "string" &&
+            (typeof item.value === "string" || item.value === null) &&
             rangeContains(item, offset)
           ) {
-            // `- pro` in steps: the first key of a new item, not a string item.
+            // `- pro` (or an empty `- `) in steps: the first key of a new
+            // item, not a string item.
             return buildWorkflowLocation({
               kind,
               root: parsed.root,
               ownerPath: itemPath,
-              key: item.value,
+              key: typeof item.value === "string" ? item.value : undefined,
               isKey: true,
             });
           }
@@ -175,8 +210,65 @@ function locateInAst(
           return visit(item, [...path, index]);
         }
       }
+      // `[a, §]`: a new item in a flow sequence.
+      if (node.flow && insideFlowBrackets(node)) {
+        const index = node.items.filter((item) => {
+          const end = (item as YamlNode | null)?.range?.[1];
+          return end !== undefined && end <= offset;
+        }).length;
+        const itemPath = [...path, index];
+        const { ownerPath, key } = splitValuePath(itemPath);
+        return buildWorkflowLocation({
+          kind,
+          root: parsed.root,
+          ownerPath,
+          key,
+          isKey: false,
+          valuePath: itemPath,
+          valueRange: { start: offset, end: offset },
+        });
+      }
     }
     return undefined;
+  };
+
+  const insideFlowBrackets = (node: YamlNode) =>
+    !!node.range && offset > node.range[0] && offset < node.range[1];
+
+  /**
+   * `endCondition:` then `ret` on the next line parses as the plain value of
+   * `endCondition`, but it is the first key of a new nested object.
+   */
+  const halfTypedFirstKey = (
+    keyNode: Scalar,
+    value: Scalar,
+    objectPath: WorkflowPath
+  ): WorkflowLocation | undefined => {
+    if (
+      value.type !== Scalar.PLAIN ||
+      !value.range ||
+      !keyNode.range ||
+      offset < value.range[0] ||
+      offset > value.range[1]
+    ) {
+      return undefined;
+    }
+    const source = text.slice(value.range[0], value.range[1]);
+    if (
+      !PARTIAL_KEY.test(source) ||
+      !text.slice(keyNode.range[1], value.range[0]).includes("\n") ||
+      classifyWorkflowObject(objectPath, parsed.root) ===
+        WORKFLOW_OBJECT_KINDS.UNKNOWN
+    ) {
+      return undefined;
+    }
+    return buildWorkflowLocation({
+      kind,
+      root: parsed.root,
+      ownerPath: objectPath,
+      key: source,
+      isKey: true,
+    });
   };
 
   const scalarHit = (
@@ -276,6 +368,65 @@ function setKey(frames: ScanFrame[], keyCol: number, key: string) {
 const unquoteKey = (raw: string) =>
   /^["']/.test(raw) ? raw.slice(1, -1) : raw.trim();
 
+const INLINE_VALUE_STATES = {
+  /** Plain text the cursor is still typing. */
+  PLAIN: "plain",
+  /** Inside a quoted scalar that is not closed yet. */
+  QUOTED: "quoted",
+  /** In a trailing comment, or past a closed quote: not part of the value. */
+  OUTSIDE: "outside",
+} as const;
+
+/**
+ * Where the cursor stands in the value typed so far on a `key: value` line.
+ * A `#` starts a comment only at the start or after whitespace, and never
+ * inside quotes.
+ */
+function inlineValueState(value: string): {
+  state: (typeof INLINE_VALUE_STATES)[keyof typeof INLINE_VALUE_STATES];
+  quoteStyle?: YamlScalarStyle;
+} {
+  const quote = value[0];
+  if (quote === '"' || quote === "'") {
+    const quoteStyle =
+      quote === '"'
+        ? YAML_SCALAR_STYLES.DOUBLE_QUOTED
+        : YAML_SCALAR_STYLES.SINGLE_QUOTED;
+    for (let index = 1; index < value.length; index++) {
+      if (quote === '"' && value[index] === "\\") {
+        index++;
+      } else if (value[index] === quote) {
+        // `''` is an escaped quote inside a single-quoted scalar.
+        if (quote === "'" && value[index + 1] === "'") {
+          index++;
+          continue;
+        }
+        return { state: INLINE_VALUE_STATES.OUTSIDE, quoteStyle };
+      }
+    }
+    return { state: INLINE_VALUE_STATES.QUOTED, quoteStyle };
+  }
+  return /(^|\s)#/.test(value)
+    ? { state: INLINE_VALUE_STATES.OUTSIDE }
+    : { state: INLINE_VALUE_STATES.PLAIN };
+}
+
+/** End of a block scalar's body: its last line indented past `keyCol`. */
+function blockBodyEnd(text: string, offset: number, keyCol: number): number {
+  const trimCr = (end: number) => (text[end - 1] === "\r" ? end - 1 : end);
+  let lineEnd = lineEndFrom(text, offset);
+  let bodyEnd = Math.max(offset, trimCr(lineEnd));
+  while (lineEnd < text.length) {
+    const start = lineEnd + 1;
+    lineEnd = lineEndFrom(text, start);
+    const line = text.slice(start, trimCr(lineEnd));
+    if (line.trim() === "") continue;
+    if (line.search(/\S/) <= keyCol) break;
+    bodyEnd = trimCr(lineEnd);
+  }
+  return bodyEnd;
+}
+
 function locateByScan(
   text: string,
   parsed: YamlParse,
@@ -287,9 +438,13 @@ function locateByScan(
   const before = lines[cursorLine].replace(/\r$/, "");
   const frames: ScanFrame[] = [];
   let blockKeyCol = -1;
+  let blockBodyStart = 0;
+  let lineStart = 0;
 
   for (let index = 0; index < cursorLine; index++) {
+    const nextLineStart = lineStart + lines[index].length + 1;
     const line = lines[index].replace(/\r$/, "");
+    lineStart = nextLineStart;
     if (line.trim() === "" || /^\s*#/.test(line)) continue;
     if (blockKeyCol >= 0) {
       if (line.search(/\S/) > blockKeyCol) continue;
@@ -299,7 +454,10 @@ function locateByScan(
     const match = KEY_LINE.exec(rest);
     if (!match) continue;
     setKey(frames, keyCol, unquoteKey(match[1]));
-    if (BLOCK_HEADER.test((match[2] ?? "").trim())) blockKeyCol = keyCol;
+    if (BLOCK_HEADER.test((match[2] ?? "").trim())) {
+      blockKeyCol = keyCol;
+      blockBodyStart = nextLineStart;
+    }
   }
 
   const build = (
@@ -317,12 +475,16 @@ function locateByScan(
     before.trim() === "" ? before.length : before.search(/\S/);
 
   // A line inside a block scalar: prompt or script text, no structure to track.
+  // The range is the whole body, as on the parser path.
   if (blockKeyCol >= 0 && cursorIndent > blockKeyCol) {
     const key = frames[frames.length - 1]?.key;
     return build(frames, {
       key,
       textCapable: true,
-      valueRange: { start: offset - before.length, end: offset },
+      valueRange: {
+        start: blockBodyStart,
+        end: blockBodyEnd(text, offset, blockKeyCol),
+      },
       scalarStyle: YAML_SCALAR_STYLES.BLOCK,
     });
   }
@@ -339,20 +501,32 @@ function locateByScan(
   if (match) {
     // Cursor is after "key:" — a value.
     setKey(frames, keyCol, unquoteKey(match[1]));
+    const key = frames[frames.length - 1].key;
     const value = (match[2] ?? "").trimStart();
     const onHeader = BLOCK_HEADER.test(value.trim());
+    const inline = onHeader ? undefined : inlineValueState(value);
+    if (inline?.state === INLINE_VALUE_STATES.OUTSIDE) {
+      return build(frames, { key, role: WORKFLOW_LOCATION_ROLES.NONE });
+    }
+    const quoted = inline?.state === INLINE_VALUE_STATES.QUOTED;
+    // `key: §"text"`: anything typed here lands outside the quotes.
+    const beforeOpeningQuote =
+      value === "" && (text[offset] === '"' || text[offset] === "'");
     return build(frames, {
-      key: frames[frames.length - 1].key,
-      textCapable: !onHeader && !/^[[{]/.test(value),
+      key,
+      textCapable: !onHeader && !beforeOpeningQuote && !/^[[{]/.test(value),
       valueRange: onHeader
         ? undefined
-        : { start: offset - value.length, end: offset },
-      scalarStyle: YAML_SCALAR_STYLES.PLAIN,
+        : {
+            start: offset - value.length + (quoted ? 1 : 0),
+            end: offset,
+          },
+      scalarStyle: inline?.quoteStyle ?? YAML_SCALAR_STYLES.PLAIN,
     });
   }
 
   // Typing a key (or empty): find the object that will own it.
-  if (/^[\w.$-]*$/.test(rest)) {
+  if (PARTIAL_KEY.test(rest)) {
     while (frames.length > 0 && frames[frames.length - 1].col > keyCol) {
       frames.pop();
     }
@@ -394,9 +568,78 @@ export function getYamlWorkflowLocation(
   );
 }
 
-function lineEndFrom(text: string, offset: number): number {
-  const end = text.indexOf("\n", offset);
-  return end < 0 ? text.length : end;
+const FLOW_STYLE_BY_SCALAR_STYLE: Readonly<
+  Partial<Record<YamlScalarStyle, YamlFlowStyle>>
+> = {
+  [YAML_SCALAR_STYLES.PLAIN]: YAML_FLOW_STYLES.PLAIN,
+  [YAML_SCALAR_STYLES.SINGLE_QUOTED]: YAML_FLOW_STYLES.SINGLE_QUOTED,
+  [YAML_SCALAR_STYLES.DOUBLE_QUOTED]: YAML_FLOW_STYLES.DOUBLE_QUOTED,
+};
+
+function decodeScalar(
+  text: string,
+  node: Scalar
+): { sourceRange: WorkflowTextRange; decoded: DecodedText } | undefined {
+  const geometry = scalarGeometry(text, node);
+  if (!geometry?.valueRange || !node.range) return undefined;
+  const { valueRange } = geometry;
+  const flowStyle = FLOW_STYLE_BY_SCALAR_STYLE[geometry.style];
+  const decoded = flowStyle
+    ? decodeYamlFlowScalar(
+        text.slice(valueRange.start, valueRange.end),
+        valueRange.start,
+        flowStyle
+      )
+    : decodeYamlBlockScalar(text, node.range[0], node.range[1]);
+  return { sourceRange: valueRange, decoded };
+}
+
+/** Every string value whose field has `role` (e.g. every prompt), decoded. */
+export function getYamlTextSpans(
+  text: string,
+  role: WorkflowLocationRole,
+  kind: CtrlYokeFileKind = CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+): WorkflowTextSpan[] {
+  const parsed = parseYaml(text);
+  const spans: WorkflowTextSpan[] = [];
+  const visit = (node: unknown, path: WorkflowPath) => {
+    if (isMap(node)) {
+      const objectKind = classifyWorkflowObject(path, parsed.root);
+      for (const pair of node.items) {
+        if (!isScalar(pair.key)) continue;
+        const field = String(pair.key.value);
+        const value = pair.value;
+        if (
+          isScalar(value) &&
+          typeof value.value === "string" &&
+          getTextRole(objectKind, field) === role
+        ) {
+          const decoded = decodeScalar(text, value);
+          if (!decoded) continue;
+          spans.push(
+            createTextSpan(
+              {
+                kind,
+                path: [...path, field],
+                field,
+                objectKind,
+                role,
+                sourceRange: decoded.sourceRange,
+              },
+              decoded.decoded,
+              value.value
+            )
+          );
+        } else {
+          visit(value, [...path, field]);
+        }
+      }
+    } else if (isSeq(node)) {
+      node.items.forEach((item, index) => visit(item, [...path, index]));
+    }
+  };
+  visit(parsed.doc.contents, []);
+  return spans;
 }
 
 /**

@@ -93,14 +93,24 @@ export class LanguageIntelligenceHost {
     await this.options.backend.startLanguages?.(languageIds);
   }
 
+  /**
+   * Live, trusted, and not a ctrlyoke file: ctrlyoke owns its workflow and
+   * prompt files (see `lookupSession`), so no generic server may see one.
+   */
+  private servesPath(viewerPath: string): boolean {
+    return (
+      !this.disposed &&
+      this.options.isWorkspaceTrusted() &&
+      getCtrlYokeFileKind(viewerPath) === null
+    );
+  }
+
   /** Resolve a file while applying the caller's request-origin policy. */
   async resolveForPath(
     viewerPath: string,
     origin: LanguageServerRequestOrigin
   ): Promise<LanguageServerDescriptor | undefined> {
-    if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
-    // ctrlyoke owns its workflow and prompt files (see `lookupSession`).
-    if (getCtrlYokeFileKind(viewerPath)) return undefined;
+    if (!this.servesPath(viewerPath)) return undefined;
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
       this.roots,
@@ -117,8 +127,7 @@ export class LanguageIntelligenceHost {
   ): Promise<
     { descriptor: LanguageServerDescriptor; result: unknown } | undefined
   > {
-    if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
-    if (getCtrlYokeFileKind(viewerPath)) return undefined;
+    if (!this.servesPath(viewerPath)) return undefined;
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
       this.roots,
@@ -141,8 +150,7 @@ export class LanguageIntelligenceHost {
     languageId: string,
     origin: LanguageServerRequestOrigin
   ): Promise<void> {
-    if (this.disposed || !this.options.isWorkspaceTrusted()) return;
-    if (getCtrlYokeFileKind(viewerPath)) return;
+    if (!this.servesPath(viewerPath)) return;
     const absolutePath = safeResolveWorkspacePath(viewerPath, this.roots);
     if (!absolutePath) return;
     const resolution = await this.options.backend.resolveForPath(

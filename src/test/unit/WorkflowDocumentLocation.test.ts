@@ -250,6 +250,117 @@ suite("WorkflowDocumentLocation: YAML", () => {
     );
   });
 
+  test("the first key typed under a new nested object is a key in that object", () => {
+    // YAML reads `ret` as the plain value of `endCondition`.
+    const { loc } = locate(
+      "steps:\n  - prompt: x\n    endCondition:\n      ret§\n",
+      WORKFLOW_YAML
+    );
+    assert.strictEqual(loc.role, ROLE.KEY);
+    assert.strictEqual(loc.objectKind, OBJECT.END_CONDITION);
+    assert.deepStrictEqual(loc.path, ["steps", 0, "endCondition", "ret"]);
+    for (const [marked, objectKind] of [
+      ["worktree:\n  mo§\nsteps: []\n", OBJECT.WORKTREE],
+      ["errorBehavior:\n  on§\n", OBJECT.ERROR_BEHAVIOR],
+      ["vars:\n  na§\n", OBJECT.VARS],
+      ["_templateMeta:\n  na§\n", OBJECT.TEMPLATE_META],
+      [
+        "steps:\n  - prompt: x\n    toolPermissions:\n      mo§\n",
+        OBJECT.TOOL_PERMISSIONS,
+      ],
+    ] as const) {
+      const nested = locate(marked, WORKFLOW_YAML).loc;
+      assert.strictEqual(nested.role, ROLE.KEY, marked);
+      assert.strictEqual(nested.objectKind, objectKind, marked);
+    }
+    // A text field's value on the next line is still text, not a key.
+    const text = locate("prompt:\n  Fix §it\n", WORKFLOW_YAML).loc;
+    assert.strictEqual(text.role, ROLE.PROMPT_TEXT);
+  });
+
+  test("an empty new list item opens a new step", () => {
+    const { loc } = locate("steps:\n  - prompt: a\n  - §\n", WORKFLOW_YAML);
+    assert.strictEqual(loc.role, ROLE.KEY);
+    assert.strictEqual(loc.objectKind, OBJECT.PROMPT_STEP);
+    assert.deepStrictEqual(loc.path, ["steps", 1]);
+    assert.strictEqual(loc.key, undefined);
+  });
+
+  test("a new entry in a flow mapping or flow sequence", () => {
+    const mapping = locate(
+      'steps:\n  - { prompt: "hi", §}\n',
+      WORKFLOW_YAML
+    ).loc;
+    assert.strictEqual(mapping.role, ROLE.KEY);
+    assert.strictEqual(mapping.objectKind, OBJECT.PROMPT_STEP);
+    assert.deepStrictEqual(mapping.path, ["steps", 0]);
+    assert.deepStrictEqual(mapping.siblingKeys, ["prompt"]);
+
+    const sequence = locate(
+      "steps:\n  - prompt: a\n    skills: [a, §]\n",
+      WORKFLOW_YAML
+    ).loc;
+    assert.strictEqual(sequence.role, ROLE.VALUE);
+    assert.strictEqual(sequence.key, "skills");
+    assert.deepStrictEqual(sequence.path, ["steps", 0, "skills", 1]);
+  });
+
+  test("trailing comments and quote boundaries are not text", () => {
+    for (const marked of [
+      "steps:\n  - prompt: hi # a §\n",
+      'steps:\n  - prompt: "x"§\n',
+      'steps:\n  - prompt: "x" §\n',
+      "steps:\n  - prompt: 'it''s'§\n",
+      "prompt: x #§\n",
+    ]) {
+      const { loc } = locate(marked, WORKFLOW_YAML);
+      assert.strictEqual(loc.role, ROLE.NONE, marked);
+    }
+    const beforeQuote = locate('prompt: §"x"\n', WORKFLOW_YAML).loc;
+    assert.strictEqual(beforeQuote.role, ROLE.VALUE);
+    // `#` inside quotes, or without a space before it, is still text.
+    for (const marked of [
+      'prompt: "a # b §',
+      "prompt: issue#12 §",
+      "prompt: 'it''s #§",
+    ]) {
+      assert.strictEqual(
+        locate(marked, WORKFLOW_YAML).loc.role,
+        ROLE.PROMPT_TEXT,
+        marked
+      );
+    }
+  });
+
+  test("an unclosed quoted value starts its range after the quote", () => {
+    const { text, loc } = locate('prompt: "fix §', WORKFLOW_YAML);
+    assert.strictEqual(loc.role, ROLE.PROMPT_TEXT);
+    assert.strictEqual(loc.scalarStyle, "doubleQuoted");
+    assert.ok(slice(text, loc.valueRange)?.startsWith("fix"));
+  });
+
+  test("a single-step script workflow's root is still the root", () => {
+    const { loc } = locate(
+      "type: script\nscript: echo hi\nwork§\n",
+      WORKFLOW_YAML
+    );
+    assert.strictEqual(loc.objectKind, OBJECT.WORKFLOW_ROOT);
+    const script = locate("type: script\nscript: ec§ho\n", WORKFLOW_YAML).loc;
+    assert.strictEqual(script.role, ROLE.SCRIPT_TEXT);
+  });
+
+  test("the fallback scan's block range covers the whole body", () => {
+    // A new last line inside the block has no parser node.
+    const { text, loc } = locate(
+      "steps:\n  - prompt: |\n      first\n      §\n      third\n    name: n\n",
+      WORKFLOW_YAML
+    );
+    assert.strictEqual(loc.role, ROLE.PROMPT_TEXT);
+    const body = slice(text, loc.valueRange) ?? "";
+    assert.ok(body.includes("first") && body.includes("third"), body);
+    assert.ok(!body.includes("name"), body);
+  });
+
   test("findRangeForPath resolves scalars, keys and missing paths", () => {
     const text =
       "steps:\n  - prompt: one\n    harness: claude-cli\n    endCondition:\n      script: x\n";
@@ -362,6 +473,39 @@ suite("WorkflowDocumentLocation: JSON", () => {
     }
   });
 
+  test("quote boundaries and comments are not text", () => {
+    for (const marked of ['{"prompt": §"x"}', '{"prompt": "x"§}']) {
+      const { loc } = locate(marked, WORKFLOW_JSON);
+      assert.strictEqual(loc.role, ROLE.VALUE, marked);
+      assert.ok(!loc.jsonString, marked);
+    }
+    const inside = locate('{"prompt": "§x"}', WORKFLOW_JSON).loc;
+    assert.strictEqual(inside.role, ROLE.PROMPT_TEXT);
+    for (const marked of [
+      '{ /* hi§ */ "prompt": "x" }',
+      '{ // hi§\n "prompt": "x" }',
+      '{ "prompt": "x" /* open§',
+    ]) {
+      assert.strictEqual(
+        locate(marked, WORKFLOW_JSON).loc.role,
+        ROLE.NONE,
+        marked
+      );
+    }
+  });
+
+  test("findRangeForPath clips a keyless object to its first line", () => {
+    const text = '{\n  "steps": [\n    {\n      "prompt": "x"\n    }\n  ]\n}';
+    assert.strictEqual(
+      slice(text, findRangeForPath(text, ["steps", 0], WORKFLOW_JSON)),
+      "{"
+    );
+    assert.strictEqual(
+      slice(text, findRangeForPath(text, [], WORKFLOW_JSON)),
+      "{"
+    );
+  });
+
   test("findRangeForPath resolves scalars, collections and missing paths", () => {
     const text = '{"steps":[{"prompt":"one","endCondition":{"script":"x"}}]}';
     const kind = WORKFLOW_JSON;
@@ -415,6 +559,18 @@ suite("WorkflowDocumentLocation: .prompt.md", () => {
       PROMPT_MARKDOWN
     ).loc;
     assert.strictEqual(fence.role, ROLE.NONE);
+  });
+
+  test("a BOM and an empty frontmatter split as the loader splits them", () => {
+    for (const marked of [
+      "\uFEFF---\nschemaVersion: 1\n---\nBo§dy\n",
+      "---\n---\nBo§dy\n",
+      "\uFEFF---\n---\nBo§dy\n",
+    ]) {
+      const { loc, text } = locate(marked, PROMPT_MARKDOWN);
+      assert.strictEqual(loc.role, ROLE.PROMPT_TEXT, JSON.stringify(marked));
+      assert.strictEqual(slice(text, loc.valueRange), "Body\n");
+    }
   });
 
   test("an unclosed frontmatter fence is plain prompt text", () => {

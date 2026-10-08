@@ -92,15 +92,21 @@ function deref(schema, node, depth = 0) {
   return { ...deref(schema, target, depth + 1), ...siblings };
 }
 
-/** Properties of an object schema, merged through `$ref`, `allOf` and `oneOf`/`anyOf`. */
+/**
+ * Properties of an object schema, merged through `$ref`, `allOf` and
+ * `oneOf`/`anyOf`. Each key keeps every branch's definition, in schema order,
+ * so `describeProperty` can union their kinds and enums (the root `type` is
+ * `prompt` in one branch and `script` in another).
+ */
 function collectProperties(schema, raw, properties = new Map(), depth = 0) {
   if (depth > 20) return properties;
   const node = deref(schema, raw);
   if (!isObject(node)) return properties;
   for (const [key, property] of Object.entries(node.properties ?? {})) {
-    if (isObject(property) && !properties.has(key)) {
-      properties.set(key, property);
-    }
+    if (!isObject(property)) continue;
+    const definitions = properties.get(key) ?? [];
+    definitions.push(property);
+    properties.set(key, definitions);
   }
   for (const keyword of ["allOf", "oneOf", "anyOf"]) {
     for (const branch of node[keyword] ?? []) {
@@ -194,20 +200,30 @@ function firstDefined(schema, raw, field, depth = 0) {
   return undefined;
 }
 
-function describeProperty(schema, raw) {
-  const kinds = [...collectValueKinds(schema, raw)];
+/** One outline entry from every definition of a key; the first one that sets a field wins. */
+function describeProperty(schema, definitions) {
+  const kindSet = new Set();
+  const enumValues = [];
+  for (const raw of definitions) {
+    collectValueKinds(schema, raw, kindSet);
+    collectEnumValues(schema, raw, enumValues);
+  }
+  const kinds = [...kindSet];
+  const firstOf = (field) =>
+    definitions
+      .map((raw) => firstDefined(schema, raw, field))
+      .find((value) => value !== undefined);
   const entry = {
     valueKind:
       kinds.length === 1 ? kinds[0] : kinds.length === 0 ? "string" : "oneOf",
   };
   if (kinds.length > 1) entry.alternatives = kinds;
-  const enumValues = collectEnumValues(schema, raw);
   if (enumValues.length) entry.enum = enumValues;
-  const defaultValue = firstDefined(schema, raw, "default");
+  const defaultValue = firstOf("default");
   if (defaultValue !== undefined) entry.default = defaultValue;
-  const description = firstDefined(schema, raw, "description");
+  const description = firstOf("description");
   if (typeof description === "string") entry.description = description;
-  if (firstDefined(schema, raw, "deprecated") === true) entry.deprecated = true;
+  if (firstOf("deprecated") === true) entry.deprecated = true;
   return entry;
 }
 
@@ -269,6 +285,11 @@ export interface WorkflowOutlineProperty {
   readonly valueKind: WorkflowOutlineValueKind;
   /** The kinds accepted when \`valueKind\` is \`oneOf\`. */
   readonly alternatives?: readonly Exclude<WorkflowOutlineValueKind, "oneOf">[];
+  /**
+   * Literal values to suggest. Not always a closed set: with \`oneOf\` a literal
+   * can sit beside a free-form kind (\`maxSteps\` is \`-1\` or any number), so
+   * never validate against it.
+   */
   readonly enum?: readonly (string | number | boolean)[];
   readonly default?: string | number | boolean | null;
   readonly description?: string;

@@ -39,7 +39,60 @@ function declarationsFor(selector: string): string {
   return rules.map((rule) => rule[3]).join("\n");
 }
 
+interface CssRule {
+  offset: number;
+  selectors: string[];
+  properties: Set<string>;
+}
+
+/** Innermost style rules of globals.css with their source offsets. */
+function parseRules(): CssRule[] {
+  const css = globalsCss.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+    " ".repeat(comment.length)
+  );
+  return [...css.matchAll(/([^{};]+)\{([^{}]*)\}/g)].map((match) => ({
+    offset: match.index ?? 0,
+    selectors: match[1].split(",").map((selector) => selector.trim()),
+    properties: new Set(
+      [...match[2].matchAll(/([\w-]+)\s*:/g)].map((decl) => decl[1])
+    ),
+  }));
+}
+
 describe("syntax palette", () => {
+  // VS Code (and the hosted server) give a high-contrast light body both
+  // `vscode-high-contrast` and `vscode-high-contrast-light`. Both selectors
+  // have equal specificity, so the light rule only wins by coming later.
+  it("orders body.vscode-high-contrast-light after body.vscode-high-contrast", () => {
+    const rules = parseRules();
+    const highContrast = rules.filter((rule) =>
+      rule.selectors.includes("body.vscode-high-contrast")
+    );
+    const highContrastLight = rules.filter((rule) =>
+      rule.selectors.includes("body.vscode-high-contrast-light")
+    );
+    const syntaxVariable = syntaxRoleVariable(SYNTAX_ROLES.KEYWORD);
+    expect(
+      highContrast.some((rule) => rule.properties.has(syntaxVariable))
+    ).toBe(true);
+    expect(
+      highContrastLight.some((rule) => rule.properties.has(syntaxVariable))
+    ).toBe(true);
+
+    for (const dark of highContrast) {
+      for (const light of highContrastLight) {
+        const shared = [...dark.properties].filter((property) =>
+          light.properties.has(property)
+        );
+        if (shared.length === 0) continue;
+        expect(
+          light.offset,
+          `${shared.join(", ")} must be overridden by the high-contrast light rule`
+        ).toBeGreaterThan(dark.offset);
+      }
+    }
+  });
+
   it.each(THEME_SELECTORS)("defines every role for %s", (selector) => {
     const declarations = declarationsFor(selector);
     for (const role of Object.values(SYNTAX_ROLES)) {

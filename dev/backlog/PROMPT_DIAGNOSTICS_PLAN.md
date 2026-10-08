@@ -138,11 +138,12 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
   - on workspace file create, delete or rename, open prompt documents are re-checked, so
     "missing file" clears when the file appears
 - **Where it runs:**
-  - `.prompt.md`: the body after frontmatter.
-  - `.ctrlyoke.yaml`/`.yml`/`.json`: every `PROMPT_TEXT` range from `getWorkflowLocation`,
-    with offsets mapped back through the decoded value. Block scalars are dedented and JSON
-    strings decoded, the same mapping the bug fix needs. That shared helper is
-    `WorkflowPromptRanges`, from the file support plan's Phase 1b.
+  - Every prompt value from `getWorkflowTextSpans(text, kind)`
+    (`src/completions/WorkflowPromptRanges.ts`, built in the file support plan's Phase 1b):
+    the `.prompt.md` body after frontmatter, and in `.ctrlyoke.yaml`/`.yml`/`.json` every
+    `prompt`, `retryPrompt` and `passRetryPrompt`. Run the rules on each span's decoded
+    `text` (block scalars dedented, JSON strings unescaped) and map each diagnostic's
+    `from`/`to` back with `span.toSourceOffset`. The bug fix uses the same spans.
 - **Field mapping:** `prompt` maps to `PROMPT_DIAGNOSTIC_FIELDS.PROMPT`; both `retryPrompt`
   and `passRetryPrompt` map to `RETRY_PROMPT`. The schema allows `$endCondition:` in
   `passRetryPrompt` too, and `PROMPT_DIAGNOSTIC_FIELDS` has no separate value for it, so
@@ -178,9 +179,9 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
 2. **Phase 2: VS Code provider for `.prompt.md`, then workflow prompt values.**
    - The provider, its triggers and severity mapping, registered in `extension.ts` on the same
      file predicate (`getCtrlYokeFileKind`) as the completion and link providers.
-   - Start with `.prompt.md`, which needs only the frontmatter split. Workflow-file prompt
-     ranges need the file support plan's Phase 1b (`WorkflowPromptRanges`); Phase 1 alone
-     answers only one cursor position at a time and returns undecoded spans.
+   - `getWorkflowTextSpans` covers `.prompt.md` and workflow files alike, so both can land
+     together. Each span's `path` and `field` also give the context `getPromptDiagnostics`
+     needs: the step index, and whether the field is a retry prompt.
    - Tests: unit tests with a stubbed resolver. Add an extension-host integration test that
      opens a fixture with a missing file, a backticked existing file and `$step:9`, and checks
      the collection's diagnostics.

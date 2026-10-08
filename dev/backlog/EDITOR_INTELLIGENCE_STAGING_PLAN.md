@@ -1,7 +1,8 @@
 # Editor Intelligence Staging Plan
 
-**Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0, merged to
-`main`). Wave 2 is next. This plan only orders the work. The design lives in the three plans it
+**Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
+**F1b**, the follow-up the Wave 1 review added. Wave 2 can start: nothing in it waits on
+anything else. This plan only orders the work. The design lives in the three plans it
 stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -19,15 +20,15 @@ it.
 
 ## Progress
 
-| Phase           | State                 | Notes                                                                                                                                                                                                                                         |
-| --------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. Deviations in plan F's Phase 1 entry; review bugs are scheduled as F1b.                          |
-| F2              | **Done** (2026-10-08) | Generated `WorkflowSchemaOutline` (`schema:update`, `precompile`, `check:docs` drift check), hand-authored `WorkflowPropertySnippets.ts`, and `PromptPropertyCompletionProvider` moved onto both. Details in plan F's Phase 2 entry.          |
-| D1              | **Done** (2026-10-08) | `src/utils/PromptDiagnosticRules.ts` and `src/utils/PromptReferenceScanner.ts`; CodeMirror linters are adapters. Characterization tests pass against the pre-extraction code too. Details in plan D's "Phase 1 as built".                     |
-| M1              | **Done** (2026-10-08) | `--cy-syntax-*` in `globals.css`, one role table in `utils/syntaxPalette.ts`, `resolveCodeMirrorLanguage`. Visual check still owed (see plan M's Phase 1 entry) and one hosted regression filed: `hosted-high-contrast-light-syntax-colours`. |
-| M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                                       |
-| F1b             | Not started           | Added by the Wave 1 review: F1/F2 bug fixes plus the shared `WorkflowPromptRanges` helper. First in Wave 2.                                                                                                                                   |
-| Everything else | Not started           |                                                                                                                                                                                                                                               |
+| Phase           | State                 | Notes                                                                                                                                                                                                                                             |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. Deviations in plan F's Phase 1 entry; the review's bugs were fixed in F1b.                           |
+| F2              | **Done** (2026-10-08) | Generated `WorkflowSchemaOutline` (`schema:update`, `precompile`, `check:docs` drift check), hand-authored `WorkflowPropertySnippets.ts`, and `PromptPropertyCompletionProvider` moved onto both. Details in plan F's Phase 2 entry.              |
+| D1              | **Done** (2026-10-08) | `src/utils/PromptDiagnosticRules.ts` and `src/utils/PromptReferenceScanner.ts`; CodeMirror linters are adapters. Characterization tests pass against the pre-extraction code too. Details in plan D's "Phase 1 as built".                         |
+| M1              | **Done** (2026-10-08) | `--cy-syntax-*` in `globals.css`, one role table in `utils/syntaxPalette.ts`, `resolveCodeMirrorLanguage`. Visual check still owed (see plan M's Phase 1 entry). Its one hosted regression is fixed: `hosted-high-contrast-light-syntax-colours`. |
+| M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                                           |
+| F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                                          |
+| Everything else | Not started           |                                                                                                                                                                                                                                                   |
 
 ### Wave 1 review (2026-10-08)
 
@@ -39,19 +40,20 @@ below were reproduced with probe documents. What the review changed:
   so the extraction preserved behaviour. Small cleanups are listed for D2 to take (plan D,
   "Phase 1 as built").
 - **M1:** no bugs inside VS Code. In the hosted browser, high-contrast **light** gets the
-  high-contrast dark palette, filed as
-  [`hosted-high-contrast-light-syntax-colours`](../bugs/backlog/hosted-high-contrast-light-syntax-colours.md).
+  high-contrast dark palette:
+  [`hosted-high-contrast-light-syntax-colours`](../bugs/implemented/hosted-high-contrast-light-syntax-colours.md),
+  fixed before Wave 2.
   M2's real remaining work is narrower than planned (most markdown roles exist) but needs a
   lazy, memoised wrapper around `resolveCodeMirrorLanguage` (plan M, Phase 2).
 - **F1 and F2:** several location bugs, each of which would cost F3 its key completions
   (first key under a new nested mapping, an empty `- ` item, flow mappings), plus a wrong
   `.prompt.md` frontmatter split, a predicate that disagrees with `WorkflowFileDiscovery`, a
-  root-classification error and a first-branch-wins enum in the outline. They are collected
-  as plan F's **Phase 1b**, so they are fixed once, before anything builds on them.
+  root-classification error and a first-branch-wins enum in the outline. They became plan
+  F's **Phase 1b**, fixed before Wave 2 so nothing builds on them.
 - **Missing shared piece.** B, D2 and later F5/F6 all need every prompt range in a workflow
   file as decoded text with an offset map. F1 only answers one cursor position at a time and
   returns raw spans. Without a shared helper, B and D2 would each write one in parallel. F1b
-  adds it as `WorkflowPromptRanges`.
+  added it: `getWorkflowTextSpans` in `src/completions/WorkflowPromptRanges.ts`.
 
 ## Short answer
 
@@ -75,23 +77,23 @@ below were reproduced with probe documents. What the review changed:
 
 Each row lists what must land before that phase.
 
-| Phase      | Needs                           | Why                                                                                                                             |
-| ---------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| M0, M1, F2 | none                            | Self-contained                                                                                                                  |
-| F1         | none                            | New pure modules plus the server-side exclusion                                                                                 |
-| D1         | none                            | Characterization tests, then extraction                                                                                         |
-| F0         | D1                              | Same file as D1. Run serially so the two extractions don't conflict.                                                            |
-| F1b        | F1, F2                          | Fixes their review bugs and adds `WorkflowPromptRanges`                                                                         |
-| F3         | F1b                             | Completion items need a correct location and outline; the F1b bugs all land on key completions                                  |
-| B          | F1b                             | Decoded prompt ranges come from `WorkflowPromptRanges`, so no throwaway extractor                                               |
-| M4         | F1, ships with B                | The grammar is generated from `WORKFLOW_TEXT_FIELDS`. Shipping it without B makes backticks look literal while they still link. |
-| D2         | D1, plus F1b for workflow files | `.prompt.md` support needs only D1. Workflow prompt values need `WorkflowPromptRanges`.                                         |
-| M2         | M1, D1, F0                      | Palette; lint precedence over the D1 adapters; same file as F0                                                                  |
-| F4         | F0, F1, F3                      | As stated in plan F                                                                                                             |
-| F5         | F4, D1                          | Workspace lint uses D1's rules. The compartment comes from F4.                                                                  |
-| F7         | F3                              | VS Code value completions share F3                                                                                              |
-| D3         | D2, F5                          | Needs the side-effect-free `PromptFileParser` validate added in F5                                                              |
-| F6 + M3    | F4, M2                          | YAML chips and nested markdown share the same `PROMPT_TEXT` ranges and compartment, so they are planned as one change           |
+| Phase      | Needs            | Why                                                                                                                             |
+| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| M0, M1, F2 | none             | Self-contained                                                                                                                  |
+| F1         | none             | New pure modules plus the server-side exclusion                                                                                 |
+| D1         | none             | Characterization tests, then extraction                                                                                         |
+| F0         | D1               | Same file as D1. Run serially so the two extractions don't conflict.                                                            |
+| F1b        | F1, F2           | Fixes their review bugs and adds `getWorkflowTextSpans`                                                                         |
+| F3         | F1b              | Completion items need a correct location and outline; the F1b bugs all land on key completions                                  |
+| B          | F1b              | Decoded prompt ranges come from `getWorkflowTextSpans`, so no throwaway extractor                                               |
+| M4         | F1, ships with B | The grammar is generated from `WORKFLOW_TEXT_FIELDS`. Shipping it without B makes backticks look literal while they still link. |
+| D2         | D1, F1b          | Prompt values, `.prompt.md` bodies included, come from `getWorkflowTextSpans`                                                   |
+| M2         | M1, D1, F0       | Palette; lint precedence over the D1 adapters; same file as F0                                                                  |
+| F4         | F0, F1, F3       | As stated in plan F                                                                                                             |
+| F5         | F4, D1           | Workspace lint uses D1's rules. The compartment comes from F4.                                                                  |
+| F7         | F3               | VS Code value completions share F3                                                                                              |
+| D3         | D2, F5           | Needs the side-effect-free `PromptFileParser` validate added in F5                                                              |
+| F6 + M3    | F4, M2           | YAML chips and nested markdown share the same `PROMPT_TEXT` ranges and compartment, so they are planned as one change           |
 
 ## Waves
 
@@ -101,7 +103,8 @@ lists a suggested split across the long-lived worktrees (`big-feature`, `small-f
 
 ### Wave 1: foundations and quick wins
 
-**Done 2026-10-08.** All five phases merged to `main`.
+**Done 2026-10-08.** All five phases merged to `main`. The review's follow-ups, F1b and the
+hosted high-contrast light fix, were then committed on `main` directly.
 
 | Phase                                              | Hot file                                                             | Worktree it ran in        |
 | -------------------------------------------------- | -------------------------------------------------------------------- | ------------------------- |
@@ -113,16 +116,15 @@ lists a suggested split across the long-lived worktrees (`big-feature`, `small-f
 
 ### Wave 2: consumers of the core
 
-F1b goes first and should merge to `main` before B, F3 or D2's workflow-file half start; the
-rest of the wave can begin immediately.
+Every input is on `main`. The only ordering left is the worktree split: D2 follows F0 in
+`small-feature`.
 
-| Phase                                                           | Hot file                                | Suggested worktree | Notes                                                                                                                                                                    |
-| --------------------------------------------------------------- | --------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **F1b:** F1/F2 fixes and `WorkflowPromptRanges`                 | `src/completions/WorkflowLocation*.ts`  | `big-feature`      | First. Plan F, Phase 1b.                                                                                                                                                 |
-| **F3:** completion items                                        | —                                       | `big-feature`      | After F1b, in the same worktree                                                                                                                                          |
-| **F0:** completion-client extraction                            | `CodeMirrorEditor.tsx`                  | `small-feature`    | Can start now                                                                                                                                                            |
-| **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | After F0. `.prompt.md` first (needs only D1), then workflow prompt values once F1b is on `main`. Takes plan D's listed cleanups.                                         |
-| **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | M4's grammar and generator can start now; B needs F1b. Merge them together. Fix `hosted-high-contrast-light-syntax-colours` here too, since it is small and in M's area. |
+| Phase                                                           | Hot file                                | Suggested worktree | Notes                                                                                                                 |
+| --------------------------------------------------------------- | --------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **F3:** completion items                                        | —                                       | `big-feature`      | Plan F's Phase 3 lists what the Phase 1/2 API leaves to it (root mode filtering, step-type keys, per-object snippets) |
+| **F0:** completion-client extraction                            | `CodeMirrorEditor.tsx`                  | `small-feature`    |                                                                                                                       |
+| **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | After F0 in the same worktree. Uses `getWorkflowTextSpans` for every file kind. Takes plan D's listed cleanups.       |
+| **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | Merge them together. B uses `getWorkflowTextSpans`; M4's generator reads `WORKFLOW_TEXT_FIELDS`                       |
 
 M1's visual check (plan M, Phase 1) is still owed; do it before M2 in Wave 3.
 

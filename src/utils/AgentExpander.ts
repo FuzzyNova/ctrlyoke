@@ -2,7 +2,7 @@ import * as fs from "fs";
 import { AgentDiscovery, AgentInfo } from "./AgentDiscovery";
 import { Log } from "./Log";
 import { TtlCache } from "./TtlCache";
-import { splitMarkdownFrontmatter } from "./DiscoveryUtils";
+import { splitMarkdownFrontmatter } from "./MarkdownFrontmatter";
 
 /**
  * AgentExpander
