@@ -418,6 +418,18 @@ describe("syntax palette", () => {
             "monospace",
           ],
         },
+        {
+          "color": "var(--cy-syntax-quote)",
+          "tag": [
+            "quoteMark",
+          ],
+        },
+        {
+          "color": "var(--cy-syntax-list-marker)",
+          "tag": [
+            "listMark",
+          ],
+        },
       ]
     `);
   });

@@ -1,5 +1,5 @@
 import { HighlightStyle } from "@codemirror/language";
-import { tags, type Tag } from "@lezer/highlight";
+import { Tag, tags } from "@lezer/highlight";
 
 /**
  * Single source for syntax colours across the dashboard.
@@ -48,6 +48,19 @@ export function syntaxRoleVariable(role: SyntaxRole): string {
 export function syntaxRoleColor(role: SyntaxRole): string {
   return `var(${syntaxRoleVariable(role)})`;
 }
+
+/**
+ * Lezer tags every markdown mark as `processingInstruction`. The markdown
+ * configuration in `codemirrorLanguage.ts` retags `QuoteMark` and `ListMark`
+ * with these (children of `processingInstruction`, so an unconfigured theme
+ * still treats them as marks) so the quote and list-marker roles can colour
+ * them the way refractor already does.
+ */
+export const QUOTE_MARK_TAG = Tag.define(
+  "quoteMark",
+  tags.processingInstruction
+);
+export const LIST_MARK_TAG = Tag.define("listMark", tags.processingInstruction);
 
 interface SyntaxRoleSpec {
   /** Colour role; omitted for entries that only change font style/decoration. */
@@ -194,17 +207,14 @@ export const SYNTAX_ROLE_SPECS: readonly SyntaxRoleSpec[] = [
     tags: [tags.monospace],
     tokenClasses: ["code-snippet"],
   },
-  // Lezer tags every markdown mark as `processingInstruction`, so quote and
-  // list marks only get their own colour once the prompt editor's markdown
-  // configuration gives them distinct tags. refractor already does.
   {
     role: SYNTAX_ROLES.QUOTE,
-    tags: [],
+    tags: [QUOTE_MARK_TAG],
     tokenClasses: ["blockquote"],
   },
   {
     role: SYNTAX_ROLES.LIST_MARKER,
-    tags: [],
+    tags: [LIST_MARK_TAG],
     tokenClasses: ["list"],
   },
 ];
