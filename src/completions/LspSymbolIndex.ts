@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import { pathToFileURL, fileURLToPath } from "node:url";
+import { fileURLToPath } from "node:url";
+import { toServerFileUri } from "../server/lsp/LspProtocol";
 import {
   LANGUAGE_SERVER_CATALOG,
   type LanguageServerCatalogEntry,
@@ -26,12 +27,17 @@ export interface LspSymbolQueryHost {
     | { descriptor: { capabilities: Record<string, unknown> }; result: unknown }
     | undefined
   >;
-  resolveForPath?(viewerPath: string): Promise<{
-    id: string;
-    languageId: string;
-    rootPath: string;
-  } | undefined>;
-  onStatusChanged?(listener: (event: { status: string }) => void): { dispose(): void };
+  resolveForPath?(viewerPath: string): Promise<
+    | {
+        id: string;
+        languageId: string;
+        rootPath: string;
+      }
+    | undefined
+  >;
+  onStatusChanged?(listener: (event: { status: string }) => void): {
+    dispose(): void;
+  };
 }
 
 /** Standalone symbol source backed by the managed language-server host. */
@@ -68,7 +74,8 @@ export class LspSymbolIndex implements SymbolIndex {
     const entry = this.entryForFile(viewerPath);
     return (
       this.servedExtensions.has(path.posix.extname(viewerPath).toLowerCase()) ||
-      (!!entry && entry.languages.some((language) => this.servedLanguages.has(language)))
+      (!!entry &&
+        entry.languages.some((language) => this.servedLanguages.has(language)))
     );
   }
 
@@ -104,7 +111,8 @@ export class LspSymbolIndex implements SymbolIndex {
         !this.host.resolveForPath &&
         entry &&
         !(await this.cachedRootMarker(entry, files, rootMarkerCache))
-      ) continue;
+      )
+        continue;
       seenServers.add(key);
       try {
         const response = await this.host.requestForPath(
@@ -156,9 +164,7 @@ export class LspSymbolIndex implements SymbolIndex {
     signal?: AbortSignal
   ): Promise<IndexedSymbol[]> {
     if (signal?.aborted || !this.ready) return [];
-    const uri = pathToFileURL(
-      path.resolve(this.workspaceRoot, viewerPath)
-    ).toString();
+    const uri = toServerFileUri(path.resolve(this.workspaceRoot, viewerPath));
     try {
       const response = await this.host.requestForPath(
         viewerPath,

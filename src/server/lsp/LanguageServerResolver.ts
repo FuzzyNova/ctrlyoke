@@ -221,7 +221,9 @@ async function resolveDefinition(
       ...options.userSettings.languageServers.settings[id],
       ...options.workspaceSettings.languageServers.settings[id],
     },
-    ...( "env" in definition && definition.env ? { env: { ...definition.env } } : {}),
+    ...("env" in definition && definition.env
+      ? { env: { ...definition.env } }
+      : {}),
     ...(catalogEntry ? { catalogEntry } : {}),
   };
 }

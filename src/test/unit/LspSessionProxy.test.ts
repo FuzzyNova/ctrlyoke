@@ -179,6 +179,24 @@ suite("LspSessionProxy", () => {
     assert.strictEqual(clientB.length, 0);
   });
 
+  test("delivers diagnostics whose URI the server spelled differently", async () => {
+    await open(proxyA!, "text");
+    clientA.length = 0;
+    // typescript-language-server on Windows publishes `file:///c%3A/...` for
+    // a document opened as `file:///C:/...`.
+    const canonical = pathToFileURL(path.join(workspaceRoot, "src", "main.ts")).toString();
+    const serverSpelling = canonical.replace(
+      /^file:\/\/\/([A-Za-z]):/,
+      (_match, drive: string) => `file:///${drive.toLowerCase()}%3A`
+    );
+    await backend.serverConnections[0].sendNotification(
+      LSP_METHODS.PUBLISH_DIAGNOSTICS,
+      { uri: serverSpelling, diagnostics: [] }
+    );
+    await waitFor(() => clientA.length > 0);
+    assert.strictEqual(clientA.length, 1);
+  });
+
   test("preserves created, changed, and deleted watched-file event kinds", async () => {
     await open(proxyA!, "text");
     const watchedEvents = () => backend.notifications.filter(

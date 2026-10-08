@@ -1,11 +1,14 @@
 import * as path from "node:path";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { pathToFileURL } from "node:url";
 import type { MessageConnection } from "vscode-jsonrpc";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 import type { LanguageIntelligenceSessionLookupResponse } from "../../types/HostedWorkspaceViewerTypes";
-import { LSP_METHODS } from "./LspProtocol";
+import {
+  LSP_METHODS,
+  canonicalServerFileUri,
+  toServerFileUri,
+} from "./LspProtocol";
 import type {
   LanguageServerBackend,
   LanguageServerDescriptor,
@@ -30,7 +33,8 @@ interface SharedServerSession {
 const MAX_WARMUP_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const BINARY_CHECK_BYTES = 8_192;
 
-export type LanguageIntelligenceSessionLookup = LanguageIntelligenceSessionLookupResponse;
+export type LanguageIntelligenceSessionLookup =
+  LanguageIntelligenceSessionLookupResponse;
 
 export interface LanguageIntelligenceHostOptions {
   readonly backend: LanguageServerBackend;
@@ -43,7 +47,10 @@ export interface LanguageIntelligenceHostOptions {
 export class LanguageIntelligenceHost {
   private readonly roots: WorkspacePathContext;
   private readonly sessions = new Map<string, Promise<SharedServerSession>>();
-  private readonly sessionsById = new Map<string, Promise<SharedServerSession>>();
+  private readonly sessionsById = new Map<
+    string,
+    Promise<SharedServerSession>
+  >();
   private disposed = false;
   private readonly warmupDocuments = new Map<string, Set<string>>();
   private readonly statusEvents = new EventEmitter();
@@ -55,17 +62,24 @@ export class LanguageIntelligenceHost {
       namedRoots: options.namedWorkspaceRoots,
     };
     const statusSource = options.backend as LanguageServerBackend & {
-      onStatusChanged?: (listener: (event: LanguageServerStatusChange) => void) => { dispose(): void };
+      onStatusChanged?: (
+        listener: (event: LanguageServerStatusChange) => void
+      ) => { dispose(): void };
     };
     this.backendStatusSubscription = statusSource.onStatusChanged?.((event) => {
       this.statusEvents.emit("change", event);
-      if (event.status === LANGUAGE_SERVER_STATUSES.CRASHED || event.status === LANGUAGE_SERVER_STATUSES.STOPPED) {
+      if (
+        event.status === LANGUAGE_SERVER_STATUSES.CRASHED ||
+        event.status === LANGUAGE_SERVER_STATUSES.STOPPED
+      ) {
         this.invalidateSession(event.id, event.rootPath);
       }
     });
   }
 
-  onStatusChanged(listener: (event: LanguageServerStatusChange) => void): { dispose(): void } {
+  onStatusChanged(listener: (event: LanguageServerStatusChange) => void): {
+    dispose(): void;
+  } {
     this.statusEvents.on("change", listener);
     return { dispose: () => this.statusEvents.off("change", listener) };
   }
@@ -75,7 +89,9 @@ export class LanguageIntelligenceHost {
   }
 
   /** Resolve a file through the managed backend without prompting for approval. */
-  async resolveForPath(viewerPath: string): Promise<LanguageServerDescriptor | undefined> {
+  async resolveForPath(
+    viewerPath: string
+  ): Promise<LanguageServerDescriptor | undefined> {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
@@ -85,23 +101,41 @@ export class LanguageIntelligenceHost {
     return "descriptor" in resolution ? resolution.descriptor : undefined;
   }
 
-  async requestForPath(viewerPath: string, method: string, params: unknown): Promise<{ descriptor: LanguageServerDescriptor; result: unknown } | undefined> {
+  async requestForPath(
+    viewerPath: string,
+    method: string,
+    params: unknown
+  ): Promise<
+    { descriptor: LanguageServerDescriptor; result: unknown } | undefined
+  > {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
-    const resolution = await this.options.backend.resolveForPath(viewerPath, this.roots);
+    const resolution = await this.options.backend.resolveForPath(
+      viewerPath,
+      this.roots
+    );
     if (!("descriptor" in resolution)) return undefined;
     const session = await this.getOrCreateSession(resolution.descriptor);
     if (!this.options.isWorkspaceTrusted()) return undefined;
-    return { descriptor: session.descriptor, result: await session.connection.sendRequest(method, params) };
+    return {
+      descriptor: session.descriptor,
+      result: await session.connection.sendRequest(method, params),
+    };
   }
 
-  async openWarmupDocument(viewerPath: string, languageId: string): Promise<void> {
+  async openWarmupDocument(
+    viewerPath: string,
+    languageId: string
+  ): Promise<void> {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return;
     const absolutePath = safeResolveWorkspacePath(viewerPath, this.roots);
     if (!absolutePath) return;
-    const resolution = await this.options.backend.resolveForPath(viewerPath, this.roots);
+    const resolution = await this.options.backend.resolveForPath(
+      viewerPath,
+      this.roots
+    );
     if (!("descriptor" in resolution)) return;
     const session = await this.getOrCreateSession(resolution.descriptor);
-    const uri = pathToFileURL(absolutePath).toString();
+    const uri = toServerFileUri(absolutePath);
     const opened = this.warmupDocuments.get(session.id) ?? new Set<string>();
     if (opened.has(uri)) return;
     const fs = await import("node:fs/promises");
@@ -112,13 +146,26 @@ export class LanguageIntelligenceHost {
       const sample = Buffer.alloc(BINARY_CHECK_BYTES);
       const { bytesRead } = await handle.read(sample, 0, BINARY_CHECK_BYTES, 0);
       if (sample.subarray(0, bytesRead).includes(0)) return;
-    } finally { await handle.close(); }
-    const text = secretRedactionService.redactText(await fs.readFile(absolutePath, "utf8"));
+    } finally {
+      await handle.close();
+    }
+    const text = secretRedactionService.redactText(
+      await fs.readFile(absolutePath, "utf8")
+    );
     let document = session.documents.get(uri);
     if (!document) {
-      document = { uri, tabs: new Map(), serverVersion: 1, syncedText: text, syncedVersion: 1, warmupReferences: 1 };
+      document = {
+        uri,
+        tabs: new Map(),
+        serverVersion: 1,
+        syncedText: text,
+        syncedVersion: 1,
+        warmupReferences: 1,
+      };
       session.documents.set(uri, document);
-      await session.connection.sendNotification(LSP_METHODS.DID_OPEN, { textDocument: { uri, languageId, version: 1, text } });
+      await session.connection.sendNotification(LSP_METHODS.DID_OPEN, {
+        textDocument: { uri, languageId, version: 1, text },
+      });
     } else {
       document.warmupReferences = (document.warmupReferences ?? 0) + 1;
     }
@@ -127,7 +174,8 @@ export class LanguageIntelligenceHost {
   }
 
   async restartServer(id: string): Promise<void> {
-    if (!this.options.backend.restartServer) throw new Error("This language server host does not support restart.");
+    if (!this.options.backend.restartServer)
+      throw new Error("This language server host does not support restart.");
     await this.options.backend.restartServer(id);
   }
 
@@ -140,23 +188,35 @@ export class LanguageIntelligenceHost {
   }
 
   async stopServer(id: string): Promise<void> {
-    if (!this.options.backend.stopManagedServer) throw new Error("This language server host does not support stop.");
+    if (!this.options.backend.stopManagedServer)
+      throw new Error("This language server host does not support stop.");
     await this.options.backend.stopManagedServer(id);
   }
 
-  async lookupSession(viewerPath: string): Promise<LanguageIntelligenceSessionLookup> {
+  async lookupSession(
+    viewerPath: string
+  ): Promise<LanguageIntelligenceSessionLookup> {
     if (!this.options.isWorkspaceTrusted()) {
-      return { session: null, reason: LANGUAGE_SERVER_RESOLUTION_REASONS.UNTRUSTED };
+      return {
+        session: null,
+        reason: LANGUAGE_SERVER_RESOLUTION_REASONS.UNTRUSTED,
+      };
     }
     if (!safeResolveWorkspacePath(viewerPath, this.roots)) {
-      return { session: null, reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
+      return {
+        session: null,
+        reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER,
+      };
     }
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
       this.roots
     );
     if (!this.options.isWorkspaceTrusted()) {
-      return { session: null, reason: LANGUAGE_SERVER_RESOLUTION_REASONS.UNTRUSTED };
+      return {
+        session: null,
+        reason: LANGUAGE_SERVER_RESOLUTION_REASONS.UNTRUSTED,
+      };
     }
     if (!("descriptor" in resolution)) {
       return { session: null, reason: resolution.reason };
@@ -176,7 +236,9 @@ export class LanguageIntelligenceHost {
     send: (message: unknown) => void,
     canOpenPath: (viewerPath: string) => Promise<boolean>,
     fileEditOperations: {
-      readFile: (viewerPath: string) => Promise<{ content: string; readOnly?: boolean }>;
+      readFile: (
+        viewerPath: string
+      ) => Promise<{ content: string; readOnly?: boolean }>;
       writeFile: (viewerPath: string, content: string) => Promise<void>;
       notifyFileChanged: (viewerPath: string) => Promise<void>;
     } = {
@@ -200,25 +262,31 @@ export class LanguageIntelligenceHost {
       ...fileEditOperations,
       documents: session.documents,
       onDispose: () => session.proxies.delete(proxy),
-      onDocumentOpened: () => this.options.backend.documentOpened?.(session.descriptor),
-      onDocumentClosed: () => this.options.backend.documentClosed?.(session.descriptor),
+      onDocumentOpened: () =>
+        this.options.backend.documentOpened?.(session.descriptor),
+      onDocumentClosed: () =>
+        this.options.backend.documentClosed?.(session.descriptor),
       onSessionInvalidated: invalidateClient,
     });
     session.proxies.add(proxy);
     return proxy;
   }
 
-  async notifyWorkspaceFileChanged(viewerPath: string, type = 2): Promise<void> {
+  async notifyWorkspaceFileChanged(
+    viewerPath: string,
+    type = 2
+  ): Promise<void> {
     const absolutePath = safeResolveWorkspacePath(viewerPath, this.roots);
     if (!absolutePath) return;
-    const uri = pathToFileURL(absolutePath).toString();
+    const uri = toServerFileUri(absolutePath);
     for (const pending of this.sessions.values()) {
       const session = await pending.catch(() => undefined);
       if (!session) continue;
-      void session.connection.sendNotification(
-        LSP_METHODS.DID_CHANGE_WATCHED_FILES,
-        { changes: [{ uri, type }] }
-      ).catch(() => undefined);
+      void session.connection
+        .sendNotification(LSP_METHODS.DID_CHANGE_WATCHED_FILES, {
+          changes: [{ uri, type }],
+        })
+        .catch(() => undefined);
     }
   }
 
@@ -250,54 +318,55 @@ export class LanguageIntelligenceHost {
     const key = `${descriptor.id}\n${root}`;
     const existing = this.sessions.get(key);
     if (existing) return existing;
-    const created = Promise.resolve(this.options.backend.getConnection(descriptor)).then(
-      (connection) => {
-        const session: SharedServerSession = {
-          id: randomUUID(),
-          descriptor: { ...descriptor, rootPath: root },
-          connection,
-          documents: new Map(),
-          proxies: new Set(),
-        };
-        connection.onNotification((method, rawParams) => {
-          if (method === LSP_METHODS.PUBLISH_DIAGNOSTICS) {
-            const params = rawParams as
-              | ({ uri?: unknown } & Record<string, unknown>)
-              | undefined;
-            if (typeof params?.uri !== "string") return;
-            const document = session.documents.get(params.uri);
-            if (!document) return;
-            for (const [proxy, buffer] of document.tabs) {
-              if (buffer.text === document.syncedText) {
-                proxy.deliverServerMessage({
-                  jsonrpc: "2.0",
-                  method,
-                  params,
-                });
-              }
+    const created = Promise.resolve(
+      this.options.backend.getConnection(descriptor)
+    ).then((connection) => {
+      const session: SharedServerSession = {
+        id: randomUUID(),
+        descriptor: { ...descriptor, rootPath: root },
+        connection,
+        documents: new Map(),
+        proxies: new Set(),
+      };
+      connection.onNotification((method, rawParams) => {
+        if (method === LSP_METHODS.PUBLISH_DIAGNOSTICS) {
+          const params = rawParams as
+            ({ uri?: unknown } & Record<string, unknown>) | undefined;
+          if (typeof params?.uri !== "string") return;
+          const document = session.documents.get(
+            canonicalServerFileUri(params.uri)
+          );
+          if (!document) return;
+          for (const [proxy, buffer] of document.tabs) {
+            if (buffer.text === document.syncedText) {
+              proxy.deliverServerMessage({
+                jsonrpc: "2.0",
+                method,
+                params,
+              });
             }
-            return;
           }
-          for (const proxy of session.proxies) {
-            proxy.deliverServerMessage({
-              jsonrpc: "2.0",
-              method,
-              ...(rawParams === undefined ? {} : { params: rawParams }),
-            });
-          }
-        });
-        connection.onRequest((method, params) => {
-          const proxy = session.proxies.values().next().value;
-          return proxy?.forwardServerRequest(method, params);
-        });
-        if (this.options.backend.listenConnection) {
-          this.options.backend.listenConnection(connection);
-        } else {
-          connection.listen();
+          return;
         }
-        return session;
+        for (const proxy of session.proxies) {
+          proxy.deliverServerMessage({
+            jsonrpc: "2.0",
+            method,
+            ...(rawParams === undefined ? {} : { params: rawParams }),
+          });
+        }
+      });
+      connection.onRequest((method, params) => {
+        const proxy = session.proxies.values().next().value;
+        return proxy?.forwardServerRequest(method, params);
+      });
+      if (this.options.backend.listenConnection) {
+        this.options.backend.listenConnection(connection);
+      } else {
+        connection.listen();
       }
-    );
+      return session;
+    });
     this.sessions.set(key, created);
     void created.catch((error: unknown) => {
       if (this.sessions.get(key) === created) this.sessions.delete(key);
@@ -308,9 +377,11 @@ export class LanguageIntelligenceHost {
         detail: error instanceof Error ? error.message : String(error),
       } satisfies LanguageServerStatusChange);
     });
-    void created.then((session) => {
-      this.sessionsById.set(session.id, created);
-    }).catch(() => undefined);
+    void created
+      .then((session) => {
+        this.sessionsById.set(session.id, created);
+      })
+      .catch(() => undefined);
     return created;
   }
 
@@ -319,27 +390,41 @@ export class LanguageIntelligenceHost {
     const pending = this.sessions.get(key);
     if (!pending) return;
     this.sessions.delete(key);
-    void pending.then((session) => {
-      this.sessionsById.delete(session.id);
-      void this.closeWarmupDocuments(session);
-      for (const proxy of [...session.proxies]) proxy.invalidateSession();
-      session.connection.dispose();
-    }).catch(() => undefined);
+    void pending
+      .then((session) => {
+        this.sessionsById.delete(session.id);
+        void this.closeWarmupDocuments(session);
+        for (const proxy of [...session.proxies]) proxy.invalidateSession();
+        session.connection.dispose();
+      })
+      .catch(() => undefined);
   }
 
-  private async closeWarmupDocuments(session: SharedServerSession): Promise<void> {
+  private async closeWarmupDocuments(
+    session: SharedServerSession
+  ): Promise<void> {
     const uris = this.warmupDocuments.get(session.id);
     if (!uris) return;
     this.warmupDocuments.delete(session.id);
     for (const uri of uris) {
       const document = session.documents.get(uri);
-      if (document) document.warmupReferences = Math.max(0, (document.warmupReferences ?? 0) - 1);
-      if (document && (document.tabs.size > 0 || (document.warmupReferences ?? 0) > 0)) continue;
+      if (document)
+        document.warmupReferences = Math.max(
+          0,
+          (document.warmupReferences ?? 0) - 1
+        );
+      if (
+        document &&
+        (document.tabs.size > 0 || (document.warmupReferences ?? 0) > 0)
+      )
+        continue;
       try {
         await session.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
           textDocument: { uri },
         });
-      } catch { /* server may already have exited */ }
+      } catch {
+        /* server may already have exited */
+      }
       session.documents.delete(uri);
     }
   }

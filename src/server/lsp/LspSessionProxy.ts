@@ -1,6 +1,9 @@
 import * as path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { CancellationTokenSource, type MessageConnection } from "vscode-jsonrpc";
+import { fileURLToPath } from "node:url";
+import {
+  CancellationTokenSource,
+  type MessageConnection,
+} from "vscode-jsonrpc";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 import { LSP_SESSION_INVALIDATION_CLOSE } from "../../types/DashboardConstants";
 import { toViewerPath } from "../../platform/WorkspaceViewerPath";
@@ -10,6 +13,7 @@ import {
   LSP_READ_ONLY_URI_SCHEME,
   fromLspViewerUri,
   toLspViewerUri,
+  toServerFileUri,
   type JsonRpcMessage,
 } from "./LspProtocol";
 import type { SharedDocument } from "./LspSharedDocument";
@@ -30,7 +34,9 @@ interface ProxyOptions {
   readonly roots: WorkspacePathContext;
   readonly send: (message: unknown) => void;
   readonly canOpenPath: (viewerPath: string) => Promise<boolean>;
-  readonly readFile: (viewerPath: string) => Promise<{ content: string; readOnly?: boolean }>;
+  readonly readFile: (
+    viewerPath: string
+  ) => Promise<{ content: string; readOnly?: boolean }>;
   readonly writeFile: (viewerPath: string, content: string) => Promise<void>;
   readonly notifyFileChanged: (viewerPath: string) => Promise<void>;
   readonly documents: Map<string, SharedDocument>;
@@ -49,7 +55,10 @@ export class LspSessionProxy {
     string | number,
     { resolve(value: unknown): void; reject(error: Error): void }
   >();
-  private readonly pendingClientRequests = new Map<string | number, CancellationTokenSource>();
+  private readonly pendingClientRequests = new Map<
+    string | number,
+    CancellationTokenSource
+  >();
   private messageQueue: Promise<void> = Promise.resolve();
   private nextServerRequestId = 1;
   private nextClientRequestId = 1;
@@ -64,7 +73,10 @@ export class LspSessionProxy {
   }
 
   invalidateSession(): void {
-    this.options.onSessionInvalidated?.(LSP_SESSION_INVALIDATION_CLOSE.CODE, LSP_SESSION_INVALIDATION_CLOSE.REASON);
+    this.options.onSessionInvalidated?.(
+      LSP_SESSION_INVALIDATION_CLOSE.CODE,
+      LSP_SESSION_INVALIDATION_CLOSE.REASON
+    );
     this.dispose();
   }
 
@@ -81,7 +93,10 @@ export class LspSessionProxy {
     this.handleServerResponse(message);
   }
 
-  async forwardServerRequest(method: string, params: unknown): Promise<unknown> {
+  async forwardServerRequest(
+    method: string,
+    params: unknown
+  ): Promise<unknown> {
     if (this.disposed) throw new Error("LSP client is disconnected.");
     if (method === LSP_METHODS.APPLY_EDIT) {
       const edit = (params as { edit?: unknown } | undefined)?.edit;
@@ -113,9 +128,11 @@ export class LspSessionProxy {
         this.options.onDocumentClosed?.();
         if ((document.warmupReferences ?? 0) === 0) {
           this.options.documents.delete(buffer.serverUri);
-          void this.options.connection.sendNotification(LSP_METHODS.DID_CLOSE, {
-            textDocument: { uri: buffer.serverUri },
-          }).catch(() => undefined);
+          void this.options.connection
+            .sendNotification(LSP_METHODS.DID_CLOSE, {
+              textDocument: { uri: buffer.serverUri },
+            })
+            .catch(() => undefined);
         }
       }
     }
@@ -169,7 +186,11 @@ export class LspSessionProxy {
         } else {
           rewrittenResult = await this.rewriteUris(result, false);
         }
-        this.sendToClient({ jsonrpc: "2.0", id: request.id, result: rewrittenResult });
+        this.sendToClient({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: rewrittenResult,
+        });
       })
       .catch((error: unknown) => {
         this.sendError(request.id, INVALID_REQUEST, String(error));
@@ -226,7 +247,9 @@ export class LspSessionProxy {
     if (!pending) return;
     this.pendingServerRequests.delete(response.id);
     if (response.error) {
-      pending.reject(new Error(response.error.message ?? "LSP client request failed."));
+      pending.reject(
+        new Error(response.error.message ?? "LSP client request failed.")
+      );
       return;
     }
     void this.rewriteUris(response.result, true)
@@ -248,9 +271,13 @@ export class LspSessionProxy {
       typeof document?.uri !== "string" ||
       typeof document.text !== "string" ||
       typeof document.languageId !== "string"
-    ) return;
+    )
+      return;
     const translated = this.resolveClientUri(document.uri);
-    if (!translated || !(await this.options.canOpenPath(translated.viewerPath))) {
+    if (
+      !translated ||
+      !(await this.options.canOpenPath(translated.viewerPath))
+    ) {
       return;
     }
     const state: BufferState = {
@@ -327,7 +354,10 @@ export class LspSessionProxy {
     });
   }
 
-  private async resyncForRequest(method: string, params: unknown): Promise<void> {
+  private async resyncForRequest(
+    method: string,
+    params: unknown
+  ): Promise<void> {
     const uri = findTextDocumentUri(params);
     if (!uri) return;
     const state =
@@ -345,8 +375,13 @@ export class LspSessionProxy {
     const clientUri = findTextDocumentUri(params);
     if (!clientUri || this.buffers.has(clientUri)) return;
     const translated = this.resolveClientUri(clientUri);
-    if (!translated || !(await this.options.canOpenPath(translated.viewerPath))) {
-      throw new Error("Language server request targets a file unavailable in the workspace viewer.");
+    if (
+      !translated ||
+      !(await this.options.canOpenPath(translated.viewerPath))
+    ) {
+      throw new Error(
+        "Language server request targets a file unavailable in the workspace viewer."
+      );
     }
   }
 
@@ -363,25 +398,33 @@ export class LspSessionProxy {
     shared.syncedVersion = shared.serverVersion;
   }
 
-  private resolveClientUri(clientUri: string):
-    | { viewerPath: string; serverUri: string }
-    | undefined {
+  private resolveClientUri(
+    clientUri: string
+  ): { viewerPath: string; serverUri: string } | undefined {
     try {
       const parsed = new URL(clientUri);
       if (parsed.protocol !== "file:") return undefined;
-      const viewerPath = fromLspViewerUri(clientUri) ?? toViewerPath(fileURLToPath(parsed), {
-            primaryRoot: this.options.roots.workspaceRoot,
-            namedRoots: this.options.roots.namedRoots,
-          });
-      const absolutePath = safeResolveWorkspacePath(viewerPath, this.options.roots);
+      const viewerPath =
+        fromLspViewerUri(clientUri) ??
+        toViewerPath(fileURLToPath(parsed), {
+          primaryRoot: this.options.roots.workspaceRoot,
+          namedRoots: this.options.roots.namedRoots,
+        });
+      const absolutePath = safeResolveWorkspacePath(
+        viewerPath,
+        this.options.roots
+      );
       if (!absolutePath) return undefined;
-      return { viewerPath, serverUri: pathToFileURL(absolutePath).toString() };
+      return { viewerPath, serverUri: toServerFileUri(absolutePath) };
     } catch {
       return undefined;
     }
   }
 
-  private async rewriteUris(value: unknown, inbound: boolean): Promise<unknown> {
+  private async rewriteUris(
+    value: unknown,
+    inbound: boolean
+  ): Promise<unknown> {
     if (typeof value === "string") return value;
     if (Array.isArray(value)) {
       return Promise.all(value.map((item) => this.rewriteUris(item, inbound)));
@@ -394,8 +437,9 @@ export class LspSessionProxy {
           ? this.resolveInboundUri(entry)
           : this.resolveOutboundUri(entry);
       } else if (key.toLowerCase().startsWith("file:")) {
-        rewritten[inbound ? this.resolveInboundUri(key) : this.resolveOutboundUri(key)] =
-          await this.rewriteUris(entry, inbound);
+        rewritten[
+          inbound ? this.resolveInboundUri(key) : this.resolveOutboundUri(key)
+        ] = await this.rewriteUris(entry, inbound);
       } else {
         rewritten[key] = await this.rewriteUris(entry, inbound);
       }
@@ -427,7 +471,10 @@ export class LspSessionProxy {
     }
   }
 
-  private async applyWorkspaceEdit(value: unknown, confirmUnopened: boolean): Promise<void> {
+  private async applyWorkspaceEdit(
+    value: unknown,
+    confirmUnopened: boolean
+  ): Promise<void> {
     if (!value || typeof value !== "object") return;
     const edit = value as {
       changes?: Record<string, Array<{ range?: unknown; newText?: unknown }>>;
@@ -436,32 +483,53 @@ export class LspSessionProxy {
         edits?: Array<{ range?: unknown; newText?: unknown }>;
       }>;
     };
-    const byPath = new Map<string, Array<{ range?: unknown; newText?: unknown }>>();
+    const byPath = new Map<
+      string,
+      Array<{ range?: unknown; newText?: unknown }>
+    >();
     for (const [uri, edits] of Object.entries(edit.changes ?? {})) {
-      if (typeof uri !== "string" || !Array.isArray(edits)) throw new Error("Invalid workspace edit.");
+      if (typeof uri !== "string" || !Array.isArray(edits))
+        throw new Error("Invalid workspace edit.");
       byPath.set(this.viewerPathFromServerUri(uri), edits);
     }
     for (const change of edit.documentChanges ?? []) {
       const uri = change.textDocument?.uri;
-      if (typeof uri !== "string" || !Array.isArray(change.edits)) throw new Error("Unsupported workspace edit operation.");
+      if (typeof uri !== "string" || !Array.isArray(change.edits))
+        throw new Error("Unsupported workspace edit operation.");
       const existing = byPath.get(this.viewerPathFromServerUri(uri)) ?? [];
-      byPath.set(this.viewerPathFromServerUri(uri), [...existing, ...change.edits]);
+      byPath.set(this.viewerPathFromServerUri(uri), [
+        ...existing,
+        ...change.edits,
+      ]);
     }
     if (byPath.size === 0) return;
 
     // Validate the whole edit before mutating any buffer or file.
     const resolved = [...byPath].map(([viewerPath, edits]) => {
-      const serverUri = this.resolveClientUri(toLspViewerUri(viewerPath))?.serverUri;
-      if (!serverUri) throw new Error(`Workspace edit path is outside the workspace: ${viewerPath}`);
+      const serverUri = this.resolveClientUri(
+        toLspViewerUri(viewerPath)
+      )?.serverUri;
+      if (!serverUri)
+        throw new Error(
+          `Workspace edit path is outside the workspace: ${viewerPath}`
+        );
       return { viewerPath, serverUri, edits };
     });
     for (const file of resolved) {
       if (!(await this.options.canOpenPath(file.viewerPath))) {
-        throw new Error(`Workspace edit targets a read-only file: ${file.viewerPath}`);
+        throw new Error(
+          `Workspace edit targets a read-only file: ${file.viewerPath}`
+        );
       }
     }
-    const unopened = resolved.filter(({ serverUri }) => !this.options.documents.get(serverUri)?.tabs.size);
-    if (confirmUnopened && unopened.length > 0 && !(await this.confirmUnopenedRename(unopened.length))) {
+    const unopened = resolved.filter(
+      ({ serverUri }) => !this.options.documents.get(serverUri)?.tabs.size
+    );
+    if (
+      confirmUnopened &&
+      unopened.length > 0 &&
+      !(await this.confirmUnopenedRename(unopened.length))
+    ) {
       throw new Error("Rename cancelled.");
     }
 
@@ -471,7 +539,10 @@ export class LspSessionProxy {
         this.applyEditsToOpenBuffer(file.serverUri, file.edits);
       } else {
         const response = await this.options.readFile(file.viewerPath);
-        if (response.readOnly) throw new Error(`Workspace edit targets a read-only file: ${file.viewerPath}`);
+        if (response.readOnly)
+          throw new Error(
+            `Workspace edit targets a read-only file: ${file.viewerPath}`
+          );
         const content = applyLspTextEdits(response.content, file.edits);
         await this.options.writeFile(file.viewerPath, content);
         await this.options.notifyFileChanged(file.viewerPath);
@@ -486,7 +557,9 @@ export class LspSessionProxy {
     const shared = this.options.documents.get(serverUri);
     if (!shared) return;
     for (const [proxy] of shared.tabs) {
-      const state = [...proxy.buffers.values()].find((buffer) => buffer.serverUri === serverUri);
+      const state = [...proxy.buffers.values()].find(
+        (buffer) => buffer.serverUri === serverUri
+      );
       if (!state) continue;
       proxy.sendToClient({
         jsonrpc: "2.0",
@@ -498,7 +571,11 @@ export class LspSessionProxy {
 
   private viewerPathFromServerUri(uri: string): string {
     let absolutePath: string;
-    try { absolutePath = fileURLToPath(uri); } catch { throw new Error(`Invalid workspace edit URI: ${uri}`); }
+    try {
+      absolutePath = fileURLToPath(uri);
+    } catch {
+      throw new Error(`Invalid workspace edit URI: ${uri}`);
+    }
     const viewerPath = toViewerPath(absolutePath, {
       primaryRoot: this.options.roots.workspaceRoot,
       namedRoots: this.options.roots.namedRoots,
@@ -542,7 +619,11 @@ function findTextDocumentUri(value: unknown): string | undefined {
   return typeof document?.uri === "string" ? document.uri : undefined;
 }
 
-function applyTextChange(text: string, range: unknown, replacement: string): string {
+function applyTextChange(
+  text: string,
+  range: unknown,
+  replacement: string
+): string {
   const candidate = range as {
     start?: { line?: number; character?: number };
     end?: { line?: number; character?: number };
@@ -552,7 +633,8 @@ function applyTextChange(text: string, range: unknown, replacement: string): str
     typeof candidate.start.character !== "number" ||
     typeof candidate.end?.line !== "number" ||
     typeof candidate.end.character !== "number"
-  ) return text;
+  )
+    return text;
   const offset = (line: number, character: number): number => {
     let index = 0;
     for (let currentLine = 0; currentLine < line; currentLine += 1) {
@@ -576,11 +658,16 @@ function applyLspTextEdits(
     .map((edit) => ({ range: edit.range, text: edit.newText as string }))
     .sort((a, b) => {
       const left = a.range as { start?: { line?: number; character?: number } };
-      const right = b.range as { start?: { line?: number; character?: number } };
-      return (right.start?.line ?? 0) - (left.start?.line ?? 0) ||
-        (right.start?.character ?? 0) - (left.start?.character ?? 0);
+      const right = b.range as {
+        start?: { line?: number; character?: number };
+      };
+      return (
+        (right.start?.line ?? 0) - (left.start?.line ?? 0) ||
+        (right.start?.character ?? 0) - (left.start?.character ?? 0)
+      );
     });
   let updated = text;
-  for (const change of changes) updated = applyTextChange(updated, change.range, change.text);
+  for (const change of changes)
+    updated = applyTextChange(updated, change.range, change.text);
   return updated;
 }

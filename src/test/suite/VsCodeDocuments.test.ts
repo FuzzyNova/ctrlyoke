@@ -20,6 +20,12 @@ suite("VsCodeDocuments", () => {
       const document = await vscode.workspace.openTextDocument(
         vscode.Uri.file(filePath)
       );
+      // Pin the document in an editor, as a user's dirty file would be. A
+      // document opened only through openTextDocument is held by VS Code's
+      // bounded hidden-model pool (50 references); under a sharded run other
+      // tests' hidden opens evict it from workspace.textDocuments before
+      // saveIfDirty looks it up.
+      await vscode.window.showTextDocument(document, { preview: false });
       const edit = new vscode.WorkspaceEdit();
       edit.replace(
         document.uri,
@@ -55,6 +61,9 @@ suite("VsCodeDocuments", () => {
       );
     } finally {
       saveListener?.dispose();
+      await vscode.commands.executeCommand(
+        "workbench.action.revertAndCloseActiveEditor"
+      );
       await fs.rm(directory, { recursive: true, force: true });
     }
   });
