@@ -15,7 +15,7 @@ Prompt-file completion and navigation layer. This directory owns VS Code complet
 </architecture>
 
 <registration>
-`src/extension.ts` registers the same `PromptCompletionProvider` four times for `@`, `#`, `~`, and `$` on prompt files (`*.{prompt,ctrlyoke}.json`, `*.ctrlyoke.{yaml,yml}`, `*.prompt.md`, and `prompt` language). `PromptLinkProvider` uses the same selector set.
+`src/extension.ts` registers the same `PromptCompletionProvider` four times for `@`, `#`, `~`, and `$` on prompt files (the globs from `getCtrlYokeFileGlobs()`, plus the `prompt` language). `PromptLinkProvider` uses the same selector set.
 
 If you add a new trigger or reference form, update all of these together:
 
@@ -25,6 +25,12 @@ If you add a new trigger or reference form, update all of these together:
 - `PromptLinkProvider`
 - `src/ui/PromptEditorSupportService.ts` if the dashboard should support it too
   </registration>
+
+<ctrlyokeFileDetection>
+`CtrlYokeFileKind.ts` is the single "is this a ctrlyoke file" predicate (`getCtrlYokeFileKind`) and the source of the VS Code globs (`getCtrlYokeFileGlobs`). Add a new workflow or prompt suffix there only. The Node language-server host imports it too: `LanguageIntelligenceHost` refuses ctrlyoke files (reason `CTRLYOKE_FILE`) so a generic YAML, JSON or Markdown server never attaches next to ctrlyoke's own support.
+
+`WorkflowDocumentLocation.ts` (`getWorkflowLocation`, `findRangeForPath`) answers "where is the cursor and which schema object owns it" for all three kinds. Prompt- and script-bearing fields are listed once in `WORKFLOW_TEXT_FIELDS` (`WorkflowLocationTypes.ts`); add a new text field there. Everything is pure (no `vscode`, no `fs`). Keep the YAML half in `WorkflowLocationYaml.ts` so the webview can `import()` it lazily; the facade imports it statically and is for the Node and VS Code hosts. The existing VS Code providers still use their own scanners until the file-support plan's Phase 7.
+</ctrlyokeFileDetection>
 
 <promptCompletionProvider>
 `PromptCompletionProvider` is intentionally context-gated:

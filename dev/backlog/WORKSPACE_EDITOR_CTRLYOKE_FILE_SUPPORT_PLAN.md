@@ -1,8 +1,9 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-07):** Proposed. Nothing is implemented yet. _Refreshed 2026-10-08:_ the
-language intelligence plan shipped (`dev/implemented/`). Facts 2 and 9, "Editor integration"
-and "Coexistence with language servers" were re-audited against the merged code.
+**Status (2026-10-08):** Phase 1 is implemented (see its entry under "Implementation phases").
+Phases 0 and 2–7 are not started. _Refreshed 2026-10-08:_ the language intelligence plan
+shipped (`dev/implemented/`). Facts 2 and 9, "Editor integration" and "Coexistence with
+language servers" were re-audited against the merged code.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -443,7 +444,43 @@ Every phase lands with tests and leaves both editors working.
    - Tests: the existing `CodeMirrorEditor.test.tsx` completion describes must pass unchanged,
      plus client unit tests for partial-then-full and for cancellation.
 
-2. **Phase 1: `WorkflowDocumentLocation` and the file predicate.**
+2. **Phase 1: `WorkflowDocumentLocation` and the file predicate.** **Done 2026-10-08.**
+   Built as planned, with these specifics and deviations:
+   - **Modules (all pure, under `src/completions/`):** `CtrlYokeFileKind.ts`
+     (`getCtrlYokeFileKind`, plus `getCtrlYokeFileGlobs` so the VS Code selectors derive from the
+     same suffix table), `WorkflowLocationTypes.ts` (`WorkflowLocation`, `WORKFLOW_TEXT_FIELDS`,
+     `classifyWorkflowObject`, `buildWorkflowLocation`), `WorkflowLocationJson.ts`,
+     `WorkflowLocationYaml.ts` and the `WorkflowDocumentLocation.ts` facade
+     (`getWorkflowLocation`, `findRangeForPath`; `.prompt.md` frontmatter and body handling lives
+     in the facade). The kind, role and object-kind constants are in `DashboardConstants.ts`.
+   - **`WorkflowLocation` shape:** `path` is the node under the cursor (for a new key not yet
+     typed, the owning object). It adds `key` (nearest enclosing key) and `scalarStyle` (YAML) to
+     what the design listed. `valueRange` is the scalar _content_ (inside quotes, after a
+     block-scalar header), so a consumer never re-parses quoting.
+   - **Kinds:** `.prompt.json` is a `WORKFLOW_JSON` file, matching the existing
+     `**/*.{prompt,ctrlyoke}.json` selector. `PromptLinkProvider` now matches it too; before, it
+     only checked `.ctrlyoke.json`.
+   - **Language-server exclusion:** `lookupSession` returns the new `CTRLYOKE_FILE` reason.
+     `resolveForPath`, `requestForPath` and `openWarmupDocument` also refuse ctrlyoke files, so no
+     path can feed one to a server. `useLanguageIntelligence` needed no change: an unknown reason
+     already maps to no status hint.
+   - **Dependency:** `yaml` ^2.9.1 is now a direct dependency.
+   - **YAML strategy:** the `yaml` AST answers when the cursor is inside a node (including flow
+     style and quoted scalars). A blank line, a half-typed key or a new line inside a block scalar
+     has no node, so an indentation-scan fallback answers instead. A bare scalar item in
+     `steps`, `parallel` or `hooks` (`- pro`) is treated as a half-typed key.
+   - **Not done yet, deliberately:** the bundle check that the YAML half lands in its own webview
+     chunk. Nothing in the webview imports these modules until Phase 4, so there is no chunk to
+     check; do it there. `WorkflowDocumentLocation.ts` imports the YAML half statically for the
+     Node and VS Code hosts; the webview must import `WorkflowLocationJson` directly and
+     `WorkflowLocationYaml` via `import()`.
+   - **Scan not yet merged:** `YamlBlockScalarContext.ts` and
+     `PromptPropertyCompletionProvider`'s `findPromptStepBlock` are still used by the VS Code
+     providers. The new scan is a separate implementation, so for now there are two. Phase 7 moves
+     the providers onto `getWorkflowLocation` and deletes the old ones.
+   - **Tests:** `CtrlYokeFileKind.test.ts`, `LanguageIntelligenceHost.test.ts` and
+     `WorkflowDocumentLocation.test.ts` in `src/test/unit/`. Fixtures use a `§` cursor marker,
+     because `|` is also the YAML block-scalar header.
    - Add `yaml` as a direct dependency. Keep the YAML half of the location module in its own
      file so the webview can `import()` it lazily, and confirm with a bundle check that it
      lands in a separate chunk.
@@ -510,7 +547,7 @@ Every phase lands with tests and leaves both editors working.
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 0–2 can land in any order. Phase 4 needs 0, 1 and 3. The cross-plan order is in
+Phases 0–2 can land in any order (Phase 1 is done). Phase 4 needs 0, 1 and 3. The cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 
 ## Open questions

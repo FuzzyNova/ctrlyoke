@@ -6,6 +6,7 @@ import * as path from "path";
 import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
+import { getCtrlYokeFileGlobs } from "./completions/CtrlYokeFileKind";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import {
   getCompletionCore,
@@ -44,6 +45,7 @@ import { LanguageIntelligenceHost } from "./server/lsp/LanguageIntelligenceHost"
 import { ManagedLanguageServerBackend } from "./server/lsp/ManagedLanguageServerBackend";
 import { createLanguageServerSettingsReaders } from "./server/lsp/LanguageServerSettingsAccess";
 import {
+  CTRLYOKE_FILE_KINDS,
   GIT_CHANGE_KINDS,
   HOST_KINDS,
   MESSAGE_TYPES,
@@ -674,9 +676,7 @@ export async function activate(context: vscode.ExtensionContext) {
       webviewProvider.getSecretRegistryService()
     );
     const promptFilePatterns = [
-      { pattern: "**/*.{prompt,ctrlyoke}.json" },
-      { pattern: "**/*.ctrlyoke.{yaml,yml}" },
-      { pattern: "**/*.prompt.md" },
+      ...getCtrlYokeFileGlobs().map((pattern) => ({ pattern })),
       { language: "prompt" }, // VS Code's prompt language (used by Copilot)
     ];
 
@@ -734,10 +734,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // with context-aware branching based on type: script vs. AI prompt steps.
     const promptPropertyCompletionProvider =
       new PromptPropertyCompletionProvider();
-    const yamlWorkflowPatterns = [
-      { pattern: "**/*.ctrlyoke.yaml" },
-      { pattern: "**/*.ctrlyoke.yml" },
-    ];
+    const yamlWorkflowPatterns = getCtrlYokeFileGlobs([
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+    ]).map((pattern) => ({ pattern }));
     context.subscriptions.push(
       vscode.languages.registerCompletionItemProvider(
         yamlWorkflowPatterns,

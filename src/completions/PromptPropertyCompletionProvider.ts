@@ -2,7 +2,9 @@ import * as vscode from "vscode";
 import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
 import * as fs from "fs";
 import * as path from "path";
+import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
 import {
+  CTRLYOKE_FILE_KINDS,
   STEP_TYPES,
   PROMPT_PROPERTIES,
   PROMPT_FILE_LANGUAGE_IDS,
@@ -283,8 +285,8 @@ export class PromptPropertyCompletionProvider
     if (
       document.languageId !== PROMPT_FILE_LANGUAGE_IDS.YAML &&
       document.languageId !== PROMPT_FILE_LANGUAGE_IDS.YML &&
-      !document.fileName.endsWith(".ctrlyoke.yaml") &&
-      !document.fileName.endsWith(".ctrlyoke.yml")
+      getCtrlYokeFileKind(document.fileName) !==
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
     ) {
       return undefined;
     }

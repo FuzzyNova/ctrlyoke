@@ -971,6 +971,8 @@ export const LSP_SESSION_LOOKUP_REASONS = {
   NEEDS_APPROVAL: "needs approval",
   UNTRUSTED: "untrusted",
   STOPPED: "stopped",
+  /** ctrlyoke owns workflow and prompt files; no generic language server attaches. */
+  CTRLYOKE_FILE: "ctrlyoke file",
 } as const;
 
 /** Whether a language-server request is user-visible or background work. */
@@ -3661,6 +3663,55 @@ export const PROMPT_PROPERTIES = {
   TOOL_PERMISSIONS: "toolPermissions",
   ERROR_BEHAVIOR: "errorBehavior",
 } as const;
+
+/**
+ * The kinds of ctrlyoke-authored file. `getCtrlYokeFileKind()` is the single
+ * predicate; the VS Code selectors, link provider, language-server exclusion
+ * and workspace editor all derive from it.
+ */
+export const CTRLYOKE_FILE_KINDS = {
+  WORKFLOW_YAML: "workflowYaml",
+  WORKFLOW_JSON: "workflowJson",
+  PROMPT_MARKDOWN: "promptMarkdown",
+} as const;
+export type CtrlYokeFileKind =
+  (typeof CTRLYOKE_FILE_KINDS)[keyof typeof CTRLYOKE_FILE_KINDS];
+
+/** What the cursor is on inside a ctrlyoke file (`getWorkflowLocation().role`). */
+export const WORKFLOW_LOCATION_ROLES = {
+  KEY: "key",
+  VALUE: "value",
+  /** Text sent to the AI: `prompt`, `retryPrompt`, `passRetryPrompt`, `.prompt.md` bodies. */
+  PROMPT_TEXT: "promptText",
+  /** Shell text: step and condition `script`, hook `command`. */
+  SCRIPT_TEXT: "scriptText",
+  NONE: "none",
+} as const;
+export type WorkflowLocationRole =
+  (typeof WORKFLOW_LOCATION_ROLES)[keyof typeof WORKFLOW_LOCATION_ROLES];
+
+/** Which schema object owns the key at the cursor. */
+export const WORKFLOW_OBJECT_KINDS = {
+  WORKFLOW_ROOT: "workflowRoot",
+  PROMPT_STEP: "promptStep",
+  SCRIPT_STEP: "scriptStep",
+  PARALLEL_GROUP: "parallelGroup",
+  END_CONDITION: "endCondition",
+  PRE_CONDITION: "preCondition",
+  TOOL_PERMISSIONS: "toolPermissions",
+  ERROR_BEHAVIOR: "errorBehavior",
+  HOOK: "hook",
+  WORKTREE: "worktree",
+  VARS: "vars",
+  TEMPLATE_META: "templateMeta",
+  /** Frontmatter of a `.prompt.md` file; only `schemaVersion` is meaningful. */
+  PROMPT_FILE_FRONTMATTER: "promptFileFrontmatter",
+  /** Everything after the optional frontmatter of a `.prompt.md` file. */
+  PROMPT_FILE_BODY: "promptFileBody",
+  UNKNOWN: "unknown",
+} as const;
+export type WorkflowObjectKind =
+  (typeof WORKFLOW_OBJECT_KINDS)[keyof typeof WORKFLOW_OBJECT_KINDS];
 
 /** Script-step fields copied from authored workflow files into normalized steps. */
 export const SCRIPT_STEP_COPY_FIELDS = [

@@ -1,7 +1,7 @@
 # Editor Intelligence Staging Plan
 
-**Status (2026-10-08):** Proposed. Nothing is implemented yet. This plan only orders the work.
-The design lives in the three plans it stages.
+**Status (2026-10-08):** In progress. **F1 is done**; nothing else is implemented yet. This plan
+only orders the work. The design lives in the three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
 
@@ -15,6 +15,16 @@ This plan is the authoritative order for three overlapping plans:
 The language intelligence plan these build on is already implemented
 (`dev/implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`), so nothing here waits on
 it.
+
+## Progress
+
+| Phase           | State                 | Notes                                                                                                                                                                                             |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. The deviations from plan F are in its Phase 1 entry. |
+| Everything else | Not started           |                                                                                                                                                                                                   |
+
+F1 unblocks F3 (which also needs F2), B and M4, and the workflow-file half of D2. F2, D1, M0 and M1
+never depended on it and can start now.
 
 ## Short answer
 

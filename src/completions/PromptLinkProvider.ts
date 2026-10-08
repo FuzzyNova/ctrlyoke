@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import * as path from "path";
+import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeNamedWorkspaceRoots,
@@ -342,12 +342,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
    * Check if document is a prompt file
    */
   private isPromptFile(document: vscode.TextDocument): boolean {
-    const fileName = path.basename(document.fileName);
     return (
-      fileName.endsWith(".ctrlyoke.json") ||
-      fileName.endsWith(".ctrlyoke.yaml") ||
-      fileName.endsWith(".ctrlyoke.yml") ||
-      fileName.endsWith(".prompt.md") ||
+      getCtrlYokeFileKind(document.fileName) !== null ||
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT ||
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.YAML ||

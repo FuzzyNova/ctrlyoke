@@ -14,6 +14,7 @@ import type {
   LanguageServerDescriptor,
 } from "./LanguageServerBackend";
 import { LANGUAGE_SERVER_RESOLUTION_REASONS } from "./LanguageServerBackend";
+import { getCtrlYokeFileKind } from "../../completions/CtrlYokeFileKind";
 import { LspSessionProxy } from "./LspSessionProxy";
 import type { SharedDocument } from "./LspSharedDocument";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
@@ -98,6 +99,8 @@ export class LanguageIntelligenceHost {
     origin: LanguageServerRequestOrigin
   ): Promise<LanguageServerDescriptor | undefined> {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
+    // ctrlyoke owns its workflow and prompt files (see `lookupSession`).
+    if (getCtrlYokeFileKind(viewerPath)) return undefined;
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
       this.roots,
@@ -115,6 +118,7 @@ export class LanguageIntelligenceHost {
     { descriptor: LanguageServerDescriptor; result: unknown } | undefined
   > {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return undefined;
+    if (getCtrlYokeFileKind(viewerPath)) return undefined;
     const resolution = await this.options.backend.resolveForPath(
       viewerPath,
       this.roots,
@@ -138,6 +142,7 @@ export class LanguageIntelligenceHost {
     origin: LanguageServerRequestOrigin
   ): Promise<void> {
     if (this.disposed || !this.options.isWorkspaceTrusted()) return;
+    if (getCtrlYokeFileKind(viewerPath)) return;
     const absolutePath = safeResolveWorkspacePath(viewerPath, this.roots);
     if (!absolutePath) return;
     const resolution = await this.options.backend.resolveForPath(
@@ -239,6 +244,14 @@ export class LanguageIntelligenceHost {
       return {
         session: null,
         reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER,
+      };
+    }
+    // ctrlyoke owns its workflow and prompt files; a generic YAML, JSON or
+    // Markdown server must not attach alongside ctrlyoke's own support.
+    if (getCtrlYokeFileKind(viewerPath)) {
+      return {
+        session: null,
+        reason: LANGUAGE_SERVER_RESOLUTION_REASONS.CTRLYOKE_FILE,
       };
     }
     const resolution = await this.options.backend.resolveForPath(
