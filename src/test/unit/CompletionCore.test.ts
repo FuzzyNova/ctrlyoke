@@ -15,7 +15,10 @@ import type { IndexedSymbol, SymbolIndex } from "../../completions/SymbolIndex";
 import { LspSymbolKind } from "../../completions/SymbolIndex";
 import { VsCodeSymbolIndex } from "../../platform/VsCodeSymbolIndex";
 import { RegexSymbolIndex } from "../../completions/RegexSymbolIndex";
-import { LspSymbolIndex, type LspSymbolQueryHost } from "../../completions/LspSymbolIndex";
+import {
+  LspSymbolIndex,
+  type LspSymbolQueryHost,
+} from "../../completions/LspSymbolIndex";
 import { FallbackSymbolIndex } from "../../completions/FallbackSymbolIndex";
 import type { LanguageServerCatalogEntry } from "../../server/lsp/LanguageServerCatalog";
 import { toVSCodeCompletionItem } from "../../completions/CompletionHelpers";
@@ -789,14 +792,21 @@ suite("VsCodeSymbolIndex completion golden", () => {
     const first = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-root-one-"));
     const second = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-root-two-"));
     try {
-      await fs.writeFile(path.join(second, "Widget.ts"), "export class Widget {}\n");
-      const index = new RegexSymbolIndex(first, async () => ["root2/Widget.ts"], (viewerPath) => {
-        assert.strictEqual(viewerPath, "root2/Widget.ts");
-        return {
-          absolutePath: path.join(second, "Widget.ts"),
-          workspaceRoot: second,
-        };
-      });
+      await fs.writeFile(
+        path.join(second, "Widget.ts"),
+        "export class Widget {}\n"
+      );
+      const index = new RegexSymbolIndex(
+        first,
+        async () => ["root2/Widget.ts"],
+        (viewerPath) => {
+          assert.strictEqual(viewerPath, "root2/Widget.ts");
+          return {
+            absolutePath: path.join(second, "Widget.ts"),
+            workspaceRoot: second,
+          };
+        }
+      );
       const [symbol] = await index.workspaceSymbols("Widget", 10);
       assert.strictEqual(symbol?.viewerPath, "root2/Widget.ts");
       assert.strictEqual(symbol?.name, "Widget");
@@ -898,7 +908,26 @@ suite("VsCodeSymbolIndex completion golden", () => {
 
   test("uses the shared #sym golden through LSP and regex while the server warms", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-golden-"));
-    const source = ["// fixture", "", "", "export class Widget {", "  first() {", "    return 1;", "  }", "", "  second() {", "    return 2;", "  }", "", "  third() {", "    return 3;", "  }", "", "  value = 4;", "}"].join("\n");
+    const source = [
+      "// fixture",
+      "",
+      "",
+      "export class Widget {",
+      "  first() {",
+      "    return 1;",
+      "  }",
+      "",
+      "  second() {",
+      "    return 2;",
+      "  }",
+      "",
+      "  third() {",
+      "    return 3;",
+      "  }",
+      "",
+      "  value = 4;",
+      "}",
+    ].join("\n");
     const files = ["tsconfig.json", "src/Widget.ts"];
     await fs.mkdir(path.join(root, "src"), { recursive: true });
     await fs.writeFile(path.join(root, "tsconfig.json"), "{}");
@@ -906,27 +935,59 @@ suite("VsCodeSymbolIndex completion golden", () => {
     let warm = false;
     let openedAnchor = "";
     const host: LspSymbolQueryHost = {
-      startLanguages: async () => { warm = true; },
-      openWarmupDocument: async (viewerPath) => { openedAnchor = viewerPath; },
+      startLanguages: async () => {
+        warm = true;
+      },
+      openWarmupDocument: async (viewerPath) => {
+        openedAnchor = viewerPath;
+      },
       requestForPath: async (_file, method) => ({
         descriptor: { capabilities: {} },
-        result: method === LSP_METHODS.WORKSPACE_SYMBOL ? [{ name: "Widget", kind: LspSymbolKind.Class, location: { uri: vscode.Uri.file(path.join(root, "src", "Widget.ts")).toString(), range: { start: { line: 3 }, end: { line: 17 } } } }] : [],
+        result:
+          method === LSP_METHODS.WORKSPACE_SYMBOL
+            ? [
+                {
+                  name: "Widget",
+                  kind: LspSymbolKind.Class,
+                  location: {
+                    uri: vscode.Uri.file(
+                      path.join(root, "src", "Widget.ts")
+                    ).toString(),
+                    range: { start: { line: 3 }, end: { line: 17 } },
+                  },
+                },
+              ]
+            : [],
       }),
     };
     try {
       const regex = new RegexSymbolIndex(root, async () => files);
       const lsp = new LspSymbolIndex(root, async () => files, host);
-      const symbols = new FallbackSymbolIndex(lsp, regex, (symbol) => lsp.shouldUseRegexFallback(symbol));
+      const symbols = new FallbackSymbolIndex(lsp, regex, (symbol) =>
+        lsp.shouldUseRegexFallback(symbol)
+      );
       const core = createCore({ symbols });
       const [duringStartup] = await core.getHashCompletions("Wid");
-      assert.strictEqual(duringStartup.insertText, symbolCompletionGoldenResult.insertText);
+      assert.strictEqual(
+        duringStartup.insertText,
+        symbolCompletionGoldenResult.insertText
+      );
       assert.ok(warm);
       await new Promise<void>((resolve) => setImmediate(resolve));
       assert.strictEqual(openedAnchor, "src/Widget.ts");
       const [ready] = await core.getHashCompletions("Wid");
-      assert.strictEqual(ready.insertText, symbolCompletionGoldenResult.insertText);
-      assert.strictEqual(ready.kind, symbolCompletionGoldenResult.completionKind);
-      assert.strictEqual(COMPLETION_KIND_ICONS[ready.kind], symbolCompletionGoldenResult.icon);
+      assert.strictEqual(
+        ready.insertText,
+        symbolCompletionGoldenResult.insertText
+      );
+      assert.strictEqual(
+        ready.kind,
+        symbolCompletionGoldenResult.completionKind
+      );
+      assert.strictEqual(
+        COMPLETION_KIND_ICONS[ready.kind],
+        symbolCompletionGoldenResult.icon
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -937,7 +998,10 @@ suite("VsCodeSymbolIndex completion golden", () => {
     const files = ["tsconfig.json", "src/Widget.ts"];
     await fs.mkdir(path.join(root, "src"), { recursive: true });
     await fs.writeFile(path.join(root, "tsconfig.json"), "{}");
-    await fs.writeFile(path.join(root, "src", "Widget.ts"), "export class Widget {}\n");
+    await fs.writeFile(
+      path.join(root, "src", "Widget.ts"),
+      "export class Widget {}\n"
+    );
     let starts = 0;
     let requests = 0;
     const host: LspSymbolQueryHost = {
@@ -972,11 +1036,16 @@ suite("VsCodeSymbolIndex completion golden", () => {
   });
 
   test("re-warms anchors after managed servers stop and restart", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-lifecycle-"));
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "symbol-lsp-lifecycle-")
+    );
     const files = ["tsconfig.json", "src/Widget.ts"];
     await fs.mkdir(path.join(root, "src"), { recursive: true });
     await fs.writeFile(path.join(root, "tsconfig.json"), "{}");
-    await fs.writeFile(path.join(root, "src", "Widget.ts"), "export class Widget {}\n");
+    await fs.writeFile(
+      path.join(root, "src", "Widget.ts"),
+      "export class Widget {}\n"
+    );
     let statusListener: ((event: { status: string }) => void) | undefined;
     let opens = 0;
     const catalog: LanguageServerCatalogEntry = {
@@ -995,15 +1064,26 @@ suite("VsCodeSymbolIndex completion golden", () => {
     };
     const host: LspSymbolQueryHost = {
       startLanguages: async () => undefined,
-      openWarmupDocument: async () => { opens++; },
-      requestForPath: async () => ({ descriptor: { capabilities: {} }, result: [] }),
+      openWarmupDocument: async () => {
+        opens++;
+      },
+      requestForPath: async () => ({
+        descriptor: { capabilities: {} },
+        result: [],
+      }),
       onStatusChanged: (listener) => {
         statusListener = listener;
-        return { dispose: () => { statusListener = undefined; } };
+        return {
+          dispose: () => {
+            statusListener = undefined;
+          },
+        };
       },
     };
     try {
-      const index = new LspSymbolIndex(root, async () => files, host, [catalog]);
+      const index = new LspSymbolIndex(root, async () => files, host, [
+        catalog,
+      ]);
       await index.workspaceSymbols("Widget", 10);
       await waitForCondition(() => opens === 1, "initial LSP anchor warm-up");
       assert.strictEqual(opens, 1);
@@ -1024,21 +1104,26 @@ suite("VsCodeSymbolIndex completion golden", () => {
     const host: LspSymbolQueryHost = {
       startLanguages: async () => undefined,
       openWarmupDocument: async () => undefined,
-      resolveForPath: async (viewerPath) => viewerPath.endsWith(".proto")
-        ? { id: "approved-proto", languageId: "proto", rootPath: root }
-        : undefined,
+      resolveForPath: async (viewerPath) =>
+        viewerPath.endsWith(".proto")
+          ? { id: "approved-proto", languageId: "proto", rootPath: root }
+          : undefined,
       requestForPath: async (viewerPath) => {
         requested = viewerPath;
         return {
           descriptor: { capabilities: {} },
-          result: [{
-            name: "Widget",
-            kind: LspSymbolKind.Class,
-            location: {
-              uri: vscode.Uri.file(path.join(root, "schema.proto")).toString(),
-              range: { start: { line: 0 }, end: { line: 0 } },
+          result: [
+            {
+              name: "Widget",
+              kind: LspSymbolKind.Class,
+              location: {
+                uri: vscode.Uri.file(
+                  path.join(root, "schema.proto")
+                ).toString(),
+                range: { start: { line: 0 }, end: { line: 0 } },
+              },
             },
-          }],
+          ],
         };
       },
     };
@@ -1048,7 +1133,8 @@ suite("VsCodeSymbolIndex completion golden", () => {
       let symbol: IndexedSymbol | undefined;
       for (let attempt = 0; attempt < 200 && !symbol; attempt++) {
         [symbol] = await index.workspaceSymbols("Widget", 10);
-        if (!symbol) await new Promise<void>((resolve) => setTimeout(resolve, 10));
+        if (!symbol)
+          await new Promise<void>((resolve) => setTimeout(resolve, 10));
       }
       assert.ok(symbol, "custom LSP server should serve its configured file");
       assert.strictEqual(requested, "schema.proto");
@@ -1061,10 +1147,39 @@ suite("VsCodeSymbolIndex completion golden", () => {
 
   test("fans out to detected LSP languages, resolves range-less symbols, and caps results", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-fanout-"));
-    const files = ["tsconfig.json", "pyproject.toml", "src/Widget.ts", "src/tool.py"];
+    const files = [
+      "tsconfig.json",
+      "pyproject.toml",
+      "src/Widget.ts",
+      "src/tool.py",
+    ];
     const catalog: LanguageServerCatalogEntry[] = [
-      { id: "ts", displayName: "TS", description: "", homepage: "", license: "", masonName: "", command: [], languages: ["typescript"], extensions: ["ts"], rootMarkers: ["tsconfig.json"], install: { kind: "npm", packages: [], bin: "ts" } },
-      { id: "py", displayName: "Python", description: "", homepage: "", license: "", masonName: "", command: [], languages: ["python"], extensions: ["py"], rootMarkers: ["pyproject.toml"], install: { kind: "npm", packages: [], bin: "py" } },
+      {
+        id: "ts",
+        displayName: "TS",
+        description: "",
+        homepage: "",
+        license: "",
+        masonName: "",
+        command: [],
+        languages: ["typescript"],
+        extensions: ["ts"],
+        rootMarkers: ["tsconfig.json"],
+        install: { kind: "npm", packages: [], bin: "ts" },
+      },
+      {
+        id: "py",
+        displayName: "Python",
+        description: "",
+        homepage: "",
+        license: "",
+        masonName: "",
+        command: [],
+        languages: ["python"],
+        extensions: ["py"],
+        rootMarkers: ["pyproject.toml"],
+        install: { kind: "npm", packages: [], bin: "py" },
+      },
     ];
     const calls: string[] = [];
     const host: LspSymbolQueryHost = {
@@ -1072,12 +1187,44 @@ suite("VsCodeSymbolIndex completion golden", () => {
       openWarmupDocument: async () => undefined,
       requestForPath: async (file, method, params) => {
         calls.push(`${method}:${file}`);
-        const uri = vscode.Uri.file(path.join(root, file.includes(".py") ? "src/tool.py" : "src/Widget.ts")).toString();
-        if (method === LSP_METHODS.WORKSPACE_SYMBOL_RESOLVE) return {
+        const uri = vscode.Uri.file(
+          path.join(
+            root,
+            file.includes(".py") ? "src/tool.py" : "src/Widget.ts"
+          )
+        ).toString();
+        if (method === LSP_METHODS.WORKSPACE_SYMBOL_RESOLVE)
+          return {
+            descriptor: { capabilities: {} },
+            result: {
+              ...(params as object),
+              location: {
+                uri,
+                range: { start: { line: 3 }, end: { line: 17 } },
+              },
+            },
+          };
+        return {
           descriptor: { capabilities: {} },
-          result: { ...(params as object), location: { uri, range: { start: { line: 3 }, end: { line: 17 } } } },
+          result: file.endsWith(".py")
+            ? [
+                {
+                  name: "tool",
+                  kind: LspSymbolKind.Function,
+                  location: {
+                    uri,
+                    range: { start: { line: 0 }, end: { line: 2 } },
+                  },
+                },
+              ]
+            : [
+                {
+                  name: "Widget",
+                  kind: LspSymbolKind.Class,
+                  location: { uri },
+                },
+              ],
         };
-        return { descriptor: { capabilities: {} }, result: file.endsWith(".py") ? [{ name: "tool", kind: LspSymbolKind.Function, location: { uri, range: { start: { line: 0 }, end: { line: 2 } } } }] : [{ name: "Widget", kind: LspSymbolKind.Class, location: { uri } }] };
       },
     };
     try {
@@ -1087,16 +1234,31 @@ suite("VsCodeSymbolIndex completion golden", () => {
       const symbols = await index.workspaceSymbols("W", 1);
       assert.strictEqual(symbols.length, 1);
       assert.strictEqual(symbols[0].name, "Widget");
-      assert.strictEqual(calls.filter((call) => call.startsWith(`${LSP_METHODS.WORKSPACE_SYMBOL}:`)).length, 2);
-      assert.strictEqual(calls.filter((call) => call.startsWith(`${LSP_METHODS.WORKSPACE_SYMBOL_RESOLVE}:`)).length, 1);
+      assert.strictEqual(
+        calls.filter((call) =>
+          call.startsWith(`${LSP_METHODS.WORKSPACE_SYMBOL}:`)
+        ).length,
+        2
+      );
+      assert.strictEqual(
+        calls.filter((call) =>
+          call.startsWith(`${LSP_METHODS.WORKSPACE_SYMBOL_RESOLVE}:`)
+        ).length,
+        1
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
 
   test("resolves and queries one representative for many files of a language", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "symbol-lsp-routing-"));
-    const files = Array.from({ length: 96 }, (_, index) => `src/file-${index}.proto`);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "symbol-lsp-routing-")
+    );
+    const files = Array.from(
+      { length: 96 },
+      (_, index) => `src/file-${index}.proto`
+    );
     let resolutions = 0;
     let requests = 0;
     let statusEvents = 0;
@@ -1123,12 +1285,26 @@ suite("VsCodeSymbolIndex completion golden", () => {
     try {
       const index = new LspSymbolIndex(root, async () => files, host, []);
       await index.workspaceSymbols("Widget", 10);
-      await waitForCondition(() => resolutions > 0, "initial custom server warm-up");
+      await waitForCondition(
+        () => resolutions > 0,
+        "initial custom server warm-up"
+      );
       await index.workspaceSymbols("Widget", 10);
 
-      assert.ok(resolutions <= 2, `expected O(languages × roots) resolution, got ${resolutions}`);
-      assert.strictEqual(requests, 1, "the resolved server should be queried once");
-      assert.strictEqual(statusEvents, 0, "a symbol query must not emit status events");
+      assert.ok(
+        resolutions <= 2,
+        `expected O(languages × roots) resolution, got ${resolutions}`
+      );
+      assert.strictEqual(
+        requests,
+        1,
+        "the resolved server should be queried once"
+      );
+      assert.strictEqual(
+        statusEvents,
+        0,
+        "a symbol query must not emit status events"
+      );
       assert.ok(emitStatus, "the index should subscribe to lifecycle status");
     } finally {
       await fs.rm(root, { recursive: true, force: true });

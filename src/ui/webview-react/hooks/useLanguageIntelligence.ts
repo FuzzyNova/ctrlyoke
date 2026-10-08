@@ -33,19 +33,38 @@ export function useLanguageIntelligence(
     let active = true;
     let release: (() => void) | undefined;
     const controller = new AbortController();
-    setState({ filePath, extensions: [], sessionId: null, capabilities: {}, statusHint: null });
+    setState({
+      filePath,
+      extensions: [],
+      sessionId: null,
+      capabilities: {},
+      statusHint: null,
+    });
 
     void languageIntelligenceSession(filePath, controller.signal)
       .then(({ session, reason }) => {
         if (!active) return;
         if (!session) {
-          const statusHint = ({
-            [LSP_SESSION_LOOKUP_REASONS.STOPPED]: "Language server is stopped. Restart it in Language Servers settings.",
-            [LSP_SESSION_LOOKUP_REASONS.LIMIT_REACHED]: "Language server limit reached. Close another editor or raise the running server limit.",
-            [LSP_SESSION_LOOKUP_REASONS.NEEDS_APPROVAL]: "This workspace needs approval to start its language server. Review it in Language Servers settings.",
-            [LSP_SESSION_LOOKUP_REASONS.UNTRUSTED]: "Trust this workspace to enable language intelligence.",
-          } as Record<string, string>)[reason ?? ""] ?? null;
-          setState({ filePath, extensions: [], sessionId: null, capabilities: {}, statusHint });
+          const statusHint =
+            (
+              {
+                [LSP_SESSION_LOOKUP_REASONS.STOPPED]:
+                  "Language server is stopped. Restart it in Language Servers settings.",
+                [LSP_SESSION_LOOKUP_REASONS.LIMIT_REACHED]:
+                  "Language server limit reached. Close another editor or raise the running server limit.",
+                [LSP_SESSION_LOOKUP_REASONS.NEEDS_APPROVAL]:
+                  "This workspace needs approval to start its language server. Review it in Language Servers settings.",
+                [LSP_SESSION_LOOKUP_REASONS.UNTRUSTED]:
+                  "Trust this workspace to enable language intelligence.",
+              } as Record<string, string>
+            )[reason ?? ""] ?? null;
+          setState({
+            filePath,
+            extensions: [],
+            sessionId: null,
+            capabilities: {},
+            statusHint,
+          });
           return;
         }
         const acquired = acquireLanguageIntelligenceClient(
@@ -84,5 +103,11 @@ export function useLanguageIntelligence(
 
   return state.filePath === filePath
     ? state
-    : { filePath, extensions: [], sessionId: null, capabilities: {}, statusHint: null };
+    : {
+        filePath,
+        extensions: [],
+        sessionId: null,
+        capabilities: {},
+        statusHint: null,
+      };
 }

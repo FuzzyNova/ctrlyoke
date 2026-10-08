@@ -17,7 +17,10 @@ suite("WorkspaceSearchFileWalker", () => {
       await fs.mkdir(path.join(root, "src"));
       await fs.mkdir(path.join(root, "node_modules"));
       await fs.writeFile(path.join(root, "src", "main.ts"), "source");
-      await fs.writeFile(path.join(root, "node_modules", "ignored.js"), "ignored");
+      await fs.writeFile(
+        path.join(root, "node_modules", "ignored.js"),
+        "ignored"
+      );
 
       const result = await walkSearchFiles(root, Date.now(), 10, 10_000);
       assert.deepStrictEqual(result, {
@@ -61,7 +64,10 @@ suite("WorkspaceSearchFileWalker", () => {
     try {
       await fs.mkdir(path.join(root, ".ctrlyoke", "logs"), { recursive: true });
       await fs.mkdir(path.join(root, "src"));
-      await fs.writeFile(path.join(root, ".ctrlyoke", "logs", "session.log"), "log");
+      await fs.writeFile(
+        path.join(root, ".ctrlyoke", "logs", "session.log"),
+        "log"
+      );
       await fs.writeFile(path.join(root, "src", "main.ts"), "source");
 
       const result = await walkSearchFiles(root, Date.now(), 10, 10_000);

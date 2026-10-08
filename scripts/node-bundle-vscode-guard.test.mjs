@@ -3,9 +3,9 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
-const { findNodeBundleVscodeViolations } = require(
-  "./node-bundle-vscode-guard.cjs"
-);
+const {
+  findNodeBundleVscodeViolations,
+} = require("./node-bundle-vscode-guard.cjs");
 
 test("detects VS Code packages and platform files in Node bundle metafiles", () => {
   const violations = findNodeBundleVscodeViolations({

@@ -66,7 +66,9 @@ export async function walkSearchFiles(
       if (
         entry.isDirectory() &&
         !skipDirectories.has(entry.name) &&
-        !isSearchPathIgnored(path.relative(root, path.join(directory, entry.name)))
+        !isSearchPathIgnored(
+          path.relative(root, path.join(directory, entry.name))
+        )
       ) {
         pending.push(path.join(directory, entry.name));
       } else if (entry.isFile()) {

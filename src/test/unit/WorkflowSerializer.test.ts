@@ -375,10 +375,7 @@ suite("WorkflowSerializer", () => {
         await serializer.handleBrowseTemplateFile("spec", ["**/*.md"]);
         await serializer.handleBrowseTemplateFile("spec", ["**/*.md"]);
 
-        assert.strictEqual(
-          requests[0].defaultPath,
-          normalizedWorkspaceRoot
-        );
+        assert.strictEqual(requests[0].defaultPath, normalizedWorkspaceRoot);
         assert.strictEqual(
           requests[1].defaultPath,
           path.dirname(normalizedSelectedFile)

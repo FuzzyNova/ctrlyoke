@@ -40,7 +40,7 @@ suite("EndConditionEvaluator Tests", () => {
     workspaceRoot = makeTempDir("ctrlyoke-evaluator-");
     const mockPlatform: PlatformAdapter = {
       interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
-    getWorkspaceRoot: () => workspaceRoot,
+      getWorkspaceRoot: () => workspaceRoot,
       getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
       getNamedWorkspaceRoots: () => [],
       getExtensionPath: () => "",
@@ -813,7 +813,7 @@ suite("EndConditionEvaluator Tests", () => {
       const executionEvaluator = new EndConditionEvaluator(
         {
           interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
-    getWorkspaceRoot: () => workspaceRoot,
+          getWorkspaceRoot: () => workspaceRoot,
           getWorkspaceRoots: () => [workspaceRoot],
           getNamedWorkspaceRoots: () => [],
           getExtensionPath: () => "",

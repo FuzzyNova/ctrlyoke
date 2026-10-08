@@ -5,7 +5,9 @@ export class FallbackSymbolIndex implements SymbolIndex {
   constructor(
     private readonly primary: SymbolIndex,
     private readonly fallback: SymbolIndex,
-    private readonly shouldUseFallbackForSymbol?: (symbol: IndexedSymbol) => boolean
+    private readonly shouldUseFallbackForSymbol?: (
+      symbol: IndexedSymbol
+    ) => boolean
   ) {}
 
   async workspaceSymbols(
@@ -19,15 +21,24 @@ export class FallbackSymbolIndex implements SymbolIndex {
       signal
     );
     if (symbols.length === 0) {
-      const fallback = await this.fallback.workspaceSymbols(query, maxResults, signal);
+      const fallback = await this.fallback.workspaceSymbols(
+        query,
+        maxResults,
+        signal
+      );
       return this.shouldUseFallbackForSymbol
         ? fallback.filter((symbol) => this.shouldUseFallbackForSymbol?.(symbol))
         : fallback;
     }
     if (!this.shouldUseFallbackForSymbol) return symbols;
     const keys = new Set(symbols.map(symbolKey));
-    const missing = (await this.fallback.workspaceSymbols(query, maxResults, signal))
-      .filter((symbol) => this.shouldUseFallbackForSymbol?.(symbol) && !keys.has(symbolKey(symbol)));
+    const missing = (
+      await this.fallback.workspaceSymbols(query, maxResults, signal)
+    ).filter(
+      (symbol) =>
+        this.shouldUseFallbackForSymbol?.(symbol) &&
+        !keys.has(symbolKey(symbol))
+    );
     return [...symbols, ...missing].slice(0, Math.max(0, maxResults));
   }
 
@@ -44,8 +55,13 @@ export class FallbackSymbolIndex implements SymbolIndex {
     }
     if (!this.shouldUseFallbackForSymbol) return symbols;
     const keys = new Set(symbols.map(symbolKey));
-    const missing = (await this.fallback.documentSymbols(viewerPath, signal))
-      .filter((symbol) => this.shouldUseFallbackForSymbol?.(symbol) && !keys.has(symbolKey(symbol)));
+    const missing = (
+      await this.fallback.documentSymbols(viewerPath, signal)
+    ).filter(
+      (symbol) =>
+        this.shouldUseFallbackForSymbol?.(symbol) &&
+        !keys.has(symbolKey(symbol))
+    );
     return [...symbols, ...missing];
   }
 }

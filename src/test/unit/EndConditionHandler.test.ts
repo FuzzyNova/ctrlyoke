@@ -28,8 +28,8 @@ import {
   FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
   HARNESS_IDS,
-
-  INTERACTIVE_TERMINAL_MODES,} from "../../types/DashboardConstants";
+  INTERACTIVE_TERMINAL_MODES,
+} from "../../types/DashboardConstants";
 import type { StatusMessageSeverity } from "../../types/DashboardConstants";
 import {
   parseAtReferences,

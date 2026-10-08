@@ -16,7 +16,10 @@ import { VsCodeSymbolIndex } from "../platform/VsCodeSymbolIndex";
 import { RegexSymbolIndex } from "./RegexSymbolIndex";
 import { FallbackSymbolIndex } from "./FallbackSymbolIndex";
 import { VsCodeEditorContextSource } from "../platform/VsCodeEditorContextSource";
-import { fromViewerPath, rootForViewerPath } from "../platform/WorkspaceViewerPath";
+import {
+  fromViewerPath,
+  rootForViewerPath,
+} from "../platform/WorkspaceViewerPath";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
 import { CompletionCore, type PlainCompletionItem } from "./CompletionCore";
 import {

@@ -522,7 +522,10 @@ export class WorkflowExecutor {
       SecretGrantsTrustStore,
       "getDecision"
     > = secretGrantsTrustStore,
-    private readonly dashboardHostActions?: Pick<DashboardHostActions, "focusDashboard">
+    private readonly dashboardHostActions?: Pick<
+      DashboardHostActions,
+      "focusDashboard"
+    >
   ) {
     this.scriptExecutionReporter = new ScriptExecutionReporter(
       endConditionEvaluator

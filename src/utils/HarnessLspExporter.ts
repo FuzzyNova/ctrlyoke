@@ -52,7 +52,11 @@ async function read(pathname: string): Promise<string> {
 async function write(pathname: string, text: string): Promise<void> {
   await fs.mkdir(path.dirname(pathname), { recursive: true });
   let target = pathname;
-  try { target = await fs.realpath(pathname); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  try {
+    target = await fs.realpath(pathname);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   const temp = `${target}.${process.pid}.${randomUUID()}.tmp`;
   try {
     await fs.writeFile(temp, text, "utf8");
@@ -68,18 +72,50 @@ function languageMap(
 ): Record<string, string> {
   const result: Record<string, string> = {};
   const known: Record<string, string> = {
-    ts: "typescript", tsx: "typescriptreact", js: "javascript", jsx: "javascriptreact",
-    mts: "typescript", cts: "typescript", mjs: "javascript", cjs: "javascript",
-    py: "python", pyw: "python", html: "html", htm: "html", css: "css", scss: "scss", less: "less",
-    json: "json", jsonc: "jsonc", yml: "yaml", yaml: "yaml", md: "markdown", markdown: "markdown",
-    go: "go", rs: "rust", c: "c", h: "c", cc: "cpp", cpp: "cpp", hpp: "cpp", cs: "csharp", java: "java", lua: "lua", toml: "toml",
+    ts: "typescript",
+    tsx: "typescriptreact",
+    js: "javascript",
+    jsx: "javascriptreact",
+    mts: "typescript",
+    cts: "typescript",
+    mjs: "javascript",
+    cjs: "javascript",
+    py: "python",
+    pyw: "python",
+    html: "html",
+    htm: "html",
+    css: "css",
+    scss: "scss",
+    less: "less",
+    json: "json",
+    jsonc: "jsonc",
+    yml: "yaml",
+    yaml: "yaml",
+    md: "markdown",
+    markdown: "markdown",
+    go: "go",
+    rs: "rust",
+    c: "c",
+    h: "c",
+    cc: "cpp",
+    cpp: "cpp",
+    hpp: "cpp",
+    cs: "csharp",
+    java: "java",
+    lua: "lua",
+    toml: "toml",
   };
   for (const extension of definition.extensions) {
     const normalized = extension.replace(/^\./, "");
     const mapped = catalogMap?.[normalized] ?? known[normalized];
-    const language = (mapped && definition.languages.includes(mapped) ? mapped : undefined)
-      ?? (definition.languages.length === 1 ? definition.languages[0] : undefined)
-      ?? (definition.extensions.length === definition.languages.length ? definition.languages[definition.extensions.indexOf(extension)] : undefined);
+    const language =
+      (mapped && definition.languages.includes(mapped) ? mapped : undefined) ??
+      (definition.languages.length === 1
+        ? definition.languages[0]
+        : undefined) ??
+      (definition.extensions.length === definition.languages.length
+        ? definition.languages[definition.extensions.indexOf(extension)]
+        : undefined);
     if (language) result[`.${normalized}`] = language;
   }
   return result;
@@ -168,24 +204,33 @@ export class HarnessLspExporter {
     const filePath = resolvePath(targetId, scope, this.workspaceRoot);
     let text = await read(filePath);
     const options = formatting(text);
-    const catalogMap = LANGUAGE_SERVER_CATALOG.find((entry) => entry.id === id)?.extensionToLanguage;
+    const catalogMap = LANGUAGE_SERVER_CATALOG.find(
+      (entry) => entry.id === id
+    )?.extensionToLanguage;
     if (targetId === LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE) {
       const document = parse(text) as JsonObject;
       const entries: unknown[] = Array.isArray(document.servers)
         ? document.servers.slice()
         : [];
       const entry = toEntry(targetId, definition, catalogMap);
-      const matchingIndex = entries.findIndex((item) =>
-        isObject(item) && (
-          item.name === id || (
-            Array.isArray(item.extensions) &&
-            item.extensions.length === definition.extensions.length &&
-            item.extensions.every((extension) => definition.extensions.includes(String(extension).replace(/^\./, "")))
-          )
-        )
+      const matchingIndex = entries.findIndex(
+        (item) =>
+          isObject(item) &&
+          (item.name === id ||
+            (Array.isArray(item.extensions) &&
+              item.extensions.length === definition.extensions.length &&
+              item.extensions.every((extension) =>
+                definition.extensions.includes(
+                  String(extension).replace(/^\./, "")
+                )
+              )))
       );
       if (matchingIndex < 0) entries.push(entry);
-      else entries[matchingIndex] = { ...(entries[matchingIndex] as JsonObject), ...entry };
+      else
+        entries[matchingIndex] = {
+          ...(entries[matchingIndex] as JsonObject),
+          ...entry,
+        };
       text = applyEdits(
         text,
         modify(text, ["servers"], entries, { formattingOptions: options })
@@ -206,12 +251,14 @@ export class HarnessLspExporter {
       } catch {
         existing = undefined;
       }
-      if (key && (targetId === LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE || targetId === LSP_EXPORT_TARGET_IDS.OPENCODE_USER)) {
+      if (
+        key &&
+        (targetId === LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE ||
+          targetId === LSP_EXPORT_TARGET_IDS.OPENCODE_USER)
+      ) {
         const parsed = existing as JsonObject | undefined;
         const current = parsed?.[key];
-        const servers: JsonObject = isObject(current)
-          ? { ...current }
-          : {};
+        const servers: JsonObject = isObject(current) ? { ...current } : {};
         const prior = servers[id];
         servers[id] = isObject(prior) ? { ...prior, ...entry } : entry;
         text = applyEdits(
@@ -219,13 +266,16 @@ export class HarnessLspExporter {
           modify(text, [key], servers, { formattingOptions: options })
         );
       } else {
-        const container = key && isObject((existing as JsonObject | undefined)?.[key])
-          ? ((existing as JsonObject)[key] as JsonObject)
-          : undefined;
+        const container =
+          key && isObject((existing as JsonObject | undefined)?.[key])
+            ? ((existing as JsonObject)[key] as JsonObject)
+            : undefined;
         const previous = key
           ? container?.[id]
           : (existing as JsonObject | undefined)?.[id];
-        const mergedEntry = isObject(previous) ? { ...previous, ...entry } : entry;
+        const mergedEntry = isObject(previous)
+          ? { ...previous, ...entry }
+          : entry;
         const edits = key
           ? modify(text, [key, id], mergedEntry, { formattingOptions: options })
           : modify(text, [id], mergedEntry, { formattingOptions: options });

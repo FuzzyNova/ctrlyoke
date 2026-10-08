@@ -7,7 +7,7 @@ import type { HarnessId } from "../../types/DashboardConstants";
 
 const platform: PlatformAdapter = {
   interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
-    getWorkspaceRoot: () => "",
+  getWorkspaceRoot: () => "",
   getWorkspaceRoots: () => [],
   getNamedWorkspaceRoots: () => [],
   getExtensionPath: () => "",

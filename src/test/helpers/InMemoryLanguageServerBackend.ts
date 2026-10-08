@@ -32,7 +32,11 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
     private readonly languageId = "typescript"
   ) {}
 
-  resolveForPath(_viewerPath: string, _roots: WorkspacePathContext, _origin: LanguageServerRequestOrigin): LanguageServerResolution {
+  resolveForPath(
+    _viewerPath: string,
+    _roots: WorkspacePathContext,
+    _origin: LanguageServerRequestOrigin
+  ): LanguageServerResolution {
     return {
       descriptor: {
         id: "fake-lsp",
@@ -44,7 +48,10 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
     };
   }
 
-  getConnection(_descriptor: LanguageServerDescriptor, _origin: LanguageServerRequestOrigin): MessageConnection {
+  getConnection(
+    _descriptor: LanguageServerDescriptor,
+    _origin: LanguageServerRequestOrigin
+  ): MessageConnection {
     const clientToServer = new PassThrough();
     const serverToClient = new PassThrough();
     const client = createMessageConnection(

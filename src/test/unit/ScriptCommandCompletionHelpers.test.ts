@@ -142,11 +142,7 @@ suite("ScriptCommandCompletionHelpers", () => {
       ["yarn run ", 9],
     ] as const) {
       const context = parseScriptCompletionContext(command, position);
-      const suggestions = await getCompletions(
-        root,
-        command,
-        position
-      );
+      const suggestions = await getCompletions(root, command, position);
       assert.strictEqual(context.replacementStart, position, command);
       assert.ok(
         suggestions.some((item) => item.insertText === "build"),
@@ -198,10 +194,7 @@ suite("ScriptCommandCompletionHelpers", () => {
     const factory = new TestFileWatcherFactory();
     await getCompletions(root, "npm run ", 8, factory);
     assert.strictEqual(factory.created.length, 1);
-    assert.strictEqual(
-      factory.created[0].basePath,
-      path.resolve(root)
-    );
+    assert.strictEqual(factory.created[0].basePath, path.resolve(root));
     assert.strictEqual(factory.created[0].glob, "**/package.json");
 
     await fs.writeFile(

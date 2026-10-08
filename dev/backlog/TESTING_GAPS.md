@@ -10,38 +10,38 @@ Hand this file to a fresh agent to start closing coverage gaps without needing t
 
 Ranked by uncovered statement count (biggest win first). Full report: `coverage/extension/index.html`.
 
-| File | Coverage | Uncovered / Total |
-| --- | ---: | ---: |
-| `src/core/WorkflowOrchestrator.ts` | 69.22% | 1595 / 5182 |
-| `src/core/WorkflowInstance.ts` | 71.24% | 1594 / 5544 |
-| `src/ui/CtrlYokeWebviewProvider.ts` | 0% | 1429 / 1429 |
-| `src/server/CtrlYokeHostedServer.ts` | 54.13% | 1291 / 2815 |
-| `src/ui/WebviewMessageRouter.ts` | 61.39% | 1076 / 2787 |
-| `src/ui/PromptEditorSupportService.ts` | 41.38% | 874 / 1491 |
-| `src/dev/DevCommands.ts` | 0% | 698 / 698 |
-| `src/scripts/ctrlyoke-opencode-plugin.ts` | 0% | 649 / 649 |
-| `src/core/WorkflowExecutor.ts` | 90.59% | 522 / 5548 |
-| `src/ui/WorkflowSerializer.ts` | 73.43% | 455 / 1713 |
-| `src/core/orchestration/WorktreeManager.ts` | 86.93% | 443 / 3392 |
-| `src/git/CommitMessageGenerator.ts` | 45.01% | 436 / 793 |
-| `src/core/harness/codex/CodexLogParser.ts` | 75.53% | 427 / 1745 |
-| `src/core/harness/CliIntegration.ts` | 80.85% | 427 / 2230 |
-| `src/core/harness/copilot/CopilotLogParser.ts` | 76.71% | 424 / 1821 |
-| `src/core/orchestration/ExternalRunWatchCoordinator.ts` | 63.49% | 418 / 1145 |
-| `src/server/HostedWorkspaceViewerService.ts` | 87.03% | 412 / 3179 |
-| `src/cli/CliTerminalFormatter.ts` | 79.33% | 385 / 1863 |
-| `src/core/harness/copilot/CopilotCliProvider.ts` | 73.38% | 366 / 1375 |
-| `src/ui/DashboardBroadcastHub.ts` | 32.95% | 358 / 534 |
-| `src/ui/PostMessageDashboardSink.ts` | 31.08% | 357 / 518 |
-| `src/utils/ModelRegistry.ts` | 35.88% | 343 / 535 |
-| `src/ui/WebviewSettingsSync.ts` | 80.8% | 343 / 1787 |
-| `src/utils/WorkspaceSnapshotService.ts` | 76.45% | 324 / 1376 |
-| `src/core/harness/qwen/QwenLogParser.ts` | 75.43% | 309 / 1258 |
-| `src/utils/McpDiscoveryUtils.ts` | 70.58% | 308 / 1047 |
-| `src/core/harness/opencode/OpenCodeLogParser.ts` | 65.56% | 291 / 845 |
-| `src/ui/WorkflowStepHandlers.ts` | 62.9% | 283 / 763 |
-| `src/core/harness/shared/CliExecutionRunner.ts` | 75.82% | 255 / 1055 |
-| `src/core/orchestration/WorkflowStartupPipeline.ts` | 81.57% | 253 / 1373 |
+| File                                                    | Coverage | Uncovered / Total |
+| ------------------------------------------------------- | -------: | ----------------: |
+| `src/core/WorkflowOrchestrator.ts`                      |   69.22% |       1595 / 5182 |
+| `src/core/WorkflowInstance.ts`                          |   71.24% |       1594 / 5544 |
+| `src/ui/CtrlYokeWebviewProvider.ts`                     |       0% |       1429 / 1429 |
+| `src/server/CtrlYokeHostedServer.ts`                    |   54.13% |       1291 / 2815 |
+| `src/ui/WebviewMessageRouter.ts`                        |   61.39% |       1076 / 2787 |
+| `src/ui/PromptEditorSupportService.ts`                  |   41.38% |        874 / 1491 |
+| `src/dev/DevCommands.ts`                                |       0% |         698 / 698 |
+| `src/scripts/ctrlyoke-opencode-plugin.ts`               |       0% |         649 / 649 |
+| `src/core/WorkflowExecutor.ts`                          |   90.59% |        522 / 5548 |
+| `src/ui/WorkflowSerializer.ts`                          |   73.43% |        455 / 1713 |
+| `src/core/orchestration/WorktreeManager.ts`             |   86.93% |        443 / 3392 |
+| `src/git/CommitMessageGenerator.ts`                     |   45.01% |         436 / 793 |
+| `src/core/harness/codex/CodexLogParser.ts`              |   75.53% |        427 / 1745 |
+| `src/core/harness/CliIntegration.ts`                    |   80.85% |        427 / 2230 |
+| `src/core/harness/copilot/CopilotLogParser.ts`          |   76.71% |        424 / 1821 |
+| `src/core/orchestration/ExternalRunWatchCoordinator.ts` |   63.49% |        418 / 1145 |
+| `src/server/HostedWorkspaceViewerService.ts`            |   87.03% |        412 / 3179 |
+| `src/cli/CliTerminalFormatter.ts`                       |   79.33% |        385 / 1863 |
+| `src/core/harness/copilot/CopilotCliProvider.ts`        |   73.38% |        366 / 1375 |
+| `src/ui/DashboardBroadcastHub.ts`                       |   32.95% |         358 / 534 |
+| `src/ui/PostMessageDashboardSink.ts`                    |   31.08% |         357 / 518 |
+| `src/utils/ModelRegistry.ts`                            |   35.88% |         343 / 535 |
+| `src/ui/WebviewSettingsSync.ts`                         |    80.8% |        343 / 1787 |
+| `src/utils/WorkspaceSnapshotService.ts`                 |   76.45% |        324 / 1376 |
+| `src/core/harness/qwen/QwenLogParser.ts`                |   75.43% |        309 / 1258 |
+| `src/utils/McpDiscoveryUtils.ts`                        |   70.58% |        308 / 1047 |
+| `src/core/harness/opencode/OpenCodeLogParser.ts`        |   65.56% |         291 / 845 |
+| `src/ui/WorkflowStepHandlers.ts`                        |    62.9% |         283 / 763 |
+| `src/core/harness/shared/CliExecutionRunner.ts`         |   75.82% |        255 / 1055 |
+| `src/core/orchestration/WorkflowStartupPipeline.ts`     |   81.57% |        253 / 1373 |
 
 _330 more file(s) below 100% not shown — see the HTML report._
 
@@ -51,37 +51,37 @@ _330 more file(s) below 100% not shown — see the HTML report._
 
 Ranked by uncovered statement count (biggest win first). Full report: `src/ui/webview-react/coverage/index.html`.
 
-| File | Coverage | Uncovered / Total |
-| --- | ---: | ---: |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | 59.65% | 376 / 932 |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | 68.22% | 333 / 1048 |
-| `src/ui/webview-react/components/output/TerminalInstance.tsx` | 1.3% | 303 / 307 |
-| `src/ui/webview-react/components/workspace-viewer/WorkspaceSourceControlPane.tsx` | 0.46% | 216 / 217 |
-| `src/ui/webview-react/components/settings/McpManagerSection.tsx` | 61.25% | 167 / 431 |
-| `src/ui/webview-react/hooks/useOutputVirtualization.ts` | 65.53% | 152 / 441 |
-| `src/ui/webview-react/components/settings/TerminalControlBarEditor.tsx` | 49.12% | 146 / 287 |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | 71.45% | 145 / 508 |
-| `src/ui/webview-react/components/output/MarkdownText.tsx` | 71.72% | 123 / 435 |
-| `src/ui/webview-react/utils/browserNotifications.ts` | 0.81% | 122 / 123 |
-| `src/ui/webview-react/components/output/OutputRow.tsx` | 71.11% | 117 / 405 |
-| `src/ui/webview-react/hooks/useOutputScrollSeek.ts` | 33.33% | 116 / 174 |
-| `src/ui/webview-react/hooks/useDesktopLayout.ts` | 54.85% | 107 / 237 |
-| `src/ui/webview-react/components/editor/PromptEditor.tsx` | 75.35% | 105 / 426 |
-| `src/ui/webview-react/components/output/OutputMinimap.tsx` | 46.66% | 96 / 180 |
-| `src/ui/webview-react/components/output/TerminalView.tsx` | 49.45% | 92 / 182 |
-| `src/ui/webview-react/components/workflow/TemplateModal.tsx` | 55.82% | 91 / 206 |
-| `src/ui/webview-react/utils/outputRows.ts` | 85.86% | 91 / 644 |
-| `src/ui/webview-react/hooks/useOutputRowsModel.ts` | 56.79% | 89 / 206 |
-| `src/ui/webview-react/hooks/useIosVisualViewportRootStyle.ts` | 7.36% | 88 / 95 |
-| `src/ui/webview-react/store/editorStore.ts` | 79.76% | 87 / 430 |
-| `src/ui/webview-react/components/shared/UndoRedoControl.tsx` | 64.31% | 86 / 241 |
-| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx` | 85.15% | 84 / 566 |
-| `src/ui/webview-react/store/workflowStore.ts` | 79.45% | 83 / 404 |
-| `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx` | 66.66% | 82 / 246 |
-| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx` | 85.79% | 78 / 549 |
-| `src/ui/webview-react/components/settings/ServerSection.tsx` | 60.93% | 75 / 192 |
-| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | 85.48% | 72 / 496 |
-| `src/ui/webview-react/utils/markdownExport.ts` | 67.77% | 68 / 211 |
-| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` | 69.52% | 64 / 210 |
+| File                                                                              | Coverage | Uncovered / Total |
+| --------------------------------------------------------------------------------- | -------: | ----------------: |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                     |   59.65% |         376 / 932 |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`                                 |   68.22% |        333 / 1048 |
+| `src/ui/webview-react/components/output/TerminalInstance.tsx`                     |     1.3% |         303 / 307 |
+| `src/ui/webview-react/components/workspace-viewer/WorkspaceSourceControlPane.tsx` |    0.46% |         216 / 217 |
+| `src/ui/webview-react/components/settings/McpManagerSection.tsx`                  |   61.25% |         167 / 431 |
+| `src/ui/webview-react/hooks/useOutputVirtualization.ts`                           |   65.53% |         152 / 441 |
+| `src/ui/webview-react/components/settings/TerminalControlBarEditor.tsx`           |   49.12% |         146 / 287 |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`                        |   71.45% |         145 / 508 |
+| `src/ui/webview-react/components/output/MarkdownText.tsx`                         |   71.72% |         123 / 435 |
+| `src/ui/webview-react/utils/browserNotifications.ts`                              |    0.81% |         122 / 123 |
+| `src/ui/webview-react/components/output/OutputRow.tsx`                            |   71.11% |         117 / 405 |
+| `src/ui/webview-react/hooks/useOutputScrollSeek.ts`                               |   33.33% |         116 / 174 |
+| `src/ui/webview-react/hooks/useDesktopLayout.ts`                                  |   54.85% |         107 / 237 |
+| `src/ui/webview-react/components/editor/PromptEditor.tsx`                         |   75.35% |         105 / 426 |
+| `src/ui/webview-react/components/output/OutputMinimap.tsx`                        |   46.66% |          96 / 180 |
+| `src/ui/webview-react/components/output/TerminalView.tsx`                         |   49.45% |          92 / 182 |
+| `src/ui/webview-react/components/workflow/TemplateModal.tsx`                      |   55.82% |          91 / 206 |
+| `src/ui/webview-react/utils/outputRows.ts`                                        |   85.86% |          91 / 644 |
+| `src/ui/webview-react/hooks/useOutputRowsModel.ts`                                |   56.79% |          89 / 206 |
+| `src/ui/webview-react/hooks/useIosVisualViewportRootStyle.ts`                     |    7.36% |           88 / 95 |
+| `src/ui/webview-react/store/editorStore.ts`                                       |   79.76% |          87 / 430 |
+| `src/ui/webview-react/components/shared/UndoRedoControl.tsx`                      |   64.31% |          86 / 241 |
+| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`                     |   85.15% |          84 / 566 |
+| `src/ui/webview-react/store/workflowStore.ts`                                     |   79.45% |          83 / 404 |
+| `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx`        |   66.66% |          82 / 246 |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`                   |   85.79% |          78 / 549 |
+| `src/ui/webview-react/components/settings/ServerSection.tsx`                      |   60.93% |          75 / 192 |
+| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`              |   85.48% |          72 / 496 |
+| `src/ui/webview-react/utils/markdownExport.ts`                                    |   67.77% |          68 / 211 |
+| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`                     |   69.52% |          64 / 210 |
 
 _209 more file(s) below 100% not shown — see the HTML report._

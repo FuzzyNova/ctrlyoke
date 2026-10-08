@@ -355,7 +355,9 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     );
     const initialized = this.servers.get(key);
     if (!initialized?.initialized || this.userStoppedServers.has(descriptor.id))
-      throw new Error(`Language server ${descriptor.id} stopped during startup.`);
+      throw new Error(
+        `Language server ${descriptor.id} stopped during startup.`
+      );
     (descriptor as { capabilities: Record<string, unknown> }).capabilities =
       initialized.descriptor.capabilities;
     return connection;
@@ -388,12 +390,16 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       );
       const server = this.servers.get(key);
       if (this.disposed) {
-        if (server) await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
+        if (server)
+          await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
         throw new Error("Language server backend is disposed.");
       }
       if (this.userStoppedServers.has(resolved.id) || !server?.initialized) {
-        if (server) await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
-        throw new Error(`Language server ${resolved.id} stopped during startup.`);
+        if (server)
+          await this.stopServer(server, LANGUAGE_SERVER_STATUSES.STOPPED);
+        throw new Error(
+          `Language server ${resolved.id} stopped during startup.`
+        );
       }
       return connection;
     });
@@ -504,7 +510,10 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     const extension = this.extensionForServer(id);
     if (!extension) throw new Error(`Language server ${id} is not configured.`);
     const resolution = await this.resolveForPath(
-      path.join(this.options.workspaceRoot, `__ctrlyoke_restart__.${extension}`),
+      path.join(
+        this.options.workspaceRoot,
+        `__ctrlyoke_restart__.${extension}`
+      ),
       this.roots,
       LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
     );
@@ -989,7 +998,9 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
         (initialized as { capabilities?: Record<string, unknown> })
           .capabilities ?? {};
       if (this.userStoppedServers.has(resolved.id))
-        throw new Error(`Language server ${resolved.id} was stopped during startup.`);
+        throw new Error(
+          `Language server ${resolved.id} was stopped during startup.`
+        );
       (
         server.descriptor as { capabilities: Record<string, unknown> }
       ).capabilities = caps;
@@ -997,7 +1008,10 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
       try {
         await connection.sendNotification(LSP_METHODS.INITIALIZED, {});
       } catch (error) {
-        Log.warn("[LanguageServerBackend] Could not notify server that initialization completed:", error);
+        Log.warn(
+          "[LanguageServerBackend] Could not notify server that initialization completed:",
+          error
+        );
       }
       this.emitStatus({
         id: resolved.id,
@@ -1141,8 +1155,7 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
     this.restartTimers.delete(server.key);
     this.restartCounts.delete(server.key);
     const ownsServer = this.servers.get(server.key) === server;
-    if (ownsServer)
-      this.servers.delete(server.key);
+    if (ownsServer) this.servers.delete(server.key);
     // The host invalidates browser proxies while the connection is still
     // alive, so their didClose notifications cannot hit a disposed transport.
     if (ownsServer)

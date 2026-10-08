@@ -28,16 +28,22 @@ export class FileKeyValueStore implements KeyValueStore {
     else this.values[key] = value;
 
     const contents = `${JSON.stringify(this.values, null, 2)}\n`;
-    this.pendingWrite = this.pendingWrite.catch(() => undefined).then(async () => {
-      await fs.promises.mkdir(path.dirname(this.filePath), { recursive: true });
-      await writeFileAtomic(this.filePath, contents);
-    });
+    this.pendingWrite = this.pendingWrite
+      .catch(() => undefined)
+      .then(async () => {
+        await fs.promises.mkdir(path.dirname(this.filePath), {
+          recursive: true,
+        });
+        await writeFileAtomic(this.filePath, contents);
+      });
     return this.pendingWrite;
   }
 
   private readValues(): Record<string, unknown> {
     try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(this.filePath, "utf8"));
+      const parsed: unknown = JSON.parse(
+        fs.readFileSync(this.filePath, "utf8")
+      );
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error(`Expected an object in ${this.filePath}`);
       }

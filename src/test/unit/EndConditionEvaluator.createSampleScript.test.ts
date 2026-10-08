@@ -24,7 +24,7 @@ suite("EndConditionEvaluator.createSampleScript", () => {
     );
     const platform: PlatformAdapter = {
       interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
-    getWorkspaceRoot: () => workspaceRoot,
+      getWorkspaceRoot: () => workspaceRoot,
       getWorkspaceRoots: () => [workspaceRoot],
       getNamedWorkspaceRoots: () => [],
       getExtensionPath: () => path.resolve(__dirname, "../../.."),

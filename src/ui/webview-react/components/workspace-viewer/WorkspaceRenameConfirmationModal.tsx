@@ -32,7 +32,8 @@ export function WorkspaceRenameConfirmationModal() {
       }
     >
       <p className="text-sm text-foreground">
-        This rename will update {request.fileCount} unopened {request.fileCount === 1 ? "file" : "files"} on disk. Continue?
+        This rename will update {request.fileCount} unopened{" "}
+        {request.fileCount === 1 ? "file" : "files"} on disk. Continue?
       </p>
     </Modal>
   );

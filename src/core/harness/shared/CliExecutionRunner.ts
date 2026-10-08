@@ -678,14 +678,15 @@ export class CliExecutionRunner {
       // Capture context for potential inject-mode follow-up prompts. A
       // standalone TUI is ended after every turn, so it leaves nothing to
       // inject into.
-      const injectContext: InteractiveInjectContext | undefined = usesInheritedStdio
-        ? undefined
-        : {
-            logPath: discovery.logPath,
-            sessionId: discovery.sessionId,
-            spawnedWith: session.resolvedProperties,
-            spawnedWithSessionId: session.resolvedSessionId,
-          };
+      const injectContext: InteractiveInjectContext | undefined =
+        usesInheritedStdio
+          ? undefined
+          : {
+              logPath: discovery.logPath,
+              sessionId: discovery.sessionId,
+              spawnedWith: session.resolvedProperties,
+              spawnedWithSessionId: session.resolvedSessionId,
+            };
       this.lastInteractiveContext = injectContext;
 
       await this.persistResolvedSessionId(

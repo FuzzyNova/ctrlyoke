@@ -212,7 +212,7 @@ async function resolveDefinition(
   if (!foundPath) return undefined;
 
   const workspaceSettings = options.approvedWorkspaceDefinitionIds.has(id)
-    ? options.workspaceSettings.languageServers.settings[id] ?? {}
+    ? (options.workspaceSettings.languageServers.settings[id] ?? {})
     : stripUnapprovedWorkspaceOptions(
         id,
         options.workspaceSettings.languageServers.settings[id] ?? {}

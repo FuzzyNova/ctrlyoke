@@ -7,7 +7,9 @@ suite("WorkflowCommandHandler", () => {
     let focused = false;
     const actions = {
       openWorkspaceTarget: async () => ({ status: "unsupported" as const }),
-      focusDashboard: () => { focused = true; },
+      focusDashboard: () => {
+        focused = true;
+      },
     };
     await new WorkflowCommandHandler(actions).openPanel();
     assert.strictEqual(focused, true);

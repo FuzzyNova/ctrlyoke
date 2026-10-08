@@ -67,7 +67,6 @@ export interface PlatformAdapter {
    * CLI: directory of the main entry file (or process.cwd())
    */
   getExtensionPath(): string;
-
 }
 
 /**

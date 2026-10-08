@@ -884,7 +884,9 @@ suite("WebviewSettingsSync", () => {
 
       await sync.sendInitialState();
 
-      const init = messages.find((message) => message.type === MESSAGE_TYPES.INIT);
+      const init = messages.find(
+        (message) => message.type === MESSAGE_TYPES.INIT
+      );
       assert.deepStrictEqual(init.data.hostCapabilities, []);
     });
 
@@ -905,7 +907,9 @@ suite("WebviewSettingsSync", () => {
 
       await sync.sendInitialState();
 
-      const init = messages.find((message) => message.type === MESSAGE_TYPES.INIT);
+      const init = messages.find(
+        (message) => message.type === MESSAGE_TYPES.INIT
+      );
       assert.deepStrictEqual(
         init.data.hostCapabilities,
         Object.values(DASHBOARD_HOST_CAPABILITIES)

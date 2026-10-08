@@ -9,10 +9,16 @@ function findNodeBundleVscodeViolations(metafile) {
     if (/node_modules[\\/]vscode([\\/]|$)/i.test(input)) {
       violations.add(input);
     }
-    if (/node_modules[\\/]@vscode[\\/]extension-telemetry([\\/]|$)/i.test(input)) {
+    if (
+      /node_modules[\\/]@vscode[\\/]extension-telemetry([\\/]|$)/i.test(input)
+    ) {
       violations.add(input);
     }
-    if (/(^|[\\/])src[\\/]platform[\\/]VsCode[^\\/]*\.(?:[cm]?js|tsx?)$/i.test(input)) {
+    if (
+      /(^|[\\/])src[\\/]platform[\\/]VsCode[^\\/]*\.(?:[cm]?js|tsx?)$/i.test(
+        input
+      )
+    ) {
       violations.add(input);
     }
   }
@@ -47,4 +53,7 @@ function nodeBundleVscodeGuardPlugin(bundleName) {
   };
 }
 
-module.exports = { findNodeBundleVscodeViolations, nodeBundleVscodeGuardPlugin };
+module.exports = {
+  findNodeBundleVscodeViolations,
+  nodeBundleVscodeGuardPlugin,
+};

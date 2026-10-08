@@ -278,9 +278,7 @@ export class WorkflowSerializer {
 
     return analyzeWorkflowBundle(cleanWorkflow, {
       workspaceRoot,
-      trustedRoots: workspaceRoot
-        ? [...this.getTrustedRoots()]
-        : undefined,
+      trustedRoots: workspaceRoot ? [...this.getTrustedRoots()] : undefined,
       approvedExternalRoots: workspaceRoot
         ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
             ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
@@ -1137,7 +1135,9 @@ export class WorkflowSerializer {
       return;
     }
     const selectedPath = await selectPath({
-      kind: selectFolder ? PATH_SELECTION_KINDS.FOLDER : PATH_SELECTION_KINDS.FILE,
+      kind: selectFolder
+        ? PATH_SELECTION_KINDS.FOLDER
+        : PATH_SELECTION_KINDS.FILE,
       title: selectFolder
         ? `Select folder for {${variable}}`
         : `Select file for {${variable}}`,

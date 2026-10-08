@@ -320,7 +320,9 @@ export class WebviewMessageRouter {
       this.hostDependencies.actions
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
-    this.languageServerManager = new LanguageServerManagerService(() => this.getWorkspaceRoot());
+    this.languageServerManager = new LanguageServerManagerService(() =>
+      this.getWorkspaceRoot()
+    );
     this.terminalHandlers = new TerminalMessageHandlers(() =>
       this.getOrchestrator()?.getUserFeedbackSink()
     );
@@ -1418,16 +1420,48 @@ export class WebviewMessageRouter {
   }
 
   private registerLanguageServerManager(table: DispatchTable): void {
-    table.set(MESSAGE_TYPES.REQUEST_LSP_SERVERS, async (_message, ctx) => this.languageServerManager.handleRequestServers(ctx));
-    table.set(MESSAGE_TYPES.CLOSE_LSP_MANAGER, async (_message, ctx) => this.languageServerManager.closeManager(ctx.clientId));
-    table.set(MESSAGE_TYPES.REQUEST_LSP_LOCAL_SCAN, async (message, ctx) => this.languageServerManager.handleRequestLocalScan(ctx, message));
-    table.set(MESSAGE_TYPES.EXPORT_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleExport(ctx, message));
-    table.set(MESSAGE_TYPES.SAVE_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleSave(ctx, message as SaveLspDefinitionMessage));
-    table.set(MESSAGE_TYPES.DELETE_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleDelete(ctx, message as DeleteLspDefinitionMessage));
-    table.set(MESSAGE_TYPES.INSTALL_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleInstall(ctx, message as InstallLspServerMessage));
-    table.set(MESSAGE_TYPES.RESTART_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleRestart(ctx, message as RestartLspServerMessage));
-    table.set(MESSAGE_TYPES.REQUEST_LSP_APPROVAL, async (_message, ctx) => this.languageServerManager.handleRequestApproval(ctx));
-    table.set(MESSAGE_TYPES.STOP_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleStop(ctx, String(message.id ?? "")));
+    table.set(MESSAGE_TYPES.REQUEST_LSP_SERVERS, async (_message, ctx) =>
+      this.languageServerManager.handleRequestServers(ctx)
+    );
+    table.set(MESSAGE_TYPES.CLOSE_LSP_MANAGER, async (_message, ctx) =>
+      this.languageServerManager.closeManager(ctx.clientId)
+    );
+    table.set(MESSAGE_TYPES.REQUEST_LSP_LOCAL_SCAN, async (message, ctx) =>
+      this.languageServerManager.handleRequestLocalScan(ctx, message)
+    );
+    table.set(MESSAGE_TYPES.EXPORT_LSP_DEFINITION, async (message, ctx) =>
+      this.languageServerManager.handleExport(ctx, message)
+    );
+    table.set(MESSAGE_TYPES.SAVE_LSP_DEFINITION, async (message, ctx) =>
+      this.languageServerManager.handleSave(
+        ctx,
+        message as SaveLspDefinitionMessage
+      )
+    );
+    table.set(MESSAGE_TYPES.DELETE_LSP_DEFINITION, async (message, ctx) =>
+      this.languageServerManager.handleDelete(
+        ctx,
+        message as DeleteLspDefinitionMessage
+      )
+    );
+    table.set(MESSAGE_TYPES.INSTALL_LSP_SERVER, async (message, ctx) =>
+      this.languageServerManager.handleInstall(
+        ctx,
+        message as InstallLspServerMessage
+      )
+    );
+    table.set(MESSAGE_TYPES.RESTART_LSP_SERVER, async (message, ctx) =>
+      this.languageServerManager.handleRestart(
+        ctx,
+        message as RestartLspServerMessage
+      )
+    );
+    table.set(MESSAGE_TYPES.REQUEST_LSP_APPROVAL, async (_message, ctx) =>
+      this.languageServerManager.handleRequestApproval(ctx)
+    );
+    table.set(MESSAGE_TYPES.STOP_LSP_SERVER, async (message, ctx) =>
+      this.languageServerManager.handleStop(ctx, String(message.id ?? ""))
+    );
   }
 
   private registerSecretRegistry(table: DispatchTable): void {

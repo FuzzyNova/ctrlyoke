@@ -30,11 +30,22 @@ export function getCclspConfigPaths(root: string): string[] {
   const configured = process.env.CCLSP_CONFIG_PATH?.trim();
   return [
     path.join(root, "cclsp.json"),
-    ...(configured ? [path.isAbsolute(configured) ? configured : path.resolve(root, configured)] : []),
+    ...(configured
+      ? [
+          path.isAbsolute(configured)
+            ? configured
+            : path.resolve(root, configured),
+        ]
+      : []),
   ];
 }
 
 /** Claude Code records concrete plugin install directories in this manifest. */
 export function getClaudeInstalledPluginsManifestPath(): string {
-  return path.join(os.homedir(), ".claude", "plugins", "installed_plugins.json");
+  return path.join(
+    os.homedir(),
+    ".claude",
+    "plugins",
+    "installed_plugins.json"
+  );
 }

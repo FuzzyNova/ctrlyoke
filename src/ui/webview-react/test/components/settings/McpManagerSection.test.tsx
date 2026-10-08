@@ -112,13 +112,17 @@ describe("McpManagerSection", () => {
 
   it("hides the VS Code MCP gallery action when the host does not advertise it", () => {
     renderSection([]);
-    expect(screen.queryByRole("button", { name: "VS Code MCP" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "VS Code MCP" })
+    ).not.toBeInTheDocument();
   });
 
   it("shows the VS Code MCP gallery action when the host advertises it", () => {
     useUiStore.setState({ hostCapabilities: ["browseMcpGallery"] });
     renderSection([]);
-    expect(screen.getByRole("button", { name: "VS Code MCP" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "VS Code MCP" })
+    ).toBeInTheDocument();
   });
 
   it("saves only selected servers to the ctrlyoke registry", async () => {

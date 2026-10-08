@@ -52,5 +52,4 @@ export class VsCodeAdapter implements PlatformAdapter {
   getExtensionPath(): string {
     return this.context.extensionPath;
   }
-
 }

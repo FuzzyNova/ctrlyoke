@@ -20,7 +20,11 @@ import {
 
 export interface LspSymbolQueryHost {
   startLanguages(languageIds: readonly string[]): Promise<void>;
-  openWarmupDocument(viewerPath: string, languageId: string, origin: LanguageServerRequestOrigin): Promise<void>;
+  openWarmupDocument(
+    viewerPath: string,
+    languageId: string,
+    origin: LanguageServerRequestOrigin
+  ): Promise<void>;
   requestForPath(
     viewerPath: string,
     method: string,
@@ -30,7 +34,10 @@ export interface LspSymbolQueryHost {
     | { descriptor: { capabilities: Record<string, unknown> }; result: unknown }
     | undefined
   >;
-  resolveForPath?(viewerPath: string, origin: LanguageServerRequestOrigin): Promise<
+  resolveForPath?(
+    viewerPath: string,
+    origin: LanguageServerRequestOrigin
+  ): Promise<
     | {
         id: string;
         languageId: string;
@@ -105,7 +112,10 @@ export class LspSymbolIndex implements SymbolIndex {
     for (const file of this.getRouteRepresentatives(files)) {
       if (signal?.aborted) break;
       const entry = this.entryForFile(file);
-        const descriptor = await this.host.resolveForPath?.(file, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
+      const descriptor = await this.host.resolveForPath?.(
+        file,
+        LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
+      );
       if (this.host.resolveForPath && !descriptor) continue;
       const key = descriptor
         ? `${descriptor.id}\n${path.resolve(descriptor.rootPath)}`
@@ -244,13 +254,20 @@ export class LspSymbolIndex implements SymbolIndex {
     if (this.host.resolveForPath) {
       const seen = new Set<string>();
       for (const file of this.getRouteRepresentatives(files)) {
-        const descriptor = await this.host.resolveForPath(file, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
+        const descriptor = await this.host.resolveForPath(
+          file,
+          LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
+        );
         if (!descriptor) continue;
         const key = `${descriptor.id}\n${path.resolve(descriptor.rootPath)}`;
         if (seen.has(key)) continue;
         seen.add(key);
         try {
-          await this.host.openWarmupDocument(file, descriptor.languageId, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
+          await this.host.openWarmupDocument(
+            file,
+            descriptor.languageId,
+            LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
+          );
         } catch {
           /* unavailable or deleted custom-server anchors retain regex fallback */
         }
@@ -270,12 +287,15 @@ export class LspSymbolIndex implements SymbolIndex {
       const entry = this.entryForFile(file);
       if (entry) {
         const basename = path.posix.basename(file).toLowerCase();
-        const extension = entry.extensions.find((candidate) =>
-          basename === candidate.toLowerCase() ||
-          basename.endsWith(`.${candidate.toLowerCase()}`)
-        )?.toLowerCase();
+        const extension = entry.extensions
+          .find(
+            (candidate) =>
+              basename === candidate.toLowerCase() ||
+              basename.endsWith(`.${candidate.toLowerCase()}`)
+          )
+          ?.toLowerCase();
         const language = extension
-          ? entry.extensionToLanguage?.[extension] ?? entry.languages[0]
+          ? (entry.extensionToLanguage?.[extension] ?? entry.languages[0])
           : undefined;
         if (language) {
           const key = `${entry.id}\n${language}`;
@@ -293,23 +313,30 @@ export class LspSymbolIndex implements SymbolIndex {
     for (const entry of this.catalog) {
       const markerDirectories = new Set(
         files
-          .filter((file) => entry.rootMarkers.some((marker) => {
-            const basename = path.posix.basename(file).toLowerCase();
-            const normalizedMarker = marker.toLowerCase();
-            return normalizedMarker.startsWith("*.")
-              ? basename.endsWith(normalizedMarker.slice(1))
-              : basename === normalizedMarker;
-          }))
+          .filter((file) =>
+            entry.rootMarkers.some((marker) => {
+              const basename = path.posix.basename(file).toLowerCase();
+              const normalizedMarker = marker.toLowerCase();
+              return normalizedMarker.startsWith("*.")
+                ? basename.endsWith(normalizedMarker.slice(1))
+                : basename === normalizedMarker;
+            })
+          )
           .map((file) => path.posix.dirname(file))
       );
-      const roots = markerDirectories.size ? [...markerDirectories] : [undefined];
+      const roots = markerDirectories.size
+        ? [...markerDirectories]
+        : [undefined];
       for (const language of entry.languages) {
         for (const root of roots) {
           const candidates = languageFiles.get(`${entry.id}\n${language}`);
           const representative = candidates?.find((candidate) => {
             if (!root) return true;
             const relative = path.posix.relative(root, candidate);
-            return relative === "" || (!relative.startsWith("../") && relative !== "..");
+            return (
+              relative === "" ||
+              (!relative.startsWith("../") && relative !== "..")
+            );
           });
           if (representative) representatives.add(representative);
         }

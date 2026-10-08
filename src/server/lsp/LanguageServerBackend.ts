@@ -58,7 +58,10 @@ export class EmptyLanguageServerBackend implements LanguageServerBackend {
     return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
   }
 
-  getConnection(_descriptor: LanguageServerDescriptor, _origin: LanguageServerRequestOrigin): never {
+  getConnection(
+    _descriptor: LanguageServerDescriptor,
+    _origin: LanguageServerRequestOrigin
+  ): never {
     throw new Error("No language server is configured.");
   }
 }

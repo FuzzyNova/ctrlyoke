@@ -182,24 +182,71 @@ suite("HarnessLspExporter", () => {
   test("merges existing config keys and enables opencode built-ins when lsp is true", async () => {
     const filePath = path.join(root, "opencode.json");
     await fs.writeFile(filePath, JSON.stringify({ lsp: true }));
-    await new HarnessLspExporter(root).export("typescript-lsp", definition, LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE, SETTING_SCOPES.WORKSPACE);
+    await new HarnessLspExporter(root).export(
+      "typescript-lsp",
+      definition,
+      LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE,
+      SETTING_SCOPES.WORKSPACE
+    );
     const document = JSON.parse(await fs.readFile(filePath, "utf8"));
     assert.deepStrictEqual(Object.keys(document.lsp), ["typescript-lsp"]);
-    assert.deepStrictEqual(document.lsp["typescript-lsp"].command, definition.command);
-    await fs.writeFile(filePath, JSON.stringify({ lsp: { "typescript-lsp": { command: ["old"], initializationOptions: { keep: true } } } }));
-    await new HarnessLspExporter(root).export("typescript-lsp", definition, LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE, SETTING_SCOPES.WORKSPACE);
+    assert.deepStrictEqual(
+      document.lsp["typescript-lsp"].command,
+      definition.command
+    );
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({
+        lsp: {
+          "typescript-lsp": {
+            command: ["old"],
+            initializationOptions: { keep: true },
+          },
+        },
+      })
+    );
+    await new HarnessLspExporter(root).export(
+      "typescript-lsp",
+      definition,
+      LSP_EXPORT_TARGET_IDS.OPENCODE_WORKSPACE,
+      SETTING_SCOPES.WORKSPACE
+    );
     const merged = JSON.parse(await fs.readFile(filePath, "utf8"));
-    assert.deepStrictEqual(merged.lsp["typescript-lsp"].initializationOptions, { keep: true });
-    assert.deepStrictEqual(merged.lsp["typescript-lsp"].command, definition.command);
+    assert.deepStrictEqual(merged.lsp["typescript-lsp"].initializationOptions, {
+      keep: true,
+    });
+    assert.deepStrictEqual(
+      merged.lsp["typescript-lsp"].command,
+      definition.command
+    );
   });
 
   test("replaces a cclsp entry by id and its matching extension set", async () => {
     const filePath = path.join(root, "cclsp.json");
-    await fs.writeFile(filePath, JSON.stringify({ servers: [{ name: "typescript-lsp", extensions: ["ts", "tsx", "js"], command: ["old"], initializationOptions: { keep: true } }] }));
-    await new HarnessLspExporter(root).export("typescript-lsp", definition, LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE, SETTING_SCOPES.WORKSPACE);
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({
+        servers: [
+          {
+            name: "typescript-lsp",
+            extensions: ["ts", "tsx", "js"],
+            command: ["old"],
+            initializationOptions: { keep: true },
+          },
+        ],
+      })
+    );
+    await new HarnessLspExporter(root).export(
+      "typescript-lsp",
+      definition,
+      LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE,
+      SETTING_SCOPES.WORKSPACE
+    );
     const document = JSON.parse(await fs.readFile(filePath, "utf8"));
     assert.strictEqual(document.servers.length, 1);
     assert.deepStrictEqual(document.servers[0].command, definition.command);
-    assert.deepStrictEqual(document.servers[0].initializationOptions, { keep: true });
+    assert.deepStrictEqual(document.servers[0].initializationOptions, {
+      keep: true,
+    });
   });
 });

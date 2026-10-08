@@ -137,10 +137,10 @@ suite("standalone-shim state persistence", () => {
       },
     });
 
-    assert.deepStrictEqual(
-      JSON.parse(JSON.stringify(api.getState())),
-      { ...lastState, storageVersion: 1 }
-    );
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(api.getState())), {
+      ...lastState,
+      storageVersion: 1,
+    });
     assert.strictEqual(sessionStorage.getItem("fpTabId-project-a"), "tab-1");
 
     const nextState = { editorState: { editorText: "updated prompt" } };
@@ -173,10 +173,10 @@ suite("standalone-shim state persistence", () => {
       },
     });
 
-    assert.deepStrictEqual(
-      JSON.parse(JSON.stringify(api.getState())),
-      { ...currentTabState, storageVersion: 1 }
-    );
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(api.getState())), {
+      ...currentTabState,
+      storageVersion: 1,
+    });
   });
 
   test("scopes tab and state keys to the workspace", () => {
@@ -217,14 +217,14 @@ suite("standalone-shim state persistence", () => {
     ) as Record<string, number>;
     assert.deepStrictEqual(Object.keys(alphaOpenTabs), [alphaTabId]);
     assert.deepStrictEqual(Object.keys(betaOpenTabs), [betaTabId]);
-    assert.deepStrictEqual(
-      JSON.parse(storage.getItem("fpState-alpha-last")!),
-      { draft: "alpha", storageVersion: 1 }
-    );
-    assert.deepStrictEqual(
-      JSON.parse(storage.getItem("fpState-beta-last")!),
-      { draft: "beta", storageVersion: 1 }
-    );
+    assert.deepStrictEqual(JSON.parse(storage.getItem("fpState-alpha-last")!), {
+      draft: "alpha",
+      storageVersion: 1,
+    });
+    assert.deepStrictEqual(JSON.parse(storage.getItem("fpState-beta-last")!), {
+      draft: "beta",
+      storageVersion: 1,
+    });
   });
 
   test("starts clean when the persisted root storage version differs", () => {
@@ -242,10 +242,9 @@ suite("standalone-shim state persistence", () => {
       },
     });
 
-    assert.deepStrictEqual(
-      JSON.parse(JSON.stringify(api.getState())),
-      { storageVersion: 1 }
-    );
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(api.getState())), {
+      storageVersion: 1,
+    });
     api.setState({ draft: "new" });
     assert.deepStrictEqual(
       JSON.parse(localStorage.getItem("fpState-project-a-tab-old")!),

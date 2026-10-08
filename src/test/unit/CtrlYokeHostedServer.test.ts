@@ -673,7 +673,8 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
   test("token-gates language-server session lookup", async () => {
     await withServer(async (port, token) => {
       assert.strictEqual(
-        (await sendGetRequest(port, "/api/lsp/session?path=src/main.ts")).statusCode,
+        (await sendGetRequest(port, "/api/lsp/session?path=src/main.ts"))
+          .statusCode,
         401
       );
       const response = await sendGetRequest(

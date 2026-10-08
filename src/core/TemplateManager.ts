@@ -272,12 +272,7 @@ export class TemplateManager {
    * Get the templates directory from the extension bundle
    */
   private getBuiltInTemplatesPath(): string {
-    return path.join(
-      this.extensionPath,
-      "out",
-      "templates",
-      "workflows"
-    );
+    return path.join(this.extensionPath, "out", "templates", "workflows");
   }
 
   /**

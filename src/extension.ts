@@ -1650,7 +1650,8 @@ function registerCommands(
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
-      const languageServerSettings = createLanguageServerSettingsReaders(configService);
+      const languageServerSettings =
+        createLanguageServerSettingsReaders(configService);
       const languageIntelligenceHost = new LanguageIntelligenceHost({
         backend: new ManagedLanguageServerBackend({
           workspaceRoot,
@@ -1663,7 +1664,9 @@ function registerCommands(
         namedWorkspaceRoots,
         isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
       });
-      dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);
+      dashboardApplication.setLanguageIntelligenceHost(
+        languageIntelligenceHost
+      );
       try {
         hostedServer = new CtrlYokeHostedServer(
           createHostedServerOptions({

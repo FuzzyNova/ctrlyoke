@@ -100,7 +100,12 @@ export function DeveloperSection() {
       disabled: !dev.commands.restartExtensionHost,
     },
     ...(canReloadHost && dev.commands.reloadWindow
-      ? [{ label: "Reload Window", messageType: MESSAGE_TYPES.DEV_RELOAD_WINDOW }]
+      ? [
+          {
+            label: "Reload Window",
+            messageType: MESSAGE_TYPES.DEV_RELOAD_WINDOW,
+          },
+        ]
       : []),
     ...(dev.commands.restartExtensionHost
       ? [

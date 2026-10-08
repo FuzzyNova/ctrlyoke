@@ -109,10 +109,7 @@ export class RegexSymbolIndex implements SymbolIndex {
         realWorkspaceRoot = fs.realpath(workspaceRoot);
         this.realWorkspaceRoots.set(workspaceRoot, realWorkspaceRoot);
       }
-      const realRelative = path.relative(
-        await realWorkspaceRoot,
-        realPath
-      );
+      const realRelative = path.relative(await realWorkspaceRoot, realPath);
       if (
         realRelative === ".." ||
         realRelative.startsWith(`..${path.sep}`) ||

@@ -163,7 +163,13 @@ export const SaveWorkflowDialog: React.FC = () => {
       type: MESSAGE_TYPES.BROWSE_SAVE_LOCATION,
       defaultDir: location,
     });
-  }, [vscode, openFileBrowser, location, workspaceRoot, canSelectWorkspacePath]);
+  }, [
+    vscode,
+    openFileBrowser,
+    location,
+    workspaceRoot,
+    canSelectWorkspacePath,
+  ]);
 
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

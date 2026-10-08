@@ -7,7 +7,9 @@ import { readJsonFile } from "../../utils/FileSystemUtils";
 
 suite("FileSystemUtils", () => {
   test("reads and parses JSON without a VS Code host", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-json-"));
+    const directory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-json-")
+    );
     const filePath = path.join(directory, "data.json");
     try {
       await fs.writeFile(filePath, JSON.stringify({ value: 42 }), "utf8");

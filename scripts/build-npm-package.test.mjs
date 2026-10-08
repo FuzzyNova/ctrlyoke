@@ -94,10 +94,7 @@ test("every packaged out/ entry also ships in the VSIX", () => {
     const allowed = entry.endsWith("/")
       ? allowlist.some((line) => line.startsWith(`!${entry}`))
       : allowlist.includes(`!${entry}`);
-    assert.ok(
-      allowed,
-      `.vscodeignore must allowlist ${entry}`
-    );
+    assert.ok(allowed, `.vscodeignore must allowlist ${entry}`);
   }
 });
 

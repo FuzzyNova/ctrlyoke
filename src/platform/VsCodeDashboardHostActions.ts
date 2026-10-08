@@ -98,7 +98,7 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
                 [...extensions],
               ])
             )
-        : undefined,
+          : undefined,
     };
     if (request.kind === PATH_SELECTION_KINDS.SAVE) {
       const selected = await vscode.window.showSaveDialog({

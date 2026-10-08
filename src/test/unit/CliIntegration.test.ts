@@ -64,7 +64,6 @@ class MockVsCodePlatform implements PlatformAdapter {
   getExtensionPath(): string {
     return process.cwd();
   }
-
 }
 
 class TestCliIntegration extends CliIntegration {

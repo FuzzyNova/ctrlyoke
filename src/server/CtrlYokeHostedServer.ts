@@ -441,85 +441,111 @@ export class CtrlYokeHostedServer
       );
     });
     this.lspWss.on("error", (err: Error) => {
-      Log.warn(`[CtrlYokeHostedServer] LSP WebSocket server error: ${err.message}`);
+      Log.warn(
+        `[CtrlYokeHostedServer] LSP WebSocket server error: ${err.message}`
+      );
     });
-    this.lspWss.on("connection", (ws: WebSocket, _req: import("http").IncomingMessage, serverId: string) => {
-      let proxy: import("./lsp/LspSessionProxy").LspSessionProxy | undefined;
-      let socketClosed = false;
-      const pendingMessages: JsonRpcMessage[] = [];
-      ws.on("message", (data) => {
-        try {
-          const message = JSON.parse(data.toString()) as JsonRpcMessage;
-          if (proxy) {
-            void proxy.handleMessage(message).catch((error: unknown) => {
-              Log.warn(`[CtrlYokeHostedServer] LSP message failed: ${String(error)}`);
-            });
+    this.lspWss.on(
+      "connection",
+      (
+        ws: WebSocket,
+        _req: import("http").IncomingMessage,
+        serverId: string
+      ) => {
+        let proxy: import("./lsp/LspSessionProxy").LspSessionProxy | undefined;
+        let socketClosed = false;
+        const pendingMessages: JsonRpcMessage[] = [];
+        ws.on("message", (data) => {
+          try {
+            const message = JSON.parse(data.toString()) as JsonRpcMessage;
+            if (proxy) {
+              void proxy.handleMessage(message).catch((error: unknown) => {
+                Log.warn(
+                  `[CtrlYokeHostedServer] LSP message failed: ${String(error)}`
+                );
+              });
+            } else pendingMessages.push(message);
+          } catch {
+            ws.close(4400, "Invalid JSON-RPC message");
           }
-          else pendingMessages.push(message);
-        } catch {
-          ws.close(4400, "Invalid JSON-RPC message");
-        }
-      });
-      ws.on("close", () => {
-        socketClosed = true;
-        proxy?.dispose();
-      });
-      // Registered before the proxy exists: an unhandled 'error' event on a
-      // socket would crash the process.
-      ws.on("error", (error: Error) => {
-        Log.warn(`[CtrlYokeHostedServer] LSP socket error: ${error.message}`);
-        proxy?.dispose();
-      });
-      void this.languageIntelligenceHost
-        .createProxy(serverId, (message) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(message));
-          }
-        }, async (viewerPath) => {
-          const file = await this.viewerService.readFile(viewerPath);
-          return file.readOnly !== true;
-        }, {
-          readFile: async (viewerPath) => {
-            const file = await this.viewerService.readFile(viewerPath);
-            return { content: file.content, readOnly: file.readOnly };
-          },
-          writeFile: async (viewerPath, content) => {
-            const file = await this.viewerService.readFile(viewerPath);
-            if (file.readOnly) throw new Error(`Workspace edit targets a read-only file: ${viewerPath}`);
-            await this.viewerService.saveFile({
-              path: viewerPath,
-              content,
-              baseModifiedAt: file.modifiedAt ?? null,
-            });
-          },
-          notifyFileChanged: (viewerPath) =>
-            this.languageIntelligenceHost.notifyWorkspaceFileChanged(viewerPath),
-        }, (code, reason) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.close(code, reason);
-          }
-        })
-        .then((created) => {
-          proxy = created;
-          if (!created) {
-            if (!socketClosed) ws.close(4404, "Language server session not found");
-            return;
-          }
-          if (socketClosed || ws.readyState !== WebSocket.OPEN) {
-            created.dispose();
-            return;
-          }
-          for (const message of pendingMessages.splice(0)) {
-            void created.handleMessage(message).catch((error: unknown) => {
-              Log.warn(`[CtrlYokeHostedServer] LSP message failed: ${String(error)}`);
-            });
-          }
-        })
-        .catch((error: unknown) => {
-          Log.warn(`[CtrlYokeHostedServer] Failed to open LSP session: ${String(error)}`);
-          ws.close(1011, "Language server unavailable");
         });
-    });
+        ws.on("close", () => {
+          socketClosed = true;
+          proxy?.dispose();
+        });
+        // Registered before the proxy exists: an unhandled 'error' event on a
+        // socket would crash the process.
+        ws.on("error", (error: Error) => {
+          Log.warn(`[CtrlYokeHostedServer] LSP socket error: ${error.message}`);
+          proxy?.dispose();
+        });
+        void this.languageIntelligenceHost
+          .createProxy(
+            serverId,
+            (message) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+              }
+            },
+            async (viewerPath) => {
+              const file = await this.viewerService.readFile(viewerPath);
+              return file.readOnly !== true;
+            },
+            {
+              readFile: async (viewerPath) => {
+                const file = await this.viewerService.readFile(viewerPath);
+                return { content: file.content, readOnly: file.readOnly };
+              },
+              writeFile: async (viewerPath, content) => {
+                const file = await this.viewerService.readFile(viewerPath);
+                if (file.readOnly)
+                  throw new Error(
+                    `Workspace edit targets a read-only file: ${viewerPath}`
+                  );
+                await this.viewerService.saveFile({
+                  path: viewerPath,
+                  content,
+                  baseModifiedAt: file.modifiedAt ?? null,
+                });
+              },
+              notifyFileChanged: (viewerPath) =>
+                this.languageIntelligenceHost.notifyWorkspaceFileChanged(
+                  viewerPath
+                ),
+            },
+            (code, reason) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.close(code, reason);
+              }
+            }
+          )
+          .then((created) => {
+            proxy = created;
+            if (!created) {
+              if (!socketClosed)
+                ws.close(4404, "Language server session not found");
+              return;
+            }
+            if (socketClosed || ws.readyState !== WebSocket.OPEN) {
+              created.dispose();
+              return;
+            }
+            for (const message of pendingMessages.splice(0)) {
+              void created.handleMessage(message).catch((error: unknown) => {
+                Log.warn(
+                  `[CtrlYokeHostedServer] LSP message failed: ${String(error)}`
+                );
+              });
+            }
+          })
+          .catch((error: unknown) => {
+            Log.warn(
+              `[CtrlYokeHostedServer] Failed to open LSP session: ${String(error)}`
+            );
+            ws.close(1011, "Language server unavailable");
+          });
+      }
+    );
     const defaultJsonParser = express.json({ limit: DEFAULT_JSON_BODY_LIMIT });
     const workspaceFileJsonParser = express.json({
       limit: WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES,
@@ -1407,9 +1433,16 @@ export class CtrlYokeHostedServer
         return;
       }
       try {
-        res.json(await this.languageIntelligenceHost.lookupSession(viewerPath, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR));
+        res.json(
+          await this.languageIntelligenceHost.lookupSession(
+            viewerPath,
+            LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+          )
+        );
       } catch (error) {
-        Log.warn(`[CtrlYokeHostedServer] LSP session lookup failed: ${String(error)}`);
+        Log.warn(
+          `[CtrlYokeHostedServer] LSP session lookup failed: ${String(error)}`
+        );
         res.status(500).json({ error: "Internal server error" });
       }
     });
@@ -2824,7 +2857,10 @@ export class CtrlYokeHostedServer
           // A delete event has no current modification time.
         }
         this.broadcastWorkspaceFileChanged(viewerPath, modifiedAt);
-        void this.languageIntelligenceHost.notifyWorkspaceFileChanged(viewerPath, type);
+        void this.languageIntelligenceHost.notifyWorkspaceFileChanged(
+          viewerPath,
+          type
+        );
       };
       watcher.onDidChange(() => void notify(2));
       watcher.onDidCreate(() => void notify(1));
@@ -3164,7 +3200,9 @@ export class CtrlYokeHostedServer
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
     void this.languageIntelligenceHost.dispose().catch((error: unknown) => {
-      Log.warn(`[CtrlYokeHostedServer] Failed to stop language servers: ${String(error)}`);
+      Log.warn(
+        `[CtrlYokeHostedServer] Failed to stop language servers: ${String(error)}`
+      );
     });
     for (const { watcher } of this.fileWatchers.values()) watcher.dispose();
     this.fileWatchers.clear();

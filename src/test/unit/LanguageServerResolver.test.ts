@@ -143,7 +143,9 @@ suite("LanguageServerResolver", () => {
       }
     );
     assert.ok(resolved);
-    assert.ok(resolved.command.command.endsWith("typescript-language-server.cmd"));
+    assert.ok(
+      resolved.command.command.endsWith("typescript-language-server.cmd")
+    );
   });
 
   test("uses workspace selection and resolves definitions user, approved workspace, then catalog", async () => {

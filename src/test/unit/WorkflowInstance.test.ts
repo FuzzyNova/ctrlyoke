@@ -28,8 +28,8 @@ import {
   STATUS_MESSAGE_SEVERITY,
   WORKTREE_MODES,
   type HarnessId,
-
-  INTERACTIVE_TERMINAL_MODES,} from "../../types/DashboardConstants";
+  INTERACTIVE_TERMINAL_MODES,
+} from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";

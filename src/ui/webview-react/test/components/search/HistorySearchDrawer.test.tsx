@@ -621,14 +621,12 @@ describe("HistorySearchDrawer filters", () => {
   });
 
   it("selects output for the target workflow instance when opening a result", () => {
-    useUiStore
-      .getState()
-      .setLoadedWorkflows([
-        {
-          id: "search-workflow-instance",
-          workflowKey: result.workflowKey,
-        } as never,
-      ]);
+    useUiStore.getState().setLoadedWorkflows([
+      {
+        id: "search-workflow-instance",
+        workflowKey: result.workflowKey,
+      } as never,
+    ]);
     renderSearch();
     act(() => {
       useUiStore.getState().setHistorySearchResults([result], false, {

@@ -34,20 +34,37 @@ const viewListeners = new Map<string, Set<(view: EditorView) => void>>();
 export function applyWorkspaceTextEdits(uri: string, edits: unknown[]): void {
   const view = editorViews.get(uri);
   if (!view) return;
-  const changes = edits.flatMap((value) => {
-    if (!value || typeof value !== "object") return [];
-    const edit = value as { range?: { start?: { line?: number; character?: number }; end?: { line?: number; character?: number } }; newText?: unknown };
-    if (typeof edit.newText !== "string" || !edit.range?.start || !edit.range.end) return [];
-    const offset = (position: { line?: number; character?: number }) => {
-      if (typeof position.line !== "number" || typeof position.character !== "number") return 0;
-      if (position.line >= view.state.doc.lines) return view.state.doc.length;
-      const line = view.state.doc.line(Math.max(1, position.line + 1));
-      return Math.min(line.to, line.from + Math.max(0, position.character));
-    };
-    const from = offset(edit.range.start);
-    const to = offset(edit.range.end);
-    return [{ from, to, insert: edit.newText }];
-  }).sort((a, b) => a.from - b.from);
+  const changes = edits
+    .flatMap((value) => {
+      if (!value || typeof value !== "object") return [];
+      const edit = value as {
+        range?: {
+          start?: { line?: number; character?: number };
+          end?: { line?: number; character?: number };
+        };
+        newText?: unknown;
+      };
+      if (
+        typeof edit.newText !== "string" ||
+        !edit.range?.start ||
+        !edit.range.end
+      )
+        return [];
+      const offset = (position: { line?: number; character?: number }) => {
+        if (
+          typeof position.line !== "number" ||
+          typeof position.character !== "number"
+        )
+          return 0;
+        if (position.line >= view.state.doc.lines) return view.state.doc.length;
+        const line = view.state.doc.line(Math.max(1, position.line + 1));
+        return Math.min(line.to, line.from + Math.max(0, position.character));
+      };
+      const from = offset(edit.range.start);
+      const to = offset(edit.range.end);
+      return [{ from, to, insert: edit.newText }];
+    })
+    .sort((a, b) => a.from - b.from);
   if (changes.length) view.dispatch({ changes });
 }
 setWorkspaceEditHandler(applyWorkspaceTextEdits);
@@ -86,10 +103,14 @@ export function requestLanguageIntelligence(
     return Promise.reject(new Error("Language server session is unavailable"));
   }
   session.client.sync();
-  return session.client.request<unknown, unknown>(method, params).catch((error: unknown) => {
-    WebviewLog.warn(`[languageIntelligenceClient] ${method} failed: ${String(error)}`);
-    return null;
-  });
+  return session.client
+    .request<unknown, unknown>(method, params)
+    .catch((error: unknown) => {
+      WebviewLog.warn(
+        `[languageIntelligenceClient] ${method} failed: ${String(error)}`
+      );
+      return null;
+    });
 }
 
 export function registerLanguageIntelligenceView(
@@ -104,7 +125,9 @@ export function registerLanguageIntelligenceView(
   };
 }
 
-function waitForLanguageIntelligenceView(uri: string): Promise<EditorView | null> {
+function waitForLanguageIntelligenceView(
+  uri: string
+): Promise<EditorView | null> {
   const current = editorViews.get(uri);
   if (current) return Promise.resolve(current);
   return new Promise((resolve) => {
@@ -173,7 +196,10 @@ class WorkspaceViewerLspWorkspace extends Workspace {
     this.client.didClose(uri);
   }
 
-  updateFile(uri: string, update: Parameters<Workspace["updateFile"]>[1]): void {
+  updateFile(
+    uri: string,
+    update: Parameters<Workspace["updateFile"]>[1]
+  ): void {
     const file = this.getFile(uri);
     const view = file?.getView();
     if (view) view.dispatch(update);
@@ -188,11 +214,13 @@ class WorkspaceViewerLspWorkspace extends Workspace {
     if (existing) return existing;
     const filePath = viewerPathFromUri(uri);
     if (!filePath) return null;
-    useWorkspaceViewerStore.getState().openToFile(
-      filePath,
-      startLine === undefined ? undefined : startLine + 1,
-      endLine === undefined ? undefined : endLine + 1
-    );
+    useWorkspaceViewerStore
+      .getState()
+      .openToFile(
+        filePath,
+        startLine === undefined ? undefined : startLine + 1,
+        endLine === undefined ? undefined : endLine + 1
+      );
     await waitForLanguageIntelligenceView(uri);
     return this.getFile(uri);
   }
@@ -206,11 +234,13 @@ class WorkspaceViewerLspWorkspace extends Workspace {
     if (existing) return existing;
     const filePath = viewerPathFromUri(uri);
     if (!filePath) return null;
-    useWorkspaceViewerStore.getState().openToFile(
-      filePath,
-      startLine === undefined ? undefined : startLine + 1,
-      endLine === undefined ? undefined : endLine + 1
-    );
+    useWorkspaceViewerStore
+      .getState()
+      .openToFile(
+        filePath,
+        startLine === undefined ? undefined : startLine + 1,
+        endLine === undefined ? undefined : endLine + 1
+      );
     return waitForLanguageIntelligenceView(uri);
   }
 }
@@ -234,7 +264,9 @@ export function acquireLanguageIntelligenceClient(
       () => {
         if (client.connected) client.disconnect();
       },
-      () => { for (const listener of sessionEndedListeners) listener(); }
+      () => {
+        for (const listener of sessionEndedListeners) listener();
+      }
     );
     client = new LSPClient({
       // Keep phase 3 navigation/rename keymaps out until their viewer UX exists.
@@ -246,7 +278,10 @@ export function acquireLanguageIntelligenceClient(
     sessions.set(sessionId, session);
     transport.start();
   }
-  if (session.disposeTimer) { clearTimeout(session.disposeTimer); session.disposeTimer = undefined; }
+  if (session.disposeTimer) {
+    clearTimeout(session.disposeTimer);
+    session.disposeTimer = undefined;
+  }
   session.refs += 1;
   const sessionEnded = () => onSessionEnded?.();
   if (onSessionEnded) session.sessionEndedListeners.add(sessionEnded);
@@ -268,5 +303,5 @@ export function acquireLanguageIntelligenceClient(
         current.transport.dispose();
       }, SESSION_DISPOSE_GRACE_MS);
     },
-  }
+  };
 }

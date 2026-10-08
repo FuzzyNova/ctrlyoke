@@ -18,8 +18,8 @@ import {
   OUTPUT_HISTORY_KINDS,
   STEP_STATUS,
   type HarnessId,
-
-  INTERACTIVE_TERMINAL_MODES,} from "../../types/DashboardConstants";
+  INTERACTIVE_TERMINAL_MODES,
+} from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
 import type { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";

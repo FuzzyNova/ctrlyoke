@@ -137,7 +137,10 @@ function loadShim(): {
   context.window.clearTimeout = context.clearTimeout;
   context.window.setInterval = context.setInterval;
 
-  vm.runInNewContext(buildHostedStandaloneShimScript("test-workspace"), context);
+  vm.runInNewContext(
+    buildHostedStandaloneShimScript("test-workspace"),
+    context
+  );
   return { api: context.window.vscodeApi, sockets, dispatched };
 }
 

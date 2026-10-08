@@ -1,6 +1,9 @@
 import type { Transport } from "@codemirror/lsp-client";
 import { confirmWorkspaceRename } from "./workspaceEditConfirmation";
-import { LSP_METHODS, LSP_SESSION_INVALIDATION_CLOSE } from "@root/types/DashboardConstants";
+import {
+  LSP_METHODS,
+  LSP_SESSION_INVALIDATION_CLOSE,
+} from "@root/types/DashboardConstants";
 
 let workspaceEditHandler: ((uri: string, edits: unknown[]) => void) | undefined;
 export function setWorkspaceEditHandler(
@@ -79,7 +82,8 @@ export class LanguageIntelligenceTransport implements Transport {
     };
     socket.onmessage = (event) => {
       if (this.disposed || this.socket !== socket) return;
-      const message = typeof event.data === "string" ? event.data : String(event.data);
+      const message =
+        typeof event.data === "string" ? event.data : String(event.data);
       if (this.handleProxyMessage(message)) return;
       for (const handler of [...this.handlers]) handler(message);
     };
@@ -87,7 +91,10 @@ export class LanguageIntelligenceTransport implements Transport {
       if (this.disposed || this.socket !== socket) return;
       this.socket = null;
       this.onDisconnect();
-      if (event?.code === LSP_SESSION_INVALIDATION_CLOSE.CODE) { this.onSessionEnded(); return; }
+      if (event?.code === LSP_SESSION_INVALIDATION_CLOSE.CODE) {
+        this.onSessionEnded();
+        return;
+      }
       this.scheduleReconnect();
     };
     socket.onerror = () => socket.close();
@@ -95,17 +102,40 @@ export class LanguageIntelligenceTransport implements Transport {
 
   private handleProxyMessage(raw: string): boolean {
     let message: { id?: string | number; method?: string; params?: unknown };
-    try { message = JSON.parse(raw) as typeof message; } catch { return false; }
+    try {
+      message = JSON.parse(raw) as typeof message;
+    } catch {
+      return false;
+    }
     const socket = this.socket;
-    if (message.method === LSP_METHODS.CONFIRM_WORKSPACE_RENAME && message.id !== undefined) {
-      const fileCount = (message.params as { fileCount?: unknown } | undefined)?.fileCount;
-      void confirmWorkspaceRename(typeof fileCount === "number" ? fileCount : 0).then((confirmed) => {
-        if (!this.disposed && socket && this.socket === socket && socket.readyState === OPEN) socket.send(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: confirmed }));
+    if (
+      message.method === LSP_METHODS.CONFIRM_WORKSPACE_RENAME &&
+      message.id !== undefined
+    ) {
+      const fileCount = (message.params as { fileCount?: unknown } | undefined)
+        ?.fileCount;
+      void confirmWorkspaceRename(
+        typeof fileCount === "number" ? fileCount : 0
+      ).then((confirmed) => {
+        if (
+          !this.disposed &&
+          socket &&
+          this.socket === socket &&
+          socket.readyState === OPEN
+        )
+          socket.send(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: message.id,
+              result: confirmed,
+            })
+          );
       });
       return true;
     }
     if (message.method === LSP_METHODS.APPLY_WORKSPACE_TEXT_EDITS) {
-      const params = message.params as { uri?: unknown; edits?: unknown } | undefined;
+      const params = message.params as
+        { uri?: unknown; edits?: unknown } | undefined;
       if (typeof params?.uri === "string" && Array.isArray(params.edits)) {
         workspaceEditHandler?.(params.uri, params.edits);
       }

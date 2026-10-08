@@ -481,7 +481,10 @@ export const WorkspaceFileEditor = forwardRef<
           className="min-h-0 w-full flex-1 overflow-hidden"
         />
         {languageIntelligence.statusHint && (
-          <p className="shrink-0 px-2 py-1 text-xxs text-description-fg" role="status">
+          <p
+            className="shrink-0 px-2 py-1 text-xxs text-description-fg"
+            role="status"
+          >
             {languageIntelligence.statusHint}
           </p>
         )}

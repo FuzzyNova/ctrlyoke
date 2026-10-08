@@ -62,7 +62,9 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
         onSave={vi.fn()}
       />
     );
-    expect(getByRole("status").textContent).toContain("Language server is stopped.");
+    expect(getByRole("status").textContent).toContain(
+      "Language server is stopped."
+    );
   });
 
   it("reconfigures a connected session without replacing the editor view", async () => {

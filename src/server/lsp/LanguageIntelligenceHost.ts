@@ -19,7 +19,10 @@ import type { SharedDocument } from "./LspSharedDocument";
 import type { WorkspacePathContext } from "./WorkspacePathContainment";
 import { safeResolveWorkspacePath } from "./WorkspacePathContainment";
 import type { LanguageServerStatusChange } from "./ManagedLanguageServerBackend";
-import { LANGUAGE_SERVER_STATUSES, type LanguageServerRequestOrigin } from "../../types/DashboardConstants";
+import {
+  LANGUAGE_SERVER_STATUSES,
+  type LanguageServerRequestOrigin,
+} from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 
@@ -118,7 +121,10 @@ export class LanguageIntelligenceHost {
       origin
     );
     if (!("descriptor" in resolution)) return undefined;
-    const session = await this.getOrCreateSession(resolution.descriptor, origin);
+    const session = await this.getOrCreateSession(
+      resolution.descriptor,
+      origin
+    );
     if (!this.options.isWorkspaceTrusted()) return undefined;
     return {
       descriptor: session.descriptor,
@@ -140,7 +146,10 @@ export class LanguageIntelligenceHost {
       origin
     );
     if (!("descriptor" in resolution)) return;
-    const session = await this.getOrCreateSession(resolution.descriptor, origin);
+    const session = await this.getOrCreateSession(
+      resolution.descriptor,
+      origin
+    );
     const uri = toServerFileUri(absolutePath);
     const opened = this.warmupDocuments.get(session.id) ?? new Set<string>();
     if (opened.has(uri)) return;
@@ -246,7 +255,10 @@ export class LanguageIntelligenceHost {
     if (!("descriptor" in resolution)) {
       return { session: null, reason: resolution.reason };
     }
-    const session = await this.getOrCreateSession(resolution.descriptor, origin);
+    const session = await this.getOrCreateSession(
+      resolution.descriptor,
+      origin
+    );
     return {
       session: {
         id: session.id,
@@ -372,21 +384,35 @@ export class LanguageIntelligenceHost {
           if (!document) return;
           for (const [proxy, buffer] of document.tabs) {
             if (buffer.text === document.syncedText) {
-              void proxy.deliverServerMessage({
-                jsonrpc: "2.0",
-                method,
-                params,
-              }).catch((error: unknown) => Log.warn("[LanguageIntelligenceHost] Could not deliver language-server notification:", error));
+              void proxy
+                .deliverServerMessage({
+                  jsonrpc: "2.0",
+                  method,
+                  params,
+                })
+                .catch((error: unknown) =>
+                  Log.warn(
+                    "[LanguageIntelligenceHost] Could not deliver language-server notification:",
+                    error
+                  )
+                );
             }
           }
           return;
         }
         for (const proxy of session.proxies) {
-          void proxy.deliverServerMessage({
-            jsonrpc: "2.0",
-            method,
-            ...(rawParams === undefined ? {} : { params: rawParams }),
-          }).catch((error: unknown) => Log.warn("[LanguageIntelligenceHost] Could not deliver language-server notification:", error));
+          void proxy
+            .deliverServerMessage({
+              jsonrpc: "2.0",
+              method,
+              ...(rawParams === undefined ? {} : { params: rawParams }),
+            })
+            .catch((error: unknown) =>
+              Log.warn(
+                "[LanguageIntelligenceHost] Could not deliver language-server notification:",
+                error
+              )
+            );
         }
       });
       connection.onRequest((method, params) => {

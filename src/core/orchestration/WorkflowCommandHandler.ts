@@ -89,7 +89,9 @@ export class WorkflowCommandHandler {
       if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.FAILED)
         throw new Error(result.message);
       if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED)
-        throw new Error(result.message ?? "Opening files is not supported by this host.");
+        throw new Error(
+          result.message ?? "Opening files is not supported by this host."
+        );
     } catch (error) {
       Log.error(
         "[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:",

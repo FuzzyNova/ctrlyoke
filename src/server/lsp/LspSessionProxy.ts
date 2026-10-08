@@ -552,13 +552,16 @@ export class LspSessionProxy {
         const anchor = this.options.documents.get(file.serverUri);
         if (anchor && (anchor.warmupReferences ?? 0) > 0) {
           anchor.serverVersion += 1;
-          await this.options.connection.sendNotification(LSP_METHODS.DID_CHANGE, {
-            textDocument: {
-              uri: file.serverUri,
-              version: anchor.serverVersion,
-            },
-            contentChanges: [{ text: content }],
-          });
+          await this.options.connection.sendNotification(
+            LSP_METHODS.DID_CHANGE,
+            {
+              textDocument: {
+                uri: file.serverUri,
+                version: anchor.serverVersion,
+              },
+              contentChanges: [{ text: content }],
+            }
+          );
           anchor.syncedText = content;
           anchor.syncedVersion = anchor.serverVersion;
         }

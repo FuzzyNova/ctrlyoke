@@ -295,7 +295,8 @@ export async function createNodeHostedServer(options: {
   // Exempt the connection token from heuristic redaction while the server is
   // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.
   const unprotectToken = secretRedactionService.protectValue(token);
-  const languageServerSettings = createLanguageServerSettingsReaders(configService);
+  const languageServerSettings =
+    createLanguageServerSettingsReaders(configService);
   const languageServerBackend = new ManagedLanguageServerBackend({
     workspaceRoot: cwd,
     ...languageServerSettings,
@@ -310,12 +311,18 @@ export async function createNodeHostedServer(options: {
     namedWorkspaceRoots: namedRoots,
     isWorkspaceTrusted: () => true,
   });
-  const lspSymbolIndex = new LspSymbolIndex(cwd, services.getCompletionFiles, languageIntelligenceHost);
-  services.completionCore.setSymbolIndex(new FallbackSymbolIndex(
-    lspSymbolIndex,
-    services.regexSymbolIndex,
-    (symbol) => lspSymbolIndex.shouldUseRegexFallback(symbol)
-  ));
+  const lspSymbolIndex = new LspSymbolIndex(
+    cwd,
+    services.getCompletionFiles,
+    languageIntelligenceHost
+  );
+  services.completionCore.setSymbolIndex(
+    new FallbackSymbolIndex(
+      lspSymbolIndex,
+      services.regexSymbolIndex,
+      (symbol) => lspSymbolIndex.shouldUseRegexFallback(symbol)
+    )
+  );
   dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);
   server = new CtrlYokeHostedServer(
     createHostedServerOptions({
@@ -340,11 +347,26 @@ export async function createNodeHostedServer(options: {
     runningUrl = url;
     if (configService.get("languageServers").startOnLaunch) {
       const files = await getGitTrackedFiles(cwd).catch(() => []);
-      const extensions = new Set(files.map((file) => path.extname(file).slice(1).toLowerCase()));
-      const detectedLanguages = [...new Set(LANGUAGE_SERVER_CATALOG.filter((entry) => entry.extensions.some((extension) => extensions.has(extension.toLowerCase()))).flatMap((entry) => entry.languages))];
-      void languageIntelligenceHost.startLanguages(detectedLanguages).catch((error: unknown) => {
-        Log.warn("[NodeHostServices] Could not start detected language servers:", error);
-      });
+      const extensions = new Set(
+        files.map((file) => path.extname(file).slice(1).toLowerCase())
+      );
+      const detectedLanguages = [
+        ...new Set(
+          LANGUAGE_SERVER_CATALOG.filter((entry) =>
+            entry.extensions.some((extension) =>
+              extensions.has(extension.toLowerCase())
+            )
+          ).flatMap((entry) => entry.languages)
+        ),
+      ];
+      void languageIntelligenceHost
+        .startLanguages(detectedLanguages)
+        .catch((error: unknown) => {
+          Log.warn(
+            "[NodeHostServices] Could not start detected language servers:",
+            error
+          );
+        });
     }
   } catch (error) {
     unprotectToken();

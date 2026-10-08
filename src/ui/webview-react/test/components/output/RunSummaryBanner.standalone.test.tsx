@@ -58,7 +58,9 @@ describe("RunSummaryBanner in the hosted browser (isStandalone)", () => {
     expect(
       screen.queryByRole("button", { name: "Open Worktree in New Window" })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy worktree path" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy worktree path" })
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "View Diff" })
     ).toBeInTheDocument();
