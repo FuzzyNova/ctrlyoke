@@ -18,6 +18,7 @@ import {
 import { ManagedLanguageServerBackend } from "../../server/lsp/ManagedLanguageServerBackend";
 import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
+import { removeTempDir } from "../helpers/tempWorkspace";
 
 suite("ManagedLanguageServerBackend", () => {
   const root = "/workspace";
@@ -629,7 +630,7 @@ suite("ManagedLanguageServerBackend", () => {
       assert.strictEqual(result.descriptor.rootPath, projectRoot);
     } finally {
       await backend.dispose();
-      await fs.promises.rm(workspace, { recursive: true, force: true });
+      removeTempDir(workspace);
     }
   });
 
@@ -717,7 +718,7 @@ suite("ManagedLanguageServerBackend", () => {
     } finally {
       proxy?.dispose();
       await host.dispose();
-      await fs.promises.rm(workspace, { recursive: true, force: true });
+      removeTempDir(workspace);
     }
   });
 
@@ -1142,7 +1143,7 @@ suite("ManagedLanguageServerBackend", () => {
     } finally {
       proxy?.dispose();
       await host.dispose();
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 });

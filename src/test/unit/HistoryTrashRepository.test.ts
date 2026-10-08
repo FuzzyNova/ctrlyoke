@@ -22,6 +22,7 @@ import {
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { removeTempDir } from "../helpers/tempWorkspace";
 import {
   CURRENT_SCHEMA_VERSIONS,
   NewerSchemaError,
@@ -96,11 +97,8 @@ suite("HistoryTrashRepository", () => {
     await new OutputHistoryManager(workspace).flushPendingIndexRefresh();
     clearRunSummaryCache();
     // The runs and trash roots live under the per-project state directory.
-    await fs.rm(path.dirname(WorkflowPaths.runsRoot(workspace)), {
-      recursive: true,
-      force: true,
-    });
-    await fs.rm(workspace, { recursive: true, force: true });
+    removeTempDir(path.dirname(WorkflowPaths.runsRoot(workspace)));
+    removeTempDir(workspace);
   });
 
   test("keeps the trash beside .runs, not inside it", () => {
