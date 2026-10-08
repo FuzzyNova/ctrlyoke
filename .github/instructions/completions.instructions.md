@@ -73,7 +73,9 @@ It tries `executeDocumentSymbolProvider` (exact name+range match, see `findDocum
 - branches on whether the current item contains `type: script`
 - also owns `type: prompt | script` enum-value completions
 
-Its prompt and script key sets are derived from `schemas/workflow-schema.json`, including the prompt step's shared `executionProperties`. Keep only display details and insertion snippets as optional overrides in the provider; a new schema property should be offered automatically. `_runtime` is deliberately omitted because execution generates it rather than users authoring it. The provider reads the packaged schema from `out/schemas/`, with the sibling `out/schemas/` fallback used by compiled tests.
+Its prompt and script key sets come from the generated `WORKFLOW_SCHEMA_OUTLINE` (`src/types/generated/WorkflowSchemaOutline.ts`), so the provider no longer reads the schema file from disk. The outline is built from `schemas/workflow-schema.json` by `scripts/generate-workflow-schema-outline.mjs` (part of `npm run schema:update` and `precompile`; `check:docs` fails on drift). It records, per `WORKFLOW_OBJECT_KINDS` entry, the authorable keys with value kind, enum, default, description and `deprecated`, plus the keys the schema forbids there (`worktree`, `maxSteps`, `trustedExternalRoots` on steps). Runtime-only fields (`_runtime`, `startedAt`, `definitionRevision`, `parallelGroups`) are excluded in the generator's `RUNTIME_ONLY_KEYS`; a new object kind needs an entry in its `OBJECT_SOURCES`. A new schema property is offered automatically.
+
+Display details and insertion snippets are hand-authored in `WorkflowPropertySnippets.ts` (`WORKFLOW_PROPERTY_SNIPPETS`), which is pure so both hosts can import it; a test fails if a snippet's key leaves the schema.
 </yamlWorkflowKeys>
 
 <referenceContracts>

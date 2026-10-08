@@ -1,7 +1,7 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-08):** Phase 1 is implemented (see its entry under "Implementation phases").
-Phases 0 and 2–7 are not started. _Refreshed 2026-10-08:_ the language intelligence plan
+**Status (2026-10-08):** Phases 1 and 2 are implemented (see their entries under
+"Implementation phases"). Phases 0 and 3–7 are not started. _Refreshed 2026-10-08:_ the language intelligence plan
 shipped (`dev/implemented/`). Facts 2 and 9, "Editor integration" and "Coexistence with
 language servers" were re-audited against the merged code.
 
@@ -494,11 +494,35 @@ Every phase lands with tests and leaves both editors working.
      `YamlBlockScalarContext.test.ts`. Cover complete, half-typed and invalid documents, every
      `objectKind`, parallel members, `finalStep`, flow vs block YAML, and JSON escapes.
 
-3. **Phase 2: `WorkflowSchemaOutline` and shared snippets.**
-   - Generator step in `schema:update`, plus a drift check.
-   - Move `PROPERTY_OVERRIDES` into `WorkflowPropertySnippets.ts`.
-   - Move `PromptPropertyCompletionProvider` onto the outline. This removes its `fs` and
-     `__dirname` schema read. Its existing tests must pass.
+3. **Phase 2: `WorkflowSchemaOutline` and shared snippets.** **Done 2026-10-08.**
+   Built as planned, with these specifics and deviations:
+   - **Generator:** `scripts/generate-workflow-schema-outline.mjs` writes
+     `src/types/generated/WorkflowSchemaOutline.ts` (prettier-ignored, like
+     `SchemaDescriptions.ts`). It runs in `schema:update` and `precompile`, and
+     `node scripts/generate-workflow-schema-outline.mjs --check` is part of `check:docs`.
+     Its `OBJECT_SOURCES` table maps each `WORKFLOW_OBJECT_KINDS` value to the schema nodes that
+     define it; a new object kind needs an entry there.
+   - **Shape:** `WORKFLOW_SCHEMA_OUTLINE: Partial<Record<WorkflowObjectKind, WorkflowObjectOutline>>`,
+     each with `properties` (`valueKind`, `alternatives` for `oneOf`, `enum`, `default`,
+     `description`, `deprecated`) and `forbiddenKeys`. Types are exported from the generated file.
+   - **Covered kinds:** `workflowRoot`, `promptStep`, `scriptStep`, `parallelGroup`,
+     `endCondition`, `preCondition`, `toolPermissions`, `errorBehavior`, `hook`, `worktree`,
+     `templateMeta`, `promptFileFrontmatter` (just `schemaVersion`). `vars` is omitted because it
+     has no fixed keys; `promptFileBody` and `unknown` have no schema.
+   - **Resolution rules:** keys merge through `$ref`, `allOf`, `oneOf` and `anyOf`. A `$ref` with
+     a sibling `description` takes the sibling (`worktree`, `maxSteps`). Forbidden keys come from
+     `allOf` `not: { required: [key] }` branches, and a step also inherits `workflowStep`'s.
+     Runtime-only keys (`_runtime`, `startedAt`, `definitionRevision`, `parallelGroups`) are a
+     fixed list in the generator. The empty-string `agent` sentinel is not an enum value.
+   - **Snippets:** `PROPERTY_OVERRIDES` is now `WORKFLOW_PROPERTY_SNIPPETS` in
+     `src/completions/WorkflowPropertySnippets.ts`, pure and shared.
+   - **Provider:** `PromptPropertyCompletionProvider` reads the outline, so its `fs`/`__dirname`
+     schema read is gone. Its existing tests pass unchanged.
+   - **Tests:** `scripts/generate-workflow-schema-outline.test.mjs` (drift against the checked-in
+     file, forbidden and runtime keys, enums, `oneOf` kinds) is added to `test:packaging`.
+     `src/test/unit/WorkflowPropertySnippets.test.ts` fails if a snippet's key leaves the schema.
+   - **Not yet used:** `valueKind`, `enum`, `default` and `forbiddenKeys` have no consumer until
+     Phase 3.
 
 4. **Phase 3: `WorkflowFileCompletionCore`.**
    - Key and value items, and the `WorkflowValueDataSource` interface.
@@ -547,7 +571,7 @@ Every phase lands with tests and leaves both editors working.
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 0–2 can land in any order (Phase 1 is done). Phase 4 needs 0, 1 and 3. The cross-plan order is in
+Phases 0–2 can land in any order (Phases 1 and 2 are done). Phase 4 needs 0, 1 and 3. The cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 
 ## Open questions

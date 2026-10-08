@@ -1,6 +1,6 @@
 # Editor Intelligence Staging Plan
 
-**Status (2026-10-08):** In progress. **F1 is done**; nothing else is implemented yet. This plan
+**Status (2026-10-08):** In progress. **F1 and F2 are done**; nothing else is implemented yet. This plan
 only orders the work. The design lives in the three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -18,13 +18,14 @@ it.
 
 ## Progress
 
-| Phase           | State                 | Notes                                                                                                                                                                                             |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. The deviations from plan F are in its Phase 1 entry. |
-| Everything else | Not started           |                                                                                                                                                                                                   |
+| Phase           | State                 | Notes                                                                                                                                                                                                                                |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F1              | **Done** (2026-10-08) | File predicate, language-server exclusion, `getWorkflowLocation`/`findRangeForPath` for YAML, JSON and `.prompt.md`, `WORKFLOW_TEXT_FIELDS`. The deviations from plan F are in its Phase 1 entry.                                    |
+| F2              | **Done** (2026-10-08) | Generated `WorkflowSchemaOutline` (`schema:update`, `precompile`, `check:docs` drift check), hand-authored `WorkflowPropertySnippets.ts`, and `PromptPropertyCompletionProvider` moved onto both. Details in plan F's Phase 2 entry. |
+| Everything else | Not started           |                                                                                                                                                                                                                                      |
 
-F1 unblocks F3 (which also needs F2), B and M4, and the workflow-file half of D2. F2, D1, M0 and M1
-never depended on it and can start now.
+F1 and F2 together unblock F3 and the workflow-file half of D2; F1 alone unblocks B and M4. D1, M0
+and M1 never depended on either and can start now.
 
 ## Short answer
 

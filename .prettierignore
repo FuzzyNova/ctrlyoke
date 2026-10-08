@@ -12,6 +12,7 @@ docs/reference/workflow-schema.md
 docs/reference/run-files.md
 src/ui/webview-react/static/custom-icons.css
 src/types/generated/SchemaDescriptions.ts
+src/types/generated/WorkflowSchemaOutline.ts
 
 # Dependencies
 node_modules/
