@@ -12,6 +12,9 @@ suite("VsCodeDocuments", () => {
       path.join(os.tmpdir(), "ctrlyoke-document-")
     );
     const filePath = path.join(directory, "workflow.md");
+    let saveEventElapsedMs: number | undefined;
+    let startedAt = 0;
+    let saveListener: vscode.Disposable | undefined;
     try {
       await fs.writeFile(filePath, "before", "utf8");
       const document = await vscode.workspace.openTextDocument(
@@ -26,10 +29,32 @@ suite("VsCodeDocuments", () => {
       await vscode.workspace.applyEdit(edit);
       assert.strictEqual(document.isDirty, true);
 
+      startedAt = Date.now();
+      saveListener = vscode.workspace.onDidSaveTextDocument((savedDocument) => {
+        if (savedDocument.uri.toString() === document.uri.toString()) {
+          saveEventElapsedMs = Date.now() - startedAt;
+        }
+      });
       await saveIfDirty(filePath);
 
-      assert.strictEqual(await fs.readFile(filePath, "utf8"), "after");
+      const savedContents = await fs.readFile(filePath, "utf8");
+      assert.strictEqual(
+        savedContents,
+        "after",
+        `saveIfDirty did not persist the open document: ${JSON.stringify({
+          filePath,
+          elapsedMs: Date.now() - startedAt,
+          documentIsDirty: document.isDirty,
+          matchingOpenDocumentCount: vscode.workspace.textDocuments.filter(
+            (openDocument) =>
+              openDocument.uri.toString() === document.uri.toString()
+          ).length,
+          saveEventElapsedMs,
+          savedContents,
+        })}`
+      );
     } finally {
+      saveListener?.dispose();
       await fs.rm(directory, { recursive: true, force: true });
     }
   });
