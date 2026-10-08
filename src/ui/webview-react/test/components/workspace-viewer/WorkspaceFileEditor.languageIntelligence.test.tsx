@@ -9,6 +9,7 @@ import {
   type WorkspaceFileEditorHandle,
 } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import * as languageClient from "@utils/languageIntelligenceClient";
 
 const { useLanguageIntelligenceMock } = vi.hoisted(() => ({
   useLanguageIntelligenceMock: vi.fn(() => ({
@@ -79,5 +80,66 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
       expect(container.querySelector(".cm-content")).toBe(content);
       expect(ref.current?.getSelectionRange()).toEqual(selection);
     });
+  });
+
+  it("seeds a recreated read-only view with the current language extension", async () => {
+    const sessionExtension = StateField.define({
+      create: () => "connected",
+      update: (value) => value,
+    });
+    useLanguageIntelligenceMock.mockReturnValue({
+      filePath: "src/app.ts",
+      extensions: [sessionExtension],
+      sessionId: "session-1",
+      capabilities: { documentFormattingProvider: true },
+    });
+    const props = {
+      filePath: "src/app.ts",
+      content: "const value = 1",
+      onChange: vi.fn(),
+      onSave: vi.fn(),
+    };
+    const { container, rerender } = render(<WorkspaceFileEditor {...props} />);
+    rerender(<WorkspaceFileEditor {...props} readOnly />);
+    await waitFor(() => {
+      const editor = container.querySelector(".cm-editor") as HTMLElement;
+      expect(
+        EditorView.findFromDOM(editor)?.state.field(sessionExtension)
+      ).toBe("connected");
+    });
+  });
+
+  it("formats a document without a trailing newline without duplicating its last line", async () => {
+    vi.spyOn(languageClient, "requestLanguageIntelligence").mockResolvedValue([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 2, character: 0 },
+        },
+        newText: "formatted",
+      },
+    ]);
+    useLanguageIntelligenceMock.mockReturnValue({
+      filePath: "src/app.ts",
+      extensions: [],
+      sessionId: "session-1",
+      capabilities: {},
+    });
+    const ref = createRef<WorkspaceFileEditorHandle>();
+    const { container } = render(
+      <WorkspaceFileEditor
+        ref={ref}
+        filePath="src/app.ts"
+        content="one\ntwo"
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    await ref.current?.formatDocument();
+    await waitFor(() =>
+      expect(container.querySelector(".cm-content")?.textContent).toBe(
+        "formatted"
+      )
+    );
   });
 });

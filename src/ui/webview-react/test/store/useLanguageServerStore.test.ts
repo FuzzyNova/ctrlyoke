@@ -17,6 +17,8 @@ describe("useLanguageServerStore", () => {
       catalog: [],
       probes: [],
       statuses: [],
+      detectedLanguages: [],
+      approvedWorkspaceDefinitionIds: [],
       localServers: [],
       localError: undefined,
       loading: false,
@@ -49,9 +51,10 @@ describe("useLanguageServerStore", () => {
     useLanguageServerStore
       .getState()
       .setInstallProgress("pyright", "Downloading");
-    expect(useLanguageServerStore.getState().installing.pyright).toBe(
-      "Downloading"
-    );
+    expect(useLanguageServerStore.getState().installing.pyright).toMatchObject({
+      label: "Downloading",
+      failed: false,
+    });
     useLanguageServerStore
       .getState()
       .setInstallProgress("pyright", undefined, undefined, true);

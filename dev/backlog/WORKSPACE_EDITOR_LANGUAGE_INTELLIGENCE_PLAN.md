@@ -9,8 +9,11 @@ open-buffer edits use the `ctrlyoke/applyWorkspaceTextEdits` notification
 (`{ uri, edits }`). The browser intercepts these messages on the LSP socket and
 answers/applies them through the viewer modal and CodeMirror buffer. Its trust,
 approval/hash renewal, lifecycle, cap/LRU, restart, and edit contracts have
-automated coverage. Browser completion/hover/rename/diagnostics verification
-remains a manual follow-up in both hosts. Phases 7a, 7-regex, and
+automated coverage. The 2026-10-07 browser review fixes cover editor
+compartment reseeding, grace-period client disposal, session invalidation
+lookup, whole-document formatting, settings scope and approval UX, and
+workspace-language discovery. Browser completion/hover/rename/diagnostics
+verification remains a manual follow-up in both hosts. Phases 7a, 7-regex, and
 7c are complete, as is phase 1 (staging Stages 12a and 12b). Later phases
 remain.
 The `SymbolIndex` port and `VsCodeSymbolIndex` (phase 7a) plus

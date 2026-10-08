@@ -313,7 +313,9 @@ export const WorkspaceFileEditor = forwardRef<
           openSecretsSettings
         ),
         ...(langExt ? [langExt] : []),
-        languageIntelligenceCompartment.current.of([]),
+        languageIntelligenceCompartment.current.of(
+          languageIntelligenceRef.current.extensions
+        ),
         keymap.of([
           indentWithTab,
           {
@@ -506,10 +508,9 @@ function toLspPosition(view: EditorView, offset: number): LspPosition {
 }
 
 function lspOffset(view: EditorView, position: LspPosition): number {
-  const line = view.state.doc.line(
-    Math.min(view.state.doc.lines, position.line + 1)
-  );
-  return Math.min(line.to, line.from + position.character);
+  if (position.line >= view.state.doc.lines) return view.state.doc.length;
+  const line = view.state.doc.line(Math.max(1, position.line + 1));
+  return Math.min(line.to, line.from + Math.max(0, position.character));
 }
 
 function selectAndScrollToLines(

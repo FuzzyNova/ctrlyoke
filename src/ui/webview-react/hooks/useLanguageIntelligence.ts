@@ -24,6 +24,7 @@ export function useLanguageIntelligence(
     sessionId: null,
     capabilities: {},
   });
+  const [sessionGeneration, setSessionGeneration] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -39,7 +40,8 @@ export function useLanguageIntelligence(
           session.languageId,
           filePath,
           languageIntelligenceSocketUrl(session.id),
-          (url) => new WebSocket(url) as unknown as LspWebSocket
+          (url) => new WebSocket(url) as unknown as LspWebSocket,
+          () => setSessionGeneration((generation) => generation + 1)
         );
         release = acquired.release;
         if (active)
@@ -64,7 +66,7 @@ export function useLanguageIntelligence(
       controller.abort();
       release?.();
     };
-  }, [filePath]);
+  }, [filePath, sessionGeneration]);
 
   return state.filePath === filePath
     ? state

@@ -73,6 +73,14 @@ export class ManagedLanguageServerBackend implements LanguageServerBackend {
 
   get runningServerCount(): number { return this.servers.size; }
 
+  getApprovedWorkspaceDefinitionIds(): string[] {
+    const settings = this.normalize(this.options.workspaceSettings().languageServers);
+    const approvals = this.getApprovals();
+    return Object.entries(settings.definitions)
+      .filter(([id, definition]) => approvals[id] === this.definitionHash(definition, settings.settings[id]))
+      .map(([id]) => id);
+  }
+
   async resolveForPath(viewerPath: string, roots: WorkspacePathContext, promptForApproval = true): Promise<LanguageServerResolution> {
     if (this.disposed) return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.NO_SERVER };
     if (!this.options.isWorkspaceTrusted()) return { reason: LANGUAGE_SERVER_RESOLUTION_REASONS.UNTRUSTED };

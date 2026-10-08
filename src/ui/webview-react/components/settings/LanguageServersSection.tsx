@@ -7,6 +7,7 @@ import {
 import type { LanguageServerDefinition } from "@root/types/CtrlYokeSettings";
 import {
   LANGUAGE_SERVER_INSTALL_KINDS,
+  LANGUAGE_SERVER_SELECTIONS,
   LANGUAGE_SERVER_STATUSES,
   LSP_EXPORT_TARGET_IDS,
 } from "@root/types/DashboardConstants";
@@ -69,6 +70,10 @@ const EMPTY_FORM: FormState = {
 export function LanguageServersSection({ activeScope }: Props) {
   const definitions = useLanguageServerStore((s) => s.definitions);
   const catalog = useLanguageServerStore((s) => s.catalog);
+  const detectedLanguages = useLanguageServerStore((s) => s.detectedLanguages);
+  const approvedWorkspaceDefinitionIds = useLanguageServerStore(
+    (s) => s.approvedWorkspaceDefinitionIds
+  );
   const probes = useLanguageServerStore((s) => s.probes);
   const statuses = useLanguageServerStore((s) => s.statuses);
   const hostPlatform = useLanguageServerStore((s) => s.hostPlatform);
@@ -111,10 +116,7 @@ export function LanguageServersSection({ activeScope }: Props) {
     requestServers();
   }, [requestServers]);
 
-  const languages = useMemo(
-    () => [...new Set(catalog.flatMap((entry) => entry.languages))].sort(),
-    [catalog]
-  );
+  const languages = detectedLanguages;
   const probeById = useMemo(
     () => new Map(probes.map((probe) => [probe.id, probe])),
     [probes]
@@ -148,8 +150,18 @@ export function LanguageServersSection({ activeScope }: Props) {
             env: Object.fromEntries(
               form.env
                 .split(/\n/)
-                .map((line) => line.split("=", 2))
-                .filter((parts) => parts.length === 2)
+                .map((line) => {
+                  const separator = line.indexOf("=");
+                  return separator < 0
+                    ? null
+                    : [
+                        line.slice(0, separator).trim(),
+                        line.slice(separator + 1).trim(),
+                      ];
+                })
+                .filter((parts): parts is [string, string] =>
+                  Boolean(parts?.[0])
+                )
             ),
           }
         : {}),
@@ -162,7 +174,12 @@ export function LanguageServersSection({ activeScope }: Props) {
   const requestSelectWrite = (language: string, value: string) =>
     sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
       path: `languageServers.use.${language}`,
-      value: value === "off" ? false : value,
+      value:
+        value === LANGUAGE_SERVER_SELECTIONS.OFF
+          ? false
+          : value === LANGUAGE_SERVER_SELECTIONS.AUTOMATIC
+            ? undefined
+            : value,
       scope: activeScope,
     });
   const copyInstallCommand = async (entry: (typeof catalog)[number]) => {
@@ -230,19 +247,36 @@ export function LanguageServersSection({ activeScope }: Props) {
                 <span className="font-mono text-foreground">{language}</span>
                 <select
                   aria-label={`${language} language server`}
-                  value={String(selections[language] ?? "auto")}
+                  value={
+                    selections[language] === false
+                      ? LANGUAGE_SERVER_SELECTIONS.OFF
+                      : typeof selections[language] === "string"
+                        ? selections[language]
+                        : LANGUAGE_SERVER_SELECTIONS.AUTOMATIC
+                  }
                   onChange={(event) =>
                     requestSelectWrite(language, event.target.value)
                   }
                   className="max-w-48 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg"
                 >
-                  <option value="auto">Automatic</option>
-                  <option value="off">Off</option>
+                  <option value={LANGUAGE_SERVER_SELECTIONS.AUTOMATIC}>
+                    Automatic
+                  </option>
+                  <option value={LANGUAGE_SERVER_SELECTIONS.OFF}>Off</option>
                   {catalog
                     .filter((entry) => entry.languages.includes(language))
                     .map((entry) => (
                       <option key={entry.id} value={entry.id}>
                         {entry.displayName}
+                      </option>
+                    ))}
+                  {definitions
+                    .filter((entry) =>
+                      entry.definition.languages.includes(language)
+                    )
+                    .map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.id} (managed)
                       </option>
                     ))}
                 </select>
@@ -265,13 +299,20 @@ export function LanguageServersSection({ activeScope }: Props) {
             </p>
           ) : (
             rows.map((row) => {
-              const status =
+              const liveStatus =
                 row.status?.status ??
-                (row.managed?.scope === SETTING_SCOPES.WORKSPACE
+                (row.managed?.scope === SETTING_SCOPES.WORKSPACE &&
+                !approvedWorkspaceDefinitionIds.includes(row.id)
                   ? LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL
                   : row.probe?.detected
                     ? LANGUAGE_SERVER_STATUSES.STOPPED
                     : LANGUAGE_SERVER_STATUSES.NOT_INSTALLED);
+              const status =
+                row.managed?.scope === SETTING_SCOPES.WORKSPACE &&
+                approvedWorkspaceDefinitionIds.includes(row.id) &&
+                liveStatus === LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL
+                  ? LANGUAGE_SERVER_STATUSES.STOPPED
+                  : liveStatus;
               const definition = row.managed?.definition ?? row.catalogEntry;
               const exportGroups = buildManagerExportGroups({
                 hasWorkspaceRoot,
@@ -497,14 +538,26 @@ export function LanguageServersSection({ activeScope }: Props) {
                   className="block text-xxs text-description-fg"
                 >
                   {field}
-                  <input
-                    aria-label={field}
-                    value={form[field]}
-                    onChange={(event) =>
-                      setForm({ ...form, [field]: event.target.value })
-                    }
-                    className="mt-0.5 w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg"
-                  />
+                  {field === "env" ? (
+                    <textarea
+                      aria-label={field}
+                      rows={4}
+                      value={form[field]}
+                      onChange={(event) =>
+                        setForm({ ...form, [field]: event.target.value })
+                      }
+                      className="mt-0.5 w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg"
+                    />
+                  ) : (
+                    <input
+                      aria-label={field}
+                      value={form[field]}
+                      onChange={(event) =>
+                        setForm({ ...form, [field]: event.target.value })
+                      }
+                      className="mt-0.5 w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg"
+                    />
+                  )}
                 </label>
               ))}
               <div className="flex gap-2">
@@ -561,6 +614,7 @@ export function LanguageServersSection({ activeScope }: Props) {
               <div className="max-h-[60vh] space-y-2 overflow-auto">
                 {filteredCatalog.map((entry) => {
                   const detected = probeById.get(entry.id)?.detected;
+                  const installState = installing[entry.id];
                   const selected = Object.values(selections).includes(entry.id);
                   return (
                     <article
@@ -590,10 +644,13 @@ export function LanguageServersSection({ activeScope }: Props) {
                           <button
                             type="button"
                             onClick={() => install(entry.id)}
-                            disabled={Boolean(installing[entry.id])}
+                            disabled={Boolean(
+                              installing[entry.id] &&
+                              !installing[entry.id]?.failed
+                            )}
                             className="rounded-sm bg-btn-bg px-2 py-1 text-xxs text-btn-fg"
                           >
-                            {installing[entry.id] ?? "Install"}
+                            {installing[entry.id]?.label ?? "Install"}
                           </button>
                         ) : null}
                         <button
@@ -617,6 +674,24 @@ export function LanguageServersSection({ activeScope }: Props) {
                           </span>
                         )}
                       </div>
+                      {installState?.failed && (
+                        <p role="alert" className="mt-1 text-xxs text-error-fg">
+                          {installState.label}
+                          {installState.copyableCommand && (
+                            <button
+                              type="button"
+                              className="ml-2 underline"
+                              onClick={() =>
+                                void navigator.clipboard?.writeText(
+                                  installState.copyableCommand!
+                                )
+                              }
+                            >
+                              Copy install command
+                            </button>
+                          )}
+                        </p>
+                      )}
                     </article>
                   );
                 })}
@@ -680,9 +755,16 @@ export function LanguageServersSection({ activeScope }: Props) {
           )}
         </section>
       </div>
-      {exportResult && <p role="status" className={`text-xs ${exportResult.success ? "text-success-fg" : "text-error-fg"}`}>
-        {exportResult.success ? `Exported ${exportResult.id} to ${exportResult.targetId} (${exportResult.scope}).` : `Could not export ${exportResult.id}: ${exportResult.error ?? "Unknown error"}`}
-      </p>}
+      {exportResult && (
+        <p
+          role="status"
+          className={`text-xs ${exportResult.success ? "text-success-fg" : "text-error-fg"}`}
+        >
+          {exportResult.success
+            ? `Exported ${exportResult.id} to ${exportResult.targetId} (${exportResult.scope}).`
+            : `Could not export ${exportResult.id}: ${exportResult.error ?? "Unknown error"}`}
+        </p>
+      )}
     </div>
   );
 }

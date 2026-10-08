@@ -6,7 +6,9 @@ export interface WorkspaceRenameConfirmation {
 let current: WorkspaceRenameConfirmation | null = null;
 const listeners = new Set<() => void>();
 
-export function subscribeWorkspaceRenameConfirmation(listener: () => void): () => void {
+export function subscribeWorkspaceRenameConfirmation(
+  listener: () => void
+): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -21,6 +23,7 @@ function setCurrent(next: WorkspaceRenameConfirmation | null): void {
 }
 
 export function confirmWorkspaceRename(fileCount: number): Promise<boolean> {
+  current?.respond(false);
   return new Promise((resolve) => {
     setCurrent({
       fileCount,

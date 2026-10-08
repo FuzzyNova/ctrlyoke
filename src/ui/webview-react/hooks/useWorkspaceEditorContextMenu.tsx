@@ -143,7 +143,9 @@ export function useWorkspaceEditorContextMenu({
             void writeClipboardText(selectionText);
           },
         },
-        ...languageItems,
+        ...(languageItems.length
+          ? [{ type: "divider" as const }, ...languageItems]
+          : []),
         { type: "divider" },
         {
           label: "Add Selection to ctrlyoke",

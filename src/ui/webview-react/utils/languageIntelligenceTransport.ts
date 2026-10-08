@@ -1,6 +1,6 @@
 import type { Transport } from "@codemirror/lsp-client";
 import { confirmWorkspaceRename } from "./workspaceEditConfirmation";
-import { LSP_METHODS } from "@root/types/DashboardConstants";
+import { LSP_METHODS, LSP_SESSION_INVALIDATION_CLOSE } from "@root/types/DashboardConstants";
 
 let workspaceEditHandler: ((uri: string, edits: unknown[]) => void) | undefined;
 export function setWorkspaceEditHandler(
@@ -13,7 +13,7 @@ export interface LspWebSocket {
   readonly readyState: number;
   onopen: (() => void) | null;
   onmessage: ((event: { data: unknown }) => void) | null;
-  onclose: (() => void) | null;
+  onclose: ((event?: { code?: number }) => void) | null;
   onerror: (() => void) | null;
   send(message: string): void;
   close(): void;
@@ -35,7 +35,8 @@ export class LanguageIntelligenceTransport implements Transport {
     private readonly url: string,
     private readonly createSocket: LspWebSocketFactory,
     private readonly onConnect: () => void,
-    private readonly onDisconnect: () => void
+    private readonly onDisconnect: () => void,
+    private readonly onSessionEnded: () => void = () => undefined
   ) {}
 
   start(): void {
@@ -82,10 +83,11 @@ export class LanguageIntelligenceTransport implements Transport {
       if (this.handleProxyMessage(message)) return;
       for (const handler of [...this.handlers]) handler(message);
     };
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       if (this.disposed || this.socket !== socket) return;
       this.socket = null;
       this.onDisconnect();
+      if (event?.code === LSP_SESSION_INVALIDATION_CLOSE.CODE) { this.onSessionEnded(); return; }
       this.scheduleReconnect();
     };
     socket.onerror = () => socket.close();
@@ -94,10 +96,11 @@ export class LanguageIntelligenceTransport implements Transport {
   private handleProxyMessage(raw: string): boolean {
     let message: { id?: string | number; method?: string; params?: unknown };
     try { message = JSON.parse(raw) as typeof message; } catch { return false; }
+    const socket = this.socket;
     if (message.method === LSP_METHODS.CONFIRM_WORKSPACE_RENAME && message.id !== undefined) {
       const fileCount = (message.params as { fileCount?: unknown } | undefined)?.fileCount;
       void confirmWorkspaceRename(typeof fileCount === "number" ? fileCount : 0).then((confirmed) => {
-        this.send(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: confirmed }));
+        if (!this.disposed && socket && this.socket === socket && socket.readyState === OPEN) socket.send(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: confirmed }));
       });
       return true;
     }

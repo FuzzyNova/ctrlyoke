@@ -21,7 +21,11 @@ interface ClientSession {
   client: LSPClient;
   transport: LanguageIntelligenceTransport;
   refs: number;
+  disposeTimer?: ReturnType<typeof setTimeout>;
+  sessionEndedListeners: Set<() => void>;
 }
+
+const SESSION_DISPOSE_GRACE_MS = 500;
 
 const sessions = new Map<string, ClientSession>();
 const editorViews = new Map<string, EditorView>();
@@ -36,7 +40,9 @@ export function applyWorkspaceTextEdits(uri: string, edits: unknown[]): void {
     if (typeof edit.newText !== "string" || !edit.range?.start || !edit.range.end) return [];
     const offset = (position: { line?: number; character?: number }) => {
       if (typeof position.line !== "number" || typeof position.character !== "number") return 0;
-      return view.state.doc.line(Math.min(view.state.doc.lines, position.line + 1)).from + position.character;
+      if (position.line >= view.state.doc.lines) return view.state.doc.length;
+      const line = view.state.doc.line(Math.max(1, position.line + 1));
+      return Math.min(line.to, line.from + Math.max(0, position.character));
     };
     const from = offset(edit.range.start);
     const to = offset(edit.range.end);
@@ -214,18 +220,21 @@ export function acquireLanguageIntelligenceClient(
   languageId: string,
   filePath: string,
   socketUrl: string,
-  createSocket: LspWebSocketFactory
+  createSocket: LspWebSocketFactory,
+  onSessionEnded?: () => void
 ): { extension: ReturnType<LSPClient["plugin"]>; release: () => void } {
   let session = sessions.get(sessionId);
   if (!session) {
     let client: LSPClient;
+    const sessionEndedListeners = new Set<() => void>();
     const transport = new LanguageIntelligenceTransport(
       socketUrl,
       createSocket,
       () => client.connect(transport),
       () => {
         if (client.connected) client.disconnect();
-      }
+      },
+      () => { for (const listener of sessionEndedListeners) listener(); }
     );
     client = new LSPClient({
       // Keep phase 3 navigation/rename keymaps out until their viewer UX exists.
@@ -233,24 +242,31 @@ export function acquireLanguageIntelligenceClient(
       workspace: (connectedClient) =>
         new WorkspaceViewerLspWorkspace(connectedClient),
     });
-    session = { client, transport, refs: 0 };
+    session = { client, transport, refs: 0, sessionEndedListeners };
     sessions.set(sessionId, session);
     transport.start();
   }
+  if (session.disposeTimer) { clearTimeout(session.disposeTimer); session.disposeTimer = undefined; }
   session.refs += 1;
+  const sessionEnded = () => onSessionEnded?.();
+  if (onSessionEnded) session.sessionEndedListeners.add(sessionEnded);
   let released = false;
   return {
     extension: session.client.plugin(workspaceFileUri(filePath), languageId),
     release: () => {
       if (released) return;
       released = true;
+      session.sessionEndedListeners.delete(sessionEnded);
       const current = sessions.get(sessionId);
       if (!current) return;
       current.refs -= 1;
-      if (current.refs > 0) return;
-      sessions.delete(sessionId);
-      current.client.disconnect();
-      current.transport.dispose();
+      if (current.refs > 0 || current.disposeTimer) return;
+      current.disposeTimer = setTimeout(() => {
+        if (sessions.get(sessionId) !== current || current.refs > 0) return;
+        sessions.delete(sessionId);
+        current.client.disconnect();
+        current.transport.dispose();
+      }, SESSION_DISPOSE_GRACE_MS);
     },
   }
 }

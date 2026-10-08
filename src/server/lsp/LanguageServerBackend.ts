@@ -38,6 +38,8 @@ export interface LanguageServerBackend {
   startLanguages?(languageIds: readonly string[]): Promise<void>;
   restartServer?(id: string): Promise<void>;
   requestWorkspaceApproval?(): Promise<boolean>;
+  getApprovedWorkspaceDefinitionIds?(): string[];
+  getApprovedWorkspaceDefinitionIds?(): string[];
   stopManagedServer?(id: string): Promise<void>;
   dispose?(): void | Promise<void>;
 }

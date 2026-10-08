@@ -36,27 +36,42 @@ interface State {
   catalog: readonly LanguageServerCatalogEntry[];
   probes: LanguageServerProbeResult[];
   statuses: LanguageServerStatusEntry[];
+  detectedLanguages: string[];
+  approvedWorkspaceDefinitionIds: string[];
   localServers: LocalLanguageServerEntry[];
   localError?: string;
   loading: boolean;
   scanning: boolean;
   query: string;
   tab: LanguageServerTab;
-  installing: Record<string, string | undefined>;
+  installing: Record<
+    string,
+    { label: string; copyableCommand?: string; failed: boolean } | undefined
+  >;
   exportedTargets: Record<string, string[]>;
-  exportResult?: { id: string; targetId: LspExportTargetId; scope: SettingWriteScope; success: boolean; error?: string };
+  exportResult?: {
+    id: string;
+    targetId: LspExportTargetId;
+    scope: SettingWriteScope;
+    success: boolean;
+    error?: string;
+  };
   setServers: (
     payload: Pick<
       State,
       "hostPlatform" | "definitions" | "catalog" | "probes" | "statuses"
-    >
+    > &
+      Partial<
+        Pick<State, "detectedLanguages" | "approvedWorkspaceDefinitionIds">
+      >
   ) => void;
   setLocalScan: (servers: LocalLanguageServerEntry[], error?: string) => void;
   setInstallProgress: (
     id: string,
     output?: string,
     error?: string,
-    complete?: boolean
+    complete?: boolean,
+    copyableCommand?: string
   ) => void;
   setExportResult: (result: NonNullable<State["exportResult"]>) => void;
   setQuery: (query: string) => void;
@@ -81,6 +96,8 @@ export const useLanguageServerStore = create<State>((set) => ({
   catalog: [],
   probes: [],
   statuses: [],
+  detectedLanguages: [],
+  approvedWorkspaceDefinitionIds: [],
   localServers: [],
   loading: false,
   scanning: false,
@@ -88,20 +105,46 @@ export const useLanguageServerStore = create<State>((set) => ({
   tab: LANGUAGE_SERVER_TABS.CATALOG,
   installing: {},
   exportedTargets: {},
-  setExportResult: (result) => set((state) => ({
-    exportResult: result,
-    exportedTargets: result.success
-      ? { ...state.exportedTargets, [result.id]: [...new Set([...(state.exportedTargets[result.id] ?? []), `${result.targetId}:${result.scope}`])] }
-      : state.exportedTargets,
-  })),
-  setServers: (payload) => set({ ...payload, loading: false }),
+  setExportResult: (result) =>
+    set((state) => ({
+      exportResult: result,
+      exportedTargets: result.success
+        ? {
+            ...state.exportedTargets,
+            [result.id]: [
+              ...new Set([
+                ...(state.exportedTargets[result.id] ?? []),
+                `${result.targetId}:${result.scope}`,
+              ]),
+            ],
+          }
+        : state.exportedTargets,
+    })),
+  setServers: (payload) =>
+    set({
+      ...payload,
+      detectedLanguages: payload.detectedLanguages ?? [],
+      approvedWorkspaceDefinitionIds:
+        payload.approvedWorkspaceDefinitionIds ?? [],
+      loading: false,
+    }),
   setLocalScan: (localServers, localError) =>
     set({ localServers, localError, scanning: false }),
-  setInstallProgress: (id, output, error, complete) =>
+  setInstallProgress: (id, output, error, complete, copyableCommand) =>
     set((state) => ({
       installing: {
         ...state.installing,
-        [id]: complete ? undefined : (error ?? output ?? "Installing…"),
+        [id]:
+          complete && !error && !copyableCommand
+            ? undefined
+            : {
+                label:
+                  error ??
+                  output ??
+                  (complete ? "Install failed" : "Installing…"),
+                copyableCommand,
+                failed: Boolean(error),
+              },
       },
     })),
   setQuery: (query) => set({ query }),

@@ -2784,6 +2784,8 @@ export interface LspServersUpdateMessage {
   catalog: readonly LanguageServerCatalogEntry[];
   probes: LanguageServerProbeResult[];
   statuses: LanguageServerStatusChange[];
+  detectedLanguages?: string[];
+  approvedWorkspaceDefinitionIds?: string[];
 }
 
 export interface LspLocalScanResultMessage {

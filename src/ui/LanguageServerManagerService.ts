@@ -36,6 +36,38 @@ function executablePath(name: string, entries: string[]): string | undefined {
   return undefined;
 }
 
+function detectWorkspaceLanguages(root: string, definitions: readonly { definition: LanguageServerDefinition }[]): string[] {
+  const languageByExtension = new Map<string, string>();
+  for (const entry of LANGUAGE_SERVER_CATALOG) for (const extension of entry.extensions) {
+    if (!languageByExtension.has(extension.toLowerCase())) languageByExtension.set(extension.toLowerCase(), entry.languages[0] ?? "");
+  }
+  languageByExtension.set("tsx", "typescriptreact");
+  languageByExtension.set("jsx", "javascriptreact");
+  languageByExtension.set("ts", "typescript");
+  languageByExtension.set("js", "javascript");
+  for (const { definition } of definitions) for (const extension of definition.extensions) {
+    if (definition.languages[0]) languageByExtension.set(extension.toLowerCase(), definition.languages[0]);
+  }
+  const detected = new Set<string>();
+  const ignored = new Set([".git", "node_modules", ".ctrlyoke", "vendor", "dist", "build"]);
+  const pending = [root];
+  let visited = 0;
+  while (pending.length && visited < 5000) {
+    const directory = pending.pop()!;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(directory, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (++visited >= 5000) break;
+      if (entry.isDirectory() && !ignored.has(entry.name)) pending.push(path.join(directory, entry.name));
+      else if (entry.isFile()) {
+        const language = languageByExtension.get(path.extname(entry.name).slice(1).toLowerCase());
+        if (language) detected.add(language);
+      }
+    }
+  }
+  return [...detected].sort();
+}
+
 export class LanguageServerManagerService {
   private readonly clients = new Map<string, WebviewClientContext>();
   private readonly statuses = new Map<string, LanguageServerStatusChange>();
@@ -65,7 +97,7 @@ export class LanguageServerManagerService {
     this.clients.set(ctx.clientId, ctx);
     const [definitions, probes] = await Promise.all([this.readDefinitions(), this.probeCatalog()]);
     this.definitions = definitions; this.probes = probes;
-    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, hostPlatform: getHostPlatform(), definitions, catalog: LANGUAGE_SERVER_CATALOG, probes, statuses: [...this.statuses.values()] });
+    ctx.emit(this.createUpdate(definitions, probes));
   }
 
   async handleRequestLocalScan(ctx: WebviewClientContext, _message: RequestLspLocalScanMessage): Promise<void> {
@@ -161,13 +193,17 @@ export class LanguageServerManagerService {
 
   private pushStatus(event: LanguageServerStatusChange): void {
     this.statuses.set(`${event.id}\n${path.resolve(event.rootPath)}`, event);
-    const message = { type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, hostPlatform: getHostPlatform(), definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] };
+    const message = this.createUpdate(this.definitions, this.probes);
     for (const client of this.clients.values()) client.emit(message);
   }
 
   private async emitUpdate(ctx: WebviewClientContext): Promise<void> {
     this.definitions = await this.readDefinitions(); this.probes = await this.probeCatalog();
-    ctx.emit({ type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, hostPlatform: getHostPlatform(), definitions: this.definitions, catalog: LANGUAGE_SERVER_CATALOG, probes: this.probes, statuses: [...this.statuses.values()] });
+    ctx.emit(this.createUpdate(this.definitions, this.probes));
+  }
+
+  private createUpdate(definitions: Array<{ id: string; definition: LanguageServerDefinition; scope: SettingWriteScope }>, probes: LanguageServerProbeResult[]) {
+    return { type: MESSAGE_TYPES.LSP_SERVERS_UPDATE, hostPlatform: getHostPlatform(), definitions, catalog: LANGUAGE_SERVER_CATALOG, probes, statuses: [...this.statuses.values()], detectedLanguages: detectWorkspaceLanguages(this.getWorkspaceRoot(), definitions), approvedWorkspaceDefinitionIds: this.host?.getApprovedWorkspaceDefinitionIds() ?? [] };
   }
 
   private async readDefinitions(): Promise<Array<{ id: string; definition: LanguageServerDefinition; scope: SettingWriteScope }>> {

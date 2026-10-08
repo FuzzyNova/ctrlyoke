@@ -2073,6 +2073,9 @@ export function createMessageHandlers(
       catalog: message.catalog ?? [],
       probes: message.probes ?? [],
       statuses: message.statuses ?? [],
+      detectedLanguages: message.detectedLanguages ?? [],
+      approvedWorkspaceDefinitionIds:
+        message.approvedWorkspaceDefinitionIds ?? [],
     });
   };
   handlers[MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT] = (message) => {
@@ -2087,7 +2090,8 @@ export function createMessageHandlers(
         message.id,
         message.output,
         message.error,
-        message.complete
+        message.complete,
+        message.copyableCommand
       );
   };
   handlers[MESSAGE_TYPES.LSP_EXPORT_RESULT] = (message) => {

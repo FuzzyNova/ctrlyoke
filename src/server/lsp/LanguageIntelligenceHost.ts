@@ -135,6 +135,10 @@ export class LanguageIntelligenceHost {
     return this.options.backend.requestWorkspaceApproval?.() ?? false;
   }
 
+  getApprovedWorkspaceDefinitionIds(): string[] {
+    return this.options.backend.getApprovedWorkspaceDefinitionIds?.() ?? [];
+  }
+
   async stopServer(id: string): Promise<void> {
     if (!this.options.backend.stopManagedServer) throw new Error("This language server host does not support stop.");
     await this.options.backend.stopManagedServer(id);

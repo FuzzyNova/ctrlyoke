@@ -2046,6 +2046,11 @@ export const LANGUAGE_SERVER_INSTALL_KINDS = {
   COMMAND: "command",
 } as const;
 
+export const LANGUAGE_SERVER_SELECTIONS = {
+  AUTOMATIC: "auto",
+  OFF: "off",
+} as const;
+
 /** Normalized format discriminants consumed by local LSP config discovery. */
 export const LSP_DISCOVERY_FORMATS = {
   QWEN: "qwen",

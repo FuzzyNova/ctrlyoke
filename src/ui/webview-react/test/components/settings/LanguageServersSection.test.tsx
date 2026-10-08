@@ -15,6 +15,7 @@ import {
   SETTING_SCOPES,
 } from "@/types/messages";
 import type { LanguageServerCatalogEntry } from "@root/types/WebviewMessageTypes";
+import { useSettingsStore } from "@store/settingsStore";
 
 const catalog: LanguageServerCatalogEntry[] = [
   {
@@ -73,6 +74,8 @@ function seed(
           },
         ]
       : [],
+    detectedLanguages: ["python"],
+    approvedWorkspaceDefinitionIds: [],
     localServers: [],
     localError: undefined,
     loading: false,
@@ -125,6 +128,94 @@ describe("LanguageServersSection", () => {
         scope: SETTING_SCOPES.USER,
       }
     );
+  });
+
+  it("shows Off for false selections and removes the active-scope override for Automatic", () => {
+    const originalGlobalSettings = useSettingsStore.getState().globalSettings;
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        languageServers: { use: { python: false } },
+      } as never,
+    }));
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.USER} />);
+    expect(
+      (screen.getByLabelText("python language server") as HTMLSelectElement)
+        .value
+    ).toBe("off");
+    fireEvent.change(screen.getByLabelText("python language server"), {
+      target: { value: "auto" },
+    });
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      {
+        path: "languageServers.use.python",
+        value: undefined,
+        scope: SETTING_SCOPES.USER,
+      }
+    );
+    useSettingsStore.setState({ globalSettings: originalGlobalSettings });
+  });
+
+  it("offers managed definitions in the detected language dropdown", () => {
+    seed(LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL);
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+    expect(
+      screen.getByRole("option", { name: "pyright (managed)" })
+    ).toBeTruthy();
+  });
+
+  it("keeps approved workspace definitions from showing an approval action", () => {
+    seed(LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL);
+    useLanguageServerStore.setState({
+      approvedWorkspaceDefinitionIds: ["pyright"],
+      statuses: [],
+    });
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+    expect(screen.getByText("Stopped")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+  });
+
+  it("parses environment values at the first equals sign from a multiline field", () => {
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.USER} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add server" }));
+    fireEvent.change(screen.getByLabelText("id"), {
+      target: { value: "custom" },
+    });
+    fireEvent.change(screen.getByLabelText("command"), {
+      target: { value: "custom-lsp --stdio" },
+    });
+    fireEvent.change(screen.getByLabelText("env"), {
+      target: { value: "TOKEN=first=second\nMODE=fast" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.SAVE_LSP_DEFINITION,
+      expect.objectContaining({
+        id: "custom",
+        definition: expect.objectContaining({
+          env: { TOKEN: "first=second", MODE: "fast" },
+        }),
+        scope: SETTING_SCOPES.USER,
+      })
+    );
+  });
+
+  it("shows install errors and a copyable command in the catalog row", () => {
+    useLanguageServerStore
+      .getState()
+      .setInstallProgress(
+        "pyright",
+        undefined,
+        "npm failed",
+        true,
+        "npm install pyright"
+      );
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+    expect(screen.getByRole("alert").textContent).toContain("npm failed");
+    expect(
+      screen.getAllByRole("button", { name: "Copy install command" })
+    ).toHaveLength(2);
   });
 
   it("exports a managed definition through the Save flyout", () => {

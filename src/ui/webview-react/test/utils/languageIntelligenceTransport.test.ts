@@ -3,12 +3,13 @@ import {
   LanguageIntelligenceTransport,
   type LspWebSocket,
 } from "@utils/languageIntelligenceTransport";
+import { getWorkspaceRenameConfirmation } from "@utils/workspaceEditConfirmation";
 
 class FakeSocket implements LspWebSocket {
   readyState = 0;
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event?: { code?: number }) => void) | null = null;
   onerror: (() => void) | null = null;
   sent: string[] = [];
 
@@ -30,9 +31,9 @@ class FakeSocket implements LspWebSocket {
     this.onmessage?.({ data });
   }
 
-  disconnect(): void {
+  disconnect(code = 1006): void {
     this.readyState = 3;
-    this.onclose?.();
+    this.onclose?.({ code });
   }
 }
 
@@ -53,7 +54,9 @@ describe("LanguageIntelligenceTransport", () => {
     socket.open();
 
     transport.send('{"jsonrpc":"2.0","method":"initialized"}');
-    socket.receive('{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics"}');
+    socket.receive(
+      '{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics"}'
+    );
 
     expect(onConnect).toHaveBeenCalledOnce();
     expect(socket.sent).toEqual(['{"jsonrpc":"2.0","method":"initialized"}']);
@@ -87,6 +90,42 @@ describe("LanguageIntelligenceTransport", () => {
 
       expect(sockets).toHaveLength(2);
       expect(received).toHaveBeenCalledWith("reconnected");
+      transport.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("relooks up ended sessions instead of reconnecting and drops stale confirmation replies", async () => {
+    vi.useFakeTimers();
+    try {
+      const socket = new FakeSocket();
+      const ended = vi.fn();
+      const transport = new LanguageIntelligenceTransport(
+        "ws://localhost",
+        () => socket,
+        vi.fn(),
+        vi.fn(),
+        ended
+      );
+      transport.start();
+      socket.open();
+      socket.receive(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 7,
+          method: "ctrlyoke/confirmWorkspaceRename",
+          params: { fileCount: 2 },
+        })
+      );
+      const confirmation = getWorkspaceRenameConfirmation();
+      expect(confirmation).not.toBeNull();
+      socket.disconnect(4410);
+      confirmation?.respond(true);
+      await Promise.resolve();
+      expect(ended).toHaveBeenCalledOnce();
+      expect(socket.sent).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
       transport.dispose();
     } finally {
       vi.useRealTimers();

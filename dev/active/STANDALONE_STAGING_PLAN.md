@@ -277,6 +277,7 @@ names the guard or test that proves it, not just the code change.
     dirty document` failure. That test passed in isolation, as did all six
     focused Stage 15a/router tests.
   - **15b — done (2026-10-07):** `useLanguageServerStore`, `LanguageServersSection`, shared manager UI helpers extracted from `McpManagerSection`, and settings drawer/catalog integration. Status rendering, scoped language choices, install confirmation, and MCP regression coverage pass. `npm run typecheck`, `npm run lint`, and `npm test` pass (extension 5,640/4 pending, UI 3,489, packaging 80).
+  - **Browser review fixes (2026-10-07; 12b/14b/15b):** preserve the LSP compartment when read-only rebuilds the editor; defer unreferenced clients briefly; repeat session lookup on close code `4410`; clamp whole-document edits; settle replaced rename confirmations and drop stale socket replies; correct Automatic/Off selection, env editing, install errors, and approval display; send detected workspace languages and show managed servers in the language selector; group LSP context actions after Copy. Focused Vitest coverage passes.
   - Warm-on-`#` moved from 13 to **16** (its only consumer).
   - **17 — done 2026-10-07:** harness export only. Node `DiagnosticsSource`
     remains **17b**, blocked on `VSCODE_LSP_MCP_PLAN.md` Phase 1 defining the
