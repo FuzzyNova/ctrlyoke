@@ -303,6 +303,16 @@ suite("WorkflowDocumentLocation: YAML", () => {
     assert.strictEqual(sequence.role, ROLE.VALUE);
     assert.strictEqual(sequence.key, "skills");
     assert.deepStrictEqual(sequence.path, ["steps", 0, "skills", 1]);
+    assert.strictEqual(mapping.inFlowCollection, true);
+    assert.strictEqual(sequence.inFlowCollection, true);
+    const partial = locate(
+      "steps:\n  - { prompt: hi, end§ }\n",
+      WORKFLOW_YAML
+    ).loc;
+    assert.strictEqual(partial.role, ROLE.KEY);
+    assert.strictEqual(partial.inFlowCollection, true);
+    const block = locate("steps:\n  - prompt: hi\n    §\n", WORKFLOW_YAML).loc;
+    assert.ok(!block.inFlowCollection);
   });
 
   test("trailing comments and quote boundaries are not text", () => {
@@ -444,6 +454,22 @@ suite("WorkflowDocumentLocation: JSON", () => {
     assert.strictEqual(skill.role, ROLE.VALUE);
     assert.strictEqual(skill.key, "skills");
     assert.deepStrictEqual(skill.path, ["steps", 0, "skills", 0]);
+  });
+
+  test("whitespace inside an array is the next element slot", () => {
+    const empty = locate(
+      '{"steps":[{"prompt":"a","skills":[§]}]}',
+      WORKFLOW_JSON
+    ).loc;
+    assert.strictEqual(empty.role, ROLE.VALUE);
+    assert.strictEqual(empty.key, "skills");
+    assert.deepStrictEqual(empty.path, ["steps", 0, "skills", 0]);
+    const second = locate(
+      '{"steps":[{"prompt":"a","skills":["x", §]}]}',
+      WORKFLOW_JSON
+    ).loc;
+    assert.deepStrictEqual(second.path, ["steps", 0, "skills", 1]);
+    assert.ok(!second.jsonString);
   });
 
   test("parallel members and finalStep", () => {

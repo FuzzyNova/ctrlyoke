@@ -12,6 +12,15 @@ import { findCodeRanges } from "../../utils/FileReferenceParser";
 
 const { WORKFLOW_YAML, WORKFLOW_JSON, PROMPT_MARKDOWN } = CTRLYOKE_FILE_KINDS;
 
+/** The parser's value at a span's path. */
+function parsedValueAt(source: string, span: WorkflowTextSpan): unknown {
+  let value: unknown = parseYaml(source);
+  for (const key of span.path) {
+    value = (value as Record<string | number, unknown> | undefined)?.[key];
+  }
+  return value;
+}
+
 /** Every decoded character that is not produced by an escape or a fold maps to itself. */
 function assertMapsBack(
   source: string,
@@ -95,6 +104,40 @@ suite("WorkflowPromptRanges: YAML", () => {
       assert.ok(span, JSON.stringify(text));
       assert.strictEqual(span.text, expected, JSON.stringify(text));
       assert.ok(span.exact, JSON.stringify(text));
+    }
+  });
+
+  test("an explicit indentation indicator is relative to the parent node", () => {
+    // YAML measures `|2` from the key's column (or a bare entry's `-`), not
+    // from the header line's leading spaces. Each fixture's prompts contain
+    // `@a.ts`, which must map back to the source character.
+    const fixtures = [
+      "steps:\n  - prompt: |2\n      see @a.ts `x`\n",
+      // A parallel member with `|4`.
+      "steps:\n  - prompt: |2\n      see @a.ts\n  - prompt: |4\n        see @a.ts\n         more\n",
+      "steps:\n  - prompt: |2\n        two extra @a.ts\n      base\n",
+      "steps:\n  -   prompt: |2\n        wide dash @a.ts\n",
+      "steps:\n  - type: prompt\n    prompt: |2\n        second key @a.ts\n",
+      "finalStep:\n  prompt: |1\n     nested map @a.ts\n",
+      "steps:\n  - parallel:\n      - prompt: |2\n          parallel @a.ts\n",
+      "steps:\n  - prompt: >2\n      folded\n      @a.ts\n\n       more\n",
+      "steps:\n  - prompt: |2-\n      strip @a.ts\n\n",
+      "steps:\n  - prompt: |+2\n      keep @a.ts\n\n",
+      "steps:\n  - prompt: |-2\n      strip first @a.ts\n",
+      "steps:\n  - &p prompt: !!str |2\n        anchored @a.ts\n",
+      // A header alone on its line belongs to the key above it.
+      "steps:\n  - prompt: # c\n      # d\n      |2\n        own line @a.ts\n",
+      "steps:\r\n  - prompt: |2\r\n      crlf @a.ts\r\n",
+    ];
+    for (const text of fixtures) {
+      const spans = getWorkflowTextSpans(text, WORKFLOW_YAML);
+      assert.ok(spans.length > 0, JSON.stringify(text));
+      for (const span of spans) {
+        const expected = parsedValueAt(text, span);
+        assert.strictEqual(span.text, expected, JSON.stringify(text));
+        assert.ok(span.exact, JSON.stringify(text));
+        assertMapsBack(text, span, "@a.ts");
+      }
     }
   });
 

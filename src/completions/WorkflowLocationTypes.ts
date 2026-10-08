@@ -44,6 +44,8 @@ export interface WorkflowLocation {
   /** The cursor is inside a JSON string literal, so inserted text must be escaped. */
   readonly jsonString?: boolean;
   readonly scalarStyle?: YamlScalarStyle;
+  /** Inside a YAML flow collection (`{ ... }`, `[ ... ]`), where only single-line flow syntax is valid. */
+  readonly inFlowCollection?: boolean;
 }
 
 /**
@@ -234,6 +236,7 @@ export interface WorkflowLocationInput {
   readonly valueRange?: WorkflowTextRange;
   readonly jsonString?: boolean;
   readonly scalarStyle?: YamlScalarStyle;
+  readonly inFlowCollection?: boolean;
   /** Overrides the derived role, e.g. NONE for a comment. */
   readonly role?: WorkflowLocationRole;
 }
@@ -268,5 +271,6 @@ export function buildWorkflowLocation(
     valueRange: input.valueRange,
     jsonString: input.jsonString,
     scalarStyle: input.scalarStyle,
+    inFlowCollection: input.inFlowCollection || undefined,
   };
 }

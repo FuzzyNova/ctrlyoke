@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), in the full `npm test` run after merging Wave 2 of the editor intelligence plans
 - **Area:** `src/test/suite/VsCodeDocuments.test.ts`, `src/platform/VsCodeDocuments.ts` (`saveIfDirty`)
-- **Severity:** low (test-only so far)
+- **Resolution:** fixed in this commit, defensively: `saveIfDirty` now also checks visible editors and dirty tabs, and the test waits for the active editor. The eviction itself never reproduced, so watch for a recurrence.
 
 ## Symptom
 

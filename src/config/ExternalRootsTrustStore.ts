@@ -41,6 +41,7 @@ const DECISION_KEY_SEPARATOR = "␟";
  */
 export class ExternalRootsTrustStore {
   private readonly writeQueue = new AsyncWriteQueue();
+  private readonly listeners = new Set<() => void>();
 
   constructor(private readonly storePath: string) {}
 
@@ -165,6 +166,18 @@ export class ExternalRootsTrustStore {
       }
       await this.save(data);
     });
+    for (const listener of this.listeners) listener();
+  }
+
+  /**
+   * Run `listener` after each decision this process records. Writes made by
+   * another process (the standalone CLI) are not observed.
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 }
 

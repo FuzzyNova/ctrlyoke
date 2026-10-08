@@ -27,18 +27,41 @@ async function diagnose(
 }
 
 suite("getWorkflowPromptDiagnostics", () => {
-  test("flags a missing file and a missing step in a .prompt.md body", async () => {
-    const text = "---\nname: x\n---\nRead @missing.ts and $step:2\n";
+  test("flags a missing file in a .prompt.md body", async () => {
+    const text = "---\nname: x\n---\nRead @missing.ts and @present.ts\n";
     assert.deepStrictEqual(
       await diagnose(text, CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN),
       [
         {
-          code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_STEP_MISSING,
-          text: "$step:2",
-        },
-        {
           code: PROMPT_DIAGNOSTIC_CODES.UNRESOLVED_REFERENCE,
           text: "@missing.ts",
+        },
+      ]
+    );
+  });
+
+  test("does not guess a .prompt.md body's position, since a step can load it", async () => {
+    // A step's prompt, finalStep or retryPrompt can name the file, and the
+    // body is expanded in that position at runtime; only the workflow knows it.
+    const text = [
+      "Use $previous, $previous:3, $all, $step:2, $finalStep",
+      "and $endCondition:stdout.",
+      "",
+    ].join("\n");
+    assert.deepStrictEqual(
+      await diagnose(text, CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN),
+      []
+    );
+  });
+
+  test("still flags position-independent mistakes in a .prompt.md body", async () => {
+    const text = "Fix $endCondition:stdot\n";
+    assert.deepStrictEqual(
+      await diagnose(text, CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN),
+      [
+        {
+          code: PROMPT_DIAGNOSTIC_CODES.CONDITION_FIELD_UNKNOWN,
+          text: "$endCondition:stdot",
         },
       ]
     );

@@ -303,6 +303,51 @@ function splitBlockLines(
 }
 
 /**
+ * Where a line's node starts: past its indentation and any `- ` sequence
+ * indicators. `lastDash` is the column of the innermost `-`, if any.
+ */
+function lineNodeColumns(
+  text: string,
+  lineStart: number,
+  limit: number
+): { node: number; lastDash?: number } {
+  let index = lineStart;
+  while (text[index] === " ") index++;
+  let lastDash: number | undefined;
+  while (index < limit && text[index] === "-" && isBlank(text[index + 1])) {
+    lastDash = index - lineStart;
+    index++;
+    while (isBlank(text[index])) index++;
+  }
+  return { node: index - lineStart, lastDash };
+}
+
+const isBlankOrCommentLine = (line: string) => /^\s*(#.*)?$/.test(line);
+
+/**
+ * The indentation of a block scalar's parent node, which YAML 1.2 measures an
+ * explicit indentation indicator (`|2`) from. For a mapping value that is the
+ * key's column, so `  - prompt: |2` is relative to `prompt` (4), not to the
+ * line's leading spaces (2). A sequence entry (`- |2`) is relative to its `-`.
+ * A header alone on its line belongs to the key on the previous content line.
+ */
+function blockParentIndent(text: string, headerStart: number): number {
+  const lineStart = text.lastIndexOf("\n", headerStart - 1) + 1;
+  const { node, lastDash } = lineNodeColumns(text, lineStart, headerStart);
+  if (lineStart + node < headerStart) return node;
+  if (lastDash !== undefined) return lastDash;
+  let previousEnd = lineStart - 1;
+  while (previousEnd > 0) {
+    const previousStart = text.lastIndexOf("\n", previousEnd - 1) + 1;
+    if (!isBlankOrCommentLine(text.slice(previousStart, previousEnd))) {
+      return lineNodeColumns(text, previousStart, previousEnd).node;
+    }
+    previousEnd = previousStart - 1;
+  }
+  return 0;
+}
+
+/**
  * Decode a block scalar (`|` or `>`) whose header starts at `headerStart` and
  * whose node ends at `end`. Content lines are dedented by the block's indent;
  * `>` folds, and the chomping indicator decides the trailing newlines.
@@ -330,10 +375,7 @@ export function decodeYamlBlockScalar(
   const explicitIndent = Number(indicators?.[2] || 0);
   let indent: number;
   if (explicitIndent > 0) {
-    // Relative to the line that holds the header.
-    const headerLineStart = text.lastIndexOf("\n", headerStart - 1) + 1;
-    indent =
-      leadingSpaces(text.slice(headerLineStart, headerStart)) + explicitIndent;
+    indent = blockParentIndent(text, headerStart) + explicitIndent;
   } else {
     const first = lines.find((line) => line.text.trim() !== "");
     indent = first ? leadingSpaces(first.text) : 0;

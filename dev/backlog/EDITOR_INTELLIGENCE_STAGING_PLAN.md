@@ -2,9 +2,9 @@
 
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
 **F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
-merged and reviewed; its review fixes are on `main`. **Wave 3 can start.** F4 opens with the
-one F3 bug the review filed (see the Wave 2 review). This plan only orders the work. The
-design lives in the three plans it stages.
+merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
+review filed. **Wave 3 can start** with no prerequisite fix. This plan only orders the work.
+The design lives in the three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
 
@@ -67,7 +67,7 @@ All five phases were merged to `main` (the conflicts were the shared progress ta
 `completions.instructions.md`, which every branch edited) and reviewed against their plans.
 Every finding below was reproduced with a probe. The full `npm test` passed apart from one
 unrelated, pre-existing flake (filed as
-[`vscode-documents-dirty-save-test-flake`](../bugs/backlog/vscode-documents-dirty-save-test-flake.md)).
+[`vscode-documents-dirty-save-test-flake`](../bugs/implemented/vscode-documents-dirty-save-test-flake.md)).
 
 - **F0:** no regressions. The completion client's stale-response guard, progressive `#` cache
   and icon seeding match the old code; the global sequence numbers fix an old two-editor
@@ -82,7 +82,7 @@ unrelated, pre-existing flake (filed as
     now uses a file system watcher.
   - An older pass could overwrite a newer one at the same document version.
 - **D2, filed:**
-  [`vscode-prompt-diagnostics-symbol-lookups-and-trust-refresh`](../bugs/backlog/vscode-prompt-diagnostics-symbol-lookups-and-trust-refresh.md)
+  [`vscode-prompt-diagnostics-symbol-lookups-and-trust-refresh`](../bugs/implemented/vscode-prompt-diagnostics-symbol-lookups-and-trust-refresh.md)
   covers unused symbol-kind lookups on every pass, and no refresh when trust changes.
 - **B and M4, fixed:**
   - **High:** a YAML comment containing `prompt: |` turned the rest of the file into markdown,
@@ -90,7 +90,7 @@ unrelated, pre-existing flake (filed as
   - Inexactly decoded spans mapped code ranges onto the wrong characters, which suppressed
     live references. Both consumers now check `span.exact`. One of the decoder's two causes,
     a leading tab counted as indent, is fixed; the other is filed as
-    [`yaml-block-scalar-indent-indicator-measured-from-wrong-column`](../bugs/backlog/yaml-block-scalar-indent-indicator-measured-from-wrong-column.md).
+    [`yaml-block-scalar-indent-indicator-measured-from-wrong-column`](../bugs/implemented/yaml-block-scalar-indent-indicator-measured-from-wrong-column.md).
   - Every completion request re-parsed the whole file. Code ranges are now cached per
     document version, and computed only once a trigger is found.
 - **F3, fixed:**
@@ -102,10 +102,12 @@ unrelated, pre-existing flake (filed as
   - YAML-reserved `@…` and `.inf`-like values were inserted unquoted.
   - `sessionId` offered script steps, which have no session.
 - **F3, filed:**
-  [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/backlog/workflow-completion-core-json-arrays-flow-maps-and-commas.md)
+  [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md)
   covers JSON arrays without a typed quote, multi-line inserts inside YAML flow mappings, and
-  missing JSON commas. Nothing consumes the core yet, so **fix it at the start of F4**, which
-  is the first consumer.
+  missing JSON commas.
+
+All four filed bugs (this one, the D2 and decoder bugs above, and the save-test flake) were
+fixed on `main` after the review. F4 and F7 no longer need a fix first.
 
 ## Short answer
 
@@ -141,7 +143,7 @@ Each row lists what must land before that phase.
 | M4         | F1, ships with B | The grammar is generated from `WORKFLOW_TEXT_FIELDS`. Shipping it without B makes backticks look literal while they still link. |
 | D2         | D1, F1b          | Prompt values, `.prompt.md` bodies included, come from `getWorkflowTextSpans`                                                   |
 | M2         | M1, D1, F0       | Palette; lint precedence over the D1 adapters; same file as F0                                                                  |
-| F4         | F0, F1, F3       | As stated in plan F. Starts by fixing `workflow-completion-core-json-arrays-flow-maps-and-commas`                               |
+| F4         | F0, F1, F3       | As stated in plan F                                                                                                             |
 | F5         | F4, D1           | Workspace lint uses D1's rules. The compartment comes from F4.                                                                  |
 | F7         | F3               | VS Code value completions share F3                                                                                              |
 | D3         | D2, F5           | Needs the side-effect-free `PromptFileParser` validate added in F5                                                              |
@@ -183,11 +185,11 @@ hosted high-contrast light fix, were then committed on `main` directly.
 **Ready to start.** Every input is on `main`, and no two phases share a hot file. M2 is the
 only Wave 3 phase that touches `CodeMirrorEditor.tsx`.
 
-| Phase                                 | Hot file                  | Suggested worktree | Notes                                                                                                                            |
-| ------------------------------------- | ------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| **M2:** markdown in the prompt editor | `CodeMirrorEditor.tsx`    | `small-feature`    | Needs the lazy, memoised `resolveCodeMirrorLanguage` wrapper noted in the Wave 1 review                                          |
-| **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` | `big-feature`      | First fix `workflow-completion-core-json-arrays-flow-maps-and-commas`; F4 is the core's first consumer                           |
-| **F7:** VS Code completion parity     | —                         | `bug-fix`          | Moves the VS Code providers onto the F3 core. If it lands before F4, it needs that same fix first; coordinate with `big-feature` |
+| Phase                                 | Hot file                  | Suggested worktree | Notes                                                                                   |
+| ------------------------------------- | ------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
+| **M2:** markdown in the prompt editor | `CodeMirrorEditor.tsx`    | `small-feature`    | Needs the lazy, memoised `resolveCodeMirrorLanguage` wrapper noted in the Wave 1 review |
+| **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` | `big-feature`      | The core's first consumer                                                               |
+| **F7:** VS Code completion parity     | —                         | `bug-fix`          | Moves the VS Code providers onto the F3 core                                            |
 
 ### Wave 4: diagnostics everywhere
 

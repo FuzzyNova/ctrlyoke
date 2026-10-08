@@ -7,13 +7,17 @@ import { createWebviewClientContext } from "../../ui/WebviewClientContext";
 import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
 import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
 import {
+  ATOMIC_REFERENCE_KINDS,
   HARNESS_IDS,
   MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import { pathsEqual } from "../../utils/PathCasing";
 import { CompletionCore } from "../../completions/CompletionCore";
-import { symbolCompletionGolden } from "../fixtures/SymbolCompletionGolden";
+import {
+  symbolCompletionGolden,
+  symbolCompletionGoldenResult,
+} from "../fixtures/SymbolCompletionGolden";
 
 suite("PromptEditorSupportService", () => {
   let workspaceRoot: string;
@@ -194,6 +198,72 @@ suite("PromptEditorSupportService", () => {
       results: Array<{ exists: boolean; message?: string }>;
     };
     assert.deepStrictEqual(result.results, [{ id: "asset", exists: true }]);
+  });
+
+  test("resolves #sym: kinds for the dashboard but not when the caller opts out", async () => {
+    await fs.mkdir(path.join(workspaceRoot, "src"), { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceRoot, "src", "Widget.ts"),
+      "\n".repeat(20),
+      "utf8"
+    );
+    let symbolQueries = 0;
+    const core = new CompletionCore({
+      getFiles: async () => [],
+      isMultiRoot: () => false,
+      symbols: {
+        workspaceSymbols: async () => {
+          symbolQueries++;
+          return [symbolCompletionGolden];
+        },
+        documentSymbols: async () => {
+          symbolQueries++;
+          return [symbolCompletionGolden];
+        },
+      },
+    });
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined,
+      undefined,
+      undefined,
+      () => [],
+      () => [],
+      undefined,
+      core
+    );
+    const reference = {
+      id: "sym",
+      type: ATOMIC_REFERENCE_KINDS.SYMBOL,
+      path: "src/Widget.ts",
+      symbolName: "Widget",
+      lineStart: "4",
+      lineEnd: "18",
+    };
+
+    assert.deepStrictEqual(
+      await service.validateContextReferences(
+        [{ ...reference, from: 0, to: 1 }],
+        undefined,
+        { resolveSymbolKind: false }
+      ),
+      [{ id: "sym", exists: true }]
+    );
+    assert.strictEqual(symbolQueries, 0, "no symbol provider was queried");
+
+    const emitted: Array<{ results: Array<{ symbolKind?: number }> }> = [];
+    await service.handleContextRefsValidation(
+      createWebviewClientContext("test-client", (message) => {
+        emitted.push(message as (typeof emitted)[number]);
+      }),
+      [reference]
+    );
+    assert.strictEqual(
+      emitted[0]?.results[0]?.symbolKind,
+      symbolCompletionGoldenResult.completionKind
+    );
+    assert.ok(symbolQueries > 0);
   });
 
   test("explains when a relative context reference has no workflow location", async () => {

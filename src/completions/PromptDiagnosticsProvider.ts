@@ -22,6 +22,20 @@ export type PromptReferenceValidator = (
   documentPath: string
 ) => Promise<ContextReferenceValidationResult[]>;
 
+/**
+ * Something whose change can alter how references resolve (trusted roots,
+ * settings). Registers `listener` and returns its unsubscribe, the shape of
+ * `configService.subscribe`.
+ */
+export type PromptDiagnosticsRefreshTrigger = (
+  listener: () => void
+) => () => void;
+
+export interface PromptDiagnosticsProviderOptions {
+  /** Each change re-lints every open document (debounced). */
+  refreshTriggers?: readonly PromptDiagnosticsRefreshTrigger[];
+}
+
 // A function, not a module-level table: the bundle is loaded against a stub
 // `vscode` in the packaging test, where enums are undefined at load time.
 function toVsCodeSeverity(
@@ -53,9 +67,12 @@ function lintableKind(document: vscode.TextDocument): CtrlYokeFileKind | null {
  * every open file when any workspace file is created or deleted, so "file not
  * found" clears when the file appears. That uses a file system watcher, not
  * `onDidCreateFiles`, because those events only fire for edits made through
- * VS Code and the usual writer here is a harness. Only `file:` documents are
- * linted, so a `git:` diff side does not duplicate every entry. Spelling is
- * deliberately left to spell-check extensions.
+ * VS Code and the usual writer here is a harness. The host's
+ * `refreshTriggers` (trust decisions, settings) re-run every open file the
+ * same way, so approving an external root clears its warning without an
+ * edit. Only `file:` documents are linted, so a `git:` diff side does not
+ * duplicate every entry. Spelling is deliberately left to spell-check
+ * extensions.
  */
 export class PromptDiagnosticsProvider implements vscode.Disposable {
   private readonly collection = vscode.languages.createDiagnosticCollection(
@@ -67,13 +84,19 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
   private refreshAllTimer: NodeJS.Timeout | undefined;
   private readonly disposables: vscode.Disposable[] = [this.collection];
 
-  constructor(private readonly validateReferences: PromptReferenceValidator) {
+  constructor(
+    private readonly validateReferences: PromptReferenceValidator,
+    options: PromptDiagnosticsProviderOptions = {}
+  ) {
     const watcher = vscode.workspace.createFileSystemWatcher("**/*");
-    const refreshFiles = () => this.scheduleRefreshAll();
+    const refreshAllSoon = () => this.scheduleRefreshAll();
+    for (const trigger of options.refreshTriggers ?? []) {
+      this.disposables.push({ dispose: trigger(refreshAllSoon) });
+    }
     this.disposables.push(
       watcher,
-      watcher.onDidCreate(refreshFiles),
-      watcher.onDidDelete(refreshFiles),
+      watcher.onDidCreate(refreshAllSoon),
+      watcher.onDidDelete(refreshAllSoon),
       vscode.workspace.onDidOpenTextDocument((doc) => void this.refresh(doc)),
       vscode.workspace.onDidChangeTextDocument((event) =>
         this.schedule(event.document)

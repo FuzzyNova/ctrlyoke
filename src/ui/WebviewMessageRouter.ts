@@ -96,6 +96,7 @@ import { UndoRedoCoordinator } from "./UndoRedoCoordinator";
 import { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
 import { PromptEditorSupportService } from "./PromptEditorSupportService";
 import type {
+  ContextReferenceValidationOptions,
   ContextReferenceValidationResult,
   IdentifiedContextReference,
 } from "../utils/PromptDiagnosticRules";
@@ -342,11 +343,13 @@ export class WebviewMessageRouter {
   /** Validate prompt references for a host with no webview client (VS Code diagnostics). */
   validateContextReferences(
     references: IdentifiedContextReference[],
-    sourceDefinitionPath?: string
+    sourceDefinitionPath: string | undefined,
+    options: ContextReferenceValidationOptions
   ): Promise<ContextReferenceValidationResult[]> {
     return this.promptEditorSupport.validateContextReferences(
       references,
-      sourceDefinitionPath
+      sourceDefinitionPath,
+      options
     );
   }
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), Wave 2 review of F3 (`bf20ebfca`)
 - **Area:** `src/completions/WorkflowFileCompletionCore.ts`, the JSON half of `src/completions/WorkflowDocumentLocation.ts`
-- **Severity:** medium (no consumer yet; F4 and F7 consume the core)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

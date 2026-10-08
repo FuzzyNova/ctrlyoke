@@ -43,6 +43,7 @@ import type { WebviewSettingsSync } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type { WebviewMessageRouter } from "./WebviewMessageRouter";
 import type {
+  ContextReferenceValidationOptions,
   ContextReferenceValidationResult,
   IdentifiedContextReference,
 } from "../utils/PromptDiagnosticRules";
@@ -1303,11 +1304,13 @@ export class CtrlYokeWebviewProvider
   /** Reference resolver for `PromptDiagnosticsProvider`; same policy as the dashboard editor. */
   public validateContextReferences(
     references: IdentifiedContextReference[],
-    sourceDefinitionPath?: string
+    sourceDefinitionPath: string | undefined,
+    options: ContextReferenceValidationOptions
   ): Promise<ContextReferenceValidationResult[]> {
     return this.router.validateContextReferences(
       references,
-      sourceDefinitionPath
+      sourceDefinitionPath,
+      options
     );
   }
 

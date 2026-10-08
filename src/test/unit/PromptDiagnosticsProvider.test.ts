@@ -6,6 +6,7 @@ import { setup, suite, teardown, test } from "mocha";
 import * as vscode from "vscode";
 import {
   PromptDiagnosticsProvider,
+  type PromptDiagnosticsRefreshTrigger,
   type PromptReferenceValidator,
 } from "../../completions/PromptDiagnosticsProvider";
 import {
@@ -82,5 +83,50 @@ suite("PromptDiagnosticsProvider", () => {
     await vscode.workspace.applyEdit(edit);
     await provider.refresh(document);
     assert.deepStrictEqual(provider.getDiagnostics(document.uri), []);
+  });
+
+  test("re-checks open files when a refresh trigger fires, until disposed", async () => {
+    // Stands in for a trust decision or settings write that makes a
+    // previously unresolvable reference resolve.
+    let trusted = false;
+    let subscribed = 0;
+    let fire: (() => void) | undefined;
+    const trigger: PromptDiagnosticsRefreshTrigger = (listener) => {
+      subscribed++;
+      fire = listener;
+      return () => {
+        subscribed--;
+        fire = undefined;
+      };
+    };
+    provider.dispose();
+    provider = new PromptDiagnosticsProvider(
+      async (references) =>
+        references.map((reference) => ({
+          id: reference.id,
+          exists: trusted,
+          message: "outside approved roots",
+        })),
+      { refreshTriggers: [trigger] }
+    );
+    assert.strictEqual(subscribed, 1);
+
+    const document = await open("case.prompt.md", "see @external.ts\n");
+    await provider.refresh(document);
+    assert.strictEqual(provider.getDiagnostics(document.uri).length, 1);
+
+    trusted = true;
+    fire?.();
+    const deadline = Date.now() + 10_000;
+    while (
+      provider.getDiagnostics(document.uri).length > 0 &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.deepStrictEqual(provider.getDiagnostics(document.uri), []);
+
+    provider.dispose();
+    assert.strictEqual(subscribed, 0, "dispose unsubscribes every trigger");
   });
 });

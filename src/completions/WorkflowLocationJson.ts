@@ -82,6 +82,23 @@ export function getJsonWorkflowLocation(
     });
   }
 
+  // Between items of `[ ... ]`: a new element, addressed by the index it would take.
+  if (node.type === JSON_NODE.ARRAY) {
+    const index = (node.children ?? []).filter(
+      (child) => child.offset + child.length <= offset
+    ).length;
+    const valuePath = [...getNodePath(node), index];
+    const { ownerPath, key } = splitValuePath(valuePath);
+    return buildWorkflowLocation({
+      kind,
+      root,
+      ownerPath,
+      key,
+      isKey: false,
+      valuePath,
+    });
+  }
+
   // `"key": ` with no value yet, or the colon/whitespace around a key.
   if (node.type === JSON_NODE.PROPERTY) {
     const keyNode = node.children?.[0];
@@ -148,6 +165,40 @@ function innerStringRange(text: string, node: Node): WorkflowTextRange {
 function isInsideString(text: string, node: Node, offset: number): boolean {
   const { start, end } = innerStringRange(text, node);
   return offset >= start && offset <= end;
+}
+
+/** Tokens that end a complete JSON value. */
+const JSON_VALUE_END_TOKENS: ReadonlySet<SyntaxKind> = new Set([
+  SyntaxKind.StringLiteral,
+  SyntaxKind.NumericLiteral,
+  SyntaxKind.TrueKeyword,
+  SyntaxKind.FalseKeyword,
+  SyntaxKind.NullKeyword,
+  SyntaxKind.CloseBraceToken,
+  SyntaxKind.CloseBracketToken,
+]);
+
+/**
+ * True when the last token before `end` (comments and whitespace skipped)
+ * completes a value, so a key or list item inserted at `end` needs a leading
+ * comma. A comma, colon or opening bracket there means it does not.
+ */
+export function isAfterJsonValue(text: string, end: number): boolean {
+  const scanner = createScanner(text.slice(0, end), true);
+  let last: SyntaxKind | undefined;
+  for (
+    let token = scanner.scan();
+    token !== SyntaxKind.EOF;
+    token = scanner.scan()
+  ) {
+    if (
+      token !== SyntaxKind.LineCommentTrivia &&
+      token !== SyntaxKind.BlockCommentTrivia
+    ) {
+      last = token;
+    }
+  }
+  return last !== undefined && JSON_VALUE_END_TOKENS.has(last);
 }
 
 /** Inside a `//` or `/* *\/` comment (an unterminated block runs to the end). */

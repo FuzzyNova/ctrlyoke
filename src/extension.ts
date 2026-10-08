@@ -94,6 +94,7 @@ import {
   getPtyProcessManager,
 } from "./core/harness/PtyProcessManager";
 import { configService } from "./config/CtrlYokeConfigService";
+import { externalRootsTrustStore } from "./config/ExternalRootsTrustStore";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
@@ -763,9 +764,21 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Prompt-text diagnostics (broken references, prior-context and condition
     // misuse) in ctrlyoke files, using the dashboard editor's rules and resolver.
+    // Squiggles never show a symbol's kind, so skip that per-reference lookup.
+    // Trust decisions and settings decide which roots resolve, so either
+    // changing re-lints the open files.
     context.subscriptions.push(
-      new PromptDiagnosticsProvider((references, documentPath) =>
-        webviewProvider.validateContextReferences(references, documentPath)
+      new PromptDiagnosticsProvider(
+        (references, documentPath) =>
+          webviewProvider.validateContextReferences(references, documentPath, {
+            resolveSymbolKind: false,
+          }),
+        {
+          refreshTriggers: [
+            (listener) => configService.subscribe(listener),
+            (listener) => externalRootsTrustStore.subscribe(listener),
+          ],
+        }
       )
     );
 

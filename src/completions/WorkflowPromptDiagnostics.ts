@@ -45,19 +45,42 @@ function promptField(span: WorkflowTextSpan): PromptDiagnosticField {
 }
 
 /**
+ * A `.prompt.md` body can run as its own one-step workflow, but a workflow's
+ * step `prompt`, `finalStep` or `retryPrompt`/`passRetryPrompt` can also name
+ * the file, and the executor then swaps the body in before prior-context and
+ * condition-output expansion (`WorkflowExecutor.resolveEffectivePrompt`). The
+ * file cannot say which position it will run in, so every position-dependent
+ * rule takes the most permissive view: any number of prior steps, a final
+ * step, retry-prompt fields. Rules that hold everywhere (unknown
+ * condition fields, unresolved files) still apply.
+ */
+const PROMPT_MARKDOWN_SPAN_CONTEXT: PromptDiagnosticContext = {
+  stepIndex: 0,
+  stepCount: Number.POSITIVE_INFINITY,
+  hasFinalStep: true,
+  hasPreCondition: true,
+  hasEndCondition: true,
+  field: PROMPT_DIAGNOSTIC_FIELDS.RETRY_PROMPT,
+};
+
+/**
  * What the file says about where a prompt sits. `stepCount` counts the flat
  * steps before it (a parallel group's members share the group's start, and the
  * final step sees every step). A workflow-level default such as the root
  * `endCondition.retryPrompt` applies to every step, so it is judged from the
- * most permissive one, the final step's view. A `.prompt.md` file is one step with no final
- * step. `hasPreCondition` is always true: a step can inherit a pre-condition
- * from the workflow or the global default, and the file cannot say which, so
- * the "no pre-condition" rule stays quiet rather than guess.
+ * most permissive one, the final step's view. `hasPreCondition` is always
+ * true: a step can inherit a pre-condition from the workflow or the global
+ * default, and the file cannot say which, so the "no pre-condition" rule stays
+ * quiet rather than guess. A `.prompt.md` body gets
+ * {@link PROMPT_MARKDOWN_SPAN_CONTEXT} for the same reason.
  */
 function getSpanContext(
   span: WorkflowTextSpan,
   root: unknown
 ): PromptDiagnosticContext {
+  if (span.kind === CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN) {
+    return PROMPT_MARKDOWN_SPAN_CONTEXT;
+  }
   const fields = isRecord(root) ? root : {};
   const steps = Array.isArray(fields[PROMPT_PROPERTIES.STEPS])
     ? (fields[PROMPT_PROPERTIES.STEPS] as unknown[])

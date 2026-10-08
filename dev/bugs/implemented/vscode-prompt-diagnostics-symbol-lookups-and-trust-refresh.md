@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), Wave 2 review of D2 (`5e23a74c9`)
 - **Area:** `src/completions/PromptDiagnosticsProvider.ts`, `src/ui/PromptEditorSupportService.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit. The open question is answered: a `.prompt.md` named by a step is expanded like inline text, so its body is now linted with the most permissive position context.
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), Wave 2 review of the editor intelligence plans
 - **Area:** `src/completions/WorkflowTextDecoding.ts` (`decodeYamlBlockScalar`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

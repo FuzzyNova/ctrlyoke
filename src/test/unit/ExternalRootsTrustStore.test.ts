@@ -47,6 +47,25 @@ suite("ExternalRootsTrustStore", () => {
     assert.strictEqual(store.getDecision(workspaceA, rootTwo), "allow");
   });
 
+  test("subscribers hear each recorded decision until they unsubscribe", async () => {
+    const root = rootDir();
+    let calls = 0;
+    const unsubscribe = store.subscribe(() => {
+      calls++;
+      // The decision is readable by the time listeners run.
+      assert.strictEqual(store.getDecision(workspaceA, root), "allow");
+    });
+
+    await store.setDecisions(workspaceA, [], "allow");
+    assert.strictEqual(calls, 0, "an empty batch records nothing");
+    await store.setDecisions(workspaceA, [root], "allow");
+    assert.strictEqual(calls, 1);
+
+    unsubscribe();
+    await store.setDecisions(workspaceA, [root], "allow");
+    assert.strictEqual(calls, 1);
+  });
+
   test("getApprovedRoots only returns allowed roots", async () => {
     const allowed = rootDir();
     const denied = rootDir();

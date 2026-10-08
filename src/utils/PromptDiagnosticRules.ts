@@ -72,6 +72,17 @@ export interface ContextReferenceValidationResult {
   suggestions?: string[];
 }
 
+/** How much work a host's reference resolver does beyond "does it exist". */
+export interface ContextReferenceValidationOptions {
+  /**
+   * Look up each `#sym:` reference's live symbol kind for
+   * {@link ContextReferenceValidationResult.symbolKind}. That costs a
+   * document-symbol query per reference (plus a workspace-symbol query on a
+   * miss), so a host that never shows the kind (VS Code diagnostics) skips it.
+   */
+  resolveSymbolKind: boolean;
+}
+
 export type IdentifiedContextReference = ContextReferenceMatch & { id: string };
 
 /** Resolves references against the workspace; injected by each host. */

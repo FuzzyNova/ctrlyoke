@@ -1,5 +1,7 @@
 import * as assert from "assert";
+import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 import { suite, test } from "mocha";
+import { parseDocument } from "yaml";
 import {
   getWorkflowLocation,
   parseWorkflowDocumentRoot,
@@ -522,6 +524,187 @@ suite("WorkflowFileCompletionCore: values", () => {
 
   test("keys with no value list offer nothing", () => {
     assert.deepStrictEqual(complete("steps:\n  - name: §\n").items, []);
+  });
+});
+
+/**
+ * Applies the item labelled `label` to the replace range, then types `suffix`
+ * after it (a JSON key needs a value before the document parses).
+ */
+function apply(
+  result: WorkflowFileCompletions & { text: string },
+  label: string,
+  suffix = ""
+): string {
+  const item = result.items.find((candidate) => candidate.label === label);
+  assert.ok(item, `no "${label}" item in ${JSON.stringify(labels(result))}`);
+  const { start, end } = result.replaceRange;
+  return (
+    result.text.slice(0, start) +
+    (item.insertText ?? item.label) +
+    suffix +
+    result.text.slice(end)
+  );
+}
+
+function parseJsonStrict(text: string): unknown {
+  const errors: ParseError[] = [];
+  const value = parseJsonc(text, errors, {
+    allowTrailingComma: false,
+    disallowComments: false,
+  }) as unknown;
+  assert.deepStrictEqual(errors, [], `invalid JSON:\n${text}`);
+  return value;
+}
+
+function parseYamlStrict(text: string): unknown {
+  const doc = parseDocument(text);
+  assert.deepStrictEqual(
+    doc.errors.map((error) => error.code),
+    [],
+    `invalid YAML:\n${text}`
+  );
+  return doc.toJS() as unknown;
+}
+
+suite("WorkflowFileCompletionCore: inserts leave a valid document", () => {
+  test("a JSON array with no typed quote offers element items", () => {
+    const empty = complete(
+      '{"steps": [{"prompt": "a", "skills": [§]}]}',
+      WORKFLOW_JSON
+    );
+    assert.deepStrictEqual(labels(empty), ["alpha", "beta"]);
+    assert.deepStrictEqual(parseJsonStrict(apply(empty, "alpha")), {
+      steps: [{ prompt: "a", skills: ["alpha"] }],
+    });
+
+    const second = complete(
+      '{"steps": [{"prompt": "a", "skills": ["alpha", §]}]}',
+      WORKFLOW_JSON
+    );
+    assert.deepStrictEqual(labels(second), ["beta"]);
+    assert.deepStrictEqual(parseJsonStrict(apply(second, "beta")), {
+      steps: [{ prompt: "a", skills: ["alpha", "beta"] }],
+    });
+  });
+
+  test("a JSON priorContext array offers bare step numbers, not [n] or keywords", () => {
+    const result = complete(
+      '{"steps": [{"prompt": "a"}, {"prompt": "b", "priorContext": [§]}]}',
+      WORKFLOW_JSON
+    );
+    assert.deepStrictEqual(labels(result), ["1"]);
+    assert.deepStrictEqual(parseJsonStrict(apply(result, "1")), {
+      steps: [{ prompt: "a" }, { prompt: "b", priorContext: [1] }],
+    });
+  });
+
+  test("a JSON list item typed after a value without a comma gets one", () => {
+    for (const marked of [
+      '{"steps": [{"prompt": "a", "skills": ["alpha" §]}]}',
+      '{"steps": [{"prompt": "a", "skills": ["alpha"§]}]}',
+    ]) {
+      const result = complete(marked, WORKFLOW_JSON);
+      assert.deepStrictEqual(
+        parseJsonStrict(apply(result, "beta")),
+        { steps: [{ prompt: "a", skills: ["alpha", "beta"] }] },
+        marked
+      );
+    }
+  });
+
+  test("a YAML flow sequence item stays valid", () => {
+    const result = complete(
+      "steps:\n  - prompt: a\n  - prompt: b\n    priorContext: [§]\n"
+    );
+    assert.deepStrictEqual(labels(result), ["1"]);
+    assert.deepStrictEqual(parseYamlStrict(apply(result, "1")), {
+      steps: [{ prompt: "a" }, { prompt: "b", priorContext: [1] }],
+    });
+    const skills = complete("steps:\n  - prompt: hi\n    skills: [§]\n");
+    assert.deepStrictEqual(parseYamlStrict(apply(skills, "alpha")), {
+      steps: [{ prompt: "hi", skills: ["alpha"] }],
+    });
+  });
+
+  test("keys inside a YAML flow mapping insert single-line flow syntax", () => {
+    const result = complete("steps:\n  - { prompt: hi, §}\n");
+    for (const key of ["endCondition", "hooks", "preCondition", "harness"]) {
+      const item = result.items.find((candidate) => candidate.label === key);
+      assert.strictEqual(item?.insertText, `${key}: `, key);
+      const parsed = parseYamlStrict(apply(result, key)) as {
+        steps: Record<string, unknown>[];
+      };
+      assert.ok(key in parsed.steps[0], key);
+    }
+    // An undecided flow step offers `prompt` without the `|` block header.
+    const undecided = complete("steps:\n  - { name: x, §}\n");
+    assert.strictEqual(
+      undecided.items.find((item) => item.label === "prompt")?.insertText,
+      "prompt: "
+    );
+    assert.deepStrictEqual(parseYamlStrict(apply(undecided, "prompt", "hi")), {
+      steps: [{ name: "x", prompt: "hi" }],
+    });
+    // A half-typed key in the flow mapping is still a flow key.
+    const partial = complete("steps:\n  - { prompt: hi, end§ }\n");
+    assert.strictEqual(
+      partial.items.find((item) => item.label === "endCondition")?.insertText,
+      "endCondition: "
+    );
+    parseYamlStrict(apply(partial, "endCondition"));
+  });
+
+  test("block mappings keep their multi-line snippets", () => {
+    const result = complete("steps:\n  - prompt: hi\n    §\n");
+    assert.ok(
+      result.items
+        .find((item) => item.label === "endCondition")
+        ?.insertText?.includes("\n")
+    );
+  });
+
+  test("a JSON key after a completed value is preceded by a comma", () => {
+    const result = complete('{"prompt":"a"\n  §\n}', WORKFLOW_JSON);
+    assert.strictEqual(
+      result.items.find((item) => item.label === "harness")?.insertText,
+      ', "harness": '
+    );
+    assert.deepStrictEqual(
+      parseJsonStrict(apply(result, "harness", '"claude-cli"')),
+      { prompt: "a", harness: "claude-cli" }
+    );
+    // Across a comment, and replacing a key whose quotes are already typed.
+    const quoted = complete('{"prompt":"a" // note\n  "ha§"\n}', WORKFLOW_JSON);
+    assert.deepStrictEqual(
+      parseJsonStrict(apply(quoted, "harness", '"claude-cli"')),
+      { prompt: "a", harness: "claude-cli" }
+    );
+    for (const marked of [
+      '{"steps": [{"prompt": "a"}], "worktree": {"enabled": true}\n  §\n}',
+      '{"steps": [{"prompt": "a", "skills": ["x"]\n  §\n}]}',
+      '{"steps": [{"prompt": "a", "timeout": 5\n  §\n}]}',
+      '{"steps": [{"prompt": "a", "resumeSession": false\n  §\n}]}',
+    ]) {
+      const after = complete(marked, WORKFLOW_JSON);
+      const key = after.items[0]?.label;
+      assert.ok(key, marked);
+      parseJsonStrict(apply(after, key, "null"));
+    }
+  });
+
+  test("a JSON key after an existing comma or brace gets no extra comma", () => {
+    for (const marked of [
+      '{"prompt":"a",\n  §\n}',
+      '{"prompt":"a", /* c */ §}',
+      "{§}",
+      '{"steps": [{§}]}',
+    ]) {
+      const result = complete(marked, WORKFLOW_JSON);
+      const harness = result.items.find((item) => item.label === "harness");
+      assert.strictEqual(harness?.insertText, '"harness": ', marked);
+      parseJsonStrict(apply(result, "harness", "null"));
+    }
   });
 });
 

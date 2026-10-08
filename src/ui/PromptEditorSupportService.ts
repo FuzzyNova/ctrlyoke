@@ -56,6 +56,7 @@ import {
 } from "../core/PromptFileResolver";
 import { PromptFileWriter } from "../utils/PromptFileWriter";
 import type {
+  ContextReferenceValidationOptions,
   ContextReferenceValidationResult,
   IdentifiedContextReference,
 } from "../utils/PromptDiagnosticRules";
@@ -922,9 +923,11 @@ export class PromptEditorSupportService {
       ctx,
       this.getWorkspaceRoot() ? this.getTrustedWorkspaceRoots() : undefined
     );
+    // The dashboard's reference chips show the symbol's kind icon.
     const results = await this.resolveContextReferences(
       references,
-      sourceDefinitionDir
+      sourceDefinitionDir,
+      { resolveSymbolKind: true }
     );
 
     ctx.emit({
@@ -941,20 +944,23 @@ export class PromptEditorSupportService {
    */
   validateContextReferences(
     references: IdentifiedContextReference[],
-    sourceDefinitionPath?: string
+    sourceDefinitionPath: string | undefined,
+    options: ContextReferenceValidationOptions
   ): Promise<ContextReferenceValidationResult[]> {
     return this.resolveContextReferences(
       references,
       getTrustedSourceDefinitionDir(
         sourceDefinitionPath,
         this.getWorkspaceRoot() ? this.getTrustedWorkspaceRoots() : undefined
-      )
+      ),
+      options
     );
   }
 
   private resolveContextReferences(
     references: readonly ContextReferenceToValidate[],
-    sourceDefinitionDir: string | undefined
+    sourceDefinitionDir: string | undefined,
+    options: ContextReferenceValidationOptions
   ): Promise<ContextReferenceValidationResult[]> {
     const workspaceRoot = this.getWorkspaceRoot() || null;
     const namedRoots = [...this.getNamedRoots()];
@@ -965,7 +971,8 @@ export class PromptEditorSupportService {
           reference,
           workspaceRoot,
           namedRoots,
-          sourceDefinitionDir
+          sourceDefinitionDir,
+          options
         )),
       }))
     );
@@ -983,7 +990,8 @@ export class PromptEditorSupportService {
     },
     workspaceRoot: string | null,
     namedRoots: readonly ResolverWorkspaceFolder[],
-    sourceDefinitionDir?: string
+    sourceDefinitionDir: string | undefined,
+    options: ContextReferenceValidationOptions
   ): Promise<{
     exists: boolean;
     message?: string;
@@ -1080,6 +1088,7 @@ export class PromptEditorSupportService {
           };
         }
         if (
+          options.resolveSymbolKind &&
           reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL &&
           reference.symbolName
         ) {

@@ -17,6 +17,7 @@ import {
 } from "../types/generated/WorkflowSchemaOutline";
 import { escapeJsonStringFragment } from "../utils/JsonStringEscape";
 import type { PlainCompletionItem } from "./CompletionCore";
+import { isAfterJsonValue } from "./WorkflowLocationJson";
 import { getWorkflowPropertySnippet } from "./WorkflowPropertySnippets";
 import {
   isRecord,
@@ -215,18 +216,37 @@ function hasKeyColon(text: string, replaceEnd: number): boolean {
   return /^[ \t]*:/.test(text.slice(replaceEnd));
 }
 
+/**
+ * `, ` when a JSON key or list item lands right after a complete value (no
+ * comma typed yet), so the insert leaves valid JSON. Empty everywhere else.
+ */
+function jsonSeparator(
+  request: WorkflowFileCompletionRequest,
+  replaceStart: number
+): string {
+  const { location, text } = request;
+  return location.kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON &&
+    !location.jsonString &&
+    isAfterJsonValue(text, replaceStart)
+    ? ", "
+    : "";
+}
+
 function keyInsertText(
   request: WorkflowFileCompletionRequest,
   key: string,
   property: WorkflowOutlineProperty,
   snippetText: string | undefined,
-  keyOnly: boolean
+  keyOnly: boolean,
+  separator: string
 ): string {
   const { location, text, offset } = request;
   if (location.kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON) {
-    return keyOnly ? `"${key}"` : `"${key}": `;
+    return separator + (keyOnly ? `"${key}"` : `"${key}": `);
   }
   if (keyOnly) return key;
+  // A flow mapping (`{ prompt: hi, § }`) cannot hold a block snippet.
+  if (location.inFlowCollection) return `${key}: `;
   const body =
     snippetText ?? (isCollectionOnly(property) ? `${key}:\n  ` : `${key}: `);
   return body.replace(/\n/g, `\n${leadingKeyIndent(text, offset)}`);
@@ -243,7 +263,9 @@ function getKeyItems(
     location.objectKind === WORKFLOW_OBJECT_KINDS.WORKFLOW_ROOT
       ? rootKeyIsRelevant(documentRoot)
       : () => true;
-  const keyOnly = hasKeyColon(request.text, getReplaceRange(request).end);
+  const replaceRange = getReplaceRange(request);
+  const keyOnly = hasKeyColon(request.text, replaceRange.end);
+  const separator = jsonSeparator(request, replaceRange.start);
 
   for (const sourceKind of keySourceKinds(location, documentRoot)) {
     const outline: WorkflowObjectOutline | undefined =
@@ -270,7 +292,8 @@ function getKeyItems(
           key,
           property,
           snippet.insertSnippet,
-          keyOnly
+          keyOnly,
+          separator
         ),
         detail: property.deprecated ? `Deprecated · ${detail}` : detail,
         documentation: property.description ?? snippet.documentation,
@@ -533,6 +556,10 @@ function getValueItems(
       ? existing.map((entry: unknown) => String(entry))
       : []
   );
+  // Only a list item can follow another value; a property value follows `:`.
+  const separator = isElement
+    ? jsonSeparator(request, getReplaceRange(request).start)
+    : "";
   const seen = new Set<string>();
   const items: PlainCompletionItem[] = [];
   for (const { candidate, sort } of candidates) {
@@ -546,7 +573,7 @@ function getValueItems(
       kind: sort.startsWith(SORT_DYNAMIC)
         ? COMPLETION_ITEM_KINDS.VALUE
         : COMPLETION_ITEM_KINDS.ENUM_MEMBER,
-      insertText,
+      insertText: separator + insertText,
       detail: candidate.detail,
       sortText: sort,
       filterText: candidate.raw ? undefined : identity,

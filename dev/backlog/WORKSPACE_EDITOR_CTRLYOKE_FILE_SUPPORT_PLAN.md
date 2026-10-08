@@ -713,9 +713,9 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 0, 1, 2, 1b and 3 are done. Phase 4 can start now, beginning with the F3 bug the Wave 2
-review filed: [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/backlog/workflow-completion-core-json-arrays-flow-maps-and-commas.md). The
-cross-plan order is in
+Phases 0, 1, 2, 1b and 3 are done. Phase 4 can start now. The F3 bug the Wave 2 review filed,
+[`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md),
+is already fixed. The cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 
 ## Open questions

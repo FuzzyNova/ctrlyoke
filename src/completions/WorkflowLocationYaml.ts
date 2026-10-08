@@ -152,8 +152,11 @@ function locateInAst(
 ): WorkflowLocation | undefined {
   const visit = (
     node: unknown,
-    path: WorkflowPath
+    path: WorkflowPath,
+    parentInFlow: boolean
   ): WorkflowLocation | undefined => {
+    const inFlow =
+      parentInFlow || ((isMap(node) || isSeq(node)) && node.flow === true);
     if (isMap(node)) {
       for (const pair of node.items) {
         if (!isScalar(pair.key) || !pair.key.range) continue;
@@ -166,16 +169,22 @@ function locateInAst(
             ownerPath: path,
             key,
             isKey: true,
+            inFlowCollection: inFlow,
           });
         }
         const value = pair.value as YamlNode | null;
         if (isScalar(value)) {
-          const firstKey = halfTypedFirstKey(pair.key, value, [...path, key]);
+          const firstKey = halfTypedFirstKey(
+            pair.key,
+            value,
+            [...path, key],
+            inFlow
+          );
           if (firstKey) return firstKey;
-          const hit = scalarHit(value, path, key, undefined);
+          const hit = scalarHit(value, path, key, undefined, inFlow);
           if (hit) return hit;
         } else if (value && rangeContains(value, offset)) {
-          return visit(value, [...path, key]);
+          return visit(value, [...path, key], inFlow);
         }
       }
       // `{ prompt: x, § }`: a new key in a flow mapping.
@@ -185,6 +194,7 @@ function locateInAst(
             root: parsed.root,
             ownerPath: path,
             isKey: true,
+            inFlowCollection: true,
           })
         : undefined;
     }
@@ -207,12 +217,13 @@ function locateInAst(
               ownerPath: itemPath,
               key: typeof item.value === "string" ? item.value : undefined,
               isKey: true,
+              inFlowCollection: inFlow,
             });
           }
-          const hit = scalarHit(item, ownerPath, key, itemPath);
+          const hit = scalarHit(item, ownerPath, key, itemPath, inFlow);
           if (hit) return hit;
         } else if (rangeContains(item as YamlNode, offset)) {
-          return visit(item, [...path, index]);
+          return visit(item, [...path, index], inFlow);
         }
       }
       // `[a, §]`: a new item in a flow sequence.
@@ -231,6 +242,7 @@ function locateInAst(
           isKey: false,
           valuePath: itemPath,
           valueRange: { start: offset, end: offset },
+          inFlowCollection: true,
         });
       }
     }
@@ -247,7 +259,8 @@ function locateInAst(
   const halfTypedFirstKey = (
     keyNode: Scalar,
     value: Scalar,
-    objectPath: WorkflowPath
+    objectPath: WorkflowPath,
+    inFlow: boolean
   ): WorkflowLocation | undefined => {
     if (
       value.type !== Scalar.PLAIN ||
@@ -273,6 +286,7 @@ function locateInAst(
       ownerPath: objectPath,
       key: source,
       isKey: true,
+      inFlowCollection: inFlow,
     });
   };
 
@@ -280,7 +294,8 @@ function locateInAst(
     node: Scalar,
     ownerPath: WorkflowPath,
     key: string | undefined,
-    valuePath: WorkflowPath | undefined
+    valuePath: WorkflowPath | undefined,
+    inFlow: boolean
   ): WorkflowLocation | undefined => {
     const geometry = scalarGeometry(text, node);
     if (!geometry?.contains(offset)) return undefined;
@@ -299,10 +314,11 @@ function locateInAst(
       textCapable: isText && !onBlockHeader && valuePath === undefined,
       valueRange: onBlockHeader ? undefined : geometry.valueRange,
       scalarStyle: geometry.style,
+      inFlowCollection: inFlow,
     });
   };
 
-  return visit(parsed.doc.contents, []);
+  return visit(parsed.doc.contents, [], false);
 }
 
 const SCAN_FRAME = { MAP: "map", SEQ: "seq" } as const;
