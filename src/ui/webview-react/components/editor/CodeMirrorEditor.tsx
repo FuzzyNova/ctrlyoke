@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useState,
+} from "react";
 import {
   EditorView,
   placeholder,
@@ -8,7 +14,6 @@ import {
   type PluginValue,
   Decoration,
   WidgetType,
-  tooltips,
   repositionTooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
@@ -26,16 +31,7 @@ import {
 } from "@utils/atomicReferences";
 import { Compartment, EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
-import {
-  autocompletion,
-  completionKeymap,
-  startCompletion,
-  insertCompletionText,
-  pickedCompletion,
-  type Completion,
-  type CompletionResult,
-} from "@codemirror/autocomplete";
-import { fuzzyMatchRanges } from "@root/completions/FuzzyRanking";
+import { completionKeymap } from "@codemirror/autocomplete";
 import { history, historyKeymap, insertTab } from "@codemirror/commands";
 import {
   searchKeymap,
@@ -61,11 +57,8 @@ import {
   PROMPT_DIAGNOSTIC_FIELDS,
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
-  CAPTURING_OUTPUT_PLACEHOLDER,
   OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS,
-  COMPLETION_TRIGGERS,
   type CodeMirrorEditorMode,
-  type CompletionTrigger,
 } from "@root/types/DashboardConstants";
 import { COMPLETION_KIND_ICONS } from "@root/types/SymbolKindConstants";
 import {
@@ -93,12 +86,16 @@ import {
 import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
-import {
-  REFERENCE_BOUNDARY_CHAR_RE,
-  findWordStartTriggerIndex,
-} from "@root/utils/ReferenceBoundary";
+import { REFERENCE_BOUNDARY_CHAR_RE } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
-import { keyboardTooltipSpace as getKeyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
+import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
+import { promptTokenCompletionExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
+import {
+  buildCodeMirrorCompletionResult,
+  findCustomCompletionContext,
+  findSlashCompletionContext,
+  symbolIconCacheKey,
+} from "@utils/promptCompletion/promptCompletionResult";
 import {
   EDITOR_OVERFLOW_CAUSES,
   EDITOR_OVERFLOW_EVENT,
@@ -107,6 +104,11 @@ import {
 } from "@utils/editorAutoExpand";
 
 export { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
+export {
+  buildCodeMirrorCompletionResult,
+  findCustomCompletionContext,
+  findSlashCompletionContext,
+};
 
 // Typo.js spell checker (will be loaded from window.Typo)
 declare global {
@@ -163,390 +165,14 @@ interface CodeMirrorEditorProps {
 
 export type { ContextReferenceValidationResult };
 
-interface ExtensionCompletionItem {
-  label: string;
-  kind?: number;
-  detail?: string;
-  insertText?: string;
-  captureId?: string;
-  sortText?: string;
-  filterText?: string;
-  /** Fuzzy relevance rank from the extension (see PlainCompletionItem.rank). */
-  rank?: number;
-  /**
-   * Explicit codicon name overriding the kind-derived icon below (see
-   * PlainCompletionItem.icon in CompletionCore.ts for why this exists —
-   * some atomic reference kinds share a CompletionItemKind but need distinct
-   * icons matching their chip). Must name a key in SYMBOL_ICON_COLORS.
-   */
-  icon?: string;
-}
-
-interface PendingCompletionRequest {
-  trigger: CompletionTrigger;
-  query: string;
-}
-
 interface PendingPlaceholder {
   from: number;
   to: number;
   timeoutId: ReturnType<typeof setTimeout>;
 }
 
-type OutputCapturePickHandler = (
-  captureId: string,
-  from: number,
-  to: number
-) => void;
-
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
-
-function shouldBypassCodeMirrorFiltering(
-  request: PendingCompletionRequest | null
-): boolean {
-  if (!request) {
-    return false;
-  }
-
-  return (
-    request.trigger === "/" ||
-    request.trigger === COMPLETION_TRIGGERS.PATH ||
-    (request.trigger === "@" &&
-      (request.query.startsWith('"') ||
-        request.query.includes("/") ||
-        request.query.includes("\\")))
-  );
-}
-
-// Parses a single completion's insertText into the fields needed to key the
-// symbol icon cache, iff it's a well-formed #sym: reference. Reuses
-// findContextReferenceMatches (the same parser the chip/lint pipeline runs on
-// the saved document text) instead of re-deriving the quoted-path format, so
-// this never drifts from what the reference actually looks like once inserted.
-function parseSingleSymbolReference(
-  text: string
-):
-  | { path: string; symbolName: string; lineStart?: string; lineEnd?: string }
-  | undefined {
-  const [match] = findContextReferenceMatches(text);
-  if (
-    !match ||
-    match.type !== ATOMIC_REFERENCE_KINDS.SYMBOL ||
-    !match.path ||
-    !match.symbolName
-  ) {
-    return undefined;
-  }
-  return {
-    path: match.path,
-    symbolName: match.symbolName,
-    lineStart: match.lineStart,
-    lineEnd: match.lineEnd,
-  };
-}
-
-// Terminal context-reference completions self-terminate with a trailing space
-// when picked, so text typed immediately after can't merge into the reference —
-// and, in atomic mode, get absorbed into the chip (the "@file.tsxfoo" bug).
-// "Keep typing" completions are exempt so progressive completion still works:
-// directories ("dir/", whose sub-folder completions keep firing as you drill in)
-// and colon-continuation tokens ("$step:"). Path-trigger completions replace the
-// whole prompt with a file to load (never a chip), so they're exempt too.
-// Mirrors the pasted-image handler, which likewise appends a trailing space to
-// its inserted @ref (see resolvePendingPaste).
-function withReferenceBoundarySpace(
-  applyText: string,
-  trigger: CompletionTrigger | undefined
-): string {
-  if (
-    trigger === "/" ||
-    trigger === COMPLETION_TRIGGERS.PATH ||
-    applyText.length === 0 ||
-    /\s$/.test(applyText)
-  ) {
-    return applyText;
-  }
-  // A quoted path ends in `"`; look past it for the real terminator.
-  const core = applyText.endsWith('"') ? applyText.slice(0, -1) : applyText;
-  if (core.endsWith("/") || core.endsWith(":")) {
-    return applyText; // directory or "keep typing" token — expects more input
-  }
-  return `${applyText} `;
-}
-
-export function buildCodeMirrorCompletionResult(
-  items: ExtensionCompletionItem[],
-  from: number,
-  request: PendingCompletionRequest | null,
-  symbolIconCache?: Map<string, string>,
-  onOutputCapturePicked?: OutputCapturePickHandler
-): CompletionResult {
-  // A response the extension already fuzzy-ranked against the query is shown
-  // as-is: CodeMirror's own matcher would both re-sort it and drop legitimate
-  // matches (a one-character query only matches at the label start, and a
-  // gapped two-character query never matches). Every keystroke re-queries the
-  // extension (no `validFor`), so the list still narrows as the user types.
-  const bypassFiltering =
-    shouldBypassCodeMirrorFiltering(request) ||
-    items.some((item) => item.rank !== undefined);
-  const useFilterTextForMatching = !bypassFiltering;
-  const completions = items.map((item, index) => {
-    // Calculate boost from sortText.
-    // Handles both numeric prefixes ("000_", "001_") and
-    // bang-prefixed variants ("!000_", "!001_") used by git change items.
-    let boost: number;
-    if (item.sortText) {
-      const prefixMatch = item.sortText.match(/^!?(\d+)_/);
-      if (prefixMatch) {
-        const prefix = parseInt(prefixMatch[1]);
-        boost = 1000 - prefix * 100 - index * 0.01;
-      } else {
-        boost = -index;
-      }
-    } else {
-      boost = -index;
-    }
-
-    const type =
-      item.icon ??
-      (item.kind !== undefined
-        ? COMPLETION_KIND_ICONS[item.kind] || DEFAULT_COMPLETION_ICON
-        : DEFAULT_COMPLETION_ICON);
-    const matchLabel =
-      useFilterTextForMatching && item.filterText
-        ? item.filterText
-        : item.label;
-    const rawApplyText = item.insertText || item.label;
-    // The slash is already present in the document at `from`. Extension-side
-    // slash completions use the complete token as their insertText so the
-    // same plain payload works for VS Code and webview consumers; CodeMirror
-    // replaces only the text after that trigger character.
-    const applyText =
-      request?.trigger === "/" && rawApplyText.startsWith("/")
-        ? rawApplyText.slice(1)
-        : rawApplyText;
-    // Final inserted text — a trailing boundary space for terminal references.
-    const applyValue = withReferenceBoundarySpace(applyText, request?.trigger);
-
-    // The completion item's own `kind` is known synchronously, right now —
-    // seed the chip icon cache from it on pick so the chip renders with the
-    // correct symbol-* icon immediately, instead of showing
-    // DEFAULT_COMPLETION_ICON until createContextReferenceLintExtension's
-    // debounced round trip resolves. That round trip still runs afterward and
-    // will correct the cache if it ever disagrees (e.g. the symbol moved
-    // between listing the completion and picking it); this only short-circuits
-    // the common case. It can't help a pasted or hand-typed reference, which
-    // has no completion item to draw a kind from.
-    //
-    // The trigger char stays in the document at `from`; `insertText` is only
-    // what's inserted after it (e.g. `sym:file:Name:1-2`, no leading `#`). So
-    // reconstruct the reference as it will actually read in the document —
-    // trigger + insertText — before parsing, or `#sym:` never matches and the
-    // seed silently no-ops (the chip flashes the misc icon until the async pass
-    // resolves it). `path` is a pseudo-trigger with no document char.
-    const referenceText =
-      request && request.trigger !== COMPLETION_TRIGGERS.PATH
-        ? `${request.trigger}${applyText}`
-        : applyText;
-    const symbolRef =
-      symbolIconCache && item.kind !== undefined
-        ? parseSingleSymbolReference(referenceText)
-        : undefined;
-
-    return {
-      label: matchLabel,
-      displayLabel: matchLabel === item.label ? undefined : item.label,
-      type,
-      detail: item.detail,
-      boost,
-      // Don't prepend trigger - it stays in the document at position 'from'
-      // We only replace from 'from + 1' onward for trigger-based completions.
-      apply: item.captureId
-        ? (
-            view: EditorView,
-            completion: Completion,
-            _applyFrom: number,
-            applyTo: number
-          ) => {
-            // Output captures always resolve to a fresh `@<path>` reference
-            // (see resolvePendingCapture), regardless of whether this item
-            // was picked via the `@` or `#` trigger. Unlike every other
-            // completion here, the trigger character itself must be consumed
-            // too — replacing only from the usual applyFrom (after the
-            // trigger) would leave a stray `#` in place, or double up `@` into
-            // `@@path`. Replace from the trigger's own position (`from`, the
-            // outer closure variable) instead.
-            view.dispatch({
-              ...insertCompletionText(
-                view.state,
-                CAPTURING_OUTPUT_PLACEHOLDER,
-                from,
-                applyTo
-              ),
-              annotations: pickedCompletion.of(completion),
-            });
-            onOutputCapturePicked?.(
-              item.captureId!,
-              from,
-              from + CAPTURING_OUTPUT_PLACEHOLDER.length
-            );
-          }
-        : symbolRef
-          ? (
-              view: EditorView,
-              completion: Completion,
-              applyFrom: number,
-              applyTo: number
-            ) => {
-              symbolIconCache!.set(
-                symbolIconCacheKey(
-                  symbolRef.path,
-                  symbolRef.symbolName,
-                  symbolRef.lineStart,
-                  symbolRef.lineEnd
-                ),
-                type
-              );
-              // Mirrors applyCompletion()'s own string-apply path (see
-              // @codemirror/autocomplete) so picking a symbol completion still
-              // behaves identically to any other — same insert/cursor/scroll
-              // behavior, same pickedCompletion annotation — with the cache
-              // seed as the only addition.
-              view.dispatch({
-                ...insertCompletionText(
-                  view.state,
-                  applyValue,
-                  applyFrom,
-                  applyTo
-                ),
-                annotations: pickedCompletion.of(completion),
-              });
-            }
-          : applyValue,
-    };
-  });
-
-  const result: CompletionResult = {
-    from: from + (request?.trigger === COMPLETION_TRIGGERS.PATH ? 0 : 1),
-    options: completions,
-  };
-
-  if (bypassFiltering) {
-    result.filter = false;
-    // With filtering off CodeMirror computes no matched ranges of its own, so
-    // supply them — with the same matcher the extension ranked with — so the
-    // dropdown still highlights what the query matched.
-    const highlightQuery = getCompletionHighlightQuery(request);
-    if (highlightQuery) {
-      result.getMatch = (completion) =>
-        fuzzyMatchRanges(
-          completion.displayLabel ?? completion.label,
-          highlightQuery
-        );
-    }
-  }
-
-  return result;
-}
-
-// The part of the typed query a completion label is matched against: labels
-// are basenames, so a typed directory (`src/ui/co`, `"my dir/fi`) contributes
-// only its last segment.
-function getCompletionHighlightQuery(
-  request: PendingCompletionRequest | null
-): string {
-  if (!request) {
-    return "";
-  }
-  const query = request.query.replace(/^"/, "");
-  return query.slice(
-    Math.max(query.lastIndexOf("/"), query.lastIndexOf("\\")) + 1
-  );
-}
-
-// Cache key for a progressive completion's full result. The trigger is always a
-// single leading character, so different triggers can never collide regardless
-// of the query that follows.
-function completionCacheKey(trigger: CompletionTrigger, query: string): string {
-  return `${trigger} ${query}`;
-}
-
-/**
- * Find the slash-token completion context immediately before the cursor.
- * Native slash commands are intentionally still eligible for the merged
- * ctrlyoke insertion list; selecting an entry makes the namespace explicit.
- */
-export function findSlashCompletionContext(
-  textBefore: string,
-  lineFrom = 0
-): { from: number; query: string } | null {
-  const slashIndex = findWordStartTriggerIndex(textBefore, "/");
-  if (slashIndex === -1) return null;
-
-  const query = textBefore.slice(slashIndex + 1);
-  if (!/^[a-zA-Z0-9:._-]*$/.test(query)) return null;
-
-  return { from: lineFrom + slashIndex, query };
-}
-
-/** Resolve the trigger/query immediately before a CodeMirror completion cursor. */
-export function findCustomCompletionContext(
-  textBefore: string,
-  lineFrom = 0
-): { trigger: CompletionTrigger; query: string; from: number } | null {
-  const lastAtIndex = findWordStartTriggerIndex(textBefore, "@");
-  const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
-  const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
-  const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
-  const lastBangIndex = findWordStartTriggerIndex(textBefore, "!");
-  const slashContext = findSlashCompletionContext(textBefore, lineFrom);
-  const lastSlashIndex = slashContext ? slashContext.from - lineFrom : -1;
-
-  const maxIndex = Math.max(
-    lastSlashIndex,
-    lastAtIndex,
-    lastHashIndex,
-    lastTildeIndex,
-    lastDollarIndex,
-    lastBangIndex
-  );
-  if (maxIndex === -1) return null;
-
-  let trigger: CompletionTrigger;
-  let query: string;
-  if (maxIndex === lastSlashIndex) {
-    trigger = "/";
-    query = slashContext!.query;
-  } else if (maxIndex === lastAtIndex) {
-    trigger = "@";
-    query = textBefore.slice(lastAtIndex + 1);
-  } else if (maxIndex === lastHashIndex) {
-    trigger = "#";
-    query = textBefore.slice(lastHashIndex + 1);
-  } else if (maxIndex === lastTildeIndex) {
-    trigger = "~";
-    query = textBefore.slice(lastTildeIndex + 1);
-  } else if (maxIndex === lastDollarIndex) {
-    trigger = "$";
-    query = textBefore.slice(lastDollarIndex + 1);
-  } else {
-    trigger = "!";
-    query = textBefore.slice(lastBangIndex + 1);
-  }
-
-  const isInsideQuotedPath =
-    trigger === "@" && query.startsWith('"') && !query.slice(1).includes('"');
-  if (query.includes(" ") && !isInsideQuotedPath) return null;
-  if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(query)) return null;
-  if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(query)) return null;
-  if (trigger === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(query)) return null;
-  // Secret names intentionally stay uppercase-only. This also rejects `![` so
-  // Markdown image syntax never opens the secret dropdown.
-  if (trigger === "!" && !/^[A-Z0-9_]*$/.test(query)) return null;
-
-  return { trigger, query, from: lineFrom + maxIndex };
-}
 
 export function buildPromptReferenceInsertion(
   docText: string,
@@ -650,39 +276,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const readOnlyRef = useRef(readOnly);
   // Tracks last reported signed-overflow to avoid redundant events
   const lastOverflowRef = useRef<number | null>(null);
-  // customCompletions (@/#/~/$// triggers) and pathCompletions (whole-doc
-  // "looks like a file path") are independent CodeMirror `override` sources
-  // and can legitimately be in flight at the same time — e.g. a lone "/"
-  // matches both, and both should contribute to one merged dropdown. Each
-  // in-flight extension-host round trip gets its own map entry keyed by a
-  // globally unique seq, so a response can never resolve/cache the wrong
-  // source's request. `resolve` is nulled (not deleted) once a progressive
-  // `#` partial response fires, so the entry survives to receive the full
-  // response later — see handleCompletionResponse.
-  const pendingCompletionsRef = useRef<
-    Map<
-      number,
-      {
-        resolve: ((value: CompletionResult | null) => void) | null;
-        request: PendingCompletionRequest;
-      }
-    >
-  >(new Map());
-  // Tracks each source's own latest in-flight seq so a fresh keystroke from
-  // that source cancels only its own stale request, never the other source's.
-  const inFlightCompletionSeqRef = useRef<{
-    custom: number | null;
-    path: number | null;
-  }>({ custom: null, path: null });
-  // Cache for a full completion result that arrived after its (already-resolved)
-  // partial response — see the progressive `#` completion flow. Keyed by
-  // trigger+query so the re-triggered completion source can serve it
-  // synchronously without a second round trip to the extension host.
-  const completionCacheRef = useRef<{
-    key: string;
-    result: CompletionResult;
-  } | null>(null);
-  const completionSeqRef = useRef(0);
   const validationSeqRef = useRef(0);
   const pendingValidationRequestsRef = useRef<
     Map<number, (value: ContextReferenceValidationResult[]) => void>
@@ -999,74 +592,26 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     [vscode, handleOutputSnapshotSaved]
   );
 
-  // Handle completion response from extension.
-  //
-  // Some triggers (currently `#`) answer progressively: a `partial` response
-  // arrives first with the instant items (e.g. the current editor selection),
-  // then a final response with the full list once the slow part (workspace
-  // symbols) resolves. The partial resolves the pending CodeMirror completion
-  // promise so the dropdown appears immediately; the final response — arriving
-  // after that promise is already settled — is cached and applied by
-  // re-triggering the completion source, which serves it synchronously.
-  const handleCompletionResponse = useCallback(
-    (
-      items: ExtensionCompletionItem[],
-      from: number,
-      seq?: number,
-      partial?: boolean
-    ) => {
-      if (seq === undefined) {
-        return;
-      }
-      // No entry means this request was already cancelled (superseded by a
-      // newer keystroke from the same source) or already fully resolved —
-      // discard rather than resolve/cache the wrong thing.
-      const entry = pendingCompletionsRef.current.get(seq);
-      if (!entry) {
-        return;
-      }
-
-      const result = buildCodeMirrorCompletionResult(
-        items,
-        from,
-        entry.request,
-        symbolIconCacheRef.current,
-        handleOutputCapturePicked
-      );
-
-      if (partial) {
-        // Deliver the instant items now, but keep the map entry (request
-        // context) so the forthcoming full response can be keyed and re-applied.
-        if (entry.resolve) {
-          entry.resolve(result);
-          entry.resolve = null;
-        }
-        return;
-      }
-
-      // Final response. If the promise is still pending (no partial was sent,
-      // e.g. there was no selection), resolve it directly.
-      if (entry.resolve) {
-        entry.resolve(result);
-        pendingCompletionsRef.current.delete(seq);
-        return;
-      }
-
-      // A partial already resolved the promise and the dropdown is open. Cache
-      // the full result and re-trigger completion so the source can serve it
-      // from cache without another round trip.
-      pendingCompletionsRef.current.delete(seq);
-      completionCacheRef.current = {
-        key: completionCacheKey(entry.request.trigger, entry.request.query),
-        result,
-      };
-      const view = viewRef.current;
-      if (view) {
-        startCompletion(view);
-      }
-    },
-    [handleOutputCapturePicked]
+  // Latest-value refs let the one long-lived client read current values without
+  // being rebuilt (which would recreate the editor view).
+  const isMultiRootWorkspaceRef = useRef(isMultiRootWorkspace);
+  isMultiRootWorkspaceRef.current = isMultiRootWorkspace;
+  const outputCapturePickedRef = useRef(handleOutputCapturePicked);
+  outputCapturePickedRef.current = handleOutputCapturePicked;
+  const viewRefForCompletion = viewRef;
+  const completionClient = useMemo(
+    () =>
+      createPromptCompletionClient({
+        transport: vscode,
+        getView: () => viewRefForCompletion.current,
+        getSymbolIconCache: () => symbolIconCacheRef.current,
+        getIsMultiRootWorkspace: () => isMultiRootWorkspaceRef.current,
+        onOutputCapturePicked: (captureId, from, to) =>
+          outputCapturePickedRef.current(captureId, from, to),
+      }),
+    [vscode, viewRefForCompletion]
   );
+  useEffect(() => () => completionClient.dispose(), [completionClient]);
 
   const validateContextReferences = useCallback(
     (
@@ -1206,18 +751,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     };
   }, []);
 
-  // Listen for completion and context-reference validation responses from extension
+  // Listen for context-reference validation and attachment responses from extension
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
-      if (message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE) {
-        handleCompletionResponse(
-          message.items || [],
-          message.from,
-          message.seq,
-          message.partial
-        );
-      } else if (message.type === MESSAGE_TYPES.CONTEXT_REFS_VALIDATION) {
+      if (message.type === MESSAGE_TYPES.CONTEXT_REFS_VALIDATION) {
         const resolve = pendingValidationRequestsRef.current.get(message.seq);
         if (resolve) {
           pendingValidationRequestsRef.current.delete(message.seq);
@@ -1240,149 +778,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [
-    handleCompletionResponse,
-    handlePastedImageSaved,
-    handleOutputSnapshotSaved,
-  ]);
-
-  // Custom completions source
-  const customCompletions = useCallback(
-    (
-      context: any
-    ): CompletionResult | Promise<CompletionResult | null> | null => {
-      // Use lastIndexOf to find the rightmost trigger character, mirroring
-      // PromptCompletionProvider's approach. Using matchBefore with @"[^"]* was
-      // buggy: when the prompt contained a literal "@" (e.g. `"@"`), the pattern
-      // would match from that @" all the way to the cursor (since [^"]* greedily
-      // consumes everything that isn't a closing quote), swallowing any real
-      // @path trigger typed later on the same line.
-      const lineObj = context.state.doc.lineAt(context.pos);
-      const textBefore = lineObj.text.slice(0, context.pos - lineObj.from);
-
-      const completionContext = findCustomCompletionContext(
-        textBefore,
-        lineObj.from
-      );
-      if (!completionContext) return null;
-      const { trigger, query: afterTrigger, from } = completionContext;
-
-      // Serve a full result cached by a progressive (partial→full) response for
-      // this exact trigger+query synchronously — no second round trip. Checked
-      // before the empty-query guard so it also applies when only the trigger
-      // char has been typed (e.g. `#` with an active selection).
-      const cacheKey = completionCacheKey(
-        trigger as CompletionTrigger,
-        afterTrigger
-      );
-      if (completionCacheRef.current?.key === cacheKey) {
-        const cached = completionCacheRef.current.result;
-        completionCacheRef.current = null;
-        return cached;
-      }
-
-      if (from === context.pos && !context.explicit) return null;
-
-      // Assign a sequence number so stale responses can be discarded
-      const seq = ++completionSeqRef.current;
-
-      // A fresh request invalidates any lingering progressive cache (e.g. a
-      // stale selection snapshot from a prior dropdown that was dismissed).
-      completionCacheRef.current = null;
-
-      // Cancel this source's own previous in-flight request (never the other
-      // source's — pathCompletions can be genuinely concurrent, e.g. a lone
-      // "/" matches both, and both should contribute to the merged dropdown).
-      const prevSeq = inFlightCompletionSeqRef.current.custom;
-      if (prevSeq !== null) {
-        const prevEntry = pendingCompletionsRef.current.get(prevSeq);
-        prevEntry?.resolve?.(null);
-        pendingCompletionsRef.current.delete(prevSeq);
-      }
-      inFlightCompletionSeqRef.current.custom = seq;
-
-      // Request completions from extension host
-      return new Promise<CompletionResult | null>((resolve) => {
-        pendingCompletionsRef.current.set(seq, {
-          resolve,
-          request: {
-            trigger: trigger as CompletionTrigger,
-            query: afterTrigger,
-          },
-        });
-
-        vscode.postMessage({
-          type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
-          trigger,
-          prefix: trigger + afterTrigger,
-          position: from,
-          seq,
-        });
-      });
-    },
-    [vscode]
-  );
-
-  // Path-only completions — fires when the entire editor content is a lone file path.
-  // Suggests .prompt.md / .md / .txt files from the workspace as replacements.
-  const pathCompletions = useCallback(
-    (context: any): Promise<CompletionResult | null> | null => {
-      // Match paths starting with ./ ../ / or a Windows drive letter. The
-      // dot-prefixed alternative's trailing slash is optional so a lone "."
-      // (before any "/" has been typed) already activates this dropdown.
-      const pathPattern = isMultiRootWorkspace
-        ? /(?:\.\.?\/?|\/|[a-zA-Z]:[/\\]|[^\s/\\]+[/\\])[^\s\n]*/
-        : /(?:\.\.?\/?|\/|[a-zA-Z]:[/\\])[^\s\n]*/;
-      const before = context.matchBefore(pathPattern);
-      if (!before) return null;
-
-      // Only activate when this match starts at the very beginning of the
-      // actual content (no mixed text before the path)
-      const doc = context.state.doc.toString();
-      const leadingWs = doc.length - doc.trimStart().length;
-      if (before.from !== leadingWs) return null;
-
-      // Bail out if there is any non-whitespace content after the path
-      if (doc.slice(before.to).trim().length > 0) return null;
-
-      if (before.from === before.to && !context.explicit) return null;
-
-      WebviewLog.trace(
-        `[CodeMirror] pathCompletions triggered: "${before.text}" from=${before.from}`
-      );
-
-      const seq = ++completionSeqRef.current;
-
-      // Cancel this source's own previous in-flight request only — see the
-      // matching comment in customCompletions.
-      const prevSeq = inFlightCompletionSeqRef.current.path;
-      if (prevSeq !== null) {
-        const prevEntry = pendingCompletionsRef.current.get(prevSeq);
-        prevEntry?.resolve?.(null);
-        pendingCompletionsRef.current.delete(prevSeq);
-      }
-      inFlightCompletionSeqRef.current.path = seq;
-
-      return new Promise<CompletionResult | null>((resolve) => {
-        pendingCompletionsRef.current.set(seq, {
-          resolve,
-          request: {
-            trigger: "path",
-            query: before.text,
-          },
-        });
-
-        vscode.postMessage({
-          type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
-          trigger: "path",
-          prefix: before.text,
-          position: before.from,
-          seq,
-        });
-      });
-    },
-    [isMultiRootWorkspace, vscode]
-  );
+  }, [handlePastedImageSaved, handleOutputSnapshotSaved]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -1451,37 +847,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           symbolIconCacheRef.current,
           referenceValidityRef.current
         ),
-        // Mount autocomplete tooltips on document.body so they escape the
-        // overflow:hidden ancestors (critical on iOS where CodeMirror forces
-        // position:absolute for tooltips, which causes them to be clipped and
-        // hidden behind the EditorFooter). The body container is outside any
-        // overflow:hidden chain, so the tooltip renders above the footer.
-        tooltips({
-          parent: document.body,
-          tooltipSpace: getKeyboardTooltipSpace,
-        }),
-        autocompletion({
-          override: [customCompletions, pathCompletions],
-          activateOnTyping: true,
-          closeOnBlur: true,
-          optionClass: (completion) =>
-            `cm-completion-${completion.type || DEFAULT_COMPLETION_ICON}`,
-          // `type` is a codicon name (see COMPLETION_KIND_ICONS), not
-          // CodeMirror's own semantic bucket vocabulary — icons:false turns
-          // off CM's built-in char-glyph icon renderer (ƒ, ○, 𝑥, ...) so
-          // this is the only icon source, for every completion kind, not
-          // just file/folder.
-          icons: false,
-          addToOptions: [
-            {
-              render: (completion) => {
-                const icon = document.createElement("span");
-                icon.className = `cm-completionIcon codicon codicon-${completion.type || DEFAULT_COMPLETION_ICON}`;
-                return icon;
-              },
-              position: 20, // Position before label
-            },
-          ],
+        promptTokenCompletionExtension({
+          sources: [completionClient.customSource, completionClient.pathSource],
         }),
         EditorView.domEventHandlers({
           blur: () => {
@@ -1624,8 +991,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    customCompletions,
-    pathCompletions,
+    completionClient,
     validateContextReferences,
     handleImagePaste,
     mode,
@@ -1810,20 +1176,6 @@ const ATOMIC_REFERENCE_LINK_EVENTS = new Set([
   "touchcancel",
   "touchend",
 ]);
-
-// Stable identity for a #sym: reference, independent of its position in the
-// document — correlates an async symbol-kind lookup (resolved in
-// createContextReferenceLintExtension) back to the matching chip icon in
-// createAtomicReferenceExtension without changing the reference's stored
-// text/wire format.
-function symbolIconCacheKey(
-  path: string,
-  symbolName: string,
-  lineStart?: string,
-  lineEnd?: string
-): string {
-  return `${path}::${symbolName}::${lineStart ?? ""}-${lineEnd ?? ""}`;
-}
 
 // Dispatched once a #sym: reference's real kind resolves asynchronously (see
 // createContextReferenceLintExtension), so createAtomicReferenceExtension
