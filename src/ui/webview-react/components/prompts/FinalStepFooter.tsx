@@ -53,7 +53,7 @@ interface FinalStepFooterProps {
   modelLabel?: string;
   /** True when model is inherited (not set at prompt level) */
   modelIsDefault?: boolean;
-  /** Latest CLI output for the current final step pass */
+  /** Latest CLI output of the final step's most recent pass */
   latestOutput?: CliOutput | null;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];

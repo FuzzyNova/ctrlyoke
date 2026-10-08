@@ -8,16 +8,22 @@ import {
 } from "../types/messages";
 
 /**
- * Returns the most recent CLI output for the final step's current loop
- * iteration. History-aware, mirroring `useLatestStepOutput` above.
+ * Returns the final step's most recent CLI output from any pass.
+ * History-aware, mirroring `useLatestStepOutput` below.
+ *
+ * Not restricted to the current pass: once a new pass begins, the queue
+ * runs before the final step does, so the current pass has no output yet.
+ * Matching only that pass blanked the footer's context-window bar and stats
+ * from pass 2 onward. Context-window stats live only in output history, never
+ * in `_runtime`, so there was nothing to fall back to. Queue steps likewise
+ * keep their previous loop's output until the new loop's output arrives.
  *
  * Condition/setup phases are skipped for the same reason as `useLatestStepOutput`.
  *
  * Shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function useFinalStepLatestOutput(): CliOutput | null {
-  const { liveOrderedEntries, historyOutputs, finalStepLoopCount } =
-    useWorkflowStore();
+  const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
   const { isViewingHistory } = useUiStore();
 
   const entries =
@@ -31,14 +37,13 @@ export function useFinalStepLatestOutput(): CliOutput | null {
       if (
         entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
         isPromptExecutionPhase(entry.phase) &&
-        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-        entry.target.loopIndex === finalStepLoopCount
+        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
       ) {
         return entry.cliOutput;
       }
     }
     return null;
-  }, [entries, finalStepLoopCount]);
+  }, [entries]);
 }
 
 /**

@@ -144,4 +144,37 @@ describe("useFinalStepLatestOutput", () => {
     expect(result.current?.response).toBe("final ai output");
     expect(result.current?.tokens?.contextWindowSize).toBe(1000000);
   });
+
+  it("keeps the previous pass's output once a new pass starts", () => {
+    const store = useWorkflowStore.getState();
+    store.loadWorkflow({
+      fileName: "wf.ctrlyoke.yaml",
+      steps: [{ prompt: "only" }],
+    });
+    store.appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "pass 1 output", tokens: AI_TOKENS }),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
+    // Pass 2 is in its queue phase: the final step has not run for it yet.
+    useWorkflowStore.setState({ finalStepLoopCount: 1 });
+
+    const { result, rerender } = renderHook(() => useFinalStepLatestOutput());
+    expect(result.current?.response).toBe("pass 1 output");
+    expect(result.current?.tokens?.contextWindowSize).toBe(1000000);
+
+    store.appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "pass 2 output" }),
+      timestampMs: Date.now(),
+      sequence: 2,
+    });
+    rerender();
+    expect(result.current?.response).toBe("pass 2 output");
+  });
 });
