@@ -127,7 +127,8 @@ export function buildCodeMirrorCompletionResult(
   from: number,
   request: PendingCompletionRequest | null,
   symbolIconCache?: Map<string, string>,
-  onOutputCapturePicked?: OutputCapturePickHandler
+  onOutputCapturePicked?: OutputCapturePickHandler,
+  escapeInsertText?: (text: string) => string
 ): CompletionResult {
   // A response the extension already fuzzy-ranked against the query is shown
   // as-is: CodeMirror's own matcher would both re-sort it and drop legitimate
@@ -174,7 +175,13 @@ export function buildCodeMirrorCompletionResult(
         ? rawApplyText.slice(1)
         : rawApplyText;
     // Final inserted text — a trailing boundary space for terminal references.
-    const applyValue = withReferenceBoundarySpace(applyText, request?.trigger);
+    const boundedApplyText = withReferenceBoundarySpace(
+      applyText,
+      request?.trigger
+    );
+    const applyValue = escapeInsertText
+      ? escapeInsertText(boundedApplyText)
+      : boundedApplyText;
 
     // The completion item's own `kind` is known synchronously, right now —
     // seed the chip icon cache from it on pick so the chip renders with the

@@ -320,4 +320,34 @@ suite("Node hosted server composition", function () {
       if (request.trigger === "#") assert.strictEqual(response.partial, false);
     }
   });
+
+  test("answers a prompt-token request from a workflow file with a document-relative position", async () => {
+    assert.ok(runtime);
+    const socket = await openSocket(runtime.url, "workflow-file-client");
+    sockets.push(socket);
+    // The workspace editor sends the token's offset in the whole workflow
+    // file, not its offset within the prompt text.
+    const responsePromise = waitForMessage(
+      socket,
+      (message) =>
+        message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE &&
+        message.seq === 101
+    );
+    socket.send(
+      JSON.stringify({
+        type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+        trigger: "@",
+        prefix: "@Wid",
+        position: 4096,
+        seq: 101,
+      })
+    );
+    const items = (await responsePromise).items as Array<{
+      insertText?: string;
+    }>;
+    assert.ok(
+      items.some((item) => item.insertText?.includes("Widget.ts")),
+      `expected Widget.ts, got ${JSON.stringify(items)}`
+    );
+  });
 });

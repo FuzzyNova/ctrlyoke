@@ -1,8 +1,8 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-08):** Phases 1, 2 and 1b are implemented (see their entries under
+**Status (2026-10-08):** Phases 0, 1, 2, 1b, 3 and 4 are implemented (see their entries under
 "Implementation phases"). Phase 1b fixed the bugs the Wave 1 review found in 1 and 2 and added
-the decoded prompt ranges Wave 2 needs. Phases 0 and 3–7 are not started. _Refreshed
+the decoded prompt ranges Wave 2 needs. Phases 5–7 are not started. _Refreshed
 2026-10-08:_ the language intelligence plan shipped (`dev/implemented/`). Facts 2 and 9,
 "Editor integration" and "Coexistence with language servers" were re-audited against the
 merged code.
@@ -669,11 +669,50 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
        schema says an agent name), and make the `hooks` snippet insert a list.
    - Tests: pure Mocha tests with a stub data source.
 
-6. **Phase 4: Workspace editor completions.**
+6. **Phase 4: Workspace editor completions.** **Done 2026-10-08.**
    - The `ctrlyokeFileSupport` compartment, and the three sources registered through language
      data next to `basicSetup` and the LSP compartment, with body-mounted tooltips.
    - A webview `WorkflowValueDataSource` built from the stores.
    - `PROMPT_TEXT` gating for prompt tokens, plus `SCRIPT_TEXT` and permission routing.
+   - **As built:**
+     - **Modules, under `webview-react/utils/workflowFileSupport/`:**
+       `workflowFileSupport.ts` (the lazy chunk's entry: `getWorkflowLocation`,
+       `parseWorkflowDocumentRoot`, `getWorkflowFileCompletions`), `loadWorkflowFileSupport.ts`
+       (one memoised `import()`), `workflowValueDataSource.ts` (reads `settingsStore`,
+       `useMcpManagerStore` and `secretRegistryStore` per request),
+       `hostedRangeCompletions.ts` and `workflowFileCompletionExtension.ts`.
+     - **Sources:** key/value (`KEY`/`VALUE` roles; it filters by the word typed, because the
+       core's replace range can include a JSON key's quotes, and does not open the key list on
+       indentation alone), host-backed (`SCRIPT_TEXT`, and `VALUE` under `toolPermissions`),
+       and prompt tokens (`PROMPT_TEXT` only, through `PromptCompletionClient.customSource`).
+       Tooltips use `tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace })`,
+       and the `visualViewport` handlers call `repositionTooltips`.
+     - **Lazy chunk, as one module rather than a JSON/YAML split:** the whole facade, core and
+       `yaml` load together the first time a ctrlyoke file (JSON and `.prompt.md` included)
+       opens, so a JSON file also pays for the YAML half. Verified in a webview build: `yaml`
+       is only in `workflowFileSupport.js`, not `dashboard.js`. This replaces the
+       parser-free indentation fallback the Phase 1 entry anticipated: until the chunk
+       resolves the sources answer nothing. It loads on file open, so in practice that is
+       before the first keystroke.
+     - **`WorkflowLocationJson.ts` no longer imports `SyntaxKind`** (an ambient `const enum`
+       the webview's `isolatedModules` rejects); `JSON_TOKENS` repeats the values and a unit
+       test pins them against `createScanner`.
+     - **JSON escaping:** `PromptCompletionClientOptions.escapeInsertText` (threaded into
+       `buildCodeMirrorCompletionResult`) escapes the insert, the `#sym:` function-apply path
+       included.
+     - **Script and permission completions** send the field's own text slice and a relative
+       position over the existing request messages, with `seq` numbers from 1,000,000,000 so
+       the properties-panel editors never consume them. The slice is raw source, so an escaped
+       JSON or quoted-YAML script is completed best-effort.
+     - **Not done, deliberately:** the `path` completion for a `prompt:` value naming a
+       `.prompt.md` file (the client's `pathSource` only fires when the whole document is a
+       path); worktree branch-name completion; the "escaped `\"` before `@` is not a
+       boundary" rule for JSON prompt text.
+     - **Tests:** `WorkspaceFileEditor.ctrlyokeFiles.test.tsx` (YAML and JSON key/value, LSP
+       source and ctrlyoke source in one dropdown, prompt tokens only inside prompt text, JSON
+       escaping on accept, script routing, non-ctrlyoke files unchanged), the `JSON_TOKENS`
+       pin, and a `nodeHostedServer.integration.test.ts` case for a document-relative
+       prompt-token position.
    - Tests: `WorkspaceFileEditor.test.tsx` covers key, value and prompt-token completions in
      YAML, JSON and `.prompt.md`, and confirms non-ctrlyoke files are unchanged. Reuse
      `fixtures/completionRequests.ts`. Add a case to
@@ -735,7 +774,8 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      language `yaml`/`json` no longer gets prompt-token completions; both providers key off the
      ctrlyoke file name. Tests need `PromptDocumentStub` with a real file name.
 
-Phases 0, 1, 2, 1b, 3 and 7 are done. Phase 4 can start now. The F3 bug the Wave 2 review filed,
+Phases 0, 1, 2, 1b, 3, 4 and 7 are done. Phase 5 needs F4 and D1, both landed. The F3 bug the
+Wave 2 review filed,
 [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md),
 is already fixed. The cross-plan order is in
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).

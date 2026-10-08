@@ -124,7 +124,11 @@ suite("PromptDiagnosticsProvider", () => {
     ) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    assert.deepStrictEqual(provider.getDiagnostics(document.uri), []);
+    assert.deepStrictEqual(
+      provider.getDiagnostics(document.uri),
+      [],
+      `still flagged after the refresh trigger fired; document still open: ${vscode.workspace.textDocuments.includes(document)}, closed: ${document.isClosed}`
+    );
 
     provider.dispose();
     assert.strictEqual(subscribed, 0, "dispose unsubscribes every trigger");

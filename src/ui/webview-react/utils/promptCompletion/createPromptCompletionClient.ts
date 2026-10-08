@@ -33,6 +33,8 @@ export interface PromptCompletionClientOptions {
   /** Multi-root workspaces also accept a leading `folder/` as a path start. */
   getIsMultiRootWorkspace: () => boolean;
   onOutputCapturePicked?: OutputCapturePickHandler;
+  /** Escapes inserted text for the host string, e.g. a JSON string fragment. */
+  escapeInsertText?: (text: string) => string;
 }
 
 interface PendingCompletionEntry {
@@ -212,7 +214,8 @@ export class PromptCompletionClient {
       from,
       entry.request,
       this.options.getSymbolIconCache(),
-      this.options.onOutputCapturePicked
+      this.options.onOutputCapturePicked,
+      this.options.escapeInsertText
     );
 
     if (partial) {
