@@ -4,7 +4,7 @@ import * as path from "path";
 import { pathToFileURL } from "node:url";
 import { suite, test } from "mocha";
 import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
-import { LSP_METHODS } from "../../types/DashboardConstants";
+import { LANGUAGE_SERVER_REQUEST_ORIGINS, LSP_METHODS } from "../../types/DashboardConstants";
 import {
   LSP_READ_ONLY_URI_SCHEME,
   LSP_VIEWER_URI_PREFIX,
@@ -37,7 +37,7 @@ suite("LspSessionProxy", () => {
     });
     clientA = [];
     clientB = [];
-    const lookup = await host.lookupSession("src/main.ts");
+    const lookup = await host.lookupSession("src/main.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok(lookup.session);
     sessionId = lookup.session.id;
     proxyA = await host.createProxy(sessionId, (message) => clientA.push(message), async () => true);
@@ -86,21 +86,21 @@ suite("LspSessionProxy", () => {
   });
 
   test("opens one hidden warmup anchor and keeps it open for the server", async () => {
-    await host.openWarmupDocument("src/main.ts", "typescript");
+    await host.openWarmupDocument("src/main.ts", "typescript", LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
     await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_OPEN));
     const opened = backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN);
     const params = opened[0].params as { textDocument: { uri: string; languageId: string; text: string } };
     assert.strictEqual(params.textDocument.uri, pathToFileURL(path.join(workspaceRoot, "src", "main.ts")).toString());
     assert.strictEqual(params.textDocument.languageId, "typescript");
     assert.strictEqual(params.textDocument.text, "const value = 1;\n");
-    await host.openWarmupDocument("src/main.ts", "typescript");
+    await host.openWarmupDocument("src/main.ts", "typescript", LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
     assert.strictEqual(backend.notifications.filter(({ method }) => method === LSP_METHODS.DID_OPEN).length, 1);
   });
 
   test("claims a warmup URI before concurrent file reads", async () => {
     await Promise.all([
-      host.openWarmupDocument("src/main.ts", "typescript"),
-      host.openWarmupDocument("src/main.ts", "typescript"),
+      host.openWarmupDocument("src/main.ts", "typescript", LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND),
+      host.openWarmupDocument("src/main.ts", "typescript", LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND),
     ]);
     await waitFor(() => backend.notifications.some(({ method }) => method === LSP_METHODS.DID_OPEN));
     await host.dispose();
@@ -406,7 +406,7 @@ suite("LspSessionProxy", () => {
   test("confirms and writes edits to unopened files then notifies watched files", async () => {
     const unopened = path.join(workspaceRoot, "src", "other.ts");
     fs.writeFileSync(unopened, "const value = 1;\r\n");
-    await host.openWarmupDocument("src/other.ts", "typescript");
+    await host.openWarmupDocument("src/other.ts", "typescript", LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
     let saved = "";
     const editProxy = await host.createProxy(sessionId, (message) => clientA.push(message), async () => true, {
       readFile: async () => ({ content: "const value = 1;\r\n" }),

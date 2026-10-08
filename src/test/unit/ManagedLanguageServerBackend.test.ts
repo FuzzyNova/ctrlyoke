@@ -7,7 +7,7 @@ import { PassThrough } from "stream";
 import { pathToFileURL } from "url";
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
-import { LSP_SESSION_INVALIDATION_CLOSE } from "../../types/DashboardConstants";
+import { LANGUAGE_SERVER_REQUEST_ORIGINS, LSP_SESSION_INVALIDATION_CLOSE } from "../../types/DashboardConstants";
 import { ManagedLanguageServerBackend } from "../../server/lsp/ManagedLanguageServerBackend";
 import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
@@ -19,7 +19,7 @@ suite("ManagedLanguageServerBackend", () => {
   test("trust gate prevents resolution and spawning", async () => {
     let spawnCount = 0;
     const backend = createBackend({ trusted: false, onSpawn: () => { spawnCount += 1; } });
-    const result = await backend.resolveForPath("src/app.ts", roots);
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.deepStrictEqual(result, { reason: "untrusted" });
     assert.strictEqual(spawnCount, 0);
     await backend.dispose();
@@ -31,12 +31,12 @@ suite("ManagedLanguageServerBackend", () => {
     backend.onStatusChanged((event) => statuses.push(event.status));
     try {
       assert.deepStrictEqual(
-        await backend.resolveForPath("src/app.ts", roots, false),
+        await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND),
         { reason: "no server" }
       );
       assert.deepStrictEqual(statuses, []);
 
-      await backend.resolveForPath("src/app.ts", roots);
+      await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
       assert.deepStrictEqual(statuses, ["not installed"]);
     } finally {
       await backend.dispose();
@@ -56,16 +56,16 @@ suite("ManagedLanguageServerBackend", () => {
     };
     const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp", "--stdio"], languages: ["typescript"], extensions: ["ts"], rootMarkers: [], env: { MODE: "one" } } }, use: { typescript: "custom" }, settings: { custom: { typescript: { tsdk: "./node_modules/typescript/lib" } } } };
     const backend = createBackend({ store, interaction, workspaceSettings: settings });
-    const result = await backend.resolveForPath("src/app.ts", roots);
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in result);
     assert.strictEqual(decisions, 1);
-    await backend.resolveForPath("src/app.ts", roots);
+    await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.strictEqual(decisions, 1);
     settings.definitions.custom.env.MODE = "two";
-    await backend.resolveForPath("src/app.ts", roots);
+    await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.strictEqual(decisions, 2);
     settings.settings.custom.typescript.tsdk = "./vendor/typescript/lib";
-    await backend.resolveForPath("src/app.ts", roots);
+    await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.strictEqual(decisions, 3, "path-bearing initialization settings are bound to the approval hash");
     await backend.dispose();
   });
@@ -75,7 +75,7 @@ suite("ManagedLanguageServerBackend", () => {
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
     try {
       await backend.startLanguages(["typescript"]);
-      const first = await host.lookupSession("src/app.ts");
+      const first = await host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
       assert.ok(first.session);
       assert.deepStrictEqual(first.session.capabilities, { completionProvider: {}, hoverProvider: true });
       const messages: unknown[] = [];
@@ -85,7 +85,7 @@ suite("ManagedLanguageServerBackend", () => {
         capabilities: { completionProvider: {}, hoverProvider: true },
         serverInfo: { name: "typescript-language-server" },
       });
-      const second = await host.lookupSession("src/app.ts");
+      const second = await host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
       assert.deepStrictEqual(second.session?.capabilities, { completionProvider: {}, hoverProvider: true });
     } finally { await host.dispose(); }
   });
@@ -93,10 +93,11 @@ suite("ManagedLanguageServerBackend", () => {
   test("coalesces concurrent connection requests for one server root", async () => {
     const children: EventEmitter[] = [];
     const backend = createBackend({ children });
-    const result = await backend.resolveForPath("src/app.ts", roots);
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in result);
-    const [first, second] = await Promise.all([backend.getConnection(result.descriptor), backend.getConnection(result.descriptor)]);
+    const [first, second] = await Promise.all([backend.getConnection(result.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR), backend.getConnection(result.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)]);
     assert.strictEqual(first, second);
+    assert.deepStrictEqual(result.descriptor.capabilities, { completionProvider: {}, hoverProvider: true });
     assert.strictEqual(children.length, 1);
     await backend.dispose();
   });
@@ -113,11 +114,42 @@ suite("ManagedLanguageServerBackend", () => {
       }) as typeof setTimeout,
       clearTimer: (() => undefined) as typeof clearTimeout,
     });
-    const result = await backend.resolveForPath("src/app.ts", roots);
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in result);
-    await backend.getConnection(result.descriptor);
+    await backend.getConnection(result.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     await backend.dispose();
     assert.strictEqual((children[0] as EventEmitter & { killCount: number }).killCount, 1);
+  });
+
+  test("stops a server still initializing and never hands out its connection", async () => {
+    let resolveInitialize!: (value: unknown) => void;
+    const initializeResponse = new Promise<unknown>((resolve) => {
+      resolveInitialize = resolve;
+    });
+    const children: EventEmitter[] = [];
+    const backend = createBackend({ children, initializeResponse });
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    assert.ok("descriptor" in result);
+    const starting = backend.getConnection(result.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    await waitForCondition(() => children.length === 1, "language-server spawn");
+    await backend.stopManagedServer(result.descriptor.id);
+    resolveInitialize({ capabilities: { hoverProvider: true } });
+    const settled = await Promise.allSettled([starting]);
+    assert.strictEqual(settled[0]?.status, "rejected");
+    assert.strictEqual(backend.runningServerCount, 0);
+    await backend.dispose();
+  });
+
+  test("restart starts a detected server that has never run", async () => {
+    let spawnCount = 0;
+    const backend = createBackend({ onSpawn: () => { spawnCount += 1; } });
+    try {
+      await backend.restartServer("typescript-language-server");
+      assert.strictEqual(spawnCount, 1);
+      assert.strictEqual(backend.runningServerCount, 1);
+    } finally {
+      await backend.dispose();
+    }
   });
 
   test("evicts a failed startup session so a later lookup retries and reports the crash", async () => {
@@ -128,7 +160,7 @@ suite("ManagedLanguageServerBackend", () => {
     host.onStatusChanged((event) => statuses.push(event.status));
     try {
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        await assert.rejects(host.lookupSession("src/app.ts"), /spawn failed/);
+        await assert.rejects(host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR), /spawn failed/);
       }
       assert.strictEqual(attempts, 2);
       assert.ok(statuses.includes("crashed"));
@@ -140,7 +172,7 @@ suite("ManagedLanguageServerBackend", () => {
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
     const closes: Array<{ code: number; reason: string }> = [];
     try {
-      const lookup = await host.lookupSession("src/app.ts");
+      const lookup = await host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
       assert.ok(lookup.session);
       await host.createProxy(lookup.session.id, () => undefined, async () => true, undefined, (code, reason) => { closes.push({ code, reason }); });
       await host.createProxy(lookup.session.id, () => undefined, async () => true, undefined, (code, reason) => { closes.push({ code, reason }); });
@@ -158,15 +190,15 @@ suite("ManagedLanguageServerBackend", () => {
     const backend = createBackend({ onSpawn: () => { spawnCount += 1; } });
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
     try {
-      assert.ok((await host.lookupSession("src/app.ts")).session);
+      assert.ok((await host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)).session);
       await host.stopServer("typescript-language-server");
-      assert.deepStrictEqual(await host.lookupSession("src/app.ts"), {
+      assert.deepStrictEqual(await host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR), {
         session: null,
         reason: "stopped",
       });
       assert.strictEqual(spawnCount, 1);
       await host.restartServer("typescript-language-server");
-      assert.ok((await host.lookupSession("src/app.ts")).session);
+      assert.ok((await host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)).session);
       assert.strictEqual(spawnCount, 2);
     } finally { await host.dispose(); }
   });
@@ -180,14 +212,52 @@ suite("ManagedLanguageServerBackend", () => {
     await backend.dispose();
   });
 
+  test("background symbol and warmup requests stay quiet and never evict at the cap", async () => {
+    let spawnCount = 0;
+    const statuses: string[] = [];
+    const backend = createBackend({
+      maxRunning: 1,
+      onSpawn: () => { spawnCount += 1; },
+    });
+    backend.onStatusChanged((event) => statuses.push(event.status));
+    const host = new LanguageIntelligenceHost({
+      backend,
+      workspaceRoot: root,
+      namedWorkspaceRoots: [],
+      isWorkspaceTrusted: () => true,
+    });
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await backend.startLanguages(["typescript", "python"]);
+        await host.requestForPath(
+          "src/app.py",
+          "workspace/symbol",
+          { query: "Widget" },
+          LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
+        );
+        await host.openWarmupDocument(
+          "src/app.py",
+          "python",
+          LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
+        );
+      }
+      assert.strictEqual(spawnCount, 1);
+      assert.strictEqual(backend.runningServerCount, 1);
+      assert.strictEqual(statuses.filter((status) => status === "stopped").length, 0);
+      assert.strictEqual(statuses.filter((status) => status === "limit reached").length, 0);
+    } finally {
+      await host.dispose();
+    }
+  });
+
   test("background warmup and path requests do not prompt for workspace definitions", async () => {
     let prompts = 0;
     const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp"], languages: ["typescript"], extensions: ["ts"], rootMarkers: [] } }, use: { typescript: "custom" } };
     const backend = createBackend({ workspaceSettings: settings, interaction: { canPrompt: () => true, requestChoice: async () => undefined, requestBatchApproval: async () => { prompts += 1; return undefined; } } });
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot: root, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
     try {
-      await host.openWarmupDocument("src/app.ts", "typescript");
-      await host.requestForPath("src/app.ts", "textDocument/completion", {});
+      await host.openWarmupDocument("src/app.ts", "typescript", LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
+      await host.requestForPath("src/app.ts", "textDocument/completion", {}, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
       assert.strictEqual(prompts, 0);
     } finally { await host.dispose(); }
   });
@@ -196,7 +266,7 @@ suite("ManagedLanguageServerBackend", () => {
     let prompts = 0;
     const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp"], languages: ["python"], extensions: ["py"], rootMarkers: [] } } };
     const backend = createBackend({ workspaceSettings: settings, interaction: { canPrompt: () => true, requestChoice: async () => undefined, requestBatchApproval: async () => { prompts += 1; return undefined; } } });
-    const result = await backend.resolveForPath("src/app.ts", roots);
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in result);
     assert.strictEqual(prompts, 0);
     await backend.dispose();
@@ -206,9 +276,9 @@ suite("ManagedLanguageServerBackend", () => {
     let prompts = 0;
     const settings = { ...CTRLYOKE_SETTINGS_DEFAULTS.languageServers, definitions: { custom: { command: ["custom-lsp"], languages: ["typescript"], extensions: ["ts"], rootMarkers: [] } }, use: { typescript: "custom" } };
     const backend = createBackend({ workspaceSettings: settings, interaction: { canPrompt: () => true, requestChoice: async () => undefined, requestBatchApproval: async () => { prompts += 1; return undefined; } } });
-    const results = await Promise.all([backend.resolveForPath("src/app.ts", roots), backend.resolveForPath("src/other.ts", roots)]);
+    const results = await Promise.all([backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR), backend.resolveForPath("src/other.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR)]);
     assert.deepStrictEqual(results, [{ reason: "needs approval" }, { reason: "needs approval" }]);
-    await backend.resolveForPath("src/app.ts", roots);
+    await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.strictEqual(prompts, 1);
     await backend.dispose();
   });
@@ -220,7 +290,7 @@ suite("ManagedLanguageServerBackend", () => {
     await fs.promises.writeFile(path.join(projectRoot, "app.sln"), "", "utf8");
     const backend = createBackend({ root: workspace });
     try {
-      const result = await backend.resolveForPath(path.join(projectRoot, "src", "app.cs"), { workspaceRoot: workspace, namedRoots: [] });
+      const result = await backend.resolveForPath(path.join(projectRoot, "src", "app.cs"), { workspaceRoot: workspace, namedRoots: [] }, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
       assert.ok("descriptor" in result);
       assert.strictEqual(result.descriptor.rootPath, projectRoot);
     } finally {
@@ -238,8 +308,8 @@ suite("ManagedLanguageServerBackend", () => {
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot: workspace, namedWorkspaceRoots: [], isWorkspaceTrusted: () => true });
     let proxy: Awaited<ReturnType<LanguageIntelligenceHost["createProxy"]>>;
     try {
-      await host.openWarmupDocument("anchor.ts", "typescript");
-      const lookup = await host.lookupSession("anchor.ts");
+      await host.openWarmupDocument("anchor.ts", "typescript", LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
+      const lookup = await host.lookupSession("anchor.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
       assert.ok(lookup.session);
       proxy = await host.createProxy(lookup.session.id, () => undefined, async () => true);
       assert.ok(proxy);
@@ -262,9 +332,9 @@ suite("ManagedLanguageServerBackend", () => {
   test("idle shutdown never stops a server while a document is open", async () => {
     const timers: Array<() => void> = [];
     const backend = createBackend({ setTimer: ((callback: () => void) => { timers.push(callback); return callback as unknown as ReturnType<typeof setTimeout>; }) as typeof setTimeout, clearTimer: (() => undefined) as typeof clearTimeout });
-    const result = await backend.resolveForPath("src/app.ts", roots);
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in result);
-    await backend.getConnection(result.descriptor);
+    await backend.getConnection(result.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     backend.documentOpened(result.descriptor);
     timers.splice(0).forEach((timer) => timer());
     assert.strictEqual(backend.runningServerCount, 1);
@@ -276,11 +346,11 @@ suite("ManagedLanguageServerBackend", () => {
 
   test("cap reports limit reached when every server owns an open document", async () => {
     const backend = createBackend({ maxRunning: 1 });
-    const ts = await backend.resolveForPath("src/app.ts", roots);
+    const ts = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in ts);
-    await backend.getConnection(ts.descriptor);
+    await backend.getConnection(ts.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     backend.documentOpened(ts.descriptor);
-    const json = await backend.resolveForPath("package.json", roots);
+    const json = await backend.resolveForPath("package.json", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.deepStrictEqual(json, { reason: "limit reached" });
     backend.documentClosed(ts.descriptor);
     await backend.dispose();
@@ -290,13 +360,13 @@ suite("ManagedLanguageServerBackend", () => {
     const backend = createBackend({ maxRunning: 1 });
     const statuses: string[] = [];
     backend.onStatusChanged((status) => statuses.push(`${status.id}:${status.status}`));
-    const ts = await backend.resolveForPath("src/app.ts", roots);
+    const ts = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in ts);
-    await backend.getConnection(ts.descriptor);
-    const json = await backend.resolveForPath("package.json", roots);
+    await backend.getConnection(ts.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+    const json = await backend.resolveForPath("package.json", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in json);
     assert.ok(statuses.includes("typescript-language-server:stopped"));
-    await backend.getConnection(json.descriptor);
+    await backend.getConnection(json.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.strictEqual(backend.runningServerCount, 1);
     await backend.dispose();
   });
@@ -305,15 +375,15 @@ suite("ManagedLanguageServerBackend", () => {
     const timers: Array<() => void> = [];
     const children: EventEmitter[] = [];
     const backend = createBackend({ children, setTimer: ((callback: () => void) => { timers.push(callback); return callback as unknown as ReturnType<typeof setTimeout>; }) as typeof setTimeout, clearTimer: (() => undefined) as typeof clearTimeout });
-    const result = await backend.resolveForPath("src/app.ts", roots);
+    const result = await backend.resolveForPath("src/app.ts", roots, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     assert.ok("descriptor" in result);
-    await backend.getConnection(result.descriptor);
+    await backend.getConnection(result.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     backend.documentOpened(result.descriptor);
     children[0].emit("exit", 1, null);
     assert.strictEqual((children[0] as EventEmitter & { exitCode: number | null }).exitCode, 0, "crashed child is killed before restart");
     assert.strictEqual(backend.runningServerCount, 0);
     assert.ok(timers.length >= 2, "idle callback and crash retry should both be queued");
-    await backend.getConnection(result.descriptor);
+    await backend.getConnection(result.descriptor, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
     timers.at(-2)?.();
     assert.strictEqual(backend.runningServerCount, 1);
     assert.strictEqual(children.length, 2);
@@ -324,6 +394,29 @@ suite("ManagedLanguageServerBackend", () => {
     assert.strictEqual(children.length, 3);
     await backend.dispose();
     children[0].emit("exit", 1, null);
+  });
+
+  test("coalesces an editor lookup with a restart already in progress", async () => {
+    const children: EventEmitter[] = [];
+    const backend = createBackend({ children });
+    const host = new LanguageIntelligenceHost({
+      backend,
+      workspaceRoot: root,
+      namedWorkspaceRoots: [],
+      isWorkspaceTrusted: () => true,
+    });
+    try {
+      const first = await host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+      assert.ok(first.session);
+      const restart = host.restartServer("typescript-language-server");
+      const lookup = host.lookupSession("src/app.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
+      const [, second] = await Promise.all([restart, lookup]);
+      assert.ok(second.session);
+      assert.deepStrictEqual(second.session.capabilities, { completionProvider: {}, hoverProvider: true });
+      assert.strictEqual(children.length, 2);
+    } finally {
+      await host.dispose();
+    }
   });
 
   test("proxies TypeScript completion and hover when installed", async function () {
@@ -343,7 +436,7 @@ suite("ManagedLanguageServerBackend", () => {
     const host = new LanguageIntelligenceHost({ backend, workspaceRoot, namedWorkspaceRoots: [{ name: path.basename(workspaceRoot), fsPath: workspaceRoot }], isWorkspaceTrusted: () => true });
     let proxy: Awaited<ReturnType<LanguageIntelligenceHost["createProxy"]>>;
     try {
-      const lookup = await host.lookupSession("main.ts");
+      const lookup = await host.lookupSession("main.ts", LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR);
       assert.ok(lookup.session);
       const received: Array<Record<string, unknown>> = [];
       proxy = await host.createProxy(lookup.session.id, (message) => {
@@ -381,6 +474,17 @@ function hasTypeScriptLanguageServer(): boolean {
   return pathEntries.some((directory) => extensions.some((extension) => fs.existsSync(path.join(directory, `typescript-language-server${extension}`))));
 }
 
+async function waitForCondition(
+  condition: () => boolean,
+  description: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (condition()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error(`Timed out waiting for ${description}.`);
+}
+
 async function waitForMessage(messages: Array<Record<string, unknown>>, predicate: (message: Record<string, unknown>) => boolean): Promise<Record<string, unknown>> {
   const started = Date.now();
   while (Date.now() - started < 15_000) {
@@ -404,6 +508,7 @@ function createBackend(options: {
   children?: EventEmitter[];
   ignoreShutdown?: boolean;
   ignoreExit?: boolean;
+  initializeResponse?: Promise<unknown>;
   installed?: boolean;
 } = {}): ManagedLanguageServerBackend {
   const state = options.store ?? new Map<string, unknown>();
@@ -415,7 +520,7 @@ function createBackend(options: {
     options.children?.push(emitter);
     emitter.once("exit", () => { server?.dispose(); stdin.destroy(); stdout.destroy(); stderr.destroy(); });
     server = createMessageConnection(new StreamMessageReader(stdin), new StreamMessageWriter(stdout));
-    server.onRequest("initialize", () => ({ capabilities: { completionProvider: {}, hoverProvider: true } }));
+    server.onRequest("initialize", () => options.initializeResponse ?? ({ capabilities: { completionProvider: {}, hoverProvider: true } }));
     server.onRequest("textDocument/hover", () => ({ contents: "hover" }));
     server.onRequest("shutdown", () => options.ignoreShutdown ? new Promise<null>((resolve) => setTimeout(() => resolve(null), 25)) : null);
     server.onNotification("exit", () => { if (!options.ignoreExit) setImmediate(() => { emitter.exitCode = 0; emitter.emit("exit", 0, null); }); });

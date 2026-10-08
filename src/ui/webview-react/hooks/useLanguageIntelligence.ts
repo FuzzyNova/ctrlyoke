@@ -7,12 +7,14 @@ import {
 import { acquireLanguageIntelligenceClient } from "@utils/languageIntelligenceClient";
 import type { LspWebSocket } from "@utils/languageIntelligenceTransport";
 import { WebviewLog } from "@utils/logger";
+import { LSP_SESSION_LOOKUP_REASONS } from "../../../types/DashboardConstants";
 
 export interface LanguageIntelligenceState {
   filePath: string;
   extensions: Extension[];
   sessionId: string | null;
   capabilities: Record<string, unknown>;
+  statusHint: string | null;
 }
 
 export function useLanguageIntelligence(
@@ -23,6 +25,7 @@ export function useLanguageIntelligence(
     extensions: [],
     sessionId: null,
     capabilities: {},
+    statusHint: null,
   });
   const [sessionGeneration, setSessionGeneration] = useState(0);
 
@@ -30,11 +33,21 @@ export function useLanguageIntelligence(
     let active = true;
     let release: (() => void) | undefined;
     const controller = new AbortController();
-    setState({ filePath, extensions: [], sessionId: null, capabilities: {} });
+    setState({ filePath, extensions: [], sessionId: null, capabilities: {}, statusHint: null });
 
     void languageIntelligenceSession(filePath, controller.signal)
-      .then(({ session }) => {
-        if (!active || !session) return;
+      .then(({ session, reason }) => {
+        if (!active) return;
+        if (!session) {
+          const statusHint = ({
+            [LSP_SESSION_LOOKUP_REASONS.STOPPED]: "Language server is stopped. Restart it in Language Servers settings.",
+            [LSP_SESSION_LOOKUP_REASONS.LIMIT_REACHED]: "Language server limit reached. Close another editor or raise the running server limit.",
+            [LSP_SESSION_LOOKUP_REASONS.NEEDS_APPROVAL]: "This workspace needs approval to start its language server. Review it in Language Servers settings.",
+            [LSP_SESSION_LOOKUP_REASONS.UNTRUSTED]: "Trust this workspace to enable language intelligence.",
+          } as Record<string, string>)[reason ?? ""] ?? null;
+          setState({ filePath, extensions: [], sessionId: null, capabilities: {}, statusHint });
+          return;
+        }
         const acquired = acquireLanguageIntelligenceClient(
           session.id,
           session.languageId,
@@ -50,6 +63,7 @@ export function useLanguageIntelligence(
             extensions: [acquired.extension],
             sessionId: session.id,
             capabilities: session.capabilities,
+            statusHint: null,
           });
         else acquired.release();
       })
@@ -70,5 +84,5 @@ export function useLanguageIntelligence(
 
   return state.filePath === filePath
     ? state
-    : { filePath, extensions: [], sessionId: null, capabilities: {} };
+    : { filePath, extensions: [], sessionId: null, capabilities: {}, statusHint: null };
 }

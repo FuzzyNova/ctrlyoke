@@ -237,10 +237,34 @@ async function resolveDefinition(
 }
 
 const warnedWorkspaceOptionKeys = new Set<string>();
+const WORKSPACE_EXECUTION_OPTION_KEY_PATTERN =
+  /path|tsdk|plugin|command|env|exec|executable|binary/i;
+
+/** Values in these settings can select or execute workspace-controlled code. */
+export function getWorkspaceExecutionOptionEntries(
+  settings: Record<string, unknown>,
+  prefix = ""
+): string[] {
+  const entries: string[] = [];
+  for (const [key, value] of Object.entries(settings)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (WORKSPACE_EXECUTION_OPTION_KEY_PATTERN.test(key)) {
+      entries.push(`${fullKey}:${JSON.stringify(value)}`);
+    } else if (value && typeof value === "object" && !Array.isArray(value)) {
+      entries.push(
+        ...getWorkspaceExecutionOptionEntries(
+          value as Record<string, unknown>,
+          fullKey
+        )
+      );
+    }
+  }
+  return entries.sort();
+}
 
 /** Path and plugin options can execute workspace-controlled code or load code. */
 function isWorkspaceExecutionOptionKey(key: string): boolean {
-  return /path|tsdk|plugin/i.test(key);
+  return WORKSPACE_EXECUTION_OPTION_KEY_PATTERN.test(key);
 }
 
 function stripUnapprovedWorkspaceOptions(

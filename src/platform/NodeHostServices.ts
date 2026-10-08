@@ -342,7 +342,9 @@ export async function createNodeHostedServer(options: {
       const files = await getGitTrackedFiles(cwd).catch(() => []);
       const extensions = new Set(files.map((file) => path.extname(file).slice(1).toLowerCase()));
       const detectedLanguages = [...new Set(LANGUAGE_SERVER_CATALOG.filter((entry) => entry.extensions.some((extension) => extensions.has(extension.toLowerCase()))).flatMap((entry) => entry.languages))];
-      void languageIntelligenceHost.startLanguages(detectedLanguages);
+      void languageIntelligenceHost.startLanguages(detectedLanguages).catch((error: unknown) => {
+        Log.warn("[NodeHostServices] Could not start detected language servers:", error);
+      });
     }
   } catch (error) {
     unprotectToken();

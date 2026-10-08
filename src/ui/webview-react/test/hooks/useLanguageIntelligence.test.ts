@@ -25,6 +25,19 @@ describe("useLanguageIntelligence", () => {
     expect(socket).not.toHaveBeenCalled();
   });
 
+  it("surfaces a stopped-server lookup reason as an editor status hint", async () => {
+    vi.spyOn(hostedApi, "languageIntelligenceSession").mockResolvedValue({
+      session: null,
+      reason: "stopped",
+    });
+    const { result } = renderHook(() => useLanguageIntelligence("src/app.ts"));
+
+    await waitFor(() =>
+      expect(result.current.statusHint).toContain("Language server is stopped")
+    );
+    expect(result.current.sessionId).toBeNull();
+  });
+
   it("repeats session lookup after the host invalidates the socket", async () => {
     const lookup = vi
       .spyOn(hostedApi, "languageIntelligenceSession")

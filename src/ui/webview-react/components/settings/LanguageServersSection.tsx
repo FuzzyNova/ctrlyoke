@@ -313,6 +313,11 @@ export function LanguageServersSection({ activeScope }: Props) {
                 liveStatus === LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL
                   ? LANGUAGE_SERVER_STATUSES.STOPPED
                   : liveStatus;
+              const canRestart =
+                status === LANGUAGE_SERVER_STATUSES.RUNNING ||
+                status === LANGUAGE_SERVER_STATUSES.IDLE ||
+                status === LANGUAGE_SERVER_STATUSES.CRASHED ||
+                row.status?.status === LANGUAGE_SERVER_STATUSES.STOPPED;
               const definition = row.managed?.definition ?? row.catalogEntry;
               const exportGroups = buildManagerExportGroups({
                 hasWorkspaceRoot,
@@ -396,10 +401,7 @@ export function LanguageServersSection({ activeScope }: Props) {
                             Approve
                           </button>
                         )}
-                      {(status === LANGUAGE_SERVER_STATUSES.RUNNING ||
-                        status === LANGUAGE_SERVER_STATUSES.IDLE ||
-                        status === LANGUAGE_SERVER_STATUSES.CRASHED ||
-                        status === LANGUAGE_SERVER_STATUSES.STOPPED) && (
+                      {canRestart && (
                         <>
                           <button
                             type="button"

@@ -88,6 +88,30 @@ suite("LanguageServerResolver", () => {
     });
   });
 
+  test("drops command and environment settings such as rust-analyzer overrideCommand", async () => {
+    const workspaceSettings = emptyLanguageServers();
+    workspaceSettings.settings["rust-analyzer"] = {
+      check: { overrideCommand: ["./scripts/check.sh"] },
+      server: { extraEnv: { RUSTC_WRAPPER: "./scripts/wrapper" } },
+      diagnostics: { enable: true },
+    };
+    const resolved = await resolveLanguageServer(
+      options({
+        languageId: "rust",
+        workspaceSettings: { languageServers: workspaceSettings },
+      }),
+      {
+        fileExists: async () => true,
+        resolveCommand: async (command, args) => commandResult(command, args),
+      }
+    );
+    assert.deepStrictEqual(resolved?.settings, {
+      check: {},
+      server: {},
+      diagnostics: { enable: true },
+    });
+  });
+
   test("allows workspace initialization paths after matching approval", async () => {
     const workspaceSettings = emptyLanguageServers();
     workspaceSettings.settings["typescript-language-server"] = {

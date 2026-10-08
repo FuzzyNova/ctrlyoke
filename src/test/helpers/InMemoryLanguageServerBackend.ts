@@ -12,6 +12,7 @@ import type {
   LanguageServerResolution,
 } from "../../server/lsp/LanguageServerBackend";
 import type { WorkspacePathContext } from "../../server/lsp/WorkspacePathContainment";
+import type { LanguageServerRequestOrigin } from "../../types/DashboardConstants";
 
 export class InMemoryLanguageServerBackend implements LanguageServerBackend {
   readonly notifications: Array<{ method: string; params: unknown }> = [];
@@ -22,6 +23,7 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
     params: unknown;
   }> = [];
   readonly serverConnections: MessageConnection[] = [];
+  readonly clientConnections: MessageConnection[] = [];
   readonly requestTokens: CancellationToken[] = [];
   requestHandler: (method: string, params: unknown) => unknown = () => null;
 
@@ -30,7 +32,7 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
     private readonly languageId = "typescript"
   ) {}
 
-  resolveForPath(_viewerPath: string, _roots: WorkspacePathContext): LanguageServerResolution {
+  resolveForPath(_viewerPath: string, _roots: WorkspacePathContext, _origin: LanguageServerRequestOrigin): LanguageServerResolution {
     return {
       descriptor: {
         id: "fake-lsp",
@@ -42,7 +44,7 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
     };
   }
 
-  getConnection(_descriptor: LanguageServerDescriptor): MessageConnection {
+  getConnection(_descriptor: LanguageServerDescriptor, _origin: LanguageServerRequestOrigin): MessageConnection {
     const clientToServer = new PassThrough();
     const serverToClient = new PassThrough();
     const client = createMessageConnection(
@@ -68,6 +70,15 @@ export class InMemoryLanguageServerBackend implements LanguageServerBackend {
     });
     server.listen();
     this.serverConnections.push(server);
+    this.clientConnections.push(client);
     return client;
+  }
+
+  async dispose(): Promise<void> {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    for (const connection of this.serverConnections) connection.dispose();
+    for (const connection of this.clientConnections) connection.dispose();
+    this.clientConnections.length = 0;
+    this.serverConnections.length = 0;
   }
 }

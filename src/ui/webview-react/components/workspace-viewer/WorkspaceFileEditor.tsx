@@ -475,10 +475,17 @@ export const WorkspaceFileEditor = forwardRef<
     }
 
     return (
-      <div
-        ref={containerRef}
-        className="h-full min-h-0 w-full overflow-hidden"
-      />
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+        <div
+          ref={containerRef}
+          className="min-h-0 w-full flex-1 overflow-hidden"
+        />
+        {languageIntelligence.statusHint && (
+          <p className="shrink-0 px-2 py-1 text-xxs text-description-fg" role="status">
+            {languageIntelligence.statusHint}
+          </p>
+        )}
+      </div>
     );
   }
 );

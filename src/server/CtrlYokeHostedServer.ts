@@ -45,6 +45,7 @@ import {
   HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
+  LANGUAGE_SERVER_REQUEST_ORIGINS,
   type FinalStepPhase,
   type ExecutionPhase,
   type HarnessId,
@@ -1401,7 +1402,7 @@ export class CtrlYokeHostedServer
         return;
       }
       try {
-        res.json(await this.languageIntelligenceHost.lookupSession(viewerPath));
+        res.json(await this.languageIntelligenceHost.lookupSession(viewerPath, LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR));
       } catch (error) {
         Log.warn(`[CtrlYokeHostedServer] LSP session lookup failed: ${String(error)}`);
         res.status(500).json({ error: "Internal server error" });

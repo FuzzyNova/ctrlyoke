@@ -183,6 +183,13 @@ describe("LanguageServersSection", () => {
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
   });
 
+  it("does not offer restart for a detected server that has never started", () => {
+    seed();
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+    expect(screen.getByText("Stopped")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Restart" })).toBeNull();
+  });
+
   it("parses environment values at the first equals sign from a multiline field", () => {
     render(<LanguageServersSection activeScope={SETTING_SCOPES.USER} />);
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));

@@ -8,8 +8,10 @@ import {
 } from "../server/lsp/LanguageServerCatalog";
 import {
   LANGUAGE_SERVER_STATUSES,
+  LANGUAGE_SERVER_REQUEST_ORIGINS,
   LSP_METHODS,
 } from "../types/DashboardConstants";
+import type { LanguageServerRequestOrigin } from "../types/DashboardConstants";
 import {
   LspSymbolKind,
   type IndexedSymbol,
@@ -18,16 +20,17 @@ import {
 
 export interface LspSymbolQueryHost {
   startLanguages(languageIds: readonly string[]): Promise<void>;
-  openWarmupDocument(viewerPath: string, languageId: string): Promise<void>;
+  openWarmupDocument(viewerPath: string, languageId: string, origin: LanguageServerRequestOrigin): Promise<void>;
   requestForPath(
     viewerPath: string,
     method: string,
-    params: unknown
+    params: unknown,
+    origin: LanguageServerRequestOrigin
   ): Promise<
     | { descriptor: { capabilities: Record<string, unknown> }; result: unknown }
     | undefined
   >;
-  resolveForPath?(viewerPath: string): Promise<
+  resolveForPath?(viewerPath: string, origin: LanguageServerRequestOrigin): Promise<
     | {
         id: string;
         languageId: string;
@@ -102,7 +105,7 @@ export class LspSymbolIndex implements SymbolIndex {
     for (const file of this.getRouteRepresentatives(files)) {
       if (signal?.aborted) break;
       const entry = this.entryForFile(file);
-      const descriptor = await this.host.resolveForPath?.(file);
+        const descriptor = await this.host.resolveForPath?.(file, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
       if (this.host.resolveForPath && !descriptor) continue;
       const key = descriptor
         ? `${descriptor.id}\n${path.resolve(descriptor.rootPath)}`
@@ -120,7 +123,8 @@ export class LspSymbolIndex implements SymbolIndex {
         const response = await this.host.requestForPath(
           file,
           LSP_METHODS.WORKSPACE_SYMBOL,
-          { query }
+          { query },
+          LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
         );
         if (!response || signal?.aborted) continue;
         const entries = Array.isArray(response.result)
@@ -135,7 +139,8 @@ export class LspSymbolIndex implements SymbolIndex {
               const resolved = await this.host.requestForPath(
                 file,
                 LSP_METHODS.WORKSPACE_SYMBOL_RESOLVE,
-                item
+                item,
+                LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
               );
               if (!resolved || !isWorkspaceSymbol(resolved.result)) continue;
               item = resolved.result as WorkspaceSymbolLike;
@@ -171,7 +176,8 @@ export class LspSymbolIndex implements SymbolIndex {
       const response = await this.host.requestForPath(
         viewerPath,
         LSP_METHODS.DOCUMENT_SYMBOL,
-        { textDocument: { uri } }
+        { textDocument: { uri } },
+        LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
       );
       if (signal?.aborted || !response || !Array.isArray(response.result))
         return [];
@@ -227,7 +233,8 @@ export class LspSymbolIndex implements SymbolIndex {
         try {
           await this.host.openWarmupDocument(
             anchor,
-            this.languageForAnchor(entry, anchor)
+            this.languageForAnchor(entry, anchor),
+            LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND
           );
         } catch {
           /* unavailable/unapproved servers retain regex fallback */
@@ -237,13 +244,13 @@ export class LspSymbolIndex implements SymbolIndex {
     if (this.host.resolveForPath) {
       const seen = new Set<string>();
       for (const file of this.getRouteRepresentatives(files)) {
-        const descriptor = await this.host.resolveForPath(file);
+        const descriptor = await this.host.resolveForPath(file, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
         if (!descriptor) continue;
         const key = `${descriptor.id}\n${path.resolve(descriptor.rootPath)}`;
         if (seen.has(key)) continue;
         seen.add(key);
         try {
-          await this.host.openWarmupDocument(file, descriptor.languageId);
+          await this.host.openWarmupDocument(file, descriptor.languageId, LANGUAGE_SERVER_REQUEST_ORIGINS.BACKGROUND);
         } catch {
           /* unavailable or deleted custom-server anchors retain regex fallback */
         }

@@ -17,6 +17,7 @@ const { useLanguageIntelligenceMock } = vi.hoisted(() => ({
     extensions: [] as Extension[],
     sessionId: null as string | null,
     capabilities: {},
+    statusHint: null as string | null,
   })),
 }));
 
@@ -41,7 +42,27 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
       extensions: [],
       sessionId: null,
       capabilities: {},
+      statusHint: null,
     });
+  });
+
+  it("shows lookup reasons in a small editor status hint", () => {
+    useLanguageIntelligenceMock.mockReturnValue({
+      filePath: "src/app.ts",
+      extensions: [],
+      sessionId: null,
+      capabilities: {},
+      statusHint: "Language server is stopped.",
+    });
+    const { getByRole } = render(
+      <WorkspaceFileEditor
+        filePath="src/app.ts"
+        content="const value = 1"
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    expect(getByRole("status").textContent).toContain("Language server is stopped.");
   });
 
   it("reconfigures a connected session without replacing the editor view", async () => {
@@ -69,6 +90,7 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
       extensions: [sessionExtension],
       sessionId: "session-1",
       capabilities: { definitionProvider: true },
+      statusHint: null,
     });
     rerender(<WorkspaceFileEditor ref={ref} {...props} />);
 
@@ -92,6 +114,7 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
       extensions: [sessionExtension],
       sessionId: "session-1",
       capabilities: { documentFormattingProvider: true },
+      statusHint: null,
     });
     const props = {
       filePath: "src/app.ts",
@@ -124,6 +147,7 @@ describe("WorkspaceFileEditor language intelligence compartment", () => {
       extensions: [],
       sessionId: "session-1",
       capabilities: {},
+      statusHint: null,
     });
     const ref = createRef<WorkspaceFileEditorHandle>();
     const { container } = render(

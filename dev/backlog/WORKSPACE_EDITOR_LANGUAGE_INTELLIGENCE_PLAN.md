@@ -283,8 +283,15 @@ UX, including where the catalog comes from, is in "Settings section UX" below.
 - **One server per (server id, workspace root)**, shared across browser tabs
   through `LspSessionProxy`.
 - **Global cap:** at most `maxRunning` servers (default 4) per host.
-  - When the cap is hit, the host stops the least recently used server that
-    has **no open documents**.
+  - Every resolution and connection request carries a required origin:
+    `EDITOR` for a browser file lookup and `BACKGROUND` for `#` symbol queries,
+    warm-up anchors, launch starts, and file-change notifications. Only editor
+    lookups may prompt for workspace-definition approval or evict an idle LRU
+    server. Background work returns `LIMIT_REACHED` quietly at the cap and
+    never stops a running server; the status event is reserved for editor
+    lookups the user can act on.
+  - When an editor lookup hits the cap, the host stops the least recently used
+    server that has **no open documents**.
   - If every running server has open documents, the new language gets no
     session. The editor keeps its plain CodeMirror behavior, the settings
     section shows "limit reached", and `#` falls back to `RegexSymbolIndex`

@@ -973,6 +973,14 @@ export const LSP_SESSION_LOOKUP_REASONS = {
   STOPPED: "stopped",
 } as const;
 
+/** Whether a language-server request is user-visible or background work. */
+export const LANGUAGE_SERVER_REQUEST_ORIGINS = {
+  EDITOR: "editor",
+  BACKGROUND: "background",
+} as const;
+export type LanguageServerRequestOrigin =
+  (typeof LANGUAGE_SERVER_REQUEST_ORIGINS)[keyof typeof LANGUAGE_SERVER_REQUEST_ORIGINS];
+
 export const HOSTED_ICON_FILES = {
   APP_ICON_PNG: "icon.png",
   // SVG used in the web app manifest and as the SVG apple-touch-icon. iOS 15+ uses
