@@ -1,21 +1,31 @@
 # Workspace Editor Language Intelligence Plan
 
-**Status (2026-10-07):** Proposed and decided. The `SymbolIndex` port and
-`VsCodeSymbolIndex` (phase 7a) plus `RegexSymbolIndex` (phase 7-regex, staging
-Stage 9) are complete. Remaining phases are ready to implement in sequence.
-Every code reference was re-audited against `src/` on 2026-10-07, after the
-standalone server shipped. That pass corrected stale locations, fixed the
-standalone trust claim, and added three things:
+**Status (2026-10-08): Implemented**, except phase 6's Node
+`DiagnosticsSource` (staging Stage 17b), which is blocked until
+[`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md) Phase 1 defines
+the port; that plan now carries the follow-up. Phases 0–4, 6 (harness export),
+7a, 7b, 7c, and 7-regex shipped through staging Stages I1, I2, and 12a–17.
+Phase 5 is dropped.
 
-- the Language Servers settings UX and catalog decision (see
-  "Settings section UX");
-- the VS Code `#` cold-start fix (phase 7c, staging Stage I2);
-- standalone warm-up rules.
+- **Verified against a real server (2026-10-08):** `ctrlyoke server` with
+  `typescript-language-server` on Windows served session lookup, initialize
+  capabilities, hover, completion, definition, and diagnostics to two
+  `/ws/lsp` clients. Killing the server process closed both sockets with
+  `4410`, `ctrlyoke server` stayed up, and a fresh lookup restored hover.
+  That check found that Windows servers publish `file:///c%3A/...` URIs, so
+  every server URI now goes through `toServerFileUri`/`canonicalServerFileUri`
+  in `src/server/lsp/LspProtocol.ts`.
+- **Not yet checked by hand:** the browser editor UI itself (menus, references
+  panel, rename confirmation) and the VS Code-hosted server.
+- **Known limitation:** the workspace `languageServers.settings` filter blocks
+  path, plugin, command, env, and exec-like keys, but not every
+  server-specific launch key (for example `rust-analyzer.procMacro.server`)
+  or command keys nested in arrays.
 
 Phase 5, the VS Code provider backend, is **dropped**.
 
 **Sequencing:**
-[`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md) is the
+[`STANDALONE_STAGING_PLAN.md`](./STANDALONE_STAGING_PLAN.md) is the
 authoritative order. Most of this plan runs **after** the standalone server
 (Track C, Stages 12–17), so the `/ws/lsp` socket is added once, to the shared
 server class. Two pieces run earlier:
@@ -39,11 +49,11 @@ server class. Two pieces run earlier:
   end-condition gate and the harness-facing IDE MCP. This plan narrows its
   harness scope (see "Harness side" below) and gives its diagnostics gate a
   host-neutral source.
-- [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md): its
+- [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md): its
   Phase 8 uses this plan's `SymbolIndex` port with `RegexSymbolIndex`. The
   one-off `LspSymbolClient` is not built. `LspSymbolIndex` (phase 7b here)
   later upgrades standalone `#` through the same port.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md):
   the managed language-server host must stay in the Node-only graph. Phase 6
   item 4 of that plan is where `VsCodeSymbolIndex` and the completion core
   land.
@@ -270,8 +280,15 @@ UX, including where the catalog comes from, is in "Settings section UX" below.
 - **One server per (server id, workspace root)**, shared across browser tabs
   through `LspSessionProxy`.
 - **Global cap:** at most `maxRunning` servers (default 4) per host.
-  - When the cap is hit, the host stops the least recently used server that
-    has **no open documents**.
+  - Every resolution and connection request carries a required origin:
+    `EDITOR` for a browser file lookup and `BACKGROUND` for `#` symbol queries,
+    warm-up anchors, launch starts, and file-change notifications. Only editor
+    lookups may prompt for workspace-definition approval or evict an idle LRU
+    server. Background work returns `LIMIT_REACHED` quietly at the cap and
+    never stops a running server; the status event is reserved for editor
+    lookups the user can act on.
+  - When an editor lookup hits the cap, the host stops the least recently used
+    server that has **no open documents**.
   - If every running server has open documents, the new language gets no
     session. The editor keeps its plain CodeMirror behavior, the settings
     section shows "limit reached", and `#` falls back to `RegexSymbolIndex`
@@ -305,13 +322,23 @@ UX, including where the catalog comes from, is in "Settings section UX" below.
   - Results that point outside the workspace roots (for example lib `.d.ts`
     files in a global install) are returned as read-only locations. The
     editor may preview them but never writes them.
-- **Multi-file edits (rename, code actions):** the proxy applies the
+- **Multi-file edits (rename, code actions):** Stage 14a applies rename results
+  and server `workspace/applyEdit` requests in the proxy. The proxy applies the
   `WorkspaceEdit` itself. The open buffer is edited in the browser. Files that
   aren't open are written through `HostedWorkspaceViewerService` (same EOL
   preservation and atomic write), and then a `workspace/didChangeWatchedFiles`
   notification is sent. A rename that touches unopened files asks for confirmation
   with a file count in the browser (a built-in modal, per the native-vs-built-in
-  modal policy).
+  modal policy). The proxy sends `ctrlyoke/confirmWorkspaceRename` as an LSP
+  request with `{ fileCount }`; the browser replies with a boolean result.
+  Edits to open buffers are sent as the LSP notification
+  `ctrlyoke/applyWorkspaceTextEdits` with `{ uri, edits }`, then flow back to
+  the proxy through the normal `didChange` stream, which is the single source of
+  truth for open-buffer text. After applying a rename edit, the proxy answers the
+  browser's `textDocument/rename` request with `null` so the browser LSP client
+  does not apply the same `WorkspaceEdit` a second time. Code-action edits are
+  applied when the server sends `workspace/applyEdit` after the user executes an
+  action.
 
 ### Multiple tabs and external changes: best effort, never read-only
 
@@ -495,8 +522,9 @@ union.
 - **npm-distributed entries:** an **Install** button.
   - It runs `npm install --prefix <ctrlyokeStateHome>/lsp <packages>` on the
     host and streams progress into the row.
-  - Before it runs, a built-in confirmation modal names the packages and
-    the directory.
+  - The host's `requestChoice` confirmation names the packages and directory
+    before spawning. The browser sends the request directly; the host check is
+    authoritative for both panel and hosted clients.
   - The workspace can never trigger it.
   - If `npm` isn't on `PATH`, the button turns into the copyable command.
 - **Everything else:** **Copy install command** for the host's OS (for
@@ -548,9 +576,18 @@ Verified 2026-10-07. Each format maps onto our definition shape:
 | ----------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Qwen Code   | `.lsp.json` / none                                                                                                | top-level keys are names (the docs use language ids): `{ command, args, extensionToLanguage, env, initializationOptions, settings, trustRequired }` |
 | Claude Code | none at project level; **installed plugins** carry `.lsp.json` or `plugin.json` `lspServers` (same shape as Qwen) | `{ command, args, extensionToLanguage: { ".go": "go" }, … }`. Unknown keys fail its validation, which matters for export.                           |
-| Copilot CLI | `.github/lsp.json` (and root `lsp.json`, per the `lsp-setup` skill) / `~/.copilot/lsp-config.json`                | `{ lspServers: { name: { command, args, fileExtensions: { ".ts": "typescript" }, env, rootUri, initializationOptions } } }`                         |
-| opencode    | `opencode.json` / `~/.config/opencode/opencode.json`, `lsp` key (`true` or an object)                             | `{ lsp: { name: { command: [exe, ...args], extensions: [".rs"], env, initialization, disabled } } }`                                                |
-| cclsp       | `cclsp.json` or `CCLSP_CONFIG_PATH`                                                                               | `{ servers: [ { extensions: ["py"], command: [exe, ...args], rootDir, initializationOptions } ] }`                                                  |
+
+| Copilot CLI | `.github/lsp.json` (and root `lsp.json`, per the `lsp-setup` skill) / `~/.copilot/lsp-config.json` | `{ lspServers: { name: { command, args, fileExtensions: { ".ts": "typescript" }, env, rootUri, initializationOptions } } }` |
+| opencode | `opencode.json` / `~/.config/opencode/opencode.json`, `lsp` key (`true` or an object) | `{ lsp: { name: { command: [exe, ...args], extensions: [".rs"], env, initialization, disabled } } }` |
+| cclsp | `cclsp.json` or `CCLSP_CONFIG_PATH` | `{ servers: [ { extensions: ["py"], command: [exe, ...args], rootDir, initializationOptions } ] }` |
+
+Re-checked 2026-10-07 against Anthropic's [code intelligence plugin guide](https://code.claude.com/docs/en/plugins/code-intelligence) and [LSP plugin component reference](https://code.claude.com/docs/en/plugins/components#lsp-servers): standalone `.lsp.json` is described at the plugin root, and `plugin.json`'s `lspServers` accepts inline configs or a plugin-relative JSON path. The docs do not describe a project-root `.lsp.json` loader. Keep Claude's export routed through the Qwen-compatible project `.lsp.json`; direct Claude support would require generating/installing a plugin.
+
+When exporting to opencode, a boolean `lsp` setting is converted to the
+object form required for a named server. Opencode enables built-ins for an
+object-valued `lsp`, so converting `true` preserves its built-in behavior
+without a synthetic wildcard entry. Converting `false` to add a named server
+also opts into opencode's object behavior, which enables built-ins.
 
 - Our `command` is one array, matching opencode and cclsp.
 - `extensionToLanguage` / `fileExtensions` maps convert to `extensions` plus
@@ -626,12 +663,22 @@ and **nothing falls back when it returns empty.**
      indentation in Python. When no end is found, `endLine = startLine`.
    - It becomes the per-language fallback in both hosts (7b and 7c).
 3. **7c — VS Code cold start** (staging Stage I2). See below.
-4. **7b — `LspSymbolIndex`** (Node-only, staging Stage 16).
+4. **Done — 7b, `LspSymbolIndex`** (Node-only, staging Stage 16, 2026-10-07).
    - It issues `workspace/symbol` and `textDocument/documentSymbol` through
      `LanguageIntelligenceHost`.
    - It fans out to every running or startable server for the workspace,
      within the global cap.
    - It merges the results and applies `maxResults`.
+   - The first `#` query starts servers selected for languages with matching
+     root markers. Startup stays asynchronous for the current query, so the
+     regex index answers until each language has a ready server.
+   - Catalog warm-up metadata opens one anchor per matching TS/JS config
+     marker and keeps it open for the server lifetime. Symbol requests refresh
+     managed-server idle activity.
+   - Range-less workspace symbols are resolved when the server supports
+     `workspaceSymbol/resolve`; unresolved entries are omitted.
+   - Standalone `createNodeHostedServer` composes this with the existing
+     `FallbackSymbolIndex`; VS Code composition remains unchanged.
 
 The composition root picks the index per host. VS Code-hosted uses
 `VsCodeSymbolIndex` with the regex fallback from 7c (Open Question 2).
@@ -723,6 +770,14 @@ full fidelity without user action.
 
 ### Standalone: servers must be warm for `#`
 
+**Review fix (2026-10-07):** `LspSymbolIndex` caches route representatives by
+the tracked-file snapshot, groups known extensions by language and root marker,
+and resolves custom extensions once per extension. Workspace-symbol requests
+query each resolved server/root once. Background resolution remains quiet when
+a server is unavailable, and VS Code symbol lookup continues when warm-up file
+discovery fails. Completion watcher invalidation shares the search walker's
+directory exclusions and ignores `.ctrlyoke/logs/**`.
+
 - **Opening a file isn't enough.** Starting servers on file open (see
   "Lifecycle") doesn't cover `#`, because `#` in the prompt editor never opens
   a workspace file.
@@ -782,7 +837,7 @@ is far ahead of anything we would ship. Instead:
 ## Implementation phases
 
 Staging numbers refer to
-[`STANDALONE_STAGING_PLAN.md`](../active/STANDALONE_STAGING_PLAN.md).
+[`STANDALONE_STAGING_PLAN.md`](./STANDALONE_STAGING_PLAN.md).
 
 0. **Done. Save conflicts and reload banner** (independent; **Stage I1**).
    This shipped before the standalone release.
@@ -795,7 +850,7 @@ Staging numbers refer to
      watchers through `FileWatcherFactory` (in `CtrlYokeHostedServer`).
    - The reload/compare banner (in `WorkspaceExplorerPane.tsx`), and explorer
      directory refresh.
-1. **Protocol spine** (**Stage 12**, after the shared server class from
+1. **Protocol spine** (**Done — Stage 12**, after the shared server class from
    Stage 7a).
    - A `/ws/lsp` branch in the server's `upgrade` handler, before the 404,
      with the same `?token=` check. It hands off to a **separate**
@@ -804,11 +859,29 @@ Staging numbers refer to
    - A new `HostedServerOptions` field carries the `LanguageIntelligenceHost`,
      built in `createNodeHostServices` and in `extension.ts`'s hosted-server
      composition.
+   - **Session lookup (decided 2026-10-07).** The hook learns which session
+     serves a file from a token-gated HTTP route,
+     `GET /api/lsp/session?path=<viewerPath>`, returning
+     `{ session: { id, languageId } | null, reason? }` (`reason` covers "no
+     server", "limit reached", "needs approval", "untrusted"). Types live in
+     `src/types/HostedWorkspaceViewerTypes.ts`. The socket is then
+     `/ws/lsp?server=<id>&token=…`; one socket per session serves every file
+     of that language in the tab.
+   - **Backend seam.** `LanguageIntelligenceHost` gets its server connections
+     from an injected `LanguageServerBackend` interface (resolve a server for
+     a path, start/obtain a `MessageConnection`). Stage 12 ships only the
+     interface plus a test fake that speaks LSP over in-memory stdio streams;
+     production composition passes a backend that resolves nothing, so the
+     editor is unchanged until Stage 13 supplies `ManagedLanguageServerBackend`.
    - `LanguageIntelligenceHost` + `LspSessionProxy` in `src/server/lsp/`: id
      rewriting, didOpen ref-counting, URI ⇄ viewer-path translation,
      containment, and outbound secret redaction.
-   - The `useLanguageIntelligence` hook and a CodeMirror client wired into
-     `WorkspaceFileEditor` through a `Compartment`.
+   - **Done — browser half (Stage 12b):** install `@codemirror/lsp-client`,
+     share a reconnecting socket/client per session id, and wire the hook and
+     client into `WorkspaceFileEditor` through a `Compartment`. Cross-file
+     navigation returns the editor view after viewer-store navigation; LSP
+     zero-based lines are converted to the viewer's one-based selection lines.
+     Reconnect and session changes do not recreate the editor view.
    - A shared workspace-root containment helper extracted from
      `HostedWorkspaceViewerService.safeResolve`, without its user-settings
      exception.
@@ -834,16 +907,36 @@ Staging numbers refer to
      each server's docs and Helix `languages.toml`.
    - PATH, tool-dir, and workspace `node_modules/.bin` resolution through
      `resolveCliCommand`.
-   - Spawn/idle/cap/restart lifecycle, `startOnLaunch`, warm-on-`#` with
-     anchor documents, and the trust gate.
+   - Spawn/idle/cap/restart lifecycle, `startOnLaunch`, and the trust gate.
+     When a managed session stops or crashes, its `/ws/lsp` clients are closed
+     with WebSocket code `4410` and reason `Language server session ended;
+reconnect to refresh`; the browser must repeat HTTP session lookup before
+     reconnecting. Pending workspace definitions are skipped by `startOnLaunch`.
+     Stage 13b is implemented in `ManagedLanguageServerBackend`; tests cover
+     trust refusal, remembered and hash-invalidated approvals, open-document
+     protection, cap rejection, idle shutdown, LRU eviction, and crash restart.
+     The conditional installed-TypeScript-server integration covers completion
+     and hover through the proxy; the proxy's matching-diagnostics unit test
+     covers diagnostics routing. The live browser feature path has not yet been
+     manually exercised.
+     Warm-on-`#` (first-`#` start and anchor documents) moved to phase 7b /
+     Stage 16 on 2026-10-07, because `LspSymbolIndex` is its only consumer.
 
    This delivers completion, hover, definition, references, rename, signature
    help, formatting, and diagnostics.
 
-3. **Editor UX** (**Stage 14**). Context menu items, the references panel,
-   rename confirmation for multi-file edits, F12, and capability gating.
-4. **Language Servers settings section** (**Stage 15**). Full UX in
-   "Settings section UX".
+3. **Editor UX** (**Done — Stage 14, 2026-10-07**). The editor context menu
+   gates definition, references, rename, and formatting actions on the active
+   session's advertised capabilities. F12 navigates to definitions; reference
+   results use `path#L10-L12` rows, navigate through the viewer store, and can
+   be inserted into a workflow as selection context. The existing Ctrl/Cmd-click
+   and touch-tap `.cm-link` gestures remain reference navigation. Vitest covers
+   capability hiding, F12 dispatch, result formatting/navigation/context
+   insertion, and link gestures. Full verification passed: typecheck, lint, and
+   `npm test` (extension 5,635 passing/4 pending, UI 3,476 passing, packaging
+   80 passing).
+4. **Language Servers settings section** (**Stage 15 — done 2026-10-07**).
+   Full UX in "Settings section UX".
    - Languages strip (`use` per language) and server rows with live status
      pushed from the host.
    - Catalog tab: detected / not installed, npm one-click install into the
@@ -853,20 +946,30 @@ Staging numbers refer to
      Copilot `lsp.json`/`lsp-config.json`, opencode `lsp`, and `cclsp.json`.
    - Add/edit form for hand-written definitions, and Approve for pending
      workspace definitions.
-   - Move `McpManagerSection`'s module-local helpers that both sections need
-     into `components/shared/`.
+   - Shared manager UI helpers are in `components/shared/` and used by both
+     sections. The drawer tab and settings-search landmark are registered.
+   - Verification passed: `npm run typecheck`, `npm run lint`, and `npm test`
+     (extension 5,640 passing/4 pending, UI 3,489 passing, packaging 80 passing).
 5. ~~**VS Code provider backend.**~~ **Dropped 2026-10-06.** See Open
    Question 1.
-6. **Harness export + `DiagnosticsSource` port** (**Stage 17**, coordinated
-   with `VSCODE_LSP_MCP_PLAN.md`; see "Harness side" item 3).
+6. **Harness export** (**Stage 17**, done 2026-10-07): target-native exports
+   for Qwen-compatible project `.lsp.json`, Copilot workspace/user configs,
+   opencode workspace/user configs, and generated `cclsp.json`; the language
+   server row has a shared Save flyout. `npm run typecheck` and `npm run lint`
+   pass. A full `npm test` passed once (extension 5,646 passing/4 pending, UI
+   3,490 passing, packaging 80 passing). The final run passed UI and packaging
+   but hit the known `VsCodeDocuments > saves an open dirty document` race;
+   that test passed in isolation. The Node `DiagnosticsSource` remains
+   **Stage 17b, blocked** until `VSCODE_LSP_MCP_PLAN.md` Phase 1 defines the
+   port.
 7. **`SymbolIndex` port**, split across four stages:
    - **Done — 7a (2026-10-06).** `SymbolIndex`, `VsCodeSymbolIndex`, the
      one-time SymbolKind numbering conversion, and callers moved onto the
      port landed in decoupling **Stage 5b**. VS Code behavior is preserved.
    - **Done — 7-regex (2026-10-06).** `RegexSymbolIndex` ships with standalone
      **Stage 9** as standalone v1's `#` source.
-   - **7c. VS Code cold start** (independent **Stage I2**; see "VS Code
-     cold start").
+   - **Done — 7c (2026-10-07).** VS Code cold start (independent **Stage I2**;
+     see "VS Code cold start").
      - Add `FallbackSymbolIndex` in `src/completions/`, wrapping
        `VsCodeSymbolIndex` with `RegexSymbolIndex` in
        `CompletionHelpers.getCompletionCore`.
@@ -879,6 +982,9 @@ Staging numbers refer to
          With a TS document already open, it opens nothing.
    - **7b. `LspSymbolIndex`.** **Stage 16**, wired by the standalone
      composition root, with the regex index as the per-language fallback.
+     Includes the warm-on-`#` rules from "Standalone: servers must be warm
+     for `#`" (first-`#` start within the cap, anchor `didOpen` per root
+     marker, `#` counts as idle activity).
      Reuse `FallbackSymbolIndex` if per-language fallback reduces to it;
      otherwise extend it rather than adding a second wrapper.
    - Tests: a golden test that each index produces identical `#sym:` insert

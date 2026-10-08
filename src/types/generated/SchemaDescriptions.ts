@@ -432,6 +432,19 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
+  "languageServers": "Managed language server definitions and language selections for the workspace editor.",
+  "languageServers.definitions": "Server id to command definition. Workspace definitions remain pending until the user approves them.",
+  "languageServers.definitions.*": "Command, supported languages, and root markers for one managed language server.",
+  "languageServers.definitions.*.command": "Executable followed by its arguments. For example: [\"pyright-langserver\", \"--stdio\"].",
+  "languageServers.definitions.*.env": "Environment variables passed to the server process.",
+  "languageServers.definitions.*.extensions": "File extensions served, without a leading dot.",
+  "languageServers.definitions.*.languages": "LSP language ids served by this definition.",
+  "languageServers.definitions.*.rootMarkers": "Files or directories used to find the project root.",
+  "languageServers.idleShutdownMinutes": "User-only idle timeout in minutes before a server without open documents is stopped. 0 disables idle shutdown.",
+  "languageServers.maxRunning": "User-only maximum number of concurrently running language servers.",
+  "languageServers.settings": "Server id to LSP initialization and workspace/configuration settings.",
+  "languageServers.startOnLaunch": "User-only opt-in to start selected language servers when the hosted server launches. Defaults to lazy startup.",
+  "languageServers.use": "Language id to selected server id, or false to disable language intelligence. Workspace scope may select available servers.",
   "maxSteps": "Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.",
   "mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
   "mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
@@ -1692,6 +1705,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "permissionRequest",
     "notification",
     "error"
+  ],
+  "languageServers.use.*": [
+    false
   ],
   "maxSteps": [
     -1

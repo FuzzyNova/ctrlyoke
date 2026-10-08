@@ -9,6 +9,7 @@ import {
 import { EditorView, basicSetup } from "codemirror";
 import {
   EditorState,
+  Compartment,
   EditorSelection,
   RangeSetBuilder,
   type Extension,
@@ -29,11 +30,19 @@ import {
 } from "@utils/codemirrorLanguage";
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useLanguageIntelligence } from "@hooks/useLanguageIntelligence";
+import {
+  registerLanguageIntelligenceView,
+  requestLanguageIntelligence,
+  viewerPathFromUri,
+  workspaceFileUri,
+} from "@utils/languageIntelligenceClient";
 import { useUiStore } from "@store/uiStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 import {
   ATOMIC_REFERENCE_KINDS,
+  LSP_METHODS,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,
 } from "@root/types/DashboardConstants";
@@ -44,6 +53,11 @@ export interface WorkspaceFileEditorHandle {
   selectLines: (startLine: number, endLine: number) => void;
   getSelectionText: () => string;
   getSelectionRange: () => { startLine: number; endLine: number } | null;
+  getLanguageCapabilities: () => Record<string, unknown>;
+  goToDefinition: () => Promise<void>;
+  findAllReferences: () => Promise<void>;
+  renameSymbol: () => Promise<void>;
+  formatDocument: () => Promise<void>;
 }
 
 interface WorkspaceFileEditorProps {
@@ -109,6 +123,10 @@ export const WorkspaceFileEditor = forwardRef<
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    const languageIntelligenceCompartment = useRef(new Compartment());
+    const languageIntelligence = useLanguageIntelligence(filePath);
+    const languageIntelligenceRef = useRef(languageIntelligence);
+    languageIntelligenceRef.current = languageIntelligence;
     const onSaveRef = useRef(onSave);
     const onChangeRef = useRef(onChange);
     const onUndoRedoChangeRef = useRef(onUndoRedoChange);
@@ -139,36 +157,147 @@ export const WorkspaceFileEditor = forwardRef<
       onPendingSelectionAppliedRef.current = onPendingSelectionApplied;
     }, [onPendingSelectionApplied]);
 
-    useImperativeHandle(ref, () => ({
-      undo: () => {
-        if (viewRef.current) undo(viewRef.current);
-      },
-      redo: () => {
-        if (viewRef.current) redo(viewRef.current);
-      },
-      selectLines: (startLine: number, endLine: number) => {
-        const view = viewRef.current;
-        if (!view) return;
-        selectAndScrollToLines(view, startLine, endLine);
-      },
-      getSelectionText: () => {
-        const view = viewRef.current;
-        if (!view) return "";
-        const { from, to } = view.state.selection.main;
-        if (from === to) return "";
-        return view.state.sliceDoc(from, to);
-      },
-      getSelectionRange: () => {
-        const view = viewRef.current;
-        if (!view) return null;
-        const { from, to } = view.state.selection.main;
-        if (from === to) return null;
-        const doc = view.state.doc;
-        const startLine = doc.lineAt(from).number;
-        const endLine = doc.lineAt(to).number;
-        return { startLine, endLine };
-      },
-    }));
+    const goToDefinition = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const result = (await requestLanguageIntelligence(
+        sessionId,
+        "textDocument/definition",
+        {
+          textDocument: { uri: workspaceFileUri(filePath) },
+          position: toLspPosition(view, view.state.selection.main.head),
+        }
+      )) as LspLocation | LspLocation[] | null;
+      const location = Array.isArray(result) ? result[0] : result;
+      const path = location && viewerPathFromUri(location.uri);
+      if (!location || !path) return;
+      if (path === filePath)
+        selectAndScrollToLines(
+          view,
+          location.range.start.line + 1,
+          location.range.end.line + 1
+        );
+      else
+        openToFile(
+          path,
+          location.range.start.line + 1,
+          location.range.end.line + 1
+        );
+    }, [filePath, openToFile]);
+
+    const findAllReferences = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const result = (await requestLanguageIntelligence(
+        sessionId,
+        "textDocument/references",
+        {
+          textDocument: { uri: workspaceFileUri(filePath) },
+          position: toLspPosition(view, view.state.selection.main.head),
+          context: { includeDeclaration: true },
+        }
+      )) as LspLocation[] | null;
+      const references = (result ?? []).flatMap((location) => {
+        const path = viewerPathFromUri(location.uri);
+        return path
+          ? [
+              {
+                path,
+                startLine: location.range.start.line + 1,
+                endLine: Math.max(
+                  location.range.start.line + 1,
+                  location.range.end.line + 1
+                ),
+              },
+            ]
+          : [];
+      });
+      useWorkspaceViewerStore.getState().setLanguageReferences(references);
+      useWorkspaceViewerStore.getState().open();
+    }, [filePath]);
+
+    const renameSymbol = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const word = view.state.wordAt(view.state.selection.main.head);
+      if (!word) return;
+      const oldName = view.state.sliceDoc(word.from, word.to);
+      const newName = window.prompt("Rename symbol", oldName);
+      if (!newName || newName === oldName) return;
+      await requestLanguageIntelligence(sessionId, LSP_METHODS.RENAME, {
+        textDocument: { uri: workspaceFileUri(filePath) },
+        position: toLspPosition(view, word.from),
+        newName,
+      });
+    }, [filePath]);
+
+    const formatDocument = useCallback(async () => {
+      const view = viewRef.current;
+      const sessionId = languageIntelligenceRef.current.sessionId;
+      if (!view || !sessionId) return;
+      const edits = (await requestLanguageIntelligence(
+        sessionId,
+        "textDocument/formatting",
+        {
+          textDocument: { uri: workspaceFileUri(filePath) },
+          options: { tabSize: 2, insertSpaces: true },
+        }
+      )) as LspTextEdit[] | null;
+      if (!edits?.length) return;
+      view.dispatch({
+        changes: edits
+          .map((edit) => ({
+            from: lspOffset(view, edit.range.start),
+            to: lspOffset(view, edit.range.end),
+            insert: edit.newText,
+          }))
+          .sort((a, b) => a.from - b.from),
+      });
+    }, [filePath]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        undo: () => {
+          if (viewRef.current) undo(viewRef.current);
+        },
+        redo: () => {
+          if (viewRef.current) redo(viewRef.current);
+        },
+        selectLines: (startLine: number, endLine: number) => {
+          const view = viewRef.current;
+          if (!view) return;
+          selectAndScrollToLines(view, startLine, endLine);
+        },
+        getSelectionText: () => {
+          const view = viewRef.current;
+          if (!view) return "";
+          const { from, to } = view.state.selection.main;
+          if (from === to) return "";
+          return view.state.sliceDoc(from, to);
+        },
+        getSelectionRange: () => {
+          const view = viewRef.current;
+          if (!view) return null;
+          const { from, to } = view.state.selection.main;
+          if (from === to) return null;
+          const doc = view.state.doc;
+          const startLine = doc.lineAt(from).number;
+          const endLine = doc.lineAt(to).number;
+          return { startLine, endLine };
+        },
+        getLanguageCapabilities: () =>
+          languageIntelligenceRef.current.capabilities,
+        goToDefinition,
+        findAllReferences,
+        renameSymbol,
+        formatDocument,
+      }),
+      [findAllReferences, formatDocument, goToDefinition, renameSymbol]
+    );
 
     const extensions = useMemo<Extension[]>(() => {
       const langExt = getLanguageExtension(filePath);
@@ -184,8 +313,23 @@ export const WorkspaceFileEditor = forwardRef<
           openSecretsSettings
         ),
         ...(langExt ? [langExt] : []),
+        languageIntelligenceCompartment.current.of(
+          languageIntelligenceRef.current.extensions
+        ),
         keymap.of([
           indentWithTab,
+          {
+            key: "F12",
+            preventDefault: true,
+            run: () => {
+              if (
+                !languageIntelligenceRef.current.capabilities.definitionProvider
+              )
+                return false;
+              void goToDefinition();
+              return true;
+            },
+          },
           {
             key: "Mod-s",
             run: () => {
@@ -208,7 +352,24 @@ export const WorkspaceFileEditor = forwardRef<
         }),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ];
-    }, [filePath, openSecretsSettings, openToDirectory, openToFile, readOnly]);
+    }, [
+      filePath,
+      goToDefinition,
+      openSecretsSettings,
+      openToDirectory,
+      openToFile,
+      readOnly,
+    ]);
+
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({
+        effects: languageIntelligenceCompartment.current.reconfigure(
+          languageIntelligence.extensions
+        ),
+      });
+    }, [languageIntelligence.extensions]);
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
@@ -222,19 +383,24 @@ export const WorkspaceFileEditor = forwardRef<
         parent: containerRef.current,
       });
       viewRef.current = view;
+      const unregisterLanguageView = registerLanguageIntelligenceView(
+        filePath,
+        view
+      );
       onUndoRedoChangeRef.current?.(
         undoDepth(view.state) > 0,
         redoDepth(view.state) > 0
       );
 
       return () => {
+        unregisterLanguageView();
         view.destroy();
         viewRef.current = null;
         onUndoRedoChangeRef.current?.(false, false);
       };
       // extensions covers filePath + readOnly; content is handled by the effect below
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [extensions]);
+    }, [extensions, filePath]);
 
     // Sync editor content when the prop changes externally (e.g. file loaded from disk)
     useEffect(() => {
@@ -309,15 +475,50 @@ export const WorkspaceFileEditor = forwardRef<
     }
 
     return (
-      <div
-        ref={containerRef}
-        className="h-full min-h-0 w-full overflow-hidden"
-      />
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+        <div
+          ref={containerRef}
+          className="min-h-0 w-full flex-1 overflow-hidden"
+        />
+        {languageIntelligence.statusHint && (
+          <p className="shrink-0 px-2 py-1 text-xxs text-description-fg" role="status">
+            {languageIntelligence.statusHint}
+          </p>
+        )}
+      </div>
     );
   }
 );
 
 WorkspaceFileEditor.displayName = "WorkspaceFileEditor";
+
+interface LspPosition {
+  line: number;
+  character: number;
+}
+interface LspRange {
+  start: LspPosition;
+  end: LspPosition;
+}
+interface LspLocation {
+  uri: string;
+  range: LspRange;
+}
+interface LspTextEdit {
+  range: LspRange;
+  newText: string;
+}
+
+function toLspPosition(view: EditorView, offset: number): LspPosition {
+  const line = view.state.doc.lineAt(offset);
+  return { line: line.number - 1, character: offset - line.from };
+}
+
+function lspOffset(view: EditorView, position: LspPosition): number {
+  if (position.line >= view.state.doc.lines) return view.state.doc.length;
+  const line = view.state.doc.line(Math.max(1, position.line + 1));
+  return Math.min(line.to, line.from + Math.max(0, position.character));
+}
 
 function selectAndScrollToLines(
   view: EditorView,

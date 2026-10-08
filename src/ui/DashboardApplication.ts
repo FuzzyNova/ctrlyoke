@@ -42,6 +42,7 @@ import { configService } from "../config/CtrlYokeConfigService";
 import { harnessAvailability } from "../utils/HarnessAvailability";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import type { DashboardBroadcastHub } from "./DashboardBroadcastHub";
+import type { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
 
 /** Host services and view callbacks needed to compose the shared dashboard. */
 export interface DashboardApplicationOptions {
@@ -316,6 +317,10 @@ export class DashboardApplication
     this.outputHistoryManager = manager;
   }
 
+  setLanguageIntelligenceHost(host: LanguageIntelligenceHost): void {
+    this.router.languageServerManager.bindHost(host);
+  }
+
   async routeClientMessage(
     message: unknown,
     postMessage: PostMessageFn,
@@ -352,5 +357,6 @@ export class DashboardApplication
     this.disposePanelClient();
     for (const disposable of this.disposables) disposable.dispose();
     for (const unsubscribe of this.unsubscribers) unsubscribe();
+    this.router.languageServerManager.dispose();
   }
 }

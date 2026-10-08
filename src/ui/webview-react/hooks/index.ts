@@ -23,6 +23,7 @@ export {
 export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";
 export { useNewWorkflowKeyHandler } from "./useNewWorkflowKeyHandler";
 export { useHistorySearchKeyHandler } from "./useHistorySearchKeyHandler";
+export { useLanguageIntelligence } from "./useLanguageIntelligence";
 export { useDrawerTabOverrides } from "./useDrawerTabOverrides";
 export { useSettingsDrawerTabOverrides } from "./useSettingsDrawerTabOverrides";
 export { usePromptStatus } from "./usePromptStatus";

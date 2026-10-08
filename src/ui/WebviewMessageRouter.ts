@@ -82,6 +82,10 @@ import type {
   ServerPortFallbackInfo,
   BindAddressFallbackInfo,
   DashboardHostActionResultMessage,
+  SaveLspDefinitionMessage,
+  DeleteLspDefinitionMessage,
+  InstallLspServerMessage,
+  RestartLspServerMessage,
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
@@ -93,6 +97,7 @@ import { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
 import { PromptEditorSupportService } from "./PromptEditorSupportService";
 import { HarnessFileMessageService } from "./HarnessFileMessageService";
 import { McpManagerService } from "./McpManagerService";
+import { LanguageServerManagerService } from "./LanguageServerManagerService";
 import { SecretRegistryService } from "./SecretRegistryService";
 import { TerminalMessageHandlers } from "./TerminalMessageHandlers";
 import { WorkflowStepHandlers } from "./WorkflowStepHandlers";
@@ -255,6 +260,7 @@ export class WebviewMessageRouter {
   private readonly promptEditorSupport: PromptEditorSupportService;
   private readonly harnessFiles: HarnessFileMessageService;
   private readonly mcpManager: McpManagerService;
+  readonly languageServerManager: LanguageServerManagerService;
   private readonly terminalHandlers: TerminalMessageHandlers;
   private readonly workflowStepHandlers: WorkflowStepHandlers;
   private readonly licenseHandlers: LicenseSettingsHandlers;
@@ -314,6 +320,7 @@ export class WebviewMessageRouter {
       this.hostDependencies.actions
     );
     this.mcpManager = new McpManagerService(() => this.getWorkspaceRoot());
+    this.languageServerManager = new LanguageServerManagerService(() => this.getWorkspaceRoot());
     this.terminalHandlers = new TerminalMessageHandlers(() =>
       this.getOrchestrator()?.getUserFeedbackSink()
     );
@@ -424,6 +431,7 @@ export class WebviewMessageRouter {
   }
 
   disposeClient(clientId: string): void {
+    this.languageServerManager.disposeClient(clientId);
     this.clientInteractionPorts.get(clientId)?.disposeAllPending();
     this.clientInteractionPorts.delete(clientId);
     for (const controller of this.historySearchAbortControllers.get(clientId)
@@ -520,6 +528,7 @@ export class WebviewMessageRouter {
     this.registerPromptEditor(table);
     this.registerEditorSupport(table);
     this.registerMcpManager(table);
+    this.registerLanguageServerManager(table);
     this.registerSecretRegistry(table);
     this.registerUserInteraction(table);
     this.registerHarnessFiles(table);
@@ -1406,6 +1415,19 @@ export class WebviewMessageRouter {
         );
       }
     );
+  }
+
+  private registerLanguageServerManager(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.REQUEST_LSP_SERVERS, async (_message, ctx) => this.languageServerManager.handleRequestServers(ctx));
+    table.set(MESSAGE_TYPES.CLOSE_LSP_MANAGER, async (_message, ctx) => this.languageServerManager.closeManager(ctx.clientId));
+    table.set(MESSAGE_TYPES.REQUEST_LSP_LOCAL_SCAN, async (message, ctx) => this.languageServerManager.handleRequestLocalScan(ctx, message));
+    table.set(MESSAGE_TYPES.EXPORT_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleExport(ctx, message));
+    table.set(MESSAGE_TYPES.SAVE_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleSave(ctx, message as SaveLspDefinitionMessage));
+    table.set(MESSAGE_TYPES.DELETE_LSP_DEFINITION, async (message, ctx) => this.languageServerManager.handleDelete(ctx, message as DeleteLspDefinitionMessage));
+    table.set(MESSAGE_TYPES.INSTALL_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleInstall(ctx, message as InstallLspServerMessage));
+    table.set(MESSAGE_TYPES.RESTART_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleRestart(ctx, message as RestartLspServerMessage));
+    table.set(MESSAGE_TYPES.REQUEST_LSP_APPROVAL, async (_message, ctx) => this.languageServerManager.handleRequestApproval(ctx));
+    table.set(MESSAGE_TYPES.STOP_LSP_SERVER, async (message, ctx) => this.languageServerManager.handleStop(ctx, String(message.id ?? "")));
   }
 
   private registerSecretRegistry(table: DispatchTable): void {

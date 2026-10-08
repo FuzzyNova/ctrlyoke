@@ -12,11 +12,20 @@ suite("VsCodeDocuments", () => {
       path.join(os.tmpdir(), "ctrlyoke-document-")
     );
     const filePath = path.join(directory, "workflow.md");
+    let saveEventElapsedMs: number | undefined;
+    let startedAt = 0;
+    let saveListener: vscode.Disposable | undefined;
     try {
       await fs.writeFile(filePath, "before", "utf8");
       const document = await vscode.workspace.openTextDocument(
         vscode.Uri.file(filePath)
       );
+      // Pin the document in an editor, as a user's dirty file would be. A
+      // document opened only through openTextDocument is held by VS Code's
+      // bounded hidden-model pool (50 references); under a sharded run other
+      // tests' hidden opens evict it from workspace.textDocuments before
+      // saveIfDirty looks it up.
+      await vscode.window.showTextDocument(document, { preview: false });
       const edit = new vscode.WorkspaceEdit();
       edit.replace(
         document.uri,
@@ -26,10 +35,35 @@ suite("VsCodeDocuments", () => {
       await vscode.workspace.applyEdit(edit);
       assert.strictEqual(document.isDirty, true);
 
+      startedAt = Date.now();
+      saveListener = vscode.workspace.onDidSaveTextDocument((savedDocument) => {
+        if (savedDocument.uri.toString() === document.uri.toString()) {
+          saveEventElapsedMs = Date.now() - startedAt;
+        }
+      });
       await saveIfDirty(filePath);
 
-      assert.strictEqual(await fs.readFile(filePath, "utf8"), "after");
+      const savedContents = await fs.readFile(filePath, "utf8");
+      assert.strictEqual(
+        savedContents,
+        "after",
+        `saveIfDirty did not persist the open document: ${JSON.stringify({
+          filePath,
+          elapsedMs: Date.now() - startedAt,
+          documentIsDirty: document.isDirty,
+          matchingOpenDocumentCount: vscode.workspace.textDocuments.filter(
+            (openDocument) =>
+              openDocument.uri.toString() === document.uri.toString()
+          ).length,
+          saveEventElapsedMs,
+          savedContents,
+        })}`
+      );
     } finally {
+      saveListener?.dispose();
+      await vscode.commands.executeCommand(
+        "workbench.action.revertAndCloseActiveEditor"
+      );
       await fs.rm(directory, { recursive: true, force: true });
     }
   });

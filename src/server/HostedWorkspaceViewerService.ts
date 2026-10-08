@@ -72,6 +72,7 @@ import {
   fromViewerPath,
   type ViewerRootContext,
 } from "../platform/WorkspaceViewerPath";
+import { safeResolveWorkspacePath } from "./lsp/WorkspacePathContainment";
 import {
   discoverRepos,
   findRepoForPath,
@@ -651,39 +652,15 @@ export class HostedWorkspaceViewerService {
     const ownedUserSettingsPath =
       this.resolveOwnedUserSettingsFile(requestedPath);
     if (ownedUserSettingsPath) return ownedUserSettingsPath;
-
-    const trustedRoots = this.trustedRoots;
-    const resolved = this.resolveAgainstRoots(requestedPath);
-
-    // Reject if the resolved path escapes every trusted root
-    if (!isPathWithinAnyDirectory(resolved, trustedRoots)) {
-      return null;
-    }
-
-    // Try to resolve symlinks on the full path
-    try {
-      const realResolved = fs.realpathSync(resolved);
-      if (
-        !isPathWithinAnyDirectory(realResolved, this.realpathsOf(trustedRoots))
-      ) {
-        return null;
-      }
-      return options.preserveLexicalPath ? resolved : realResolved;
-    } catch {
-      // Path doesn't exist yet (e.g. new file write) — fall back to parent check
-      const parent = path.dirname(resolved);
-      try {
-        const realParent = fs.realpathSync(parent);
-        if (
-          !isPathWithinAnyDirectory(realParent, this.realpathsOf(trustedRoots))
-        ) {
-          return null;
-        }
-      } catch {
-        // Parent also doesn't exist; rely on the normalised check above
-      }
-      return resolved;
-    }
+    return safeResolveWorkspacePath(
+      requestedPath,
+      {
+        workspaceRoot: this.workspaceRoot,
+        namedRoots: this.namedRoots,
+        trustedRoots: this.trustedRoots,
+      },
+      options
+    );
   }
 
   /**

@@ -173,6 +173,10 @@ export class CompletionCore {
 
   constructor(private readonly workspace: CompletionWorkspace) {}
 
+  setSymbolIndex(symbols: SymbolIndex): void {
+    this.workspace.symbols = symbols;
+  }
+
   clearCache(): void {
     this.files = [];
     this.filesAt = 0;

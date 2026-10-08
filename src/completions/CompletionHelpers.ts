@@ -1,11 +1,22 @@
 import * as vscode from "vscode";
+import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
 import { Log } from "../utils/Log";
 import { getGitTrackedFiles } from "../utils/GitUtils";
-import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
-import { isMultiRootWorkspace } from "../platform/VsCodeWorkspaceRoot";
+import {
+  isSearchPathIgnored,
+  walkSearchFiles,
+} from "../utils/WorkspaceSearchFileWalker";
+import {
+  getVsCodeNamedWorkspaceRoots,
+  getVsCodeWorkspaceRoot,
+  isMultiRootWorkspace,
+} from "../platform/VsCodeWorkspaceRoot";
 import { VsCodeSymbolIndex } from "../platform/VsCodeSymbolIndex";
+import { RegexSymbolIndex } from "./RegexSymbolIndex";
+import { FallbackSymbolIndex } from "./FallbackSymbolIndex";
 import { VsCodeEditorContextSource } from "../platform/VsCodeEditorContextSource";
+import { fromViewerPath, rootForViewerPath } from "../platform/WorkspaceViewerPath";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
 import { CompletionCore, type PlainCompletionItem } from "./CompletionCore";
 import {
@@ -16,40 +27,61 @@ import {
 } from "../types/DashboardConstants";
 
 let completionCore: CompletionCore | undefined;
+let vsCodeSymbolIndex: VsCodeSymbolIndex | undefined;
+let cachedCompletionFiles: string[] | undefined;
+let completionFilesAt = 0;
+
+async function getCompletionFiles(): Promise<string[]> {
+  if (cachedCompletionFiles && Date.now() - completionFilesAt < 5000)
+    return cachedCompletionFiles;
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  const results: string[] = [];
+  for (const folder of folders) {
+    let paths: string[];
+    try {
+      paths = await getGitTrackedFiles(folder.uri.fsPath);
+    } catch (error) {
+      Log.warn(
+        `[Completions] git ls-files failed for ${folder.name}, falling back to workspace walk:`,
+        error
+      );
+      paths = (
+        await walkSearchFiles(folder.uri.fsPath, Date.now(), 100_000, 10_000)
+      ).files;
+    }
+    for (const file of paths) {
+      results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
+    }
+  }
+  cachedCompletionFiles = results;
+  completionFilesAt = Date.now();
+  return results;
+}
 
 /** VS Code composition root for the host-neutral completion engine. */
 export function getCompletionCore(): CompletionCore {
   if (!completionCore) {
+    const root = getVsCodeWorkspaceRoot();
+    const roots = getVsCodeNamedWorkspaceRoots();
+    vsCodeSymbolIndex = new VsCodeSymbolIndex(getCompletionFiles);
     completionCore = new CompletionCore({
       isMultiRoot: isMultiRootWorkspace,
-      getFiles: async () => {
-        const folders = vscode.workspace.workspaceFolders ?? [];
-        const results: string[] = [];
-        for (const folder of folders) {
-          let paths: string[];
-          try {
-            paths = await getGitTrackedFiles(folder.uri.fsPath);
-          } catch (error) {
-            Log.warn(
-              `[Completions] git ls-files failed for ${folder.name}, falling back to workspace walk:`,
-              error
-            );
-            paths = (
-              await walkSearchFiles(
-                folder.uri.fsPath,
-                Date.now(),
-                100_000,
-                10_000
-              )
-            ).files;
-          }
-          for (const file of paths) {
-            results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
-          }
-        }
-        return results;
-      },
-      symbols: new VsCodeSymbolIndex(),
+      getFiles: getCompletionFiles,
+      symbols: new FallbackSymbolIndex(
+        vsCodeSymbolIndex,
+        new RegexSymbolIndex(root, getCompletionFiles, (viewerPath) => {
+          const namedRoot = rootForViewerPath(viewerPath, roots);
+          const workspaceRoot = namedRoot?.fsPath ?? root;
+          const absolutePath = fromViewerPath(viewerPath, {
+            primaryRoot: root,
+            namedRoots: roots,
+          });
+          const relative = path.relative(workspaceRoot, absolutePath);
+          return relative === ".." || relative.startsWith(`..${path.sep}`)
+            ? undefined
+            : { absolutePath, workspaceRoot };
+        })
+      ),
       editorContext: new VsCodeEditorContextSource(),
     });
   }
@@ -58,7 +90,10 @@ export function getCompletionCore(): CompletionCore {
 
 /** Clear the shared completion engine's workspace-file cache. */
 export function clearFilesCache(): void {
+  cachedCompletionFiles = undefined;
+  completionFilesAt = 0;
   completionCore?.clearCache();
+  vsCodeSymbolIndex?.invalidateWarmupCache();
 }
 
 /** Subscribe VS Code cache invalidation to shared configuration changes. */
@@ -71,6 +106,26 @@ export function initializeCompletionHelpers(
     Log.debug("[Completions] Cache cleared due to config change");
   });
   context.subscriptions.push({ dispose: unsubscribe });
+  const watcher = vscode.workspace.createFileSystemWatcher("**/*");
+  const invalidate = (uri: vscode.Uri): void => {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const relevant = folders.some((folder) => {
+      const relative = path.relative(folder.uri.fsPath, uri.fsPath);
+      return (
+        relative !== ".." &&
+        !relative.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relative) &&
+        !isSearchPathIgnored(relative)
+      );
+    });
+    if (relevant) clearFilesCache();
+  };
+  context.subscriptions.push(
+    watcher,
+    watcher.onDidCreate(invalidate),
+    watcher.onDidChange(invalidate),
+    watcher.onDidDelete(invalidate)
+  );
 }
 
 /** Stable workspace-relative slug for an output document. */

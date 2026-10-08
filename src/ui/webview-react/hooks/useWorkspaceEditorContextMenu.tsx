@@ -35,6 +35,42 @@ function buildFileRef(path: string): string {
   return path.includes(" ") ? `@"${path}"` : `@${path}`;
 }
 
+export function buildLanguageIntelligenceMenuItems(
+  editorRef: RefObject<WorkspaceFileEditorHandle | null>,
+  capabilities: Record<string, unknown>
+): StepContextMenuEntry[] {
+  const items: StepContextMenuEntry[] = [];
+  if (capabilities.definitionProvider)
+    items.push({
+      label: "Go to Definition",
+      icon: "codicon-go-to-file",
+      disabled: false,
+      onClick: () => void editorRef.current?.goToDefinition(),
+    });
+  if (capabilities.referencesProvider)
+    items.push({
+      label: "Find All References",
+      icon: "codicon-references",
+      disabled: false,
+      onClick: () => void editorRef.current?.findAllReferences(),
+    });
+  if (capabilities.renameProvider)
+    items.push({
+      label: "Rename Symbol",
+      icon: "codicon-edit",
+      disabled: false,
+      onClick: () => void editorRef.current?.renameSymbol(),
+    });
+  if (capabilities.documentFormattingProvider)
+    items.push({
+      label: "Format Document",
+      icon: "codicon-brush",
+      disabled: false,
+      onClick: () => void editorRef.current?.formatDocument(),
+    });
+  return items;
+}
+
 function enqueuePromptEditorReference(reference: string): void {
   const store = useEditorStore.getState();
   store.preparePromptEditorForInsert();
@@ -73,6 +109,12 @@ export function useWorkspaceEditorContextMenu({
       const selectionRange = editorRef.current?.getSelectionRange();
       const hasSelection = selectionText.length > 0;
       const promptFile = isPromptFile(filePath);
+      const languageCapabilities =
+        editorRef.current?.getLanguageCapabilities() ?? {};
+      const languageItems = buildLanguageIntelligenceMenuItems(
+        editorRef,
+        languageCapabilities
+      );
 
       const items: StepContextMenuEntry[] = [
         {
@@ -101,6 +143,9 @@ export function useWorkspaceEditorContextMenu({
             void writeClipboardText(selectionText);
           },
         },
+        ...(languageItems.length
+          ? [{ type: "divider" as const }, ...languageItems]
+          : []),
         { type: "divider" },
         {
           label: "Add Selection to ctrlyoke",

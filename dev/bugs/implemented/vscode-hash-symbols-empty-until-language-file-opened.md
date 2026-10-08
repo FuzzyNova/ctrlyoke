@@ -1,5 +1,7 @@
 # VS Code-hosted `#` symbol completions are empty until a file of that language is opened
 
+**Resolution:** fixed in this commit
+
 - **Found:** 2026-10-07 by Nathan (manual testing)
 - **Area:** `src/platform/VsCodeSymbolIndex.ts`, `src/completions/CompletionHelpers.ts`
 - **Severity:** medium
@@ -35,7 +37,7 @@ behaviors that make the result empty before a TS document opens:
   projects that an open file has loaded.
 
 No VS Code or TypeScript setting preloads projects. The full analysis is in
-`dev/backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`, "VS Code cold
+`dev/implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`, "VS Code cold
 start".
 
 ## Suggested Fix

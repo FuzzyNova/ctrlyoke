@@ -85,6 +85,7 @@ fields.
 | [`defaults`](#defaults) | Default execution properties applied to all new workflows (mirrors ExecutionProperties). |
 | [`worktrees`](#worktrees) | User-only worktree checkout placement configuration. |
 | [`coordination`](#coordination) | Retention and participant settings for the execution-root coordination board. |
+| [`languageServers`](#languageservers) | Managed language server definitions and language selections for the workspace editor. |
 | [`storage`](#storage) | User-only storage location configuration. |
 | [`permissions`](#permissions) | Harness-specific path and sandbox permission settings. |
 | [`usageTracking`](#usagetracking) | Controls workspace-local provider quota and observed-usage collection. |
@@ -521,6 +522,54 @@ Lease lifetime for participants delivered through the CLI or built-in skill.
 - **Default:** `true`
 
 Allow participants not launched by ctrlyoke to join the coordination board.
+
+## `languageServers` {#languageservers}
+
+Managed language server definitions and language selections for the workspace editor.
+
+### `languageServers.definitions` {#languageservers-definitions}
+
+- **Type:** map of [languageServerDefinition](#type-languageserverdefinition)
+- **Default:** `{}`
+
+Server id to command definition. Workspace definitions remain pending until the user approves them.
+
+### `languageServers.use` {#languageservers-use}
+
+- **Type:** map of (`string` or `false`)
+- **Default:** `{}`
+
+Language id to selected server id, or false to disable language intelligence. Workspace scope may select available servers.
+
+### `languageServers.settings` {#languageservers-settings}
+
+- **Type:** map of `object`
+- **Default:** `{}`
+
+Server id to LSP initialization and workspace/configuration settings.
+
+### `languageServers.idleShutdownMinutes` {#languageservers-idleshutdownminutes}
+
+- **Type:** `integer`
+- **Default:** `10`
+- **Constraints:** minimum 0
+
+User-only idle timeout in minutes before a server without open documents is stopped. 0 disables idle shutdown.
+
+### `languageServers.maxRunning` {#languageservers-maxrunning}
+
+- **Type:** `integer`
+- **Default:** `4`
+- **Constraints:** minimum 1
+
+User-only maximum number of concurrently running language servers.
+
+### `languageServers.startOnLaunch` {#languageservers-startonlaunch}
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+User-only opt-in to start selected language servers when the hosted server launches. Defaults to lazy startup.
 
 ## `storage` {#storage}
 
@@ -1584,6 +1633,47 @@ Fields:
 - `reasoningPerMTok` · `number`
 
 ## Shared types {#shared-types}
+
+### languageServerDefinition {#type-languageserverdefinition}
+
+- **Type:** `{ command, languages, extensions, … }`
+
+Command, supported languages, and root markers for one managed language server.
+
+#### `languageServerDefinition.command` {#type-languageserverdefinition-command}
+
+- **Type:** `string[]`
+- **Required:** yes
+- **Constraints:** at least 1 item(s)
+
+Executable followed by its arguments. For example: ["pyright-langserver", "--stdio"].
+
+#### `languageServerDefinition.languages` {#type-languageserverdefinition-languages}
+
+- **Type:** `string[]`
+- **Required:** yes
+
+LSP language ids served by this definition.
+
+#### `languageServerDefinition.extensions` {#type-languageserverdefinition-extensions}
+
+- **Type:** `string[]`
+- **Required:** yes
+
+File extensions served, without a leading dot.
+
+#### `languageServerDefinition.rootMarkers` {#type-languageserverdefinition-rootmarkers}
+
+- **Type:** `string[]`
+- **Required:** yes
+
+Files or directories used to find the project root.
+
+#### `languageServerDefinition.env` {#type-languageserverdefinition-env}
+
+- **Type:** map of `string`
+
+Environment variables passed to the server process.
 
 ### statusLineFormat {#type-statuslineformat}
 

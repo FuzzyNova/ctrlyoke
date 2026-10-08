@@ -14,6 +14,7 @@ export { DeveloperSection } from "./DeveloperSection";
 export { NotificationsSection } from "./NotificationsSection";
 export { AgentSkillsManagerSection } from "./AgentSkillsManagerSection";
 export { McpManagerSection } from "./McpManagerSection";
+export { LanguageServersSection } from "./LanguageServersSection";
 export { CommitSection } from "./CommitSection";
 export { RunHistorySection } from "./RunHistorySection";
 export { StatusLineSection } from "./StatusLineSection";

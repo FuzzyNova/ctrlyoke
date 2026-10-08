@@ -699,6 +699,7 @@ suite("SourceAuditCounters", () => {
   for (const entry of [
     "src/ui/DashboardApplication.ts",
     "src/server/CtrlYokeHostedServer.ts",
+    "src/server/lsp/LanguageIntelligenceHost.ts",
     "src/platform/NodeHostServices.ts",
     "src/cli/ServerCommand.ts",
   ]) {

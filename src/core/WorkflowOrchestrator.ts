@@ -793,6 +793,11 @@ export class WorkflowOrchestrator {
     return this.dashboardBroadcastHub;
   }
 
+  /** Current workspace trust state for host-owned workspace services. */
+  public isWorkspaceTrusted(): boolean {
+    return this.workspaceTrustPredicate?.() ?? true;
+  }
+
   public getHarnessUsageService(): HarnessUsageService | undefined {
     return this.harnessUsageService;
   }

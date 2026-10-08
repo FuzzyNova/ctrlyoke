@@ -23,6 +23,7 @@ import {
 import { useUiStore } from "../store/uiStore";
 import { useEditorStore } from "../store/editorStore";
 import { useRunSummaryCacheStore } from "../store/runSummaryCacheStore";
+import { useLanguageServerStore } from "../store/useLanguageServerStore";
 import {
   MESSAGE_TYPES,
   HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
@@ -2063,6 +2064,38 @@ export function createMessageHandlers(
     useMcpManagerStore
       .getState()
       .setLocalScanResult(message.servers ?? [], message.error);
+  };
+
+  handlers[MESSAGE_TYPES.LSP_SERVERS_UPDATE] = (message) => {
+    useLanguageServerStore.getState().setServers({
+      hostPlatform: message.hostPlatform,
+      definitions: message.definitions ?? [],
+      catalog: message.catalog ?? [],
+      probes: message.probes ?? [],
+      statuses: message.statuses ?? [],
+      detectedLanguages: message.detectedLanguages ?? [],
+      approvedWorkspaceDefinitionIds:
+        message.approvedWorkspaceDefinitionIds ?? [],
+    });
+  };
+  handlers[MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT] = (message) => {
+    useLanguageServerStore
+      .getState()
+      .setLocalScan(message.servers ?? [], message.error);
+  };
+  handlers[MESSAGE_TYPES.LSP_INSTALL_PROGRESS] = (message) => {
+    useLanguageServerStore
+      .getState()
+      .setInstallProgress(
+        message.id,
+        message.output,
+        message.error,
+        message.complete,
+        message.copyableCommand
+      );
+  };
+  handlers[MESSAGE_TYPES.LSP_EXPORT_RESULT] = (message) => {
+    useLanguageServerStore.getState().setExportResult(message);
   };
 
   // --------------------------------------------------------------------------

@@ -20,6 +20,8 @@ import { resolveServerToken, ServerTokenStore } from "./ServerTokenStore";
 import { LicenseService } from "../license/LicenseService";
 import { CompletionCore } from "../completions/CompletionCore";
 import { RegexSymbolIndex } from "../completions/RegexSymbolIndex";
+import { LspSymbolIndex } from "../completions/LspSymbolIndex";
+import { FallbackSymbolIndex } from "../completions/FallbackSymbolIndex";
 import type { EditorContextSource } from "../completions/EditorContextSource";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
@@ -35,6 +37,11 @@ import { TemplateManager } from "../core/TemplateManager";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { CtrlYokeHostedServer } from "../server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "../server/HostedServerOptionsFactory";
+import { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
+import { ManagedLanguageServerBackend } from "../server/lsp/ManagedLanguageServerBackend";
+import { createLanguageServerSettingsReaders } from "../server/lsp/LanguageServerSettingsAccess";
+import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
+import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
 import { setRuntimeMode } from "../utils/RuntimeMode";
 import { initializeModelRegistry } from "../utils/ModelRegistry";
 
@@ -67,6 +74,8 @@ export interface NodeHostServices {
   tokenStore: ServerTokenStore;
   licenseService: LicenseService;
   completionCore: CompletionCore;
+  regexSymbolIndex: RegexSymbolIndex;
+  getCompletionFiles(): Promise<string[]>;
   disposableRegistry: {
     add(disposable: { dispose(): void }): void;
     dispose(): void;
@@ -136,10 +145,11 @@ export async function createNodeHostServices(options: {
     getSelections: () => [],
     getVisibleOutputChannels: () => [],
   };
+  const regexSymbolIndex = new RegexSymbolIndex(cwd, getCompletionFiles);
   const completionCore = new CompletionCore({
     isMultiRoot: () => false,
     getFiles: getCompletionFiles,
-    symbols: new RegexSymbolIndex(cwd, getCompletionFiles),
+    symbols: regexSymbolIndex,
     editorContext,
   });
 
@@ -158,6 +168,8 @@ export async function createNodeHostServices(options: {
     tokenStore: new ServerTokenStore(secretStore, cwd),
     licenseService,
     completionCore,
+    regexSymbolIndex,
+    getCompletionFiles,
     disposableRegistry,
     dispose: () => disposableRegistry.dispose(),
   };
@@ -283,6 +295,28 @@ export async function createNodeHostedServer(options: {
   // Exempt the connection token from heuristic redaction while the server is
   // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.
   const unprotectToken = secretRedactionService.protectValue(token);
+  const languageServerSettings = createLanguageServerSettingsReaders(configService);
+  const languageServerBackend = new ManagedLanguageServerBackend({
+    workspaceRoot: cwd,
+    ...languageServerSettings,
+    // Approval hashes are machine/user trust decisions, never workspace data.
+    approvalStore: new FileKeyValueStore(ctrlyokeStateHome()),
+    interactionPort: dashboardApplication.interactionPort,
+    isWorkspaceTrusted: () => orchestrator.isWorkspaceTrusted(),
+  });
+  const languageIntelligenceHost = new LanguageIntelligenceHost({
+    backend: languageServerBackend,
+    workspaceRoot: cwd,
+    namedWorkspaceRoots: namedRoots,
+    isWorkspaceTrusted: () => true,
+  });
+  const lspSymbolIndex = new LspSymbolIndex(cwd, services.getCompletionFiles, languageIntelligenceHost);
+  services.completionCore.setSymbolIndex(new FallbackSymbolIndex(
+    lspSymbolIndex,
+    services.regexSymbolIndex,
+    (symbol) => lspSymbolIndex.shouldUseRegexFallback(symbol)
+  ));
+  dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);
   server = new CtrlYokeHostedServer(
     createHostedServerOptions({
       hub: orchestrator.getDashboardBroadcastHub(),
@@ -295,6 +329,7 @@ export async function createNodeHostedServer(options: {
       getUserFeedbackSink: () => orchestrator.getUserFeedbackSink(),
       hostKind: HOST_KINDS.STANDALONE,
       fileWatcherFactory: services.fileWatcherFactory,
+      languageIntelligenceHost,
       strictPort: options.strictPort,
     })
   );
@@ -303,6 +338,14 @@ export async function createNodeHostedServer(options: {
     const url = await server.listen();
     if (!url) throw new Error("The hosted server did not start.");
     runningUrl = url;
+    if (configService.get("languageServers").startOnLaunch) {
+      const files = await getGitTrackedFiles(cwd).catch(() => []);
+      const extensions = new Set(files.map((file) => path.extname(file).slice(1).toLowerCase()));
+      const detectedLanguages = [...new Set(LANGUAGE_SERVER_CATALOG.filter((entry) => entry.extensions.some((extension) => extensions.has(extension.toLowerCase()))).flatMap((entry) => entry.languages))];
+      void languageIntelligenceHost.startLanguages(detectedLanguages).catch((error: unknown) => {
+        Log.warn("[NodeHostServices] Could not start detected language servers:", error);
+      });
+    }
   } catch (error) {
     unprotectToken();
     server.dispose();

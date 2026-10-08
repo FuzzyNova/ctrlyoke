@@ -299,6 +299,52 @@
         }
       }
     },
+    "languageServers": {
+      "type": "object",
+      "description": "Managed language server definitions and language selections for the workspace editor.",
+      "additionalProperties": false,
+      "properties": {
+        "definitions": {
+          "type": "object",
+          "description": "Server id to command definition. Workspace definitions remain pending until the user approves them.",
+          "additionalProperties": {
+            "$ref": "#/$defs/languageServerDefinition"
+          },
+          "default": {}
+        },
+        "use": {
+          "type": "object",
+          "description": "Language id to selected server id, or false to disable language intelligence. Workspace scope may select available servers.",
+          "additionalProperties": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "const": false }]
+          },
+          "default": {}
+        },
+        "settings": {
+          "type": "object",
+          "description": "Server id to LSP initialization and workspace/configuration settings.",
+          "additionalProperties": { "type": "object" },
+          "default": {}
+        },
+        "idleShutdownMinutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "User-only idle timeout in minutes before a server without open documents is stopped. 0 disables idle shutdown.",
+          "default": 10
+        },
+        "maxRunning": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "User-only maximum number of concurrently running language servers.",
+          "default": 4
+        },
+        "startOnLaunch": {
+          "type": "boolean",
+          "description": "User-only opt-in to start selected language servers when the hosted server launches. Defaults to lazy startup.",
+          "default": false
+        }
+      }
+    },
     "storage": {
       "type": "object",
       "description": "User-only storage location configuration.",
@@ -1096,6 +1142,40 @@
     }
   },
   "$defs": {
+    "languageServerDefinition": {
+      "type": "object",
+      "description": "Command, supported languages, and root markers for one managed language server.",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Executable followed by its arguments. For example: [\"pyright-langserver\", \"--stdio\"]."
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "LSP language ids served by this definition."
+        },
+        "extensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "File extensions served, without a leading dot."
+        },
+        "rootMarkers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files or directories used to find the project root."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Environment variables passed to the server process."
+        }
+      },
+      "required": ["command", "languages", "extensions", "rootMarkers"]
+    },
     "statusLineFormat": {
       "description": "Ordered statusline segments. Used both for a provider's own 'format' and for the shared 'sharedFormat' that applies to every harness when 'useDifferentFormatPerHarness' is false.",
       "type": "array",

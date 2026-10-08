@@ -40,6 +40,9 @@ import {
   maskHostedServerUrlToken,
 } from "./server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "./server/HostedServerOptionsFactory";
+import { LanguageIntelligenceHost } from "./server/lsp/LanguageIntelligenceHost";
+import { ManagedLanguageServerBackend } from "./server/lsp/ManagedLanguageServerBackend";
+import { createLanguageServerSettingsReaders } from "./server/lsp/LanguageServerSettingsAccess";
 import {
   GIT_CHANGE_KINDS,
   HOST_KINDS,
@@ -1647,6 +1650,20 @@ function registerCommands(
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
+      const languageServerSettings = createLanguageServerSettingsReaders(configService);
+      const languageIntelligenceHost = new LanguageIntelligenceHost({
+        backend: new ManagedLanguageServerBackend({
+          workspaceRoot,
+          ...languageServerSettings,
+          approvalStore: new VsCodeKeyValueStore(context.globalState),
+          interactionPort: webviewProvider.getUserInteractionPort(),
+          isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
+        }),
+        workspaceRoot,
+        namedWorkspaceRoots,
+        isWorkspaceTrusted: () => workflowOrchestrator.isWorkspaceTrusted(),
+      });
+      dashboardApplication.setLanguageIntelligenceHost(languageIntelligenceHost);
       try {
         hostedServer = new CtrlYokeHostedServer(
           createHostedServerOptions({
@@ -1668,6 +1685,7 @@ function registerCommands(
             runnerHostIdentity,
             hostKind: HOST_KINDS.VSCODE,
             fileWatcherFactory: new VsCodeFileWatcherFactory(),
+            languageIntelligenceHost,
           })
         );
       } catch (err) {

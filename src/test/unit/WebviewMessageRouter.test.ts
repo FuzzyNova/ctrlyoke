@@ -115,6 +115,16 @@ class FakeLicenseActionService implements LicenseActionService {
 }
 
 suite("WebviewMessageRouter — dashboard host actions", () => {
+  test("dispatches LSP local scans to the language server manager", async () => {
+    const sent: unknown[] = [];
+    const router = buildRouter(undefined, (message) => sent.push(message), undefined, {
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
+    }, () => [{ name: "workspace", fsPath: process.cwd() }]);
+    await router.route({ type: MESSAGE_TYPES.REQUEST_LSP_LOCAL_SCAN }, { postMessage: (message) => sent.push(message), clientTag: "test:lsp" });
+    assert.ok(sent.some((message) => (message as { type?: string }).type === MESSAGE_TYPES.LSP_LOCAL_SCAN_RESULT));
+    router.disposeClient("test:lsp");
+  });
+
   test("routes run controls directly to the orchestrator", async () => {
     const calls: string[] = [];
     const orchestrator = {

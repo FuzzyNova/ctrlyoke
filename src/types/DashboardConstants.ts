@@ -702,6 +702,22 @@ export const MESSAGE_TYPES = {
   REQUEST_MCP_CONFIG_PREVIEW: "requestMcpConfigPreview", // Webview -> Extension: request a /mcp:<name> reference's resolved server config for the preview modal
   MCP_CONFIG_PREVIEW_RESULT: "mcpConfigPreviewResult", // Extension -> Webview: { mcpServerName, content, found } JSON for modal
 
+  // Language server manager — Webview ↔ Extension
+  REQUEST_LSP_SERVERS: "requestLspServers",
+  CLOSE_LSP_MANAGER: "closeLspManager",
+  LSP_SERVERS_UPDATE: "lspServersUpdate",
+  REQUEST_LSP_LOCAL_SCAN: "requestLspLocalScan",
+  LSP_LOCAL_SCAN_RESULT: "lspLocalScanResult",
+  SAVE_LSP_DEFINITION: "saveLspDefinition",
+  DELETE_LSP_DEFINITION: "deleteLspDefinition",
+  INSTALL_LSP_SERVER: "installLspServer",
+  LSP_INSTALL_PROGRESS: "lspInstallProgress",
+  RESTART_LSP_SERVER: "restartLspServer",
+  REQUEST_LSP_APPROVAL: "requestLspApproval",
+  STOP_LSP_SERVER: "stopLspServer",
+  EXPORT_LSP_DEFINITION: "exportLspDefinition",
+  LSP_EXPORT_RESULT: "lspExportResult",
+
   // Harness File Manager — Webview ↔ Extension
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }
   HARNESS_FILES_RESULT: "harnessFilesResult", // Extension -> Webview: { files: ManagedFile[] }
@@ -921,6 +937,49 @@ export const HOSTED_CONNECTION_LIVENESS = {
   FOREGROUND_PROBE_TIMEOUT_MS: 8_000,
   BACKGROUND_REVALIDATE_MS: 30_000,
 } as const;
+
+/** LSP method names shared by the hosted server and its browser protocol proxy. */
+export const LSP_METHODS = {
+  INITIALIZE: "initialize",
+  INITIALIZED: "initialized",
+  SHUTDOWN: "shutdown",
+  EXIT: "exit",
+  RENAME: "textDocument/rename",
+  APPLY_EDIT: "workspace/applyEdit",
+  CONFIRM_WORKSPACE_RENAME: "ctrlyoke/confirmWorkspaceRename",
+  APPLY_WORKSPACE_TEXT_EDITS: "ctrlyoke/applyWorkspaceTextEdits",
+  DID_OPEN: "textDocument/didOpen",
+  DID_CHANGE: "textDocument/didChange",
+  DID_CLOSE: "textDocument/didClose",
+  PUBLISH_DIAGNOSTICS: "textDocument/publishDiagnostics",
+  DID_CHANGE_WATCHED_FILES: "workspace/didChangeWatchedFiles",
+  WORKSPACE_SYMBOL: "workspace/symbol",
+  DOCUMENT_SYMBOL: "textDocument/documentSymbol",
+  WORKSPACE_SYMBOL_RESOLVE: "workspaceSymbol/resolve",
+  CANCEL_REQUEST: "$/cancelRequest",
+} as const;
+
+/** Server-side close tells hosted LSP clients to look up and attach again. */
+export const LSP_SESSION_INVALIDATION_CLOSE = {
+  CODE: 4410,
+  REASON: "Language server session ended; reconnect to refresh",
+} as const;
+
+export const LSP_SESSION_LOOKUP_REASONS = {
+  NO_SERVER: "no server",
+  LIMIT_REACHED: "limit reached",
+  NEEDS_APPROVAL: "needs approval",
+  UNTRUSTED: "untrusted",
+  STOPPED: "stopped",
+} as const;
+
+/** Whether a language-server request is user-visible or background work. */
+export const LANGUAGE_SERVER_REQUEST_ORIGINS = {
+  EDITOR: "editor",
+  BACKGROUND: "background",
+} as const;
+export type LanguageServerRequestOrigin =
+  (typeof LANGUAGE_SERVER_REQUEST_ORIGINS)[keyof typeof LANGUAGE_SERVER_REQUEST_ORIGINS];
 
 export const HOSTED_ICON_FILES = {
   APP_ICON_PNG: "icon.png",
@@ -1389,6 +1448,17 @@ export const HARNESS_IDS = {
   QWEN_CLI: "qwen-cli",
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
+
+export const LSP_EXPORT_TARGET_IDS = {
+  QWEN_WORKSPACE: "qwen-workspace-lsp",
+  COPILOT_WORKSPACE: "copilot-workspace-lsp",
+  COPILOT_USER: "copilot-user-lsp",
+  OPENCODE_WORKSPACE: "opencode-workspace-lsp",
+  OPENCODE_USER: "opencode-user-lsp",
+  CCLSP_WORKSPACE: "cclsp-workspace",
+} as const;
+export type LspExportTargetId =
+  (typeof LSP_EXPORT_TARGET_IDS)[keyof typeof LSP_EXPORT_TARGET_IDS];
 
 /**
  * Every harness in alphabetical order. ctrlyoke favours no harness: pickers
@@ -1910,6 +1980,10 @@ export type CliValidateStrictPolicy =
 /** Shared dot-notation paths for settings consumed across the extension and webview. */
 export const SETTING_PATHS = {
   STORAGE: "storage",
+  LANGUAGE_SERVERS: "languageServers",
+  LANGUAGE_SERVERS_IDLE_SHUTDOWN_MINUTES: "languageServers.idleShutdownMinutes",
+  LANGUAGE_SERVERS_MAX_RUNNING: "languageServers.maxRunning",
+  LANGUAGE_SERVERS_START_ON_LAUNCH: "languageServers.startOnLaunch",
   WORKTREES: "worktrees",
   COORDINATION: "coordination",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
@@ -1962,6 +2036,50 @@ export const SETTING_PATHS = {
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
 } as const;
+
+/** Status values emitted by the managed language-server backend. */
+export const LANGUAGE_SERVER_STATUSES = {
+  RUNNING: "running",
+  STARTING: "starting",
+  IDLE: "idle",
+  STOPPED: "stopped",
+  NOT_INSTALLED: "not installed",
+  LIMIT_REACHED: "limit reached",
+  NEEDS_APPROVAL: "needs approval",
+  CRASHED: "crashed",
+} as const;
+
+/** Install recipe kinds for curated language server catalog entries. */
+export const LANGUAGE_SERVER_INSTALL_KINDS = {
+  NPM: "npm",
+  COMMAND: "command",
+} as const;
+
+export const LANGUAGE_SERVER_SELECTIONS = {
+  AUTOMATIC: "auto",
+  OFF: "off",
+} as const;
+
+/** Normalized format discriminants consumed by local LSP config discovery. */
+export const LSP_DISCOVERY_FORMATS = {
+  QWEN: "qwen",
+  CLAUDE_PLUGIN: "claude-plugin",
+  COPILOT: "copilot",
+  OPENCODE: "opencode",
+  CCLSP: "cclsp",
+} as const;
+
+export const LSP_DISCOVERY_SOURCES = {
+  QWEN_CODE: "qwen-code",
+  CLAUDE_CODE_PLUGIN: "claude-code-plugin",
+  COPILOT_CLI: "copilot-cli",
+  COPILOT_CLI_USER: "copilot-cli-user",
+  OPENCODE: "opencode",
+  OPENCODE_USER: "opencode-user",
+  CCLSP: "cclsp",
+} as const;
+export type LanguageServerInstallKind =
+  (typeof LANGUAGE_SERVER_INSTALL_KINDS)[keyof typeof LANGUAGE_SERVER_INSTALL_KINDS];
 
 /**
  * Pseudo setting path under which workspace MCP registry entries are
@@ -2988,6 +3106,7 @@ export const GLOBAL_SETTINGS_TABS = {
   SERVER: "server",
   AGENT_SKILLS_MANAGER: "agentskillsmanager",
   MCP_MANAGER: "mcpmanager",
+  LANGUAGE_SERVERS: "languageservers",
   NOTIFICATIONS: "notifications",
   STATS: "stats",
   LICENSE: "license",

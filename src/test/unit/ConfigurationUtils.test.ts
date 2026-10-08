@@ -557,6 +557,10 @@ suite("ConfigurationUtils — cost settings", () => {
 });
 
 suite("ConfigurationUtils — default harness", () => {
+  setup(() => {
+    harnessAvailability.reset();
+  });
+
   teardown(() => {
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(makeBackend({}));

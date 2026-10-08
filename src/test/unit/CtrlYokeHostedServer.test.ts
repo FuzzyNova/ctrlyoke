@@ -647,6 +647,47 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
     });
   });
 
+  test("routes LSP sockets separately and applies the same token check", async () => {
+    await withServer(async (port, token, wasConnectionObserved) => {
+      const baseUrl = `ws://127.0.0.1:${port}/ws/lsp?server=missing`;
+      assert.strictEqual(await rejectedUpgradeStatus(baseUrl), 401);
+      assert.strictEqual(
+        await rejectedUpgradeStatus(`${baseUrl}&token=wrong-token`),
+        401
+      );
+      assert.strictEqual(wasConnectionObserved(), false);
+
+      const lsp = new WebSocket(`${baseUrl}&token=${token}`);
+      await new Promise<void>((resolve, reject) => {
+        lsp.once("open", resolve);
+        lsp.once("error", reject);
+      });
+      const closeCode = await new Promise<number>((resolve) => {
+        lsp.once("close", (code) => resolve(code));
+      });
+      assert.strictEqual(closeCode, 4404);
+      assert.strictEqual(wasConnectionObserved(), false);
+    });
+  });
+
+  test("token-gates language-server session lookup", async () => {
+    await withServer(async (port, token) => {
+      assert.strictEqual(
+        (await sendGetRequest(port, "/api/lsp/session?path=src/main.ts")).statusCode,
+        401
+      );
+      const response = await sendGetRequest(
+        port,
+        `/api/lsp/session?path=src/main.ts&token=${token}`
+      );
+      assert.strictEqual(response.statusCode, 200);
+      assert.deepStrictEqual(JSON.parse(response.body), {
+        session: null,
+        reason: "no server",
+      });
+    });
+  });
+
   test("closes a WebSocket that sends a frame over maxPayload", async () => {
     await withServer(async (port, token) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`);

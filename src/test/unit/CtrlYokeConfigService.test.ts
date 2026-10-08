@@ -67,6 +67,34 @@ suite("CtrlYokeConfigService", () => {
     );
   });
 
+  test("merges language server definitions and keeps their defaults typed", () => {
+    service.setUserBackend(
+      makeBackend({
+        languageServers: {
+          definitions: {
+            pyright: {
+              command: ["pyright-langserver", "--stdio"],
+              languages: ["python"],
+              extensions: ["py"],
+              rootMarkers: ["pyproject.toml"],
+            },
+          },
+          use: { python: "pyright" },
+        },
+      })
+    );
+
+    const languageServers = service.getAll().languageServers;
+    assert.deepStrictEqual(languageServers.use, { python: "pyright" });
+    assert.deepStrictEqual(languageServers.definitions.pyright?.command, [
+      "pyright-langserver",
+      "--stdio",
+    ]);
+    assert.strictEqual(languageServers.idleShutdownMinutes, 10);
+    assert.strictEqual(languageServers.maxRunning, 4);
+    assert.strictEqual(languageServers.startOnLaunch, false);
+  });
+
   test("resolves nested statusline settings through the config hierarchy", () => {
     service.setUserBackend(
       makeBackend({
@@ -466,6 +494,16 @@ suite("CtrlYokeConfigService", () => {
       service.set("usageTracking.enabled", false, "workspace"),
       /machine-scoped/
     );
+    for (const settingPath of [
+      "languageServers.idleShutdownMinutes",
+      "languageServers.maxRunning",
+      "languageServers.startOnLaunch",
+    ]) {
+      await assert.rejects(
+        service.set(settingPath, 1, "workspace"),
+        /machine-scoped/
+      );
+    }
     assert.strictEqual(wrote, false);
   });
 

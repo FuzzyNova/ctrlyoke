@@ -10,11 +10,9 @@ import {
   ActionDropdown,
   type ActionDropdownItem,
 } from "@components/shared/ActionDropdown";
-import {
-  FlyoutActionDropdown,
-  type FlyoutGroup,
-} from "@components/shared/FlyoutActionDropdown";
+import { FlyoutActionDropdown } from "@components/shared/FlyoutActionDropdown";
 import { BulkSelectionActionsBar } from "@components/shared/BulkSelectionActionsBar";
+import { buildManagerExportGroups } from "@components/shared/ManagerExportGroups";
 import {
   EMPTY_MCP_SERVER_FORM_STATE,
   McpServerForm,
@@ -45,6 +43,12 @@ import type {
   RegistryMcpEntry,
 } from "@root/types/WebviewMessageTypes";
 import { Icon } from "../shared/Icon";
+import {
+  ScopeBadge,
+  encodeManagerTarget as encodeTarget,
+  decodeManagerTarget as decodeTarget,
+  ManagerConfirmModal,
+} from "@components/shared/ManagerUi";
 
 type DefaultMcpServerValue = (string | McpServerConfig)[];
 
@@ -268,21 +272,6 @@ function sortRegistryServers(
   );
 }
 
-function encodeTarget(id: AnyTargetId, scope: SettingWriteScope): string {
-  return `${id}:${scope}`;
-}
-
-function decodeTarget(encoded: string): {
-  id: AnyTargetId;
-  scope: SettingWriteScope;
-} {
-  const colonIndex = encoded.lastIndexOf(":");
-  return {
-    id: encoded.slice(0, colonIndex) as AnyTargetId,
-    scope: encoded.slice(colonIndex + 1) as SettingWriteScope,
-  };
-}
-
 function getExportTargetLabel(id: AnyTargetId): string {
   if (id === SPECIAL_TARGET_IDS.CTRLYOKE) return "ctrlyoke";
   if (id === SPECIAL_TARGET_IDS.VSCODE) return "VS Code";
@@ -337,44 +326,6 @@ function getExportTargetDescription(
   return scope;
 }
 
-function buildExportGroups(
-  hasWorkspaceRoot: boolean,
-  presentKeys?: Set<string>
-): FlyoutGroup[] {
-  const workspaceItems: ActionDropdownItem[] = hasWorkspaceRoot
-    ? EXPORT_TARGET_IDS.map((id) => {
-        const encoded = encodeTarget(id, SETTING_SCOPES.WORKSPACE);
-        const alreadyPresent = presentKeys?.has(encoded) ?? false;
-        return {
-          label: getExportTargetLabel(id),
-          value: encoded,
-          description: getExportTargetDescription(id, SETTING_SCOPES.WORKSPACE),
-          disabled: alreadyPresent,
-          title: alreadyPresent ? "Already exported" : undefined,
-        };
-      })
-    : [];
-
-  const userItems: ActionDropdownItem[] = EXPORT_TARGET_IDS.map((id) => {
-    const encoded = encodeTarget(id, SETTING_SCOPES.USER);
-    const alreadyPresent = presentKeys?.has(encoded) ?? false;
-    return {
-      label: getExportTargetLabel(id),
-      value: encoded,
-      description: getExportTargetDescription(id, SETTING_SCOPES.USER),
-      disabled: alreadyPresent,
-      title: alreadyPresent ? "Already exported" : undefined,
-    };
-  });
-
-  return [
-    ...(workspaceItems.length > 0
-      ? [{ id: "workspace", label: "Workspace", items: workspaceItems }]
-      : []),
-    { id: "user", label: "User", items: userItems },
-  ];
-}
-
 function getTargetForLocalSource(
   source: LocalMcpServerEntry["source"]
 ): { targetId: AnyTargetId; scope: SettingWriteScope } | null {
@@ -414,14 +365,6 @@ function sortResolvedLocations(
     }
     return a.path.localeCompare(b.path, undefined, { sensitivity: "base" });
   });
-}
-
-function ScopeBadge({ label }: { label: string }) {
-  return (
-    <span className="inline-flex items-center rounded-sm border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
-      {label}
-    </span>
-  );
 }
 
 function ServerDetails({
@@ -998,10 +941,15 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 encodeTarget(location.targetId, location.scope)
               )
             );
-            const exportGroups = buildExportGroups(
+            const exportGroups = buildManagerExportGroups({
               hasWorkspaceRoot,
-              exportPresentKeys
-            );
+              workspaceTargetIds: EXPORT_TARGET_IDS,
+              userTargetIds: EXPORT_TARGET_IDS,
+              labelForTarget: (id) => getExportTargetLabel(id as AnyTargetId),
+              descriptionForTarget: (id, scope) =>
+                getExportTargetDescription(id as AnyTargetId, scope),
+              presentKeys: exportPresentKeys,
+            });
             const deleteItems: ActionDropdownItem[] = allLocations.map(
               (location) => ({
                 label: `${getExportTargetLabel(location.targetId)} (${formatScopeLabel(
@@ -1100,7 +1048,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             iconOnly
                             groups={exportGroups}
                             onSelect={(encoded) => {
-                              const { id, scope } = decodeTarget(encoded);
+                              const { id: targetId, scope } =
+                                decodeTarget(encoded);
+                              const id = targetId as AnyTargetId;
                               exportToHarness([server.config], id, scope);
                             }}
                           />
@@ -1530,64 +1480,26 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
       </div>
 
       {deleteLocationState && (
-        <div
-          className="fixed inset-0 z-modal flex items-center justify-center bg-black/40"
-          role="button"
-          tabIndex={0}
-          aria-label="Close delete MCP location dialog"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setDeleteLocationState(null);
-            }
-          }}
-          onKeyDown={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              (event.key === KEYBOARD_KEYS.ENTER ||
-                event.key === " " ||
-                event.key === KEYBOARD_KEYS.ESCAPE)
-            ) {
-              event.preventDefault();
-              setDeleteLocationState(null);
-            }
-          }}
+        <ManagerConfirmModal
+          title="Delete MCP location?"
+          confirmLabel="Delete"
+          backdropLabel="Close delete MCP location dialog"
+          onCancel={() => setDeleteLocationState(null)}
+          onConfirm={handleConfirmDeleteLocation}
         >
-          <div
-            className="mx-4 w-full max-w-sm rounded-sm border border-panel-border bg-editor-bg p-4 shadow-lg"
-            role="dialog"
-            aria-modal="true"
-          >
-            <p className="mb-1 text-sm font-semibold text-foreground">
-              Delete MCP location?
-            </p>
-            <p className="mb-4 text-xs text-description-fg">
+          <>
+            <p>
               Remove <strong>{deleteLocationState.displayName}</strong> from{" "}
               <strong>
                 {getExportTargetLabel(deleteLocationState.location.targetId)}
               </strong>{" "}
               ({deleteLocationState.location.scope})?
             </p>
-            <div className="mb-4 truncate font-mono text-xxs text-description-fg">
+            <div className="mt-2 truncate font-mono text-xxs">
               {formatPathForDisplay(deleteLocationState.location.path)}
             </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteLocationState(null)}
-                className="rounded-sm border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteLocation}
-                className="rounded-sm bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
+          </>
+        </ManagerConfirmModal>
       )}
 
       {deleteTargetState && (
