@@ -47,8 +47,10 @@ suite("LspDiscoveryUtils", () => {
 
   test("discovers Qwen, Claude plugins, Copilot, opencode, and cclsp definitions", async () => {
     const pluginDir = path.join(tempRoot, "plugin-installed-here");
+    const pluginRoot = path.join(tempRoot, "plugin-root-manifest");
     await fs.mkdir(path.join(workspace, ".github"), { recursive: true });
     await fs.mkdir(pluginDir, { recursive: true });
+    await fs.mkdir(path.join(pluginRoot, ".claude-plugin"), { recursive: true });
     await fs.writeFile(path.join(workspace, ".lsp.json"), JSON.stringify({ qwen: { command: "qwen-lsp", args: ["--stdio"], extensionToLanguage: { ".py": "python" } } }));
     await fs.writeFile(path.join(workspace, ".github", "lsp.json"), JSON.stringify({ lspServers: { copilot: { command: "copilot-lsp", args: ["--stdio"], fileExtensions: { ".ts": "typescript" } } } }));
     await fs.writeFile(path.join(workspace, "lsp.json"), JSON.stringify({ lspServers: { copilotRoot: { command: "root-lsp", args: [], fileExtensions: { ".js": "javascript" } } } }));
@@ -59,18 +61,29 @@ suite("LspDiscoveryUtils", () => {
     const customCclsp = path.join(tempRoot, "custom-cclsp.json");
     await fs.writeFile(customCclsp, JSON.stringify({ servers: [{ name: "custom", command: ["custom-lsp"], extensions: [".rs"] }] }));
     process.env.CCLSP_CONFIG_PATH = customCclsp;
-    await fs.writeFile(path.join(home, ".claude", "plugins", "installed_plugins.json"), JSON.stringify({ plugins: { example: [{ installPath: pluginDir }] } }));
+    await fs.writeFile(path.join(home, ".claude", "plugins", "installed_plugins.json"), JSON.stringify({ plugins: { example: [{ installPath: pluginDir }], manifest: [{ installPath: pluginRoot }] } }));
     await fs.writeFile(path.join(pluginDir, ".lsp.json"), JSON.stringify({ go: { command: "gopls", extensionToLanguage: { ".go": "go" } } }));
     await fs.writeFile(path.join(pluginDir, "plugin.json"), JSON.stringify({ lspServers: { lua: { command: "lua-ls", extensionToLanguage: { ".lua": "lua" } } } }));
+    await fs.writeFile(path.join(pluginRoot, ".claude-plugin", "plugin.json"), JSON.stringify({ name: "manifest-plugin", lspServers: "./servers.json" }));
+    await fs.writeFile(path.join(pluginRoot, "servers.json"), JSON.stringify({ lsp: { command: "manifest-lsp", extensionToLanguage: { ".lsp": "lsp" } } }));
 
     const result = await safeDiscoverLocalLanguageServers(workspace);
     assert.strictEqual(result.error, undefined);
     const ids = new Set(result.servers.map((entry) => entry.id));
-    for (const id of [LSP_DISCOVERY_FORMATS.QWEN, "copilot", "copilotRoot", "copilotUser", "rust", "markdown", "ccls", "custom", "go", "lua"]) assert.ok(ids.has(id), `expected ${id}`);
+    for (const id of [LSP_DISCOVERY_FORMATS.QWEN, "copilot", "copilotRoot", "copilotUser", "rust", "markdown", "ccls", "custom", "go", "lua", "lsp"]) assert.ok(ids.has(id), `expected ${id}`);
     const py = result.servers.find((entry) => entry.id === LSP_DISCOVERY_FORMATS.QWEN)!;
     assert.deepStrictEqual(py.definition.command, ["qwen-lsp", "--stdio"]);
     assert.deepStrictEqual(py.definition.extensions, ["py"]);
     assert.deepStrictEqual(py.definition.languages, ["python"]);
     assert.ok(result.servers.some((entry) => entry.id === "go" && entry.path === path.join(pluginDir, ".lsp.json")));
+  });
+
+  test("resolves a relative cclsp override under the workspace root", async () => {
+    const relativePath = path.join(workspace, "config", "cclsp.json");
+    await fs.mkdir(path.dirname(relativePath), { recursive: true });
+    await fs.writeFile(relativePath, JSON.stringify({ servers: [{ name: "relative", command: ["relative-lsp"], extensions: ["rel"] }] }));
+    process.env.CCLSP_CONFIG_PATH = path.join("config", "cclsp.json");
+    const result = await safeDiscoverLocalLanguageServers(workspace);
+    assert.ok(result.servers.some((entry) => entry.id === "relative" && entry.path === relativePath));
   });
 });

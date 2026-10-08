@@ -2090,6 +2090,9 @@ export function createMessageHandlers(
         message.complete
       );
   };
+  handlers[MESSAGE_TYPES.LSP_EXPORT_RESULT] = (message) => {
+    useLanguageServerStore.getState().setExportResult(message);
+  };
 
   // --------------------------------------------------------------------------
   // MCP_REGISTRY_SEARCH_RESULT - Registry search results for the manager UI

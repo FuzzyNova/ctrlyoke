@@ -716,6 +716,7 @@ export const MESSAGE_TYPES = {
   REQUEST_LSP_APPROVAL: "requestLspApproval",
   STOP_LSP_SERVER: "stopLspServer",
   EXPORT_LSP_DEFINITION: "exportLspDefinition",
+  LSP_EXPORT_RESULT: "lspExportResult",
 
   // Harness File Manager — Webview ↔ Extension
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }

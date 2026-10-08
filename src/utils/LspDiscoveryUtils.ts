@@ -15,7 +15,7 @@ import {
 import { Log } from "./Log";
 
 type JsonRecord = Record<string, unknown>;
-interface Descriptor { path: string; source: string; format: (typeof LSP_DISCOVERY_FORMATS)[keyof typeof LSP_DISCOVERY_FORMATS]; }
+interface Descriptor { path: string; source: string; format: (typeof LSP_DISCOVERY_FORMATS)[keyof typeof LSP_DISCOVERY_FORMATS]; pluginRoot?: string; }
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -83,9 +83,9 @@ async function getClaudePluginDescriptors(): Promise<Descriptor[]> {
   visit(manifest);
   const descriptors: Descriptor[] = [];
   for (const directory of directories) {
-    for (const name of [".lsp.json", "plugin.json"]) {
+    for (const name of [".lsp.json", "plugin.json", path.join(".claude-plugin", "plugin.json")]) {
       const filePath = path.join(directory, name);
-      try { await fs.access(filePath); descriptors.push({ path: filePath, source: LSP_DISCOVERY_SOURCES.CLAUDE_CODE_PLUGIN, format: LSP_DISCOVERY_FORMATS.CLAUDE_PLUGIN }); } catch { /* absent optional plugin metadata */ }
+      try { await fs.access(filePath); descriptors.push({ path: filePath, source: LSP_DISCOVERY_SOURCES.CLAUDE_CODE_PLUGIN, format: LSP_DISCOVERY_FORMATS.CLAUDE_PLUGIN, pluginRoot: directory }); } catch { /* absent optional plugin metadata */ }
     }
   }
   return descriptors;
@@ -121,7 +121,10 @@ function parseEntries(data: JsonRecord, descriptor: Descriptor): LocalLanguageSe
     const servers = Array.isArray(data.servers) ? data.servers : [];
     for (const [index, config] of servers.entries()) add(isRecord(config) && typeof config.name === "string" ? config.name : `cclsp-${index + 1}`, config);
   } else {
-    const servers = descriptor.format === LSP_DISCOVERY_FORMATS.CLAUDE_PLUGIN && isRecord(data.lspServers) ? data.lspServers : data;
+    const isPluginManifest = descriptor.format === LSP_DISCOVERY_FORMATS.CLAUDE_PLUGIN && path.basename(descriptor.path) === "plugin.json";
+    const servers = isPluginManifest
+      ? (isRecord(data.lspServers) ? data.lspServers : {})
+      : data;
     for (const [id, config] of Object.entries(servers)) if (id !== "name") add(id, config);
   }
   return results;
@@ -133,7 +136,12 @@ export async function safeDiscoverLocalLanguageServers(workspaceRoot: string): P
     const results: LocalLanguageServerEntry[] = [];
     for (const descriptor of found) {
       const parsed = await readJson(descriptor.path);
-      if (parsed) results.push(...parseEntries(parsed, descriptor));
+      if (!parsed) continue;
+      if (descriptor.format === LSP_DISCOVERY_FORMATS.CLAUDE_PLUGIN && typeof parsed.lspServers === "string" && descriptor.pluginRoot) {
+        const referencedPath = path.resolve(descriptor.pluginRoot, parsed.lspServers);
+        const referenced = await readJson(referencedPath);
+        if (referenced) results.push(...parseEntries(referenced, { ...descriptor, path: referencedPath, format: LSP_DISCOVERY_FORMATS.QWEN }));
+      } else results.push(...parseEntries(parsed, descriptor));
     }
     return { servers: results };
   } catch (error) {

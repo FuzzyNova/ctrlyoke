@@ -2748,9 +2748,17 @@ export interface SaveLspDefinitionMessage {
 export interface ExportLspDefinitionMessage {
   type: typeof MESSAGE_TYPES.EXPORT_LSP_DEFINITION;
   id: string;
-  definition: LanguageServerDefinition;
   targetId: LspExportTargetId;
   scope: SettingWriteScope;
+}
+
+export interface LspExportResultMessage {
+  type: typeof MESSAGE_TYPES.LSP_EXPORT_RESULT;
+  id: string;
+  targetId: LspExportTargetId;
+  scope: SettingWriteScope;
+  success: boolean;
+  error?: string;
 }
 
 export interface DeleteLspDefinitionMessage {
@@ -3159,6 +3167,10 @@ export type IncomingMessage =
   | McpRegistryServersUpdateMessage
   | McpLocalScanResultMessage
   | McpRegistrySearchResultMessage
+  | LspServersUpdateMessage
+  | LspLocalScanResultMessage
+  | LspInstallProgressMessage
+  | LspExportResultMessage
   | GlobalSettingsLoadedMessage
   | WorktreeManagementStateMessage
   | WorktreeManagementActionResultMessage

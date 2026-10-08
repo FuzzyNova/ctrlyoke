@@ -515,8 +515,9 @@ union.
 - **npm-distributed entries:** an **Install** button.
   - It runs `npm install --prefix <ctrlyokeStateHome>/lsp <packages>` on the
     host and streams progress into the row.
-  - Before it runs, a built-in confirmation modal names the packages and
-    the directory.
+  - The host's `requestChoice` confirmation names the packages and directory
+    before spawning. The browser sends the request directly; the host check is
+    authoritative for both panel and hosted clients.
   - The workspace can never trigger it.
   - If `npm` isn't on `PATH`, the button turns into the copyable command.
 - **Everything else:** **Copy install command** for the host's OS (for
@@ -574,6 +575,12 @@ Verified 2026-10-07. Each format maps onto our definition shape:
 | cclsp | `cclsp.json` or `CCLSP_CONFIG_PATH` | `{ servers: [ { extensions: ["py"], command: [exe, ...args], rootDir, initializationOptions } ] }` |
 
 Re-checked 2026-10-07 against Anthropic's [code intelligence plugin guide](https://code.claude.com/docs/en/plugins/code-intelligence) and [LSP plugin component reference](https://code.claude.com/docs/en/plugins/components#lsp-servers): standalone `.lsp.json` is described at the plugin root, and `plugin.json`'s `lspServers` accepts inline configs or a plugin-relative JSON path. The docs do not describe a project-root `.lsp.json` loader. Keep Claude's export routed through the Qwen-compatible project `.lsp.json`; direct Claude support would require generating/installing a plugin.
+
+When exporting to opencode, a boolean `lsp` setting is converted to the
+object form required for a named server. Opencode enables built-ins for an
+object-valued `lsp`, so converting `true` preserves its built-in behavior
+without a synthetic wildcard entry. Converting `false` to add a named server
+also opts into opencode's object behavior, which enables built-ins.
 
 - Our `command` is one array, matching opencode and cclsp.
 - `extensionToLanguage` / `fileExtensions` maps convert to `extensions` plus

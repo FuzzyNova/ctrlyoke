@@ -6,6 +6,7 @@ import * as path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import { setup, suite, teardown, test } from "mocha";
 import { configService, type ConfigBackend } from "../../config/CtrlYokeConfigService";
+import { escapeCmdArgument } from "../../core/harness/shared/WindowsCmdEscaping";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { LANGUAGE_SERVER_CATALOG } from "../../server/lsp/LanguageServerCatalog";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "../../types/DashboardConstants";
@@ -22,6 +23,8 @@ suite("LanguageServerManagerService", () => {
   let workspaceSettings: PartialCtrlYokeSettings;
   let tempRoot: string;
   let originalPath: string | undefined;
+  let originalStateHome: string | undefined;
+  let binDirectory: string;
   const messages: unknown[] = [];
   const context = (clientId = "browser:1"): WebviewClientContext => ({
     clientId,
@@ -35,14 +38,19 @@ suite("LanguageServerManagerService", () => {
     workspaceSettings = {};
     configService.setUserBackend(backend(userSettings));
     configService.setWorkspaceBackend(backend(workspaceSettings));
-    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-lsp-manager-"));
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy lsp manager-"));
     originalPath = process.env.PATH;
-    process.env.PATH = tempRoot;
+    originalStateHome = process.env.CTRLYOKE_HOME;
+    binDirectory = path.join(tempRoot, "program files");
+    process.env.PATH = `${binDirectory}${path.delimiter}${originalPath ?? ""}`;
+    process.env.CTRLYOKE_HOME = path.join(tempRoot, "state home");
+    await fs.mkdir(binDirectory, { recursive: true });
     messages.length = 0;
   });
 
   teardown(async () => {
     if (originalPath === undefined) delete process.env.PATH; else process.env.PATH = originalPath;
+    if (originalStateHome === undefined) delete process.env.CTRLYOKE_HOME; else process.env.CTRLYOKE_HOME = originalStateHome;
     configService.setUserBackend(backend({}));
     configService.setWorkspaceBackend(backend({}));
     await fs.rm(tempRoot, { recursive: true, force: true });
@@ -79,23 +87,30 @@ suite("LanguageServerManagerService", () => {
   });
 
   test("constructs the approved npm install command and streams progress", async () => {
-    const npmPath = path.join(tempRoot, process.platform === "win32" ? "npm.cmd" : "npm");
+    const npmPath = path.join(binDirectory, process.platform === "win32" ? "npm.cmd" : "npm");
     await fs.writeFile(npmPath, "");
     let spawnedCommand = "";
     let spawnedArgs: readonly string[] = [];
+    let spawnedOptions: Record<string, unknown> = {};
     const child = new EventEmitter() as ChildProcess;
     Object.assign(child, { stdout: new EventEmitter(), stderr: new EventEmitter() });
-    const fakeSpawn = ((file: string, args: readonly string[]) => {
-      spawnedCommand = file; spawnedArgs = args;
+    const fakeSpawn = ((file: string, args: readonly string[], options: Record<string, unknown>) => {
+      spawnedCommand = file; spawnedArgs = args; spawnedOptions = options;
       queueMicrotask(() => { (child.stdout as EventEmitter).emit("data", "install output"); child.emit("close", 0); });
       return child;
     }) as typeof spawn;
     const service = new LanguageServerManagerService(() => tempRoot, fakeSpawn);
     await service.handleInstall(context(), { type: MESSAGE_TYPES.INSTALL_LSP_SERVER, id: "pyright" });
-    assert.ok(spawnedCommand.toLowerCase().endsWith(process.platform === "win32" ? "npm.cmd" : "npm"));
-    assert.strictEqual(spawnedArgs[0], "install");
-    assert.strictEqual(spawnedArgs[1], "--prefix");
-    assert.ok(spawnedArgs.includes("pyright"));
+    const installDirectory = path.join(process.env.CTRLYOKE_HOME!, "lsp");
+    assert.ok(process.platform !== "win32" || !spawnedCommand.toLowerCase().endsWith("npm.cmd"), "Windows batch launchers go through the shared resolver");
+    const expectedInstallDirectory = process.platform === "win32"
+      ? escapeCmdArgument(installDirectory, false)
+      : installDirectory;
+    assert.ok(spawnedArgs.join(" ").includes(expectedInstallDirectory), "the path with spaces stays one safely quoted argument");
+    assert.ok(!("shell" in spawnedOptions));
+    if (process.platform === "win32") assert.strictEqual(spawnedOptions.windowsVerbatimArguments, true);
+    else assert.ok(spawnedArgs.includes("install"));
+    assert.ok(spawnedArgs.some((arg) => arg.includes("pyright")));
     assert.ok(messages.some((message) => (message as { output?: string }).output === "install output"));
     service.dispose();
   });

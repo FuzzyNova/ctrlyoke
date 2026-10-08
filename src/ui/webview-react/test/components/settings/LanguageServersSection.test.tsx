@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 const { sendMessageMock } = vi.hoisted(() => ({ sendMessageMock: vi.fn() }));
 vi.mock("@hooks/useMessageHandler", () => ({ sendMessage: sendMessageMock }));
@@ -80,6 +80,8 @@ function seed(
     query: "",
     tab: LANGUAGE_SERVER_TABS.CATALOG,
     installing: {},
+    exportedTargets: {},
+    exportResult: undefined,
   });
 }
 
@@ -137,31 +139,28 @@ describe("LanguageServersSection", () => {
         id: "pyright",
         targetId: "copilot-user-lsp",
         scope: SETTING_SCOPES.USER,
-        definition: expect.objectContaining({
-          command: ["pyright-langserver", "--stdio"],
-        }),
       })
     );
   });
 
-  it("confirms before installing an npm catalog entry", () => {
+  it("marks a successfully exported target as Already exported", () => {
+    seed(LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL);
+    useLanguageServerStore.getState().setExportResult({
+      id: "pyright",
+      targetId: "copilot-user-lsp",
+      scope: SETTING_SCOPES.USER,
+      success: true,
+    });
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "User" }));
+    expect(screen.getByTitle(/Already exported/)).toBeTruthy();
+  });
+
+  it("sends npm installs to the host for authoritative confirmation", () => {
     seed(LANGUAGE_SERVER_STATUSES.NOT_INSTALLED);
     render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
     fireEvent.click(screen.getByRole("button", { name: "Install" }));
-    expect(
-      screen.getByRole("dialog", { name: "Install language server packages?" })
-    ).toBeTruthy();
-    expect(sendMessageMock).not.toHaveBeenCalledWith(
-      MESSAGE_TYPES.INSTALL_LSP_SERVER,
-      expect.anything()
-    );
-    fireEvent.click(
-      within(
-        screen.getByRole("dialog", {
-          name: "Install language server packages?",
-        })
-      ).getByRole("button", { name: "Install" })
-    );
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.INSTALL_LSP_SERVER,
       { id: "pyright" }

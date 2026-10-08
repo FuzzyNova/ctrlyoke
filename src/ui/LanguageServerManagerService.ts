@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
+import { resolveCliCommand } from "../core/harness/shared/CliLauncherResolver";
 import { LANGUAGE_SERVER_INSTALL_KINDS, MESSAGE_TYPES, SETTING_SCOPES, type SettingWriteScope } from "../types/DashboardConstants";
 import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
 import type { DeleteLspDefinitionMessage, ExportLspDefinitionMessage, InstallLspServerMessage, LanguageServerProbeResult, RequestLspLocalScanMessage, SaveLspDefinitionMessage } from "../types/WebviewMessageTypes";
@@ -74,9 +75,12 @@ export class LanguageServerManagerService {
 
   async handleExport(ctx: WebviewClientContext, message: ExportLspDefinitionMessage): Promise<void> {
     try {
-      await new HarnessLspExporter(this.getWorkspaceRoot() || undefined).export(message.id, message.definition, message.targetId, message.scope);
+      const definition = this.getScopedLanguageServers(message.scope).definitions[message.id];
+      if (!definition) throw new Error(`Language server definition "${message.id}" was not found in ${message.scope} settings.`);
+      await new HarnessLspExporter(this.getWorkspaceRoot() || undefined).export(message.id, definition, message.targetId, message.scope);
+      ctx.emit({ type: MESSAGE_TYPES.LSP_EXPORT_RESULT, id: message.id, targetId: message.targetId, scope: message.scope, success: true });
     } catch (error) {
-      ctx.emit({ type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED, action: "export language server", error: error instanceof Error ? error.message : String(error) });
+      ctx.emit({ type: MESSAGE_TYPES.LSP_EXPORT_RESULT, id: message.id, targetId: message.targetId, scope: message.scope, success: false, error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -114,9 +118,10 @@ export class LanguageServerManagerService {
     if (accepted !== "install") return;
     ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, output: `Installing ${packageNames.join(", ")} in ${installDirectory}` });
     await fs.promises.mkdir(installDirectory, { recursive: true });
+    const resolved = await resolveCliCommand(path.basename(npm, path.extname(npm)), args);
     await new Promise<void>((resolve) => {
       let child: ChildProcess;
-      try { child = this.spawnProcess(npm, args, { cwd: this.getWorkspaceRoot(), stdio: ["ignore", "pipe", "pipe"], ...(process.platform === "win32" ? { shell: true } : {}) }); }
+      try { child = this.spawnProcess(resolved.command, resolved.args, { cwd: this.getWorkspaceRoot(), stdio: ["ignore", "pipe", "pipe"], ...(resolved.requiresShellVerbatimArgs ? { windowsVerbatimArguments: true } : {}) }); }
       catch (error) { ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, error: String(error), complete: true }); resolve(); return; }
       const send = (chunk: Buffer | string): void => ctx.emit({ type: MESSAGE_TYPES.LSP_INSTALL_PROGRESS, id: message.id, output: chunk.toString() });
       child.stdout?.on("data", send); child.stderr?.on("data", send);

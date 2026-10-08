@@ -30,7 +30,7 @@ export function getCclspConfigPaths(root: string): string[] {
   const configured = process.env.CCLSP_CONFIG_PATH?.trim();
   return [
     path.join(root, "cclsp.json"),
-    ...(configured ? [path.resolve(configured)] : []),
+    ...(configured ? [path.isAbsolute(configured) ? configured : path.resolve(root, configured)] : []),
   ];
 }
 

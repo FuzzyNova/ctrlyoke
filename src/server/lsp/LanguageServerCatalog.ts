@@ -29,6 +29,8 @@ export interface LanguageServerCatalogEntry {
   command: string[];
   languages: string[];
   extensions: string[];
+  /** Exact extension-to-LSP-language pairing for native harness exports. */
+  extensionToLanguage?: Record<string, string>;
   rootMarkers: string[];
   /** Opens one project anchor after startup for servers that need a loaded project. */
   warmup?: { anchorExtensions: string[]; configMarkers: string[] };
@@ -73,6 +75,10 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
       "javascriptreact",
     ],
     extensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"],
+    extensionToLanguage: {
+      ts: "typescript", tsx: "typescriptreact", js: "javascript", jsx: "javascriptreact",
+      mts: "typescript", cts: "typescript", mjs: "javascript", cjs: "javascript",
+    },
     rootMarkers: ["tsconfig.json", "jsconfig.json", "package.json"],
     warmup: { anchorExtensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"], configMarkers: ["tsconfig.json", "jsconfig.json"] },
     install: npmInstall(
@@ -95,6 +101,10 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
       "javascriptreact",
     ],
     extensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"],
+    extensionToLanguage: {
+      ts: "typescript", tsx: "typescriptreact", js: "javascript", jsx: "javascriptreact",
+      mts: "typescript", cts: "typescript", mjs: "javascript", cjs: "javascript",
+    },
     rootMarkers: ["tsconfig.json", "jsconfig.json", "package.json"],
     warmup: { anchorExtensions: ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"], configMarkers: ["tsconfig.json", "jsconfig.json"] },
     install: npmInstall(["@vtsls/language-server", "typescript"], "vtsls"),
@@ -123,6 +133,7 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
     command: ["vscode-json-language-server", "--stdio"],
     languages: ["json", "jsonc"],
     extensions: ["json", "jsonc", "json5"],
+    extensionToLanguage: { json: "json", jsonc: "jsonc", json5: "json" },
     rootMarkers: ["package.json", ".git"],
     install: npmInstall(
       ["vscode-langservers-extracted"],
@@ -140,6 +151,7 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
     command: ["vscode-css-language-server", "--stdio"],
     languages: ["css", "scss", "less"],
     extensions: ["css", "scss", "less"],
+    extensionToLanguage: { css: "css", scss: "scss", less: "less" },
     rootMarkers: ["package.json", ".git"],
     install: npmInstall(
       ["vscode-langservers-extracted"],
@@ -186,6 +198,9 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
     command: ["bash-language-server", "start"],
     languages: ["bash", "shellscript"],
     extensions: ["sh", "bash", "zsh", "ksh"],
+    extensionToLanguage: {
+      sh: "shellscript", bash: "bash", zsh: "shellscript", ksh: "shellscript",
+    },
     rootMarkers: [".bashrc", ".git"],
     install: npmInstall(["bash-language-server"], "bash-language-server"),
   },
@@ -250,6 +265,9 @@ export const LANGUAGE_SERVER_CATALOG: readonly LanguageServerCatalogEntry[] = [
     command: ["clangd"],
     languages: ["c", "cpp", "objective-c", "objective-cpp"],
     extensions: ["c", "h", "cc", "cpp", "cxx", "hh", "hpp", "hxx"],
+    extensionToLanguage: {
+      c: "c", h: "c", cc: "cpp", cpp: "cpp", cxx: "cpp", hh: "cpp", hpp: "cpp", hxx: "cpp",
+    },
     rootMarkers: ["compile_commands.json", "compile_flags.txt", ".git"],
     install: commandInstall({
       win32: "winget install LLVM.LLVM",

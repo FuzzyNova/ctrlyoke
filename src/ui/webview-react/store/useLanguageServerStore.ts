@@ -6,6 +6,7 @@ import {
   type SettingWriteScope,
 } from "@/types/messages";
 import type { LanguageServerDefinition } from "@root/types/CtrlYokeSettings";
+import type { LspExportTargetId } from "@root/types/DashboardConstants";
 import type {
   LanguageServerProbeResult,
   LocalLanguageServerEntry,
@@ -42,6 +43,8 @@ interface State {
   query: string;
   tab: LanguageServerTab;
   installing: Record<string, string | undefined>;
+  exportedTargets: Record<string, string[]>;
+  exportResult?: { id: string; targetId: LspExportTargetId; scope: SettingWriteScope; success: boolean; error?: string };
   setServers: (
     payload: Pick<
       State,
@@ -55,6 +58,7 @@ interface State {
     error?: string,
     complete?: boolean
   ) => void;
+  setExportResult: (result: NonNullable<State["exportResult"]>) => void;
   setQuery: (query: string) => void;
   setTab: (tab: LanguageServerTab) => void;
   requestServers: () => void;
@@ -83,6 +87,13 @@ export const useLanguageServerStore = create<State>((set) => ({
   query: "",
   tab: LANGUAGE_SERVER_TABS.CATALOG,
   installing: {},
+  exportedTargets: {},
+  setExportResult: (result) => set((state) => ({
+    exportResult: result,
+    exportedTargets: result.success
+      ? { ...state.exportedTargets, [result.id]: [...new Set([...(state.exportedTargets[result.id] ?? []), `${result.targetId}:${result.scope}`])] }
+      : state.exportedTargets,
+  })),
   setServers: (payload) => set({ ...payload, loading: false }),
   setLocalScan: (localServers, localError) =>
     set({ localServers, localError, scanning: false }),

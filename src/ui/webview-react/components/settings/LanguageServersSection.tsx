@@ -18,7 +18,6 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
-  ManagerConfirmModal,
   ScopeBadge,
   encodeManagerTarget,
   decodeManagerTarget,
@@ -80,6 +79,8 @@ export function LanguageServersSection({ activeScope }: Props) {
   const query = useLanguageServerStore((s) => s.query);
   const tab = useLanguageServerStore((s) => s.tab);
   const installing = useLanguageServerStore((s) => s.installing);
+  const exportedTargets = useLanguageServerStore((s) => s.exportedTargets);
+  const exportResult = useLanguageServerStore((s) => s.exportResult);
   const requestServers = useLanguageServerStore((s) => s.requestServers);
   const requestLocalScan = useLanguageServerStore((s) => s.requestLocalScan);
   const setQuery = useLanguageServerStore((s) => s.setQuery);
@@ -103,7 +104,6 @@ export function LanguageServersSection({ activeScope }: Props) {
       )?.languageServers?.use ?? {},
     [currentSettings]
   );
-  const [confirmInstall, setConfirmInstall] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
 
@@ -294,6 +294,7 @@ export function LanguageServersSection({ activeScope }: Props) {
                     [LSP_EXPORT_TARGET_IDS.OPENCODE_USER]: "opencode",
                     [LSP_EXPORT_TARGET_IDS.CCLSP_WORKSPACE]: "cclsp",
                   })[id] ?? id,
+                presentKeys: new Set(exportedTargets[row.id] ?? []),
                 descriptionForTarget: (id) =>
                   ({
                     [LSP_EXPORT_TARGET_IDS.QWEN_WORKSPACE]: ".lsp.json",
@@ -386,7 +387,6 @@ export function LanguageServersSection({ activeScope }: Props) {
                                 decodeManagerTarget(encoded);
                               sendMessage(MESSAGE_TYPES.EXPORT_LSP_DEFINITION, {
                                 id: row.id,
-                                definition: row.managed!.definition,
                                 targetId,
                                 scope,
                               });
@@ -446,7 +446,7 @@ export function LanguageServersSection({ activeScope }: Props) {
                         LANGUAGE_SERVER_INSTALL_KINDS.NPM && (
                         <button
                           type="button"
-                          onClick={() => setConfirmInstall(row.id)}
+                          onClick={() => install(row.id)}
                           className="rounded-sm border border-panel-border px-1.5 py-0.5"
                         >
                           Install
@@ -589,7 +589,7 @@ export function LanguageServersSection({ activeScope }: Props) {
                         detected !== true ? (
                           <button
                             type="button"
-                            onClick={() => setConfirmInstall(entry.id)}
+                            onClick={() => install(entry.id)}
                             disabled={Boolean(installing[entry.id])}
                             className="rounded-sm bg-btn-bg px-2 py-1 text-xxs text-btn-fg"
                           >
@@ -680,31 +680,9 @@ export function LanguageServersSection({ activeScope }: Props) {
           )}
         </section>
       </div>
-      {confirmInstall &&
-        (() => {
-          const entry = catalog.find((item) => item.id === confirmInstall);
-          return entry ? (
-            <ManagerConfirmModal
-              title="Install language server packages?"
-              confirmLabel="Install"
-              onCancel={() => setConfirmInstall(null)}
-              onConfirm={() => {
-                install(entry.id);
-                setConfirmInstall(null);
-              }}
-            >
-              <span>
-                Install{" "}
-                <code>
-                  {entry.install.kind === LANGUAGE_SERVER_INSTALL_KINDS.NPM
-                    ? entry.install.packages.join(", ")
-                    : entry.id}
-                </code>{" "}
-                into the ctrlyoke language server tools directory?
-              </span>
-            </ManagerConfirmModal>
-          ) : null;
-        })()}
+      {exportResult && <p role="status" className={`text-xs ${exportResult.success ? "text-success-fg" : "text-error-fg"}`}>
+        {exportResult.success ? `Exported ${exportResult.id} to ${exportResult.targetId} (${exportResult.scope}).` : `Could not export ${exportResult.id}: ${exportResult.error ?? "Unknown error"}`}
+      </p>}
     </div>
   );
 }
