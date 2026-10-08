@@ -14,7 +14,7 @@ import {
   RangeSetBuilder,
   type Extension,
 } from "@codemirror/state";
-import { keymap, type PluginValue } from "@codemirror/view";
+import { keymap, repositionTooltips, type PluginValue } from "@codemirror/view";
 import {
   indentWithTab,
   undo,
@@ -38,6 +38,19 @@ import {
   workspaceFileUri,
 } from "@utils/languageIntelligenceClient";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
+import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
+import {
+  loadWorkflowFileSupport,
+  type WorkflowFileSupport,
+} from "@utils/workflowFileSupport/loadWorkflowFileSupport";
+import {
+  createWorkflowFileCompletionExtension,
+  getWorkflowInsertEscape,
+} from "@utils/workflowFileSupport/workflowFileCompletionExtension";
+import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/workflowValueDataSource";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 import {
@@ -127,6 +140,22 @@ export const WorkspaceFileEditor = forwardRef<
     const languageIntelligence = useLanguageIntelligence(filePath);
     const languageIntelligenceRef = useRef(languageIntelligence);
     languageIntelligenceRef.current = languageIntelligence;
+    // ctrlyoke completions for workflow files live in their own compartment,
+    // beside the language-intelligence one, so a change never rebuilds the view.
+    const ctrlyokeFileSupportCompartment = useRef(new Compartment());
+    const ctrlyokeFileKind = useMemo(
+      () => getCtrlYokeFileKind(filePath),
+      [filePath]
+    );
+    // Null until the lazily loaded location/completion chunk arrives; the
+    // sources answer nothing meanwhile.
+    const workflowSupportRef = useRef<WorkflowFileSupport | null>(null);
+    const isMultiRootWorkspace = useSettingsStore(
+      (state) => state.globalSettings.isMultiRoot
+    );
+    const isMultiRootWorkspaceRef = useRef(isMultiRootWorkspace);
+    isMultiRootWorkspaceRef.current = isMultiRootWorkspace;
+    const symbolIconCacheRef = useRef(new Map<string, string>());
     const onSaveRef = useRef(onSave);
     const onChangeRef = useRef(onChange);
     const onUndoRedoChangeRef = useRef(onUndoRedoChange);
@@ -299,6 +328,53 @@ export const WorkspaceFileEditor = forwardRef<
       [findAllReferences, formatDocument, goToDefinition, renameSymbol]
     );
 
+    const workflowPromptClient = useMemo(
+      () =>
+        ctrlyokeFileKind
+          ? createPromptCompletionClient({
+              transport: getVsCodeApi(),
+              getView: () => viewRef.current,
+              getSymbolIconCache: () => symbolIconCacheRef.current,
+              getIsMultiRootWorkspace: () => isMultiRootWorkspaceRef.current,
+              escapeInsertText: getWorkflowInsertEscape(ctrlyokeFileKind),
+            })
+          : null,
+      [ctrlyokeFileKind]
+    );
+    useEffect(
+      () => () => workflowPromptClient?.dispose(),
+      [workflowPromptClient]
+    );
+    const ctrlyokeFileSupportExtension = useMemo<Extension>(
+      () =>
+        ctrlyokeFileKind && workflowPromptClient
+          ? createWorkflowFileCompletionExtension({
+              kind: ctrlyokeFileKind,
+              getSupport: () => workflowSupportRef.current,
+              getDataSource: createStoreWorkflowValueDataSource,
+              transport: getVsCodeApi(),
+              promptClient: workflowPromptClient,
+            })
+          : [],
+      [ctrlyokeFileKind, workflowPromptClient]
+    );
+    const ctrlyokeFileSupportExtensionRef = useRef(
+      ctrlyokeFileSupportExtension
+    );
+    ctrlyokeFileSupportExtensionRef.current = ctrlyokeFileSupportExtension;
+
+    useEffect(() => {
+      if (!ctrlyokeFileKind) return;
+      let cancelled = false;
+      void loadWorkflowFileSupport().then((support) => {
+        if (!cancelled) workflowSupportRef.current = support;
+      });
+      return () => {
+        cancelled = true;
+        workflowSupportRef.current = null;
+      };
+    }, [ctrlyokeFileKind]);
+
     const extensions = useMemo<Extension[]>(() => {
       const langExt = getLanguageExtension(filePath);
       return [
@@ -315,6 +391,9 @@ export const WorkspaceFileEditor = forwardRef<
         ...(langExt ? [langExt] : []),
         languageIntelligenceCompartment.current.of(
           languageIntelligenceRef.current.extensions
+        ),
+        ctrlyokeFileSupportCompartment.current.of(
+          ctrlyokeFileSupportExtensionRef.current
         ),
         keymap.of([
           indentWithTab,
@@ -370,6 +449,16 @@ export const WorkspaceFileEditor = forwardRef<
         ),
       });
     }, [languageIntelligence.extensions]);
+
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({
+        effects: ctrlyokeFileSupportCompartment.current.reconfigure(
+          ctrlyokeFileSupportExtension
+        ),
+      });
+    }, [ctrlyokeFileSupportExtension]);
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
@@ -438,13 +527,19 @@ export const WorkspaceFileEditor = forwardRef<
     useEffect(() => {
       const vv = window.visualViewport;
       if (!vv) return;
+      // requestMeasure alone does not re-run an open completion tooltip's own
+      // placement, so reposition it against the keyboard-shrunk viewport.
       const handleScroll = () => {
-        viewRef.current?.requestMeasure();
+        const view = viewRef.current;
+        if (!view) return;
+        view.requestMeasure();
+        repositionTooltips(view);
       };
       const handleResize = () => {
         const view = viewRef.current;
         if (!view) return;
         view.requestMeasure();
+        repositionTooltips(view);
         if (!view.hasFocus) return;
         view.dispatch({
           effects: EditorView.scrollIntoView(view.state.selection.main.head, {

@@ -1,5 +1,7 @@
 import * as assert from "assert";
+import { createScanner } from "jsonc-parser";
 import { suite, test } from "mocha";
+import { JSON_TOKENS } from "../../completions/WorkflowLocationJson";
 import {
   findRangeForPath,
   getWorkflowLocation,
@@ -625,5 +627,33 @@ suite("WORKFLOW_TEXT_FIELDS", () => {
       assert.ok(!seen.has(id), `duplicate ${id}`);
       seen.add(id);
     }
+  });
+});
+
+suite("JSON_TOKENS", () => {
+  test("match jsonc-parser's scanner, which the webview cannot import as an enum", () => {
+    const scanTokens = (text: string, ignoreTrivia: boolean): number[] => {
+      const scanner = createScanner(text, ignoreTrivia);
+      const tokens: number[] = [];
+      for (let t = scanner.scan(); t !== JSON_TOKENS.EOF; t = scanner.scan()) {
+        tokens.push(t);
+      }
+      return tokens;
+    };
+    assert.deepStrictEqual(scanTokens('} ] null true false "a" 1', true), [
+      JSON_TOKENS.CLOSE_BRACE,
+      JSON_TOKENS.CLOSE_BRACKET,
+      JSON_TOKENS.NULL,
+      JSON_TOKENS.TRUE,
+      JSON_TOKENS.FALSE,
+      JSON_TOKENS.STRING,
+      JSON_TOKENS.NUMBER,
+    ]);
+    const lineBreakTrivia = 14;
+    assert.deepStrictEqual(scanTokens("//c\n/*c*/", false), [
+      JSON_TOKENS.LINE_COMMENT,
+      lineBreakTrivia,
+      JSON_TOKENS.BLOCK_COMMENT,
+    ]);
   });
 });

@@ -5,7 +5,6 @@ import {
   getNodePath,
   parse,
   parseTree,
-  SyntaxKind,
   type Node,
   type ParseOptions,
 } from "jsonc-parser";
@@ -167,15 +166,34 @@ function isInsideString(text: string, node: Node, offset: number): boolean {
   return offset >= start && offset <= end;
 }
 
+/**
+ * `jsonc-parser`'s `SyntaxKind` values. The package declares it as an ambient
+ * `const enum`, which the webview build (`isolatedModules`) cannot import, and
+ * the lazily loaded chunk reaches this file, so the numbers are repeated here.
+ * `WorkflowDocumentLocation.test.ts` pins them against a real scan.
+ */
+export const JSON_TOKENS = {
+  CLOSE_BRACE: 2,
+  CLOSE_BRACKET: 4,
+  NULL: 7,
+  TRUE: 8,
+  FALSE: 9,
+  STRING: 10,
+  NUMBER: 11,
+  LINE_COMMENT: 12,
+  BLOCK_COMMENT: 13,
+  EOF: 17,
+} as const;
+
 /** Tokens that end a complete JSON value. */
-const JSON_VALUE_END_TOKENS: ReadonlySet<SyntaxKind> = new Set([
-  SyntaxKind.StringLiteral,
-  SyntaxKind.NumericLiteral,
-  SyntaxKind.TrueKeyword,
-  SyntaxKind.FalseKeyword,
-  SyntaxKind.NullKeyword,
-  SyntaxKind.CloseBraceToken,
-  SyntaxKind.CloseBracketToken,
+const JSON_VALUE_END_TOKENS: ReadonlySet<number> = new Set([
+  JSON_TOKENS.STRING,
+  JSON_TOKENS.NUMBER,
+  JSON_TOKENS.TRUE,
+  JSON_TOKENS.FALSE,
+  JSON_TOKENS.NULL,
+  JSON_TOKENS.CLOSE_BRACE,
+  JSON_TOKENS.CLOSE_BRACKET,
 ]);
 
 /**
@@ -185,15 +203,15 @@ const JSON_VALUE_END_TOKENS: ReadonlySet<SyntaxKind> = new Set([
  */
 export function isAfterJsonValue(text: string, end: number): boolean {
   const scanner = createScanner(text.slice(0, end), true);
-  let last: SyntaxKind | undefined;
+  let last: number | undefined;
   for (
     let token = scanner.scan();
-    token !== SyntaxKind.EOF;
+    token !== JSON_TOKENS.EOF;
     token = scanner.scan()
   ) {
     if (
-      token !== SyntaxKind.LineCommentTrivia &&
-      token !== SyntaxKind.BlockCommentTrivia
+      token !== JSON_TOKENS.LINE_COMMENT &&
+      token !== JSON_TOKENS.BLOCK_COMMENT
     ) {
       last = token;
     }
@@ -206,14 +224,14 @@ function isInComment(text: string, offset: number): boolean {
   const scanner = createScanner(text, false);
   for (
     let token = scanner.scan();
-    token !== SyntaxKind.EOF;
+    token !== JSON_TOKENS.EOF;
     token = scanner.scan()
   ) {
     const start = scanner.getTokenOffset();
     if (start >= offset) return false;
     const end = start + scanner.getTokenLength();
-    if (token === SyntaxKind.LineCommentTrivia && offset <= end) return true;
-    if (token === SyntaxKind.BlockCommentTrivia) {
+    if (token === JSON_TOKENS.LINE_COMMENT && offset <= end) return true;
+    if (token === JSON_TOKENS.BLOCK_COMMENT) {
       const closed = text.startsWith("*/", end - 2) && end - start >= 4;
       if (closed ? offset < end - 1 : offset <= end) return true;
     }

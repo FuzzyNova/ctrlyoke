@@ -3,7 +3,8 @@
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
 **F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
 merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
-review filed. **Wave 3 can start** with no prerequisite fix. This plan only orders the work.
+review filed. **Wave 3 is in progress:** F4 is done (2026-10-08); M2 and F7 are not started.
+This plan only orders the work.
 The design lives in the three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -34,6 +35,7 @@ it.
 | F3              | **Done** (2026-10-08) | `WorkflowFileCompletionCore`: key and value items, `WorkflowValueDataSource`, document-aware step numbers and effective-harness models, per-object snippets, shared JSON escape. Details in plan F's Phase 3 entry.                                                                             |
 | F0              | **Done** (2026-10-08) | Completion client extracted to `utils/promptCompletion/` (`createPromptCompletionClient`, `promptTokenCompletionExtension` in override and language-data forms). Details in plan F's Phase 0 entry.                                                                                             |
 | D2              | **Done** (2026-10-08) | `PromptDiagnosticsProvider` (`ctrlyoke` collection) over `getWorkflowTextSpans`, registered in `extension.ts`. Takes D1's three cleanups. Details in plan D's "Phase 2 as built".                                                                                                               |
+| F4              | **Done** (2026-10-08) | `WorkspaceFileEditor` gets a `ctrlyokeFileSupport` compartment: key/value, script/permission and prompt-token sources as language data, over a lazily loaded location/completion chunk. Details in plan F's Phase 4 entry.                                                                      |
 | Everything else | Not started           |                                                                                                                                                                                                                                                                                                 |
 
 ### Wave 1 review (2026-10-08)
@@ -182,8 +184,8 @@ hosted high-contrast light fix, were then committed on `main` directly.
 
 ### Wave 3: the two editors
 
-**Ready to start.** Every input is on `main`, and no two phases share a hot file. M2 is the
-only Wave 3 phase that touches `CodeMirrorEditor.tsx`.
+**F4 done 2026-10-08; M2 and F7 not started.** Every input is on `main`, and no two phases
+share a hot file. M2 is the only Wave 3 phase that touches `CodeMirrorEditor.tsx`.
 
 | Phase                                 | Hot file                  | Suggested worktree | Notes                                                                                   |
 | ------------------------------------- | ------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
