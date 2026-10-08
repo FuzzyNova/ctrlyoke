@@ -318,6 +318,10 @@ Each item: what to capture, what prep it needs, where it's used.
   trigger has real completions to show, not an empty dropdown.
 - **Use:** landing "Point at the context you mean" feature card (`📎`, currently icon-only); a new
   `docs/workflows/context-files.md` visual walkthrough.
+- **Capture script:** `demo-app/.ctrlyoke/workflows/prompt-editor-demo.ctrlyoke.yaml`. Desktop take:
+  open on a VS Code "Add Selection to ctrlyoke" beat, then zoom in on the prompt editor and type the
+  rest. It covers `#selection`, `#sym`, `@` file and directory, `$previous`, a `~` commit, `!` secret
+  and `/skill:`. The prep and the exact text are in the file's header comment.
 
 ### 10. Built-in code editor (`WorkspaceViewerModal`)
 
@@ -431,6 +435,18 @@ every install, unlike landing/docs assets.
 harness is detected to `verifyHarness`. Also consider `featuredFor: ["**/*.ctrlyoke.{yaml,yml,json}",
 "**/*.prompt.md"]` so the walkthrough is promoted on the Welcome page in workspaces that already use
 ctrlyoke.
+
+### 14. "Build visually or in code" — the same workflow in the dashboard and in VS Code
+
+- **What:** replaces the hand-highlighted YAML block in `landing/src/pages/index.astro` ("Build
+  visually. This is the file underneath."). The pitch is "edit workflows visually or in a text
+  editor", not "here is what's underneath". Two synced captures of
+  `demo-app/.ctrlyoke/workflows/bug-sweep.ctrlyoke.yaml`: the dashboard step list and properties, and
+  the same file being edited in VS Code with ctrlyoke's YAML completions (harness values, `@` paths,
+  `$step:`). It's a parallel group of three bug hunts on three harnesses, then triage, then a fix
+  for each bug.
+- **Use:** that landing section, with the heading reworded to match; `docs/workflows/yaml-format.md`.
+- **Dimensions:** category D if it ships as motion, category G if it ships as a still pair.
 
 ## Slotting summary
 

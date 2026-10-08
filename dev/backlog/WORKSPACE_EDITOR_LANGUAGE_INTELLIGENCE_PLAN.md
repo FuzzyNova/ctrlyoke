@@ -31,6 +31,10 @@ server class. Two pieces run earlier:
 
 **Related plans:**
 
+- [`WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md`](./WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md):
+  ctrlyoke-native completions and diagnostics for workflow files in the same editor, through a
+  sibling `Compartment`. Phase 3 here must skip LSP sessions for files that plan's
+  `getCtrlYokeFileKind` recognizes (see its "Coexistence with the LSP plan").
 - [`VSCODE_LSP_MCP_PLAN.md`](./VSCODE_LSP_MCP_PLAN.md): the diagnostics
   end-condition gate and the harness-facing IDE MCP. This plan narrows its
   harness scope (see "Harness side" below) and gives its diagnostics gate a
