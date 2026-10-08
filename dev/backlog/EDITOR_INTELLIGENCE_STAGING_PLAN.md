@@ -1,8 +1,8 @@
 # Editor Intelligence Staging Plan
 
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
-**F1b**, the follow-up the Wave 1 review added. **Wave 2 has started:** F0 is done; F3, D2
-and B + M4 are still open and nothing in them waits on anything else (D2 follows F0). This plan only orders the work. The design lives in the three plans it
+**F1b**, the follow-up the Wave 1 review added. **Wave 2 has started:** F0 and D2 are done; F3
+and B + M4 are still open and nothing in them waits on anything else. This plan only orders the work. The design lives in the three plans it
 stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -29,6 +29,7 @@ it.
 | M0              | **Done** (2026-10-08) | `.cm-code-range` restyled to the editor font on a preformat background.                                                                                                                                                              |
 | F1b             | **Done** (2026-10-08) | Added by the Wave 1 review: the F1/F2 bug fixes plus `getWorkflowTextSpans` (decoded prompt ranges). Details in plan F's Phase 1b entry.                                                                                             |
 | F0              | **Done** (2026-10-08) | Completion client extracted to `utils/promptCompletion/` (`createPromptCompletionClient`, `promptTokenCompletionExtension` in override and language-data forms). Details in plan F's Phase 0 entry.                                  |
+| D2              | **Done** (2026-10-08) | `PromptDiagnosticsProvider` (`ctrlyoke` collection) over `getWorkflowTextSpans`, registered in `extension.ts`. Takes D1's three cleanups. Details in plan D's "Phase 2 as built".                                                    |
 | Everything else | Not started           |                                                                                                                                                                                                                                      |
 
 ### Wave 1 review (2026-10-08)
@@ -124,7 +125,7 @@ Every input is on `main`. The only ordering left is the worktree split: D2 follo
 | --------------------------------------------------------------- | --------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | **F3:** completion items                                        | —                                       | `big-feature`      | Plan F's Phase 3 lists what the Phase 1/2 API leaves to it (root mode filtering, step-type keys, per-object snippets) |
 | **F0:** completion-client extraction                            | `CodeMirrorEditor.tsx`                  | `small-feature`    | **Done 2026-10-08.**                                                                                                  |
-| **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | After F0 in the same worktree. Uses `getWorkflowTextSpans` for every file kind. Takes plan D's listed cleanups.       |
+| **D2:** VS Code diagnostics provider                            | `extension.ts` registration             | `small-feature`    | **Done 2026-10-08.** Uses `getWorkflowTextSpans` for every file kind; took plan D's listed cleanups.                  |
 | **B + M4:** VS Code literal-reference fix and injection grammar | `package.json` (`contributes.grammars`) | `bug-fix`          | Merge them together. B uses `getWorkflowTextSpans`; M4's generator reads `WORKFLOW_TEXT_FIELDS`                       |
 
 ### Wave 3: the two editors

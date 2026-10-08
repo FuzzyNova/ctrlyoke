@@ -55,6 +55,10 @@ import {
   PromptFileResolver,
 } from "../core/PromptFileResolver";
 import { PromptFileWriter } from "../utils/PromptFileWriter";
+import type {
+  ContextReferenceValidationResult,
+  IdentifiedContextReference,
+} from "../utils/PromptDiagnosticRules";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -198,6 +202,12 @@ function filterHarnessFlagCompletions(
       item.alias?.toLocaleLowerCase().startsWith(normalizedPrefix)
   );
 }
+
+/** What reference validation reads; positions in the text are not needed. */
+type ContextReferenceToValidate = Omit<
+  IdentifiedContextReference,
+  "from" | "to"
+>;
 
 /**
  * Editor-support message handlers for the dashboard's CodeMirror prompt editor:
@@ -905,38 +915,16 @@ export class PromptEditorSupportService {
 
   async handleContextRefsValidation(
     ctx: WebviewClientContext,
-    references: Array<{
-      id: string;
-      type: AtomicReferenceKind;
-      path?: string;
-      gitRef?: string;
-      lineStart?: string;
-      lineEnd?: string;
-      symbolName?: string;
-      secretName?: string;
-    }>,
+    references: ContextReferenceToValidate[],
     seq?: number
   ): Promise<void> {
-    const workspaceRoot = this.getWorkspaceRoot() || null;
-    const namedRoots = [...this.getNamedRoots()];
     const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
       ctx,
-      workspaceRoot ? this.getTrustedWorkspaceRoots() : undefined
+      this.getWorkspaceRoot() ? this.getTrustedWorkspaceRoots() : undefined
     );
-
-    const results = await Promise.all(
-      references.map(async (reference) => {
-        const validation = await this.validateContextReference(
-          reference,
-          workspaceRoot,
-          namedRoots,
-          sourceDefinitionDir
-        );
-        return {
-          id: reference.id,
-          ...validation,
-        };
-      })
+    const results = await this.resolveContextReferences(
+      references,
+      sourceDefinitionDir
     );
 
     ctx.emit({
@@ -944,6 +932,43 @@ export class PromptEditorSupportService {
       results,
       seq,
     });
+  }
+
+  /**
+   * Validate references for a host that has no webview client (the VS Code
+   * diagnostics provider). `sourceDefinitionPath` is the document the text
+   * lives in, so `./` references resolve against it when it is trusted.
+   */
+  validateContextReferences(
+    references: IdentifiedContextReference[],
+    sourceDefinitionPath?: string
+  ): Promise<ContextReferenceValidationResult[]> {
+    return this.resolveContextReferences(
+      references,
+      getTrustedSourceDefinitionDir(
+        sourceDefinitionPath,
+        this.getWorkspaceRoot() ? this.getTrustedWorkspaceRoots() : undefined
+      )
+    );
+  }
+
+  private resolveContextReferences(
+    references: readonly ContextReferenceToValidate[],
+    sourceDefinitionDir: string | undefined
+  ): Promise<ContextReferenceValidationResult[]> {
+    const workspaceRoot = this.getWorkspaceRoot() || null;
+    const namedRoots = [...this.getNamedRoots()];
+    return Promise.all(
+      references.map(async (reference) => ({
+        id: reference.id,
+        ...(await this.validateContextReference(
+          reference,
+          workspaceRoot,
+          namedRoots,
+          sourceDefinitionDir
+        )),
+      }))
+    );
   }
 
   private async validateContextReference(

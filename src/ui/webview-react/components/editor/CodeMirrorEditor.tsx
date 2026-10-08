@@ -23,7 +23,7 @@ import {
   findConditionOutputRefs,
   findContextReferenceMatches,
   findInlinePriorContextRefs,
-  getCodeRanges,
+  findCodeRanges,
   isInCodeRange,
   type AtomicReferenceChip,
   type ContextReferenceMatch,
@@ -1750,7 +1750,7 @@ export function createCodeRangeDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const codeRanges = getCodeRanges(view.state.doc.toString());
+        const codeRanges = findCodeRanges(view.state.doc.toString());
 
         for (const { from, to } of view.visibleRanges) {
           for (const range of codeRanges) {
@@ -1805,7 +1805,7 @@ export function createLinkDecorationExtension(
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const codeRanges = getCodeRanges(view.state.doc.toString());
+        const codeRanges = findCodeRanges(view.state.doc.toString());
 
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
@@ -1888,7 +1888,7 @@ export function createSlashTokenDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const codeRanges = getCodeRanges(view.state.doc.toString());
+        const codeRanges = findCodeRanges(view.state.doc.toString());
 
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
@@ -2013,7 +2013,7 @@ function createPriorContextDecorationExtension(
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const codeRanges = getCodeRanges(view.state.doc.toString());
+        const codeRanges = findCodeRanges(view.state.doc.toString());
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
           const refs = findInlinePriorContextRefs(text, from);
@@ -2061,7 +2061,7 @@ function createConditionOutputDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const codeRanges = getCodeRanges(view.state.doc.toString());
+        const codeRanges = findCodeRanges(view.state.doc.toString());
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
           const refs = findConditionOutputRefs(text, from);

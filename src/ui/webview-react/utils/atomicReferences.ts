@@ -31,7 +31,7 @@ import {
   findConditionOutputRefs,
   findContextReferenceMatches,
   findInlinePriorContextRefs,
-  getCodeRanges,
+  findCodeRanges,
   isInCodeRange,
   type ConditionOutputRef,
   type ContextReferenceMatch,
@@ -45,7 +45,7 @@ export {
   findContextReferenceMatches,
   findInlinePriorContextRefs,
   findUnknownConditionOutputFields,
-  getCodeRanges,
+  findCodeRanges,
   isInCodeRange,
   type ConditionOutputRef,
   type ContextReferenceMatch,
@@ -600,7 +600,7 @@ export function findAtomicReferences(
   getSymbolIcon?: SymbolIconResolver,
   getValidity?: (referenceToken: string) => boolean | undefined
 ): AtomicReferenceChip[] {
-  const codeRanges = getCodeRanges(docText);
+  const codeRanges = findCodeRanges(docText);
   const candidates: Array<{
     from: number;
     to: number;

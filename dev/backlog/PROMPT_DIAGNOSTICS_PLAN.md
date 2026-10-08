@@ -1,6 +1,6 @@
 # Prompt Diagnostics Plan
 
-**Status (2026-10-08):** Phase 1 done (shared rules extracted and pinned with tests). Phases 2 and 3 are proposed.
+**Status (2026-10-08):** Phases 1 and 2 done (shared rules extracted; VS Code provider live for `.prompt.md` and workflow prompt values). Phase 3 is proposed, and its workflow-context half already landed in Phase 2.
 
 **Priority:** P2. The rules already exist and work in the dashboard. This plan makes them
 shareable and brings them to VS Code, where today a broken or literal reference gives no
@@ -176,7 +176,7 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
    - Add pure Mocha tests in `src/test/unit/PromptDiagnosticRules.test.ts`, covering each code
      and context combination.
 
-2. **Phase 2: VS Code provider for `.prompt.md`, then workflow prompt values.**
+2. **Phase 2: VS Code provider for `.prompt.md`, then workflow prompt values. (Done 2026-10-08)**
    - The provider, its triggers and severity mapping, registered in `extension.ts` on the same
      file predicate (`getCtrlYokeFileKind`) as the completion and link providers.
    - `getWorkflowTextSpans` covers `.prompt.md` and workflow files alike, so both can land
@@ -186,8 +186,8 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
      opens a fixture with a missing file, a backticked existing file and `$step:9`, and checks
      the collection's diagnostics.
 
-3. **Phase 3: Workflow-aware context and schema diagnostics in VS Code.**
-   - Exact `stepIndex`, `hasFinalStep` and condition context from `getWorkflowLocation`.
+3. **Phase 3: Schema diagnostics in VS Code.**
+   - ~~Exact `stepIndex`, `hasFinalStep` and condition context~~ Done in Phase 2 (see "Phase 2 as built"); only the `$preCondition:` caveat remains.
    - YAML schema diagnostics gated on Red Hat YAML being absent. This needs the file support
      plan's Phase 5 validate entry point.
    - Tests: `$finalStep` in a workflow with and without `finalStep`, `$endCondition:` in
@@ -228,6 +228,37 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
 - Tests: characterization tests in `CodeMirrorEditor.test.tsx` (verified to pass against the
   pre-extraction code too) and `src/test/unit/PromptDiagnosticRules.test.ts`, which covers
   every code. Not covered: the tooltip's `detail` line and the "Change to" actions.
+
+### Phase 2 as built
+
+- `src/completions/WorkflowPromptDiagnostics.ts` (pure) runs the shared rules on every
+  `getWorkflowTextSpans` span and maps results back with `toSourceOffset`.
+  `src/completions/PromptDiagnosticsProvider.ts` is the VS Code half: one `ctrlyoke`
+  collection, refresh on open, save, create/delete/rename of files, and a 300 ms debounce on
+  change (`PROMPT_DIAGNOSTICS_SOURCE`, `PROMPT_DIAGNOSTIC_DEBOUNCE_MS`). A pass that finishes
+  after the document changed is dropped.
+- Reference resolution reuses `PromptEditorSupportService`: its new public
+  `validateContextReferences` shares one path with the dashboard's `handleContextRefsValidation`
+  (`./` references anchor to the document). It reaches the provider through
+  `WebviewMessageRouter` and `CtrlYokeWebviewProvider.validateContextReferences`.
+- **Workflow context landed here, not in Phase 3.** Running with guessed defaults would flag
+  `$finalStep` or `$step:3` wrongly, so the provider reads the parsed document: `stepCount` is
+  the flat steps before the prompt (a parallel group's members share the group's start; the
+  final step sees all), `hasFinalStep` is `finalStep` being present, and `retryPrompt` and
+  `passRetryPrompt` both map to `RETRY_PROMPT`.
+- **`hasPreCondition` is always true**, so `$preCondition:` is never flagged in VS Code. A step
+  can inherit its pre-condition from the workflow or the global default, and the file can't say
+  which. The dashboard knows; the file doesn't. Fixing it needs the workflow-level and settings
+  defaults threaded in.
+- Quick fixes (`replacements`) are not offered as code actions yet (open question 1).
+- D1's cleanups are done: severities folded into `COMPATIBILITY_DIAGNOSTIC_SEVERITIES`,
+  `PROMPT_DIAGNOSTIC_FIELDS` reuses `PROMPT_PROPERTIES.PROMPT` and
+  `END_CONDITION_PROPERTIES.RETRY_PROMPT` (so it moved below them in `DashboardConstants.ts`),
+  and the `getCodeRanges` pass-through is gone (`findCodeRanges` is re-exported instead).
+- Tests: `src/test/unit/WorkflowPromptDiagnostics.test.ts` (pure, stubbed resolver) and
+  `src/test/unit/PromptDiagnosticsProvider.test.ts` (extension host). No test closes a
+  document: VS Code delays `onDidCloseTextDocument` after an editor closes, so it can't be
+  asserted deterministically.
 
 ## Open questions
 
