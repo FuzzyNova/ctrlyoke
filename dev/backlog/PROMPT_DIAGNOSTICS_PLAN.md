@@ -1,6 +1,6 @@
 # Prompt Diagnostics Plan
 
-**Status (2026-10-08):** Proposed. Nothing is implemented yet.
+**Status (2026-10-08):** Phase 1 done (shared rules extracted and pinned with tests). Phases 2 and 3 are proposed.
 
 **Priority:** P2. The rules already exist and work in the dashboard. This plan makes them
 shareable and brings them to VS Code, where today a broken or literal reference gives no
@@ -155,7 +155,7 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
 
 ## Implementation phases
 
-1. **Phase 1: Extract the rules into the shared module and pin them with tests.**
+1. **Phase 1: Extract the rules into the shared module and pin them with tests. (Done 2026-10-08)**
    - First, add characterization tests in `CodeMirrorEditor.test.tsx` for every rule as it
      behaves today: messages, severities, ranges and code-range suppression. That includes the
      **suppressed-expansion warning**, for an existing file inline and in a fence, and its
@@ -181,6 +181,28 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
      plan's Phase 5 validate entry point.
    - Tests: `$finalStep` in a workflow with and without `finalStep`, `$endCondition:` in
      `prompt` vs `retryPrompt`, and Red Hat present vs absent (stubbed).
+
+### Phase 1 as built
+
+- `src/utils/PromptDiagnosticRules.ts` holds the rules. The scanners they need
+  (`findContextReferenceMatches`, `findConditionOutputRefs`,
+  `findUnknownConditionOutputFields`, `findInlinePriorContextRefs`, `getCodeRanges`,
+  `isInCodeRange`) moved out of the webview-only `atomicReferences.ts` into
+  `src/utils/PromptReferenceScanner.ts`; `atomicReferences.ts` re-exports them.
+- `getReferenceDiagnostics(text, resolve)` takes no `context`: the reference rules don't
+  depend on workflow position. The CodeMirror adapter uses the finer-grained
+  `resolvePromptReferences` + `diagnoseResolvedReferences` pair because it also feeds the chip
+  validity and symbol-icon caches from the resolved references, and `checkPriorContextRefs` for
+  per-reference validity.
+- `PromptDiagnostic` also carries `replacements?` (quick-fix text), which the CodeMirror
+  adapter turns into "Change to ..." actions.
+- The new codes joined the existing `PROMPT_DIAGNOSTIC_CODES` in `DashboardConstants.ts` (the
+  runtime context-preparation codes) and use its dotted style, e.g.
+  `prompt.prior-context.step-missing`. The unresolved-reference rule reuses
+  `UNRESOLVED_REFERENCE`. `PROMPT_DIAGNOSTIC_FIELDS` and `PROMPT_DIAGNOSTIC_SEVERITIES` are new.
+- Linting now scans the whole document rather than the visible ranges.
+- Tests: characterization tests in `CodeMirrorEditor.test.tsx` (passed unchanged across the
+  extraction) and `src/test/unit/PromptDiagnosticRules.test.ts`.
 
 ## Open questions
 

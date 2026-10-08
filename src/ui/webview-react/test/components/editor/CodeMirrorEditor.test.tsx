@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
+import type { Extension } from "@codemirror/state";
 import type { Completion } from "@codemirror/autocomplete";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
 import {
@@ -397,6 +398,204 @@ describe("CodeMirrorEditor prior-context re-lint on step context change", () => 
       view.destroy();
       parent.remove();
     }
+  });
+});
+
+interface LintSnapshot {
+  severity: string;
+  message: string;
+  text: string;
+}
+
+async function lintDocument(
+  doc: string,
+  extensions: Extension[]
+): Promise<LintSnapshot[]> {
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  const view = new EditorView({ parent, doc, extensions });
+  try {
+    forceLinting(view);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const found: LintSnapshot[] = [];
+    forEachDiagnostic(view.state, (diagnostic, from, to) => {
+      found.push({
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        text: doc.slice(from, to),
+      });
+    });
+    return found;
+  } finally {
+    view.destroy();
+    parent.remove();
+  }
+}
+
+function lintPriorContext(
+  doc: string,
+  stepCount: number,
+  hasFinalStep: boolean
+): Promise<LintSnapshot[]> {
+  return lintDocument(doc, [
+    createPriorContextLintExtension(
+      { current: stepCount },
+      { current: hasFinalStep }
+    ),
+  ]);
+}
+
+describe("CodeMirrorEditor prior-context lint rules", () => {
+  it.each([
+    [
+      "$previous",
+      0,
+      false,
+      "warning",
+      "Prior context not found — no prior steps are available before this step",
+    ],
+    [
+      "$all",
+      0,
+      false,
+      "warning",
+      "Prior context not found — no prior steps are available before this step",
+    ],
+    [
+      "$finalStep",
+      3,
+      false,
+      "warning",
+      "Prior context not found — no final step is configured",
+    ],
+    [
+      "$allFinalStep",
+      3,
+      false,
+      "warning",
+      "Prior context not found — no final step is configured",
+    ],
+    [
+      "$step:9",
+      3,
+      false,
+      "warning",
+      "Prior context not found — step 9 does not exist",
+    ],
+    [
+      "$previous:4",
+      1,
+      false,
+      "info",
+      "Only 1 prior step is available before this step — $previous:4 will include at most 1",
+    ],
+  ])(
+    "reports %s with %i steps (final step: %s)",
+    async (doc, stepCount, hasFinalStep, severity, message) => {
+      await expect(
+        lintPriorContext(doc, stepCount, hasFinalStep)
+      ).resolves.toEqual([{ severity, message, text: doc }]);
+    }
+  );
+
+  it("reports several missing steps in one range message", async () => {
+    const [diagnostic] = await lintPriorContext("$step:8-9", 3, false);
+    expect(diagnostic.message).toMatch(
+      /^Prior context not found — steps .+ do not exist$/
+    );
+    expect(diagnostic.severity).toBe("warning");
+  });
+
+  it.each([
+    ["$previous", 1, true],
+    ["$all", 2, false],
+    ["$finalStep", 1, true],
+    ["$step:2", 3, false],
+  ])("does not report a resolvable %s", async (doc, stepCount, hasFinal) => {
+    await expect(lintPriorContext(doc, stepCount, hasFinal)).resolves.toEqual(
+      []
+    );
+  });
+
+  it("does not report a prior-context ref inside inline code", async () => {
+    await expect(
+      lintPriorContext("Use `$step:9` here", 3, false)
+    ).resolves.toEqual([]);
+  });
+});
+
+describe("CodeMirrorEditor context-reference lint rules", () => {
+  const resolver =
+    (existing: Set<string>) =>
+    async (references: Array<{ id: string; path?: string }>) =>
+      references.map((reference) =>
+        existing.has(reference.path ?? "")
+          ? { id: reference.id, exists: true }
+          : {
+              id: reference.id,
+              exists: false,
+              message: "File not found",
+            }
+      );
+  const SUPPRESSED =
+    "Context expansion suppressed — this reference won't be expanded inside code";
+
+  it("reports an unresolved reference with the host message", async () => {
+    const found = await lintDocument("See @src/missing.ts please", [
+      createContextReferenceLintExtension(resolver(new Set())),
+    ]);
+    expect(found).toEqual([
+      {
+        severity: "warning",
+        message: "File not found",
+        text: "@src/missing.ts",
+      },
+    ]);
+  });
+
+  it("falls back to a generic message when the host gives none", async () => {
+    const found = await lintDocument("See @src/missing.ts", [
+      createContextReferenceLintExtension(async (references) =>
+        references.map((reference) => ({ id: reference.id, exists: false }))
+      ),
+    ]);
+    expect(found.map((entry) => entry.message)).toEqual(["context not found"]);
+  });
+
+  it("does not report a resolved reference", async () => {
+    await expect(
+      lintDocument("See @src/real.ts", [
+        createContextReferenceLintExtension(resolver(new Set(["src/real.ts"]))),
+      ])
+    ).resolves.toEqual([]);
+  });
+
+  it("warns that expansion is suppressed for an existing file in inline code", async () => {
+    await expect(
+      lintDocument("Read `@src/real.ts` now", [
+        createContextReferenceLintExtension(resolver(new Set(["src/real.ts"]))),
+      ])
+    ).resolves.toEqual([
+      { severity: "warning", message: SUPPRESSED, text: "@src/real.ts" },
+    ]);
+  });
+
+  it("warns that expansion is suppressed for an existing file in a fence", async () => {
+    await expect(
+      lintDocument("```\n@src/real.ts\n```", [
+        createContextReferenceLintExtension(resolver(new Set(["src/real.ts"]))),
+      ])
+    ).resolves.toEqual([
+      { severity: "warning", message: SUPPRESSED, text: "@src/real.ts" },
+    ]);
+  });
+
+  it("stays silent for a missing file inside code", async () => {
+    await expect(
+      lintDocument("Read `@src/missing.ts` now\n```\n@src/missing.ts\n```", [
+        createContextReferenceLintExtension(resolver(new Set())),
+      ])
+    ).resolves.toEqual([]);
   });
 });
 
