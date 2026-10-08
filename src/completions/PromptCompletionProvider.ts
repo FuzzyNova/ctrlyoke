@@ -10,6 +10,7 @@ import { getCompletionCore } from "./CompletionHelpers";
 import type { SecretRegistryService } from "../ui/SecretRegistryService";
 import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
+import { getPromptCodeRanges, isCursorInPromptCode } from "./PromptCodeRanges";
 
 /**
  * Trigger character types for context-aware completions
@@ -59,6 +60,20 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     // Check if we should provide file/selection completions
     if (!this.shouldProvideCompletions(document, position)) {
+      return undefined;
+    }
+
+    // References inside code are sent literally, so don't offer to build one.
+    if (
+      isCursorInPromptCode(
+        document.offsetAt(position),
+        getPromptCodeRanges(
+          document.getText(),
+          document.fileName,
+          document.languageId
+        )
+      )
+    ) {
       return undefined;
     }
 

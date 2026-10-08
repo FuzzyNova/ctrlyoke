@@ -6,6 +6,7 @@ import { suite, setup, teardown, test } from "mocha";
 import { PromptLinkProvider } from "../../completions/PromptLinkProvider";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { pathsEqual } from "../../utils/PathCasing";
+import { PromptDocumentStub } from "../helpers/PromptDocumentStub";
 
 suite("PromptLinkProvider slash-token links", () => {
   const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
@@ -130,5 +131,72 @@ suite("PromptLinkProvider slash-token links", () => {
     );
 
     assert.deepStrictEqual(links, []);
+  });
+
+  suite("references inside code", () => {
+    const linkTexts = async (
+      fileName: string,
+      languageId: string,
+      text: string
+    ): Promise<string[]> => {
+      const document = new PromptDocumentStub(
+        path.join(workspaceRoot, fileName),
+        languageId,
+        text
+      );
+      const links =
+        (await new PromptLinkProvider().provideDocumentLinks(
+          document.asDocument(),
+          {} as vscode.CancellationToken
+        )) ?? [];
+      return links.map((link) =>
+        text.slice(
+          document.offsetAt(link.range.start),
+          document.offsetAt(link.range.end)
+        )
+      );
+    };
+
+    test("skips inline code and fenced blocks in a .prompt.md file", async () => {
+      const text = ["Review `@a.ts` and @b.ts", "", "```", "@c.ts", "```"].join(
+        "\n"
+      );
+      assert.deepStrictEqual(await linkTexts("p.prompt.md", "markdown", text), [
+        "@b.ts",
+      ]);
+    });
+
+    test("still links a reference after an escaped backtick", async () => {
+      const text = "Use \\`@a.ts here";
+      assert.deepStrictEqual(await linkTexts("p.prompt.md", "markdown", text), [
+        "@a.ts",
+      ]);
+    });
+
+    test("skips an indented fence inside a YAML block scalar", async () => {
+      const text = [
+        "steps:",
+        "  - prompt: |",
+        "      Read @a.ts",
+        "      ```",
+        "      @b.ts",
+        "      ```",
+        "      and `@c.ts`",
+      ].join("\n");
+      assert.deepStrictEqual(await linkTexts("w.ctrlyoke.yaml", "yaml", text), [
+        "@a.ts",
+      ]);
+    });
+
+    test("skips inline code in a JSON prompt string", async () => {
+      const text = JSON.stringify(
+        { prompt: "Read @a.ts and `@b.ts`" },
+        null,
+        2
+      );
+      assert.deepStrictEqual(await linkTexts("w.ctrlyoke.json", "json", text), [
+        "@a.ts",
+      ]);
+    });
   });
 });
