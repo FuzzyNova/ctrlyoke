@@ -1,8 +1,8 @@
 # Prompt Editor Markdown Highlighting Plan
 
-**Status (2026-10-08):** Phases 0 (readable code ranges), 1 (single-source palette) and 4
-(VS Code injection grammar, with the literal-reference bug fix) are done. Phases 2 and 3 are
-not started.
+**Status (2026-10-08):** Phases 0 (readable code ranges), 1 (single-source palette), 2
+(markdown in the prompt editor) and 4 (VS Code injection grammar, with the literal-reference
+bug fix) are done. Phase 3 is not started.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -328,7 +328,38 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
        snapshot, untokenised text in output code blocks falls back to the dark-theme
        `#d4d4d4` (`buildSyntaxTokenStyles()`'s `.cy-syntax` base colour).
 
-3. **Phase 2: Markdown in the prompt editor.**
+3. **Phase 2: Markdown in the prompt editor.** **Done 2026-10-08.**
+   - **As built:**
+     - `createPromptMarkdownLanguage()` in `codemirrorLanguage.ts` is `markdown({ base:
+markdownLanguage (GFM), codeLanguages: resolveFenceLanguage, addKeymap: false,
+completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the new
+       `QUOTE_MARK_TAG`/`LIST_MARK_TAG` (children of `processingInstruction`, defined in
+       `syntaxPalette.ts` and now filling the `quote` and `list-marker` specs).
+       `createPromptMarkdownExtension()` pairs it with the shared highlight style, and
+       `CodeMirrorEditor` adds it in `PROMPT` mode only. It is a static extension, not a
+       `Compartment`: nothing toggles it at runtime.
+     - `resolveFenceLanguage(info)` is the memoised `codeLanguages` wrapper: first word of the
+       info string, one `Language` per normalised name. The language packages are still imported
+       statically, so "lazy" means built on first use, not code-split. `cxx`, `cc` and
+       `webmanifest` were not added.
+     - **Precedence is `Prec.highest`, not the planned `Prec.high`, for ctrlyoke's mark
+       decorations** (links, file refs, prior-context, condition-output, slash tokens, code
+       ranges). `syntaxHighlighting`'s plugin is itself `Prec.high`, and at equal precedence its
+       span nests inside ours, so a reference in `*emphasis*` took the emphasis colour instead of
+       `.cm-link`'s. Chips and the reference, prior-context and condition-output lints are
+       `Prec.high`.
+     - Spellcheck now also skips fence info strings (`CodeInfo`) and link destinations
+       (`URL`) via `getMarkdownNonProseRanges`. **The plan said it already skipped
+       `findCodeRanges` ranges; it does not** (it skips only `@`/`#`/`~` references). That is
+       unchanged here, so words inside backticks and fences are still spellchecked.
+     - Tests are in `test/components/editor/CodeMirrorEditorMarkdown.test.tsx`: the parity
+       corpus (all seven cases agree with `findCodeRanges`, so there is no documented gap yet),
+       fenced JSON highlighting, quote/list tags, `#selection:` not a heading, Enter unchanged,
+       links and chips inside emphasis and link syntax, the suppressed-expansion warning with
+       markdown on, and a ~100KB parse and edit budget. Completions inside a fence are
+       untouched: the prompt editor passes its own completion sources (`override`), so the
+       markdown language's `autocomplete` data is never consulted.
+   - Original scope, kept for reference:
    - Add the `markdown()` compartment with GFM and lazy nested languages.
    - **The markdown roles mostly exist already** (Phase 1 maps heading, strong, emphasis,
      strikethrough, monospace, link and url). What's left: give `QuoteMark`, `ListMark` and

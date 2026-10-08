@@ -3,8 +3,8 @@
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
 **F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
 merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
-review filed. **Wave 3 is in progress:** F7 and F4 are done (2026-10-08); M2 remains.
-This plan only orders the work.
+review filed. **Wave 3 is done** (M2, F4 and F7), merged to `main`. This plan only orders the
+work.
 The design lives in the three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -37,6 +37,7 @@ it.
 | D2              | **Done** (2026-10-08) | `PromptDiagnosticsProvider` (`ctrlyoke` collection) over `getWorkflowTextSpans`, registered in `extension.ts`. Takes D1's three cleanups. Details in plan D's "Phase 2 as built".                                                                                                               |
 | F7              | **Done** (2026-10-08) | `WorkflowFileCompletionProvider` replaces `PromptPropertyCompletionProvider` (YAML, JSON, `.prompt.md` frontmatter, values included); `PromptCompletionProvider` gates on `getWorkflowLocation` and gains `/`. Details in plan F's Phase 7 entry.                                               |
 | F4              | **Done** (2026-10-08) | `WorkspaceFileEditor` gets a `ctrlyokeFileSupport` compartment: key/value, script/permission and prompt-token sources as language data, over a lazily loaded location/completion chunk. Details in plan F's Phase 4 entry.                                                                      |
+| M2              | **Done** (2026-10-08) | Markdown in the prompt editor: GFM plus memoised nested fence languages, quote/list mark tags, ctrlyoke mark decorations at `Prec.highest`, spellcheck skips fence info and link URLs. Details in plan M's Phase 2 entry.                                                                       |
 | Everything else | Not started           |                                                                                                                                                                                                                                                                                                 |
 
 ### Wave 1 review (2026-10-08)
@@ -185,14 +186,13 @@ hosted high-contrast light fix, were then committed on `main` directly.
 
 ### Wave 3: the two editors
 
-**In progress.** F7 and F4 are done (2026-10-08). Every input for M2 is on `main`, and no two
-phases share a hot file. M2 is the only Wave 3 phase that touches `CodeMirrorEditor.tsx`.
+**Done 2026-10-08.** All three phases merged to `main`.
 
-| Phase                                 | Hot file                  | Suggested worktree | Notes                                                                                   |
-| ------------------------------------- | ------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
-| **M2:** markdown in the prompt editor | `CodeMirrorEditor.tsx`    | `small-feature`    | Needs the lazy, memoised `resolveCodeMirrorLanguage` wrapper noted in the Wave 1 review |
-| **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` | `big-feature`      | The core's first consumer                                                               |
-| **F7:** VS Code completion parity     | —                         | `bug-fix`          | **Done.** Moved the VS Code providers onto the F3 core                                  |
+| Phase                                 | Hot file                  | Worktree it ran in | Notes                                                                      |
+| ------------------------------------- | ------------------------- | ------------------ | -------------------------------------------------------------------------- |
+| **M2:** markdown in the prompt editor | `CodeMirrorEditor.tsx`    | `small-feature`    | `resolveFenceLanguage` is the memoised wrapper the Wave 1 review asked for |
+| **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` | `big-feature`      | The core's first consumer                                                  |
+| **F7:** VS Code completion parity     | —                         | `bug-fix`          | Moved the VS Code providers onto the F3 core                               |
 
 ### Wave 4: diagnostics everywhere
 

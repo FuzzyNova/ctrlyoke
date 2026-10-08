@@ -17,6 +17,7 @@ import {
   repositionTooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
+import { createPromptMarkdownExtension } from "@utils/codemirrorLanguage";
 import {
   DEFAULT_COMPLETION_ICON,
   findAtomicReferences,
@@ -32,6 +33,7 @@ import {
 import { Compartment, EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import { completionKeymap } from "@codemirror/autocomplete";
+import { syntaxTree } from "@codemirror/language";
 import { history, historyKeymap, insertTab } from "@codemirror/commands";
 import {
   searchKeymap,
@@ -789,12 +791,23 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       doc: value,
       extensions: [
         minimalSetup,
+        // Markdown colours only. Everything ctrlyoke draws below outranks them
+        // so a reference inside emphasis or link syntax still renders as a
+        // reference. Mark decorations need `Prec.highest`, not `Prec.high`:
+        // `syntaxHighlighting`'s own plugin is `Prec.high`, and at equal
+        // precedence its span nests inside ours, where the markdown colour
+        // would override `.cm-link`'s.
+        ...(mode === CODE_MIRROR_EDITOR_MODES.PROMPT
+          ? [createPromptMarkdownExtension()]
+          : []),
         createFindKeyHandlerExtension(),
         ...(atomicContextReferences
           ? [
-              createAtomicReferenceExtension(
-                symbolIconCacheRef.current,
-                referenceValidityRef.current
+              Prec.high(
+                createAtomicReferenceExtension(
+                  symbolIconCacheRef.current,
+                  referenceValidityRef.current
+                )
               ),
             ]
           : []),
@@ -842,10 +855,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createActiveLineHighlightExtension(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
         createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
-        createContextReferenceLintExtension(
-          validateContextReferences,
-          symbolIconCacheRef.current,
-          referenceValidityRef.current
+        Prec.high(
+          createContextReferenceLintExtension(
+            validateContextReferences,
+            symbolIconCacheRef.current,
+            referenceValidityRef.current
+          )
         ),
         promptTokenCompletionExtension({
           sources: [completionClient.customSource, completionClient.pathSource],
@@ -862,7 +877,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               }
             : {}),
         }),
-        createCodeRangeDecorationExtension(),
+        Prec.highest(createCodeRangeDecorationExtension()),
         // In atomic mode, createAtomicReferenceExtension already covers every
         // range these would mark (same findContextReferenceMatches /
         // findInlinePriorContextRefs / scanCtrlYokeSlashTokens tokens) with a
@@ -877,20 +892,24 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         ...(atomicContextReferences
           ? []
           : [
-              createLinkDecorationExtension(referenceValidityRef.current),
-              createPriorContextDecorationExtension(
-                referenceValidityRef.current
-              ),
-              createConditionOutputDecorationExtension(),
-              createSlashTokenDecorationExtension(),
+              Prec.highest([
+                createLinkDecorationExtension(referenceValidityRef.current),
+                createPriorContextDecorationExtension(
+                  referenceValidityRef.current
+                ),
+                createConditionOutputDecorationExtension(),
+                createSlashTokenDecorationExtension(),
+              ]),
             ]),
-        createFileRefDecorationExtension(isMultiRootWorkspace),
-        createPriorContextLintExtension(
-          stepCountRef,
-          hasFinalStepRef,
-          referenceValidityRef.current
-        ),
-        createConditionOutputLintExtension(hasPreConditionRef, modeRef),
+        Prec.highest(createFileRefDecorationExtension(isMultiRootWorkspace)),
+        Prec.high([
+          createPriorContextLintExtension(
+            stepCountRef,
+            hasFinalStepRef,
+            referenceValidityRef.current
+          ),
+          createConditionOutputLintExtension(hasPreConditionRef, modeRef),
+        ]),
         createClickHandlerExtension(vscode, stepCountRef),
         // iOS Safari: enable the word-suggestion bar above the keyboard and
         // autocapitalization. CodeMirror defaults these to "off" which suppresses
@@ -1451,7 +1470,10 @@ function createSpellCheckExtension(
         const text = view.state.doc.sliceString(from, to);
 
         // Get ranges to exclude from spell checking (@ and # references)
-        const excludedRanges = getCompletionRanges(text);
+        const excludedRanges = [
+          ...getCompletionRanges(text),
+          ...getMarkdownNonProseRanges(view.state, from, to),
+        ];
 
         // Match words and contractions. Hyphens and underscores act as
         // separators — the regex stops at them, so "step-by-step" is matched
@@ -1683,6 +1705,29 @@ function getCompletionRanges(
     }
   }
 
+  return ranges;
+}
+
+/**
+ * Fence info strings (`typescript`, `ts title=a.ts`) and link/image
+ * destinations are not prose, so spellcheck skips them. Offsets are relative to
+ * `from`, matching the text slice the caller checks.
+ */
+function getMarkdownNonProseRanges(
+  state: EditorState,
+  from: number,
+  to: number
+): Array<{ from: number; to: number }> {
+  const ranges: Array<{ from: number; to: number }> = [];
+  syntaxTree(state).iterate({
+    from,
+    to,
+    enter: (node) => {
+      if (node.name === "CodeInfo" || node.name === "URL") {
+        ranges.push({ from: node.from - from, to: node.to - from });
+      }
+    },
+  });
   return ranges;
 }
 
