@@ -369,6 +369,8 @@ suite("PromptCompletionProvider", () => {
       const item = list.items.find((entry) => entry.label === "ctrlyoke");
       assert.ok(item, "built-in ctrlyoke MCP server");
       assert.strictEqual(item.insertText, "/mcp:ctrlyoke");
+      // VS Code filters on the range text, which starts on the slash.
+      assert.strictEqual(item.filterText, "/mcp:ctrlyoke");
       assert.deepStrictEqual(
         item.range && "start" in item.range
           ? [item.range.start.character, item.range.end.character]
@@ -378,6 +380,19 @@ suite("PromptCompletionProvider", () => {
       assert.strictEqual(
         await completeAt("p.prompt.md", "markdown", "see ./src/", "./src/"),
         undefined
+      );
+      assert.strictEqual(
+        await completeAt("p.prompt.md", "markdown", "see src/mcp:", "mcp:"),
+        undefined
+      );
+      assert.ok(
+        await completeAt(
+          "w.ctrlyoke.json",
+          "json",
+          '{ "steps": [{ "prompt": "/mcp:ctrl" }] }',
+          "/mcp:ctrl"
+        ),
+        "a token at the start of a quoted string completes"
       );
     });
   });

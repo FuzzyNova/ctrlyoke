@@ -5,10 +5,29 @@ import { useMcpManagerStore } from "@store/useMcpManagerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { isHarnessId } from "@root/types/DashboardConstants";
 
+// Only the MCP manager and secrets panels load these lists, so the first
+// completion that needs one asks for it. The answer lands in the store, and the
+// next keystroke's completion offers it.
+let requestedSecretScopes = false;
+
+function ensureMcpServersRequested(): void {
+  const { managedServers, isLoadingRegistry, requestServers } =
+    useMcpManagerStore.getState();
+  if (managedServers === undefined && !isLoadingRegistry) requestServers();
+}
+
+function ensureSecretsRequested(): void {
+  if (requestedSecretScopes) return;
+  requestedSecretScopes = true;
+  const { requestEntries } = useSecretRegistryStore.getState();
+  requestEntries(SETTING_SCOPES.USER);
+  requestEntries(SETTING_SCOPES.WORKSPACE);
+}
+
 /**
  * The option lists the key/value completions draw on, read from the stores the
- * dashboard already keeps current. Read per request rather than captured, so a
- * list that arrives after the editor mounted is still offered.
+ * dashboard keeps current. Read per request rather than captured, so a list
+ * that arrives after the editor mounted is still offered.
  */
 export function createStoreWorkflowValueDataSource(): WorkflowValueDataSource {
   return {
@@ -23,11 +42,14 @@ export function createStoreWorkflowValueDataSource(): WorkflowValueDataSource {
       useSettingsStore.getState().availableAgents.map((agent) => agent.name),
     getSkills: () =>
       useSettingsStore.getState().availableSkills.map((skill) => skill.name),
-    getMcpServers: () =>
-      (useMcpManagerStore.getState().managedServers ?? [])
+    getMcpServers: () => {
+      ensureMcpServersRequested();
+      return (useMcpManagerStore.getState().managedServers ?? [])
         .map((server) => server.id)
-        .filter((id) => id !== MCP_SERVER_IDS.CTRLYOKE),
+        .filter((id) => id !== MCP_SERVER_IDS.CTRLYOKE);
+    },
     getSecretNames: () => {
+      ensureSecretsRequested();
       const { entriesByScope } = useSecretRegistryStore.getState();
       return [
         ...new Set(

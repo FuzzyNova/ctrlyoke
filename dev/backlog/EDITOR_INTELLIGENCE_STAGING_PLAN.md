@@ -3,9 +3,10 @@
 **Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
 **F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
 merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
-review filed. **Wave 3 is done** (M2, F4 and F7), merged to `main`. This plan only orders the
-work.
-The design lives in the three plans it stages.
+review filed. **Wave 3 is done** (M2, F4 and F7), merged to `main` and reviewed; its review
+fixes are on `main`. **Wave 4 can start**: F5 now, then D3. **Wave 5 waits for F5** because
+both edit `WorkspaceFileEditor.tsx`. This plan only orders the work. The design lives in the
+three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
 
@@ -113,6 +114,49 @@ unrelated, pre-existing flake (filed as
 All four filed bugs (this one, the D2 and decoder bugs above, and the save-test flake) were
 fixed on `main` after the review. F4 and F7 no longer need a fix first.
 
+### Wave 3 review (2026-10-08)
+
+All three phases were merged to `main`. The only conflicts were the shared progress tables in
+this plan and plan F. The full `npm test` passed on the merge. Each phase was then reviewed
+against its plan, and every finding below was reproduced with a probe or a test.
+
+- **F7, fixed:**
+  - **High:** typing `/` showed nothing in VS Code. The range starts on the `/`, and VS Code
+    filters on the range text, but `filterText` was the bare name. Items now filter on the
+    full token.
+  - JSON key items were hidden for the same reason: the range starts on the opening quote.
+  - Multi-line key inserts were indented twice: the core already indents them, and VS Code
+    added the line's indent again. They now set `keepWhitespace`.
+  - Typing a space at a JSON key position opened the full key list, so the next Enter
+    inserted a key. The space trigger now opens values only.
+  - `/` didn't open after `"` or `(`. The trigger now uses the runtime token's own start
+    boundary (`findPartialSlashTokenStart`).
+  - The six per-trigger registrations are now one, so Ctrl+Space no longer lists items
+    repeatedly.
+- **F4, fixed:**
+  - Picking an output-capture item left `[Capturing output…]` in the file for good, because
+    the workspace editor has no capture handler. A client without one no longer offers
+    those items.
+  - `mcpServers` and `secrets` values stayed empty unless another panel had loaded those
+    lists. The first completion that needs one now requests it.
+  - A quoted path inserted into a YAML quoted prompt broke the YAML. The escape now follows
+    the scalar style (`getWorkflowInsertEscape`, shared with VS Code, which had the same bug).
+  - Script completion only worked on a block script's first line. Line breaks now separate
+    commands in the shared parser.
+  - In compact JSON, an `@` in an earlier field could start a prompt-token completion that
+    overwrote the fields between it and the cursor.
+- **M2, fixed:** the code-range mark at `Prec.highest` was drawn inside the lint mark. Its
+  background hid the suppressed-expansion squiggle, which plan M says must survive. It is
+  back at default precedence. The planned code-range restyle was never built; plan M now
+  records it as deferred.
+- **M2, filed:**
+  - [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md),
+    medium. Six fence and inline layouts are coloured as code while their references stay
+    live. The parity corpus skipped the cases plan M asked for; they are now pinned as
+    known gaps.
+  - [`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/backlog/prompt-editor-reference-link-split-by-markdown-emphasis.md),
+    low and cosmetic.
+
 ## Short answer
 
 - **The three plans can run in parallel, with three ordering constraints:**
@@ -196,12 +240,22 @@ hosted high-contrast light fix, were then committed on `main` directly.
 
 ### Wave 4: diagnostics everywhere
 
+**Ready to start.** F5's inputs (F4, D1) are on `main` and Wave 3's review fixes are in, so
+nothing needs fixing first. D3 starts once F5 lands, since it needs F5's side-effect-free
+`PromptFileParser` validate.
+
 | Phase                                                                 | Hot file                  | Notes                                            |
 | --------------------------------------------------------------------- | ------------------------- | ------------------------------------------------ |
 | **F5:** workspace editor diagnostics and hover                        | `WorkspaceFileEditor.tsx` | Adds the `PromptFileParser` validate entry point |
 | **D3:** workflow-aware context and YAML schema diagnostics in VS Code | —                         | After F5                                         |
 
 ### Wave 5: prompt-text polish in the workspace editor
+
+**Not yet.** Its inputs (F4, M2) are on `main`, but F6 + M3 edit `WorkspaceFileEditor.tsx`,
+which F5 holds, so it starts after F5 merges. It can run alongside D3. M3 brings Lezer's
+code colouring to workspace prompt values, so fix
+[`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md)
+first or as part of it, rather than spreading the mismatch to a second editor.
 
 | Phase                                                                                                       | Hot file                  | Notes                                            |
 | ----------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------ |

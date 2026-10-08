@@ -188,38 +188,95 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
     ).toBe(false);
   });
 
-  it("escapes a quoted path inserted into a JSON prompt string", async () => {
+  it.each([
+    {
+      name: "a JSON prompt string",
+      filePath: "a.ctrlyoke.json",
+      content: '{ "prompt": "read ',
+      inserted: `"docs/it's notes.md"`,
+      expected: `@\\"docs/it's notes.md\\"`,
+    },
+    {
+      name: "a YAML double-quoted prompt",
+      filePath: "a.ctrlyoke.yaml",
+      content: 'steps:\n  - prompt: "read ',
+      inserted: `"docs/it's notes.md"`,
+      expected: `@\\"docs/it's notes.md\\"`,
+    },
+    {
+      name: "a YAML single-quoted prompt",
+      filePath: "a.ctrlyoke.yaml",
+      content: "steps:\n  - prompt: 'read ",
+      inserted: `"docs/it's notes.md"`,
+      expected: `@"docs/it''s notes.md"`,
+    },
+    {
+      name: "a YAML block prompt, unchanged",
+      filePath: "a.ctrlyoke.yaml",
+      content: "steps:\n  - prompt: |\n      read ",
+      inserted: `"docs/it's notes.md"`,
+      expected: `@"docs/it's notes.md"`,
+    },
+  ])(
+    "escapes a quoted path inserted into $name",
+    async ({ filePath, content, inserted, expected }) => {
+      const { view } = await renderEditor(filePath, content);
+
+      typeAtEnd(view, "@my");
+
+      await answerLatestRequestUntil<RequestMessage>({
+        postMessage,
+        isRequest: (message) =>
+          message.type === MESSAGE_TYPES.REQUEST_COMPLETIONS &&
+          message.trigger === "@",
+        respond: (request) => ({
+          type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+          items: [{ label: "my notes.md", insertText: inserted, kind: 16 }],
+          from: view.state.doc.length - 3,
+          seq: request.seq,
+        }),
+        until: () => expect(optionLabels()).toContain("my notes.md"),
+      });
+      // CodeMirror ignores an accept that lands within its interaction delay.
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(acceptCompletion(view)).toBe(true);
+
+      expect(view.state.doc.toString()).toContain(expected);
+    }
+  );
+
+  it("ignores a trigger that sits before the prompt string on the same line", async () => {
     const { view } = await renderEditor(
       "a.ctrlyoke.json",
-      '{ "prompt": "read '
+      '{"name":"@x","prompt":"a'
     );
 
-    typeAtEnd(view, "@my");
+    typeAtEnd(view, "b");
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-    await answerLatestRequestUntil<RequestMessage>({
-      postMessage,
-      isRequest: (message) =>
-        message.type === MESSAGE_TYPES.REQUEST_COMPLETIONS &&
-        message.trigger === "@",
-      respond: (request) => ({
-        type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
-        items: [
-          {
-            label: "my notes.md",
-            insertText: '"docs/my notes.md"',
-            kind: 16,
-          },
-        ],
-        from: view.state.doc.length - 3,
-        seq: request.seq,
-      }),
-      until: () => expect(optionLabels()).toContain("my notes.md"),
-    });
-    // CodeMirror ignores an accept that lands within its interaction delay.
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(acceptCompletion(view)).toBe(true);
+    expect(
+      postMessage.mock.calls.some(
+        ([message]) => message.type === MESSAGE_TYPES.REQUEST_COMPLETIONS
+      )
+    ).toBe(false);
+  });
 
-    expect(view.state.doc.toString()).toContain('@\\"docs/my notes.md\\"');
+  it("asks for the MCP registry when an mcpServers value needs it", async () => {
+    const { view } = await renderEditor(
+      "a.ctrlyoke.yaml",
+      "steps:\n  - prompt: hi\n    mcpServers:\n      - "
+    );
+
+    typeAtEnd(view, "c");
+
+    await waitFor(() =>
+      expect(
+        postMessage.mock.calls.some(
+          ([message]) =>
+            message.type === MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SERVERS
+        )
+      ).toBe(true)
+    );
   });
 
   it("routes script text to the script completion request", async () => {

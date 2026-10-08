@@ -81,7 +81,8 @@ const CURSOR = "§";
 /** Completions at the `§` marker of a ctrlyoke file, or undefined when the provider declines. */
 async function complete(
   fileName: string,
-  marked: string
+  marked: string,
+  triggerCharacter?: string
 ): Promise<vscode.CompletionList | undefined> {
   const text = marked.replace(CURSOR, "");
   const document = new PromptDocumentStub(
@@ -92,7 +93,14 @@ async function complete(
   const position = document.positionAt(marked.indexOf(CURSOR));
   return new WorkflowFileCompletionProvider().provideCompletionItems(
     document.asDocument(),
-    position
+    position,
+    new vscode.CancellationTokenSource().token,
+    {
+      triggerKind: triggerCharacter
+        ? vscode.CompletionTriggerKind.TriggerCharacter
+        : vscode.CompletionTriggerKind.Invoke,
+      triggerCharacter,
+    }
   );
 }
 
@@ -196,6 +204,48 @@ suite("WorkflowFileCompletionProvider", () => {
       )
     );
     assert.ok(values.includes(HARNESS_IDS.CLAUDE_CLI));
+  });
+
+  test("filters JSON keys on the quoted text the replace range covers", async () => {
+    const list = await complete(
+      "w.ctrlyoke.json",
+      '{ "steps": [{ "prompt": "hi", "har§" }] }'
+    );
+    const harness = list?.items.find((entry) => labelOf(entry) === "harness");
+    assert.ok(
+      harness?.filterText?.startsWith('"har'),
+      String(harness?.filterText)
+    );
+  });
+
+  test("inserts multi-line keys as is, already indented to the key", async () => {
+    const list = await complete(
+      "w.ctrlyoke.yaml",
+      "steps:\n  - prompt: hi\n    sk§"
+    );
+    const skills = list?.items.find((entry) => labelOf(entry) === "skills");
+    assert.ok(skills);
+    assert.strictEqual(skills.keepWhitespace, true);
+  });
+
+  test("a typed space opens values but not a key list", async () => {
+    assert.strictEqual(
+      await complete(
+        "w.ctrlyoke.json",
+        '{ "steps": [{ "prompt": "x", § }] }',
+        " "
+      ),
+      undefined
+    );
+    assert.ok(
+      labels(
+        await complete(
+          "w.ctrlyoke.yaml",
+          "steps:\n  - prompt: hi\n    harness: §",
+          " "
+        )
+      ).includes(HARNESS_IDS.CLAUDE_CLI)
+    );
   });
 
   test("completes frontmatter keys in a .prompt.md file", async () => {

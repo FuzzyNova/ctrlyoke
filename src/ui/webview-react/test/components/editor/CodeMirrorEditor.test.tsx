@@ -638,6 +638,24 @@ describe("CodeMirrorEditor external reference completions", () => {
     expect(findSlashCompletionContext("/skill:bad name")).toBeNull();
   });
 
+  it("drops output-capture items when the editor has no capture handler", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [
+        { label: "src/a.ts", insertText: "src/a.ts" },
+        {
+          label: "Tasks (Output)",
+          insertText: CAPTURING_OUTPUT_PLACEHOLDER,
+          captureId: "capture-1",
+        },
+      ],
+      0,
+      { trigger: "@", query: "" }
+    );
+
+    // Nothing would ever replace the placeholder the capture item inserts.
+    expect(result.options.map((option) => option.label)).toEqual(["src/a.ts"]);
+  });
+
   it("maps slash completion items to explicit skill and MCP insertions", () => {
     const result = buildCodeMirrorCompletionResult(
       [

@@ -877,7 +877,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               }
             : {}),
         }),
-        Prec.highest(createCodeRangeDecorationExtension()),
+        // Default precedence on purpose: a higher-precedence mark is drawn
+        // inside a lower one, and this mark's opaque background must stay
+        // outermost or it covers the lint squiggle and selection matches.
+        createCodeRangeDecorationExtension(),
         // In atomic mode, createAtomicReferenceExtension already covers every
         // range these would mark (same findContextReferenceMatches /
         // findInlinePriorContextRefs / scanCtrlYokeSlashTokens tokens) with a

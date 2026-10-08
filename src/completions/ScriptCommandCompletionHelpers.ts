@@ -461,7 +461,8 @@ export function parseScriptCompletionContext(
   let segmentStart = 0;
   let segmentEnd = text.length;
   let boundary: RegExpExecArray | null;
-  const controlBoundary = /\|\||&&|\||;/g;
+  // A line break ends a command too, so each line of a block script completes alone.
+  const controlBoundary = /\|\||&&|\||;|\r?\n/g;
   while ((boundary = controlBoundary.exec(text)) !== null) {
     if (boundary.index >= cursor) {
       segmentEnd = boundary.index;

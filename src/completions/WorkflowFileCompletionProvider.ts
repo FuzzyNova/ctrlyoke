@@ -88,7 +88,9 @@ export class WorkflowFileCompletionProvider
 
   async provideCompletionItems(
     document: vscode.TextDocument,
-    position: vscode.Position
+    position: vscode.Position,
+    _token?: vscode.CancellationToken,
+    context?: vscode.CompletionContext
   ): Promise<vscode.CompletionList | undefined> {
     const kind = getCtrlYokeFileKind(document.fileName);
     if (!kind) return undefined;
@@ -99,6 +101,15 @@ export class WorkflowFileCompletionProvider
     if (
       location.role !== WORKFLOW_LOCATION_ROLES.KEY &&
       location.role !== WORKFLOW_LOCATION_ROLES.VALUE
+    ) {
+      return undefined;
+    }
+    // Space opens a value list after `key: `. At a key position nothing has
+    // been typed yet, so the next Enter would accept a key instead of
+    // breaking the line.
+    if (
+      context?.triggerCharacter === " " &&
+      location.role === WORKFLOW_LOCATION_ROLES.KEY
     ) {
       return undefined;
     }
@@ -117,8 +128,17 @@ export class WorkflowFileCompletionProvider
       document.positionAt(replaceRange.start),
       document.positionAt(replaceRange.end)
     );
+    // VS Code filters on the range text. A JSON range starts on the opening
+    // quote, which the bare label never matches, so filter on the quoted text.
+    const startsOnQuote = text[replaceRange.start] === '"';
     return new vscode.CompletionList(
-      items.map((item) => toVSCodeWorkflowCompletionItem(item, range)),
+      items.map((item) => {
+        const vscodeItem = toVSCodeWorkflowCompletionItem(item, range);
+        if (startsOnQuote && !item.filterText) {
+          vscodeItem.filterText = item.insertText.replace(/^[\s,]+/, "");
+        }
+        return vscodeItem;
+      }),
       false
     );
   }

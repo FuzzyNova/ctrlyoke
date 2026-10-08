@@ -15,7 +15,24 @@ Prompt-file completion and navigation layer. This directory owns VS Code complet
 </architecture>
 
 <registration>
-`src/extension.ts` registers the same `PromptCompletionProvider` once per trigger (`@`, `#`, `~`, `$`, `!`, `/`) on prompt files (the globs from `getCtrlYokeFileGlobs()`, plus the `prompt` language). `PromptLinkProvider` uses the same selector set.
+`src/extension.ts` registers `PromptCompletionProvider` once, with every trigger (`@`, `#`, `~`, `---
+applyTo: "src/completions/**"
+---
+
+<purpose>
+Prompt-file completion and navigation layer. This directory owns VS Code completions/links plus the shared reference-formatting helpers that the dashboard webview also reuses.
+</purpose>
+
+<architecture>
+**Single shared engine:** `CompletionHelpers.ts` is not VS Code-only glue. `PromptCompletionProvider` uses it for editor IntelliSense, and `src/ui/PromptEditorSupportService.ts` uses the same helpers for CodeMirror completions in the dashboard. Keep trigger behavior, labels, and `insertText` framework-agnostic here.
+
+**Single reference syntax source:** `ContextReferenceBuilder.ts` is the source of truth for emitted `@`, `#selection:`, `#sym:`, and `~` references. Do not hand-roll quoting, slashes, or trailing-slash behavior anywhere else.
+
+**Two navigation entry points:** `PromptLinkProvider.ts` resolves references already typed into prompt files; `ContextMenuReferenceCommands.ts` creates those same references from Explorer/SCM/timeline actions and inserts them through the webview prompt editor.
+</architecture>
+
+<registration>
+, `!`, `/`), on prompt files (the globs from `getCtrlYokeFileGlobs()`, plus the `prompt` language). Keep it one registration: VS Code calls every registration on Ctrl+Space, so one per trigger listed every item several times. `PromptLinkProvider` uses the same selector set.
 
 If you add a new trigger or reference form, update all of these together:
 
@@ -80,7 +97,9 @@ It tries `executeDocumentSymbolProvider` (exact name+range match, see `findDocum
 </completionHelpers>
 
 <workflowFileCompletionProvider>
-`WorkflowFileCompletionProvider` is the VS Code host of `getWorkflowFileCompletions`: key and value completions for YAML, JSON and `.prompt.md` frontmatter, registered on every ctrlyoke glob with ` ` and `"` as triggers so a value list opens right after `key: ` or `"key": "`. It returns nothing for prompt text (that is `PromptCompletionProvider`'s), script text, comments and unknown objects. Its `WorkflowValueDataSource` reads the services the dashboard's pickers read: models come from `buildHarnessModelOptions()` (`utils/HarnessModelOptions.ts`, also what `WebviewSettingsSync` sends the webview, `None` dropped), the default harness from `ConfigurationUtils.getIntegrationMode()`. The data source is synchronous, so agents, skills, MCP servers and secret names are fetched before the call and only for the field under the cursor (discovery touches the file system). Insert text goes through `toVSCodeWorkflowCompletionItem` unescaped: the core already quotes JSON keys and values, while prompt-token items still go through `toVSCodeCompletionItem`, which JSON-escapes.
+`WorkflowFileCompletionProvider` is the VS Code host of `getWorkflowFileCompletions`: key and value completions for YAML, JSON and `.prompt.md` frontmatter, registered on every ctrlyoke glob with ` ` and `"` as triggers so a value list opens right after `key: ` or `"key": "`. It returns nothing for prompt text (that is `PromptCompletionProvider`'s), script text, comments and unknown objects. Its `WorkflowValueDataSource` reads the services the dashboard's pickers read: models come from `buildHarnessModelOptions()` (`utils/HarnessModelOptions.ts`, also what `WebviewSettingsSync` sends the webview, `None` dropped), the default harness from `ConfigurationUtils.getIntegrationMode()`. The data source is synchronous, so agents, skills, MCP servers and secret names are fetched before the call and only for the field under the cursor (discovery touches the file system). Insert text goes through `toVSCodeWorkflowCompletionItem` unescaped: the core already quotes JSON keys and values. Prompt-token items go through `toVSCodeCompletionItem` with the escape `getWorkflowInsertEscape(location)` picks (`WorkflowInsertEscape.ts`, shared with the workspace editor): JSON escaping in a JSON string or YAML double-quoted scalar, `'` doubled in a single-quoted one, none in plain/block scalars and markdown.
+
+**VS Code filters a list on the text from the item's range start to the cursor, against `filterText` (else the label).** Whenever a range starts on a character the label lacks, set `filterText` to match, or VS Code silently hides every item while a direct provider call in a test still returns them: `/skill:` items (range starts on the `/`) filter on the full token, and JSON key/value items (range starts on the opening quote) on the quoted insert text. Multi-line workflow items are already indented to the key's column by the core, so `toVSCodeWorkflowCompletionItem` sets `keepWhitespace`; without it VS Code adds the line's indentation a second time.
 
 Its key sets come from the generated `WORKFLOW_SCHEMA_OUTLINE` (`src/types/generated/WorkflowSchemaOutline.ts`), built from `schemas/workflow-schema.json` by `scripts/generate-workflow-schema-outline.mjs` (part of `npm run schema:update` and `precompile`; `check:docs` fails on drift). It records, per `WORKFLOW_OBJECT_KINDS` entry, the authorable keys with value kind, enum, default, description and `deprecated`, plus the keys the schema forbids there. Runtime-only fields are excluded in the generator's `RUNTIME_ONLY_KEYS`; a new object kind needs an entry in its `OBJECT_SOURCES`. A new schema property is offered automatically. Display details and insertion text are hand-authored in `WorkflowPropertySnippets.ts`, which is pure so both hosts can import it; a test fails if a snippet's key leaves the schema.
 

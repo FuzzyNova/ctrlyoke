@@ -6,6 +6,7 @@ import {
 } from "@codemirror/autocomplete";
 import type { EditorView } from "@codemirror/view";
 import { fuzzyMatchRanges } from "@root/completions/FuzzyRanking";
+import type { InsertTextEscape } from "@root/completions/WorkflowInsertEscape";
 import {
   ATOMIC_REFERENCE_KINDS,
   CAPTURING_OUTPUT_PLACEHOLDER,
@@ -128,7 +129,7 @@ export function buildCodeMirrorCompletionResult(
   request: PendingCompletionRequest | null,
   symbolIconCache?: Map<string, string>,
   onOutputCapturePicked?: OutputCapturePickHandler,
-  escapeInsertText?: (text: string) => string
+  escapeInsertText?: InsertTextEscape
 ): CompletionResult {
   // A response the extension already fuzzy-ranked against the query is shown
   // as-is: CodeMirror's own matcher would both re-sort it and drop legitimate
@@ -139,7 +140,12 @@ export function buildCodeMirrorCompletionResult(
     shouldBypassCodeMirrorFiltering(request) ||
     items.some((item) => item.rank !== undefined);
   const useFilterTextForMatching = !bypassFiltering;
-  const completions = items.map((item, index) => {
+  // An output-capture item inserts a placeholder that only the pick handler
+  // ever replaces, so an editor without one must not offer it.
+  const offered = onOutputCapturePicked
+    ? items
+    : items.filter((item) => !item.captureId);
+  const completions = offered.map((item, index) => {
     // Calculate boost from sortText.
     // Handles both numeric prefixes ("000_", "001_") and
     // bang-prefixed variants ("!000_", "!001_") used by git change items.

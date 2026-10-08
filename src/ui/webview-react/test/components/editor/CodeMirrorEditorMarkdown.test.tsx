@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { EditorState, Prec, type Extension } from "@codemirror/state";
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree } from "@codemirror/language";
 import { insertNewlineAndIndent } from "@codemirror/commands";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
 import { highlightTree, tags } from "@lezer/highlight";
@@ -156,6 +156,31 @@ describe("markdown and code-range parity", () => {
     },
     { name: "backticks inside a fence", doc: "```\na `b` c\n```", agree: true },
     { name: "unmatched backtick", doc: "a ` b\nc", agree: true },
+    // Known gaps: Lezer colours these as code while `findCodeRanges` leaves
+    // their references live. Filed as
+    // dev/bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md.
+    { name: "unclosed fence", doc: "```ts\nsee @src/a.ts", agree: false },
+    {
+      name: "fence indented in a list item",
+      doc: "- item\n\n    ```\n    code\n    ```",
+      agree: false,
+    },
+    { name: "tilde fence", doc: "~~~\ncode\n~~~", agree: false },
+    {
+      name: "closer with an info string",
+      doc: "```\na\n```js\nb\n```",
+      agree: false,
+    },
+    {
+      name: "inline span across a line break",
+      doc: "a `b\nc` d",
+      agree: false,
+    },
+    {
+      name: "fence in a blockquote",
+      doc: "> ```\n> code\n> ```",
+      agree: false,
+    },
   ];
 
   it.each(corpus)("$name", ({ doc, agree }) => {
@@ -206,7 +231,7 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
     const view = mount(
       'see `@src/a.ts`\n```json\n{"a": 1}\n```',
       withMarkdown(
-        Prec.highest(createCodeRangeDecorationExtension()),
+        createCodeRangeDecorationExtension(),
         Prec.highest(createLinkDecorationExtension())
       )
     );
@@ -228,12 +253,16 @@ describe("suppressed-expansion warning with markdown on", () => {
           ? { id: reference.id, exists: true }
           : { id: reference.id, exists: false, message: "File not found" }
       );
+  let lastView: EditorView | undefined;
 
   async function lint(doc: string, existing: Set<string>) {
     const view = mount(doc, [
       createPromptMarkdownExtension(),
+      // The precedences CodeMirrorEditor composes them at.
+      createCodeRangeDecorationExtension(),
       Prec.high(createContextReferenceLintExtension(resolver(existing))),
     ]);
+    lastView = view;
     forceLinting(view);
     await new Promise((resolve) => setTimeout(resolve, 700));
     const found: Array<{ message: string; text: string }> = [];
@@ -254,6 +283,16 @@ describe("suppressed-expansion warning with markdown on", () => {
     expect(await lint("```ts\n@src/real.ts\n```", existing)).toEqual([
       { message: SUPPRESSED, text: "@src/real.ts" },
     ]);
+  });
+
+  it("draws the squiggle above the code background, not under it", async () => {
+    await lint("Read `@src/real.ts` now", new Set(["src/real.ts"]));
+    const lintRange = lastView!.dom.querySelector(".cm-lintRange");
+    expect(lintRange).not.toBeNull();
+    // The code range's opaque background would hide the squiggle drawn on
+    // the lint span's own background if it sat inside it.
+    expect(lintRange!.querySelector(".cm-code-range")).toBeNull();
+    expect(lintRange!.closest(".cm-code-range")).not.toBeNull();
   });
 
   it("stays silent for a missing file in code", async () => {
@@ -281,6 +320,10 @@ describe("prompt markdown performance", () => {
       selection: { anchor: view.state.doc.length + 1 },
     });
     expect(performance.now() - typeStart).toBeLessThan(2_000);
-    expect(syntaxTree(view.state).length).toBe(view.state.doc.length);
+    // The edit's own reparse is time-sliced, so under load it can stop short
+    // of the end; what must hold is that the tree can reach it after the edit.
+    expect(
+      ensureSyntaxTree(view.state, view.state.doc.length, 10_000)?.length
+    ).toBe(view.state.doc.length);
   });
 });

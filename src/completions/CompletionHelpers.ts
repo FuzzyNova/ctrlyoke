@@ -21,12 +21,11 @@ import {
   rootForViewerPath,
 } from "../platform/WorkspaceViewerPath";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
-import { escapeJsonStringFragment } from "../utils/JsonStringEscape";
+import type { InsertTextEscape } from "./WorkflowInsertEscape";
 import { CompletionCore, type PlainCompletionItem } from "./CompletionCore";
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
   COMPLETION_ITEM_KINDS,
-  PROMPT_FILE_LANGUAGE_IDS,
   VSCODE_COMMANDS,
 } from "../types/DashboardConstants";
 
@@ -155,7 +154,7 @@ export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
   _triggerChar: "@" | "#" | "~" | "$" | "/" | "!",
   range?: vscode.Range,
-  document?: vscode.TextDocument
+  escape?: InsertTextEscape
 ): vscode.CompletionItem {
   const insertText = item.captureId
     ? CAPTURING_OUTPUT_PLACEHOLDER
@@ -163,11 +162,7 @@ export function toVSCodeCompletionItem(
   const vscodeItem = toVSCodeWorkflowCompletionItem(
     {
       ...item,
-      insertText:
-        document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
-        document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
-          ? escapeJsonStringFragment(insertText)
-          : insertText,
+      insertText: escape ? escape(insertText) : insertText,
     },
     range
   );
@@ -195,6 +190,9 @@ export function toVSCodeWorkflowCompletionItem(
     toVSCodeCompletionItemKind(item.kind)
   );
   vscodeItem.insertText = item.insertText;
+  // Multi-line inserts arrive already indented to the key's column, so VS
+  // Code must not add the line's leading whitespace to them again.
+  vscodeItem.keepWhitespace = true;
   vscodeItem.detail = item.detail;
   if (item.documentation) {
     vscodeItem.documentation = new vscode.MarkdownString(item.documentation);

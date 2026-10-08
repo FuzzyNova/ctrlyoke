@@ -8,6 +8,7 @@ import {
   COMPLETION_TRIGGERS,
   type CompletionTrigger,
 } from "@root/types/DashboardConstants";
+import type { InsertTextEscape } from "@root/completions/WorkflowInsertEscape";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { WebviewLog } from "../logger";
 import {
@@ -33,14 +34,14 @@ export interface PromptCompletionClientOptions {
   /** Multi-root workspaces also accept a leading `folder/` as a path start. */
   getIsMultiRootWorkspace: () => boolean;
   onOutputCapturePicked?: OutputCapturePickHandler;
-  /** Escapes inserted text for the host string, e.g. a JSON string fragment. */
-  escapeInsertText?: (text: string) => string;
 }
 
 interface PendingCompletionEntry {
   /** Nulled (not deleted) once a progressive partial response has resolved it. */
   resolve: ((value: CompletionResult | null) => void) | null;
   request: PendingCompletionRequest;
+  /** Escapes inserted text for the string it lands in, e.g. a JSON string. */
+  escapeInsertText?: InsertTextEscape;
 }
 
 interface CompletionsResponseMessage {
@@ -109,8 +110,13 @@ export class PromptCompletionClient {
 
   constructor(private readonly options: PromptCompletionClientOptions) {}
 
+  /**
+   * `escapeInsertText` rewrites every applied item for the string the cursor
+   * is in (a workflow file's JSON or quoted YAML prompt); omit it for plain text.
+   */
   readonly customSource = (
-    context: CompletionContext
+    context: CompletionContext,
+    escapeInsertText?: InsertTextEscape
   ): CompletionResult | Promise<CompletionResult | null> | null => {
     // Use the rightmost trigger character, mirroring PromptCompletionProvider.
     // A greedy `@"[^"]*` match once swallowed a real `@path` typed after a
@@ -141,7 +147,13 @@ export class PromptCompletionClient {
     // stale selection snapshot from a prior dropdown that was dismissed).
     this.cache = null;
 
-    return this.request("custom", { trigger, query }, trigger + query, from);
+    return this.request(
+      "custom",
+      { trigger, query },
+      trigger + query,
+      from,
+      escapeInsertText
+    );
   };
 
   readonly pathSource = (
@@ -215,7 +227,7 @@ export class PromptCompletionClient {
       entry.request,
       this.options.getSymbolIconCache(),
       this.options.onOutputCapturePicked,
-      this.options.escapeInsertText
+      entry.escapeInsertText
     );
 
     if (partial) {
@@ -254,7 +266,8 @@ export class PromptCompletionClient {
     source: "custom" | "path",
     request: PendingCompletionRequest,
     prefix: string,
-    position: number
+    position: number,
+    escapeInsertText?: InsertTextEscape
   ): Promise<CompletionResult | null> {
     const seq = ++nextCompletionSeq;
 
@@ -266,7 +279,7 @@ export class PromptCompletionClient {
     this.inFlight[source] = seq;
 
     return new Promise<CompletionResult | null>((resolve) => {
-      this.pending.set(seq, { resolve, request });
+      this.pending.set(seq, { resolve, request, escapeInsertText });
       trackSeq(seq, this);
       this.options.transport.postMessage({
         type: MESSAGE_TYPES.REQUEST_COMPLETIONS,

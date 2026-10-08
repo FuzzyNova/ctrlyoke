@@ -766,7 +766,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      hardcoded Copilot JSON `model` list is gone; the workflow-file provider's harness-aware
      list replaces it.
    - **`/` trigger** registered for `/skill:` and `/mcp:` tokens through
-     `getCtrlYokeSlashCompletions`, at a line start or after whitespace only.
+     `getCtrlYokeSlashCompletions`, where a finished token would be recognised (`findPartialSlashTokenStart`, after whitespace, `"` or `(`; never inside a path).
    - **Deleted:** `YamlBlockScalarContext.ts` and its test (no callers left),
      `PromptPropertyCompletionProvider`'s step-block scan, and the provider's YAML/JSON
      prompt-value and model scanners.

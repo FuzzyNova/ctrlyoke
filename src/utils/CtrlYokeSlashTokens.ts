@@ -18,6 +18,12 @@ const TOKEN_PATTERN = new RegExp(
   `${NOT_AFTER_BOUNDARY}(?<![\\/.:])\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})(?!${TOKEN_BOUNDARY_PATTERN})`,
   "g"
 );
+// A partial token at the end of the text being typed, with the same start
+// boundary as TOKEN_PATTERN so completion opens exactly where a finished token
+// would be recognised (after whitespace, `"`, `(`, never inside a path).
+const PARTIAL_TOKEN_AT_END_PATTERN = new RegExp(
+  `${NOT_AFTER_BOUNDARY}(?<![\\/.:])\\/[a-zA-Z0-9:._-]*$`
+);
 const COMPLETE_TOKEN_PATTERN = new RegExp(
   `^\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})$`
 );
@@ -35,6 +41,14 @@ export interface CtrlYokeSlashToken {
 export interface CtrlYokeSlashTokenParts {
   kind: CtrlYokeSlashTokenKind;
   name: string;
+}
+
+/**
+ * Index of the `/` that starts the slash token being typed at the end of
+ * `textBeforeCursor`, or -1 when the text doesn't end in one.
+ */
+export function findPartialSlashTokenStart(textBeforeCursor: string): number {
+  return textBeforeCursor.search(PARTIAL_TOKEN_AT_END_PATTERN);
 }
 
 /** Classify a complete token without interpreting ordinary slash commands. */

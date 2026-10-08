@@ -8,7 +8,6 @@ import type { Extension } from "@codemirror/state";
 import { tooltips } from "@codemirror/view";
 import { fuzzyMatchRanges } from "@root/completions/FuzzyRanking";
 import {
-  CTRLYOKE_FILE_KINDS,
   WORKFLOW_LOCATION_ROLES,
   WORKFLOW_OBJECT_KINDS,
   type CtrlYokeFileKind,
@@ -16,11 +15,12 @@ import {
 import { COMPLETION_KIND_ICONS } from "@root/types/SymbolKindConstants";
 import type { WorkflowValueDataSource } from "@root/completions/WorkflowFileCompletionCore";
 import type { WorkflowLocation } from "@root/completions/WorkflowLocationTypes";
-import { escapeJsonStringFragment } from "@root/utils/JsonStringEscape";
+import { getWorkflowInsertEscape } from "@root/completions/WorkflowInsertEscape";
 import { DEFAULT_COMPLETION_ICON } from "@utils/atomicReferences";
 import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
 import type { PromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import { promptTokenLanguageDataExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
+import { findCustomCompletionContext } from "@utils/promptCompletion/promptCompletionResult";
 import type { WorkflowFileSupport } from "./loadWorkflowFileSupport";
 import {
   HOST_RANGE_COMPLETION_KINDS,
@@ -160,7 +160,22 @@ function createPromptTokenSource(
     const located = locate(options, context);
     if (located?.location.role !== WORKFLOW_LOCATION_ROLES.PROMPT_TEXT)
       return null;
-    return options.promptClient.customSource(context);
+    // The client finds the trigger on the whole line. In compact JSON that
+    // can be an `@` in an earlier field, and accepting an item would then
+    // overwrite everything from there to the cursor.
+    const valueStart = located.location.valueRange?.start;
+    if (valueStart !== undefined) {
+      const line = context.state.doc.lineAt(context.pos);
+      const trigger = findCustomCompletionContext(
+        line.text.slice(0, context.pos - line.from),
+        line.from
+      );
+      if (trigger && trigger.from < valueStart) return null;
+    }
+    return options.promptClient.customSource(
+      context,
+      getWorkflowInsertEscape(located.location)
+    );
   };
 }
 
@@ -184,13 +199,4 @@ export function createWorkflowFileCompletionExtension(
       ],
     }),
   ];
-}
-
-/** The escape for text inserted into a JSON string, or none for other formats. */
-export function getWorkflowInsertEscape(
-  kind: CtrlYokeFileKind
-): ((text: string) => string) | undefined {
-  return kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
-    ? escapeJsonStringFragment
-    : undefined;
 }

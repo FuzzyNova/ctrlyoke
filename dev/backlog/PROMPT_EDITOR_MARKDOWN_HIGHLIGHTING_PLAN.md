@@ -343,17 +343,24 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
        statically, so "lazy" means built on first use, not code-split. `cxx`, `cc` and
        `webmanifest` were not added.
      - **Precedence is `Prec.highest`, not the planned `Prec.high`, for ctrlyoke's mark
-       decorations** (links, file refs, prior-context, condition-output, slash tokens, code
-       ranges). `syntaxHighlighting`'s plugin is itself `Prec.high`, and at equal precedence its
+       decorations** (links, file refs, prior-context, condition-output, slash tokens). `syntaxHighlighting`'s plugin is itself `Prec.high`, and at equal precedence its
        span nests inside ours, so a reference in `*emphasis*` took the emphasis colour instead of
        `.cm-link`'s. Chips and the reference, prior-context and condition-output lints are
-       `Prec.high`.
+       `Prec.high`. **The code-range mark stays at default precedence** (Wave 3 review fix):
+       a higher-precedence mark is drawn inside a lower one, and at `Prec.highest` its opaque
+       background covered the suppressed-expansion squiggle and selection matches inside code.
+     - **Not built: the planned code-range restyle** (the inline `codeSpan.border` box, and
+       fences with no background so nested colours show through). `.cm-code-range` still has
+       Phase 0's preformat background on both. Deferred, not dropped.
      - Spellcheck now also skips fence info strings (`CodeInfo`) and link destinations
        (`URL`) via `getMarkdownNonProseRanges`. **The plan said it already skipped
        `findCodeRanges` ranges; it does not** (it skips only `@`/`#`/`~` references). That is
        unchanged here, so words inside backticks and fences are still spellchecked.
      - Tests are in `test/components/editor/CodeMirrorEditorMarkdown.test.tsx`: the parity
-       corpus (all seven cases agree with `findCodeRanges`, so there is no documented gap yet),
+       corpus. The original seven cases agree with `findCodeRanges`; the Wave 3 review added
+       the six that don't (unclosed, list-indented, `~~~` and blockquote fences, a closer with
+       an info string, inline code across a line break), filed as
+       [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md),
        fenced JSON highlighting, quote/list tags, `#selection:` not a heading, Enter unchanged,
        links and chips inside emphasis and link syntax, the suppressed-expansion warning with
        markdown on, and a ~100KB parse and edit budget. Completions inside a fence are

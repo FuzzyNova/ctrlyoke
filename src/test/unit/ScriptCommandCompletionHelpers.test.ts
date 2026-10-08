@@ -101,6 +101,8 @@ suite("ScriptCommandCompletionHelpers", () => {
       { text: "npm te", expected: 0 },
       { text: "git st", expected: 0 },
       { text: "echo ok && npm r", expected: 11 },
+      { text: "npm install\n  npm te", expected: 14 },
+      { text: "npm install\r\nnpm run b", expected: 21 },
     ];
 
     for (const { text, expected } of cases) {

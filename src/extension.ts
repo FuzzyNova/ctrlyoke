@@ -672,7 +672,6 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register completion provider for prompt files (JSON, YAML, and Markdown)
-    // Two triggers: @ for full file references, # for snippets (line ranges, selections)
     const promptCompletionProvider = new PromptCompletionProvider(() =>
       webviewProvider.getSecretRegistryService()
     );
@@ -681,57 +680,21 @@ export async function activate(context: vscode.ExtensionContext) {
       { language: "prompt" }, // VS Code's prompt language (used by Copilot)
     ];
 
-    // Register @ trigger for full file references (CLI-native syntax)
+    // One registration for every trigger: VS Code calls each registration on
+    // Ctrl+Space, so separate ones would return the same items several times.
+    //   @ file references    # snippets (line ranges, selections)
+    //   ~ git changes        $ prior-context references
+    //   ! secret names (names only; managed values never enter the payload)
+    //   / ctrlyoke /skill: and /mcp: tokens
     context.subscriptions.push(
       vscode.languages.registerCompletionItemProvider(
         promptFilePatterns,
         promptCompletionProvider,
-        "@" // Trigger on @ character for full file references
-      )
-    );
-
-    // Register ! trigger for secret-name references. The registry supplies
-    // names only; managed values never enter the completion payload.
-    context.subscriptions.push(
-      vscode.languages.registerCompletionItemProvider(
-        promptFilePatterns,
-        promptCompletionProvider,
-        "!"
-      )
-    );
-
-    // Register # trigger for snippet references (line ranges, selections)
-    context.subscriptions.push(
-      vscode.languages.registerCompletionItemProvider(
-        promptFilePatterns,
-        promptCompletionProvider,
-        "#" // Trigger on # character for snippets
-      )
-    );
-
-    // Register ~ trigger for git change context (diff, staged, stash, commits)
-    context.subscriptions.push(
-      vscode.languages.registerCompletionItemProvider(
-        promptFilePatterns,
-        promptCompletionProvider,
-        "~" // Trigger on ~ character for git change references
-      )
-    );
-
-    // Register $ trigger for inline prior-context references
-    context.subscriptions.push(
-      vscode.languages.registerCompletionItemProvider(
-        promptFilePatterns,
-        promptCompletionProvider,
-        "$" // Trigger on $ character for prior-context references
-      )
-    );
-
-    // Register / trigger for ctrlyoke /skill: and /mcp: tokens
-    context.subscriptions.push(
-      vscode.languages.registerCompletionItemProvider(
-        promptFilePatterns,
-        promptCompletionProvider,
+        "@",
+        "#",
+        "~",
+        "$",
+        "!",
         "/"
       )
     );

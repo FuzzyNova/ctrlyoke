@@ -46,10 +46,7 @@ import {
   loadWorkflowFileSupport,
   type WorkflowFileSupport,
 } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
-import {
-  createWorkflowFileCompletionExtension,
-  getWorkflowInsertEscape,
-} from "@utils/workflowFileSupport/workflowFileCompletionExtension";
+import { createWorkflowFileCompletionExtension } from "@utils/workflowFileSupport/workflowFileCompletionExtension";
 import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/workflowValueDataSource";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
@@ -336,7 +333,6 @@ export const WorkspaceFileEditor = forwardRef<
               getView: () => viewRef.current,
               getSymbolIconCache: () => symbolIconCacheRef.current,
               getIsMultiRootWorkspace: () => isMultiRootWorkspaceRef.current,
-              escapeInsertText: getWorkflowInsertEscape(ctrlyokeFileKind),
             })
           : null,
       [ctrlyokeFileKind]

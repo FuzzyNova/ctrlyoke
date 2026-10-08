@@ -10,7 +10,12 @@ import {
 } from "../types/DashboardConstants";
 import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
 import { getWorkflowLocation } from "./WorkflowDocumentLocation";
+import {
+  getWorkflowInsertEscape,
+  type InsertTextEscape,
+} from "./WorkflowInsertEscape";
 import { getCtrlYokeSlashCompletions } from "./SlashTokenCompletionHelpers";
+import { findPartialSlashTokenStart } from "../utils/CtrlYokeSlashTokens";
 import {
   getDocumentPromptCodeRanges,
   isCursorInPromptCode,
@@ -20,17 +25,6 @@ import {
  * Trigger character types for context-aware completions
  */
 type TriggerChar = "@" | "#" | "~" | "$" | "!" | "/";
-
-/**
- * Start of the `/skill:`-style token being typed. Unlike the other triggers a
- * slash begins a token only at the start of a line or after whitespace, so
- * paths (`src/`, `./`, `../`) never open the list.
- */
-function findSlashTokenStart(textBeforeCursor: string): number {
-  const index = textBeforeCursor.search(/(?:^|\s)\/[\w:.-]*$/);
-  if (index === -1) return -1;
-  return textBeforeCursor[index] === "/" ? index : index + 1;
-}
 
 /**
  * Provides context-aware completions for ctrlyoke prompt files
@@ -71,7 +65,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const lastTildeIndex = findWordStartTriggerIndex(textBeforeCursor, "~");
     const lastDollarIndex = findWordStartTriggerIndex(textBeforeCursor, "$");
     const lastBangIndex = findWordStartTriggerIndex(textBeforeCursor, "!");
-    const lastSlashIndex = findSlashTokenStart(textBeforeCursor);
+    const lastSlashIndex = findPartialSlashTokenStart(textBeforeCursor);
 
     // Determine which trigger is most recent (closest to cursor)
     let triggerChar: TriggerChar | undefined;
@@ -90,9 +84,11 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return undefined; // No trigger found
     }
 
-    if (!this.shouldProvideCompletions(document, position)) {
+    const promptText = this.locatePromptText(document, position);
+    if (!promptText) {
       return undefined;
     }
+    const { escape } = promptText;
 
     // References inside code are sent literally, so don't offer to build one.
     if (
@@ -145,17 +141,17 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
-      return this.getAtCompletions(afterTrigger, document);
+      return this.getAtCompletions(afterTrigger, escape);
     } else if (triggerChar === "#") {
-      return this.getHashCompletions(afterTrigger, document);
+      return this.getHashCompletions(afterTrigger, escape);
     } else if (triggerChar === "~") {
-      return this.getTildeCompletions(afterTrigger, document);
+      return this.getTildeCompletions(afterTrigger, escape);
     } else if (triggerChar === "!") {
-      return this.getSecretCompletions(afterTrigger, document);
+      return this.getSecretCompletions(afterTrigger, escape);
     } else if (triggerChar === "/") {
-      return this.getSlashCompletions(afterTrigger, document, position);
+      return this.getSlashCompletions(afterTrigger, escape, position);
     } else {
-      return this.getDollarCompletions(afterTrigger, document);
+      return this.getDollarCompletions(afterTrigger, escape);
     }
   }
 
@@ -165,7 +161,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    */
   private async getAtCompletions(
     filterText: string,
-    document: vscode.TextDocument
+    escape: InsertTextEscape | undefined
   ): Promise<vscode.CompletionList> {
     // Use shared helper to get plain completions
     const plainItems = await getCompletionCore().getFileCompletions(filterText);
@@ -173,7 +169,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("@");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "@", range, document)
+      toVSCodeCompletionItem(item, "@", range, escape)
     );
 
     return new vscode.CompletionList(items, true);
@@ -192,7 +188,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    */
   private async getHashCompletions(
     filterText: string,
-    document: vscode.TextDocument
+    escape: InsertTextEscape | undefined
   ): Promise<vscode.CompletionList> {
     // Use shared helper to get plain completions
     const plainItems = await getCompletionCore().getHashCompletions(filterText);
@@ -200,7 +196,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("#");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "#", range, document)
+      toVSCodeCompletionItem(item, "#", range, escape)
     );
 
     // CRITICAL: Must be true to get fresh symbol queries as user types
@@ -218,7 +214,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    */
   private async getTildeCompletions(
     filterText: string,
-    document: vscode.TextDocument
+    escape: InsertTextEscape | undefined
   ): Promise<vscode.CompletionList> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
@@ -230,7 +226,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     const range = this.calculateCompletionRange("~");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "~", range, document)
+      toVSCodeCompletionItem(item, "~", range, escape)
     );
 
     return new vscode.CompletionList(items, true);
@@ -238,13 +234,13 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
   private getDollarCompletions(
     filterText: string,
-    document: vscode.TextDocument
+    escape: InsertTextEscape | undefined
   ): vscode.CompletionList {
     const plainItems =
       getCompletionCore().getPriorContextCompletions(filterText);
     const range = this.calculateCompletionRange("$");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "$", range, document)
+      toVSCodeCompletionItem(item, "$", range, escape)
     );
 
     return new vscode.CompletionList(items, true);
@@ -256,7 +252,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    */
   private async getSlashCompletions(
     afterSlash: string,
-    document: vscode.TextDocument,
+    escape: InsertTextEscape | undefined,
     position: vscode.Position
   ): Promise<vscode.CompletionList> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
@@ -272,15 +268,19 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       position.line,
       position.character
     );
-    const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "/", range, document)
-    );
+    const items = plainItems.map((item) => {
+      const vscodeItem = toVSCodeCompletionItem(item, "/", range, escape);
+      // VS Code filters on the range text, which starts on the `/`, so the
+      // bare name in `filterText` would match nothing.
+      vscodeItem.filterText = item.insertText;
+      return vscodeItem;
+    });
     return new vscode.CompletionList(items, true);
   }
 
   private async getSecretCompletions(
     filterText: string,
-    document: vscode.TextDocument
+    escape: InsertTextEscape | undefined
   ): Promise<vscode.CompletionList> {
     const registry = this.getSecretRegistry?.();
     if (!registry || !vscode.workspace.workspaceFolders?.length) {
@@ -294,7 +294,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     );
     const range = this.calculateCompletionRange("!");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "!", range, document)
+      toVSCodeCompletionItem(item, "!", range, escape)
     );
     return new vscode.CompletionList(items, true);
   }
@@ -304,25 +304,28 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    * `getWorkflowLocation` (so `retryPrompt`, `passRetryPrompt` and a
    * `.prompt.md` body count and frontmatter, scripts and comments do not);
    * any other markdown or `prompt`-language document is prompt text throughout.
+   * Returns undefined outside prompt text, and otherwise the escape inserted
+   * text needs for the string it lands in (a JSON or quoted YAML prompt).
    */
-  private shouldProvideCompletions(
+  private locatePromptText(
     document: vscode.TextDocument,
     position: vscode.Position
-  ): boolean {
+  ): { escape: InsertTextEscape | undefined } | undefined {
     const kind = getCtrlYokeFileKind(document.fileName);
     if (kind) {
-      return (
-        getWorkflowLocation(
-          document.getText(),
-          document.offsetAt(position),
-          kind
-        ).role === WORKFLOW_LOCATION_ROLES.PROMPT_TEXT
+      const location = getWorkflowLocation(
+        document.getText(),
+        document.offsetAt(position),
+        kind
       );
+      return location.role === WORKFLOW_LOCATION_ROLES.PROMPT_TEXT
+        ? { escape: getWorkflowInsertEscape(location) }
+        : undefined;
     }
-    return (
-      document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
+    return document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT
-    );
+      ? { escape: undefined }
+      : undefined;
   }
 
   /**
