@@ -62,9 +62,10 @@ Nothing on the VS Code side consults the shared literal-range rule.
   - `.prompt.md` can be scanned after its frontmatter.
   - Use `getWorkflowLocation` from `WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md` if it has
     landed. Otherwise use a small block-scalar extractor that plan's Phase 1 later absorbs.
-- **Warning (follow-up):** to match the dashboard's warning, add a prompt-file
-  `DiagnosticCollection` with the same message, raised only when the reference resolves. This
-  is new infrastructure, so it can land separately from the links and completions fix.
+- **Warning (follow-up):** the dashboard's warning reaches VS Code through
+  [`PROMPT_DIAGNOSTICS_PLAN.md`](../../backlog/PROMPT_DIAGNOSTICS_PLAN.md) Phase 2, a
+  prompt-file diagnostics provider fed by the shared rules. That provider is new
+  infrastructure, so it lands separately from the links and completions fix.
 - **Tests:** in `PromptLinkProvider.test.ts` and `PromptCompletionProvider.test.ts`, cover:
   - inline code
   - a fenced block

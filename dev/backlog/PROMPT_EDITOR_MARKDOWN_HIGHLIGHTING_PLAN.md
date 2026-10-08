@@ -2,6 +2,10 @@
 
 **Status (2026-10-07):** Proposed. Nothing is implemented yet.
 
+**Sequencing:**
+[`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
+against the ctrlyoke file support and prompt diagnostics plans.
+
 **Priority:** P2. This is readability polish on the product's most-used surface. It is also
 visible in every prompt-editor capture in
 [`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md) (#9's completion clip, #13a).
@@ -286,8 +290,10 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      - typing inside a fence keeps completions suppressed exactly as today
      - the suppressed-expansion warning still appears, with its message and range, on a
        backticked reference to an existing file, both inline and in a fence. It does not appear
-       for a reference to a missing file. No test asserts this warning today, and the
-       2026-10-06 coverage report shows the branch uncovered, so this is its first test.
+       for a reference to a missing file. The warning's first test is added by
+       [`PROMPT_DIAGNOSTICS_PLAN.md`](PROMPT_DIAGNOSTICS_PLAN.md) Phase 1, which lands before
+       this phase. Here it is re-asserted with markdown highlighting on, to prove the
+       precedence rule holds.
      - a performance check on a ~25K-token prompt, where the typing-latency budget must hold
 
 4. **Phase 3: Workspace editor and YAML prompts.**
@@ -320,9 +326,10 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
      complete references inside them, though they're sent literally. Both providers must skip
      `findCodeRanges` ranges, computed on the decoded prompt value: dedent YAML block scalars
      and decode JSON strings. Phase 2's precedence rule applies here too: what looks literal
-     must behave literally. The fix and its tests are in the bug doc. The prompt-file
-     `DiagnosticCollection` that would carry the suppressed-expansion warning into VS Code is a
-     follow-up there, not a blocker for this phase.
+     must behave literally. The fix and its tests are in the bug doc. The VS Code diagnostics
+     provider that carries the suppressed-expansion warning is
+     [`PROMPT_DIAGNOSTICS_PLAN.md`](PROMPT_DIAGNOSTICS_PLAN.md) Phase 2. It is not a blocker
+     for this phase.
 
 ## Open questions
 

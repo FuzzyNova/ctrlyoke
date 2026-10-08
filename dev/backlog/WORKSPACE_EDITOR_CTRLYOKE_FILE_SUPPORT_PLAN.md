@@ -1,6 +1,12 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-07):** Proposed. Nothing is implemented yet.
+**Status (2026-10-07):** Proposed. Nothing is implemented yet. _Refreshed 2026-10-08:_ the
+language intelligence plan shipped (`dev/implemented/`). Facts 2 and 9, "Editor integration"
+and "Coexistence with language servers" were re-audited against the merged code.
+
+**Sequencing:**
+[`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
+against the markdown highlighting and prompt diagnostics plans.
 
 **Priority:** P1. The built-in editor is the "real IDE on your phone" pitch
 ([`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md) #10), and a workflow file is
@@ -12,10 +18,14 @@ gets anywhere else in the product.
 - [`PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md`](PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md):
   markdown highlighting for prompt text. Its Phase 3 nests markdown inside this plan's YAML
   `PROMPT_TEXT` ranges. Schedule it with Phase 6 here.
-- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md):
-  generic LSP features for `WorkspaceFileEditor.tsx`. This plan is its ctrlyoke-specific sibling.
-  It shares the editor's extension-slot design, but it does not depend on any LSP phase and can
-  ship first. See "Coexistence with the LSP plan" below.
+- [`PROMPT_DIAGNOSTICS_PLAN.md`](PROMPT_DIAGNOSTICS_PLAN.md): the shared prompt-text lint
+  rules (references, prior context, condition output) and VS Code's diagnostics provider. This
+  plan's Phase 5 consumes those rules for prompt text and adds the schema diagnostics they
+  don't cover.
+- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md)
+  (implemented 2026-10-08): generic LSP features for `WorkspaceFileEditor.tsx`. This plan is
+  its ctrlyoke-specific sibling. The ctrlyoke-file exclusion that plan was meant to carry was
+  not built there, so this plan now owns it. See "Coexistence with language servers".
 - [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](PROMPT_AUTHORING_SUGGESTIONS_PLAN.md): model-written
   prompt continuations in the prompt editor. It is out of scope here, but once Phase 0 extracts
   the shared prompt-editing extensions, they become the natural place to add it.
@@ -26,8 +36,11 @@ gets anywhere else in the product.
 
 The hosted dashboard's workspace viewer (`WorkspaceFileEditor.tsx`) is the only editor a
 phone or browser user has. When they open `.ctrlyoke/workflows/foo.ctrlyoke.yaml` in it, they
-get YAML syntax highlighting, CodeMirror's generic word completion from `basicSetup`, and
-clickable `@file` links. They get none of the following:
+get YAML syntax highlighting and clickable `@file` links. If they've installed
+`yaml-language-server`, `vscode-json-language-server` or `marksman` from the Language Servers
+settings, they also get that server's generic completions and diagnostics. No ctrlyoke schema
+is associated with those servers, so the help isn't ctrlyoke-aware. They get none of the
+following:
 
 - **Property completions:** valid keys at the cursor, such as `harness`, `endCondition` or
   `parallel`, with descriptions.
@@ -59,14 +72,24 @@ These were verified against `src/` on 2026-10-07.
    (`DashboardApplication.ts`, `CtrlYokeHostedServer.ts`). So new completion requests from the
    workspace editor need **no new transport**.
 
-2. **The workspace editor already has an autocompletion instance.** `WorkspaceFileEditor.tsx`
-   loads `basicSetup`, which includes `autocompletion()`, `closeBrackets()` and
-   `completionKeymap`. Adding a second `autocompletion({ override })` next to it would give two
-   competing instances. Its tooltips also mount inside the editor rather than on `document.body`,
-   and they don't use `keyboardTooltipSpace`. The prompt editor (`CodeMirrorEditor.tsx`
-   `tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace })`) shows how to do
-   this correctly, including the `repositionTooltips` call on `visualViewport` changes.
-   `@codemirror/lang-yaml` and `@codemirror/lang-json` provide no completion sources.
+2. **The workspace editor's completion composes through language data.** This was re-audited
+   on 2026-10-08, after the language intelligence plan merged.
+   - `WorkspaceFileEditor.tsx` loads `basicSetup`, which includes `autocompletion()`.
+   - The LSP client sits in a `languageIntelligenceCompartment` (`useLanguageIntelligence`).
+     Its `serverCompletion()` (`utils/languageIntelligenceClient.ts`) uses `@codemirror/lsp-client`
+     6.3's default mode: one more `autocompletion()`, plus an
+     `EditorState.languageData` `autocomplete` source. It does **not** use `override`.
+   - CodeMirror merges `autocompletion()` configs and gathers every language-data source, so
+     ctrlyoke sources registered the same way **combine** with `basicSetup` and with any
+     language server. An `override` would instead silently drop the LSP source: `override` has
+     no merge function in `completionConfig`, so one set value wins, and two different values
+     throw a config-merge conflict.
+   - `basicSetup` has no word completion, and `@codemirror/lang-yaml` and
+     `@codemirror/lang-json` provide no completion sources.
+   - The editor's tooltips still mount inside the editor rather than on `document.body`, and
+     they don't use `keyboardTooltipSpace`. The prompt editor shows how to do it:
+     `CodeMirrorEditor.tsx` uses `tooltips({ parent: document.body, tooltipSpace:
+keyboardTooltipSpace })`, plus `repositionTooltips` on `visualViewport` changes.
 
 3. **The prompt editor's completion logic is half-extracted already.** These helpers are
    exported and pure:
@@ -146,14 +169,24 @@ server`, and `CompletionHelpers.getCompletionCore()` builds it for VS Code. The 
    editor text that was already redacted. It must not need the real values, and it must never
    echo them back.
 
+9. **Language servers can attach to ctrlyoke files today.**
+   - `src/server/lsp/LanguageServerCatalog.ts` ships one-click entries for `yaml-language-server`,
+     `vscode-json-language-server` and `marksman`.
+   - `LanguageIntelligenceHost.lookupSession` resolves a session for any trusted, contained path
+     by language, with no ctrlyoke-file check.
+   - Nothing under `src/server/lsp/` associates `workflow-schema.json` with those servers.
+   - So a user who installs any of them gets generic YAML, JSON or Markdown help in workflow
+     files. Once this plan's sources land, they would also get a second set of completions and
+     diagnostics.
+
 ## Options considered
 
-| Option                                                                                                                                                                                                                      | Verdict                                                                                                                                                                                                                                                                                      |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Reuse the prompt editor's sources in the workspace editor, gated by the VS Code regex scanners.**                                                                                                                      | Rejected. It is quick, but it inherits the scanners' blind spots (fact 5), adds no property or value completions, and leaves VS Code and the browser with separate logic.                                                                                                                    |
-| **B. Ride the LSP plan: `yaml-language-server` / `vscode-json-languageservice` with `workflow-schema.json` associated.**                                                                                                    | Rejected as the primary path, though it remains possible later (see Coexistence). It needs LSP Phases 1–4 and a server install the user opts into. Schema-only completion can't offer models for the step's harness, agents, skills, secrets, step numbers or any prompt token.              |
-| **C. A browser JSON-schema CodeMirror library (e.g. `codemirror-json-schema`).**                                                                                                                                            | Rejected. It would be a third source of schema behaviour, separate from `PromptFileParser` and VS Code. Its ajv-based validation compiles with `new Function`, which needs `unsafe-eval` under the webview CSP. It has no dynamic values, and region detection would still have to be built. |
-| **D. A host-neutral core under `src/completions/` covering cursor location, the schema outline and completion items, with a CodeMirror adapter for the workspace editor and the existing VS Code providers moved onto it.** | **Chosen.** There is one implementation of "where is the cursor in this workflow" and "what is valid here". The browser and VS Code converge, and the prompt-token path reuses the router and `CompletionCore` unchanged.                                                                    |
+| Option                                                                                                                                                                                                                      | Verdict                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Reuse the prompt editor's sources in the workspace editor, gated by the VS Code regex scanners.**                                                                                                                      | Rejected. It is quick, but it inherits the scanners' blind spots (fact 5), adds no property or value completions, and leaves VS Code and the browser with separate logic.                                                                                                                                                                                             |
+| **B. Ride the LSP plan: `yaml-language-server` / `vscode-json-languageservice` with `workflow-schema.json` associated.**                                                                                                    | Rejected as the primary path, though it remains possible later (see Coexistence). The LSP spine shipped on 2026-10-08, but this still needs a server install the user opts into and a schema association the host doesn't make (fact 9). Schema-only completion can't offer models for the step's harness, agents, skills, secrets, step numbers or any prompt token. |
+| **C. A browser JSON-schema CodeMirror library (e.g. `codemirror-json-schema`).**                                                                                                                                            | Rejected. It would be a third source of schema behaviour, separate from `PromptFileParser` and VS Code. Its ajv-based validation compiles with `new Function`, which needs `unsafe-eval` under the webview CSP. It has no dynamic values, and region detection would still have to be built.                                                                          |
+| **D. A host-neutral core under `src/completions/` covering cursor location, the schema outline and completion items, with a CodeMirror adapter for the workspace editor and the existing VS Code providers moved onto it.** | **Chosen.** There is one implementation of "where is the cursor in this workflow" and "what is valid here". The browser and VS Code converge, and the prompt-token path reuses the router and `CompletionCore` unchanged.                                                                                                                                             |
 
 ## Decision
 
@@ -295,18 +328,24 @@ and `CompletionCore` stay exactly as they are. Additions:
 
 `WorkspaceFileEditor.tsx` changes as follows:
 
-- **Replace `basicSetup` with an explicit setup.** Keep everything it provides except its
-  `autocompletion()`. The editor then owns one `autocompletion` with
-  `override: [workflowPropertySource, workflowValueSource, promptTokenSource]` for ctrlyoke files,
-  and keeps CodeMirror's default word completion for every other file, so other files don't
-  change.
+- **Register sources through language data, not `override`.** Keep `basicSetup`. For ctrlyoke
+  files, the compartment contributes `EditorState.languageData.of(() => [{ autocomplete:
+source }])` for `workflowPropertySource`, `workflowValueSource` and `promptTokenSource`. That
+  is the same mechanism `serverCompletion()` uses (fact 2), so the sources combine with
+  `basicSetup` and with any language server, and other files are untouched. Any per-source
+  `autocompletion()` options must merge cleanly with the existing configs. A test asserts that
+  an LSP source and a ctrlyoke source both reach one dropdown.
+  - **Phase 0 has to change this too.** The prompt editor's `autocompletion({ override })`
+    config is fine there, because that editor has no LSP. But the extracted
+    `promptTokenCompletionExtension` must offer the language-data form, so the workspace
+    editor can use it.
 - **Tooltips:** `tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace })`, plus
   `repositionTooltips` in the existing `visualViewport` listeners. Phone editing is a headline
   use, and #10's capture clip is on a phone.
 - **A `Compartment` named `ctrlyokeFileSupport`.** It is reconfigured when the file kind or the
-  data-source snapshot changes. This is the same reason the LSP plan requires its slot to be a
-  `Compartment`: rebuilding the `useMemo` extension list tears down the view and its undo
-  history. The two compartments are siblings.
+  data-source snapshot changes. It follows the shipped `languageIntelligenceCompartment`
+  pattern next to it: rebuilding the `useMemo` extension list tears down the view and its undo
+  history, so changes go through `reconfigure`.
 - **Keep the existing `.cm-link` decorator and click handler.** References outside chip
   ranges, and every reference when chips are off, keep rendering as links.
 - **Lazy-load the YAML support.** The location module's YAML half, and the `yaml` package with
@@ -358,18 +397,37 @@ JSON workflow files.
     The load path should then call it rather than copy it.
   - The client maps each `instancePath` to a range with `findRangeForPath` and renders it with
     `@codemirror/lint`, debounced as the prompt editor's reference lint is.
-- **Unresolved references** inside `PROMPT_TEXT` reuse `createContextReferenceLintExtension`
-  and `VALIDATE_CONTEXT_REFS` unchanged.
+- **Prompt-text lint**, for `PROMPT_TEXT` ranges only, comes from
+  [`PROMPT_DIAGNOSTICS_PLAN.md`](PROMPT_DIAGNOSTICS_PLAN.md)'s shared rule module, through its
+  CodeMirror adapter. That covers unresolved references and suppressed expansion over
+  `VALIDATE_CONTEXT_REFS`, prior context, and condition output. Here the rule context (step
+  index, final step, configured conditions) is derived from the document through
+  `getWorkflowLocation`, so it is exact. This plan adds only the schema diagnostics.
 - The text only travels to the host, which already holds the file (fact 8). Diagnostics carry
   paths and messages, never values.
 
-### Coexistence with the LSP plan
+### Coexistence with language servers
 
-ctrlyoke owns ctrlyoke files. When the LSP plan resolves `languageServers.use` for a file,
-files that `getCtrlYokeFileKind` recognizes get no LSP session by default. Without that rule,
-an installed `yaml-language-server` would offer generic schema completions next to these, with
-two dropdowns and two sets of diagnostics. Add this rule to the LSP plan's Phase 3 when that
-phase starts. A later opt-in could let `yaml-language-server` contribute formatting only.
+ctrlyoke owns ctrlyoke files. The language intelligence plan was supposed to carry this rule,
+but it shipped without it (fact 9), so this plan builds it.
+
+- **Where:** `LanguageIntelligenceHost.lookupSession`, right after the containment check.
+  When `getCtrlYokeFileKind(viewerPath)` returns a kind, return no session with a new reason,
+  `CTRLYOKE_FILE`.
+  - Add the reason to `LSP_SESSION_LOOKUP_REASONS` (`DashboardConstants.ts`). The server's
+    `LANGUAGE_SERVER_RESOLUTION_REASONS` is an alias of it, so this is one edit.
+  - `useLanguageIntelligence` maps it to no status hint. It isn't an error the user should
+    act on.
+  - The predicate is pure, so the Node server imports the same module the webview does.
+- **Why it can't wait for completions:** without the rule, an installed `yaml-language-server`
+  or `marksman` already attaches to workflow files today. Once Phase 4 lands, users would get
+  two dropdowns and two sets of diagnostics. The exclusion therefore ships as soon as Phase 1's
+  predicate exists, ahead of the completion work.
+- **Later opt-in:** a `languageServers` setting could let `yaml-language-server` contribute
+  formatting only.
+- **Tests:** a `LanguageIntelligenceHost` unit test checks that `.ctrlyoke.yaml`,
+  `.ctrlyoke.json` and `.prompt.md` get `CTRLYOKE_FILE`, and that a plain `.yaml` or `.md`
+  still resolves.
 
 ## Implementation phases
 
@@ -391,6 +449,8 @@ Every phase lands with tests and leaves both editors working.
      lands in a separate chunk.
    - Add `getCtrlYokeFileKind` and its constants, and move `extension.ts` and
      `PromptLinkProvider` onto it.
+   - Add the language-server exclusion in `LanguageIntelligenceHost.lookupSession` and its
+     test. See "Coexistence with language servers".
    - Add `getWorkflowLocation` and `findRangeForPath` for YAML, JSON and Markdown, and move the
      indentation-scan fallback in.
    - Tests: fixture-driven Mocha tests in `src/test/unit/`, alongside
@@ -410,8 +470,8 @@ Every phase lands with tests and leaves both editors working.
    - Tests: pure Mocha tests with a stub data source.
 
 5. **Phase 4: Workspace editor completions.**
-   - Explicit setup in place of `basicSetup`, the `ctrlyokeFileSupport` compartment, and the
-     three sources with body-mounted tooltips.
+   - The `ctrlyokeFileSupport` compartment, and the three sources registered through language
+     data next to `basicSetup` and the LSP compartment, with body-mounted tooltips.
    - A webview `WorkflowValueDataSource` built from the stores.
    - `PROMPT_TEXT` gating for prompt tokens, plus `SCRIPT_TEXT` and permission routing.
    - Tests: `WorkspaceFileEditor.test.tsx` covers key, value and prompt-token completions in
@@ -425,6 +485,8 @@ Every phase lands with tests and leaves both editors working.
      definitions in `WebviewMessageTypes.ts` and the router entry.
    - A side-effect-free validate in `PromptFileParser`.
    - Lint rendering and outline hover.
+   - Prompt-text lint through `PROMPT_DIAGNOSTICS_PLAN.md`'s CodeMirror adapter. That plan's
+     Phase 1 has to land first.
 
 7. **Phase 6: Prompt-text polish.**
    - Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md` bodies, gated by
@@ -448,8 +510,8 @@ Every phase lands with tests and leaves both editors working.
      list.
    - Delete whatever the shared core has made dead, using `scripts/find-dead-methods.mjs`.
 
-Phases 0–2 can land in any order. Phase 4 needs 0, 1 and 3. Nothing here needs the LSP plan's
-standalone-server stages.
+Phases 0–2 can land in any order. Phase 4 needs 0, 1 and 3. The cross-plan order is in
+[`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md).
 
 ## Open questions
 

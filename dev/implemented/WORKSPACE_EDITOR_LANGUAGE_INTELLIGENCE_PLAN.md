@@ -41,10 +41,11 @@ server class. Two pieces run earlier:
 
 **Related plans:**
 
-- [`WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md`](./WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md):
+- [`WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md`](../backlog/WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md):
   ctrlyoke-native completions and diagnostics for workflow files in the same editor, through a
-  sibling `Compartment`. Phase 3 here must skip LSP sessions for files that plan's
-  `getCtrlYokeFileKind` recognizes (see its "Coexistence with the LSP plan").
+  sibling `Compartment`. The rule that ctrlyoke files get no LSP session was **not** built in
+  this plan's Phase 3. That plan now owns it, in `LanguageIntelligenceHost.lookupSession` (see
+  its "Coexistence with language servers"). _Corrected 2026-10-08._
 - [`VSCODE_LSP_MCP_PLAN.md`](./VSCODE_LSP_MCP_PLAN.md): the diagnostics
   end-condition gate and the harness-facing IDE MCP. This plan narrows its
   harness scope (see "Harness side" below) and gives its diagnostics gate a
