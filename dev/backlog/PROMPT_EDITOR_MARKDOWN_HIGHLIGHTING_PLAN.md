@@ -1,5 +1,6 @@
 # Prompt Editor Markdown Highlighting Plan
 
+**Status (2026-10-08):** Phase 0 is done. Phases 1–4 are proposed.
 **Status (2026-10-08):** Phase 1 (single-source palette) is implemented. Phases 0, 2, 3 and 4
 are not started.
 
@@ -263,7 +264,12 @@ embeddedLanguages: { "meta.embedded.block.markdown": "markdown" } }`. The
 
 ## Implementation phases
 
-1. **Phase 0: Readable code ranges.** Ship this first, as it's small.
+1. **Phase 0: Readable code ranges (done 2026-10-08).** Ship this first, as it's small.
+   - As built: `.cm-code-range` now uses `--vscode-editor-font-family`, the normal foreground and
+     `--vscode-textPreformat-background` with a 3px radius. It applies to inline and fenced
+     ranges alike. Phase 2 replaces the shared background with the inline-only box and the
+     background-free fence described above. `createCodeRangeDecorationExtension` and
+     `createLinkDecorationExtension` are now exported for tests.
    - Restyle `.cm-code-range` as in "Code ranges" above, using only existing VS Code variables.
    - No parser change.
    - Tests: no test asserts `.cm-code-range` today. Add one in `CodeMirrorEditor.test.tsx` that

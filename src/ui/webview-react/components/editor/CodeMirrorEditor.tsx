@@ -18,7 +18,6 @@ import {
   findConditionOutputRefs,
   findContextReferenceMatches,
   findInlinePriorContextRefs,
-  findUnknownConditionOutputFields,
   getCodeRanges,
   isInCodeRange,
   type AtomicReferenceChip,
@@ -59,11 +58,9 @@ import {
   ATOMIC_REFERENCE_KINDS,
   BOOLEAN_STRING_VALUES,
   CODE_MIRROR_EDITOR_MODES,
+  PROMPT_DIAGNOSTIC_FIELDS,
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
-  PRIOR_CONTEXT_REFERENCE_KINDS,
-  RETRY_PROMPT_PLACEHOLDERS,
-  SCRIPT_OUTPUT_SOURCES,
   CAPTURING_OUTPUT_PLACEHOLDER,
   OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS,
   COMPLETION_TRIGGERS,
@@ -84,7 +81,15 @@ import {
 import { WebviewLog } from "../../utils/logger";
 import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
-import { formatRangeNotation } from "@root/utils/RangeNotationParser";
+import {
+  checkPriorContextRefs,
+  diagnoseResolvedReferences,
+  getConditionOutputDiagnostics,
+  resolvePromptReferences,
+  type ContextReferenceResolver,
+  type ContextReferenceValidationResult,
+  type PromptDiagnostic,
+} from "@root/utils/PromptDiagnosticRules";
 import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
@@ -156,20 +161,7 @@ interface CodeMirrorEditorProps {
   onInsertApplied?: (requestId: string) => void;
 }
 
-export interface ContextReferenceValidationResult {
-  id: string;
-  exists: boolean;
-  message?: string;
-  /** CompletionItemKind, resolved live for #sym: refs so the chip can show the real symbol-kind icon. */
-  symbolKind?: number;
-  /**
-   * "Did you mean?" replacement reference tokens (e.g. `@src/foo/Bar.ts`) for a
-   * not-found @file / @directory ref, ranked by the extension host
-   * (getPathSuggestions). Rendered as lint quick-fix actions. Absent/empty when
-   * the reference resolves or no close match exists.
-   */
-  suggestions?: string[];
-}
+export type { ContextReferenceValidationResult };
 
 interface ExtensionCompletionItem {
   label: string;
@@ -1959,9 +1951,12 @@ function createPromptDecorationThemeExtension() {
       textDecoration: "underline",
       fontFamily: "var(--vscode-editor-font-family)",
     },
+    // Literal (unexpanded) ranges: readable code, not greyed out. The
+    // suppressed-expansion lint warning is what flags a mistaken reference.
     ".cm-code-range": {
-      color: "var(--vscode-disabledForeground)",
-      fontStyle: "italic",
+      fontFamily: "var(--vscode-editor-font-family)",
+      backgroundColor: "var(--vscode-textPreformat-background)",
+      borderRadius: "3px",
     },
     ".cm-prior-context-ref": {
       fontStyle: "italic",
@@ -2183,46 +2178,76 @@ function createSpellCheckExtension(
   );
 }
 
+/**
+ * Map a shared {@link PromptDiagnostic} onto a CodeMirror diagnostic. The
+ * `detail` line (the offending reference) is folded into the tooltip on its own
+ * italic line; `replacements` become one-click "Change to" quick fixes.
+ */
+function toCodeMirrorDiagnostic(diagnostic: PromptDiagnostic): Diagnostic {
+  const { detail, replacements } = diagnostic;
+  return {
+    from: diagnostic.from,
+    to: diagnostic.to,
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    // The atomic chip suppresses its native hover title while invalid (see
+    // AtomicReferenceWidget.toDOM), so the lint tooltip carries the full
+    // reference text — otherwise the chip's compact label (basename only)
+    // leaves the actual offending path invisible.
+    ...(detail
+      ? {
+          renderMessage: () => {
+            // Rendered inside lint's inline .cm-diagnosticText span, so the
+            // path line is a display:block span (not a div) to stay valid
+            // inline-nesting while still sitting on its own line.
+            const fragment = document.createDocumentFragment();
+            fragment.append(diagnostic.message);
+            const pathLine = document.createElement("span");
+            pathLine.className = "cm-reference-lint-path";
+            pathLine.textContent = detail;
+            fragment.appendChild(pathLine);
+            return fragment;
+          },
+        }
+      : {}),
+    // apply() uses the diagnostic's live from/to so the swap lands correctly
+    // even if the doc changed since linting.
+    ...(replacements?.length
+      ? {
+          actions: replacements.map((replacement) => ({
+            name: `Change to ${replacement}`,
+            apply: (view: EditorView, from: number, to: number) => {
+              view.dispatch({ changes: { from, to, insert: replacement } });
+            },
+          })),
+        }
+      : {}),
+  };
+}
+
 export function createContextReferenceLintExtension(
-  validateReferences: (
-    references: Array<ContextReferenceMatch & { id: string }>
-  ) => Promise<ContextReferenceValidationResult[]>,
+  validateReferences: ContextReferenceResolver,
   symbolIconCache?: Map<string, string>,
   referenceValidity?: Map<string, boolean>
 ) {
   return linter(
     async (view): Promise<Diagnostic[]> => {
-      const allReferences: Array<ContextReferenceMatch & { id: string }> = [];
-      const codeReferenceIds = new Set<string>();
-      const codeRanges = getCodeRanges(view.state.doc.toString());
-
-      for (const { from, to } of view.visibleRanges) {
-        const text = view.state.doc.sliceString(from, to);
-        const matches = findContextReferenceMatches(text, from);
-        matches.forEach((match, index) => {
-          const id = `${match.from}:${match.to}:${match.type}:${index}`;
-          allReferences.push({ ...match, id });
-          if (isInCodeRange(match.from, match.to, codeRanges)) {
-            codeReferenceIds.add(id);
-          }
-        });
-      }
-
-      if (allReferences.length === 0) {
+      const resolved = await resolvePromptReferences(
+        view.state.doc.toString(),
+        validateReferences
+      );
+      if (resolved.length === 0) {
         return [];
       }
 
-      const results = await validateReferences(allReferences);
-      const resultById = new Map(results.map((result) => [result.id, result]));
-
       // Piggyback the resolved symbol kinds (present only for "symbol" refs,
       // see handleContextRefsValidation) onto the atomic-chip icon cache —
-      // this lint pass already validates every visible reference on a
-      // debounce, so it's the natural place to keep that cache warm rather
-      // than running a second round trip just for icons.
+      // this lint pass already validates every reference on a debounce, so
+      // it's the natural place to keep that cache warm rather than running a
+      // second round trip just for icons.
       if (symbolIconCache) {
         let changed = false;
-        for (const reference of allReferences) {
+        for (const { reference, result } of resolved) {
           if (
             reference.type !== ATOMIC_REFERENCE_KINDS.SYMBOL ||
             !reference.path ||
@@ -2230,7 +2255,7 @@ export function createContextReferenceLintExtension(
           ) {
             continue;
           }
-          const symbolKind = resultById.get(reference.id)?.symbolKind;
+          const symbolKind = result?.symbolKind;
           if (symbolKind === undefined) continue;
           const icon =
             COMPLETION_KIND_ICONS[symbolKind] || DEFAULT_COMPLETION_ICON;
@@ -2258,14 +2283,8 @@ export function createContextReferenceLintExtension(
       // that does not mean the reference itself is invalid.
       if (referenceValidity) {
         let validityChanged = false;
-        for (const reference of allReferences) {
-          if (codeReferenceIds.has(reference.id)) continue;
-          const result = resultById.get(reference.id);
-          if (!result) continue;
-          const token = view.state.doc.sliceString(
-            reference.from,
-            reference.to
-          );
+        for (const { text: token, inCode, result } of resolved) {
+          if (inCode || !result) continue;
           if (referenceValidity.get(token) !== result.exists) {
             referenceValidity.set(token, result.exists);
             validityChanged = true;
@@ -2278,71 +2297,7 @@ export function createContextReferenceLintExtension(
         }
       }
 
-      return allReferences.flatMap((reference): Diagnostic[] => {
-        const result = resultById.get(reference.id);
-        const inCode = codeReferenceIds.has(reference.id);
-
-        if (inCode) {
-          // Warn only when the reference points to something that actually exists —
-          // the user may not realize expansion is silently suppressed.
-          if (result?.exists) {
-            return [
-              {
-                from: reference.from,
-                to: reference.to,
-                severity: "warning",
-                message:
-                  "Context expansion suppressed — this reference won't be expanded inside code",
-              },
-            ];
-          }
-          return [];
-        }
-
-        if (!result || result.exists) {
-          return [];
-        }
-
-        const message = result.message || "context not found";
-        // The atomic chip suppresses its native hover title while invalid (see
-        // AtomicReferenceWidget.toDOM), so fold the full reference text into the
-        // lint tooltip on its own italic line — otherwise the chip's compact
-        // label (basename only) leaves the actual offending path invisible.
-        // Captured now, not in the closure, so it reflects the linted text.
-        const referenceText = view.state.doc.sliceString(
-          reference.from,
-          reference.to
-        );
-        return [
-          {
-            from: reference.from,
-            to: reference.to,
-            severity: "warning",
-            message,
-            renderMessage: () => {
-              // Rendered inside lint's inline .cm-diagnosticText span, so the
-              // path line is a display:block span (not a div) to stay valid
-              // inline-nesting while still sitting on its own line.
-              const fragment = document.createDocumentFragment();
-              fragment.append(message);
-              const pathLine = document.createElement("span");
-              pathLine.className = "cm-reference-lint-path";
-              pathLine.textContent = referenceText;
-              fragment.appendChild(pathLine);
-              return fragment;
-            },
-            // One-click "did you mean?" fixes for a mistyped/collapsed path (see
-            // getPathSuggestions). apply() uses the diagnostic's live from/to so
-            // the swap lands correctly even if the doc changed since linting.
-            actions: result.suggestions?.map((suggestion) => ({
-              name: `Change to ${suggestion}`,
-              apply: (view: EditorView, from: number, to: number) => {
-                view.dispatch({ changes: { from, to, insert: suggestion } });
-              },
-            })),
-          },
-        ];
-      });
+      return diagnoseResolvedReferences(resolved).map(toCodeMirrorDiagnostic);
     },
     {
       delay: 400,
@@ -2425,8 +2380,8 @@ function splitCamelCaseWord(
   return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
-// Apply disabled/italic styling to fenced blocks and inline code spans
-function createCodeRangeDecorationExtension() {
+// Mark fenced blocks and inline code spans as literal (`.cm-code-range`)
+export function createCodeRangeDecorationExtension() {
   return ViewPlugin.fromClass(
     class implements PluginValue {
       decorations;
@@ -2471,7 +2426,7 @@ function createCodeRangeDecorationExtension() {
 }
 
 // Decorate links (@file, @dir/, #selection:, #sym:)
-function createLinkDecorationExtension(
+export function createLinkDecorationExtension(
   referenceValidity?: Map<string, boolean>
 ) {
   const linkPlugin = ViewPlugin.fromClass(
@@ -2782,83 +2737,30 @@ export function createPriorContextLintExtension(
 ) {
   return linter(
     (view): Diagnostic[] => {
-      const stepCount = stepCountRef.current ?? 0;
-      const hasFinalStep = hasFinalStepRef.current ?? false;
-      const diagnostics: Diagnostic[] = [];
+      const checks = checkPriorContextRefs(view.state.doc.toString(), {
+        stepCount: stepCountRef.current ?? 0,
+        hasFinalStep: hasFinalStepRef.current ?? false,
+      });
+
       let validityChanged = false;
-      const codeRanges = getCodeRanges(view.state.doc.toString());
-
-      for (const { from, to } of view.visibleRanges) {
-        const text = view.state.doc.sliceString(from, to);
-        const refs = findInlinePriorContextRefs(text, from);
-
-        for (const ref of refs) {
-          if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
-
-          const parsed = ref.ref;
-          let message: string | undefined;
-          // A partially satisfiable ref warns without marking the chip invalid.
-          let resolvable = false;
-          if (
-            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS ||
-            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL
-          ) {
-            if (stepCount <= 0) {
-              message =
-                "Prior context not found — no prior steps are available before this step";
-            } else if (
-              parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS &&
-              parsed.count !== undefined &&
-              parsed.count > stepCount
-            ) {
-              // Not an error at runtime (it takes what exists), but the
-              // author asked for more than this position can ever supply.
-              resolvable = true;
-              message = `Only ${stepCount} prior ${stepCount === 1 ? "step is" : "steps are"} available before this step — $previous:${parsed.count} will include at most ${stepCount}`;
-            }
-          } else if (
-            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP ||
-            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP
-          ) {
-            if (!hasFinalStep) {
-              message = "Prior context not found — no final step is configured";
-            }
-          } else if (parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP) {
-            const outOfRange = parsed.indices.filter(
-              (i) => i < 1 || i > stepCount
-            );
-            if (outOfRange.length > 0) {
-              const label =
-                outOfRange.length === 1
-                  ? `step ${outOfRange[0]} does not exist`
-                  : `steps ${formatRangeNotation(outOfRange)} do not exist`;
-              message = `Prior context not found — ${label}`;
-            }
-          }
-
-          if (message) {
-            diagnostics.push({
-              from: ref.from,
-              to: ref.to,
-              severity: resolvable ? "info" : "warning",
-              message,
-            });
-          }
-          const valid = !message || resolvable;
-          if (referenceValidity && referenceValidity.get(ref.token) !== valid) {
-            referenceValidity.set(ref.token, valid);
-            validityChanged = true;
-          }
+      for (const check of checks) {
+        if (
+          referenceValidity &&
+          referenceValidity.get(check.token) !== check.valid
+        ) {
+          referenceValidity.set(check.token, check.valid);
+          validityChanged = true;
         }
       }
-
       if (validityChanged) {
         view.dispatch({
           effects: referenceValidityUpdatedEffect.of(undefined),
         });
       }
 
-      return diagnostics;
+      return checks.flatMap((check) =>
+        check.diagnostic ? [toCodeMirrorDiagnostic(check.diagnostic)] : []
+      );
     },
     {
       delay: 300,
@@ -2873,74 +2775,15 @@ export function createConditionOutputLintExtension(
   modeRef: React.RefObject<CodeMirrorEditorMode>
 ) {
   return linter(
-    (view): Diagnostic[] => {
-      const hasPreCondition = hasPreConditionRef.current ?? false;
-      const mode = modeRef.current ?? CODE_MIRROR_EDITOR_MODES.PROMPT;
-      const diagnostics: Diagnostic[] = [];
-      const codeRanges = getCodeRanges(view.state.doc.toString());
-
-      for (const { from, to } of view.visibleRanges) {
-        const text = view.state.doc.sliceString(from, to);
-        const refs = findConditionOutputRefs(text, from);
-
-        for (const ref of refs) {
-          if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
-
-          if (
-            ref.phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
-            !hasPreCondition
-          ) {
-            diagnostics.push({
-              from: ref.from,
-              to: ref.to,
-              severity: "warning",
-              message: `$preCondition:${ref.field} has no effect — this step has no pre-condition configured`,
-            });
-          } else if (
-            ref.phase === SCRIPT_OUTPUT_SOURCES.END_CONDITION &&
-            mode !== CODE_MIRROR_EDITOR_MODES.END_CONDITION
-          ) {
-            diagnostics.push({
-              from: ref.from,
-              to: ref.to,
-              severity: "warning",
-              message: `$endCondition:${ref.field} is only available in the retry prompt, not the initial prompt`,
-            });
-          }
-        }
-
-        for (const ref of findUnknownConditionOutputFields(text, from)) {
-          if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
-          const replacement = ref.suggestion
-            ? `$${ref.phase}:${ref.suggestion}`
-            : undefined;
-          diagnostics.push({
-            from: ref.from,
-            to: ref.to,
-            severity: "warning",
-            message: `Unknown field "${ref.field}" for $${ref.phase} — it will not be expanded${
-              replacement ? `. Did you mean ${replacement}?` : ""
-            } Known fields: ${Object.values(RETRY_PROMPT_PLACEHOLDERS).join(", ")}.`,
-            ...(replacement
-              ? {
-                  actions: [
-                    {
-                      name: `Change to ${replacement}`,
-                      apply: (view: EditorView, from: number, to: number) => {
-                        view.dispatch({
-                          changes: { from, to, insert: replacement },
-                        });
-                      },
-                    },
-                  ],
-                }
-              : {}),
-          });
-        }
-      }
-
-      return diagnostics;
-    },
+    (view): Diagnostic[] =>
+      getConditionOutputDiagnostics(view.state.doc.toString(), {
+        hasPreCondition: hasPreConditionRef.current ?? false,
+        field:
+          (modeRef.current ?? CODE_MIRROR_EDITOR_MODES.PROMPT) ===
+          CODE_MIRROR_EDITOR_MODES.END_CONDITION
+            ? PROMPT_DIAGNOSTIC_FIELDS.RETRY_PROMPT
+            : PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
+      }).map(toCodeMirrorDiagnostic),
     {
       delay: 300,
       needsRefresh: isLintRefreshUpdate,

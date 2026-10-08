@@ -1896,7 +1896,10 @@ export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
   ERROR: "error",
 } as const;
 
-/** Diagnostic codes emitted while preparing prompt references for execution. */
+/**
+ * Diagnostic codes for prompt text: emitted while preparing references for
+ * execution, and by the shared editor lint rules (`PromptDiagnosticRules`).
+ */
 export const PROMPT_DIAGNOSTIC_CODES = {
   LARGE_REFERENCE: "prompt.reference.implausibly-large",
   OVER_INLINE_CAP: "prompt.content.over-inline-cap",
@@ -1909,6 +1912,15 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   SECRET_INTERPOLATION_IGNORED: "prompt.secret.interpolation-ignored",
   VARIABLE_SUBSTITUTION_IGNORED: "prompt.variable.substitution-ignored",
   CTRLYOKE_MCP_MODE_SKILL: "prompt.mcp.skill-mode",
+  EXPANSION_SUPPRESSED_IN_CODE: "prompt.reference.suppressed-in-code",
+  PRIOR_CONTEXT_NO_PRIOR_STEPS: "prompt.prior-context.no-prior-steps",
+  PRIOR_CONTEXT_COUNT_CAPPED: "prompt.prior-context.count-capped",
+  PRIOR_CONTEXT_NO_FINAL_STEP: "prompt.prior-context.no-final-step",
+  PRIOR_CONTEXT_STEP_MISSING: "prompt.prior-context.step-missing",
+  CONDITION_NO_PRE_CONDITION: "prompt.condition.no-pre-condition",
+  CONDITION_END_CONDITION_OUTSIDE_RETRY:
+    "prompt.condition.end-condition-outside-retry",
+  CONDITION_FIELD_UNKNOWN: "prompt.condition.field-unknown",
 } as const;
 
 export type PromptDiagnosticCode =
@@ -3134,6 +3146,27 @@ export const CODE_MIRROR_EDITOR_MODES = {
 
 export type CodeMirrorEditorMode =
   (typeof CODE_MIRROR_EDITOR_MODES)[keyof typeof CODE_MIRROR_EDITOR_MODES];
+
+// ============================================================================
+// PROMPT DIAGNOSTICS - Codes and fields for the shared prompt-text lint rules
+// ============================================================================
+/** Which prompt of a step the text belongs to. */
+export const PROMPT_DIAGNOSTIC_FIELDS = {
+  PROMPT: "prompt",
+  RETRY_PROMPT: "retryPrompt",
+} as const;
+
+export type PromptDiagnosticField =
+  (typeof PROMPT_DIAGNOSTIC_FIELDS)[keyof typeof PROMPT_DIAGNOSTIC_FIELDS];
+
+export const PROMPT_DIAGNOSTIC_SEVERITIES = {
+  ERROR: "error",
+  WARNING: "warning",
+  INFO: "info",
+} as const;
+
+export type PromptDiagnosticSeverity =
+  (typeof PROMPT_DIAGNOSTIC_SEVERITIES)[keyof typeof PROMPT_DIAGNOSTIC_SEVERITIES];
 
 // ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type
