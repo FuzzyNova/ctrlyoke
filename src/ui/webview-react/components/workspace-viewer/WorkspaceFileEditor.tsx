@@ -48,6 +48,10 @@ import {
 } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
 import { createWorkflowFileCompletionExtension } from "@utils/workflowFileSupport/workflowFileCompletionExtension";
 import {
+  createWorkflowOutlineHoverExtension,
+  createWorkflowPromptLintExtension,
+} from "@utils/workflowFileSupport/workflowPromptLintExtension";
+import {
   createWorkflowDocumentLintExtension,
   forceLinting,
 } from "@utils/workflowFileSupport/workflowDocumentLintExtension";
@@ -360,6 +364,15 @@ export const WorkspaceFileEditor = forwardRef<
                 kind: ctrlyokeFileKind,
                 getSupport: () => workflowSupportRef.current,
                 transport: getVsCodeApi(),
+              }),
+              createWorkflowPromptLintExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
+                transport: getVsCodeApi(),
+              }),
+              createWorkflowOutlineHoverExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
               }),
             ]
           : [],

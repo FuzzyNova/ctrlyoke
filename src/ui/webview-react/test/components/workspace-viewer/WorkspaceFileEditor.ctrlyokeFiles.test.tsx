@@ -5,8 +5,8 @@ import {
 } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import { diagnosticCount } from "@codemirror/lint";
+import { activateHover, EditorView } from "@codemirror/view";
+import { diagnosticCount, forEachDiagnostic } from "@codemirror/lint";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceFileEditor } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
@@ -37,6 +37,7 @@ interface RequestMessage {
   trigger?: string;
   text?: string;
   position?: number;
+  references?: Array<{ id: string; path?: string }>;
 }
 
 const postMessage = vi.mocked(window.vscodeApi!.postMessage);
@@ -76,6 +77,24 @@ const optionLabels = () =>
   Array.from(document.body.querySelectorAll(".cm-completionLabel")).map(
     (el) => el.textContent
   );
+
+function getDiagnostics(view: EditorView) {
+  const diagnostics: Array<{
+    from: number;
+    to: number;
+    severity: string;
+    message: string;
+  }> = [];
+  forEachDiagnostic(view.state, (diagnostic, from, to) =>
+    diagnostics.push({
+      from,
+      to,
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+    })
+  );
+  return diagnostics;
+}
 
 describe("WorkspaceFileEditor ctrlyoke file support", () => {
   beforeAll(async () => {
@@ -406,4 +425,132 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
     ).toBe(false);
     expect(diagnosticCount(view.state)).toBe(0);
   });
+
+  it("maps a YAML block prompt diagnostic to the exact source token", async () => {
+    const content = "steps:\n  - prompt: |\n      $step:9\n";
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+    const tokenStart = content.indexOf("$step:9");
+
+    await waitFor(() => {
+      expect(
+        getDiagnostics(view).some(
+          (diagnostic) =>
+            diagnostic.message.includes("step 9 does not exist") &&
+            diagnostic.from === tokenStart &&
+            diagnostic.to === tokenStart + "$step:9".length
+        )
+      ).toBe(true);
+    });
+  });
+
+  it("only allows end-condition output references in retryPrompt", async () => {
+    const content =
+      "steps:\n  - prompt: |\n      $endCondition:exitCode\n    endCondition:\n      script: echo ok\n      retryPrompt: |\n        $endCondition:exitCode\n";
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+
+    await waitFor(() => {
+      const diagnostics = getDiagnostics(view).filter((diagnostic) =>
+        diagnostic.message.includes("only available in the retry prompt")
+      );
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0].from).toBe(content.indexOf("$endCondition"));
+    });
+  });
+
+  it("resolves missing references and warns when an existing file is in code", async () => {
+    const content =
+      "steps:\n  - prompt: |\n      @missing.ts and `@existing.ts`\n";
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+
+    await waitFor(() => {
+      const request = latestPostedMessage<RequestMessage>(
+        postMessage,
+        (message) => message.type === MESSAGE_TYPES.VALIDATE_CONTEXT_REFS
+      );
+      expect(request.references).toHaveLength(2);
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.CONTEXT_REFS_VALIDATION,
+            seq: request.seq,
+            results: request.references?.map((reference) => ({
+              id: reference.id,
+              exists: reference.path === "existing.ts",
+              message: "context file not found",
+            })),
+          },
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(getDiagnostics(view).map(({ message }) => message)).toEqual(
+        expect.arrayContaining([
+          "context file not found",
+          "Context expansion suppressed — this reference won't be expanded inside code",
+        ])
+      );
+    });
+  });
+
+  it("ignores prompt-like text in a name and YAML comment", async () => {
+    const content =
+      'name: "$step:9"\n# $step:9\nsteps:\n  - prompt: ordinary text\n';
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    expect(
+      getDiagnostics(view).some((diagnostic) =>
+        diagnostic.message.includes("step 9 does not exist")
+      )
+    ).toBe(false);
+  });
+
+  it("maps diagnostics across escaped JSON prompt characters", async () => {
+    const content = '{"prompt":"$step:\\u0039"}';
+    const { view } = await renderEditor("a.ctrlyoke.json", content);
+    const sourceStart = content.indexOf("$step:");
+
+    await waitFor(() => {
+      const diagnostic = getDiagnostics(view).find((entry) =>
+        entry.message.includes("step 9 does not exist")
+      );
+      expect(diagnostic).toMatchObject({
+        from: sourceStart,
+        to: content.length - 2,
+      });
+    });
+  });
+
+  it.each([
+    {
+      filePath: "a.ctrlyoke.yaml",
+      content: "harness: copilot-cli\nsteps:\n  - prompt: hi\n",
+      key: "harness",
+      expectedDescription: "Harness to use for this prompt.",
+    },
+    {
+      filePath: "a.ctrlyoke.yaml",
+      content: "steps:\n  - prompt: hi\n    model: default\n",
+      key: "model",
+      expectedDescription: "AI model to use for this prompt.",
+    },
+  ])(
+    "shows the schema description when hovering $key",
+    async ({ filePath, content, key, expectedDescription }) => {
+      const { view } = await renderEditor(filePath, content);
+      const offset = content.indexOf(key) + 1;
+      activateHover(view, offset, 1);
+
+      await waitFor(
+        () => {
+          const tooltip = document.body.querySelector(
+            ".cm-tooltip-workflow-outline"
+          );
+          expect(tooltip?.textContent).toContain(expectedDescription);
+        },
+        { timeout: 1000 }
+      );
+    }
+  );
 });

@@ -83,7 +83,6 @@ import {
   resolvePromptReferences,
   type ContextReferenceResolver,
   type ContextReferenceValidationResult,
-  type PromptDiagnostic,
 } from "@root/utils/PromptDiagnosticRules";
 import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
@@ -91,6 +90,7 @@ import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
 import { REFERENCE_BOUNDARY_CHAR_RE } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
+import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
 import { promptTokenCompletionExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
 import {
   buildCodeMirrorCompletionResult,
@@ -1555,52 +1555,7 @@ function createSpellCheckExtension(
   );
 }
 
-/**
- * Map a shared {@link PromptDiagnostic} onto a CodeMirror diagnostic. The
- * `detail` line (the offending reference) is folded into the tooltip on its own
- * italic line; `replacements` become one-click "Change to" quick fixes.
- */
-function toCodeMirrorDiagnostic(diagnostic: PromptDiagnostic): Diagnostic {
-  const { detail, replacements } = diagnostic;
-  return {
-    from: diagnostic.from,
-    to: diagnostic.to,
-    severity: diagnostic.severity,
-    message: diagnostic.message,
-    // The atomic chip suppresses its native hover title while invalid (see
-    // AtomicReferenceWidget.toDOM), so the lint tooltip carries the full
-    // reference text — otherwise the chip's compact label (basename only)
-    // leaves the actual offending path invisible.
-    ...(detail
-      ? {
-          renderMessage: () => {
-            // Rendered inside lint's inline .cm-diagnosticText span, so the
-            // path line is a display:block span (not a div) to stay valid
-            // inline-nesting while still sitting on its own line.
-            const fragment = document.createDocumentFragment();
-            fragment.append(diagnostic.message);
-            const pathLine = document.createElement("span");
-            pathLine.className = "cm-reference-lint-path";
-            pathLine.textContent = detail;
-            fragment.appendChild(pathLine);
-            return fragment;
-          },
-        }
-      : {}),
-    // apply() uses the diagnostic's live from/to so the swap lands correctly
-    // even if the doc changed since linting.
-    ...(replacements?.length
-      ? {
-          actions: replacements.map((replacement) => ({
-            name: `Change to ${replacement}`,
-            apply: (view: EditorView, from: number, to: number) => {
-              view.dispatch({ changes: { from, to, insert: replacement } });
-            },
-          })),
-        }
-      : {}),
-  };
-}
+const toCodeMirrorDiagnostic = toCodeMirrorPromptDiagnostic;
 
 export function createContextReferenceLintExtension(
   validateReferences: ContextReferenceResolver,

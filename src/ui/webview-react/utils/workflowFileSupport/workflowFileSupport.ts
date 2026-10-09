@@ -11,3 +11,5 @@ export {
   parseWorkflowDocumentRoot,
 } from "@root/completions/WorkflowDocumentLocation";
 export { getWorkflowFileCompletions } from "@root/completions/WorkflowFileCompletionCore";
+export { getWorkflowPromptDiagnostics } from "@root/completions/WorkflowPromptDiagnostics";
+export { WORKFLOW_SCHEMA_OUTLINE } from "@root/types/generated/WorkflowSchemaOutline";

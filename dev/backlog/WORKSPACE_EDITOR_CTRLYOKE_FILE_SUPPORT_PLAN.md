@@ -392,14 +392,23 @@ JSON workflow files.
 
 ### Diagnostics
 
-**As built — F5a done 2026-10-08; F5b pending.** `PromptFileParser.validateWorkflowText`
+**As built — F5 done 2026-10-08.** `PromptFileParser.validateWorkflowText`
 parses unsaved YAML, JSON and `.prompt.md` frontmatter without normalization or feedback
 side effects, sharing the schema validator used by the load path. The dashboard message pair
 routes through the shared webview router (including hosted clients); the editor validates only
 ctrlyoke files, debounces by 400 ms and drops stale sequences. Schema ranges are resolved by
 `findRangeForPath` from the lazy workflow-file support chunk, using the pure RFC 6901 pointer
-converter in `src/completions/WorkflowPathFromInstancePath.ts`. F5b remains prompt-text lint and
-outline hover.
+converter in `src/completions/WorkflowPathFromInstancePath.ts`.
+
+Prompt-text lint runs `getWorkflowPromptDiagnostics` from the lazy support chunk, so the
+workspace editor shares D2's decoded `PROMPT_TEXT` spans, document-derived rule context,
+inexact-span filtering and source-offset mapping. Reference checks use the existing
+`VALIDATE_CONTEXT_REFS` round trip. Its CodeMirror diagnostic mapping is shared with the prompt
+editor, including detail lines and replacement actions. The generated outline description is
+shown on key hover using `getWorkflowLocation` and the key's object kind; the completion
+extension's body-mounted tooltip configuration owns tooltip placement. Tests cover YAML and JSON
+source ranges, prompt/retry scope, reference resolution, text outside prompt fields, and root and
+nested key hover.
 
 - **Schema validation stays host-side, in `PromptFileParser`.** Do not bundle ajv into the
   webview. It needs `unsafe-eval`, and a second validator would drift from the one that
@@ -783,7 +792,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      language `yaml`/`json` no longer gets prompt-token completions; both providers key off the
      ctrlyoke file name. Tests need `PromptDocumentStub` with a real file name.
 
-Phases 0, 1, 2, 1b, 3, 4 and 7 are done. Phase 5 needs F4 and D1, both landed. The F3 bug the
+Phases 0, 1, 1b, 2, 3, 4, 5 and 7 are done. The F3 bug the
 Wave 2 review filed,
 [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md),
 is already fixed. The cross-plan order is in
