@@ -597,7 +597,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
           className="flex items-center justify-center border-b border-panel-border py-0.5"
           title={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
         >
-          <ParallelStepsIcon size={10} className="text-description-fg" />
+          <ParallelStepsIcon size={14} className="text-description-fg" />
         </div>
         {indices.map((index) => renderPromptChip(index, true))}
       </div>
