@@ -196,7 +196,7 @@ undefined`). Re-check when extensions change. This closes fact 4's gap without d
      opens a fixture with a missing file, a backticked existing file and `$step:9`, and checks
      the collection's diagnostics.
 
-3. **Phase 3: Schema diagnostics in VS Code.**
+3. **Phase 3: Schema diagnostics in VS Code. (Done 2026-10-08)**
    - ~~Exact `stepIndex`, `hasFinalStep` and condition context~~ Done in Phase 2 (see "Phase 2 as built").
    - YAML schema diagnostics for `.ctrlyoke.yaml`/`.yml`, gated on Red Hat YAML being absent,
      using the file support plan's Phase 5 validate entry point.

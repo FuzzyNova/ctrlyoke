@@ -13,7 +13,7 @@ merged code.
 against the markdown highlighting and prompt diagnostics plans.
 
 **Priority:** P1. The built-in editor is the "real IDE on your phone" pitch
-([`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md) #10), and a workflow file is
+([`SCREENSHOTS_AND_MEDIA_PLAN.md`](../backlog/SCREENSHOTS_AND_MEDIA_PLAN.md) #10), and a workflow file is
 the file a ctrlyoke user is most likely to open in it. Today that file gets less help than it
 gets anywhere else in the product.
 
@@ -26,14 +26,14 @@ gets anywhere else in the product.
   rules (references, prior context, condition output) and VS Code's diagnostics provider. This
   plan's Phase 5 consumes those rules for prompt text and adds the schema diagnostics they
   don't cover.
-- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md)
+- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md)
   (implemented 2026-10-08): generic LSP features for `WorkspaceFileEditor.tsx`. This plan is
   its ctrlyoke-specific sibling. The ctrlyoke-file exclusion that plan was meant to carry was
   not built there, so this plan now owns it. See "Coexistence with language servers".
-- [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](PROMPT_AUTHORING_SUGGESTIONS_PLAN.md): model-written
+- [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md): model-written
   prompt continuations in the prompt editor. It is out of scope here, but once Phase 0 extracts
   the shared prompt-editing extensions, they become the natural place to add it.
-- [`SCHEMASTORE_CATALOG_PLAN.md`](SCHEMASTORE_CATALOG_PLAN.md): schema validation in editors
+- [`SCHEMASTORE_CATALOG_PLAN.md`](../backlog/SCHEMASTORE_CATALOG_PLAN.md): schema validation in editors
   other than ctrlyoke. It does not overlap with this plan.
 
 ## Problem
@@ -745,7 +745,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      `nodeHostedServer.integration.test.ts` for a prompt-token request from a workflow-file
      context.
 
-7. **Phase 5: Diagnostics and hover.**
+7. **Phase 5: Diagnostics and hover.** **Done 2026-10-08.** As built: see "Diagnostics" above.
    - `VALIDATE_WORKFLOW_DOCUMENT` / `WORKFLOW_DOCUMENT_DIAGNOSTICS`, including the type
      definitions in `WebviewMessageTypes.ts` and the router entry.
    - A side-effect-free validate in `PromptFileParser`.
@@ -756,7 +756,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
    - Prompt-text lint through `PROMPT_DIAGNOSTICS_PLAN.md`'s CodeMirror adapter. That plan's
      Phase 1 has to land first.
 
-8. **Phase 6: Prompt-text polish.**
+8. **Phase 6: Prompt-text polish.** **Done 2026-10-08.**
    - **F6a — Done 2026-10-08:** Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md`
      bodies, gated by `ui.atomicContextReferences` and never in JSON. This includes the range
      limiter for `createAtomicReferenceExtension`.

@@ -1,13 +1,8 @@
 # Editor Intelligence Staging Plan
 
-**Status (2026-10-08):** In progress. **Wave 1 is done** (F1, F2, D1, M1 and M0), and so is
-**F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
-merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
-review filed. **Wave 3 is done** (M2, F4 and F7), merged to `main` and reviewed; its review
-fixes are on `main`. **Wave 4 is done** (F5 and D3). **Wave 5 runs after Wave 4**:
-M2b (the Wave 3 review's M2 follow-ups) first, then F6a, followed by M3 and F6b. All are
-done. This plan only orders the work. The design lives in the
-three plans it stages.
+**Status (2026-10-09):** **Done.** All five waves landed and were reviewed; the Waves 4 and 5
+review fixes are in, and the full `npm test` passes. This plan only orders the work. The
+design lives in the three plans it stages, which moved to `dev/implemented/` with it.
 
 This plan is the authoritative order for three overlapping plans:
 
@@ -181,6 +176,23 @@ sessions:
   markdown parses over YAML prompt values, with the unclosed-fence rule inverted; plain `.yaml`
   files losing highlighting when the view is rebuilt.
 
+All three landed (`ab082c69a`, `dc109ac44`, `d2344d354`). Verifying them found that the
+`findCodeRanges` rewrite had introduced new problems: quadratic scanning of unclosed fence
+openers, one unclosed inline opener disabling every later span in its paragraph, and a
+backslash escaping a whole backtick run. It also found YAML highlighting leaking into the next
+file opened. A fourth session (`783fdb52b`) fixed those, made the workspace editor's highlight
+tests force a full parse (a load-dependent flake), and took the remaining small cleanups.
+
+A differential fuzz of that commit against its predecessor (20,000 random prompts) found two
+last inline-span defects, which the orchestrator fixed in the closing commit. Spans could
+nest or overlap: a span closing inside an earlier, still-open longer opener was emitted, so
+` ` x `y `` @x` z ``masked `@x`. An escaped run's unescaped remainder could also close a
+span, though backslashes are literal inside code. Inline matching is now the direct CommonMark
+scan: from each opener outside code, jump to the next run of the same length (binary search
+over run indices per length). `maskCodeRanges` was rebuilt as one pass, since it was quadratic
+in the number of ranges (20 s for`` a`b`` `` × 80,000; now under 50 ms). The full `npm test`
+passes on all three suites.
+
 ## Short answer
 
 - **The three plans can run in parallel, with three ordering constraints:**
@@ -264,9 +276,9 @@ hosted high-contrast light fix, were then committed on `main` directly.
 | **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` | `big-feature`      | The core's first consumer                                                  |
 | **F7:** VS Code completion parity     | —                         | `bug-fix`          | Moved the VS Code providers onto the F3 core                               |
 
-### Wave 4: diagnostics everywhere (Done)
+### Wave 4: diagnostics everywhere
 
-F5's inputs (F4, D1) and Wave 3's review fixes are in. F5 and D3 are complete; D3 uses F5a's
+**Done 2026-10-08.** F5's inputs (F4, D1) and Wave 3's review fixes are in. F5 and D3 are complete; D3 uses F5a's
 side-effect-free `PromptFileParser` validate.
 
 | Phase                                                                 | Hot file                  | Notes                                                                         |
@@ -281,13 +293,13 @@ and resolves the `$preCondition:` caveat left by D2 (plan D, "Phase 2 as built")
 
 ### Wave 5: prompt-text polish
 
-**Runs after Wave 4**, in this order. M2b and F6a + M3 are on different hot files, but M3
+**Done 2026-10-08.** It ran after Wave 4, in this order. M2b and F6a + M3 are on different hot files, but M3
 must not start until M2b has settled what the editor colours as code, or the mismatch
 spreads to a second editor. F6a + M3 also waits for F5, which holds `WorkspaceFileEditor.tsx`.
 
 | Phase                                         | Hot file                                         | Notes                                                                                |
 | --------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| **M2b:** M2 follow-ups from the Wave 3 review | `CodeMirrorEditor.tsx`, `FileReferenceParser.ts` | All three items below, in one change or in order                                     |
+| **M2b:** M2 follow-ups from the Wave 3 review | `CodeMirrorEditor.tsx`, `FileReferenceParser.ts` | **Done:** all three items below                                                      |
 | **F6a:** YAML and `.prompt.md` atomic chips   | `WorkspaceFileEditor.tsx`                        | **Done:** chips and shared prompt-range state; see plan F's Phase 6 entry            |
 | **M3:** nested Markdown in prompt values      | `WorkspaceFileEditor.tsx`                        | **Done:** reuses F6a's prompt-range state                                            |
 | **F6b:** completion polish (**Done**)         | `WorkspaceFileEditor.tsx`                        | Shared workflow-aware completions with the prompt editor; see plan F's Phase 6 entry |
@@ -318,7 +330,7 @@ done in plan M's Phase 2 entry.
 YAML/`.prompt.md` chips and the shared `PROMPT_TEXT` range state they need; **M3** nested
 Markdown in `.prompt.md` and YAML prompt values, reusing that range state; **F6b** the
 completion polish (`$step:` names, `$endCondition:`/`$preCondition:` scoping, `{{var}}` in
-both editors). The orchestrator's review pass makes the move to `dev/implemented/` described
+both editors). The orchestrator's review pass made the move to `dev/implemented/` described
 under "Keeping this plan current".
 
 ## Release-relevance

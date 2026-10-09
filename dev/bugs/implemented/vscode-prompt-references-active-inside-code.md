@@ -68,7 +68,7 @@ Nothing on the VS Code side consults the shared literal-range rule.
     whose `sourceRange` holds the cursor. D2 uses the same spans. Don't write a private
     extractor.
 - **Warning (follow-up):** the dashboard's warning reaches VS Code through
-  [`PROMPT_DIAGNOSTICS_PLAN.md`](../../backlog/PROMPT_DIAGNOSTICS_PLAN.md) Phase 2, a
+  [`PROMPT_DIAGNOSTICS_PLAN.md`](../../implemented/PROMPT_DIAGNOSTICS_PLAN.md) Phase 2, a
   prompt-file diagnostics provider fed by the shared rules. That provider is new
   infrastructure, so it lands separately from the links and completions fix.
 - **Tests:** in `PromptLinkProvider.test.ts` and `PromptCompletionProvider.test.ts`, cover:
@@ -79,5 +79,5 @@ Nothing on the VS Code side consults the shared literal-range rule.
   - a JSON prompt string
   - a reference just outside a span, which must still link and complete
 
-Tracked as part of `dev/backlog/PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md` Phase 4. It can
+Tracked as part of `dev/implemented/PROMPT_EDITOR_MARKDOWN_HIGHLIGHTING_PLAN.md` Phase 4. It can
 also be fixed on its own before that phase.

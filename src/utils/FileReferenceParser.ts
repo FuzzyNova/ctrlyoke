@@ -548,35 +548,35 @@ function findInlineCodeSpans(
     index = runEnd;
   }
 
-  const openByLength = new Map<number, (typeof runs)[number]>();
-  for (const run of runs) {
-    const open = openByLength.get(run.length);
-    if (open) {
-      ranges.push({ from: lineStart + open.from, to: lineStart + run.to });
-      openByLength.delete(run.length);
-      continue;
+  // CommonMark: scanning outside code, an opener pairs with the next run of
+  // exactly its length (backslashes are literal inside code, so a closer is
+  // always the whole run); an opener with no partner is literal text and the
+  // scan resumes after it. Run indices per length make each lookup a binary
+  // search, keeping the paragraph linearithmic.
+  const runIndicesByLength = new Map<number, number[]>();
+  runs.forEach((run, runIndex) => {
+    const indices = runIndicesByLength.get(run.length);
+    if (indices) indices.push(runIndex);
+    else runIndicesByLength.set(run.length, [runIndex]);
+  });
+  let runIndex = 0;
+  while (runIndex < runs.length) {
+    const run = runs[runIndex];
+    // Outside code a backslash escapes only the first backtick; the
+    // remainder may still open a span.
+    const openerFrom = run.escaped ? run.delimiterFrom : run.from;
+    const openerLength = run.escaped ? run.delimiterLength : run.length;
+    const candidates = runIndicesByLength.get(openerLength);
+    const closerIndex = candidates?.[upperBound(candidates, runIndex)];
+    if (openerLength > 0 && closerIndex !== undefined) {
+      ranges.push({
+        from: lineStart + openerFrom,
+        to: lineStart + runs[closerIndex].to,
+      });
+      runIndex = closerIndex + 1;
+    } else {
+      runIndex += 1;
     }
-    if (run.escaped) {
-      if (run.delimiterLength > 0) {
-        const escapedRun = {
-          ...run,
-          from: run.delimiterFrom,
-          length: run.delimiterLength,
-        };
-        const escapedOpen = openByLength.get(escapedRun.length);
-        if (escapedOpen) {
-          ranges.push({
-            from: lineStart + escapedOpen.from,
-            to: lineStart + run.to,
-          });
-          openByLength.delete(escapedRun.length);
-        } else {
-          openByLength.set(escapedRun.length, escapedRun);
-        }
-      }
-      continue;
-    }
-    openByLength.set(run.length, run);
   }
 }
 
@@ -600,12 +600,19 @@ export function maskCodeRanges(
   text: string,
   options: CodeRangeOptions = {}
 ): string {
-  let masked = text;
+  const parts: string[] = [];
+  let copied = 0;
   for (const { from, to } of findCodeRanges(text, options)) {
-    const block = text.slice(from, to).replace(/[@#~!$/{}]/g, "\x00");
-    masked = masked.slice(0, from) + block + masked.slice(to);
+    if (to <= copied) continue;
+    const start = Math.max(from, copied);
+    parts.push(
+      text.slice(copied, start),
+      text.slice(start, to).replace(/[@#~!$/{}]/g, "\x00")
+    );
+    copied = to;
   }
-  return masked;
+  parts.push(text.slice(copied));
+  return parts.join("");
 }
 
 /** Fence literal text with a backtick run longer than any run in its context. */

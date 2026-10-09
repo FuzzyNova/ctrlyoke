@@ -181,6 +181,42 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("never reports a span nested inside or overlapping another", () => {
+      for (const [text, expected] of [
+        ["`` x ` y `` @x ` z", ["`` x ` y ``"]],
+        ["``a`b`` c `@x", ["``a`b``"]],
+        ["``a `b` c`` @x", ["``a `b` c``"]],
+      ] as const) {
+        assert.deepStrictEqual(
+          findCodeRanges(text).map(({ from, to }) => text.slice(from, to)),
+          expected,
+          text
+        );
+      }
+    });
+
+    test("an escaped run's remainder can open a span but never closes one", () => {
+      for (const text of ["`a \\``@x`", "``a \\```@x``"]) {
+        assert.deepStrictEqual(
+          findCodeRanges(text),
+          [{ from: 0, to: text.length }],
+          text
+        );
+      }
+      assert.deepStrictEqual(findCodeRanges("#``-  \\`\\```"), []);
+    });
+
+    test("masks code in linear time", () => {
+      const text = "a`b``".repeat(80_000);
+      const startedAt = Date.now();
+      const masked = maskCodeRanges(text);
+      assert.strictEqual(masked.length, text.length);
+      assert.ok(
+        Date.now() - startedAt < 2500,
+        `maskCodeRanges took ${Date.now() - startedAt}ms for ${text.length} chars`
+      );
+    });
+
     test("keeps a list fence open across a blank line before indented content", () => {
       const text = "* item\n\n  ```\n  @x\n\n  ```";
       assert.deepStrictEqual(findCodeRanges(text), [

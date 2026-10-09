@@ -10,13 +10,13 @@ against the ctrlyoke file support and prompt diagnostics plans.
 
 **Priority:** P2. This is readability polish on the product's most-used surface. It is also
 visible in every prompt-editor capture in
-[`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md) (#9's completion clip, #13a).
+[`SCREENSHOTS_AND_MEDIA_PLAN.md`](../backlog/SCREENSHOTS_AND_MEDIA_PLAN.md) (#9's completion clip, #13a).
 
 **Related plans:**
 
 - [`WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md`](WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md):
   its `PROMPT_TEXT` ranges are where Phase 3 here nests markdown inside YAML prompt values.
-- [`STANDALONE_THEME_SNAPSHOTS_PLAN.md`](STANDALONE_THEME_SNAPSHOTS_PLAN.md): how the hosted
+- [`STANDALONE_THEME_SNAPSHOTS_PLAN.md`](../backlog/STANDALONE_THEME_SNAPSHOTS_PLAN.md): how the hosted
   browser gets VS Code's colour variables. The palette below must work when only a snapshot is
   available.
 
