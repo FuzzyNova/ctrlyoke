@@ -57,14 +57,14 @@ export function buildLanguageIntelligenceMenuItems(
   if (capabilities.renameProvider)
     items.push({
       label: "Rename Symbol",
-      icon: "codicon-edit",
+      icon: "codicon-rename",
       disabled: false,
       onClick: () => void editorRef.current?.renameSymbol(),
     });
   if (capabilities.documentFormattingProvider)
     items.push({
       label: "Format Document",
-      icon: "codicon-brush",
+      icon: "codicon-edit-sparkle",
       disabled: false,
       onClick: () => void editorRef.current?.formatDocument(),
     });
