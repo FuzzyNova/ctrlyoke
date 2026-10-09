@@ -41,11 +41,16 @@ under the lock at ~2243-2279).
 
 ## Suggested Fix
 
-Move the lease acquisition and setup out of the mutation-lock callback for managed worktrees,
-matching named worktrees. Have the locked section return the READY record and repository inputs,
-then call `acquireManagedInfo` after the lock is released. The lease, not the mutation lock, is
-what protects the new worktree once it exists. Add a test that runs two managed creations
-concurrently where the first setup outlasts `LOCK_TIMEOUT_MS`.
+Run the managed setup command outside the mutation-lock callback, matching named worktrees.
+Keep lease acquisition and runtime-trust registration **inside** the lock (they are short). If
+the lease were taken after the lock is released, a concurrent sweep/recovery could see a READY
+record with no live lease and reclaim the new worktree. Split `acquireManagedInfo` so the
+locked section returns the leased info plus whether setup is due, then run setup after the lock
+is released. The record writes that follow setup in `acquireManagedInfo` (BLOCKED on setup
+failure, READY with `setupOutcome` on success) must re-enter `withWorktreeMutationLock`, because
+other record writers (`reconcileBlockedManagedWorktrees`, settlement, cleanup) run under it. Add a test that runs two managed creations
+concurrently where the first setup outlasts `LOCK_TIMEOUT_MS`, and assert that the second
+creation completes while the first setup is still running.
 
 This blocks parallel sub-workflow fan-out in `dev/backlog/WORKFLOW_STEP_PLAN.md`, where several
 managed children start at the same moment.

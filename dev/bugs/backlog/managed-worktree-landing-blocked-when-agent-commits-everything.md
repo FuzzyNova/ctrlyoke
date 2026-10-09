@@ -6,39 +6,47 @@
 
 ## Symptom
 
-A managed-worktree run whose agent runs `git commit` itself, leaving a clean worktree, settles
-as `blocked` with "Managed branch changed without a ctrlyoke landing; refusing to overwrite its
-identity." The branch is not landed, and `merge: true` never runs. The same run lands and merges
-normally if the agent leaves even one uncommitted change.
+A managed-worktree run whose agent runs `git commit` itself settles as `blocked`. The branch is
+not landed, and `merge: true` never runs. Ctrlyoke only lands a branch whose tip it committed itself.
 
 ## Steps to Reproduce
 
 1. Run a workflow with `worktree: { mode: managed, merge: true }` whose prompt tells the agent to
    commit its changes.
-2. The agent commits everything; the worktree is clean at settlement.
-3. Settlement reports `blocked`; no merge happens.
+2. The agent commits (all or part of) its work on the managed branch.
+3. Settlement reports `blocked` with "Managed branch ref moved since ctrlyoke last verified it."
+   No merge happens.
 
 ## Root Cause
 
-`completeManagedRun` (`WorktreeManager.ts` ~735-759):
+(Corrected 2026-10-09 during the bug-drain review. The original analysis blamed the
+`if (!changed)` block, but settlement never reaches it.)
 
-- auto-commits if `hasUncommittedChanges`;
-- returns no-change if HEAD equals the watermark;
-- otherwise `if (!changed) return blocked(...)`.
-
-So "HEAD moved past the watermark on the recorded branch" is accepted when ctrlyoke also
-committed something, and rejected when it didn't. Identity is already checked earlier by
-`validateManagedCheckoutIdentity` (still attached to the recorded branch, ref consistent), which
-is the protection `WORKTREE_SUPPORT_PLAN.md` describes against detach/switch/reset. A
-fast-forward commit by the agent on the recorded branch passes that check, yet is blocked here.
+`completeManagedRun` (`WorktreeManager.ts` ~701) first calls `validateManagedCheckoutIdentity`,
+which requires `branchTip === record.lastVerifiedBranchTip` (~1140). `lastVerifiedBranchTip` is
+written only at creation (`baseCommit`) and at landing, so *any* agent commit, even with leftover
+uncommitted changes, moves the tip and blocks settlement there. The later
+`if (!changed) return blocked("Managed branch changed without a ctrlyoke landing ...")` (~755) is
+effectively unreachable: `getManagedWorktreeWatermark(record)` equals `lastVerifiedBranchTip` in
+every persisted record shape, so HEAD != watermark has already failed the identity check.
 
 ## Suggested Fix
 
-Confirm intent with the worktree design owner first. If agent commits on the recorded branch
-are legitimate (they are common for coding agents), drop the `!changed` block. Instead, require
-`committedHead` to descend from the watermark (`git merge-base --is-ancestor`), which rejects a
-reset or rewritten history while accepting forward commits. Land with the same
-`changedFileCount` computation.
+Decision (orchestrator, pre-release): agent commits on the recorded branch are legitimate. Finalization
+step 5 of `dev/implemented/WORKTREE_SUPPORT_PLAN.md` already speaks of "user/agent changes".
+Reset, rewrite, detach, and branch switches must still be blocked.
+
+- Give the settlement-time identity check a forward-progress mode: still require the
+  worktree to be attached to `info.branchName`, HEAD == branch ref, no Git operation in
+  progress, and no unsafe runtime paths, but accept a branch tip that **descends from**
+  `record.lastVerifiedBranchTip` (`isCommitAncestor` in `src/git/`), not only an equal tip.
+- Remove the dead `!changed` block. Land with the same `changedFileCount` (watermark..HEAD).
+- Make `autoCommitted` in the result reflect whether ctrlyoke actually committed (it is
+  hard-coded `true` today).
+- Audit every other caller of `validateManagedCheckoutIdentity` and every
+  `=== record.lastVerifiedBranchTip` check. Settlement and recovery of an interrupted run
+  should accept forward agent commits. Post-settlement branch cleanup and cleanup eligibility
+  (after landing has refreshed `lastVerifiedBranchTip`) keep strict equality.
 
 This matters for `dev/backlog/WORKFLOW_STEP_PLAN.md`: children with `merge: true` that commit
 their own work would silently fail to merge back before the parent's next wave.
