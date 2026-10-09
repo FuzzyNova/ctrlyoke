@@ -268,8 +268,8 @@ unreliable):
 - [`managed-worktree-setup-runs-inside-mutation-lock`](../bugs/backlog/managed-worktree-setup-runs-inside-mutation-lock.md):
   concurrent managed starts fail with a lock timeout after 5 s of someone else's `setup`, or
   take over the lock after 30 s.
-- [`managed-worktree-landing-blocked-when-agent-commits-everything`](../bugs/backlog/managed-worktree-landing-blocked-when-agent-commits-everything.md):
-  a child whose agent commits all of its own work never lands or merges.
+- [`managed-worktree-landing-blocked-when-agent-commits-everything`](../bugs/implemented/managed-worktree-landing-blocked-when-agent-commits-everything.md):
+  fixed; forward commits on the recorded branch land and merge normally.
 
 ### D5. Path resolution: reuse `PromptFileResolver`; no `.ctrlyoke/workflows/` candidate
 
@@ -692,7 +692,7 @@ rarely conflict; leaving the merge to the AI step suits overlapping lanes.
 | P5  | `merge: true` into a checkout where the parent holds a lease is refused as `blocked` (`WorktreeManager.ts:880-888`); the parent always holds one                                                             | D4d delegated merge lease                                                                                                                     |
 | P6  | Wave N+1 branches from `HEAD`, so uncommitted fixes from the merge step are silently missing                                                                                                                 | D4c dirty-parent check before fan-out                                                                                                         |
 | P7  | Concurrent managed starts with a slow `setup` fail with a lock timeout, or take over the 30 s-stale mutation lock                                                                                            | Prerequisite bug fix (D4)                                                                                                                     |
-| P8  | A child whose agent commits its own work never lands or merges                                                                                                                                               | Prerequisite bug fix (D4)                                                                                                                     |
+| P8  | A child whose agent commits its own work never lands or merges                                                                                                                                               | Fixed; managed settlement accepts forward commits on the recorded branch                                                                      |
 | P9  | The merge step has no way to learn each lane's branch                                                                                                                                                        | D12 result summary                                                                                                                            |
 | P10 | Several children inheriting one exclusive worktree root would conflict on their leases                                                                                                                       | D4d sibling-delegation rule                                                                                                                   |
 

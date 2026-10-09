@@ -1333,6 +1333,118 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("lands agent commits from a clean tree and merges when requested", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-agent-commit-clean"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "agent.txt"), "agent\n");
+    execFileSync("git", ["-C", info.worktreePath, "add", "agent.txt"]);
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "commit", "-m", "agent commit"],
+      { stdio: "ignore" }
+    );
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.autoCommitted, false);
+    assert.strictEqual(result.changedFileCount, 1);
+    assert.strictEqual(result.mergeOutcome, "fast-forward");
+    assert.strictEqual(
+      (await fs.readFile(path.join(repository, "agent.txt"), "utf8")).replace(
+        /\r\n/g,
+        "\n"
+      ),
+      "agent\n"
+    );
+  });
+
+  test("lands agent commits and auto-commits remaining uncommitted work", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-agent-commit-partial"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "agent.txt"), "agent\n");
+    execFileSync("git", ["-C", info.worktreePath, "add", "agent.txt"]);
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "commit", "-m", "agent commit"],
+      { stdio: "ignore" }
+    );
+    await fs.writeFile(
+      path.join(info.worktreePath, "remaining.txt"),
+      "remaining\n"
+    );
+
+    const result = await instance.completeManagedRun(info, { keep: true });
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.autoCommitted, true);
+    assert.strictEqual(result.changedFileCount, 2);
+    assert.strictEqual(
+      await fs.readFile(path.join(info.worktreePath, "remaining.txt"), "utf8"),
+      "remaining\n"
+    );
+  });
+
+  test("blocks landing when the managed branch is reset outside its watermark", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-agent-commit-rewrite"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    const tree = execFileSync(
+      "git",
+      ["-C", info.worktreePath, "rev-parse", "HEAD^{tree}"],
+      { encoding: "utf8" }
+    ).trim();
+    const unrelatedCommit = execFileSync(
+      "git",
+      ["-C", info.worktreePath, "commit-tree", tree, "-m", "unrelated root"],
+      { encoding: "utf8" }
+    ).trim();
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "reset", "--hard", unrelatedCommit],
+      { stdio: "ignore" }
+    );
+
+    const result = await instance.completeManagedRun(info);
+
+    assert.strictEqual(result.landingOutcome, "blocked");
+    assert.match(result.message ?? "", /reset or rewritten/);
+  });
+
+  for (const checkoutState of ["another branch", "detached HEAD"] as const) {
+    test(`blocks landing when the managed worktree is on ${checkoutState}`, async () => {
+      const { parent, repository } = await makeRepository(
+        `managed-agent-${checkoutState.replaceAll(" ", "-")}`
+      );
+      const instance = manager(parent);
+      const info = await ensureManaged(instance, repository);
+      if (checkoutState === "another branch") {
+        execFileSync(
+          "git",
+          ["-C", info.worktreePath, "switch", "-c", "other-branch"],
+          { stdio: "ignore" }
+        );
+      } else {
+        execFileSync("git", ["-C", info.worktreePath, "switch", "--detach"], {
+          stdio: "ignore",
+        });
+      }
+
+      const result = await instance.completeManagedRun(info);
+
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.match(result.message ?? "", /expected|detached HEAD/);
+    });
+  }
+
   test("lands copied runtime artifacts without treating them as blocked paths", async () => {
     const { parent, repository } = await makeRepository("managed-runtime-copy");
     const instance = manager(parent);

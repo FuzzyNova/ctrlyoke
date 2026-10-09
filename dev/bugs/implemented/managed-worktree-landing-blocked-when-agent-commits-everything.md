@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-09 by Claude (WORKFLOW_STEP_PLAN refinement review)
 - **Area:** `src/core/orchestration/WorktreeManager.ts` (`completeManagedRun`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

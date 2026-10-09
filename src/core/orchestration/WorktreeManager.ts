@@ -147,6 +147,13 @@ export interface ManagedWorktreeOwnershipRecord {
     | typeof WORKTREE_SETUP_OUTCOMES.FAILED;
 }
 
+const MANAGED_CHECKOUT_IDENTITY_MODES = {
+  STRICT: "strict",
+  FORWARD_PROGRESS: "forward-progress",
+} as const;
+type ManagedCheckoutIdentityMode =
+  (typeof MANAGED_CHECKOUT_IDENTITY_MODES)[keyof typeof MANAGED_CHECKOUT_IDENTITY_MODES];
+
 function findGitWorktreeEntryForRecord(
   entries: readonly GitWorktreeEntry[],
   record: Pick<ManagedWorktreeOwnershipRecord, "worktreePath">
@@ -701,7 +708,8 @@ export class WorktreeManager {
         const identity = await this.validateManagedCheckoutIdentity(
           repositoryRoot,
           info,
-          record
+          record,
+          MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
         );
         if (!identity.ok) return blocked(identity.message);
 
@@ -752,12 +760,6 @@ export class WorktreeManager {
           );
         }
 
-        if (!changed) {
-          return blocked(
-            "Managed branch changed without a ctrlyoke landing; refusing to overwrite its identity."
-          );
-        }
-
         let changedFileCount: number | undefined;
         try {
           changedFileCount = (
@@ -774,7 +776,8 @@ export class WorktreeManager {
         const landedIdentity = await this.validateManagedCheckoutIdentity(
           repositoryRoot,
           info,
-          { ...record, lastVerifiedBranchTip: committedHead }
+          { ...record, lastVerifiedBranchTip: committedHead },
+          MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
         );
         if (!landedIdentity.ok) return blocked(landedIdentity.message);
         const finalTip = landedIdentity.headCommit;
@@ -819,7 +822,7 @@ export class WorktreeManager {
             branchState: WORKTREE_BRANCH_STATES.PRESENT,
             branchName: info.branchName,
             ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
-            autoCommitted: true,
+            autoCommitted: changed,
             ...(changedFileCount !== undefined ? { changedFileCount } : {}),
             ...(mergeResult?.conflictFiles
               ? { conflictFiles: mergeResult.conflictFiles }
@@ -833,7 +836,7 @@ export class WorktreeManager {
           recordPath,
           landedRecord,
           info,
-          true,
+          changed,
           changedFileCount,
           mergeResult
         );
@@ -1106,7 +1109,8 @@ export class WorktreeManager {
   private async validateManagedCheckoutIdentity(
     repositoryRoot: string,
     info: WorktreeInfo,
-    record: ManagedWorktreeOwnershipRecord
+    record: ManagedWorktreeOwnershipRecord,
+    mode: ManagedCheckoutIdentityMode = MANAGED_CHECKOUT_IDENTITY_MODES.STRICT
   ): Promise<
     { ok: true; headCommit: string } | { ok: false; message: string }
   > {
@@ -1137,10 +1141,21 @@ export class WorktreeManager {
         message: "Managed worktree HEAD does not match its branch ref.",
       };
     }
-    if (branchTip !== record.lastVerifiedBranchTip) {
+    const tipIsVerified =
+      mode === MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
+        ? await isCommitAncestor(
+            repositoryRoot,
+            record.lastVerifiedBranchTip,
+            branchTip
+          )
+        : branchTip === record.lastVerifiedBranchTip;
+    if (!tipIsVerified) {
       return {
         ok: false,
-        message: "Managed branch ref moved since ctrlyoke last verified it.",
+        message:
+          mode === MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
+            ? "Managed branch ref was reset or rewritten outside ctrlyoke; refusing to land."
+            : "Managed branch ref moved since ctrlyoke last verified it.",
       };
     }
     return { ok: true, headCommit };
@@ -1242,7 +1257,7 @@ export class WorktreeManager {
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
         ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
-        ...(autoCommitted ? { autoCommitted: true } : {}),
+        autoCommitted,
         ...(changedFileCount !== undefined ? { changedFileCount } : {}),
         ...(mergeResult?.conflictFiles
           ? { conflictFiles: mergeResult.conflictFiles }
@@ -1325,7 +1340,7 @@ export class WorktreeManager {
       branchName: info.branchName,
       ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
       ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
-      ...(autoCommitted ? { autoCommitted: true } : {}),
+      autoCommitted,
       ...(changedFileCount !== undefined ? { changedFileCount } : {}),
       ...(mergeResult?.conflictFiles
         ? { conflictFiles: mergeResult.conflictFiles }
@@ -2088,6 +2103,7 @@ export class WorktreeManager {
           );
           return;
         }
+        // Cleanup stays strict: a post-settlement tip change is unowned history.
         if (currentTip !== record.lastVerifiedBranchTip) {
           throw new Error(
             "The branch tip changed outside ctrlyoke; refusing cleanup."
@@ -2892,6 +2908,7 @@ export class WorktreeManager {
       if (branchTip) {
         // A changed watermark is evidence that ctrlyoke landed or otherwise
         // verified commits on this branch. Keep it even though setup failed.
+        // Setup recovery may delete only the original, still-untouched branch.
         const branchIsUntouched =
           branchTip === record.lastVerifiedBranchTip &&
           getManagedWorktreeWatermark(record) === record.baseCommit;
@@ -3295,6 +3312,7 @@ export class WorktreeManager {
         reason: "The recorded branch no longer exists.",
       };
     }
+    // Cleanup eligibility is evaluated after settlement and requires the exact landed tip.
     if (currentTip !== record.lastVerifiedBranchTip) {
       return {
         eligible: false,
