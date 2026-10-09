@@ -6,20 +6,12 @@ import {
 } from "@components/shared/StepContextMenu";
 import { type WorkspaceFileEditorHandle } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useLongPress } from "@hooks/useLongPress";
-import { sendMessage } from "@hooks/useMessageHandler";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useWorkflowFileMenuItems } from "@hooks/useWorkflowFileMenuItems";
 import { useEditorStore } from "@store/editorStore";
-import { useUiStore } from "@store/uiStore";
 import { writeClipboardText } from "@utils/stepClipboard";
-import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
-import { postWorkflowDefinitionMutation } from "../utils/workflowMutation";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 
-const PROMPT_FILE_RE = /\.(ctrlyoke\.(yaml|yml|json)|prompt\.md)$/i;
-
-function isPromptFile(path: string | null): boolean {
-  return path ? PROMPT_FILE_RE.test(path) : false;
-}
+const NO_SYMBOL_TITLE = "No symbol at cursor";
 
 function buildSelectionRef(
   path: string,
@@ -35,32 +27,48 @@ function buildFileRef(path: string): string {
   return path.includes(" ") ? `@"${path}"` : `@${path}`;
 }
 
+/**
+ * Symbol actions stay visible but disabled when the click is not on a symbol,
+ * so the menu keeps a stable shape and still advertises what the language
+ * server offers. Format Document acts on the whole file and is always enabled.
+ */
 export function buildLanguageIntelligenceMenuItems(
   editorRef: RefObject<WorkspaceFileEditorHandle | null>,
-  capabilities: Record<string, unknown>
+  capabilities: Record<string, unknown>,
+  hasSymbol: boolean
 ): StepContextMenuEntry[] {
   const items: StepContextMenuEntry[] = [];
+  const symbolItem = (
+    label: string,
+    icon: string,
+    run: (editor: WorkspaceFileEditorHandle) => Promise<void>
+  ): StepContextMenuEntry => ({
+    label,
+    icon,
+    disabled: !hasSymbol,
+    disabledTitle: NO_SYMBOL_TITLE,
+    onClick: () => {
+      if (editorRef.current) void run(editorRef.current);
+    },
+  });
   if (capabilities.definitionProvider)
-    items.push({
-      label: "Go to Definition",
-      icon: "codicon-go-to-file",
-      disabled: false,
-      onClick: () => void editorRef.current?.goToDefinition(),
-    });
+    items.push(
+      symbolItem("Go to Definition", "codicon-go-to-file", (editor) =>
+        editor.goToDefinition()
+      )
+    );
   if (capabilities.referencesProvider)
-    items.push({
-      label: "Find All References",
-      icon: "codicon-references",
-      disabled: false,
-      onClick: () => void editorRef.current?.findAllReferences(),
-    });
+    items.push(
+      symbolItem("Find All References", "codicon-references", (editor) =>
+        editor.findAllReferences()
+      )
+    );
   if (capabilities.renameProvider)
-    items.push({
-      label: "Rename Symbol",
-      icon: "codicon-rename",
-      disabled: false,
-      onClick: () => void editorRef.current?.renameSymbol(),
-    });
+    items.push(
+      symbolItem("Rename Symbol", "codicon-rename", (editor) =>
+        editor.renameSymbol()
+      )
+    );
   if (capabilities.documentFormattingProvider)
     items.push({
       label: "Format Document",
@@ -97,23 +105,23 @@ export function useWorkspaceEditorContextMenu({
   editorRef,
   filePath,
 }: UseWorkspaceEditorContextMenuOptions): UseWorkspaceEditorContextMenuResult {
-  const vscode = useVsCodeApi();
-  const { displayedViewAddress } = useUiStore();
+  const buildWorkflowFileMenuItems = useWorkflowFileMenuItems();
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
 
   const openContextMenu = useCallback(
     (x: number, y: number) => {
+      editorRef.current?.placeCaretAtCoords(x, y);
       const selectionText = editorRef.current?.getSelectionText() ?? "";
       const selectionRange = editorRef.current?.getSelectionRange();
       const hasSelection = selectionText.length > 0;
-      const promptFile = isPromptFile(filePath);
       const languageCapabilities =
         editorRef.current?.getLanguageCapabilities() ?? {};
       const languageItems = buildLanguageIntelligenceMenuItems(
         editorRef,
-        languageCapabilities
+        languageCapabilities,
+        editorRef.current?.hasSymbolAtCaret() ?? false
       );
 
       const items: StepContextMenuEntry[] = [
@@ -173,52 +181,12 @@ export function useWorkspaceEditorContextMenu({
             enqueuePromptEditorReference(buildFileRef(filePath));
           },
         },
+        ...buildWorkflowFileMenuItems(filePath),
       ];
-
-      if (promptFile && filePath) {
-        items.push(
-          { type: "divider" },
-          {
-            label: "Run Workflow",
-            icon: "codicon-play",
-            disabled: false,
-            onClick: () => {
-              vscode.postMessage({
-                type: MESSAGE_TYPES.LOAD_WORKFLOW,
-                filePath,
-              });
-              sendMessage(MESSAGE_TYPES.RUN);
-            },
-          },
-          {
-            label: "Load Workflow",
-            icon: "codicon-folder-opened",
-            disabled: false,
-            onClick: () =>
-              vscode.postMessage({
-                type: MESSAGE_TYPES.LOAD_WORKFLOW,
-                filePath,
-              }),
-          },
-          {
-            label:
-              displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-                ? "Append and Continue Workflow"
-                : "Queue Workflow",
-            icon: "codicon-list-ordered",
-            disabled: false,
-            onClick: () =>
-              postWorkflowDefinitionMutation(vscode, {
-                type: MESSAGE_TYPES.APPEND_FILE,
-                filePath,
-              }),
-          }
-        );
-      }
 
       setContextMenu({ x, y, items });
     },
-    [editorRef, filePath, vscode, displayedViewAddress]
+    [editorRef, filePath, buildWorkflowFileMenuItems]
   );
 
   const editorLongPressHandlers = useLongPress((x, y) => openContextMenu(x, y));

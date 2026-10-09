@@ -3,11 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
+import { MESSAGE_TYPES } from "@/types/messages";
 
 const apiMocks = vi.hoisted(() => ({
   workspaceCopyEntry: vi.fn(),
   workspaceDeleteEntry: vi.fn(),
   workspaceMoveEntry: vi.fn(),
+}));
+
+const postMessage = vi.hoisted(() => vi.fn());
+vi.mock("@hooks/useVsCodeApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@hooks/useVsCodeApi")>()),
+  useVsCodeApi: () => ({ postMessage }),
 }));
 
 vi.mock("@utils/hostedApi", async (importOriginal) => ({
@@ -71,6 +78,43 @@ describe("useWorkspaceExplorerContextMenu file history", () => {
     expect(
       screen.queryByRole("button", { name: "View File History" })
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("useWorkspaceExplorerContextMenu workflow actions", () => {
+  const workflowLabels = ["Run Workflow", "Load Workflow", "Queue Workflow"];
+
+  it("offers workflow actions for a workflow file and loads it", () => {
+    render(
+      <TestHarness
+        entry={{
+          name: "build.ctrlyoke.yaml",
+          path: "flows\\build.ctrlyoke.yaml",
+          kind: "file",
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    for (const label of workflowLabels)
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load Workflow" }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.LOAD_WORKFLOW,
+      filePath: "flows/build.ctrlyoke.yaml",
+    });
+  });
+
+  it.each([
+    { name: "file.ts", path: "src/file.ts", kind: "file" as const },
+    { name: "flows", path: "flows", kind: "directory" as const },
+  ])("omits workflow actions for $path", (entry) => {
+    render(<TestHarness entry={entry} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    for (const label of workflowLabels)
+      expect(
+        screen.queryByRole("button", { name: label })
+      ).not.toBeInTheDocument();
   });
 });
 

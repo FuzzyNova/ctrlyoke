@@ -92,6 +92,15 @@ export interface WorkspaceFileEditorHandle {
   getSelectionText: () => string;
   getSelectionRange: () => { startLine: number; endLine: number } | null;
   getLanguageCapabilities: () => Record<string, unknown>;
+  /**
+   * Moves the caret to the given client coordinates, as a right-click does in
+   * VS Code, unless they land inside the current selection (which is kept so
+   * Cut/Copy still act on it). CodeMirror itself only moves the caret for the
+   * primary button.
+   */
+  placeCaretAtCoords: (x: number, y: number) => void;
+  /** True when the caret touches a word the symbol actions can act on. */
+  hasSymbolAtCaret: () => boolean;
   goToDefinition: () => Promise<void>;
   findAllReferences: () => Promise<void>;
   renameSymbol: () => Promise<void>;
@@ -356,6 +365,21 @@ export const WorkspaceFileEditor = forwardRef<
         },
         getLanguageCapabilities: () =>
           languageIntelligenceRef.current.capabilities,
+        placeCaretAtCoords: (x: number, y: number) => {
+          const view = viewRef.current;
+          const pos = view?.posAtCoords({ x, y });
+          if (!view || pos == null) return;
+          const { from, to } = view.state.selection.main;
+          if (from !== to && pos >= from && pos <= to) return;
+          view.dispatch({
+            selection: EditorSelection.cursor(pos),
+            userEvent: "select.pointer",
+          });
+        },
+        hasSymbolAtCaret: () => {
+          const view = viewRef.current;
+          return !!view?.state.wordAt(view.state.selection.main.head);
+        },
         goToDefinition,
         findAllReferences,
         renameSymbol,
