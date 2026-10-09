@@ -11,7 +11,10 @@ export {
   parseWorkflowDocumentRoot,
 } from "@root/completions/WorkflowDocumentLocation";
 export { getWorkflowFileCompletions } from "@root/completions/WorkflowFileCompletionCore";
-export { getWorkflowPromptDiagnostics } from "@root/completions/WorkflowPromptDiagnostics";
+export {
+  getWorkflowPromptDiagnostics,
+  getWorkflowPromptCompletionContext,
+} from "@root/completions/WorkflowPromptDiagnostics";
 export { getPromptCodeRanges } from "@root/completions/PromptCodeRanges";
 export { createWorkflowPromptRangesField } from "./workflowPromptRanges";
 export {

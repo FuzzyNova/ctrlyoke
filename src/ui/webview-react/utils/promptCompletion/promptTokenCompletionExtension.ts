@@ -8,6 +8,10 @@ import { EditorState, type Extension } from "@codemirror/state";
 import { tooltips } from "@codemirror/view";
 import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
 import { DEFAULT_COMPLETION_ICON } from "@utils/atomicReferences";
+import type { PromptCompletionWorkflowContext } from "@root/completions/PromptContextCompletions";
+import { getWorkflowVariableCompletions } from "@root/completions/PromptContextCompletions";
+import { COMPLETION_ITEM_KINDS } from "@root/types/DashboardConstants";
+import { findCustomCompletionContext } from "./promptCompletionResult";
 
 export interface PromptTokenCompletionOptions {
   sources: readonly CompletionSource[];
@@ -16,6 +20,79 @@ export interface PromptTokenCompletionOptions {
    * a workflow file). A source is skipped where the gate returns false.
    */
   gate?: (context: CompletionContext) => boolean;
+}
+
+/** Wrap the host-backed source with workflow-aware `$` and `{{var}}` items. */
+export function createWorkflowContextCompletionSource(
+  client: {
+    customSource: (
+      context: CompletionContext,
+      escape?: import("@root/completions/WorkflowInsertEscape").InsertTextEscape
+    ) => ReturnType<CompletionSource>;
+  },
+  getContext: (
+    context: CompletionContext
+  ) => PromptCompletionWorkflowContext | undefined,
+  getPriorItems: (
+    query: string,
+    context: PromptCompletionWorkflowContext
+  ) => import("@root/completions/CompletionCore").PlainCompletionItem[],
+  getEscape?: (
+    context: CompletionContext
+  ) =>
+    | import("@root/completions/WorkflowInsertEscape").InsertTextEscape
+    | undefined
+): CompletionSource {
+  return (context) => {
+    const line = context.state.doc.lineAt(context.pos);
+    const before = line.text.slice(0, context.pos - line.from);
+    const variable = context.matchBefore(/\{\{\w*$/);
+    if (variable) {
+      const query = variable.text.slice(2);
+      const vars = getContext(context)?.vars ?? {};
+      const items = getWorkflowVariableCompletions(vars, query);
+      if (!items.length) return null;
+      return {
+        from: variable.from + 2,
+        to: context.pos,
+        options: items.map((item) => ({
+          label: item.label,
+          detail: item.detail,
+          apply: item.insertText,
+          type: "symbol-variable",
+          boost: -items.indexOf(item),
+        })),
+      };
+    }
+    const trigger = findCustomCompletionContext(before, line.from);
+    if (trigger?.trigger === "$") {
+      const workflowContext = getContext(context);
+      if (!workflowContext) {
+        return client.customSource(context, getEscape?.(context));
+      }
+      const items = getPriorItems(trigger.query, workflowContext);
+      return items.length
+        ? {
+            from: trigger.from + 1,
+            to: context.pos,
+            options: items.map((item, index) => ({
+              label: item.label,
+              detail: item.detail,
+              apply: item.label.endsWith(":")
+                ? item.insertText
+                : `${item.insertText} `,
+              type:
+                item.icon ||
+                (item.kind === COMPLETION_ITEM_KINDS.VARIABLE
+                  ? "symbol-variable"
+                  : "book"),
+              boost: -index,
+            })),
+          }
+        : null;
+    }
+    return client.customSource(context, getEscape?.(context));
+  };
 }
 
 function gateSources({

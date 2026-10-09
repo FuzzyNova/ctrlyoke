@@ -5,8 +5,8 @@
 merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
 review filed. **Wave 3 is done** (M2, F4 and F7), merged to `main` and reviewed; its review
 fixes are on `main`. **Wave 4 is done** (F5 and D3). **Wave 5 runs after Wave 4**:
-M2b (the Wave 3 review's M2 follow-ups) first, then F6a, followed by M3 and F6b. F6a and M3
-are done; F6b remains. This plan only orders the work. The design lives in the
+M2b (the Wave 3 review's M2 follow-ups) first, then F6a, followed by M3 and F6b. All are
+done. This plan only orders the work. The design lives in the
 three plans it stages.
 
 This plan is the authoritative order for three overlapping plans:
@@ -45,7 +45,7 @@ it.
 | M2    | **Done** (2026-10-08) | Markdown in the prompt editor: GFM plus memoised nested fence languages, quote/list mark tags, ctrlyoke mark decorations at `Prec.highest`, spellcheck skips fence info and link URLs. Details in plan M's Phase 2 entry.                                                                       |
 | M2b   | **Done** (2026-10-08) | Reference links split by markdown emphasis now have uniform styling; inline code uses the shared inline-code colour and VS Code code-span border, while fenced code leaves nested token colours visible. The code-range mark remains at default precedence.                                     |
 | M3    | **Done** (2026-10-08) | Shared Markdown in workspace `.md`/`.prompt.md` files; Markdown token styling in decoded YAML `PROMPT_TEXT` block scalars through a lazy YAML parser chunk. Details in plan M's Phase 3 entry.                                                                                                  |
-| F6b   | Not started           | Completion polish (`$step:` names, `$endCondition:`/`$preCondition:` scoping, and `{{var}}`) in both editors.                                                                                                                                                                                   |
+| F6b   | **Done** (2026-10-08) | Shared workflow-aware prompt completions: named visible `$step:` items, condition-output scoping and `{{var}}` from workflow vars in both CodeMirror editors. Details in plan F's Phase 6 "As built".                                                                                           |
 
 ### Wave 1 review (2026-10-08)
 
@@ -266,12 +266,12 @@ and resolves the `$preCondition:` caveat left by D2 (plan D, "Phase 2 as built")
 must not start until M2b has settled what the editor colours as code, or the mismatch
 spreads to a second editor. F6a + M3 also waits for F5, which holds `WorkspaceFileEditor.tsx`.
 
-| Phase                                         | Hot file                                         | Notes                                                                         |
-| --------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| **M2b:** M2 follow-ups from the Wave 3 review | `CodeMirrorEditor.tsx`, `FileReferenceParser.ts` | All three items below, in one change or in order                              |
-| **F6a:** YAML and `.prompt.md` atomic chips   | `WorkspaceFileEditor.tsx`                        | **Done:** chips and shared prompt-range state; see plan F's Phase 6 entry     |
-| **M3:** nested Markdown in prompt values      | `WorkspaceFileEditor.tsx`                        | **Done:** reuses F6a's prompt-range state                                     |
-| **F6b:** completion polish                    | `WorkspaceFileEditor.tsx`                        | Reuses F6a's prompt-range state; shares completion sources with prompt editor |
+| Phase                                         | Hot file                                         | Notes                                                                                |
+| --------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| **M2b:** M2 follow-ups from the Wave 3 review | `CodeMirrorEditor.tsx`, `FileReferenceParser.ts` | All three items below, in one change or in order                                     |
+| **F6a:** YAML and `.prompt.md` atomic chips   | `WorkspaceFileEditor.tsx`                        | **Done:** chips and shared prompt-range state; see plan F's Phase 6 entry            |
+| **M3:** nested Markdown in prompt values      | `WorkspaceFileEditor.tsx`                        | **Done:** reuses F6a's prompt-range state                                            |
+| **F6b:** completion polish (**Done**)         | `WorkspaceFileEditor.tsx`                        | Shared workflow-aware completions with the prompt editor; see plan F's Phase 6 entry |
 
 M2b covers:
 

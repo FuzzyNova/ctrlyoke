@@ -334,6 +334,19 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ? workflowProperties.preCondition
         : globalSettings.defaultPreCondition;
   const hasPreCondition = effectivePreCondition != null;
+  const workflowCompletionContext = {
+    stepNames: prompts
+      .slice(
+        0,
+        selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+          ? stepCount
+          : prompts.length
+      )
+      .map((step) => step.name),
+    vars: workflowProperties.vars ?? {},
+    field: "prompt" as const,
+    hasPreCondition,
+  };
   const isRunning = isWorkflowRunning(executionState);
   const selectedPromptStatus =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
@@ -1428,6 +1441,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             stepCount={stepCount}
             hasFinalStep={hasFinalStep}
             hasPreCondition={hasPreCondition}
+            workflowCompletionContext={workflowCompletionContext}
             pendingInsertRequest={pendingPromptEditorInsert}
             onInsertApplied={consumePromptEditorInsert}
           />

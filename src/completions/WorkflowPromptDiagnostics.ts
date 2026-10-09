@@ -18,6 +18,7 @@ import { getWorkflowTextSpans } from "./WorkflowPromptRanges";
 import { isRecord, type WorkflowPath } from "./WorkflowLocationTypes";
 import type { WorkflowTextSpan } from "./WorkflowTextDecoding";
 import { resolveNullable } from "../types/ExecutionPropertyResolver";
+import type { PromptCompletionWorkflowContext } from "./PromptContextCompletions";
 
 /**
  * Prompt-text diagnostics for a whole ctrlyoke file: every prompt value runs
@@ -135,6 +136,63 @@ function getSpanContext(
     hasEndCondition:
       isRecord(owner) && owner[PROMPT_PROPERTIES.END_CONDITION] != null,
     field: promptField(span),
+  };
+}
+
+/** Workflow facts used by prompt-token completions at a document offset. */
+export function getWorkflowPromptCompletionContext(
+  text: string,
+  kind: CtrlYokeFileKind,
+  offset: number
+): PromptCompletionWorkflowContext | undefined {
+  const span = getWorkflowTextSpans(text, kind).find(
+    (candidate) =>
+      candidate.exact &&
+      offset >= candidate.sourceRange.start &&
+      offset <= candidate.sourceRange.end
+  );
+  if (!span) return undefined;
+  const root =
+    kind === CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN
+      ? undefined
+      : parseWorkflowDocumentRoot(text, kind);
+  const fields = isRecord(root) ? root : {};
+  const steps = Array.isArray(fields[PROMPT_PROPERTIES.STEPS])
+    ? (fields[PROMPT_PROPERTIES.STEPS] as unknown[])
+    : [];
+  const path = span.path;
+  let visibleEntries: unknown[] = [];
+  if (
+    kind !== CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN &&
+    path[0] !== PROMPT_PROPERTIES.STEPS
+  ) {
+    // Workflow-level retry prompts have unknown execution position; like the
+    // lint context, use the most permissive view (all queue steps).
+    visibleEntries = steps;
+  } else if (
+    path[0] === PROMPT_PROPERTIES.STEPS &&
+    typeof path[1] === "number"
+  ) {
+    visibleEntries = steps.slice(0, path[1]);
+  }
+  const stepNames = visibleEntries.flatMap((entry) => {
+    const members = parallelMembers(entry);
+    const authored = members ?? [entry];
+    return authored.map((member) =>
+      isRecord(member) && typeof member[PROMPT_PROPERTIES.NAME] === "string"
+        ? (member[PROMPT_PROPERTIES.NAME] as string)
+        : undefined
+    );
+  });
+  const diagnosticContext = getSpanContext(span, root);
+  const vars = isRecord(fields[PROMPT_PROPERTIES.VARS])
+    ? (fields[PROMPT_PROPERTIES.VARS] as Record<string, unknown>)
+    : {};
+  return {
+    stepNames,
+    vars,
+    field: diagnosticContext.field,
+    hasPreCondition: diagnosticContext.hasPreCondition,
   };
 }
 

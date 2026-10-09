@@ -92,6 +92,9 @@ import { notifyUser } from "@utils/notifyUser";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
 import { promptTokenCompletionExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
+import { createWorkflowContextCompletionSource } from "@utils/promptCompletion/promptTokenCompletionExtension";
+import type { PromptCompletionWorkflowContext } from "@root/completions/PromptContextCompletions";
+import { getContextualPriorCompletions } from "@root/completions/PromptContextCompletions";
 import {
   buildCodeMirrorCompletionResult,
   findCustomCompletionContext,
@@ -159,6 +162,8 @@ interface CodeMirrorEditorProps {
   hasFinalStep?: boolean;
   /** Whether this step has an effective pre-condition configured. */
   hasPreCondition?: boolean;
+  /** Workflow facts for scoped prompt-token completions. */
+  workflowCompletionContext?: PromptCompletionWorkflowContext;
   /** Pending external insert request from VS Code context menus. */
   pendingInsertRequest?: PromptEditorInsertRequest | null;
   /** Called after a pending external insert has been applied. */
@@ -259,6 +264,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const stepCountRef = useRef(props.stepCount ?? 0);
   const hasFinalStepRef = useRef(props.hasFinalStep ?? false);
   const hasPreConditionRef = useRef(props.hasPreCondition ?? false);
+  const workflowCompletionContextRef = useRef(props.workflowCompletionContext);
+  workflowCompletionContextRef.current = props.workflowCompletionContext;
   const modeRef = useRef<CodeMirrorEditorMode>(mode);
   const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
   const placeholderCompartmentRef = useRef(new Compartment());
@@ -863,7 +870,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           )
         ),
         promptTokenCompletionExtension({
-          sources: [completionClient.customSource, completionClient.pathSource],
+          sources: [
+            createWorkflowContextCompletionSource(
+              completionClient,
+              () => workflowCompletionContextRef.current,
+              getContextualPriorCompletions
+            ),
+            completionClient.pathSource,
+          ],
         }),
         EditorView.domEventHandlers({
           blur: () => {

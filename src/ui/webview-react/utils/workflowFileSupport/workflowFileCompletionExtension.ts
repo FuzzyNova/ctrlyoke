@@ -19,7 +19,11 @@ import { getWorkflowInsertEscape } from "@root/completions/WorkflowInsertEscape"
 import { DEFAULT_COMPLETION_ICON } from "@utils/atomicReferences";
 import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
 import type { PromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
-import { promptTokenLanguageDataExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
+import {
+  createWorkflowContextCompletionSource,
+  promptTokenLanguageDataExtension,
+} from "@utils/promptCompletion/promptTokenCompletionExtension";
+import { getContextualPriorCompletions } from "@root/completions/PromptContextCompletions";
 import { findCustomCompletionContext } from "@utils/promptCompletion/promptCompletionResult";
 import type { WorkflowFileSupport } from "./loadWorkflowFileSupport";
 import {
@@ -172,10 +176,20 @@ function createPromptTokenSource(
       );
       if (trigger && trigger.from < valueStart) return null;
     }
-    return options.promptClient.customSource(
-      context,
-      getWorkflowInsertEscape(located.location)
+    const workflowSource = createWorkflowContextCompletionSource(
+      options.promptClient,
+      (completionContext) =>
+        options
+          .getSupport()
+          ?.getWorkflowPromptCompletionContext(
+            completionContext.state.doc.toString(),
+            options.kind,
+            completionContext.pos
+          ),
+      getContextualPriorCompletions,
+      () => getWorkflowInsertEscape(located.location)
     );
+    return workflowSource(context);
   };
 }
 

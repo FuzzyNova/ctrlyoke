@@ -1,9 +1,9 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-08):** Phases 0, 1, 2, 1b, 3, 4, 5 and 7 are implemented, and Phase 6a
-chips are implemented (see their entries under "Implementation phases"). Phase 1b fixed the
+**Status (2026-10-08):** Phases 0, 1, 2, 1b, 3, 4, 5, 6 and 7 are implemented (see their
+entries under "Implementation phases"). Phase 1b fixed the
 bugs the Wave 1 review found in 1 and 2 and added the decoded prompt ranges Wave 2 needs.
-Phase 6b completion polish remains. _Refreshed
+_Refreshed
 2026-10-08:_ the language intelligence plan shipped (`dev/implemented/`). Facts 2 and 9,
 "Editor integration" and "Coexistence with language servers" were re-audited against the
 merged code.
@@ -753,8 +753,9 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
    - **F6a — Done 2026-10-08:** Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md`
      bodies, gated by `ui.atomicContextReferences` and never in JSON. This includes the range
      limiter for `createAtomicReferenceExtension`.
-   - **F6b — Pending:** `$step:` items with step names, `$endCondition:`/`$preCondition:`
-     scoping, and `{{var}}` completions (adopted by the prompt editor too).
+   - **F6b — Done 2026-10-08:** `$step:` items with visible step names,
+     `$endCondition:`/`$preCondition:` scoping, and workflow `{{var}}` completions;
+     the shared completion source is also used by the prompt editor.
    - Tests (`WorkspaceFileEditor.ctrlyokeFiles.test.tsx`):
      - chips render inside a YAML `prompt:` block scalar but not in a comment or `name:`
      - an escaped reference in a quoted scalar stays a link
@@ -773,8 +774,14 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
    bodies, skips decoded code ranges and quoted YAML scalars containing escapes, and keeps
    ordinary reference links elsewhere. Toggling the setting reconfigures `ctrlyokeFileSupport`
    without replacing the view. Tests cover YAML, quoted escapes, JSON, prompt Markdown,
-   navigation, live toggling and unchanged document bytes. Completion polish remains in F6b;
-   nested Markdown remains M3.
+   navigation, live toggling and unchanged document bytes. Nested Markdown is M3.
+
+   **As built — F6b done 2026-10-08.** `PromptContextCompletions.ts` builds the shared
+   workflow-aware `$` and `{{var}}` items. The workspace editor derives names, visible prior
+   steps, variables and condition scope from the parsed document; the prompt editor supplies
+   the selected workflow's visible steps and vars. Condition items follow the same retry-prompt
+   and effective pre-condition rules as `PromptDiagnosticRules`. Tests cover step names and
+   bounds, condition scoping, workflow vars and both CodeMirror completion-source paths.
 
 9. **Phase 7: VS Code parity.** **Done 2026-10-08.** This can be done on its own schedule.
    - `PromptPropertyCompletionProvider` gains value completions and covers JSON through
@@ -807,7 +814,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      language `yaml`/`json` no longer gets prompt-token completions; both providers key off the
      ctrlyoke file name. Tests need `PromptDocumentStub` with a real file name.
 
-Phases 0, 1, 1b, 2, 3, 4, 5, 6a and 7 are done. Phase 6b remains. The F3 bug the
+Phases 0, 1, 1b, 2, 3, 4, 5, 6 and 7 are done. The F3 bug the
 Wave 2 review filed,
 [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md),
 is already fixed. The cross-plan order is in
