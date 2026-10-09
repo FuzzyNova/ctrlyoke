@@ -1143,8 +1143,57 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
     expect(result).toEqual({
       from: "Review".length,
       to: "Review".length,
-      text: " @src/app.ts",
+      text: " @src/app.ts ",
     });
+  });
+
+  it("appends a trailing space unless whitespace already follows the cursor", () => {
+    const beforeText = buildPromptReferenceInsertion(
+      "See here",
+      {
+        requestId: "insert-6",
+        references: ["@src/ui/"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+      { from: "See ".length, to: "See ".length }
+    );
+    expect(beforeText.text).toBe("@src/ui/ ");
+
+    const beforeSpace = buildPromptReferenceInsertion(
+      "See  here",
+      {
+        requestId: "insert-7",
+        references: ["@src/ui/"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+      { from: "See ".length, to: "See ".length }
+    );
+    expect(beforeSpace.text).toBe("@src/ui/");
+  });
+
+  it("keeps back-to-back inserts of every reference kind separated", () => {
+    const references = [
+      "@src/ui/",
+      '@"path with spaces/a.ts"',
+      "#selection:src/a.ts:1-2",
+      "~commit:abc1234",
+      "@src/app.ts",
+    ];
+    for (const mode of [
+      PROMPT_EDITOR_INSERT_MODES.INSERT,
+      PROMPT_EDITOR_INSERT_MODES.APPEND,
+    ]) {
+      let doc = "";
+      references.forEach((reference, index) => {
+        const change = buildPromptReferenceInsertion(
+          doc,
+          { requestId: `seq-${index}`, references: [reference], mode },
+          { from: doc.length, to: doc.length }
+        );
+        doc = doc.slice(0, change.from) + change.text + doc.slice(change.to);
+      });
+      expect(doc).toBe(`${references.join(" ")} `);
+    }
   });
 
   it("does not prepend a space when the cursor follows whitespace or punctuation", () => {
@@ -1157,7 +1206,7 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
       },
       { from: "Review ".length, to: "Review ".length }
     );
-    expect(afterSpace.text).toBe("@src/app.ts");
+    expect(afterSpace.text).toBe("@src/app.ts ");
 
     const afterParen = buildPromptReferenceInsertion(
       "See (",
@@ -1168,7 +1217,7 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
       },
       { from: "See (".length, to: "See (".length }
     );
-    expect(afterParen.text).toBe("@src/app.ts");
+    expect(afterParen.text).toBe("@src/app.ts ");
   });
 
   it("appends references at the end of the document in append mode", () => {
@@ -1185,7 +1234,7 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
     expect(result).toEqual({
       from: "Analyze current output".length,
       to: "Analyze current output".length,
-      text: "\n@src/extension.ts",
+      text: "\n@src/extension.ts ",
     });
   });
 });

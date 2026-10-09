@@ -183,12 +183,17 @@ export function buildPromptReferenceInsertion(
 ): { from: number; to: number; text: string } {
   const referencesText = request.references.join("\n");
 
+  // Every context-menu reference ends in a trailing space (mirroring what a
+  // completion pick does) so back-to-back inserts of any reference kind —
+  // including directories ending in "/" and quoted paths, which the leading
+  // boundary-space check below cannot catch — never run together into one
+  // invalid reference.
   if (request.mode === PROMPT_EDITOR_INSERT_MODES.APPEND) {
-    const prefix = docText.length > 0 && !docText.endsWith("\n") ? "\n" : "";
+    const prefix = docText.length > 0 && !/\s$/.test(docText) ? "\n" : "";
     return {
       from: docText.length,
       to: docText.length,
-      text: `${prefix}${referencesText}`,
+      text: `${prefix}${referencesText} `,
     };
   }
 
@@ -217,6 +222,11 @@ export function buildPromptReferenceInsertion(
     if (REFERENCE_BOUNDARY_CHAR_RE.test(charBefore)) {
       text = ` ${text}`;
     }
+  }
+
+  const charAfter = docText[selection.to];
+  if (!shouldSurroundWithNewlines && !(charAfter && /\s/.test(charAfter))) {
+    text = `${text} `;
   }
 
   return {
