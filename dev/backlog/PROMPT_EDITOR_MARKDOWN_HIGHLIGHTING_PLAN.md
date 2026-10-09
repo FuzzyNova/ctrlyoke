@@ -356,16 +356,26 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
        (`URL`) via `getMarkdownNonProseRanges`. **The plan said it already skipped
        `findCodeRanges` ranges; it does not** (it skips only `@`/`#`/`~` references). That is
        unchanged here, so words inside backticks and fences are still spellchecked.
-     - Tests are in `test/components/editor/CodeMirrorEditorMarkdown.test.tsx`: the parity
-       corpus. The original seven cases agree with `findCodeRanges`; the Wave 3 review added
-       the six that don't (unclosed, list-indented, `~~~` and blockquote fences, a closer with
-       an info string, inline code across a line break), filed as
-       [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md),
-       fenced JSON highlighting, quote/list tags, `#selection:` not a heading, Enter unchanged,
-       links and chips inside emphasis and link syntax, the suppressed-expansion warning with
-       markdown on, and a ~100KB parse and edit budget. Completions inside a fence are
-       untouched: the prompt editor passes its own completion sources (`override`), so the
-       markdown language's `autocomplete` data is never consulted.
+     - **Wave 5 parity fix:** `findCodeRanges` now matches CommonMark for tilde fences, fences
+       in list items and blockquotes, bare fence closers (a closer with an info string does
+       not close), and inline spans across one line break. These runtime semantics flow
+       through the existing consumers: `PromptCodeRanges`, `WorkflowPromptRanges`,
+       `WorkflowTextDecoding`, `PromptReferenceScanner`, `PromptDiagnosticRules`,
+       `atomicReferences`, and runtime expansion all continue to use `findCodeRanges`.
+       Unclosed fences remain live at runtime; a prompt-editor decoration suppresses the
+       nested syntax colours until Lezer finds a closing `CodeMark`. The code-range mark stays
+       at default precedence, so the suppressed-expansion squiggle remains visible.
+     - Tests are in `test/components/editor/CodeMirrorEditorMarkdown.test.tsx` and
+       `src/test/unit/FileReferenceParser.test.ts`: the parity corpus now agrees for every
+       visible code range, and the unit tests pin each changed runtime case plus the unclosed
+       fence exception. The same editor tests cover fenced JSON highlighting, quote/list tags,
+       `#selection:` not a heading, Enter unchanged, links and chips inside emphasis and link
+       syntax, the suppressed-expansion warning with markdown on, and a ~100KB parse and edit
+       budget. Completions inside a fence are untouched: the prompt editor passes its own
+       completion sources (`override`), so the markdown language's `autocomplete` data is
+       never consulted. See the resolved
+       [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/implemented/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md)
+       bug for the per-case decision.
    - Original scope, kept for reference:
    - Add the `markdown()` compartment with GFM and lazy nested languages.
    - **The markdown roles mostly exist already** (Phase 1 maps heading, strong, emphasis,

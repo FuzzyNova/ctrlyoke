@@ -14,6 +14,7 @@ import {
 import {
   createPromptMarkdownExtension,
   createPromptMarkdownLanguage,
+  PROMPT_MARKDOWN_NODE_NAMES,
   resolveFenceLanguage,
 } from "@utils/codemirrorLanguage";
 import {
@@ -50,12 +51,23 @@ function parse(doc: string) {
   return tree;
 }
 
-function nodeRanges(doc: string, names: readonly string[]) {
+function visuallyCodedRanges(doc: string) {
   const ranges: Array<{ from: number; to: number }> = [];
   parse(doc).iterate({
     enter: (node) => {
-      if (names.includes(node.name)) {
+      if (node.name === "InlineCode") {
         ranges.push({ from: node.from, to: node.to });
+      } else if (node.name === PROMPT_MARKDOWN_NODE_NAMES.FENCED_CODE) {
+        let codeMarks = 0;
+        for (
+          let child = node.node.firstChild;
+          child;
+          child = child.nextSibling
+        ) {
+          if (child.name === PROMPT_MARKDOWN_NODE_NAMES.CODE_MARK)
+            codeMarks += 1;
+        }
+        if (codeMarks >= 2) ranges.push({ from: node.from, to: node.to });
       }
     },
   });
@@ -141,9 +153,9 @@ describe("prompt markdown highlighting", () => {
 });
 
 describe("markdown and code-range parity", () => {
-  // Each entry: a doc, and whether Lezer's code nodes line up with
-  // `findCodeRanges`. `findCodeRanges` is the only authority on what is
-  // literal; where Lezer disagrees the entry documents the gap.
+  // `visuallyCodedRanges` excludes unclosed fences, whose editor colours are
+  // suppressed while the user is still typing. All other cases must match the
+  // runtime authority exactly.
   const corpus: Array<{ name: string; doc: string; agree: boolean }> = [
     { name: "inline span", doc: "use `code` here", agree: true },
     { name: "double-backtick span", doc: "use ``a ` b`` here", agree: true },
@@ -156,41 +168,50 @@ describe("markdown and code-range parity", () => {
     },
     { name: "backticks inside a fence", doc: "```\na `b` c\n```", agree: true },
     { name: "unmatched backtick", doc: "a ` b\nc", agree: true },
-    // Known gaps: Lezer colours these as code while `findCodeRanges` leaves
-    // their references live. Filed as
-    // dev/bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md.
-    { name: "unclosed fence", doc: "```ts\nsee @src/a.ts", agree: false },
+    { name: "unclosed fence", doc: "```ts\nsee @src/a.ts", agree: true },
     {
       name: "fence indented in a list item",
       doc: "- item\n\n    ```\n    code\n    ```",
-      agree: false,
+      agree: true,
     },
-    { name: "tilde fence", doc: "~~~\ncode\n~~~", agree: false },
+    { name: "tilde fence", doc: "~~~\ncode\n~~~", agree: true },
     {
       name: "closer with an info string",
       doc: "```\na\n```js\nb\n```",
-      agree: false,
+      agree: true,
     },
     {
       name: "inline span across a line break",
       doc: "a `b\nc` d",
-      agree: false,
+      agree: true,
     },
     {
       name: "fence in a blockquote",
       doc: "> ```\n> code\n> ```",
-      agree: false,
+      agree: true,
     },
   ];
 
   it.each(corpus)("$name", ({ doc, agree }) => {
-    const lezer = nodeRanges(doc, ["InlineCode", "FencedCode"]);
+    const lezer = visuallyCodedRanges(doc);
     const authority = findCodeRanges(doc);
     if (agree) {
       expect(lezer).toEqual(authority);
     } else {
       expect(lezer).not.toEqual(authority);
     }
+  });
+
+  it("suppresses syntax colours until an opened fence has a closer", () => {
+    const view = mount("```ts\nconst value = 1;", [
+      createPromptMarkdownExtension(),
+    ]);
+    expect(view.dom.querySelector(".cm-unclosed-fence")).not.toBeNull();
+
+    view.dispatch({
+      changes: { from: view.state.doc.length, insert: "\n```" },
+    });
+    expect(view.dom.querySelector(".cm-unclosed-fence")).toBeNull();
   });
 });
 

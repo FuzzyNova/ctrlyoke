@@ -15,6 +15,7 @@ import {
   maskCodeRanges,
   fenceLiteral,
   LITERAL_FENCE_INFO,
+  findCodeRanges,
 } from "../../utils/FileReferenceParser";
 import { parseSecretReferences } from "../../utils/SecretReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../../utils/CtrlYokeSlashTokens";
@@ -25,6 +26,60 @@ import {
 } from "../../completions/ContextReferenceBuilder";
 
 suite("FileReferenceParser", () => {
+  suite("findCodeRanges markdown parity", () => {
+    test("masks tilde fences", () => {
+      const text = "~~~ts\n@src/a.ts\n~~~";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 0, to: text.length },
+      ]);
+      assert.deepStrictEqual(parseAtReferences(text), []);
+    });
+
+    test("does not close a fence with an info string", () => {
+      const text = "```\n@src/a.ts\n```js\n@src/b.ts\n```";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 0, to: text.length },
+      ]);
+      assert.deepStrictEqual(parseAtReferences(text), []);
+    });
+
+    test("masks a fence indented inside a list item", () => {
+      const text = "- item\n\n    ```\n    @src/a.ts\n    ```";
+      assert.deepStrictEqual(parseAtReferences(text), []);
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+      ]);
+    });
+
+    test("masks a fence inside a blockquote", () => {
+      const text = "> ```\n> @src/a.ts\n> ```";
+      assert.deepStrictEqual(parseAtReferences(text), []);
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+      ]);
+    });
+
+    test("masks inline code across one line break but not a blank line", () => {
+      const text = "a `@src/a.ts\n@src/b.ts` c\n\n@src/c.ts";
+      assert.deepStrictEqual(
+        parseAtReferences(text).map(({ path }) => path),
+        ["src/c.ts"]
+      );
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 2, to: text.indexOf("` c") + 1 },
+      ]);
+    });
+
+    test("keeps an unclosed fence live", () => {
+      const text = "```ts\n@src/a.ts";
+      assert.deepStrictEqual(findCodeRanges(text), []);
+      assert.deepStrictEqual(
+        parseAtReferences(text).map(({ path }) => path),
+        ["src/a.ts"]
+      );
+    });
+  });
+
   suite("maskCodeRanges", () => {
     test("keeps a three-backtick block inside a four-backtick fence masked", () => {
       const prompt = "````markdown\n```html\n@src/x.ts $previous\n```\n````";
@@ -35,11 +90,11 @@ suite("FileReferenceParser", () => {
     });
 
     test("preserves triple-backtick masking behavior", () => {
-      const prompt = "```text\n@src/x.ts\n``` then @src/y.ts";
+      const prompt = "```text\n@src/x.ts\n```\nthen @src/y.ts";
 
       assert.strictEqual(
         maskCodeRanges(prompt),
-        "```text\n\x00src\x00x.ts\n``` then @src/y.ts"
+        "```text\n\x00src\x00x.ts\n```\nthen @src/y.ts"
       );
     });
 
@@ -758,10 +813,10 @@ suite("FileReferenceParser", () => {
       );
     });
 
-    test("a span cannot close on a later line", () => {
+    test("a span can close on the next line of the same paragraph", () => {
       assert.deepStrictEqual(
         liveTokens("Open `@src/a.ts !TOKEN_A\nclose /skill:alpha` $previous"),
-        ALL_LIVE
+        ["$previous"]
       );
     });
 

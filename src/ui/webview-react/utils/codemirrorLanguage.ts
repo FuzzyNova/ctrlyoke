@@ -1,5 +1,11 @@
-import { syntaxHighlighting, type Language } from "@codemirror/language";
+import {
+  syntaxHighlighting,
+  syntaxTree,
+  type Language,
+} from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
+import { RangeSetBuilder } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
 import { styleTags } from "@lezer/highlight";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
@@ -73,6 +79,11 @@ export function getLanguageExtension(filePath: string) {
 
 const fenceLanguageCache = new Map<string, Language | null>();
 
+export const PROMPT_MARKDOWN_NODE_NAMES = {
+  FENCED_CODE: "FencedCode",
+  CODE_MARK: "CodeMark",
+} as const;
+
 /**
  * `codeLanguages` resolver for markdown: maps a fence info string to the
  * nested language. Only the first word counts (`ts title=a.ts` is `ts`), and
@@ -121,5 +132,75 @@ export function createPromptMarkdownExtension(): Extension {
   return [
     createPromptMarkdownLanguage(),
     createWorkspaceEditorHighlightExtension(),
+    createUnclosedFenceColorOverride(),
+  ];
+}
+
+/** Keep a transient, unclosed fence visually live until it has a closer. */
+function createUnclosedFenceColorOverride(): Extension {
+  return [
+    ViewPlugin.fromClass(
+      class {
+        decorations;
+
+        constructor(view: EditorView) {
+          this.decorations = this.buildDecorations(view);
+        }
+
+        update(update: {
+          docChanged: boolean;
+          viewportChanged: boolean;
+          view: EditorView;
+        }) {
+          if (update.docChanged || update.viewportChanged) {
+            this.decorations = this.buildDecorations(update.view);
+          }
+        }
+
+        buildDecorations(view: EditorView) {
+          const ranges: Array<{ from: number; to: number }> = [];
+          syntaxTree(view.state).iterate({
+            enter: (node) => {
+              if (node.name !== PROMPT_MARKDOWN_NODE_NAMES.FENCED_CODE) return;
+              let codeMarks = 0;
+              for (
+                let child = node.node.firstChild;
+                child;
+                child = child.nextSibling
+              ) {
+                if (child.name === PROMPT_MARKDOWN_NODE_NAMES.CODE_MARK) {
+                  codeMarks += 1;
+                }
+              }
+              if (codeMarks < 2) ranges.push({ from: node.from, to: node.to });
+            },
+          });
+
+          const builder = new RangeSetBuilder<Decoration>();
+          for (const range of ranges) {
+            for (const { from, to } of view.visibleRanges) {
+              if (range.to <= from) continue;
+              if (range.from >= to) break;
+              const visibleFrom = Math.max(range.from, from);
+              const visibleTo = Math.min(range.to, to);
+              if (visibleFrom < visibleTo) {
+                builder.add(
+                  visibleFrom,
+                  visibleTo,
+                  Decoration.mark({ class: "cm-unclosed-fence" })
+                );
+              }
+            }
+          }
+          return builder.finish();
+        }
+      },
+      { decorations: (plugin) => plugin.decorations }
+    ),
+    EditorView.baseTheme({
+      ".cm-unclosed-fence, .cm-unclosed-fence *": {
+        color: "inherit !important",
+      },
+    }),
   ];
 }

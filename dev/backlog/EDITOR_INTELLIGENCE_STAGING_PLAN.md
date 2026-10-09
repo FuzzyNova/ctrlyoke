@@ -151,11 +151,10 @@ against its plan, and every finding below was reproduced with a probe or a test.
   background hid the suppressed-expansion squiggle, which plan M says must survive. It is
   back at default precedence. The planned code-range restyle was never built; plan M now
   records it as deferred.
-- **M2, filed:**
-  - [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md),
-    medium. Six fence and inline layouts are coloured as code while their references stay
-    live. The parity corpus skipped the cases plan M asked for; they are now pinned as
-    known gaps.
+- **M2, filed and fixed in M2b item 1:**
+  - [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/implemented/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md).
+    Five runtime cases now follow CommonMark; the editor leaves an unclosed fence uncoloured
+    while runtime references stay live.
   - [`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/backlog/prompt-editor-reference-link-split-by-markdown-emphasis.md),
     low and cosmetic.
 
@@ -269,11 +268,10 @@ spreads to a second editor. F6 + M3 also waits for F5, which holds `WorkspaceFil
 
 M2b covers:
 
-1. **[`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md)**
-   (medium). Decide, case by case, whether `findCodeRanges` should match CommonMark (this
-   changes runtime expansion everywhere) or the editor should stop colouring the text as code.
-   Flip each `agree: false` entry in the parity corpus in
-   `CodeMirrorEditorMarkdown.test.tsx` to agree, or document why the gap is intended.
+1. **Done:** [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/implemented/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md).
+   `findCodeRanges` now matches CommonMark for the five runtime cases; unclosed fences remain
+   live and the prompt editor suppresses their syntax colours until a closer is present. The
+   parity corpus agrees for every visible code range, and unit tests pin the runtime decisions.
 2. **[`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/backlog/prompt-editor-reference-link-split-by-markdown-emphasis.md)**
    (low, cosmetic).
 3. **The deferred code-range restyle** from plan M's "Code ranges" section: inline spans get

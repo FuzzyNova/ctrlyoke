@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), Wave 3 review of M2 (`a1e420025`)
 - **Area:** `src/ui/webview-react/utils/codemirrorLanguage.ts` (`createPromptMarkdownLanguage`), `src/utils/FileReferenceParser.ts` (`findCodeRanges`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -28,16 +28,15 @@ text.
 ## Steps to Reproduce
 
 1. Run `CodeMirrorEditorMarkdown.test.tsx`. The parity corpus pins each case above as
-   `agree: false`.
+   `agree: true` after the fix.
 2. In the prompt editor, type `~~~` on one line, `@src/app.ts` on the next and `~~~` after
    it. The middle line is coloured as code, while the reference is still a live link and
    expands when the workflow runs.
 
 ## Root Cause
 
-`findCodeRanges` implements a narrower subset of CommonMark: backtick fences only, at most
-three spaces of indent, no container blocks, a closer must be bare, and an inline span ends
-at a line break. Lezer implements the full spec.
+`findCodeRanges` implemented a narrower subset of CommonMark: backtick fences only, no
+container blocks, and inline spans ended at a line break. Lezer used CommonMark semantics.
 
 ## Suggested Fix
 
@@ -51,4 +50,17 @@ Pick one authority per case:
   fence above all, since it is transient while typing). That keeps the runtime unchanged
   and makes colour honest.
 
-Then flip each corpus entry to `agree: true`, or to a documented intentional gap.
+The fix below records the chosen behavior for every case.
+
+## Resolution
+
+- **Tilde fences, list-item fences, blockquote fences, fences with an info string on a
+  would-be closer, and inline spans across one line break:** `findCodeRanges` now follows
+  CommonMark for these cases. Runtime expansion is suppressed inside them across the CLI,
+  VS Code, and dashboard consumers.
+- **Unclosed fence:** runtime behavior stays live so a transient opener cannot swallow the
+  rest of a prompt. The prompt editor suppresses Lezer's nested code colours until a closing
+  `CodeMark` appears.
+- `src/test/unit/FileReferenceParser.test.ts` pins each runtime decision, including that an
+  unclosed fence leaves references live. All parity corpus cases now agree with the editor's
+  visible code ranges.
