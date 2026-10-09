@@ -1,7 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { PromptFileParser } from "../../core/PromptFileParser";
-import { CTRLYOKE_FILE_KINDS } from "../../types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  CTRLYOKE_FILE_KINDS,
+} from "../../types/DashboardConstants";
 
 suite("PromptFileParser.validateWorkflowText", () => {
   const parser = new PromptFileParser();
@@ -30,7 +33,12 @@ suite("PromptFileParser.validateWorkflowText", () => {
       JSON.stringify({ steps: [{ prompt: "ship it", promtp: "typo" }] }),
       CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
     );
-    assert.ok(result.issues.some((issue) => issue.severity === "warning"));
+    assert.ok(
+      result.issues.some(
+        (issue) =>
+          issue.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+      )
+    );
     assert.ok(
       result.issues.some((issue) => issue.instancePath === "/steps/0/promtp")
     );

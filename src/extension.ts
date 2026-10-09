@@ -9,6 +9,7 @@ import { WorkflowFileCompletionProvider } from "./completions/WorkflowFileComple
 import { getCtrlYokeFileGlobs } from "./completions/CtrlYokeFileKind";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { PromptDiagnosticsProvider } from "./completions/PromptDiagnosticsProvider";
+import { PromptFileParser } from "./core/PromptFileParser";
 import {
   getCompletionCore,
   initializeCompletionHelpers,
@@ -737,6 +738,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Squiggles never show a symbol's kind, so skip that per-reference lookup.
     // Trust decisions and settings decide which roots resolve, so either
     // changing re-lints the open files.
+    const workflowTextValidator = new PromptFileParser();
     context.subscriptions.push(
       new PromptDiagnosticsProvider(
         (references, documentPath) =>
@@ -748,6 +750,13 @@ export async function activate(context: vscode.ExtensionContext) {
             (listener) => configService.subscribe(listener),
             (listener) => externalRootsTrustStore.subscribe(listener),
           ],
+          isYamlSchemaValidationSuppressed: () =>
+            vscode.extensions.getExtension("redhat.vscode-yaml")?.isActive ===
+            true,
+          validateWorkflowText: (text, kind) =>
+            workflowTextValidator.validateWorkflowText(text, kind),
+          getSettingsPreCondition: () =>
+            ConfigurationUtils.getDefaultPreCondition(),
         }
       )
     );

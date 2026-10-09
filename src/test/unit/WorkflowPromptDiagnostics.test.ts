@@ -175,11 +175,52 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
-  test("does not guess about $preCondition: since pre-conditions can be inherited", async () => {
+  test("flags $preCondition: when the step, workflow, and settings have none", async () => {
     const text = "steps:\n  - prompt: out $preCondition:stdout\n";
     assert.deepStrictEqual(
       await diagnose(text, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML),
+      [
+        {
+          code: PROMPT_DIAGNOSTIC_CODES.CONDITION_NO_PRE_CONDITION,
+          text: "$preCondition:stdout",
+        },
+      ]
+    );
+  });
+
+  test("honors the runtime pre-condition inheritance order", async () => {
+    const prompt = (prefix: string) =>
+      `steps:\n  - ${prefix}prompt: out $preCondition:stdout\n`;
+    assert.deepStrictEqual(
+      await getWorkflowPromptDiagnostics(
+        prompt("preCondition:\n      script: check.sh\n    "),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+        resolver
+      ),
       []
+    );
+    assert.deepStrictEqual(
+      await diagnose(
+        "preCondition:\n  script: check.sh\nsteps:\n  - prompt: out $preCondition:stdout\n",
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      ),
+      []
+    );
+    assert.deepStrictEqual(
+      await getWorkflowPromptDiagnostics(
+        prompt(""),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+        resolver,
+        { script: "settings-check.sh" }
+      ),
+      []
+    );
+    assert.deepStrictEqual(
+      await diagnose(
+        "preCondition:\n  script: check.sh\nsteps:\n  - preCondition: null\n    prompt: out $preCondition:stdout\n",
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      ).then((items) => items.map((item) => item.code)),
+      [PROMPT_DIAGNOSTIC_CODES.CONDITION_NO_PRE_CONDITION]
     );
   });
 

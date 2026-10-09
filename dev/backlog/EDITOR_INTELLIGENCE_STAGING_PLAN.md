@@ -4,7 +4,7 @@
 **F1b**, the follow-up the Wave 1 review added. **Wave 2 is done** (F3, F0, D2, B and M4),
 merged and reviewed; its review fixes are on `main`, and so are fixes for all four bugs the
 review filed. **Wave 3 is done** (M2, F4 and F7), merged to `main` and reviewed; its review
-fixes are on `main`. **Wave 4 can start**: F5 now, then D3. **Wave 5 runs after Wave 4**:
+fixes are on `main`. **Wave 4 is done** (F5 and D3). **Wave 5 runs after Wave 4**:
 M2b (the Wave 3 review's M2 follow-ups) first, then F6 + M3. This plan only orders the work. The design lives in the
 three plans it stages.
 
@@ -39,6 +39,7 @@ it.
 | F7              | **Done** (2026-10-08) | `WorkflowFileCompletionProvider` replaces `PromptPropertyCompletionProvider` (YAML, JSON, `.prompt.md` frontmatter, values included); `PromptCompletionProvider` gates on `getWorkflowLocation` and gains `/`. Details in plan F's Phase 7 entry.                                               |
 | F4              | **Done** (2026-10-08) | `WorkspaceFileEditor` gets a `ctrlyokeFileSupport` compartment: key/value, script/permission and prompt-token sources as language data, over a lazily loaded location/completion chunk. Details in plan F's Phase 4 entry.                                                                      |
 | F5              | **Done** (2026-10-08) | Side-effect-free host validation, schema and shared prompt-text lint, plus generated-outline key hover in the workspace editor. Details in plan F's Phase 5 "As built".                                                                                                                         |
+| D3              | **Done** (2026-10-08) | VS Code YAML schema diagnostics with Red Hat YAML suppression and exact `$preCondition:` inheritance context. Details in plan D's "Phase 3 as built".                                                                                                                                           |
 | M2              | **Done** (2026-10-08) | Markdown in the prompt editor: GFM plus memoised nested fence languages, quote/list mark tags, ctrlyoke mark decorations at `Prec.highest`, spellcheck skips fence info and link URLs. Details in plan M's Phase 2 entry.                                                                       |
 | Everything else | Not started           |                                                                                                                                                                                                                                                                                                 |
 
@@ -240,20 +241,20 @@ hosted high-contrast light fix, were then committed on `main` directly.
 | **F4:** workspace editor completions  | `WorkspaceFileEditor.tsx` | `big-feature`      | The core's first consumer                                                  |
 | **F7:** VS Code completion parity     | —                         | `bug-fix`          | Moved the VS Code providers onto the F3 core                               |
 
-### Wave 4: diagnostics everywhere
+### Wave 4: diagnostics everywhere (Done)
 
-F5's inputs (F4, D1) and Wave 3's review fixes are in. F5 is complete; D3 can proceed and uses
-its side-effect-free `PromptFileParser` validate.
+F5's inputs (F4, D1) and Wave 3's review fixes are in. F5 and D3 are complete; D3 uses F5a's
+side-effect-free `PromptFileParser` validate.
 
-| Phase                                                                 | Hot file                  | Notes                                                |
-| --------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------- |
-| **F5:** workspace editor diagnostics and hover                        | `WorkspaceFileEditor.tsx` | **Done:** schema and prompt-text lint, outline hover |
-| **D3:** workflow-aware context and YAML schema diagnostics in VS Code | —                         | After F5                                             |
+| Phase                                                                 | Hot file                  | Notes                                                                         |
+| --------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
+| **F5:** workspace editor diagnostics and hover                        | `WorkspaceFileEditor.tsx` | **Done:** schema and prompt-text lint, outline hover                          |
+| **D3:** workflow-aware context and YAML schema diagnostics in VS Code | —                         | **Done:** Red Hat YAML gating, schema ranges, inherited pre-condition context |
 
 **Session split (orchestrated run, 2026-10-08).** F5a landed the host-side validate entry
 point, message pair, `instancePath` converter and schema lint. F5b added shared prompt-text lint
-over exact `PROMPT_TEXT` ranges and generated-outline hover. D3 needs only F5a's validate and
-also takes the `$preCondition:` caveat left by D2 (plan D, "Phase 2 as built").
+over exact `PROMPT_TEXT` ranges and generated-outline hover. D3 adds YAML schema lint to VS Code
+and resolves the `$preCondition:` caveat left by D2 (plan D, "Phase 2 as built").
 
 ### Wave 5: prompt-text polish
 

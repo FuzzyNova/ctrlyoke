@@ -1,6 +1,6 @@
 # Prompt Diagnostics Plan
 
-**Status (2026-10-08):** Phases 1 and 2 done (shared rules extracted; VS Code provider live for `.prompt.md` and workflow prompt values). Phase 3 is proposed, and its workflow-context half already landed in Phase 2.
+**Status (2026-10-08):** Phases 1–3 done (shared rules extracted; VS Code prompt and workflow lint, workflow-aware context, and YAML schema diagnostics are live).
 
 **Priority:** P2. The rules already exist and work in the dashboard. This plan makes them
 shareable and brings them to VS Code, where today a broken or literal reference gives no
@@ -162,6 +162,16 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
   active** (`vscode.extensions.getExtension("redhat.vscode-yaml")?.isActive`). Re-check when
   extensions change. This closes fact 4's gap without double-reporting for users who have Red
   Hat YAML.
+- `.prompt.md` frontmatter is intentionally excluded. Its supported metadata is a small,
+  separate format (`description` only); the validator currently checks that field directly,
+  while the requested workflow schema diagnostics target `.ctrlyoke.yaml`/`.yml` files.
+- Schema diagnostics use the same `ctrlyoke` collection and source as prompt lint, with distinct
+  `WORKFLOW_SCHEMA_DIAGNOSTIC_CODES` for errors and warnings. JSON workflows remain excluded
+  because VS Code's JSON validation already covers them.
+- `$preCondition:` context follows runtime precedence: step, workflow, then settings default,
+  including `null` disabling inheritance. The resolver is shared with execution. For a
+  workflow-level retry prompt and `.prompt.md` body, context remains permissive because either
+  can be used by a step that has an effective pre-condition.
 
 ## Implementation phases
 
@@ -187,11 +197,32 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
      the collection's diagnostics.
 
 3. **Phase 3: Schema diagnostics in VS Code.**
-   - ~~Exact `stepIndex`, `hasFinalStep` and condition context~~ Done in Phase 2 (see "Phase 2 as built"); only the `$preCondition:` caveat remains.
-   - YAML schema diagnostics gated on Red Hat YAML being absent. This needs the file support
-     plan's Phase 5 validate entry point.
-   - Tests: `$finalStep` in a workflow with and without `finalStep`, `$endCondition:` in
-     `prompt` vs `retryPrompt`, and Red Hat present vs absent (stubbed).
+   - ~~Exact `stepIndex`, `hasFinalStep` and condition context~~ Done in Phase 2 (see "Phase 2 as built").
+   - YAML schema diagnostics for `.ctrlyoke.yaml`/`.yml`, gated on Red Hat YAML being absent,
+     using the file support plan's Phase 5 validate entry point.
+   - Resolve `$preCondition:` using the runtime's step → workflow → settings precedence,
+     including the `null` disable case.
+   - Tests: `$finalStep` with and without `finalStep`, `$endCondition:` in `prompt` vs
+     `retryPrompt`, inherited pre-conditions, Red Hat YAML present vs absent (stubbed), and a
+     schema error mapped to the property range.
+
+### Phase 3 as built
+
+- `PromptDiagnosticsProvider` runs the F5a `PromptFileParser.validateWorkflowText()` entry point
+  for workflow YAML only. JSON remains covered by VS Code's JSON validation. `.prompt.md`
+  frontmatter is excluded because it has its own small metadata contract, checked by the parser,
+  rather than the workflow schema.
+- Schema issue pointers use `workflowPathFromInstancePath()` and `findRangeForPath()`; parser
+  syntax positions map to the marked character. Schema diagnostics share the `ctrlyoke` source
+  and collection but use `WORKFLOW_SCHEMA_DIAGNOSTIC_CODES`.
+- Red Hat YAML's active state suppresses ctrlyoke schema diagnostics. The provider listens for
+  extension changes and refreshes open files; the active-state check is injectable for tests.
+- `$preCondition:` uses the same nullable precedence resolver as execution for step, workflow,
+  and settings defaults. A step's explicit `null` disables inheritance. Workflow-level retry
+  prompts and `.prompt.md` bodies retain permissive context because they may run in a step with
+  a pre-condition.
+- Tests cover Red Hat gating, YAML issue range mapping, JSON exclusion, and the inherited
+  pre-condition cases, alongside the Phase 2 final-step and retry-prompt context tests.
 
 ### Phase 1 as built
 
@@ -246,10 +277,10 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
   the flat steps before the prompt (a parallel group's members share the group's start; the
   final step sees all), `hasFinalStep` is `finalStep` being present, and `retryPrompt` and
   `passRetryPrompt` both map to `RETRY_PROMPT`.
-- **`hasPreCondition` is always true**, so `$preCondition:` is never flagged in VS Code. A step
-  can inherit its pre-condition from the workflow or the global default, and the file can't say
-  which. The dashboard knows; the file doesn't. Fixing it needs the workflow-level and settings
-  defaults threaded in.
+- **`hasPreCondition` follows runtime inheritance** for workflow prompt values: the step's own
+  value, workflow value, then settings default, with explicit `null` disabling inheritance.
+  Workflow-level retry prompts and `.prompt.md` bodies remain permissive because their eventual
+  execution position is unknown; see "Phase 3 as built".
 - Quick fixes (`replacements`) are not offered as code actions yet (open question 1).
 - D1's cleanups are done: severities folded into `COMPATIBILITY_DIAGNOSTIC_SEVERITIES`,
   `PROMPT_DIAGNOSTIC_FIELDS` reuses `PROMPT_PROPERTIES.PROMPT` and

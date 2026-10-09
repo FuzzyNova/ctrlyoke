@@ -2,10 +2,17 @@ import * as vscode from "vscode";
 import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
 import { getWorkflowPromptDiagnostics } from "./WorkflowPromptDiagnostics";
 import {
+  findRangeForPath,
+  workflowPathFromInstancePath,
+} from "./WorkflowDocumentLocation";
+import type { WorkflowTextValidationResult } from "../core/PromptFileParser";
+import {
+  CTRLYOKE_FILE_KINDS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROMPT_DIAGNOSTIC_DEBOUNCE_MS,
   PROMPT_DIAGNOSTICS_SOURCE,
   VSCODE_URI_SCHEMES,
+  WORKFLOW_SCHEMA_DIAGNOSTIC_CODES,
   type CtrlYokeFileKind,
   type PromptDiagnosticSeverity,
 } from "../types/DashboardConstants";
@@ -31,9 +38,20 @@ export type PromptDiagnosticsRefreshTrigger = (
   listener: () => void
 ) => () => void;
 
+export type WorkflowTextValidator = (
+  text: string,
+  kind: CtrlYokeFileKind
+) => WorkflowTextValidationResult;
+
 export interface PromptDiagnosticsProviderOptions {
   /** Each change re-lints every open document (debounced). */
   refreshTriggers?: readonly PromptDiagnosticsRefreshTrigger[];
+  /** The Red Hat YAML extension owns schema diagnostics while active. */
+  isYamlSchemaValidationSuppressed?: () => boolean;
+  /** Host-side F5a validator; absent for callers that only need prompt lint. */
+  validateWorkflowText?: WorkflowTextValidator;
+  /** Settings-level pre-condition used by the runtime property resolver. */
+  getSettingsPreCondition?: () => unknown;
 }
 
 // A function, not a module-level table: the bundle is loaded against a stub
@@ -86,11 +104,11 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
 
   constructor(
     private readonly validateReferences: PromptReferenceValidator,
-    options: PromptDiagnosticsProviderOptions = {}
+    private readonly options: PromptDiagnosticsProviderOptions = {}
   ) {
     const watcher = vscode.workspace.createFileSystemWatcher("**/*");
     const refreshAllSoon = () => this.scheduleRefreshAll();
-    for (const trigger of options.refreshTriggers ?? []) {
+    for (const trigger of this.options.refreshTriggers ?? []) {
       this.disposables.push({ dispose: trigger(refreshAllSoon) });
     }
     this.disposables.push(
@@ -104,6 +122,11 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
       vscode.workspace.onDidSaveTextDocument((doc) => void this.refresh(doc)),
       vscode.workspace.onDidCloseTextDocument((doc) => this.clear(doc))
     );
+    if (this.options.isYamlSchemaValidationSuppressed) {
+      this.disposables.push(
+        vscode.extensions.onDidChange(() => this.scheduleRefreshAll())
+      );
+    }
     this.refreshAll();
   }
 
@@ -125,8 +148,18 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
       const diagnostics = await getWorkflowPromptDiagnostics(
         document.getText(),
         kind,
-        (references) => this.validateReferences(references, document.fileName)
+        (references) => this.validateReferences(references, document.fileName),
+        this.options.getSettingsPreCondition?.()
       );
+      const schemaDiagnostics =
+        kind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML &&
+        this.options.validateWorkflowText &&
+        !this.options.isYamlSchemaValidationSuppressed?.()
+          ? this.toSchemaDiagnostics(
+              document,
+              this.options.validateWorkflowText(document.getText(), kind).issues
+            )
+          : [];
       // The text moved on while references resolved; the newer pass owns the result.
       if (
         document.version !== version ||
@@ -135,10 +168,12 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
       ) {
         return;
       }
-      this.collection.set(
-        document.uri,
-        diagnostics.map((diagnostic) => this.toDiagnostic(document, diagnostic))
-      );
+      this.collection.set(document.uri, [
+        ...diagnostics.map((diagnostic) =>
+          this.toDiagnostic(document, diagnostic)
+        ),
+        ...schemaDiagnostics,
+      ]);
     } catch (error) {
       Log.warn(
         "[PromptDiagnosticsProvider] Failed to compute diagnostics",
@@ -212,5 +247,44 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
     result.source = PROMPT_DIAGNOSTICS_SOURCE;
     result.code = diagnostic.code;
     return result;
+  }
+
+  private toSchemaDiagnostics(
+    document: vscode.TextDocument,
+    issues: WorkflowTextValidationResult["issues"]
+  ): vscode.Diagnostic[] {
+    const text = document.getText();
+    return issues.map((issue) => {
+      const path = workflowPathFromInstancePath(issue.instancePath);
+      const mapped = findRangeForPath(
+        text,
+        path,
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      );
+      const from = issue.position
+        ? document.offsetAt(
+            new vscode.Position(
+              Math.max(issue.position.line - 1, 0),
+              Math.max(issue.position.column - 1, 0)
+            )
+          )
+        : (mapped?.start ?? 0);
+      const to = issue.position
+        ? Math.min(from + 1, text.length)
+        : (mapped?.end ?? text.length);
+      const diagnostic = new vscode.Diagnostic(
+        new vscode.Range(document.positionAt(from), document.positionAt(to)),
+        issue.message,
+        issue.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+          ? vscode.DiagnosticSeverity.Warning
+          : vscode.DiagnosticSeverity.Error
+      );
+      diagnostic.source = PROMPT_DIAGNOSTICS_SOURCE;
+      diagnostic.code =
+        issue.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+          ? WORKFLOW_SCHEMA_DIAGNOSTIC_CODES.WARNING
+          : WORKFLOW_SCHEMA_DIAGNOSTIC_CODES.ERROR;
+      return diagnostic;
+    });
   }
 }

@@ -1925,6 +1925,14 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   CONDITION_FIELD_UNKNOWN: "prompt.condition.field-unknown",
 } as const;
 
+/** Codes used by VS Code's YAML workflow schema diagnostics. */
+export const WORKFLOW_SCHEMA_DIAGNOSTIC_CODES = {
+  ERROR: "workflow.schema.error",
+  WARNING: "workflow.schema.warning",
+} as const;
+export type WorkflowSchemaDiagnosticCode =
+  (typeof WORKFLOW_SCHEMA_DIAGNOSTIC_CODES)[keyof typeof WORKFLOW_SCHEMA_DIAGNOSTIC_CODES];
+
 export type PromptDiagnosticCode =
   (typeof PROMPT_DIAGNOSTIC_CODES)[keyof typeof PROMPT_DIAGNOSTIC_CODES];
 

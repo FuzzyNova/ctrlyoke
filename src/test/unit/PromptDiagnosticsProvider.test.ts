@@ -10,6 +10,7 @@ import {
   type PromptReferenceValidator,
 } from "../../completions/PromptDiagnosticsProvider";
 import {
+  WORKFLOW_SCHEMA_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTICS_SOURCE,
 } from "../../types/DashboardConstants";
@@ -61,6 +62,75 @@ suite("PromptDiagnosticsProvider", () => {
       diagnostics.every((d) => d.source === PROMPT_DIAGNOSTICS_SOURCE),
       "every diagnostic carries the ctrlyoke source"
     );
+  });
+
+  test("maps YAML schema diagnostics to their workflow path", async () => {
+    provider.dispose();
+    provider = new PromptDiagnosticsProvider(validator, {
+      isYamlSchemaValidationSuppressed: () => false,
+      validateWorkflowText: () => ({
+        issues: [
+          {
+            instancePath: "/steps/0/prompt",
+            message: "prompt is invalid",
+            severity: "error",
+          },
+        ],
+      }),
+    });
+    const document = await open(
+      "schema.ctrlyoke.yaml",
+      "steps:\n  - prompt: invalid value\n"
+    );
+    await provider.refresh(document);
+    const [diagnostic] = provider.getDiagnostics(document.uri);
+    assert.strictEqual(diagnostic.code, WORKFLOW_SCHEMA_DIAGNOSTIC_CODES.ERROR);
+    assert.strictEqual(document.getText(diagnostic.range), "invalid value");
+    assert.strictEqual(diagnostic.source, PROMPT_DIAGNOSTICS_SOURCE);
+  });
+
+  test("skips YAML schema diagnostics when Red Hat YAML is active", async () => {
+    provider.dispose();
+    provider = new PromptDiagnosticsProvider(validator, {
+      isYamlSchemaValidationSuppressed: () => true,
+      validateWorkflowText: () => ({
+        issues: [
+          {
+            instancePath: "/steps/0/prompt",
+            message: "prompt is invalid",
+            severity: "error",
+          },
+        ],
+      }),
+    });
+    const document = await open(
+      "schema.ctrlyoke.yaml",
+      "steps:\n  - prompt: valid\n"
+    );
+    await provider.refresh(document);
+    assert.deepStrictEqual(provider.getDiagnostics(document.uri), []);
+  });
+
+  test("does not add ctrlyoke schema diagnostics to JSON workflows", async () => {
+    provider.dispose();
+    provider = new PromptDiagnosticsProvider(validator, {
+      isYamlSchemaValidationSuppressed: () => false,
+      validateWorkflowText: () => ({
+        issues: [
+          {
+            instancePath: "/steps/0/prompt",
+            message: "prompt is invalid",
+            severity: "error",
+          },
+        ],
+      }),
+    });
+    const document = await open(
+      "schema.ctrlyoke.json",
+      '{"steps":[{"prompt":"valid"}]}'
+    );
+    await provider.refresh(document);
+    assert.deepStrictEqual(provider.getDiagnostics(document.uri), []);
   });
 
   test("ignores files that are not ctrlyoke files", async () => {
