@@ -148,9 +148,7 @@ describe("CustomSelect — basic behavior", () => {
     });
     expect(noneOption).toHaveAttribute(
       "title",
-      expect.stringMatching(
-        /^None\n\n[\s\S]*\n\nproperty: toolPermissions\.mode = none$/
-      )
+      "None\n\nproperty: toolPermissions.mode = none"
     );
 
     const inheritOption = screen.getByRole("button", {

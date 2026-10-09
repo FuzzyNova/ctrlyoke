@@ -2534,3 +2534,127 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "named"
   ]
 };
+
+/** Descriptions of oneOf/anyOf branches, keyed by property path, then by the literal that selects the branch. */
+export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "_runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "_runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "_runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "defaults.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "defaults.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "defaults.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "defaults.worktree": {
+    "false": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+    "true": "Managed-worktree shorthand.",
+    "managed": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+    "named": "Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to."
+  },
+  "endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "execution.maxPromptTimeoutSec": {
+    "-1": "Unlimited."
+  },
+  "finalStep": {
+    "script": "A workflow step that runs a shell script/command with no AI interaction."
+  },
+  "finalStep._runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "finalStep._runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "finalStep._runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "finalStep.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "finalStep.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "finalStep.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "maxSteps": {
+    "-1": "Unlimited."
+  },
+  "mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "queue.maxSteps": {
+    "-1": "Unlimited."
+  },
+  "queue.maxWorkflowExecutionTimeSec": {
+    "-1": "Unlimited."
+  },
+  "runs.maxRuns": {
+    "-1": "Unlimited."
+  },
+  "steps[]": {
+    "script": "A workflow step that runs a shell script/command with no AI interaction."
+  },
+  "steps[]._runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[]._runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[]._runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "steps[].agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[].endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[].mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "steps[].parallel[]": {
+    "script": "A workflow step that runs a shell script/command with no AI interaction."
+  },
+  "steps[].parallel[]._runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[].parallel[]._runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[].parallel[]._runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "steps[].parallel[].agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[].parallel[].endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[].parallel[].mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "ui.outputVirtualizationRowThreshold": {
+    "-1": "Unlimited."
+  },
+  "worktree": {
+    "false": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+    "true": "Managed-worktree shorthand.",
+    "managed": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+    "named": "Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to."
+  }
+};

@@ -430,7 +430,7 @@ Default worktree behavior for workflows that omit a root worktree value. Uses th
 
 Accepted forms:
 
-- `false` — Explicitly run this workflow in the ordinary workspace.
+- `false` — No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.
 - `true` — Managed-worktree shorthand.
 - `string` — Named-worktree branch shorthand. The value must be a valid local Git branch name.
 - `{ mode: "managed", merge?, keep?, … }` — Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.

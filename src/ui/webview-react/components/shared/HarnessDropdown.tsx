@@ -28,7 +28,11 @@ import {
   type HarnessAvailabilityStatus,
 } from "@utils/harnessUsageDisplay";
 import { Icon } from "./Icon";
-import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  schemaAriaLabel,
+  schemaOptionTitle,
+  schemaTitle,
+} from "@utils/schemaPropertyLabels";
 import { BULK_MIXED_OPTION } from "@store/editorStore";
 import { HARNESS_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 
@@ -152,7 +156,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         </button>
         <button
           type="button"
-          title={schemaTitle(schemaPath, harness, rowTooltip)}
+          title={schemaOptionTitle(name, rowTooltip, schemaPath, harness)}
           aria-label={schemaAriaLabel(name, schemaPath, harness)}
           onClick={() => onSelect(harness)}
           className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-hidden border-none bg-transparent cursor-pointer flex items-center gap-1.5"
@@ -178,7 +182,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
     >
       <button
         type="button"
-        title={schemaTitle(schemaPath, harness, rowTooltip)}
+        title={schemaOptionTitle(name, rowTooltip, schemaPath, harness)}
         aria-label={schemaAriaLabel(name, schemaPath, harness)}
         onClick={() =>
           isAvailable || isChecking ? onSelect(harness) : undefined
@@ -417,7 +421,12 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
             aria-label={schemaAriaLabel(defaultLabel ?? "Inherit", schemaPath, {
               omit: true,
             })}
-            title={schemaTitle(schemaPath, { omit: true })}
+            title={schemaOptionTitle(
+              defaultLabel ?? "Inherit",
+              undefined,
+              schemaPath,
+              { omit: true }
+            )}
             className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-hidden border-none bg-transparent cursor-inherit flex items-center"
           >
             {defaultSentinelContent}

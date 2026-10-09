@@ -146,9 +146,15 @@ This makes the most common row tooltips (models, agents, skills) much shorter. T
 help, including step-only wording such as "On a step, null (None in the step properties)…", stays
 on the field label's tooltip.
 
-This needs no new component. `schemaOptionTitle` in `schemaPropertyLabels.ts` can drop the
-schema description while still on native `title`s, so do that change first. It is independent of
-the new renderer.
+**Done 2026-10-09** on native `title`s: `schemaOptionTitle` passes an empty description to
+`schemaTitle`, so rows never pull in the field's help. The rows of `HarnessDropdown` and
+`PriorContextSelect` now go through it too.
+
+Options that select a schema `oneOf` branch carry a `variant` key in `SchemaUiMetadata`.
+`toSelectOptions` then fills in the option's description from `SCHEMA_VARIANT_DESCRIPTIONS`,
+which `generate-schema-ui-descriptions.mjs` builds from each branch's description. That is how
+the Worktree None/Managed/Named rows explain themselves. To give another option a description,
+write it on the schema branch, not in the UI.
 
 ## 6. Related gap (out of scope)
 

@@ -4,7 +4,11 @@ import {
   PRIOR_CONTEXT_KEYWORDS,
 } from "@root/types/DashboardConstants";
 import { PRIOR_CONTEXT_SELECT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
-import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  schemaAriaLabel,
+  schemaOptionTitle,
+  schemaTitle,
+} from "@utils/schemaPropertyLabels";
 import React, { useId, useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -336,7 +340,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                     schemaPath,
                     PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ?? k
                   )}
-                  title={schemaTitle(
+                  title={schemaOptionTitle(
+                    label,
+                    undefined,
                     schemaPath,
                     PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ?? k
                   )}

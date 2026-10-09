@@ -25,6 +25,7 @@ import {
   TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
   TOAST_LEVEL_OPTIONS_META,
   WORKTREE_MODE_OPTIONS_META,
+  WORKTREE_SELECTION_OPTIONS_META,
   WORKFLOW_AGENT_SELECTION_OPTIONS_META,
   toSelectOptions,
   type SchemaOptionMeta,
@@ -59,7 +60,10 @@ import {
   WORKFLOW_FILE_FORMATS,
   LIMIT_SELECTION_VALUES,
 } from "../../types/DashboardConstants";
-import { SCHEMA_ENUMS } from "../../types/generated/SchemaDescriptions";
+import {
+  SCHEMA_ENUMS,
+  SCHEMA_VARIANT_DESCRIPTIONS,
+} from "../../types/generated/SchemaDescriptions";
 
 type MetaRow = SchemaOptionMeta<string>;
 
@@ -383,6 +387,27 @@ suite("Schema UI metadata", () => {
       short: "Claude Code",
       schemaPath: "harness",
     });
+  });
+
+  test("worktree options explain themselves with their schema branch descriptions", () => {
+    for (const path of ["worktree", "defaults.worktree"]) {
+      const options = toSelectOptions(WORKTREE_SELECTION_OPTIONS_META, path);
+      const variants = SCHEMA_VARIANT_DESCRIPTIONS[path];
+      assert.deepStrictEqual(
+        options.map(({ label, description }) => [label, description]),
+        [
+          ["None", variants["false"]],
+          ["Managed", variants["managed"]],
+          ["Named", variants["named"]],
+        ]
+      );
+      for (const option of options) {
+        assert.ok(
+          option.description,
+          `${path} ${option.label} has no description`
+        );
+      }
+    }
   });
 
   test("every bound schema enum value has a metadata row and every row is schema-valid", () => {

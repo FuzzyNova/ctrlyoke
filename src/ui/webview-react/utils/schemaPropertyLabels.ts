@@ -49,8 +49,10 @@ export function schemaTitle(
 /**
  * Build one tooltip for a whole dropdown option row: the option's full
  * (possibly truncated on screen) label first, then its own description, then
- * the shared schema help for the property it writes. Omit `path` for options
- * that are not schema-backed.
+ * the YAML it writes. The field's general schema help is deliberately left
+ * out — the field label's tooltip already carries it, and repeating it made
+ * every row tooltip a wall of text. Omit `path` for options that are not
+ * schema-backed.
  */
 export function schemaOptionTitle(
   label: string,
@@ -61,7 +63,7 @@ export function schemaOptionTitle(
   return tooltipParagraphs(
     label,
     optionDescription,
-    path ? schemaTitle(path, value) : undefined
+    path ? schemaTitle(path, value, "") : undefined
   );
 }
 

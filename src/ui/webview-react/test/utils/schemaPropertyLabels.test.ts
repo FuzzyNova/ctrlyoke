@@ -25,17 +25,27 @@ describe("schemaPropertyLabels", () => {
     );
   });
 
-  it("leads an option tooltip with its full label, then its own description, then schema help", () => {
+  it("leads an option tooltip with its full label and description, then only the YAML it writes", () => {
     expect(
       schemaOptionTitle(
-        "reviewer",
-        "Reviews diffs.",
-        "toolPermissions.mode",
-        "none"
+        "Named",
+        "Targets a worktree you own.",
+        "worktree",
+        "named"
       )
     ).toBe(
-      `reviewer\n\nReviews diffs.\n\n${schemaTitle("toolPermissions.mode", "none")}`
+      "Named\n\nTargets a worktree you own.\n\nproperty: worktree = named"
     );
+    // The field's own schema help stays on the field label, never the row.
+    expect(
+      schemaOptionTitle("Markdown", undefined, "general.defaultFormat", "md")
+    ).toBe("Markdown\n\nproperty: general.defaultFormat = md");
+    expect(
+      schemaOptionTitle("None", undefined, "agent", { writes: "agent: null" })
+    ).toBe("None\n\nagent: null\n\nproperty: agent");
+    expect(
+      schemaOptionTitle("Inherit", undefined, "agent", { omit: true })
+    ).toBe("Inherit\n\nomit agent");
     expect(schemaOptionTitle("Plain", undefined)).toBe("Plain");
     expect(schemaFieldTitle("Format", "general.defaultFormat")).toBe(
       "Format\n\nDefault file format for new workflows.\n\nproperty: general.defaultFormat"

@@ -272,7 +272,9 @@ $defs:
     oneOf:
       - type: boolean
         const: false
-        description: Explicitly run this workflow in the ordinary workspace.
+        description: >-
+          No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it
+          with your own edits.
       - type: boolean
         const: true
         description: Managed-worktree shorthand.

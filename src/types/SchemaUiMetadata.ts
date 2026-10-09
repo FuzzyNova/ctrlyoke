@@ -1,4 +1,5 @@
 import type { SelectOption } from "./SelectOption";
+import { SCHEMA_VARIANT_DESCRIPTIONS } from "./generated/SchemaDescriptions";
 import {
   BROWSER_NOTIFICATION_MODES,
   CTRLYOKE_MCP_MODES,
@@ -71,6 +72,12 @@ export interface SchemaOptionMeta<V extends string> {
   };
   short?: string;
   pseudo?: { writes: string } | { omit: true };
+  /**
+   * The schema `oneOf` branch this option selects, by its discriminating
+   * literal (`"false"`, `"managed"`). The branch's description becomes the
+   * option's description, so the explanation lives only in the schema.
+   */
+  variant?: string;
 }
 
 export function toSelectOptions<
@@ -80,6 +87,10 @@ export function toSelectOptions<
     value: option.value,
     label: option.label,
     ...(option.short ? { short: option.short } : {}),
+    ...(option.variant !== undefined &&
+    SCHEMA_VARIANT_DESCRIPTIONS[path]?.[option.variant]
+      ? { description: SCHEMA_VARIANT_DESCRIPTIONS[path][option.variant] }
+      : {}),
     schemaPath: path,
     ...(option.pseudo
       ? {
@@ -199,16 +210,19 @@ export const WORKTREE_SELECTION_OPTIONS_META = {
     value: WORKTREE_MODE_SELECTIONS.NONE,
     label: "None",
     pseudo: { writes: "{path}: false" },
+    variant: "false",
   },
   [WORKTREE_MODE_SELECTIONS.MANAGED]: {
     value: WORKTREE_MODE_SELECTIONS.MANAGED,
     label: "Managed",
     pseudo: { writes: "{path}: true" },
+    variant: WORKTREE_MODES.MANAGED,
   },
   [WORKTREE_MODE_SELECTIONS.NAMED]: {
     value: WORKTREE_MODE_SELECTIONS.NAMED,
     label: "Named",
     pseudo: { writes: "{path}: { mode: named, ... }" },
+    variant: WORKTREE_MODES.NAMED,
   },
 } as const;
 
