@@ -1310,12 +1310,16 @@ export function createAtomicReferenceExtension(
 
 // Prompt-editor-specific decoration styles (link, file-ref, code-range, prior-context).
 // Generic base theme (colours, gutter, cursor, autocomplete) lives in codemirrorTheme.ts.
-function createPromptDecorationThemeExtension() {
+export function createPromptDecorationThemeExtension() {
   return EditorView.baseTheme({
-    ".cm-link": {
+    ".cm-link.cm-link": {
       color: "var(--vscode-textLink-foreground)",
       textDecoration: "underline",
       cursor: "pointer",
+      // Markdown emphasis can split a reference into adjacent link marks.
+      // Reset it on every fragment so the complete reference stays uniform.
+      fontStyle: "normal",
+      fontWeight: "normal",
     },
     ".cm-link:hover": {
       color: "var(--vscode-textLink-activeForeground)",
@@ -1325,12 +1329,18 @@ function createPromptDecorationThemeExtension() {
       textDecoration: "underline",
       fontFamily: "var(--vscode-editor-font-family)",
     },
-    // Literal (unexpanded) ranges: readable code, not greyed out. The
-    // suppressed-expansion lint warning is what flags a mistaken reference.
+    // Literal (unexpanded) ranges: inline code gets a subtle box; fenced code
+    // keeps nested-language colours visible. The suppressed-expansion lint
+    // warning is what flags a mistaken reference.
     ".cm-code-range": {
       fontFamily: "var(--vscode-editor-font-family)",
-      backgroundColor: "var(--vscode-textPreformat-background)",
+    },
+    ".cm-code-range-inline": {
+      color: "var(--cy-syntax-inline-code)",
+      border:
+        "1px solid var(--vscode-markdown-extension.editor.codeSpan.border, var(--vscode-panel-border))",
       borderRadius: "3px",
+      padding: "0 2px",
     },
     ".cm-prior-context-ref": {
       fontStyle: "italic",
@@ -1753,7 +1763,16 @@ export function createCodeRangeDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const codeRanges = findCodeRanges(view.state.doc.toString());
+        const doc = view.state.doc.toString();
+        const codeRanges = findCodeRanges(doc);
+        const fencedRanges: Array<{ from: number; to: number }> = [];
+        syntaxTree(view.state).iterate({
+          enter: (node) => {
+            if (node.name === "FencedCode") {
+              fencedRanges.push({ from: node.from, to: node.to });
+            }
+          },
+        });
 
         for (const { from, to } of view.visibleRanges) {
           for (const range of codeRanges) {
@@ -1762,10 +1781,17 @@ export function createCodeRangeDecorationExtension() {
             const visFrom = Math.max(range.from, from);
             const visTo = Math.min(range.to, to);
             if (visFrom < visTo) {
+              const isFenced = fencedRanges.some(
+                (fence) => fence.from <= range.from && fence.to >= range.to
+              );
               builder.add(
                 visFrom,
                 visTo,
-                Decoration.mark({ class: "cm-code-range" })
+                Decoration.mark({
+                  class: isFenced
+                    ? "cm-code-range cm-code-range-fenced"
+                    : "cm-code-range cm-code-range-inline",
+                })
               );
             }
           }

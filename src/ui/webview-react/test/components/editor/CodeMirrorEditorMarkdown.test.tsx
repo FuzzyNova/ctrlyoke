@@ -10,6 +10,7 @@ import {
   createCodeRangeDecorationExtension,
   createContextReferenceLintExtension,
   createLinkDecorationExtension,
+  createPromptDecorationThemeExtension,
 } from "@components/editor/CodeMirrorEditor";
 import {
   createPromptMarkdownExtension,
@@ -218,6 +219,7 @@ describe("markdown and code-range parity", () => {
 describe("ctrlyoke decorations over markdown highlighting", () => {
   const withMarkdown = (...extensions: Extension[]) => [
     createPromptMarkdownExtension(),
+    createPromptDecorationThemeExtension(),
     ...extensions,
   ];
 
@@ -240,6 +242,21 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
     }
   });
 
+  it("keeps every fragment of a reference visually uniform inside emphasis", () => {
+    const view = mount(
+      "see @src/a*b*c.ts",
+      withMarkdown(Prec.highest(createLinkDecorationExtension()))
+    );
+    const links = Array.from(view.dom.querySelectorAll(".cm-link"));
+    expect(links.map((el) => el.textContent).join("")).toBe("@src/a*b*c.ts");
+    expect(links.length).toBeGreaterThan(1);
+    for (const link of links) {
+      expect(getComputedStyle(link).fontStyle).toBe("normal");
+      expect(getComputedStyle(link).fontWeight).toBe("normal");
+      expect(link.classList.contains("cm-link")).toBe(true);
+    }
+  });
+
   it("still replaces a reference inside emphasis with a chip", () => {
     const view = mount(
       "**read @src/a.ts**",
@@ -248,18 +265,24 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
     expect(view.dom.querySelectorAll(".cm-atomic-ref")).toHaveLength(1);
   });
 
-  it("decorates no reference inside code and marks the code range", () => {
+  it("decorates no reference inside code and distinguishes inline and fenced ranges", () => {
     const view = mount(
-      'see `@src/a.ts`\n```json\n{"a": 1}\n```',
+      'see `@src/a.ts`\n```json\n{"a": "value", "n": 1}\n```',
       withMarkdown(
         createCodeRangeDecorationExtension(),
         Prec.highest(createLinkDecorationExtension())
       )
     );
     expect(view.dom.querySelector(".cm-link")).toBeNull();
-    expect(view.dom.querySelectorAll(".cm-code-range").length).toBeGreaterThan(
-      0
-    );
+    expect(view.dom.querySelector(".cm-code-range-inline")).not.toBeNull();
+    expect(view.dom.querySelector(".cm-code-range-fenced")).not.toBeNull();
+    const stringClass = createCtrlYokeHighlightStyle().style([tags.string]);
+    if (!stringClass) throw new Error("string highlight class is missing");
+    expect(
+      Array.from(view.dom.querySelectorAll("span")).some((span) =>
+        span.classList.contains(stringClass)
+      )
+    ).toBe(true);
   });
 });
 
@@ -310,10 +333,10 @@ describe("suppressed-expansion warning with markdown on", () => {
     await lint("Read `@src/real.ts` now", new Set(["src/real.ts"]));
     const lintRange = lastView!.dom.querySelector(".cm-lintRange");
     expect(lintRange).not.toBeNull();
-    // The code range's opaque background would hide the squiggle drawn on
-    // the lint span's own background if it sat inside it.
-    expect(lintRange!.querySelector(".cm-code-range")).toBeNull();
-    expect(lintRange!.closest(".cm-code-range")).not.toBeNull();
+    // The lint span sits beside (and outside) the code mark, so its squiggle
+    // remains visible with the inline border.
+    expect(lintRange!.querySelector(".cm-code-range-inline")).toBeNull();
+    expect(lintRange!.closest(".cm-code-range-inline")).not.toBeNull();
   });
 
   it("stays silent for a missing file in code", async () => {

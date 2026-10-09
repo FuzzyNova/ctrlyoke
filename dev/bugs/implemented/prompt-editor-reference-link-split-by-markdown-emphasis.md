@@ -26,6 +26,7 @@ emphasis span around it.
 
 ## Suggested Fix
 
-Cosmetic. Either mask Lezer's emphasis and strong nodes inside reference ranges (a
-decoration that resets `font-style`/`font-weight` over the reference), or accept the split.
-A filename containing `*` or `_` pairs is rare.
+**Resolution:** fixed in this commit. `.cm-link` resets `font-style` and `font-weight` on every
+fragment, keeping the text and hover underline visually uniform when Lezer splits a reference
+around emphasis. The DOM may still contain multiple adjacent link spans; all retain their
+`data-path`, so clicking continues to work. Atomic chips are unchanged.

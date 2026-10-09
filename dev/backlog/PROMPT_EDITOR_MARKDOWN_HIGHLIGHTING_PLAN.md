@@ -349,9 +349,14 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
        `Prec.high`. **The code-range mark stays at default precedence** (Wave 3 review fix):
        a higher-precedence mark is drawn inside a lower one, and at `Prec.highest` its opaque
        background covered the suppressed-expansion squiggle and selection matches inside code.
-     - **Not built: the planned code-range restyle** (the inline `codeSpan.border` box, and
-       fences with no background so nested colours show through). `.cm-code-range` still has
-       Phase 0's preformat background on both. Deferred, not dropped.
+     - **Wave 5 code-range restyle:** `.cm-code-range` keeps the editor code font;
+       `.cm-code-range-inline` adds `--cy-syntax-inline-code` and the
+       `--vscode-markdown-extension.editor.codeSpan.border` box, while
+       `.cm-code-range-fenced` has no background so nested-language colours show through.
+       The range remains at default precedence, keeping lint squiggles and selection matches
+       visible. A reference split by emphasis is also reset to normal font style/weight on each
+       `.cm-link` fragment, preserving a uniform link appearance while allowing the DOM spans
+       to remain split.
      - Spellcheck now also skips fence info strings (`CodeInfo`) and link destinations
        (`URL`) via `getMarkdownNonProseRanges`. **The plan said it already skipped
        `findCodeRanges` ranges; it does not** (it skips only `@`/`#`/`~` references). That is

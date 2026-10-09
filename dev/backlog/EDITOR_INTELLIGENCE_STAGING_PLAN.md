@@ -41,6 +41,7 @@ it.
 | F5              | **Done** (2026-10-08) | Side-effect-free host validation, schema and shared prompt-text lint, plus generated-outline key hover in the workspace editor. Details in plan F's Phase 5 "As built".                                                                                                                         |
 | D3              | **Done** (2026-10-08) | VS Code YAML schema diagnostics with Red Hat YAML suppression and exact `$preCondition:` inheritance context. Details in plan D's "Phase 3 as built".                                                                                                                                           |
 | M2              | **Done** (2026-10-08) | Markdown in the prompt editor: GFM plus memoised nested fence languages, quote/list mark tags, ctrlyoke mark decorations at `Prec.highest`, spellcheck skips fence info and link URLs. Details in plan M's Phase 2 entry.                                                                       |
+| M2b             | **Done** (2026-10-08) | Reference links split by markdown emphasis now have uniform styling; inline code uses the shared inline-code colour and VS Code code-span border, while fenced code leaves nested token colours visible. The code-range mark remains at default precedence.                                     |
 | Everything else | Not started           |                                                                                                                                                                                                                                                                                                 |
 
 ### Wave 1 review (2026-10-08)
@@ -155,7 +156,7 @@ against its plan, and every finding below was reproduced with a probe or a test.
   - [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/implemented/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md).
     Five runtime cases now follow CommonMark; the editor leaves an unclosed fence uncoloured
     while runtime references stay live.
-  - [`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/backlog/prompt-editor-reference-link-split-by-markdown-emphasis.md),
+  - [`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/implemented/prompt-editor-reference-link-split-by-markdown-emphasis.md),
     low and cosmetic.
 
 ## Short answer
@@ -272,13 +273,13 @@ M2b covers:
    `findCodeRanges` now matches CommonMark for the five runtime cases; unclosed fences remain
    live and the prompt editor suppresses their syntax colours until a closer is present. The
    parity corpus agrees for every visible code range, and unit tests pin the runtime decisions.
-2. **[`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/backlog/prompt-editor-reference-link-split-by-markdown-emphasis.md)**
-   (low, cosmetic).
-3. **The deferred code-range restyle** from plan M's "Code ranges" section: inline spans get
-   the `codeSpan.border` box, and fences lose their background so nested-language colours
-   show through. Keep the code-range mark at default precedence (see
-   `webview-react-components.instructions.md`), so the suppressed-expansion squiggle stays
-   visible.
+2. **Done:** [`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/implemented/prompt-editor-reference-link-split-by-markdown-emphasis.md)
+   (low, cosmetic). Emphasis split links retain uniform font style, weight and underline on
+   every fragment.
+3. **Done:** the deferred code-range restyle from plan M's "Code ranges" section. Inline spans
+   get the `codeSpan.border` box and shared inline-code colour; fences lose their background so
+   nested-language colours show through. The code-range mark stays at default precedence, so
+   the suppressed-expansion squiggle remains visible.
 
 Move each bug to `dev/bugs/implemented/` in the commit that fixes it, and mark the restyle
 done in plan M's Phase 2 entry.
