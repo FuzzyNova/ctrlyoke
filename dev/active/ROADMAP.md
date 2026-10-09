@@ -146,7 +146,7 @@ settings file stays valid without migration code:
 | Plan                           | Why deferring is safe                                                                                           |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | `PARALLEL_STEPS_PLAN`          | Re-audited 2026-08-14 and cleared — see the note below                                                          |
-| `WORKFLOW_STEP_PLAN`           | `promptItem` becomes a `oneOf` with a new variant; existing files stay valid                                    |
+| `WORKFLOW_STEP_PLAN`           | `workflowStep`'s inner `oneOf` gains a third arm; existing files stay valid                                     |
 | `WORKFLOW_SCHEDULING_PLAN`     | Additive `schedule` definition; the plan already makes the timezone field optional "so no migration"            |
 | `NOTIFICATION_HOOK_EVENT_PLAN` | Enum addition; the plan states no persisted-settings migration is needed (deep-merge inherits `false`)          |
 | `CLINE_INTEGRATION_PLAN`       | `HARNESS_IDS` additions are additive                                                                            |
