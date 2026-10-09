@@ -255,10 +255,75 @@ describe("WorktreesSection", () => {
     }
 
     expect(syncCalls()).toHaveLength(expectedOrder.length);
+    // Counts are per branch, not per sync step: 3 branches over 5 steps, and
+    // branch-2 is reported failed once even though its reverse-pass sync
+    // succeeded.
     await waitFor(() =>
       expect(
-        screen.getByText('Synced 4 of 5 — "branch-2": Merge conflict')
+        screen.getByText('Synced 2 of 3 — "branch-2": Merge conflict')
       ).toBeInTheDocument()
+    );
+  });
+
+  it("Sync All reports branches synced, not sync steps run", async () => {
+    const postMessage = vi.fn();
+    window.vscodeApi = {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+    const entry = (name: string): WorktreeManagementEntry => ({
+      worktreePath: `C:/repo.worktrees/${name}`,
+      headCommit: "a",
+      branchName: name,
+      ownership: "user",
+      branchState: "present",
+      inUse: false,
+      leaseOwners: [],
+      stale: false,
+      branchCleanupEligible: false,
+    });
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmResetOperations: false,
+      },
+    }));
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [entry("branch-1"), entry("branch-2"), entry("branch-3")],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Sync All with main" }));
+
+    const syncCalls = () =>
+      postMessage.mock.calls
+        .map(([msg]) => msg)
+        .filter((msg) => msg.type === MESSAGE_TYPES.SYNC_NAMED_WORKTREE);
+    for (let i = 0; i < 5; i++) {
+      await waitFor(() => expect(syncCalls().length).toBeGreaterThan(i));
+      useSettingsStore
+        .getState()
+        .setWorktreeActionResult(syncCalls()[i].requestId, {
+          success: true,
+          message: "up to date",
+        });
+    }
+
+    await waitFor(() =>
+      expect(screen.getByText("Synced 3 of 3 branches.")).toBeInTheDocument()
     );
   });
 

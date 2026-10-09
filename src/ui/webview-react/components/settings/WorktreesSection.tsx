@@ -355,9 +355,11 @@ export function WorktreesSection({
     setSyncAllFeedback(undefined);
     clearTimeout(syncAllTimerRef.current);
 
-    let attempted = 0;
-    let succeeded = 0;
-    const failures: string[] = [];
+    // The sequence visits most branches twice, so outcomes are tallied per
+    // branch (keyed by worktree path): a branch counts as synced only if every
+    // one of its sync steps succeeded, and is reported once with its first
+    // failure.
+    const failureByWorktree = new Map<string, string | undefined>();
 
     for (const worktreePath of sequence) {
       const latest = useSettingsStore.getState().worktreeManagement;
@@ -367,7 +369,6 @@ export function WorktreesSection({
       if (!entry || !isSyncEligible(entry, latest?.sourceCheckoutRoot)) {
         continue;
       }
-      attempted += 1;
       const [requestId] = feedback.begin(worktreeRowKey(worktreePath, "sync"));
       vscode.postMessage({
         type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
@@ -375,16 +376,22 @@ export function WorktreesSection({
         requestId,
       });
       const result = await waitForWorktreeResult(requestId);
-      if (result.success) {
-        succeeded += 1;
-      } else {
-        failures.push(
-          `"${entry.branchName ?? worktreePath}": ${result.message}`
-        );
-      }
+      const priorFailure = failureByWorktree.get(worktreePath);
+      failureByWorktree.set(
+        worktreePath,
+        priorFailure ??
+          (result.success
+            ? undefined
+            : `"${entry.branchName ?? worktreePath}": ${result.message}`)
+      );
     }
 
     setSyncAllPending(false);
+    const attempted = failureByWorktree.size;
+    const failures = [...failureByWorktree.values()].filter(
+      (failure): failure is string => failure !== undefined
+    );
+    const succeeded = attempted - failures.length;
     const success = failures.length === 0;
     const message =
       attempted === 0
