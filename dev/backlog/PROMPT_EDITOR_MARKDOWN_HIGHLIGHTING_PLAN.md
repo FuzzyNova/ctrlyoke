@@ -425,20 +425,19 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
 4. **Phase 3: Workspace editor and YAML prompts.** **Done 2026-10-08.**
    - **As built:** `getLanguageExtension` applies `createPromptMarkdownLanguage()` to `.md`,
      including `.prompt.md`, so GFM, nested fence languages and the shared highlight style are
-     consistent across the workspace and prompt editors. YAML workflow files get a configured
-     `yamlLanguage` through the existing lazy workflow-file support compartment. Its `parseMixed`
-     wrapper selects only YAML `BlockLiteral` nodes whose decoded `PROMPT_TEXT` spans overlap
-     them, and uses the F6a range state for source-mapped Markdown token decorations. The
-     decoded spans remove YAML's common block indentation before Markdown parses headings,
-     inline syntax and fenced languages; quoted scalars remain YAML strings. Code ranges come
-     from the shared `findCodeRanges` authority, and the nested decoration path suppresses
-     syntax inside an unclosed fence consistently with M2b.
+     consistent across the workspace and prompt editors. YAML workflow files keep the configured
+     `yamlLanguage` through the existing lazy workflow-file support compartment. A single
+     source-mapped decoration plugin parses each decoded `PROMPT_TEXT` span as Markdown and maps
+     tokens back through `toSourceOffset`; it does not overlay a second parser onto YAML. Span
+     parse results are cached by text, and unclosed-fence ranges stay live text without code
+     coloring. Quoted scalars remain YAML strings.
    - The parser lives in its own dynamic YAML chunk. Workflow Markdown is installed in the
      existing ctrlyoke support compartment after the workflow support chunk loads, so the editor
      view stays mounted and F4 completions, F5 lint and hover, and F6a chips keep their state.
      Tests in
      `WorkspaceFileEditor.ctrlyokeFiles.test.tsx` cover `.prompt.md` JSON/heading classes, YAML
      headings, emphasis, inline code and fenced JSON in root, retry and parallel prompt values,
+     indented code blocks and unclosed fences,
      YAML keys/comments/following lines and quoted prompts, chips, and a large YAML edit budget.
 
 5. **Phase 4: VS Code injection grammar.** **Done 2026-10-08**, together with the bug fix

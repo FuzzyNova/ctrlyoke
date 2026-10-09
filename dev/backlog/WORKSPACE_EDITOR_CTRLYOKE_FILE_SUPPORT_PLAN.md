@@ -771,24 +771,25 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      - toggling the setting adds and removes chips without recreating the view
      - the saved text is byte-identical
 
-   **As built — F6a done 2026-10-08.** `workflowPromptRanges.ts` adds a lazy CodeMirror
+   **As built — F6a done 2026-10-08, with review fixes.** `workflowPromptRanges.ts` adds a lazy CodeMirror
    `StateField` containing decoded `WorkflowTextSpan` values from `getWorkflowTextSpans()`,
    recomputed when the document changes. Its spans retain decoded text and `toSourceOffset()`
    so M3's nested Markdown support can reuse the same source map. The workspace editor installs
    this field only after the lazy support chunk loads. The atomic-reference extension accepts
    an optional range predicate; the prompt editor omits it and keeps its existing whole-document
    behavior. The workspace editor limits chips to exact YAML prompt values and `.prompt.md`
-   bodies, skips decoded code ranges and quoted YAML scalars containing escapes, and keeps
+   bodies, caches decoded code ranges per prompt-range field value to exclude code references,
+   skips quoted YAML scalars containing escapes, and keeps
    ordinary reference links elsewhere. Toggling the setting reconfigures `ctrlyokeFileSupport`
    without replacing the view. Tests cover YAML, quoted escapes, JSON, prompt Markdown,
    navigation, live toggling and unchanged document bytes. Nested Markdown is M3.
 
-   **As built — F6b done 2026-10-08.** `PromptContextCompletions.ts` builds the shared
-   workflow-aware `$` and `{{var}}` items. The workspace editor derives names, visible prior
-   steps, variables and condition scope from the parsed document; the prompt editor supplies
-   the selected workflow's visible steps and vars. Condition items follow the same retry-prompt
-   and effective pre-condition rules as `PromptDiagnosticRules`. Tests cover step names and
-   bounds, condition scoping, workflow vars and both CodeMirror completion-source paths.
+   **As built — F6b done 2026-10-08, with review fixes.** `PromptContextCompletions.ts` filters
+   the shared prior-context item list using step count, final-step presence, field and effective
+   pre-condition. The workspace editor and prompt editor derive their context from the same
+   span-position helper used by prompt diagnostics. Variable names share
+   `VARIABLE_NAME_PATTERN_SOURCE`, and completion preserves an existing `}}`. Tests cover step
+   bounds, final-step availability, condition scope, workflow vars and both CodeMirror paths.
 
 9. **Phase 7: VS Code parity.** **Done 2026-10-08.** This can be done on its own schedule.
    - `PromptPropertyCompletionProvider` gains value completions and covers JSON through

@@ -11,7 +11,12 @@ import { DEFAULT_COMPLETION_ICON } from "@utils/atomicReferences";
 import type { PromptCompletionWorkflowContext } from "@root/completions/PromptContextCompletions";
 import { getWorkflowVariableCompletions } from "@root/completions/PromptContextCompletions";
 import { COMPLETION_ITEM_KINDS } from "@root/types/DashboardConstants";
+import { VARIABLE_NAME_PATTERN_SOURCE } from "@root/utils/KeyValueKeyKinds";
 import { findCustomCompletionContext } from "./promptCompletionResult";
+
+const WORKFLOW_VARIABLE_COMPLETION_PATTERN = new RegExp(
+  `\\{\\{(?:${VARIABLE_NAME_PATTERN_SOURCE})?$`
+);
 
 export interface PromptTokenCompletionOptions {
   sources: readonly CompletionSource[];
@@ -46,11 +51,17 @@ export function createWorkflowContextCompletionSource(
   return (context) => {
     const line = context.state.doc.lineAt(context.pos);
     const before = line.text.slice(0, context.pos - line.from);
-    const variable = context.matchBefore(/\{\{\w*$/);
+    const variable = context.matchBefore(WORKFLOW_VARIABLE_COMPLETION_PATTERN);
     if (variable) {
       const query = variable.text.slice(2);
       const vars = getContext(context)?.vars ?? {};
-      const items = getWorkflowVariableCompletions(vars, query);
+      const hasClosingBraces =
+        context.state.doc.sliceString(context.pos, context.pos + 2) === "}}";
+      const items = getWorkflowVariableCompletions(
+        vars,
+        query,
+        hasClosingBraces
+      );
       if (!items.length) return null;
       return {
         from: variable.from + 2,

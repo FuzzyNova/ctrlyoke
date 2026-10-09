@@ -1,18 +1,25 @@
 import {
   COMPLETION_ITEM_KINDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
-  RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
+  PROMPT_DIAGNOSTIC_FIELDS,
+  type PromptDiagnosticField,
 } from "../types/DashboardConstants";
 import { fuzzyMatches } from "./FuzzyRanking";
 import type { PlainCompletionItem } from "./CompletionCore";
+import { getPriorContextCompletionItems } from "./PriorContextCompletions";
+import { VARIABLE_NAME_PATTERN_SOURCE } from "../utils/KeyValueKeyKinds";
+
+const VARIABLE_NAME_PATTERN = new RegExp(`^${VARIABLE_NAME_PATTERN_SOURCE}$`);
 
 export interface PromptCompletionWorkflowContext {
   /** Names in runtime order, including only steps visible at this prompt. */
   stepNames: readonly (string | undefined)[];
   vars: Readonly<Record<string, unknown>>;
-  field: "prompt" | "retryPrompt";
+  field: PromptDiagnosticField;
   hasPreCondition: boolean;
+  stepCount: number;
+  hasFinalStep: boolean;
 }
 
 /** Apply position and field rules to the shared prior-context list. */
@@ -24,68 +31,31 @@ export function getContextualPriorCompletions(
   const stepQuery = filterText.startsWith(stepPrefix)
     ? filterText.slice(stepPrefix.length)
     : undefined;
-  const keywords = [
-    {
-      label: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS,
-      detail: "Output of the previous step",
-    },
-    {
-      label: `${PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS}:`,
-      detail: "Last N step outputs",
-    },
-    {
-      label: PRIOR_CONTEXT_REFERENCE_KINDS.ALL,
-      detail: "Outputs of all prior steps",
-    },
-    {
-      label: PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP,
-      detail: "Previous finalStep output",
-    },
-    {
-      label: PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP,
-      detail: "All finalStep outputs",
-    },
-    {
-      label: `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`,
-      detail: "Specific prior step outputs",
-      icon: "book",
-    },
-    ...[
-      SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-      SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-    ]
-      .filter(
-        (phase) =>
-          phase !== SCRIPT_OUTPUT_SOURCES.PRE_CONDITION ||
-          context.hasPreCondition
-      )
-      .filter(
-        (phase) =>
-          phase !== SCRIPT_OUTPUT_SOURCES.END_CONDITION ||
-          context.field === "retryPrompt"
-      )
-      .flatMap((phase) =>
-        Object.values(RETRY_PROMPT_PLACEHOLDERS).map((field) => ({
-          label: `${phase}:${field}`,
-          detail: `${phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION ? "Pre-condition" : "End-condition"} script ${field}`,
-          icon:
-            phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
-              ? "shield"
-              : "checklist",
-        }))
-      ),
-  ];
-  const scoped = keywords
+  const scoped = getPriorContextCompletionItems(filterText)
     .filter(
       (keyword) =>
         !(keyword.label === stepPrefix && stepQuery !== undefined) &&
+        (context.stepCount > 0 ||
+          ![
+            PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS,
+            `${PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS}:`,
+            PRIOR_CONTEXT_REFERENCE_KINDS.ALL,
+            stepPrefix,
+          ].includes(keyword.label)) &&
+        (context.hasFinalStep ||
+          !new Set<string>([
+            PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP,
+            PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP,
+          ]).has(keyword.label)) &&
+        (keyword.label.startsWith(`${SCRIPT_OUTPUT_SOURCES.PRE_CONDITION}:`)
+          ? context.hasPreCondition
+          : true) &&
+        (keyword.label.startsWith(`${SCRIPT_OUTPUT_SOURCES.END_CONDITION}:`)
+          ? context.field === PROMPT_DIAGNOSTIC_FIELDS.RETRY_PROMPT
+          : true) &&
         fuzzyMatches(keyword.label, filterText)
     )
-    .map((keyword) => ({
-      ...keyword,
-      kind: COMPLETION_ITEM_KINDS.KEYWORD,
-      insertText: keyword.label,
-    }));
+    .map((keyword) => ({ ...keyword, kind: COMPLETION_ITEM_KINDS.KEYWORD }));
   if (stepQuery === undefined) return scoped;
   const steps = context.stepNames.flatMap((name, index) => {
     const number = index + 1;
@@ -107,15 +77,19 @@ export function getContextualPriorCompletions(
 /** `{{name}}` completions use the same key syntax as VarSubstitutor. */
 export function getWorkflowVariableCompletions(
   vars: Readonly<Record<string, unknown>>,
-  filterText: string
+  filterText: string,
+  hasClosingBraces = false
 ): PlainCompletionItem[] {
   return Object.keys(vars)
-    .filter((name) => /^\w+$/.test(name) && fuzzyMatches(name, filterText))
+    .filter(
+      (name) =>
+        VARIABLE_NAME_PATTERN.test(name) && fuzzyMatches(name, filterText)
+    )
     .sort()
     .map((name) => ({
       label: name,
       kind: COMPLETION_ITEM_KINDS.VARIABLE,
-      insertText: `${name}}} `,
+      insertText: hasClosingBraces ? name : `${name}}} `,
       detail: "Workflow variable",
       icon: "symbol-variable",
     }));

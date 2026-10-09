@@ -25,7 +25,10 @@ import {
   redoDepth,
 } from "@codemirror/commands";
 import { Transaction } from "@codemirror/state";
-import { createThemeExtension } from "@utils/codemirrorTheme";
+import {
+  createAtomicReferenceWidgetTheme,
+  createThemeExtension,
+} from "@utils/codemirrorTheme";
 import {
   getLanguageExtension,
   createWorkspaceEditorHighlightExtension,
@@ -151,6 +154,7 @@ export const WorkspaceFileEditor = forwardRef<
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const yamlLanguageCompartment = useRef(new Compartment());
+    const yamlLanguageExtensionRef = useRef<Extension>([]);
     const languageIntelligenceCompartment = useRef(new Compartment());
     const languageIntelligence = useLanguageIntelligence(filePath);
     const languageIntelligenceRef = useRef(languageIntelligence);
@@ -382,9 +386,7 @@ export const WorkspaceFileEditor = forwardRef<
               ...(ctrlyokeFileKind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML &&
               workflowSupportRef.current
                 ? [
-                    workflowSupportRef.current.createWorkflowPromptMarkdownLanguage(
-                      ctrlyokeFileKind
-                    ),
+                    workflowSupportRef.current.createWorkflowPromptMarkdownLanguage(),
                     ...(workflowPromptRangesField
                       ? [
                           workflowSupportRef.current.createWorkflowPromptMarkdownDecorations(
@@ -474,6 +476,7 @@ export const WorkspaceFileEditor = forwardRef<
       return [
         basicSetup,
         createThemeExtension("editor"),
+        createAtomicReferenceWidgetTheme(),
         createWorkspaceEditorHighlightExtension(),
         createWorkspaceEditorLinkThemeExtension(),
         createWorkspaceReferenceDecorationExtension(),
@@ -483,7 +486,7 @@ export const WorkspaceFileEditor = forwardRef<
           openSecretsSettings
         ),
         ...(langExt ? [langExt] : []),
-        yamlLanguageCompartment.current.of([]),
+        yamlLanguageCompartment.current.of(yamlLanguageExtensionRef.current),
         languageIntelligenceCompartment.current.of(
           languageIntelligenceRef.current.extensions
         ),
@@ -545,6 +548,7 @@ export const WorkspaceFileEditor = forwardRef<
       let cancelled = false;
       void loadYamlLanguageExtension().then((extension) => {
         if (cancelled || !viewRef.current) return;
+        yamlLanguageExtensionRef.current = extension;
         viewRef.current.dispatch({
           effects: yamlLanguageCompartment.current.reconfigure(extension),
         });
@@ -786,14 +790,14 @@ function isWorkspacePromptReferenceRange(
   )
     return false;
 
-  const docText = view.state.doc.toString();
   const spans = view.state.field(field, false) ?? [];
-  const codeRanges = support.getPromptCodeRanges(
+  const docText = view.state.doc.toString();
+  const codeRanges = getCachedPromptCodeRanges(
+    spans,
     docText,
+    support,
     filePath,
-    kind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
-      ? PROMPT_FILE_LANGUAGE_IDS.YAML
-      : PROMPT_FILE_LANGUAGE_IDS.MARKDOWN
+    kind
   );
 
   return spans.some((span) => {
@@ -814,6 +818,31 @@ function isWorkspacePromptReferenceRange(
 
     return !codeRanges.some((range) => from >= range.from && to <= range.to);
   });
+}
+
+const promptCodeRangesBySpans = new WeakMap<
+  readonly WorkflowTextSpan[],
+  ReturnType<WorkflowFileSupport["getPromptCodeRanges"]>
+>();
+
+function getCachedPromptCodeRanges(
+  spans: readonly WorkflowTextSpan[],
+  text: string,
+  support: WorkflowFileSupport,
+  filePath: string,
+  kind: NonNullable<ReturnType<typeof getCtrlYokeFileKind>>
+) {
+  const cached = promptCodeRangesBySpans.get(spans);
+  if (cached) return cached;
+  const ranges = support.getPromptCodeRanges(
+    text,
+    filePath,
+    kind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      ? PROMPT_FILE_LANGUAGE_IDS.YAML
+      : PROMPT_FILE_LANGUAGE_IDS.MARKDOWN
+  );
+  promptCodeRangesBySpans.set(spans, ranges);
+  return ranges;
 }
 
 function findWorkspaceReferenceMatches(

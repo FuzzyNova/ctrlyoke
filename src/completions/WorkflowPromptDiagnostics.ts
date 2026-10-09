@@ -76,7 +76,7 @@ const PROMPT_MARKDOWN_SPAN_CONTEXT: PromptDiagnosticContext = {
  * quiet rather than guess. A `.prompt.md` body gets
  * {@link PROMPT_MARKDOWN_SPAN_CONTEXT} for the same reason.
  */
-function getSpanContext(
+export function getSpanContext(
   span: WorkflowTextSpan,
   root: unknown,
   settingsPreCondition?: unknown
@@ -100,6 +100,7 @@ function getSpanContext(
   if (path[0] === PROMPT_PROPERTIES.FINAL_STEP) {
     owner = fields[PROMPT_PROPERTIES.FINAL_STEP];
     promptOwner = owner;
+    stepIndex = stepCount;
   } else if (
     path[0] === PROMPT_PROPERTIES.STEPS &&
     typeof path[1] === "number"
@@ -114,6 +115,10 @@ function getSpanContext(
         ? parallelMembers(entry)?.[path[3]]
         : entry;
     owner = promptOwner;
+  } else {
+    // Workflow-level prompts have no fixed execution position; use the most
+    // permissive view, after every queued step.
+    stepIndex = stepCount;
   }
   const effectivePreCondition =
     promptOwner && typeof promptOwner === "object"
@@ -160,21 +165,8 @@ export function getWorkflowPromptCompletionContext(
   const steps = Array.isArray(fields[PROMPT_PROPERTIES.STEPS])
     ? (fields[PROMPT_PROPERTIES.STEPS] as unknown[])
     : [];
-  const path = span.path;
-  let visibleEntries: unknown[] = [];
-  if (
-    kind !== CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN &&
-    path[0] !== PROMPT_PROPERTIES.STEPS
-  ) {
-    // Workflow-level retry prompts have unknown execution position; like the
-    // lint context, use the most permissive view (all queue steps).
-    visibleEntries = steps;
-  } else if (
-    path[0] === PROMPT_PROPERTIES.STEPS &&
-    typeof path[1] === "number"
-  ) {
-    visibleEntries = steps.slice(0, path[1]);
-  }
+  const diagnosticContext = getSpanContext(span, root);
+  const visibleEntries = steps.slice(0, diagnosticContext.stepIndex);
   const stepNames = visibleEntries.flatMap((entry) => {
     const members = parallelMembers(entry);
     const authored = members ?? [entry];
@@ -184,7 +176,6 @@ export function getWorkflowPromptCompletionContext(
         : undefined
     );
   });
-  const diagnosticContext = getSpanContext(span, root);
   const vars = isRecord(fields[PROMPT_PROPERTIES.VARS])
     ? (fields[PROMPT_PROPERTIES.VARS] as Record<string, unknown>)
     : {};
@@ -193,6 +184,8 @@ export function getWorkflowPromptCompletionContext(
     vars,
     field: diagnosticContext.field,
     hasPreCondition: diagnosticContext.hasPreCondition,
+    stepCount: diagnosticContext.stepIndex,
+    hasFinalStep: diagnosticContext.hasFinalStep,
   };
 }
 

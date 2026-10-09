@@ -51,6 +51,7 @@ import {
   KEYBOARD_KEYS,
   STEP_TYPES,
   PROMPT_PROPERTIES,
+  PROMPT_DIAGNOSTIC_FIELDS,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
   PROPERTY_EDITOR_MODES,
@@ -344,8 +345,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       )
       .map((step) => step.name),
     vars: workflowProperties.vars ?? {},
-    field: "prompt" as const,
+    field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
     hasPreCondition,
+    stepCount,
+    hasFinalStep,
   };
   const isRunning = isWorkflowRunning(executionState);
   const selectedPromptStatus =

@@ -197,6 +197,9 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
       "      ```json",
       '      {"name": "yes", "count": 12}',
       "      ```",
+      "      ```",
+      "          # code heading",
+      "      ```",
       "  - parallel:",
       "      - prompt: >-",
       "          ### Parallel heading",
@@ -221,6 +224,8 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
     expect(has("inline", "inline-code")).toBe(true);
     expect(has("yes", "string")).toBe(true);
     expect(has("12", "number")).toBe(true);
+    expect(has("code heading", "inline-code")).toBe(true);
+    expect(has("code heading", "heading")).toBe(false);
     expect(has("Parallel heading", "heading")).toBe(true);
     expect(has("emphasis", "emphasis")).toBe(true);
     expect(has("Retry heading", "heading")).toBe(true);
@@ -230,12 +235,57 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
     expect(has("quoted text", "string")).toBe(true);
   });
 
+  it("keeps text in an unclosed YAML prompt fence live", async () => {
+    const { view } = await renderEditor(
+      "open-fence.ctrlyoke.yaml",
+      "steps:\n  - prompt: |\n      ```\n      # live heading\n"
+    );
+    const { spans, style } = highlightedText(view);
+    expect(view.dom.querySelector(".cm-unclosed-fence")).not.toBeNull();
+    expect(
+      spans.some(
+        (span) =>
+          span.text.includes("live heading") &&
+          span.classes.includes(syntaxClass(style, "heading") ?? "\0")
+      )
+    ).toBe(false);
+  });
+
   it("keeps large YAML prompt edits within the editor parse budget", async () => {
     const content = `steps:\n  - prompt: |\n${"      # heading and plain text\n".repeat(3000)}  - prompt: done\n`;
     const { view } = await renderEditor("large.ctrlyoke.yaml", content);
     const startedAt = performance.now();
     view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
     expect(performance.now() - startedAt).toBeLessThan(250);
+  });
+
+  it("keeps plain YAML highlighting when read-only rebuilds the view", async () => {
+    const content = 'title: "highlighted"\n';
+    const result = await renderEditor("plain.yaml", content);
+    result.rerender(
+      <WorkspaceFileEditor
+        filePath="plain.yaml"
+        content={content}
+        readOnly
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(
+        result.container.querySelector<HTMLElement>(".cm-editor")!
+      )!;
+      const highlighted = highlightedText(view);
+      expect(
+        highlighted.spans.some(
+          (span) =>
+            span.text === "title" &&
+            span.classes.includes(
+              syntaxClass(highlighted.style, "property") ?? "\0"
+            )
+        )
+      ).toBe(true);
+    });
   });
 
   beforeEach(() => {

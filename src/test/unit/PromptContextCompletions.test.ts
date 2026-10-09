@@ -5,14 +5,17 @@ import {
 } from "../../completions/PromptContextCompletions";
 import { getWorkflowPromptCompletionContext } from "../../completions/WorkflowPromptDiagnostics";
 import { CTRLYOKE_FILE_KINDS } from "../../types/DashboardConstants";
+import { PROMPT_DIAGNOSTIC_FIELDS } from "../../types/DashboardConstants";
 
 suite("PromptContextCompletions", () => {
   test("names only the prior steps in step completions", () => {
     const items = getContextualPriorCompletions("step:", {
       stepNames: ["Setup", "Build"],
       vars: {},
-      field: "prompt",
+      field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
       hasPreCondition: false,
+      stepCount: 2,
+      hasFinalStep: false,
     });
     assert.deepStrictEqual(
       items.map(({ label, detail }) => [label, detail]),
@@ -27,8 +30,10 @@ suite("PromptContextCompletions", () => {
     const prompt = getContextualPriorCompletions("", {
       stepNames: [],
       vars: {},
-      field: "prompt",
+      field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
       hasPreCondition: false,
+      stepCount: 0,
+      hasFinalStep: false,
     });
     assert.ok(!prompt.some((item) => item.label.startsWith("endCondition:")));
     assert.ok(!prompt.some((item) => item.label.startsWith("preCondition:")));
@@ -36,8 +41,10 @@ suite("PromptContextCompletions", () => {
     const retry = getContextualPriorCompletions("", {
       stepNames: [],
       vars: {},
-      field: "retryPrompt",
+      field: PROMPT_DIAGNOSTIC_FIELDS.RETRY_PROMPT,
       hasPreCondition: true,
+      stepCount: 2,
+      hasFinalStep: true,
     });
     assert.ok(retry.some((item) => item.label.startsWith("endCondition:")));
     assert.ok(retry.some((item) => item.label.startsWith("preCondition:")));
@@ -51,6 +58,36 @@ suite("PromptContextCompletions", () => {
       ).map((item) => [item.label, item.insertText]),
       [["project_name", "project_name}} "]]
     );
+  });
+
+  test("hides context completions that are invalid at the current position", () => {
+    const firstStep = getContextualPriorCompletions("", {
+      stepNames: [],
+      vars: {},
+      field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
+      hasPreCondition: false,
+      stepCount: 0,
+      hasFinalStep: false,
+    });
+    assert.ok(
+      !firstStep.some((item) =>
+        /^(previous|all|step:|previous:)$/.test(item.label)
+      )
+    );
+    assert.ok(
+      !firstStep.some((item) => /^(finalStep|allFinalStep)$/.test(item.label))
+    );
+
+    const laterStep = getContextualPriorCompletions("", {
+      stepNames: ["First"],
+      vars: {},
+      field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
+      hasPreCondition: false,
+      stepCount: 1,
+      hasFinalStep: true,
+    });
+    assert.ok(laterStep.some((item) => item.label === "previous"));
+    assert.ok(laterStep.some((item) => item.label === "finalStep"));
   });
 
   test("derives visible step names and vars from the workflow document", () => {
@@ -73,6 +110,8 @@ suite("PromptContextCompletions", () => {
     );
     assert.deepStrictEqual(context?.stepNames, ["First"]);
     assert.strictEqual(context?.vars.project_name, "demo");
+    assert.strictEqual(context?.stepCount, 1);
+    assert.strictEqual(context?.hasFinalStep, false);
   });
 
   test("uses every step for workflow-level retry prompts", () => {

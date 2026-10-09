@@ -223,10 +223,15 @@ export function createUnclosedFenceColorOverride(): Extension {
       },
       { decorations: (plugin) => plugin.decorations }
     ),
-    EditorView.baseTheme({
-      ".cm-unclosed-fence, .cm-unclosed-fence *": {
-        color: "inherit !important",
-      },
-    }),
+    createUnclosedFenceTheme(),
   ];
+}
+
+/** Keep transient unclosed fence text on the editor's live-text color. */
+export function createUnclosedFenceTheme(): Extension {
+  return EditorView.baseTheme({
+    ".cm-unclosed-fence, .cm-unclosed-fence *": {
+      color: "inherit !important",
+    },
+  });
 }

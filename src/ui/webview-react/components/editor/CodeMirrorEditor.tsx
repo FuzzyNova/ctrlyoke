@@ -16,7 +16,10 @@ import {
   WidgetType,
   repositionTooltips,
 } from "@codemirror/view";
-import { createThemeExtension } from "@utils/codemirrorTheme";
+import {
+  createAtomicReferenceWidgetTheme,
+  createThemeExtension,
+} from "@utils/codemirrorTheme";
 import { createPromptMarkdownExtension } from "@utils/codemirrorLanguage";
 import {
   DEFAULT_COMPLETION_ICON,
@@ -857,6 +860,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         ]),
         placeholderCompartmentRef.current.of(placeholder(placeholderText)),
         createThemeExtension(surface),
+        createAtomicReferenceWidgetTheme(),
         createPromptDecorationThemeExtension(),
         createLinterThemeExtension(),
         createActiveLineHighlightExtension(),
@@ -1364,14 +1368,6 @@ export function createPromptDecorationThemeExtension() {
     },
     ".cm-condition-output-ref": {
       fontStyle: "italic",
-    },
-    // Atomic-mode reference chip: the box/icon/label styling is the shared
-    // `.atomic-reference-chip` rule in globals.css. This is the CodeMirror-only
-    // adapter — editor widgets stay on one line even though output chips may
-    // wrap long find-expanded references.
-    ".cm-atomic-ref": {
-      whiteSpace: "nowrap",
-      verticalAlign: "baseline",
     },
   });
 }

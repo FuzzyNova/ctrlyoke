@@ -48,6 +48,8 @@ describe("workflow-aware prompt completions", () => {
     vars: { project_name: "demo" },
     field: "retryPrompt" as const,
     hasPreCondition: true,
+    stepCount: 1,
+    hasFinalStep: true,
   };
   const source = createWorkflowContextCompletionSource(
     { customSource: () => null },
@@ -73,6 +75,16 @@ describe("workflow-aware prompt completions", () => {
     expect(result?.options.map((item) => [item.label, item.apply])).toEqual([
       ["project_name", "project_name}} "],
     ]);
+  });
+
+  it("keeps an existing variable closer when completing inside `{{foo}}`", async () => {
+    const state = EditorState.create({ doc: "{{project}}" });
+    const result = await source(
+      new CompletionContext(state, state.doc.length - 2, true)
+    );
+    expect(
+      result?.options.find((item) => item.label === "project_name")?.apply
+    ).toBe("project_name");
   });
 
   it("gates retry and condition-output completions consistently", async () => {
