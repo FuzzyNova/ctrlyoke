@@ -949,6 +949,7 @@ export const LSP_METHODS = {
   SHUTDOWN: "shutdown",
   EXIT: "exit",
   RENAME: "textDocument/rename",
+  REFERENCES: "textDocument/references",
   APPLY_EDIT: "workspace/applyEdit",
   CONFIRM_WORKSPACE_RENAME: "ctrlyoke/confirmWorkspaceRename",
   APPLY_WORKSPACE_TEXT_EDITS: "ctrlyoke/applyWorkspaceTextEdits",

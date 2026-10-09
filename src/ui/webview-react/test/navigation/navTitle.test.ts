@@ -14,6 +14,16 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 
 describe("routeTitle", () => {
+  it("labels a references view by the open file", () => {
+    expect(
+      routeTitle({
+        viewer: "explorer",
+        file: "src/b.ts",
+        references: { path: "src/a.ts", line: 1, character: 0 },
+      })
+    ).toBe("References: b.ts — ctrlyoke");
+  });
+
   it("is the bare app name for an empty route", () => {
     expect(routeTitle({})).toBe("ctrlyoke");
   });

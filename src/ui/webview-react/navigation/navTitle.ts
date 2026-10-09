@@ -61,6 +61,9 @@ function locationLabel(
   workflow: WorkflowTitle | undefined
 ): string | undefined {
   if (route.viewer === WORKSPACE_VIEWER_TABS.EXPLORER) {
+    if (route.references) {
+      return `References: ${basename(route.file ?? route.references.path)}`;
+    }
     if (route.file) return basename(route.file);
     if (route.dir) return `${basename(route.dir)}/`;
     return "Explorer";

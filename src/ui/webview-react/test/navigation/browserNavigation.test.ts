@@ -320,4 +320,30 @@ describe("setupBrowserNavigation", () => {
     });
     expect(document.title).toBe("Release Notes — ctrlyoke");
   });
+
+  it("pushes one history entry per reference visited", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&viewer=explorer&file=src/a.ts"
+    );
+    cleanup = setupBrowserNavigation();
+    const origin = { path: "src/a.ts", line: 3, character: 4 };
+    const viewer = useWorkspaceViewerStore.getState();
+
+    viewer.showLanguageReferences(origin);
+    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+    expect(new URLSearchParams(window.location.search).get("refs")).toBe(
+      "src/a.ts:3:5"
+    );
+
+    viewer.selectLanguageReference({ path: "src/b.ts", line: 9 });
+    viewer.selectLanguageReference({ path: "src/b.ts", line: 20 });
+
+    expect(useBrowserHistoryStore.getState().idx).toBe(3);
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get("file")).toBe("src/b.ts");
+    expect(params.get("lines")).toBe("20-20");
+    expect(params.get("refs")).toBe("src/a.ts:3:5");
+  });
 });

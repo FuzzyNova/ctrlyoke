@@ -42,10 +42,45 @@ export interface PendingFileHistory {
   generation: number;
 }
 
+/** A position in a workspace file: `line` is 1-based, `character` is the
+ * 0-based UTF-16 column, as LSP and JS string indices count it. */
+export interface LanguageReferencePosition {
+  path: string;
+  line: number;
+  character: number;
+}
+
+/** One reference to a symbol. Symbols never span lines, so a reference is a
+ * single line plus the column range of the symbol on it. */
 export interface LanguageReferenceResult {
   path: string;
-  startLine: number;
-  endLine: number;
+  line: number;
+  startCharacter: number;
+  endCharacter: number;
+  /** The full text of the reference's line, once loaded. */
+  preview?: string;
+}
+
+/** The reference the user last navigated to from the references panel. */
+export interface LanguageReferenceSelection {
+  path: string;
+  line: number;
+}
+
+/** A "Find All References" query: where it was run and what it found. */
+export interface LanguageReferencesView {
+  origin: LanguageReferencePosition;
+  /** Null while the query is still running. */
+  results: LanguageReferenceResult[] | null;
+  error: string | null;
+  selected: LanguageReferenceSelection | null;
+}
+
+export function sameLanguageReferencePosition(
+  a: LanguageReferencePosition,
+  b: LanguageReferencePosition
+): boolean {
+  return a.path === b.path && a.line === b.line && a.character === b.character;
 }
 
 function normalizeWorkspacePath(path: string): string {
@@ -138,7 +173,10 @@ interface WorkspaceViewerState {
   searchResults: WorkspaceSearchResult[];
   searchLoading: boolean;
   searchTruncated: boolean;
-  languageReferences: LanguageReferenceResult[] | null;
+  languageReferences: LanguageReferencesView | null;
+  /** Mobile only: whether the references panel covers the viewer. Desktop
+   * shows the panel whenever `languageReferences` is set. */
+  languageReferencesPanelOpen: boolean;
 
   // Commit area
   commitMessage: string;
@@ -245,7 +283,25 @@ interface WorkspaceViewerActions {
   setSearchResults(results: WorkspaceSearchResult[]): void;
   setSearchLoading(loading: boolean): void;
   setSearchTruncated(truncated: boolean): void;
-  setLanguageReferences(references: LanguageReferenceResult[] | null): void;
+  /**
+   * Show the references for `origin`, keeping already-loaded results when the
+   * origin is unchanged. With no selection the mobile panel opens; with one it
+   * stays out of the way of the selected file.
+   */
+  showLanguageReferences(
+    origin: LanguageReferencePosition,
+    selected?: LanguageReferenceSelection | null
+  ): void;
+  /** Apply query results, ignored unless `origin` is still the one shown. */
+  setLanguageReferenceResults(
+    origin: LanguageReferencePosition,
+    results: LanguageReferenceResult[],
+    error?: string | null
+  ): void;
+  /** Navigate to a reference, keeping the result list available. */
+  selectLanguageReference(selection: LanguageReferenceSelection): void;
+  setLanguageReferencesPanelOpen(open: boolean): void;
+  clearLanguageReferences(): void;
 
   // Commit history metadata used by the context menu and detached banner.
   setCurrentBranch(branch: string | null): void;
@@ -323,6 +379,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   searchLoading: false,
   searchTruncated: false,
   languageReferences: null,
+  languageReferencesPanelOpen: false,
 
   commitMessage: "",
   committing: false,
@@ -397,6 +454,8 @@ export const useWorkspaceViewerStore = create<
           pulling: false,
           scmError: null,
           error: null,
+          languageReferences: null,
+          languageReferencesPanelOpen: false,
         });
       },
 
@@ -819,8 +878,45 @@ export const useWorkspaceViewerStore = create<
         set({ searchTruncated: truncated });
       },
 
-      setLanguageReferences(references) {
-        set({ languageReferences: references });
+      showLanguageReferences(origin, selected = null) {
+        const current = get().languageReferences;
+        const keep =
+          current !== null &&
+          sameLanguageReferencePosition(current.origin, origin);
+        set({
+          languageReferences: {
+            origin,
+            results: keep ? current.results : null,
+            error: keep ? current.error : null,
+            selected,
+          },
+          languageReferencesPanelOpen: selected === null,
+        });
+      },
+
+      setLanguageReferenceResults(origin, results, error = null) {
+        const current = get().languageReferences;
+        if (!current || !sameLanguageReferencePosition(current.origin, origin))
+          return;
+        set({ languageReferences: { ...current, results, error } });
+      },
+
+      selectLanguageReference(selection) {
+        const current = get().languageReferences;
+        if (!current) return;
+        set({
+          languageReferences: { ...current, selected: selection },
+          languageReferencesPanelOpen: false,
+        });
+        get().openToFile(selection.path, selection.line, selection.line);
+      },
+
+      setLanguageReferencesPanelOpen(open) {
+        set({ languageReferencesPanelOpen: open });
+      },
+
+      clearLanguageReferences() {
+        set({ languageReferences: null, languageReferencesPanelOpen: false });
       },
 
       // --- Commit history metadata ---

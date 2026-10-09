@@ -12,7 +12,9 @@
  *   viewer=explorer|scm|search            workspace viewer open + active tab
  *   file=<relPath>                        explorer file, or scm diff file
  *   dir=<relPath>                         explorer directory (when no file)
- *   lines=<start>-<end>                   explorer file selection (inbound only)
+ *   lines=<start>-<end>                   explorer file selection (inbound only,
+ *                                         except as the selected reference)
+ *   refs=<relPath>:<line>:<col>           explorer "Find All References" origin
  *   ref=<hash|~diff|~staged|~stash:N>     scm git-ref diff (when no file)
  *   query=<text>&scope=<scope>            workspace search state
  *   includeGitIgnored=true&repo=<id>      optional workspace search filters
@@ -23,6 +25,10 @@
  */
 
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type {
+  LanguageReferencePosition,
+  LanguageReferenceSelection,
+} from "@store/workspaceViewerStore";
 import type { WorkspaceSearchScope } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   BOOLEAN_STRING_VALUES,
@@ -65,8 +71,13 @@ export interface Route {
   dir?: string;
   /** SCM git ref (commit hash or `~diff`/`~staged`/`~stash:N`). */
   ref?: string;
-  /** Inbound-only selection range for an explorer file. */
+  /**
+   * Selection range for an explorer file. Inbound-only, except that with
+   * `references` it is the selected reference and so part of the location.
+   */
   lines?: [number, number];
+  /** Explorer: the position a "Find All References" query ran at. */
+  references?: LanguageReferencePosition;
   /** Workspace search query, restored when the search tab is opened. */
   searchQuery?: string;
   /** Workspace search scope. */
@@ -90,6 +101,8 @@ export interface RouteSourceState {
   searchScope?: WorkspaceSearchScope;
   searchIncludeGitIgnored?: boolean;
   searchRepo?: string | null;
+  referencesOrigin?: LanguageReferencePosition | null;
+  referenceSelection?: LanguageReferenceSelection | null;
 }
 
 /** Forward-slash normalize a path; the rest of the UI keys off these. */
@@ -124,6 +137,32 @@ function parseLines(value: string | null): [number, number] | undefined {
   const end = parseInt(match[2], 10);
   if (start <= 0 || end <= 0) return undefined;
   return [start, end];
+}
+
+/** `refs=` value: the column is 1-based in the URL, like `file:line:col`. */
+function parseReferences(
+  value: string | null
+): LanguageReferencePosition | undefined {
+  if (!value) return undefined;
+  const match = /^(.+):(\d+):(\d+)$/.exec(value.trim());
+  if (!match) return undefined;
+  const line = parseInt(match[2], 10);
+  const column = parseInt(match[3], 10);
+  if (line <= 0 || column <= 0) return undefined;
+  return { path: fwd(match[1]), line, character: column - 1 };
+}
+
+function serializeReferences(origin: LanguageReferencePosition): string {
+  return `${origin.path}:${origin.line}:${origin.character + 1}`;
+}
+
+function referencesEqual(
+  a: LanguageReferencePosition | undefined,
+  b: LanguageReferencePosition | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.path === b.path && a.line === b.line && a.character === b.character;
 }
 
 function linesEqual(
@@ -172,7 +211,7 @@ function workflowAddressesEqual(
  * Enforce the nesting rules so equality and serialization are reliable
  * regardless of how a Route was constructed:
  *  - file/dir/ref/lines only exist inside a viewer
- *  - explorer: `file` (+lines) wins over `dir`
+ *  - explorer: `file` (+lines) wins over `dir`; `references` is kept either way
  *  - sourceControl: `ref` wins over `file`; `dir`/`lines` are dropped
  *  - all paths are forward-slash normalized
  */
@@ -192,6 +231,14 @@ export function normalizeRoute(route: Route): Route {
       }
     } else if (route.dir) {
       out.dir = fwd(route.dir);
+    }
+    const references = route.references;
+    if (references && references.line > 0 && references.character >= 0) {
+      out.references = {
+        path: fwd(references.path),
+        line: references.line,
+        character: references.character,
+      };
     }
   } else if (route.viewer === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL) {
     if (route.ref) {
@@ -251,6 +298,7 @@ export function parseRoute(search: string): Route {
     dir: clean(params.get("dir")),
     ref: clean(params.get("ref")),
     lines: parseLines(params.get("lines")),
+    references: parseReferences(params.get("refs")),
     searchQuery: clean(params.get("query")),
     searchScope: parseSearchScope(params.get("scope")),
     searchIncludeGitIgnored: parseBoolean(params.get("includeGitIgnored")),
@@ -288,6 +336,9 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
       } else if (normalized.dir) {
         params.set("dir", normalized.dir);
       }
+      if (normalized.references) {
+        params.set("refs", serializeReferences(normalized.references));
+      }
     } else if (normalized.viewer === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL) {
       if (normalized.ref) {
         params.set("ref", normalized.ref);
@@ -320,7 +371,8 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
 /**
  * Equality ignoring the inbound-only `lines` selection. Used to decide whether
  * a route change is a distinct navigation worth its own history entry — a line
- * range within the same file is not.
+ * range within the same file is not, unless it is the selected reference of a
+ * references view, so back/forward steps through the references visited.
  */
 export function sameNavigation(a: Route, b: Route): boolean {
   const na = normalizeRoute(a);
@@ -331,6 +383,8 @@ export function sameNavigation(a: Route, b: Route): boolean {
     na.file === nb.file &&
     na.dir === nb.dir &&
     na.ref === nb.ref &&
+    referencesEqual(na.references, nb.references) &&
+    (!na.references || linesEqual(na.lines, nb.lines)) &&
     na.searchQuery === nb.searchQuery &&
     (na.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) ===
       (nb.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) &&
@@ -351,6 +405,7 @@ export function routesEqual(a: Route, b: Route): boolean {
     na.dir === nb.dir &&
     na.ref === nb.ref &&
     linesEqual(na.lines, nb.lines) &&
+    referencesEqual(na.references, nb.references) &&
     na.searchQuery === nb.searchQuery &&
     (na.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) ===
       (nb.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) &&
@@ -380,7 +435,8 @@ export function isSearchStateChange(a: Route, b: Route): boolean {
  * the sync layer: when navigable store fields settle, the result feeds the
  * history stack / `pushState`. Selection lines are intentionally not derived —
  * they are an inbound-only deep-link intent, not continuously tracked editor
- * state.
+ * state — except for the selected reference of a references view, which is
+ * the location the user navigated to.
  */
 export function deriveRoute(s: RouteSourceState): Route {
   const raw: Route = {};
@@ -393,9 +449,14 @@ export function deriveRoute(s: RouteSourceState): Route {
     if (s.activeTab === WORKSPACE_VIEWER_TABS.EXPLORER) {
       if (s.selectedFilePath) {
         raw.file = s.selectedFilePath;
+        const selection = s.referenceSelection;
+        if (s.referencesOrigin && selection?.path === s.selectedFilePath) {
+          raw.lines = [selection.line, selection.line];
+        }
       } else if (s.explorerPath) {
         raw.dir = s.explorerPath;
       }
+      if (s.referencesOrigin) raw.references = s.referencesOrigin;
     } else if (s.activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL) {
       if (s.diffRef) {
         raw.ref = s.diffRef;

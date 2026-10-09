@@ -15,6 +15,7 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import { openLanguageReferences } from "@utils/languageReferences";
 import {
   WORKSPACE_SEARCH_SCOPES,
   WORKSPACE_VIEWER_TABS,
@@ -78,6 +79,7 @@ function applyViewer(route: Route): void {
       wv.clearFile();
       wv.openToDirectory(route.dir ?? "");
     }
+    applyReferences(route);
     return;
   }
 
@@ -103,4 +105,21 @@ function applyViewer(route: Route): void {
     wv.setActiveTab(WORKSPACE_VIEWER_TABS.SOURCE_CONTROL);
     wv.clearDiff();
   }
+}
+
+/**
+ * A route's selected reference is its file plus the line range; without one
+ * (`lines` absent, or a file the references view did not navigate to) the
+ * references view is shown unselected, which on mobile opens its panel.
+ */
+function applyReferences(route: Route): void {
+  if (!route.references) {
+    useWorkspaceViewerStore.getState().clearLanguageReferences();
+    return;
+  }
+  const selected =
+    route.file && route.lines
+      ? { path: route.file, line: route.lines[0] }
+      : null;
+  void openLanguageReferences(route.references, selected);
 }

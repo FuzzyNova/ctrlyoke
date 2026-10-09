@@ -22,6 +22,8 @@ function currentSourceState(): RouteSourceState {
     searchScope: wv.searchScope,
     searchIncludeGitIgnored: wv.searchIncludeGitIgnored,
     searchRepo: wv.repos.length > 1 ? wv.selectedRepoId : null,
+    referencesOrigin: wv.languageReferences?.origin ?? null,
+    referenceSelection: wv.languageReferences?.selected ?? null,
   };
 }
 

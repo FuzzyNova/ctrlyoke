@@ -44,6 +44,7 @@ import {
   viewerPathFromUri,
   workspaceFileUri,
 } from "@utils/languageIntelligenceClient";
+import { openLanguageReferences } from "@utils/languageReferences";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import {
@@ -264,32 +265,16 @@ export const WorkspaceFileEditor = forwardRef<
       const view = viewRef.current;
       const sessionId = languageIntelligenceRef.current.sessionId;
       if (!view || !sessionId) return;
-      const result = (await requestLanguageIntelligence(
-        sessionId,
-        "textDocument/references",
+      const position = toLspPosition(view, view.state.selection.main.head);
+      await openLanguageReferences(
         {
-          textDocument: { uri: workspaceFileUri(filePath) },
-          position: toLspPosition(view, view.state.selection.main.head),
-          context: { includeDeclaration: true },
-        }
-      )) as LspLocation[] | null;
-      const references = (result ?? []).flatMap((location) => {
-        const path = viewerPathFromUri(location.uri);
-        return path
-          ? [
-              {
-                path,
-                startLine: location.range.start.line + 1,
-                endLine: Math.max(
-                  location.range.start.line + 1,
-                  location.range.end.line + 1
-                ),
-              },
-            ]
-          : [];
-      });
-      useWorkspaceViewerStore.getState().setLanguageReferences(references);
-      useWorkspaceViewerStore.getState().open();
+          path: filePath,
+          line: position.line + 1,
+          character: position.character,
+        },
+        null,
+        { force: true }
+      );
     }, [filePath]);
 
     const renameSymbol = useCallback(async () => {

@@ -3,6 +3,11 @@ import { applyRoute, isApplyingRoute } from "@/navigation/applyRoute";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { openLanguageReferences } from "@utils/languageReferences";
+
+vi.mock("@utils/languageReferences", () => ({
+  openLanguageReferences: vi.fn(() => Promise.resolve()),
+}));
 
 const RUN = {
   workflowKey: "demo" as never,
@@ -15,6 +20,7 @@ function fakeVsCode() {
 }
 
 beforeEach(() => {
+  vi.mocked(openLanguageReferences).mockClear();
   useWorkspaceViewerStore.getState().reset();
   useUiStore.setState({
     displayedViewAddress: null,
@@ -76,5 +82,39 @@ describe("applyRoute", () => {
       endLine: 9,
     });
     expect(isApplyingRoute()).toBe(false);
+  });
+
+  it("restores a references view with the route's line as its selection", () => {
+    const origin = { path: "src/a.ts", line: 3, character: 4 };
+    applyRoute(
+      {
+        viewer: "explorer",
+        file: "src/b.ts",
+        lines: [9, 9],
+        references: origin,
+      },
+      fakeVsCode()
+    );
+    expect(openLanguageReferences).toHaveBeenCalledWith(origin, {
+      path: "src/b.ts",
+      line: 9,
+    });
+  });
+
+  it("restores a references view with no selection when no line is set", () => {
+    const origin = { path: "src/a.ts", line: 3, character: 4 };
+    applyRoute(
+      { viewer: "explorer", file: "src/a.ts", references: origin },
+      fakeVsCode()
+    );
+    expect(openLanguageReferences).toHaveBeenCalledWith(origin, null);
+  });
+
+  it("clears references when the explorer route has none", () => {
+    useWorkspaceViewerStore
+      .getState()
+      .showLanguageReferences({ path: "src/a.ts", line: 3, character: 4 });
+    applyRoute({ viewer: "explorer", file: "src/a.ts" }, fakeVsCode());
+    expect(useWorkspaceViewerStore.getState().languageReferences).toBeNull();
   });
 });

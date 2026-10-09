@@ -9,6 +9,7 @@ import { WorkspaceExplorerPane } from "./WorkspaceExplorerPane";
 import { WorkspaceSourceControlPane } from "./WorkspaceSourceControlPane";
 import { WorkspaceSearchPane } from "./WorkspaceSearchPane";
 import { WorkspaceLanguageReferencesPanel } from "./WorkspaceLanguageReferencesPanel";
+import { WORKSPACE_VIEWER_TABS } from "@root/types/DashboardConstants";
 
 const EXIT_DURATION_MS = 220;
 
@@ -89,15 +90,21 @@ export const WorkspaceViewerModal: React.FC = () => {
         onClose={handleClose}
         workspacePath={workspacePath ?? undefined}
       />
-      <div className="flex-1 overflow-hidden relative">
-        {activeTab === "explorer" ? (
-          <WorkspaceExplorerPane />
-        ) : activeTab === "sourceControl" ? (
-          <WorkspaceSourceControlPane />
-        ) : (
-          <WorkspaceSearchPane />
+      <div className="flex-1 overflow-hidden relative flex">
+        <div className="relative min-w-0 flex-1 overflow-hidden">
+          {activeTab === WORKSPACE_VIEWER_TABS.EXPLORER ? (
+            <WorkspaceExplorerPane />
+          ) : activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL ? (
+            <WorkspaceSourceControlPane />
+          ) : (
+            <WorkspaceSearchPane />
+          )}
+        </div>
+        {/* References navigate the explorer, so they belong to its tab: a
+            side column on desktop, a panel over the viewer on mobile. */}
+        {activeTab === WORKSPACE_VIEWER_TABS.EXPLORER && (
+          <WorkspaceLanguageReferencesPanel />
         )}
-        <WorkspaceLanguageReferencesPanel />
       </div>
 
       {/* fixed inset-0 escapes the App root's flex layout (and its trailing

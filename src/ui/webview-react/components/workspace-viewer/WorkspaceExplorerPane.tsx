@@ -153,6 +153,15 @@ export const WorkspaceExplorerPane: React.FC = () => {
     (s) => s.setMobileEditorVisible
   );
   const openToFileHistory = useWorkspaceViewerStore((s) => s.openToFileHistory);
+  const hasLanguageReferences = useWorkspaceViewerStore(
+    (s) => s.languageReferences !== null
+  );
+  const languageReferenceCount = useWorkspaceViewerStore(
+    (s) => s.languageReferences?.results?.length
+  );
+  const setLanguageReferencesPanelOpen = useWorkspaceViewerStore(
+    (s) => s.setLanguageReferencesPanelOpen
+  );
   const setError = useWorkspaceViewerStore((s) => s.setError);
 
   const pendingNavigation = useWorkspaceViewerStore((s) => s.pendingNavigation);
@@ -882,7 +891,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileEditorColumn = (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden relative">
       {/* File toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border shrink-0 min-h-9">
+      <div className="flex items-center gap-2 px-3 py-1 border-b border-panel-border shrink-0 min-h-9">
         {isMobile && (
           <button
             onClick={handleMobileBack}
@@ -900,7 +909,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 <button
                   onClick={handleSave}
                   disabled={fileSaving || !fileDirty}
-                  className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-sm border transition-colors shrink-0 ${
+                  className={`flex items-center gap-1 px-2 py-1 text-xs rounded-sm border transition-colors shrink-0 ${
                     fileDirty && !fileSaving
                       ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
                       : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
@@ -927,7 +936,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     disabled={!canUndo}
                     title="Undo"
                     aria-label="Undo"
-                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-hidden focus-visible:ring-1 ${
+                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-1 text-xs transition-colors focus:outline-hidden focus-visible:ring-1 ${
                       canUndo
                         ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                         : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
@@ -935,7 +944,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   >
                     <Icon name="discard" />
                   </button>
-                  <div className="bg-btn-secondary-bg text-btn-secondary-fg py-0.5 shrink-0">
+                  <div className="bg-btn-secondary-bg text-btn-secondary-fg py-1 shrink-0">
                     <div className="w-px h-full bg-current opacity-40" />
                   </div>
                   <button
@@ -944,7 +953,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     disabled={!canRedo}
                     title="Redo"
                     aria-label="Redo"
-                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-hidden focus-visible:ring-1 ${
+                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-1 text-xs transition-colors focus:outline-hidden focus-visible:ring-1 ${
                       canRedo
                         ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                         : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
@@ -959,7 +968,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     onClick={() => setPreviewMode((p) => !p)}
                     aria-pressed={previewMode}
                     aria-label={previewMode ? "Edit file" : "Preview file"}
-                    className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-sm border transition-colors shrink-0 ${
+                    className={`flex items-center gap-1 px-2 py-1 text-xs rounded-sm border transition-colors shrink-0 ${
                       previewMode
                         ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
                         : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -981,7 +990,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 <button
                   onClick={handleDiscardUnsaved}
                   disabled={fileSaving || fileLoading || !fileDirty}
-                  className={`ml-auto flex items-center gap-1 px-2 py-0.5 text-xs rounded-sm border transition-colors shrink-0 ${
+                  className={`ml-auto flex items-center gap-1 px-2 py-1 text-xs rounded-sm border transition-colors shrink-0 ${
                     fileDirty && !fileSaving && !fileLoading
                       ? "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                       : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
@@ -1004,6 +1013,22 @@ export const WorkspaceExplorerPane: React.FC = () => {
               No file selected
             </span>
           )
+        )}
+        {/* On mobile the references panel covers the viewer, so it hides once
+            a reference is opened; this brings the results back. */}
+        {isMobile && hasLanguageReferences && (
+          <button
+            type="button"
+            onClick={() => setLanguageReferencesPanelOpen(true)}
+            className={`flex shrink-0 items-center gap-1 px-2 py-1 text-xs rounded-sm border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover ${
+              selectedFilePath && !fileReadOnly ? "" : "ml-auto"
+            }`}
+            title="Show references"
+            aria-label="Show references"
+          >
+            <Icon name="references" />
+            {languageReferenceCount}
+          </button>
         )}
       </div>
 

@@ -172,3 +172,100 @@ describe("deriveRoute", () => {
     });
   });
 });
+
+describe("references routes", () => {
+  const ORIGIN = {
+    path: "src/hooks/useMediaQuery.ts",
+    line: 42,
+    character: 16,
+  };
+
+  it("round-trips the references origin with a 1-based column", () => {
+    const search = serializeRoute({
+      viewer: "explorer",
+      file: "src/App.tsx",
+      lines: [12, 12],
+      references: ORIGIN,
+    });
+    expect(new URLSearchParams(search).get("refs")).toBe(
+      "src/hooks/useMediaQuery.ts:42:17"
+    );
+    expect(parseRoute(search)).toEqual({
+      viewer: "explorer",
+      file: "src/App.tsx",
+      lines: [12, 12],
+      references: ORIGIN,
+    });
+  });
+
+  it("parses paths that contain colons and rejects malformed origins", () => {
+    expect(parseRoute("?viewer=explorer&refs=a:b.ts:3:1").references).toEqual({
+      path: "a:b.ts",
+      line: 3,
+      character: 0,
+    });
+    expect(
+      parseRoute("?viewer=explorer&refs=a.ts:3").references
+    ).toBeUndefined();
+    expect(
+      parseRoute("?viewer=explorer&refs=a.ts:0:1").references
+    ).toBeUndefined();
+  });
+
+  it("keeps references only on the explorer tab", () => {
+    expect(
+      normalizeRoute({ viewer: "sourceControl", references: ORIGIN })
+    ).toEqual({ viewer: "sourceControl" });
+  });
+
+  it("treats the selected reference line as part of the navigation", () => {
+    const first: Route = {
+      viewer: "explorer",
+      file: "src/App.tsx",
+      lines: [12, 12],
+      references: ORIGIN,
+    };
+    const second: Route = { ...first, lines: [30, 30] };
+    expect(sameNavigation(first, second)).toBe(false);
+    expect(sameNavigation(first, { ...first, references: undefined })).toBe(
+      false
+    );
+  });
+});
+
+describe("deriveRoute references", () => {
+  const ORIGIN = { path: "src/a.ts", line: 3, character: 4 };
+  const base: RouteSourceState = {
+    displayedViewAddress: null,
+    isOpen: true,
+    activeTab: "explorer",
+    selectedFilePath: "src/b.ts",
+    explorerPath: "src",
+    selectedDiffPath: null,
+    diffRef: null,
+    referencesOrigin: ORIGIN,
+  };
+
+  it("derives the selected reference as the line range of its file", () => {
+    expect(
+      deriveRoute({
+        ...base,
+        referenceSelection: { path: "src/b.ts", line: 9 },
+      })
+    ).toEqual({
+      viewer: "explorer",
+      file: "src/b.ts",
+      lines: [9, 9],
+      references: ORIGIN,
+    });
+  });
+
+  it("omits the line range once another file is open", () => {
+    expect(
+      deriveRoute({
+        ...base,
+        referenceSelection: { path: "src/c.ts", line: 9 },
+      })
+    ).toEqual({ viewer: "explorer", file: "src/b.ts", references: ORIGIN });
+  });
+});
