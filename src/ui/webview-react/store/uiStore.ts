@@ -351,6 +351,16 @@ function withHiddenOutputKeys(
   };
 }
 
+/**
+ * Ask the workflow properties panel to show one workflow variable's row (the
+ * prompt editor's Ctrl+click on `{{name}}` and its "add to vars" quick fix).
+ * `nonce` makes a repeat request for the same name observable.
+ */
+export interface WorkflowVariableRevealRequest {
+  name: string;
+  nonce: number;
+}
+
 export interface PendingOutputFindRequest {
   query: string;
   preferredTarget?: OutputExecutionTarget;
@@ -780,6 +790,9 @@ interface UiState {
   mobileStepsMode: "sidebar" | "fullwidth";
   mobileWorkflowPropsOpen: boolean;
 
+  // Transient, not persisted: consumed by WorkflowPropertiesPanel.
+  workflowVariableRevealRequest: WorkflowVariableRevealRequest | null;
+
   // Global settings drawer state
   globalSettingsOpen: boolean;
   globalSettingsActiveTab: string;
@@ -1098,6 +1111,12 @@ interface UiActions {
   toggleMobileWorkflowProps: () => void;
   closeMobileSteps: () => void;
   closeMobileWorkflowProps: () => void;
+  /**
+   * Open the workflow properties panel (the mobile overlay when `mobile`,
+   * otherwise the desktop sidebar) and focus `name`'s Variables row.
+   */
+  revealWorkflowVariable: (name: string, options: { mobile: boolean }) => void;
+  clearWorkflowVariableRevealRequest: () => void;
 
   // Global settings drawer actions
   toggleGlobalSettings: () => void;
@@ -1224,6 +1243,7 @@ const initialState: UiState = {
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
   mobileWorkflowPropsOpen: false,
+  workflowVariableRevealRequest: null,
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
   startupReady: false,
@@ -2328,6 +2348,20 @@ export const useUiStore = create<UiState & UiActions>()(
 
       closeMobileWorkflowProps: () => set({ mobileWorkflowPropsOpen: false }),
 
+      revealWorkflowVariable: (name, { mobile }) =>
+        set((state) => ({
+          workflowVariableRevealRequest: {
+            name,
+            nonce: (state.workflowVariableRevealRequest?.nonce ?? 0) + 1,
+          },
+          ...(mobile
+            ? { mobileWorkflowPropsOpen: true }
+            : { settingsCollapsed: false }),
+        })),
+
+      clearWorkflowVariableRevealRequest: () =>
+        set({ workflowVariableRevealRequest: null }),
+
       // ============================================================================
       // GLOBAL SETTINGS DRAWER
       // ============================================================================
@@ -2417,6 +2451,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchFilters: createDefaultHistorySearchFilters(),
           pendingHistorySearchNavigation: null,
           pendingFindRequest: null,
+          workflowVariableRevealRequest: null,
           recentWorkflows: [],
           recentWorkflowsDropdownOpen: false,
           workspaceWorktreeOwnership: null,

@@ -21,6 +21,8 @@ import { useActiveInteractiveSession } from "../../hooks/useActiveInteractiveSes
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
+import { useIsMobile } from "@hooks/useMediaQuery";
+import { defineWorkflowVariable } from "@utils/workflowVars";
 import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import { PropertiesDrawer } from "./PropertiesDrawer";
 import { StepColorField } from "./StepColorField";
@@ -350,6 +352,21 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     stepCount,
     hasFinalStep,
   };
+  const isMobile = useIsMobile();
+  const revealWorkflowVariable = useCallback(
+    (name: string) =>
+      useUiStore.getState().revealWorkflowVariable(name, { mobile: isMobile }),
+    [isMobile]
+  );
+  // Adds the variable with an empty value, then reveals its row so the author
+  // types the value next.
+  const defineAndRevealWorkflowVariable = useCallback(
+    (name: string) => {
+      defineWorkflowVariable(vscode, name);
+      revealWorkflowVariable(name);
+    },
+    [revealWorkflowVariable, vscode]
+  );
   const isRunning = isWorkflowRunning(executionState);
   const selectedPromptStatus =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
@@ -1445,6 +1462,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             hasFinalStep={hasFinalStep}
             hasPreCondition={hasPreCondition}
             workflowCompletionContext={workflowCompletionContext}
+            onRevealVariable={revealWorkflowVariable}
+            onDefineVariable={
+              isExternallyManaged ? undefined : defineAndRevealWorkflowVariable
+            }
             pendingInsertRequest={pendingPromptEditorInsert}
             onInsertApplied={consumePromptEditorInsert}
           />

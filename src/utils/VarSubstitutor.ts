@@ -5,8 +5,10 @@ import type {
   ScriptStep,
   ScriptProperties,
 } from "../types/CtrlYokeTypes";
-import { maskCodeRanges } from "./FileReferenceParser";
-import { VARIABLE_NAME_PATTERN_SOURCE } from "./KeyValueKeyKinds";
+import {
+  findVariablePlaceholders,
+  isVariableDefined,
+} from "./VariablePlaceholders";
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.
@@ -37,48 +39,37 @@ import { VARIABLE_NAME_PATTERN_SOURCE } from "./KeyValueKeyKinds";
  */
 export class VarSubstitutor {
   private static readonly SECRET_REFERENCE_PREFIX = "${secret:";
-  private static readonly PLACEHOLDER_RE = new RegExp(
-    `\\{\\{(${VARIABLE_NAME_PATTERN_SOURCE})\\}\\}`,
-    "g"
-  );
 
   /**
    * Substitute all `{{key}}` placeholders in `text` using `vars`.
    * Unresolved placeholders and placeholders inside fenced code blocks remain
-   * literal. Inline code spans do not protect a placeholder: vars are also
-   * substituted into script text, where backticks are shell command
-   * substitution, and authors put vars inside inline code on purpose.
+   * literal; see `findVariablePlaceholders` for why inline code does not
+   * protect a placeholder.
    */
   static substitute(text: string, vars: Record<string, string>): string {
-    const maskedText = maskCodeRanges(text, { fencesOnly: true });
     const substitutedSpans: Array<{ start: number; end: number; key: string }> =
       [];
-    let outputLengthDelta = 0;
-    const substitutedText = text.replace(
-      this.PLACEHOLDER_RE,
-      (match, key: string, offset: number) => {
-        if (maskedText.slice(offset, offset + match.length).includes("\x00")) {
-          return match;
-        }
-        if (!Object.prototype.hasOwnProperty.call(vars, key)) {
-          return match;
-        }
-        const value = vars[key];
-        // Variable substitution must not turn ordinary workflow data into an
-        // executable managed-secret interpolation. Fail before the process
-        // environment can be built, leaving downstream secret expansion out
-        // of reach.
-        if (value.includes(this.SECRET_REFERENCE_PREFIX)) {
-          throw new Error(
-            `Variable "${key}" cannot contain a managed secret reference`
-          );
-        }
-        const start = offset + outputLengthDelta;
-        substitutedSpans.push({ start, end: start + value.length, key });
-        outputLengthDelta += value.length - match.length;
-        return value;
+    let substitutedText = "";
+    let cursor = 0;
+    for (const { from, to, name, inFence } of findVariablePlaceholders(text)) {
+      if (inFence || !isVariableDefined(vars, name)) continue;
+      const value = vars[name];
+      // Variable substitution must not turn ordinary workflow data into an
+      // executable managed-secret interpolation. Fail before the process
+      // environment can be built, leaving downstream secret expansion out
+      // of reach.
+      if (value.includes(this.SECRET_REFERENCE_PREFIX)) {
+        throw new Error(
+          `Variable "${name}" cannot contain a managed secret reference`
+        );
       }
-    );
+      substitutedText += text.slice(cursor, from);
+      const start = substitutedText.length;
+      substitutedText += value;
+      substitutedSpans.push({ start, end: substitutedText.length, key: name });
+      cursor = to;
+    }
+    substitutedText += text.slice(cursor);
 
     const countSecretReferences = (value: string): number =>
       value.split(this.SECRET_REFERENCE_PREFIX).length - 1;
@@ -116,19 +107,10 @@ export class VarSubstitutor {
     text: string,
     vars: Record<string, string>
   ): string[] {
-    const maskedText = maskCodeRanges(text, { fencesOnly: true });
     const found = new Set<string>();
-    this.PLACEHOLDER_RE.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = this.PLACEHOLDER_RE.exec(text)) !== null) {
-      const offset = match.index;
-      if (
-        maskedText.slice(offset, offset + match[0].length).includes("\x00") ||
-        Object.prototype.hasOwnProperty.call(vars, match[1])
-      ) {
-        continue;
-      }
-      found.add(match[0]);
+    for (const { from, to, name, inFence } of findVariablePlaceholders(text)) {
+      if (inFence || isVariableDefined(vars, name)) continue;
+      found.add(text.slice(from, to));
     }
     return [...found];
   }

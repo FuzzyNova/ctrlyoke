@@ -1,7 +1,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { KEY_VALUE_KEY_KINDS } from "@root/utils/KeyValueKeyKinds";
-import { KeyValueRowsEditor } from "@components/shared/KeyValueRowsEditor";
+import {
+  KeyValueRowsEditor,
+  findKeyValueRowValueInput,
+} from "@components/shared/KeyValueRowsEditor";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
 
 const secretEntry = {
@@ -33,6 +36,15 @@ afterEach(() => {
 });
 
 describe("KeyValueRowsEditor", () => {
+  it("finds a row's value input by its key", () => {
+    const { container } = renderEditor({ A: "1", B: "2" });
+    expect(findKeyValueRowValueInput(container, "B")).toBe(
+      screen.getByLabelText("Value for B")
+    );
+    expect(findKeyValueRowValueInput(container, "C")).toBeNull();
+    expect(findKeyValueRowValueInput(null, "A")).toBeNull();
+  });
+
   it("commits key and value edits on blur, not on keystroke", () => {
     const onChange = vi.fn();
     renderEditor({ FIRST: "one" }, onChange);

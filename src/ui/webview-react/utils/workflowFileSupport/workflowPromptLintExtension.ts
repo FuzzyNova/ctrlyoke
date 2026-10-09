@@ -72,7 +72,9 @@ export function createWorkflowPromptLintExtension(options: {
           options.getSettingsPreCondition?.()
         );
         if (lintSequence !== latestLint) return [];
-        return diagnostics.map(toCodeMirrorPromptDiagnostic);
+        return diagnostics.map((diagnostic) =>
+          toCodeMirrorPromptDiagnostic(diagnostic)
+        );
       },
       { delay: 300 }
     ),

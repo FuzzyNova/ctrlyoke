@@ -141,6 +141,9 @@ export function getSpanContext(
     hasEndCondition:
       isRecord(owner) && owner[PROMPT_PROPERTIES.END_CONDITION] != null,
     field: promptField(span),
+    vars: isRecord(fields[PROMPT_PROPERTIES.VARS])
+      ? (fields[PROMPT_PROPERTIES.VARS] as Record<string, unknown>)
+      : {},
   };
 }
 
@@ -176,12 +179,9 @@ export function getWorkflowPromptCompletionContext(
         : undefined
     );
   });
-  const vars = isRecord(fields[PROMPT_PROPERTIES.VARS])
-    ? (fields[PROMPT_PROPERTIES.VARS] as Record<string, unknown>)
-    : {};
   return {
     stepNames,
-    vars,
+    vars: diagnosticContext.vars ?? {},
     field: diagnosticContext.field,
     hasPreCondition: diagnosticContext.hasPreCondition,
     stepCount: diagnosticContext.stepCount,

@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
@@ -23,6 +24,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
+import { defineWorkflowVariable } from "@utils/workflowVars";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
@@ -510,6 +512,47 @@ describe("WorkflowPropertiesPanel variables", () => {
       property: "vars",
       value: { region: "eu-west-1" },
     });
+  });
+
+  it("opens the Context page and focuses a variable the editor asks to reveal", async () => {
+    useSettingsStore.getState().setWorkflowProperties({
+      vars: { region: "us-east-1", retries: "3" },
+    });
+    render(<WorkflowPropertiesPanel />);
+
+    act(() => {
+      useUiStore.getState().revealWorkflowVariable("retries", {
+        mobile: false,
+      });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Value for retries")).toHaveFocus()
+    );
+    expect(useUiStore.getState().workflowVariableRevealRequest).toBeNull();
+  });
+
+  it("adds an undefined variable with an empty value for the editor's quick fix", async () => {
+    useSettingsStore.getState().setWorkflowProperties({
+      vars: { region: "us-east-1" },
+    });
+    render(<WorkflowPropertiesPanel />);
+
+    act(() => {
+      defineWorkflowVariable({ postMessage }, "testvar");
+      useUiStore.getState().revealWorkflowVariable("testvar", {
+        mobile: false,
+      });
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: "updateWorkflowProperty",
+      property: "vars",
+      value: { region: "us-east-1", testvar: "" },
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Value for testvar")).toHaveFocus()
+    );
   });
 
   it("removes vars when every variable is cleared", () => {
