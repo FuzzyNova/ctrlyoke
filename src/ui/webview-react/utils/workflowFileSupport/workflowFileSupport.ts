@@ -12,4 +12,6 @@ export {
 } from "@root/completions/WorkflowDocumentLocation";
 export { getWorkflowFileCompletions } from "@root/completions/WorkflowFileCompletionCore";
 export { getWorkflowPromptDiagnostics } from "@root/completions/WorkflowPromptDiagnostics";
+export { getPromptCodeRanges } from "@root/completions/PromptCodeRanges";
+export { createWorkflowPromptRangesField } from "./workflowPromptRanges";
 export { WORKFLOW_SCHEMA_OUTLINE } from "@root/types/generated/WorkflowSchemaOutline";

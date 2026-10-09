@@ -1,4 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import {
   acceptCompletion,
   type CompletionContext,
@@ -12,6 +18,7 @@ import { WorkspaceFileEditor } from "@components/workspace-viewer/WorkspaceFileE
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { loadWorkflowFileSupport } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useSettingsStore } from "@store/settingsStore";
 import {
   answerLatestRequestUntil,
   latestPostedMessage,
@@ -110,6 +117,12 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
 
   beforeEach(() => {
     useWorkspaceViewerStore.getState().reset();
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        atomicContextReferences: false,
+      },
+    }));
     postMessage.mockClear();
     useLanguageIntelligenceMock.mockReturnValue({
       filePath: "",
@@ -118,6 +131,147 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
       capabilities: {},
       statusHint: null,
     });
+  });
+
+  it("chips only live YAML prompt references, leaving comments, names and code as links", async () => {
+    const content =
+      'name: "@src/name.ts"\n# @src/comment.ts\nsteps:\n  - prompt: |\n      use @src/prompt.ts and `@src/code.ts`\n';
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        atomicContextReferences: true,
+      },
+    }));
+
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+
+    expect(
+      Array.from(view.dom.querySelectorAll<HTMLElement>(".cm-atomic-ref")).map(
+        (chip) => chip.getAttribute("data-path")
+      )
+    ).toEqual(["src/prompt.ts"]);
+    expect(
+      Array.from(view.dom.querySelectorAll<HTMLElement>(".cm-link")).map(
+        (link) => link.getAttribute("data-path")
+      )
+    ).toEqual(
+      expect.arrayContaining(["src/name.ts", "src/comment.ts", "src/code.ts"])
+    );
+    fireEvent.click(view.dom.querySelector(".cm-atomic-ref")!, {
+      ctrlKey: true,
+      clientX: 1,
+      clientY: 1,
+    });
+    expect(useWorkspaceViewerStore.getState().pendingNavigation).toMatchObject({
+      type: "file",
+      filePath: "src/prompt.ts",
+    });
+  });
+
+  it("keeps an escaped reference in a quoted YAML prompt as a link", async () => {
+    const content = 'steps:\n  - prompt: "line\\n @src/escaped.ts"\n';
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        atomicContextReferences: true,
+      },
+    }));
+
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+
+    expect(view.dom.querySelector(".cm-atomic-ref")).toBeNull();
+    expect(view.dom.querySelector<HTMLElement>(".cm-link")?.dataset.path).toBe(
+      "src/escaped.ts"
+    );
+  });
+
+  it("chips a .prompt.md body reference but not a frontmatter reference", async () => {
+    const content = '---\nname: "@src/frontmatter.ts"\n---\nUse @src/body.ts\n';
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        atomicContextReferences: true,
+      },
+    }));
+
+    const { view } = await renderEditor("notes.prompt.md", content);
+
+    expect(
+      Array.from(view.dom.querySelectorAll<HTMLElement>(".cm-atomic-ref")).map(
+        (chip) => chip.getAttribute("data-path")
+      )
+    ).toEqual(["src/body.ts"]);
+    expect(
+      view.dom.querySelector<HTMLElement>(
+        '.cm-link[data-path="src/frontmatter.ts"]'
+      )
+    ).not.toBeNull();
+  });
+
+  it("does not chip JSON references", async () => {
+    const content = '{"prompt":"Use @src/file.ts"}';
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        atomicContextReferences: true,
+      },
+    }));
+
+    const { view } = await renderEditor("a.ctrlyoke.json", content);
+
+    expect(view.dom.querySelector(".cm-atomic-ref")).toBeNull();
+    expect(
+      view.dom.querySelector('.cm-link[data-path="src/file.ts"]')
+    ).not.toBeNull();
+  });
+
+  it("toggles chips live without recreating the view or changing saved text", async () => {
+    const content = "steps:\n  - prompt: |\n      Use @src/file.ts\n";
+    const onChange = vi.fn();
+    const { container } = render(
+      <WorkspaceFileEditor
+        filePath="a.ctrlyoke.yaml"
+        content={content}
+        onChange={onChange}
+        onSave={vi.fn()}
+      />
+    );
+    const editorDom = await waitFor(() => {
+      const element = container.querySelector<HTMLElement>(".cm-editor");
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    const view = EditorView.findFromDOM(editorDom)!;
+    await loadWorkflowFileSupport();
+
+    act(() => {
+      useSettingsStore.setState((state) => ({
+        globalSettings: {
+          ...state.globalSettings,
+          atomicContextReferences: true,
+        },
+      }));
+    });
+    await waitFor(() =>
+      expect(view.dom.querySelector(".cm-atomic-ref")?.textContent).toContain(
+        "file.ts"
+      )
+    );
+
+    act(() => {
+      useSettingsStore.setState((state) => ({
+        globalSettings: {
+          ...state.globalSettings,
+          atomicContextReferences: false,
+        },
+      }));
+    });
+    await waitFor(() =>
+      expect(view.dom.querySelector(".cm-atomic-ref")).toBeNull()
+    );
+    expect(EditorView.findFromDOM(editorDom)).toBe(view);
+    expect(view.state.doc.toString()).toBe(content);
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("offers harness ids for a YAML value", async () => {

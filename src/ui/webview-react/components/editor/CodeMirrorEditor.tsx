@@ -1248,7 +1248,8 @@ export function relintForContextChange(view: EditorView): void {
 // decoration pipeline.
 export function createAtomicReferenceExtension(
   symbolIconCache?: Map<string, string>,
-  referenceValidity?: Map<string, boolean>
+  referenceValidity?: Map<string, boolean>,
+  rangeLimiter?: (view: EditorView, from: number, to: number) => boolean
 ) {
   const getSymbolIcon: SymbolIconResolver | undefined = symbolIconCache
     ? (path, symbolName, lineStart, lineEnd) =>
@@ -1267,6 +1268,9 @@ export function createAtomicReferenceExtension(
       view.state.doc.toString(),
       getSymbolIcon,
       getValidity
+    ).filter(
+      (candidate) =>
+        !rangeLimiter || rangeLimiter(view, candidate.from, candidate.to)
     )) {
       builder.add(
         chip.from,

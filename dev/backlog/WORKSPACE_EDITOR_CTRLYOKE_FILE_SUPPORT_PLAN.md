@@ -1,8 +1,9 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-08):** Phases 0, 1, 2, 1b, 3 and 4 are implemented (see their entries under
-"Implementation phases"). Phase 1b fixed the bugs the Wave 1 review found in 1 and 2 and added
-the decoded prompt ranges Wave 2 needs. Phases 5–7 are not started. _Refreshed
+**Status (2026-10-08):** Phases 0, 1, 2, 1b, 3, 4, 5 and 7 are implemented, and Phase 6a
+chips are implemented (see their entries under "Implementation phases"). Phase 1b fixed the
+bugs the Wave 1 review found in 1 and 2 and added the decoded prompt ranges Wave 2 needs.
+Phase 6b completion polish remains. _Refreshed
 2026-10-08:_ the language intelligence plan shipped (`dev/implemented/`). Facts 2 and 9,
 "Editor integration" and "Coexistence with language servers" were re-audited against the
 merged code.
@@ -749,17 +750,31 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      Phase 1 has to land first.
 
 8. **Phase 6: Prompt-text polish.**
-   - Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md` bodies, gated by
-     `ui.atomicContextReferences` and never in JSON. This includes the range limiter for
-     `createAtomicReferenceExtension`.
-   - Tests (`WorkspaceFileEditor.test.tsx`):
+   - **F6a — Done 2026-10-08:** Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md`
+     bodies, gated by `ui.atomicContextReferences` and never in JSON. This includes the range
+     limiter for `createAtomicReferenceExtension`.
+   - **F6b — Pending:** `$step:` items with step names, `$endCondition:`/`$preCondition:`
+     scoping, and `{{var}}` completions (adopted by the prompt editor too).
+   - Tests (`WorkspaceFileEditor.ctrlyokeFiles.test.tsx`):
      - chips render inside a YAML `prompt:` block scalar but not in a comment or `name:`
      - an escaped reference in a quoted scalar stays a link
      - no chips in `.ctrlyoke.json`
+     - chips render in `.prompt.md` bodies but not frontmatter
      - toggling the setting adds and removes chips without recreating the view
      - the saved text is byte-identical
-   - `$step:` items with step names, and `$endCondition:`/`$preCondition:` scoping.
-   - `{{var}}` completions, adopted by the prompt editor too.
+
+   **As built — F6a done 2026-10-08.** `workflowPromptRanges.ts` adds a lazy CodeMirror
+   `StateField` containing decoded `WorkflowTextSpan` values from `getWorkflowTextSpans()`,
+   recomputed when the document changes. Its spans retain decoded text and `toSourceOffset()`
+   so M3's nested Markdown support can reuse the same source map. The workspace editor installs
+   this field only after the lazy support chunk loads. The atomic-reference extension accepts
+   an optional range predicate; the prompt editor omits it and keeps its existing whole-document
+   behavior. The workspace editor limits chips to exact YAML prompt values and `.prompt.md`
+   bodies, skips decoded code ranges and quoted YAML scalars containing escapes, and keeps
+   ordinary reference links elsewhere. Toggling the setting reconfigures `ctrlyokeFileSupport`
+   without replacing the view. Tests cover YAML, quoted escapes, JSON, prompt Markdown,
+   navigation, live toggling and unchanged document bytes. Completion polish remains in F6b;
+   nested Markdown remains M3.
 
 9. **Phase 7: VS Code parity.** **Done 2026-10-08.** This can be done on its own schedule.
    - `PromptPropertyCompletionProvider` gains value completions and covers JSON through
@@ -792,7 +807,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      language `yaml`/`json` no longer gets prompt-token completions; both providers key off the
      ctrlyoke file name. Tests need `PromptDocumentStub` with a real file name.
 
-Phases 0, 1, 1b, 2, 3, 4, 5 and 7 are done. The F3 bug the
+Phases 0, 1, 1b, 2, 3, 4, 5, 6a and 7 are done. Phase 6b remains. The F3 bug the
 Wave 2 review filed,
 [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md),
 is already fixed. The cross-plan order is in
