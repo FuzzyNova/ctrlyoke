@@ -49,6 +49,9 @@ const STATUS_CLASSES: Record<LanguageServerStatus, string> = {
     "border-warning-border text-warning-fg",
   [LANGUAGE_SERVER_STATUSES.CRASHED]: "border-error-border text-error-fg",
 };
+/** Mirrors the fallback in `LanguageServerResolver.resolveLanguageServer`. */
+const AUTOMATIC_DESCRIPTION =
+  "Automatic uses the first installed catalog server for the language, in catalog order. A selected server that isn't installed also falls back to Automatic; Off disables language features for that language.";
 type Props = { activeScope: SettingWriteScope };
 type FormState = {
   id: string;
@@ -134,6 +137,17 @@ export function LanguageServersSection({ activeScope }: Props) {
       ),
     [catalog, query]
   );
+  const automaticTooltip = (language: string) => {
+    const automatic = catalog.find(
+      (entry) =>
+        entry.languages.includes(language) && probeById.get(entry.id)?.detected
+    );
+    return `Automatic: uses the first installed catalog server for ${language}. ${
+      automatic
+        ? `Currently ${automatic.displayName}.`
+        : "None is installed, so this language has no server."
+    }`;
+  };
   const activeDefinition = form?.id ? definitionById.get(form.id) : undefined;
   const saveForm = () => {
     if (!form?.id.trim() || !form.command.trim()) return;
@@ -239,14 +253,20 @@ export function LanguageServersSection({ activeScope }: Props) {
             <div className="text-xs font-semibold text-foreground">
               Languages
             </div>
+            <p className="text-xxs text-description-fg">
+              {AUTOMATIC_DESCRIPTION}
+            </p>
             {languages.map((language) => (
               <label
                 key={language}
                 className="flex items-center justify-between gap-2 text-xs"
               >
-                <span className="font-mono text-foreground">{language}</span>
+                <span className="min-w-0 truncate font-mono text-foreground">
+                  {language}
+                </span>
                 <select
                   aria-label={`${language} language server`}
+                  title={automaticTooltip(language)}
                   value={
                     selections[language] === false
                       ? LANGUAGE_SERVER_SELECTIONS.OFF
@@ -257,9 +277,12 @@ export function LanguageServersSection({ activeScope }: Props) {
                   onChange={(event) =>
                     requestSelectWrite(language, event.target.value)
                   }
-                  className="max-w-48 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg"
+                  className="w-48 shrink-0 rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg"
                 >
-                  <option value={LANGUAGE_SERVER_SELECTIONS.AUTOMATIC}>
+                  <option
+                    value={LANGUAGE_SERVER_SELECTIONS.AUTOMATIC}
+                    title={automaticTooltip(language)}
+                  >
                     Automatic
                   </option>
                   <option value={LANGUAGE_SERVER_SELECTIONS.OFF}>Off</option>
@@ -588,26 +611,47 @@ export function LanguageServersSection({ activeScope }: Props) {
           )}
         </section>
         <section className="min-w-0 space-y-3 rounded-sm border border-panel-border p-3">
-          <div
-            className="flex gap-1"
-            role="tablist"
-            aria-label="Discover language servers"
-          >
-            {[
-              [LANGUAGE_SERVER_TABS.CATALOG, "Catalog"],
-              [LANGUAGE_SERVER_TABS.LOCAL, "Local configs"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => setTab(value as typeof tab)}
-                className={`rounded-sm border px-2 py-1 text-xs ${tab === value ? "border-btn-bg bg-btn-bg text-btn-fg" : "border-panel-border text-description-fg"}`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center gap-1">
+            <div
+              className="flex gap-1"
+              role="tablist"
+              aria-label="Discover language servers"
+            >
+              {[
+                [LANGUAGE_SERVER_TABS.CATALOG, "Catalog"],
+                [LANGUAGE_SERVER_TABS.LOCAL, "Local configs"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === value}
+                  onClick={() => setTab(value as typeof tab)}
+                  className={`rounded-sm border px-2 py-1 text-xs ${tab === value ? "border-btn-bg bg-btn-bg text-btn-fg" : "border-panel-border text-description-fg"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={
+                tab === LANGUAGE_SERVER_TABS.CATALOG
+                  ? requestServers
+                  : requestLocalScan
+              }
+              disabled={tab === LANGUAGE_SERVER_TABS.LOCAL && scanning}
+              title={
+                tab === LANGUAGE_SERVER_TABS.CATALOG
+                  ? "Re-detect installed catalog servers"
+                  : "Re-scan harness configs for language servers"
+              }
+              className="ml-auto rounded-sm border border-panel-border px-2 py-1 text-xs disabled:opacity-50"
+            >
+              {tab === LANGUAGE_SERVER_TABS.LOCAL && scanning
+                ? "Scanning…"
+                : "Scan again"}
+            </button>
           </div>
           {tab === LANGUAGE_SERVER_TABS.CATALOG ? (
             <>
@@ -618,7 +662,7 @@ export function LanguageServersSection({ activeScope }: Props) {
                 onChange={(event) => setQuery(event.target.value)}
                 className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg"
               />
-              <div className="max-h-[60vh] space-y-2 overflow-auto">
+              <div className="space-y-2">
                 {filteredCatalog.map((entry) => {
                   const detected = probeById.get(entry.id)?.detected;
                   const installState = installing[entry.id];
@@ -703,29 +747,9 @@ export function LanguageServersSection({ activeScope }: Props) {
                   );
                 })}
               </div>
-              <button
-                type="button"
-                onClick={requestServers}
-                className="rounded-sm border border-panel-border px-2 py-1 text-xs"
-              >
-                Scan again
-              </button>
             </>
           ) : (
             <>
-              <div className="flex justify-between">
-                <h3 className="text-xs font-semibold text-foreground">
-                  Local configs
-                </h3>
-                <button
-                  type="button"
-                  onClick={requestLocalScan}
-                  disabled={scanning}
-                  className="rounded-sm border border-panel-border px-2 py-1 text-xs"
-                >
-                  {scanning ? "Scanning…" : "Scan again"}
-                </button>
-              </div>
               {localError && (
                 <p role="alert" className="text-xs text-error-fg">
                   {localError}

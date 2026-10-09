@@ -157,6 +157,31 @@ describe("LanguageServersSection", () => {
     useSettingsStore.setState({ globalSettings: originalGlobalSettings });
   });
 
+  it("explains Automatic and names the server it currently resolves to", () => {
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.USER} />);
+    expect(screen.getByText(/Automatic uses the first installed/)).toBeTruthy();
+    expect(screen.getByLabelText("python language server").title).toContain(
+      "Currently Pyright."
+    );
+  });
+
+  it("uses one Scan again button that follows the active tab", () => {
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.USER} />);
+    sendMessageMock.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Scan again" }));
+    expect(sendMessageMock).toHaveBeenLastCalledWith(
+      MESSAGE_TYPES.REQUEST_LSP_SERVERS
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Local configs" }));
+    expect(screen.getAllByRole("button", { name: "Scan again" })).toHaveLength(
+      1
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Scan again" }));
+    expect(sendMessageMock).toHaveBeenLastCalledWith(
+      MESSAGE_TYPES.REQUEST_LSP_LOCAL_SCAN
+    );
+  });
+
   it("offers managed definitions in the detected language dropdown", () => {
     seed(LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL);
     render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
