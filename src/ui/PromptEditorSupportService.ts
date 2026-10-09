@@ -93,6 +93,8 @@ import { encode } from "gpt-tokenizer";
 import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import { PromptFileParser } from "../core/PromptFileParser";
+import type { CtrlYokeFileKind } from "../types/DashboardConstants";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type { WebviewClientContext } from "./WebviewClientContext";
 import type { SecretRegistryService } from "./SecretRegistryService";
@@ -222,6 +224,7 @@ type ContextReferenceToValidate = Omit<
  * service.
  */
 export class PromptEditorSupportService {
+  private readonly workflowTextValidator = new PromptFileParser();
   constructor(
     private readonly getWorkspaceRoot: () => string,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
@@ -243,6 +246,19 @@ export class PromptEditorSupportService {
     private readonly fileWatcherFactory?: FileWatcherFactory,
     private readonly completionCore?: CompletionCore
   ) {}
+
+  validateWorkflowDocument(
+    text: string,
+    kind: CtrlYokeFileKind
+  ): Array<{ path: string; message: string; severity: "error" | "warning" }> {
+    return this.workflowTextValidator
+      .validateWorkflowText(text, kind)
+      .issues.map(({ instancePath, message, severity }) => ({
+        path: instancePath,
+        message,
+        severity,
+      }));
+  }
 
   private getTrustedWorkspaceRoots(): string[] {
     return [

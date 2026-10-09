@@ -15,6 +15,7 @@ import type {
   WorkflowPath,
   WorkflowTextRange,
 } from "./WorkflowLocationTypes";
+export { workflowPathFromInstancePath } from "./WorkflowPathFromInstancePath";
 import {
   findYamlRangeForPath,
   getYamlWorkflowLocation,

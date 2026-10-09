@@ -6,6 +6,7 @@ import {
 import { EditorState } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { diagnosticCount } from "@codemirror/lint";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceFileEditor } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
@@ -308,5 +309,101 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
 
     expect(optionLabels()).not.toContain("copilot-cli");
     expect(screen.queryByText("copilot-cli")).toBeNull();
+  });
+
+  it.each([
+    {
+      filePath: "a.ctrlyoke.yaml",
+      content: "steps:\n  - prompt: 42\n",
+    },
+    {
+      filePath: "a.ctrlyoke.json",
+      content: '{"steps":[{"prompt":42}]}',
+    },
+  ])(
+    "shows a schema diagnostic on the invalid value in $filePath",
+    async ({ filePath, content }) => {
+      const { view } = await renderEditor(filePath, content);
+      await waitFor(() => {
+        const request = latestPostedMessage<RequestMessage>(
+          postMessage,
+          (message) => message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+        );
+        expect(request.text).toBe(content);
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: {
+              type: MESSAGE_TYPES.WORKFLOW_DOCUMENT_DIAGNOSTICS,
+              seq: request.seq,
+              issues: [
+                {
+                  path: "/steps/0/prompt",
+                  message: "must be string",
+                  severity: "error",
+                },
+              ],
+            },
+          })
+        );
+        expect(diagnosticCount(view.state)).toBe(1);
+        expect(view.dom.querySelector(".cm-lintRange-error")?.textContent).toBe(
+          "42"
+        );
+      });
+    }
+  );
+
+  it("drops diagnostics returned for a stale validation sequence", async () => {
+    const { view } = await renderEditor(
+      "a.ctrlyoke.yaml",
+      "steps:\n  - prompt: 42\n"
+    );
+    await waitFor(() =>
+      expect(
+        postMessage.mock.calls.some(
+          ([message]) =>
+            message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+        )
+      ).toBe(true)
+    );
+    const oldRequest = latestPostedMessage<RequestMessage>(
+      postMessage,
+      (message) => message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+    );
+    typeAtEnd(view, " ");
+    await waitFor(() => {
+      const current = latestPostedMessage<RequestMessage>(
+        postMessage,
+        (message) => message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+      );
+      expect(current.seq).not.toBe(oldRequest.seq);
+    });
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.WORKFLOW_DOCUMENT_DIAGNOSTICS,
+          seq: oldRequest.seq,
+          issues: [
+            { path: "/steps/0/prompt", message: "stale", severity: "error" },
+          ],
+        },
+      })
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(diagnosticCount(view.state)).toBe(0);
+  });
+
+  it("does not validate plain YAML files", async () => {
+    const { view } = await renderEditor(
+      "config/plain.yaml",
+      "steps:\n  - prompt: 42\n"
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(
+      postMessage.mock.calls.some(
+        ([message]) => message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+      )
+    ).toBe(false);
+    expect(diagnosticCount(view.state)).toBe(0);
   });
 });

@@ -41,6 +41,10 @@ import {
   SCRIPT_STEP_COPY_FIELDS,
 } from "../types/DashboardConstants";
 import {
+  CTRLYOKE_FILE_KINDS,
+  type CtrlYokeFileKind,
+} from "../types/DashboardConstants";
+import {
   describeIncompleteComparison,
   isComparisonIncomplete,
 } from "../utils/ScriptComparison";
@@ -68,6 +72,17 @@ type ParallelValidationProperties = Pick<
   PromptFile,
   "priorContext" | "sessionId" | "maxSteps"
 >;
+
+export interface WorkflowTextValidationIssue {
+  instancePath: string;
+  message: string;
+  severity: "error" | "warning";
+  position?: { readonly line: number; readonly column: number };
+}
+
+export interface WorkflowTextValidationResult {
+  readonly issues: WorkflowTextValidationIssue[];
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -274,6 +289,110 @@ export class PromptFileParser {
     return this.validateSchemaAndGetWarnings(parsed);
   }
 
+  /**
+   * Validate unsaved workflow text without normalizing, loading, logging or
+   * notifying. Kept host-agnostic for dashboard and language-server callers.
+   */
+  validateWorkflowText(
+    text: string,
+    kind: CtrlYokeFileKind
+  ): WorkflowTextValidationResult {
+    let sourceLineOffset = 0;
+    try {
+      let parsed: unknown;
+      if (kind === CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN) {
+        const located = splitMarkdownFrontmatter(text);
+        if (!located) return { issues: [] };
+        sourceLineOffset =
+          text.slice(0, text.indexOf(located.frontmatter)).split("\n").length -
+          1;
+        const frontmatter = yaml.load(located.frontmatter, {
+          schema: WORKFLOW_YAML_SCHEMA,
+        });
+        if (
+          frontmatter !== null &&
+          frontmatter !== undefined &&
+          !isObject(frontmatter)
+        ) {
+          return {
+            issues: [
+              {
+                instancePath: "",
+                message:
+                  "Markdown frontmatter must contain a YAML mapping or null",
+                severity: "error",
+              },
+            ],
+          };
+        }
+        if (
+          isObject(frontmatter) &&
+          frontmatter.description !== undefined &&
+          typeof frontmatter.description !== "string"
+        ) {
+          return {
+            issues: [
+              {
+                instancePath: "/description",
+                message: "Markdown frontmatter description must be a string",
+                severity: "error",
+              },
+            ],
+          };
+        }
+        return { issues: [] };
+      } else if (kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON) {
+        parsed = JSON.parse(text);
+      } else {
+        parsed = yaml.load(text, { schema: WORKFLOW_YAML_SCHEMA });
+      }
+
+      const validation = this.validateSchema(parsed);
+      return {
+        issues: [
+          ...validation.errors.map((error) => ({
+            instancePath: error.instancePath,
+            message: error.message ?? "Schema validation failed",
+            severity: "error" as const,
+          })),
+          ...validation.warnings.map((warning) => ({
+            instancePath: warning.propertyPointer,
+            message: warning.message,
+            severity: "warning" as const,
+          })),
+        ],
+      };
+    } catch (error) {
+      const issue: WorkflowTextValidationIssue = {
+        instancePath: "",
+        message: error instanceof Error ? error.message : String(error),
+        severity: "error",
+      };
+      const mark = (error as { mark?: { line?: number; column?: number } })
+        ?.mark;
+      if (
+        mark &&
+        typeof mark.line === "number" &&
+        typeof mark.column === "number"
+      ) {
+        issue.position = {
+          line: mark.line + sourceLineOffset + 1,
+          column: mark.column + 1,
+        };
+      } else if (error instanceof SyntaxError) {
+        const match = /position\s+(\d+)/i.exec(error.message);
+        if (match) {
+          const before = text.slice(0, Number(match[1]));
+          issue.position = {
+            line: (before.match(/\n/g)?.length ?? 0) + 1,
+            column: before.length - before.lastIndexOf("\n"),
+          };
+        }
+      }
+      return { issues: [issue] };
+    }
+  }
+
   private async validateAndNormalizeWithWarnings(
     parsed: any,
     contentPath: string
@@ -351,12 +470,25 @@ export class PromptFileParser {
   private validateSchemaAndGetWarnings(
     parsed: unknown
   ): WorkflowValidationWarning[] {
-    if (!this.strictValidator || !this.relaxedValidator) return [];
+    const result = this.validateSchema(parsed);
+    if (result.errors.length > 0) {
+      throw this.schemaValidationError(result.errors);
+    }
+    return result.warnings;
+  }
 
-    if (this.strictValidator(parsed)) return [];
+  private validateSchema(parsed: unknown): {
+    errors: ErrorObject[];
+    warnings: WorkflowValidationWarning[];
+  } {
+    if (!this.strictValidator || !this.relaxedValidator) {
+      return { errors: [], warnings: [] };
+    }
+
+    if (this.strictValidator(parsed)) return { errors: [], warnings: [] };
     const originalErrors = [...(this.strictValidator.errors ?? [])];
     if (!this.relaxedValidator(parsed)) {
-      throw this.schemaValidationError(originalErrors);
+      return { errors: originalErrors, warnings: [] };
     }
 
     let scratch = structuredClone(parsed);
@@ -408,11 +540,11 @@ export class PromptFileParser {
       }
 
       if (!removed) {
-        throw this.schemaValidationError(errors);
+        return { errors, warnings };
       }
     }
 
-    return warnings;
+    return { errors: [], warnings };
   }
 
   private schemaValidationError(errors: readonly ErrorObject[]): Error {

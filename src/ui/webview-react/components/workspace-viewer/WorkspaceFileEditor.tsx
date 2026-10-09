@@ -47,6 +47,10 @@ import {
   type WorkflowFileSupport,
 } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
 import { createWorkflowFileCompletionExtension } from "@utils/workflowFileSupport/workflowFileCompletionExtension";
+import {
+  createWorkflowDocumentLintExtension,
+  forceLinting,
+} from "@utils/workflowFileSupport/workflowDocumentLintExtension";
 import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/workflowValueDataSource";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
@@ -344,13 +348,20 @@ export const WorkspaceFileEditor = forwardRef<
     const ctrlyokeFileSupportExtension = useMemo<Extension>(
       () =>
         ctrlyokeFileKind && workflowPromptClient
-          ? createWorkflowFileCompletionExtension({
-              kind: ctrlyokeFileKind,
-              getSupport: () => workflowSupportRef.current,
-              getDataSource: createStoreWorkflowValueDataSource,
-              transport: getVsCodeApi(),
-              promptClient: workflowPromptClient,
-            })
+          ? [
+              createWorkflowFileCompletionExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
+                getDataSource: createStoreWorkflowValueDataSource,
+                transport: getVsCodeApi(),
+                promptClient: workflowPromptClient,
+              }),
+              createWorkflowDocumentLintExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
+                transport: getVsCodeApi(),
+              }),
+            ]
           : [],
       [ctrlyokeFileKind, workflowPromptClient]
     );
@@ -363,7 +374,10 @@ export const WorkspaceFileEditor = forwardRef<
       if (!ctrlyokeFileKind) return;
       let cancelled = false;
       void loadWorkflowFileSupport().then((support) => {
-        if (!cancelled) workflowSupportRef.current = support;
+        if (!cancelled) {
+          workflowSupportRef.current = support;
+          if (viewRef.current) forceLinting(viewRef.current);
+        }
       });
       return () => {
         cancelled = true;

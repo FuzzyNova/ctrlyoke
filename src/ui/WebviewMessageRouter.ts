@@ -1349,6 +1349,17 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT, (message, ctx) => {
+      ctx.emit({
+        type: MESSAGE_TYPES.WORKFLOW_DOCUMENT_DIAGNOSTICS,
+        seq: message.seq,
+        issues: this.promptEditorSupport.validateWorkflowDocument(
+          message.text,
+          message.kind
+        ),
+      });
+    });
+
     table.set(MESSAGE_TYPES.SAVE_PASTED_IMAGE, async (message, ctx) => {
       await this.promptEditorSupport.handleSavePastedImage(ctx, message);
     });

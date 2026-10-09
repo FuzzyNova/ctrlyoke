@@ -392,6 +392,15 @@ JSON workflow files.
 
 ### Diagnostics
 
+**As built — F5a done 2026-10-08; F5b pending.** `PromptFileParser.validateWorkflowText`
+parses unsaved YAML, JSON and `.prompt.md` frontmatter without normalization or feedback
+side effects, sharing the schema validator used by the load path. The dashboard message pair
+routes through the shared webview router (including hosted clients); the editor validates only
+ctrlyoke files, debounces by 400 ms and drops stale sequences. Schema ranges are resolved by
+`findRangeForPath` from the lazy workflow-file support chunk, using the pure RFC 6901 pointer
+converter in `src/completions/WorkflowPathFromInstancePath.ts`. F5b remains prompt-text lint and
+outline hover.
+
 - **Schema validation stays host-side, in `PromptFileParser`.** Do not bundle ajv into the
   webview. It needs `unsafe-eval`, and a second validator would drift from the one that
   actually loads files. Add a message pair: `VALIDATE_WORKFLOW_DOCUMENT { text, kind, seq }`

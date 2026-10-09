@@ -565,6 +565,8 @@ export const MESSAGE_TYPES = {
   FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: addressed file-ref result
   VALIDATE_CONTEXT_REFS: "validateContextRefs", // Webview -> Extension: Validate inline @/#/~ context references
   CONTEXT_REFS_VALIDATION: "contextRefsValidation", // Extension -> Webview: Inline context reference validation results
+  VALIDATE_WORKFLOW_DOCUMENT: "validateWorkflowDocument", // Webview -> Extension: Validate unsaved ctrlyoke workflow text
+  WORKFLOW_DOCUMENT_DIAGNOSTICS: "workflowDocumentDiagnostics", // Extension -> Webview: Path-based workflow schema issues
   INSERT_PROMPT_REFERENCES: "insertPromptReferences", // Extension -> Webview: insert raw context references into the live prompt editor
 
   // Image paste - Webview <-> Extension

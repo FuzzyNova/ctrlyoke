@@ -6,6 +6,8 @@
  */
 export {
   getWorkflowLocation,
+  findRangeForPath,
+  workflowPathFromInstancePath,
   parseWorkflowDocumentRoot,
 } from "@root/completions/WorkflowDocumentLocation";
 export { getWorkflowFileCompletions } from "@root/completions/WorkflowFileCompletionCore";
