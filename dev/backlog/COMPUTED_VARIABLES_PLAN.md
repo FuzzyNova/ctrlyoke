@@ -9,7 +9,9 @@ names that survive step reordering.
 
 **Related:** `dev/implemented/KEY_VALUE_ROW_EDITOR_PLAN.md` (the authoring
 surface this lands in, now built), `USER_INPUT_STEP_PLAN.md` (the same "script produces a value the workflow
-consumes" shape, for a human instead of a script)
+consumes" shape, for a human instead of a script),
+`SCRIPT_GENERATED_STEPS_PLAN.md` (the same shape where the script produces
+steps instead of a value)
 
 ## The ask
 
