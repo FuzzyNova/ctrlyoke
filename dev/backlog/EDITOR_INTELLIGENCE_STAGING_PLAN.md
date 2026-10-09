@@ -162,6 +162,25 @@ against its plan, and every finding below was reproduced with a probe or a test.
   - [`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/implemented/prompt-editor-reference-link-split-by-markdown-emphasis.md),
     low and cosmetic.
 
+### Waves 4 and 5 review (2026-10-08)
+
+All eight sessions landed on `big-feature`. `npm test` passed except one UI test, the
+large-YAML parse budget in `WorkspaceFileEditor.ctrlyokeFiles.test.tsx` (707 ms against
+250 ms). The review found fixes needed before the plans can close, and queued them as three
+sessions:
+
+- **M2b, `findCodeRanges`:** two runtime regressions (a backslash inside inline code hides the
+  closer; an unclosed fence stops every later fence from masking), quadratic inline scanning,
+  fences on a list-marker line, and fences that outlive their blockquote. Also an invalid CSS
+  variable name that drops the inline code border.
+- **F5 and D3:** lint listeners die when the view is rebuilt; the hosted prompt lint ignores the
+  settings pre-condition default; the Red Hat YAML gate races activation; syntax-error positions
+  are dropped in the webview; the load path doesn't share the new validate entry point.
+- **F6a, M3 and F6b:** a YAML parse per chip on each keystroke (the likely cause of the budget
+  failure); completions offering `$previous`/`$finalStep` where lint flags them; two disagreeing
+  markdown parses over YAML prompt values, with the unclosed-fence rule inverted; plain `.yaml`
+  files losing highlighting when the view is rebuilt.
+
 ## Short answer
 
 - **The three plans can run in parallel, with three ordering constraints:**
