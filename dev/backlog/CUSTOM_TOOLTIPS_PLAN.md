@@ -42,7 +42,7 @@ Give tooltips a structured form instead of a flat string:
 interface TooltipContent {
   heading?: string; // rendered bold
   paragraphs: string[];
-  footer?: string; // e.g. "property: model = …", rendered muted/monospace
+  footer?: string; // "property: model = …", always shown (see §5.1)
 }
 ```
 
@@ -115,10 +115,45 @@ Note: Testing Library's default normalizer collapses whitespace in `getByTitle`.
 paragraph structure must assert on the attribute or pass `normalizer: (t) => t`. The current
 tests already do this.
 
-## 5. Open questions
+## 5. Decisions
 
-- Should the `property:` footer be shown in the dashboard at all, or only when a setting is on?
-  It's for people who also edit YAML, and it's noise for dashboard-only users.
-- Should a dropdown row's tooltip leave out the field's schema help, since the field label's
-  tooltip already shows it? The row would then show only the label, the option description and
-  the `property:` footer, and become much shorter.
+### 5.1 Always show the `property:` footer
+
+The footer stays on for every dashboard user. There is no setting to hide it. It teaches the YAML
+property name and value behind each control, so users can move to writing workflow files by hand.
+
+That matters more than it first appears. Templates can only be fully authored in YAML or JSON
+today. `TemplateManager` reads `_templateMeta.variables` (type, options, default, description,
+`autoFillFilename`, and so on) and the `{placeholder}` / `{file:name}` tokens straight from the
+file. The dashboard has no way to declare template variables or place them in step fields. Until
+it does, anyone writing templates has to know the YAML property names, and the footer is how
+dashboard users learn them.
+
+Render the footer muted and in monospace, so it reads as a reference line rather than prose.
+
+### 5.2 Leave the field's help out of dropdown rows
+
+A dropdown row's tooltip leaves out the field's schema help, because the field label's tooltip
+already shows it. A row shows:
+
+- **heading:** the option's full label (it is often truncated on screen);
+- **paragraph:** the option's own description, if it has one (agents, skills);
+- **pseudo-options:** for None/Inherit, the YAML the option writes (`agent: null`,
+  `omit skills`), in place of a description;
+- **footer:** `property: <path> = <value>`.
+
+This makes the most common row tooltips (models, agents, skills) much shorter. The field-level
+help, including step-only wording such as "On a step, null (None in the step properties)…", stays
+on the field label's tooltip.
+
+This needs no new component. `schemaOptionTitle` in `schemaPropertyLabels.ts` can drop the
+schema description while still on native `title`s, so do that change first. It is independent of
+the new renderer.
+
+## 6. Related gap (out of scope)
+
+The dashboard can't author templates: it can't declare `_templateMeta.variables` or insert
+`{placeholder}` tokens into step fields. `dev/backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md` only
+covers enforcing `required` variables. Dashboard template authoring would need its own plan. If it
+ships, the reason for §5.1 gets weaker but doesn't go away: the footer would still teach the file
+format.
