@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-09 by claude-cli while scoping `dev/backlog/SCRIPT_GENERATED_STEPS_PLAN.md` (code reading; not reproduced)
 - **Area:** `src/core/WorkflowExecutor.ts` (final-step loop, ~745-839)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

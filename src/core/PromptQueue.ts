@@ -1065,15 +1065,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
     let settlement: SequentialStepSettlement = {};
     await this.workingFileManager.runInQueueWithWorkingFileLock(async () => {
-      const workingFilePath = this.state.workingFilePath;
-      if (workingFilePath) {
-        const workingFile = await this.readWorkingFile(workingFilePath);
-        const newStepsFromDisk = this.mergeDiskDefinition(workingFile);
-        if (newStepsFromDisk.length > 0) {
-          this.onDiskStepsMergedEmitter.fire(newStepsFromDisk);
-          this.emitStateChange();
-        }
-      }
+      await this.mergeDiskStepsWhileLocked();
 
       const promotedGroup = this.state.parallelGroups.find(
         (group) =>
@@ -1094,6 +1086,34 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       await this.workingFileManager.updateWorkingFileDirect(true, true);
     });
     return settlement;
+  }
+
+  /**
+   * Merge steps another process appended to the run file, under the
+   * working-file lock. The final-step loop calls this before deciding whether
+   * the pass appended work, so the decision never depends on the file watcher
+   * (which polls at 1 s for run files outside the workspace) having merged
+   * the append yet. Queue steps get the same guarantee from
+   * `commitStepOutcomeAndAdvance()`.
+   */
+  public async mergeDiskStepsUnderLock(): Promise<void> {
+    await this.workingFileManager.runInQueueWithWorkingFileLock(() =>
+      this.mergeDiskStepsWhileLocked()
+    );
+  }
+
+  /** Caller must hold the working-file lock via `runInQueueWithWorkingFileLock`. */
+  private async mergeDiskStepsWhileLocked(): Promise<void> {
+    const workingFilePath = this.state.workingFilePath;
+    if (!workingFilePath) {
+      return;
+    }
+    const workingFile = await this.readWorkingFile(workingFilePath);
+    const newStepsFromDisk = this.mergeDiskDefinition(workingFile);
+    if (newStepsFromDisk.length > 0) {
+      this.onDiskStepsMergedEmitter.fire(newStepsFromDisk);
+      this.emitStateChange();
+    }
   }
 
   /**

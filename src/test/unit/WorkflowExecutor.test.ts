@@ -8,6 +8,7 @@ import {
   WorkflowExecutionContext,
 } from "../../core/WorkflowExecutor";
 import { PromptQueue } from "../../core/PromptQueue";
+import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
 import { RecordedTargetFailureError } from "../../core/RecordedTargetFailureError";
 import {
   MissingSecretError,
@@ -3654,6 +3655,65 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.ok(runtime);
     assert.strictEqual(runtime?.loopCount, 1);
     assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
+  });
+
+  test("loops on an out-of-process append the file watcher has not merged", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-executor-final-step-disk-append-")
+    );
+    try {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const executor = makeExecutor(queue);
+      const steps = [{ prompt: "queue-1" }];
+      const finalStep = { prompt: "final-disk-append" };
+      const draftPath = await queue.createWorkingFile(
+        "final-step-disk-append",
+        steps,
+        workspace
+      );
+      queue.loadPrompts({ steps, finalStep }, draftPath);
+      const promotion = await queue.promoteToNewRun(workspace, 100);
+      assert.ok(promotion);
+      const workflowKey = queue.getState().workflowKey!;
+
+      let finalRuns = 0;
+      integration.onSend = async (prompt) => {
+        if (prompt.prompt === finalStep.prompt && ++finalRuns === 1) {
+          // Another process writes the run file; no watcher merges it, so
+          // only the executor's own merge can see this step.
+          await RunContinuationService.appendStepsToRun(
+            workspace,
+            workflowKey,
+            promotion.runRef,
+            [{ prompt: "disk-appended" }],
+            queue.getState().definitionRevision,
+            100,
+            undefined,
+            true
+          );
+          assert.strictEqual(queue.getState().steps.length, 1);
+        }
+        return { success: true, responseText: `ok:${prompt.prompt}` };
+      };
+
+      const context = makeContext(integration);
+      context.workspaceFolderPath = workspace;
+      context.executionWorkspace = createNoWorktreeExecutionWorkspace(
+        new MockPlatform(workspace)
+      );
+      await executor.execute(integration, context);
+
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "queue-1",
+        "final-disk-append",
+        "disk-appended",
+        "final-disk-append",
+      ]);
+      assert.strictEqual(queue.getFinalStepRuntime()?.loopCount, 1);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 
   test("stops a finalStep loop at the workflow maxSteps cap", async () => {

@@ -790,6 +790,9 @@ export class WorkflowExecutor {
           break;
         }
 
+        // An out-of-process writer (MCP append_step, a script final step)
+        // may have appended work the file watcher hasn't merged yet.
+        await this.promptQueue.mergeDiskStepsUnderLock();
         const queueSizeAfter = this.promptQueue.getState().steps.length;
         if (queueSizeAfter > queueSizeBefore) {
           const hitQueueSizeLimit = await this.checkStepLimit(
