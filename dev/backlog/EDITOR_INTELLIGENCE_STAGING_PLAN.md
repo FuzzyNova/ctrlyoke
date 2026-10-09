@@ -295,15 +295,19 @@ spreads to a second editor. F6a + M3 also waits for F5, which holds `WorkspaceFi
 M2b covers:
 
 1. **Done:** [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/implemented/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md).
-   `findCodeRanges` now matches CommonMark for the five runtime cases; unclosed fences remain
-   live and the prompt editor suppresses their syntax colours until a closer is present. The
-   parity corpus agrees for every visible code range, and unit tests pin the runtime decisions.
+   `findCodeRanges` now matches CommonMark for the runtime cases; unclosed fences remain live
+   and the prompt editor suppresses their syntax colours until a closer is present. The M2b
+   review follow-up also covers escaped backticks inside code, later fences after unclosed
+   openers, list-marker fences, container boundaries, tilde info strings, block-bounded inline
+   spans and linear-time scanning. The parity corpus records aligned visible ranges and the
+   intentional mismatch where runtime recovers after an unclosed opener but Lezer stays open
+   through EOF.
 2. **Done:** [`prompt-editor-reference-link-split-by-markdown-emphasis`](../bugs/implemented/prompt-editor-reference-link-split-by-markdown-emphasis.md)
    (low, cosmetic). Emphasis split links retain uniform font style, weight and underline on
    every fragment.
 3. **Done:** the deferred code-range restyle from plan M's "Code ranges" section. Inline spans
-   get the `codeSpan.border` box and shared inline-code colour; fences lose their background so
-   nested-language colours show through. The code-range mark stays at default precedence, so
+   get the VS Code preformat border and shared inline-code colour; fences lose their background
+   so nested-language colours show through. The code-range mark stays at default precedence, so
    the suppressed-expansion squiggle remains visible.
 
 Move each bug to `dev/bugs/implemented/` in the commit that fixes it, and mark the restyle

@@ -187,7 +187,9 @@ suite("PromptDiagnosticsProvider", () => {
 
     trusted = true;
     fire?.();
-    const deadline = Date.now() + 10_000;
+    // The extension suite runs in a VS Code shard beside the UI and other
+    // extension hosts; allow the debounced refresh to settle under that load.
+    const deadline = Date.now() + 20_000;
     while (
       provider.getDiagnostics(document.uri).length > 0 &&
       Date.now() < deadline

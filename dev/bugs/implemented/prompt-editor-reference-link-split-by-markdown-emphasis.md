@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-08 by Claude (claude-cli), Wave 3 review of M2 (`a1e420025`)
 - **Area:** `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` (link decorations at `Prec.highest`), `src/ui/webview-react/utils/codemirrorLanguage.ts`
-- **Severity:** low
+- **Resolution:** fixed in 3c03150d8
 
 ## Symptom
 
@@ -26,7 +26,7 @@ emphasis span around it.
 
 ## Suggested Fix
 
-**Resolution:** fixed in this commit. `.cm-link` resets `font-style` and `font-weight` on every
+`.cm-link` resets `font-style` and `font-weight` on every
 fragment, keeping the text and hover underline visually uniform when Lezer splits a reference
 around emphasis. The DOM may still contain multiple adjacent link spans; all retain their
 `data-path`, so clicking continues to work. Atomic chips are unchanged.

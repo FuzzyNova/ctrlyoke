@@ -113,7 +113,14 @@ suite("VsCodeDocuments", () => {
       await vscode.commands.executeCommand(
         "workbench.action.revertAndCloseActiveEditor"
       );
-      await fs.rm(directory, { recursive: true, force: true });
+      await fs
+        .rm(directory, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 100,
+        })
+        .catch(() => {});
     }
   });
 
@@ -134,7 +141,14 @@ suite("VsCodeDocuments", () => {
       );
       assert.strictEqual(await fs.readFile(filePath, "utf8"), "unchanged");
     } finally {
-      await fs.rm(directory, { recursive: true, force: true });
+      await fs
+        .rm(directory, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 100,
+        })
+        .catch(() => {});
     }
   });
 });

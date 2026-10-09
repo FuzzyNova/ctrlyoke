@@ -78,6 +78,79 @@ suite("FileReferenceParser", () => {
         ["src/a.ts"]
       );
     });
+
+    test("ignores backslashes inside inline code when pairing delimiters", () => {
+      const text = "Run `C:\\tmp\\` then @file.md and `x`";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("`C:"), to: text.indexOf(" then") },
+        { from: text.lastIndexOf("`x`"), to: text.length },
+      ]);
+      assert.deepStrictEqual(
+        parseAtReferences(text).map(({ path }) => path),
+        ["file.md"]
+      );
+    });
+
+    test("finds later closed fences after an unclosed fence opener", () => {
+      for (const text of [
+        "~~~~~~~~~~\nNotes\n\n```\n$previous\n```",
+        "````\n\n```\n$previous\n```",
+      ]) {
+        const from = text.indexOf("```", text.indexOf("\n\n") + 2);
+        assert.deepStrictEqual(findCodeRanges(text), [
+          { from, to: text.lastIndexOf("```") + 3 },
+        ]);
+        assert.deepStrictEqual(parseInlinePriorContextRefs(text), []);
+      }
+    });
+
+    test("recognizes a fence on a list marker line", () => {
+      for (const text of ["- ```\n  code @x\n  ```", "1. ```\n   @x\n   ```"]) {
+        assert.deepStrictEqual(parseAtReferences(text), []);
+        assert.deepStrictEqual(findCodeRanges(text), [
+          { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+        ]);
+      }
+    });
+
+    test("ends a blockquote fence with its container and rejects lazy code continuation", () => {
+      const endedQuote = "> ```\n> code\n\nRegular @src/ref.md text\n\n```\nx";
+      assert.deepStrictEqual(
+        findCodeRanges(endedQuote).map(({ from, to }) => ({ from, to })),
+        []
+      );
+      assert.deepStrictEqual(
+        parseAtReferences(endedQuote).map(({ path }) => path),
+        ["src/ref.md"]
+      );
+
+      const lazyContinuation = "> ```\n@src/x.md\n> ```";
+      assert.deepStrictEqual(
+        parseAtReferences(lazyContinuation).map(({ path }) => path),
+        ["src/x.md"]
+      );
+    });
+
+    test("allows backticks in tilde fence info and stops inline spans at block starts", () => {
+      const tilde = "~~~ `js`\n@a\n~~~";
+      assert.deepStrictEqual(findCodeRanges(tilde), [
+        { from: 0, to: tilde.length },
+      ]);
+      for (const text of ["- a `x\n- b` @y", "`a\n# H `b"]) {
+        assert.deepStrictEqual(findCodeRanges(text), []);
+      }
+    });
+
+    test("scans a dense backtick line within a linear-time budget", () => {
+      const text = "a`b``".repeat(50_000);
+      const startedAt = Date.now();
+      const ranges = findCodeRanges(text);
+      assert.ok(ranges.length > 0);
+      assert.ok(
+        Date.now() - startedAt < 2500,
+        `findCodeRanges took ${Date.now() - startedAt}ms for ${text.length} chars`
+      );
+    });
   });
 
   suite("maskCodeRanges", () => {

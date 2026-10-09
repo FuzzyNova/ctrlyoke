@@ -352,13 +352,22 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
        a higher-precedence mark is drawn inside a lower one, and at `Prec.highest` its opaque
        background covered the suppressed-expansion squiggle and selection matches inside code.
      - **Wave 5 code-range restyle:** `.cm-code-range` keeps the editor code font;
-       `.cm-code-range-inline` adds `--cy-syntax-inline-code` and the
-       `--vscode-markdown-extension.editor.codeSpan.border` box, while
-       `.cm-code-range-fenced` has no background so nested-language colours show through.
+       `.cm-code-range-inline` adds `--cy-syntax-inline-code` and
+       `--vscode-panel-border`; `.cm-code-range-fenced` has no background so nested-language
+       colours show through.
        The range remains at default precedence, keeping lint squiggles and selection matches
        visible. A reference split by emphasis is also reset to normal font style/weight on each
        `.cm-link` fragment, preserving a uniform link appearance while allowing the DOM spans
        to remain split.
+     - **M2b review fixes:** `findCodeRanges` ignores escapes only outside inline code, rescans
+       after unclosed fence openers, recognizes fences on list-marker lines, scopes fences to
+       their list/blockquote container, and accepts backticks in tilde-fence info strings.
+       Inline delimiter scanning tracks line starts in one pass and stops at list-item and ATX
+       heading boundaries. The code-range decoration rebuilds when Lezer advances its syntax
+       tree and classifies ranges against sorted fences in one pass. Unit and editor parity
+       tests cover these cases and a large backtick-heavy performance budget. The two
+       later-fence-after-unclosed-opener cases are intentional parity gaps: runtime recovers at
+       later closed fences, while Lezer keeps the unclosed opener live through EOF.
      - Spellcheck now also skips fence info strings (`CodeInfo`) and link destinations
        (`URL`) via `getMarkdownNonProseRanges`. **The plan said it already skipped
        `findCodeRanges` ranges; it does not** (it skips only `@`/`#`/`~` references). That is

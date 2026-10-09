@@ -44,7 +44,7 @@ export interface CodeRangeOptions {
   fencesOnly?: boolean;
 }
 
-const BLOCK_FENCE_OPENER = /^ {0,3}(`{3,}|~{3,})([^`]*)$/;
+const BLOCK_FENCE_OPENER = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const BLOCK_FENCE_RUN = /^ {0,3}(`{3,}|~{3,})/;
 
 /**
@@ -101,7 +101,8 @@ export function findCodeRanges(
         paragraphEnd < contextualLines.length &&
         contextualLines[paragraphEnd].fenceText.trim() !== "" &&
         !fencedLines[paragraphEnd] &&
-        !openerLines.has(paragraphEnd)
+        !openerLines.has(paragraphEnd) &&
+        !contextualLines[paragraphEnd].blockStart
       ) {
         paragraphEnd += 1;
       }
@@ -125,11 +126,16 @@ function addFenceContainerContext(
   start: number;
   fenceText: string;
   fenceStart: number;
+  quoteDepth: number;
+  listId?: number;
+  blockStart: boolean;
 }> {
-  let listIndent: number | undefined;
+  let list: { id: number; contentIndent: number } | undefined;
+  let nextListId = 0;
   return lines.map((line) => {
     let text = line.text;
     let offset = 0;
+    let quoteDepth = 0;
     // Strip blockquote markers, including nested quotes, before looking for
     // a fence. Keep the physical line intact for range offsets.
     while (true) {
@@ -137,23 +143,32 @@ function addFenceContainerContext(
       if (!quote) break;
       text = text.slice(quote[0].length);
       offset += quote[0].length;
+      quoteDepth += 1;
     }
+    const blockStart = startsMarkdownBlock(text);
 
-    const list = /^( {0,3})(?:[-+*]|\d{1,9}[.)])([ \t]+)/.exec(text);
-    if (list) {
-      const markerIndent = list[1].length;
-      listIndent = markerIndent + list[0].length - markerIndent;
+    const listMarker = /^( {0,3})(?:[-+*]|\d{1,9}[.)])([ \t]+)/.exec(text);
+    let listId: number | undefined;
+    if (listMarker) {
+      const markerIndent = listMarker[1].length;
+      list = {
+        id: ++nextListId,
+        contentIndent: markerIndent + listMarker[0].length,
+      };
+      listId = list.id;
+      text = text.slice(listMarker[0].length);
+      offset += listMarker[0].length;
     } else if (text.trim() !== "") {
       const indent = /^( *)/.exec(text)?.[0].length ?? 0;
-      if (listIndent !== undefined && indent < listIndent)
-        listIndent = undefined;
+      if (list && indent < list.contentIndent) list = undefined;
     }
 
-    if (listIndent !== undefined) {
+    if (list && listId === undefined) {
       const indent = /^( *)/.exec(text)?.[0].length ?? 0;
-      if (indent >= listIndent) {
-        text = text.slice(listIndent);
-        offset += listIndent;
+      if (indent >= list.contentIndent) {
+        text = text.slice(list.contentIndent);
+        offset += list.contentIndent;
+        listId = list.id;
       }
     }
 
@@ -162,6 +177,9 @@ function addFenceContainerContext(
       start: line.start,
       fenceText: text,
       fenceStart: line.start + offset,
+      quoteDepth,
+      listId,
+      blockStart,
     };
   });
 }
@@ -172,6 +190,9 @@ function findClosedBlockFences(
     start: number;
     fenceText: string;
     fenceStart: number;
+    quoteDepth: number;
+    listId?: number;
+    blockStart: boolean;
   }>
 ): {
   ranges: Array<{ from: number; to: number }>;
@@ -181,84 +202,124 @@ function findClosedBlockFences(
   const ranges: Array<{ from: number; to: number }> = [];
   const fencedLines = Array<boolean>(lines.length).fill(false);
   const openerLines = new Set<number>();
-  let opener:
-    { index: number; from: number; marker: string; length: number } | undefined;
-  let generatedFence:
-    { index: number; from: number; length: number } | undefined;
-  const generatedRanges: Array<{ from: number; to: number }> = [];
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
+  let index = 0;
+  while (index < lines.length) {
+    const opener = getFenceOpener(lines[index]);
     if (!opener) {
-      const match = BLOCK_FENCE_OPENER.exec(line.fenceText);
-      if (match) {
-        openerLines.add(index);
-        opener = {
-          index,
-          from: line.fenceStart + match[0].indexOf(match[1]),
-          marker: match[1][0],
-          length: match[1].length,
-        };
-      }
+      index += 1;
       continue;
     }
+    openerLines.add(index);
+    let generatedFence:
+      { index: number; from: number; length: number } | undefined;
+    const generatedRanges: Array<{ from: number; to: number }> = [];
+    let closerIndex = -1;
 
-    const run = BLOCK_FENCE_RUN.exec(line.fenceText);
-    if (!run) continue;
-
-    if (generatedFence !== undefined) {
+    for (
+      let candidateIndex = index + 1;
+      candidateIndex < lines.length;
+      candidateIndex += 1
+    ) {
+      const candidate = lines[candidateIndex];
+      if (candidate.quoteDepth < lines[index].quoteDepth) break;
       if (
-        run[1][0] === "`" &&
-        run[1].length >= generatedFence.length &&
-        /^\s*$/.test(line.fenceText.slice(run[0].length))
+        lines[index].listId !== undefined &&
+        candidate.quoteDepth === lines[index].quoteDepth &&
+        candidate.listId !== lines[index].listId
       ) {
-        const to = line.fenceStart + run[0].indexOf(run[1]) + run[1].length;
-        generatedRanges.push({ from: generatedFence.from, to });
-        for (
-          let fenceLine = generatedFence.index;
-          fenceLine <= index;
-          fenceLine += 1
-        ) {
-          fencedLines[fenceLine] = true;
-        }
-        generatedFence = undefined;
+        break;
       }
+      if (!sameFenceContainer(lines[index], candidate)) continue;
+      const run = BLOCK_FENCE_RUN.exec(candidate.fenceText);
+      if (!run) continue;
+
+      if (generatedFence) {
+        if (
+          run[1][0] === "`" &&
+          run[1].length >= generatedFence.length &&
+          /^\s*$/.test(candidate.fenceText.slice(run[0].length))
+        ) {
+          const to =
+            candidate.fenceStart + run[0].indexOf(run[1]) + run[1].length;
+          generatedRanges.push({ from: generatedFence.from, to });
+          for (let n = generatedFence.index; n <= candidateIndex; n += 1)
+            fencedLines[n] = true;
+          generatedFence = undefined;
+        }
+        continue;
+      }
+
+      if (
+        opener.marker === "`" &&
+        run[1][0] === "`" &&
+        run[1].length >= opener.length &&
+        candidate.fenceText.slice(run[0].length).trim() === LITERAL_FENCE_INFO
+      ) {
+        openerLines.add(candidateIndex);
+        generatedFence = {
+          index: candidateIndex,
+          from: candidate.fenceStart + run[0].indexOf(run[1]),
+          length: run[1].length,
+        };
+        continue;
+      }
+
+      if (
+        run[1][0] === opener.marker &&
+        run[1].length >= opener.length &&
+        /^\s*$/.test(candidate.fenceText.slice(run[0].length))
+      ) {
+        closerIndex = candidateIndex;
+        break;
+      }
+    }
+
+    if (closerIndex < 0) {
+      ranges.push(...generatedRanges);
+      index += 1;
       continue;
     }
 
-    if (
-      opener.marker === "`" &&
-      run[1][0] === "`" &&
-      run[1].length >= opener.length &&
-      line.fenceText.slice(run[0].length).trim() === LITERAL_FENCE_INFO
-    ) {
-      openerLines.add(index);
-      generatedFence = {
-        index,
-        from: line.fenceStart + run[0].indexOf(run[1]),
-        length: run[1].length,
-      };
-      continue;
-    }
-
-    if (
-      run[1][0] !== opener.marker ||
-      run[1].length < opener.length ||
-      !/^\s*$/.test(line.fenceText.slice(run[0].length))
-    ) {
-      continue;
-    }
-
-    const to = line.fenceStart + run[0].indexOf(run[1]) + run[1].length;
-    ranges.push({ from: opener.from, to });
-    for (let fenceLine = opener.index; fenceLine <= index; fenceLine += 1) {
-      fencedLines[fenceLine] = true;
-    }
-    opener = undefined;
+    const closer = lines[closerIndex];
+    const run = BLOCK_FENCE_RUN.exec(closer.fenceText)!;
+    ranges.push({
+      from: opener.from,
+      to: closer.fenceStart + run[0].indexOf(run[1]) + run[1].length,
+    });
+    for (let n = index; n <= closerIndex; n += 1) fencedLines[n] = true;
+    index = closerIndex + 1;
   }
-
-  if (opener) ranges.push(...generatedRanges);
   return { ranges, fencedLines, openerLines };
+}
+
+function getFenceOpener(line: {
+  fenceText: string;
+  fenceStart: number;
+}): { from: number; marker: string; length: number } | undefined {
+  const match = BLOCK_FENCE_OPENER.exec(line.fenceText);
+  if (!match) return undefined;
+  if (match[1][0] === "`" && match[2].includes("`")) return undefined;
+  return {
+    from: line.fenceStart + match[0].indexOf(match[1]),
+    marker: match[1][0],
+    length: match[1].length,
+  };
+}
+
+function sameFenceContainer(
+  opener: { quoteDepth: number; listId?: number },
+  candidate: { quoteDepth: number; listId?: number }
+): boolean {
+  return (
+    opener.quoteDepth === candidate.quoteDepth &&
+    opener.listId === candidate.listId
+  );
+}
+
+function startsMarkdownBlock(line: string): boolean {
+  return /^(?: {0,3}#{1,6}(?:\s|$)| {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+)/.test(
+    line
+  );
 }
 
 function mergeCodeRanges(
@@ -289,11 +350,18 @@ function findInlineCodeSpans(
 ): void {
   const lineStart = lines[0]?.start ?? 0;
   const line = lines.map(({ text }) => text).join("\n");
-  const runs: Array<{ from: number; to: number; length: number }> = [];
+  const runs: Array<{
+    from: number;
+    to: number;
+    length: number;
+    escaped: boolean;
+  }> = [];
   let index = 0;
+  let lineStartIndex = 0;
   while (index < line.length) {
-    if (line[index] === "\\") {
-      index += 2;
+    if (line[index] === "\n") {
+      lineStartIndex = index + 1;
+      index += 1;
       continue;
     }
     if (line[index] !== "`") {
@@ -302,7 +370,6 @@ function findInlineCodeSpans(
     }
 
     const runEnd = backtickRunEnd(line, index);
-    const lineStartIndex = line.lastIndexOf("\n", index - 1) + 1;
     if (
       runEnd - index >= 3 &&
       /^ {0,4}$/.test(line.slice(lineStartIndex, index))
@@ -310,31 +377,37 @@ function findInlineCodeSpans(
       index = runEnd;
       continue;
     }
-    runs.push({ from: index, to: runEnd, length: runEnd - index });
+    let precedingBackslashes = 0;
+    for (
+      let before = index - 1;
+      before >= lineStartIndex && line[before] === "\\";
+      before -= 1
+    ) {
+      precedingBackslashes += 1;
+    }
+    runs.push({
+      from: index,
+      to: runEnd,
+      length: runEnd - index,
+      escaped: precedingBackslashes % 2 === 1,
+    });
     index = runEnd;
   }
 
-  // Link each run to the next run of exactly the same length in one reverse
-  // pass. The forward pass then skips matched spans, so large paragraphs full
-  // of unmatched backticks cannot trigger repeated suffix scans.
-  const nextSameLength: Array<number | undefined> = Array(runs.length).fill(
-    undefined
-  );
-  const nextByLength = new Map<number, number>();
-  for (let runIndex = runs.length - 1; runIndex >= 0; runIndex -= 1) {
-    const run = runs[runIndex];
-    nextSameLength[runIndex] = nextByLength.get(run.length);
-    nextByLength.set(run.length, runIndex);
-  }
-
+  let openIndex: number | undefined;
   for (let runIndex = 0; runIndex < runs.length; runIndex += 1) {
-    const closeIndex = nextSameLength[runIndex];
-    if (closeIndex === undefined) continue;
+    const run = runs[runIndex];
+    if (openIndex === undefined) {
+      if (!run.escaped) openIndex = runIndex;
+      continue;
+    }
+    const open = runs[openIndex];
+    if (run.length !== open.length) continue;
     ranges.push({
-      from: lineStart + runs[runIndex].from,
-      to: lineStart + runs[closeIndex].to,
+      from: lineStart + open.from,
+      to: lineStart + run.to,
     });
-    runIndex = closeIndex;
+    openIndex = undefined;
   }
 }
 

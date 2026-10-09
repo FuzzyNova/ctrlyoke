@@ -1355,8 +1355,7 @@ export function createPromptDecorationThemeExtension() {
     },
     ".cm-code-range-inline": {
       color: "var(--cy-syntax-inline-code)",
-      border:
-        "1px solid var(--vscode-markdown-extension.editor.codeSpan.border, var(--vscode-panel-border))",
+      border: "1px solid var(--vscode-panel-border, transparent)",
       borderRadius: "3px",
       padding: "0 2px",
     },
@@ -1774,7 +1773,11 @@ export function createCodeRangeDecorationExtension() {
       }
 
       update(update: any) {
-        if (update.docChanged || update.viewportChanged) {
+        if (
+          update.docChanged ||
+          update.viewportChanged ||
+          syntaxTree(update.startState) !== syntaxTree(update.state)
+        ) {
           this.decorations = this.buildDecorations(update.view);
         }
       }
@@ -1792,6 +1795,7 @@ export function createCodeRangeDecorationExtension() {
           },
         });
 
+        let fencedIndex = 0;
         for (const { from, to } of view.visibleRanges) {
           for (const range of codeRanges) {
             if (range.to <= from) continue;
@@ -1799,9 +1803,17 @@ export function createCodeRangeDecorationExtension() {
             const visFrom = Math.max(range.from, from);
             const visTo = Math.min(range.to, to);
             if (visFrom < visTo) {
-              const isFenced = fencedRanges.some(
-                (fence) => fence.from <= range.from && fence.to >= range.to
-              );
+              while (
+                fencedIndex < fencedRanges.length &&
+                fencedRanges[fencedIndex].to < range.to
+              ) {
+                fencedIndex += 1;
+              }
+              const fence = fencedRanges[fencedIndex];
+              const isFenced =
+                fence !== undefined &&
+                fence.from <= range.from &&
+                fence.to >= range.to;
               builder.add(
                 visFrom,
                 visTo,

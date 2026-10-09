@@ -191,6 +191,58 @@ describe("markdown and code-range parity", () => {
       doc: "> ```\n> code\n> ```",
       agree: true,
     },
+    {
+      name: "backslash inside inline code",
+      doc: "Run `C:\\tmp\\` then @file.md and `x`",
+      agree: true,
+    },
+    {
+      name: "later fence after an unclosed tilde opener",
+      doc: "~~~~~~~~~~\nNotes\n\n```\n$previous\n```",
+      // Runtime recovers and masks the later closed fence; Lezer keeps the
+      // unclosed tilde fence open through EOF, so it paints no later range.
+      agree: false,
+    },
+    {
+      name: "later fence after an unclosed shorter backtick opener",
+      doc: "````\n\n```\n$previous\n```",
+      agree: false,
+    },
+    {
+      name: "fence on a list marker line",
+      doc: "- ```\n  code @x\n  ```",
+      agree: true,
+    },
+    {
+      name: "ordered list fence on its marker line",
+      doc: "1. ```\n   @x\n   ```",
+      agree: true,
+    },
+    {
+      name: "blockquote fence ends with its container",
+      doc: "> ```\n> code\n\nRegular @ref text\n\n```\nx",
+      agree: true,
+    },
+    {
+      name: "blockquote fence rejects lazy continuation",
+      doc: "> ```\n@x\n> ```",
+      agree: true,
+    },
+    {
+      name: "tilde fence info may contain backticks",
+      doc: "~~~ `js`\n@a\n~~~",
+      agree: true,
+    },
+    {
+      name: "inline span stops at a new list item",
+      doc: "- a `x\n- b` @y",
+      agree: true,
+    },
+    {
+      name: "inline span stops at an ATX heading",
+      doc: "`a\n# H `b",
+      agree: true,
+    },
   ];
 
   it.each(corpus)("$name", ({ doc, agree }) => {
@@ -222,6 +274,15 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
     createPromptDecorationThemeExtension(),
     ...extensions,
   ];
+
+  it("uses a valid VS Code variable for the inline code border", () => {
+    mount("`inline`", withMarkdown());
+    const styleText = Array.from(document.querySelectorAll("style"))
+      .map((style) => style.textContent ?? "")
+      .join("\n");
+    expect(styleText).toContain("--vscode-panel-border");
+    expect(styleText).not.toContain("--vscode-markdown-extension.");
+  });
 
   it("renders a link as the innermost span inside emphasis and link syntax", () => {
     const view = mount(
