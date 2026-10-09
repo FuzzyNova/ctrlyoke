@@ -170,6 +170,27 @@ export interface NamedWorktreeSetupRecord {
   updatedAt: number;
 }
 
+interface ManagedInfoAcquisitionArgs {
+  record: ManagedWorktreeOwnershipRecord;
+  recordPath: string;
+  commonDirectory: string;
+  repositoryInputs: ResolvedRepositoryInputs;
+  origin: WorktreeOrigin;
+  directoryRecreated: boolean;
+  options: EnsureManagedWorktreeOptions;
+  sourceCheckoutDirty?: boolean;
+  git: GitLocationLookup;
+}
+
+/** Lease and trust taken under the mutation lock; setup runs after it is released. */
+interface AcquiredManagedInfo {
+  args: ManagedInfoAcquisitionArgs;
+  executionWorkspace: ExecutionWorkspace;
+  lease: ExecutionLeaseHandle;
+  runtimeTrust: RuntimeTrustedRootHandle;
+  shouldRunSetup: boolean;
+}
+
 function getManagedWorktreeWatermark(
   record: ManagedWorktreeOwnershipRecord
 ): string {
@@ -2983,23 +3004,9 @@ export class WorktreeManager {
     };
   }
 
-  private async acquireManagedInfo(args: {
-    record: ManagedWorktreeOwnershipRecord;
-    recordPath: string;
-    commonDirectory: string;
-    repositoryInputs: ResolvedRepositoryInputs;
-    origin: WorktreeOrigin;
-    directoryRecreated: boolean;
-    options: EnsureManagedWorktreeOptions;
-    sourceCheckoutDirty?: boolean;
-    git: GitLocationLookup;
-  }): Promise<{
-    args: typeof args;
-    executionWorkspace: ExecutionWorkspace;
-    lease: ExecutionLeaseHandle;
-    runtimeTrust: RuntimeTrustedRootHandle;
-    shouldRunSetup: boolean;
-  }> {
+  private async acquireManagedInfo(
+    args: ManagedInfoAcquisitionArgs
+  ): Promise<AcquiredManagedInfo> {
     const executionWorkspace = this.buildExecutionWorkspace(
       args.repositoryInputs,
       args.record.worktreePath,
@@ -3041,23 +3048,9 @@ export class WorktreeManager {
     };
   }
 
-  private async completeManagedInfo(acquired: {
-    args: {
-      record: ManagedWorktreeOwnershipRecord;
-      recordPath: string;
-      commonDirectory: string;
-      repositoryInputs: ResolvedRepositoryInputs;
-      origin: WorktreeOrigin;
-      directoryRecreated: boolean;
-      options: EnsureManagedWorktreeOptions;
-      sourceCheckoutDirty?: boolean;
-      git: GitLocationLookup;
-    };
-    executionWorkspace: ExecutionWorkspace;
-    lease: ExecutionLeaseHandle;
-    runtimeTrust: RuntimeTrustedRootHandle;
-    shouldRunSetup: boolean;
-  }): Promise<ActiveWorktreeInfo> {
+  private async completeManagedInfo(
+    acquired: AcquiredManagedInfo
+  ): Promise<ActiveWorktreeInfo> {
     const { args, executionWorkspace, lease, runtimeTrust, shouldRunSetup } =
       acquired;
     let setupOutcome: WorktreeInfo["setupOutcome"];
