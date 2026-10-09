@@ -3,6 +3,7 @@ import {
   StepContextMenu,
   type StepContextMenuState,
 } from "@components/shared/StepContextMenu";
+import { useWorkflowFileMenuItems } from "@hooks/useWorkflowFileMenuItems";
 import { useEditorStore } from "@store/editorStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
@@ -69,6 +70,7 @@ export function useWorkspaceExplorerContextMenu({
   onViewFileHistory,
 }: UseWorkspaceExplorerContextMenuOptions) {
   const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
+  const buildWorkflowFileMenuItems = useWorkflowFileMenuItems();
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
@@ -212,6 +214,9 @@ export function useWorkspaceExplorerContextMenu({
                 },
               ]
             : []),
+          ...(entry.kind === WORKSPACE_ENTRY_KINDS.FILE
+            ? buildWorkflowFileMenuItems(normalizeWorkspacePath(entry.path))
+            : []),
           { type: "divider" },
           {
             label: "Delete",
@@ -230,6 +235,7 @@ export function useWorkspaceExplorerContextMenu({
       });
     },
     [
+      buildWorkflowFileMenuItems,
       clipboard,
       handleAddToCtrlYoke,
       handleDelete,
