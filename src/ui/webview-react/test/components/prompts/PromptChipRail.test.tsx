@@ -263,9 +263,7 @@ describe("PromptChipRail", () => {
     render(<PromptChipRail onExpand={vi.fn()} />);
 
     const groupWrapper = screen.getByTestId(`chip-parallel-group-${group.id}`);
-    expect(
-      groupWrapper.querySelector(".codicon-type-hierarchy-sub")
-    ).not.toBeNull();
+    expect(groupWrapper.querySelector(".lucide-split")).not.toBeNull();
     expect(
       within(groupWrapper).getByRole("button", { name: "Prompt 1" })
     ).toBeInTheDocument();

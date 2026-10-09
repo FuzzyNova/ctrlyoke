@@ -70,6 +70,7 @@ import {
 } from "./ParallelGroupPanel";
 import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import { Icon } from "../shared/Icon";
+import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -563,7 +564,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   };
 
   // A parallel group's chips get one thin bordered wrapper with a
-  // type-hierarchy-sub header, in place of the individual indication a
+  // parallel-steps icon header, in place of the individual indication a
   // standalone chip's identity bar already gives — mirroring
   // `ParallelGroupPanel`'s treatment in the full panel. Its running
   // highlight surrounds the whole wrapper instead of any one member (each
@@ -596,10 +597,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
           className="flex items-center justify-center border-b border-panel-border py-0.5"
           title={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
         >
-          <Icon
-            name="type-hierarchy-sub"
-            className="text-xxs text-description-fg"
-          />
+          <ParallelStepsIcon size={10} className="text-description-fg" />
         </div>
         {indices.map((index) => renderPromptChip(index, true))}
       </div>

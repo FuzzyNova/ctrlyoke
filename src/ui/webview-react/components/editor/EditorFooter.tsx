@@ -16,6 +16,7 @@ import {
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { SplitButton } from "../shared/SplitButton";
 import type { RunDispatchTarget } from "../../hooks/useRunDispatchTargets";
 
@@ -394,7 +395,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                     : !hasContent
                       ? "Enter a prompt first"
                       : runInParallelTarget.title,
-                  icon: <Icon name="type-hierarchy-sub" />,
+                  icon: <ParallelStepsIcon />,
                 },
                 {
                   label: "",

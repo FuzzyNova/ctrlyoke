@@ -100,6 +100,7 @@ import {
   stepDragId,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
+import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { remapIndicesThroughPermutation } from "@utils/stepMultiSelection";
 
 type PendingDragContainer = {
@@ -1678,7 +1679,7 @@ const WorkflowStepsPanelInner: React.FC<{
       if (!group) return null;
       return (
         <div className="flex items-center gap-2 rounded-sm border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs shadow-lg">
-          <Icon name="type-hierarchy-sub" className="text-description-fg" />
+          <ParallelStepsIcon className="text-description-fg" />
           <span className="font-semibold">
             Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
           </span>

@@ -31,6 +31,7 @@ import {
   livePreviewSortingStrategy,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
+import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
 import { isStepExecutionLocked } from "@utils/stepCapabilities";
@@ -274,7 +275,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         <ExecutingStepHighlight testId="parallel-group-executing-highlight" />
       )}
       <header className="flex flex-wrap items-center gap-2 border-b border-panel-border px-2 py-1.5 text-xs">
-        <Icon name="type-hierarchy-sub" className="text-description-fg" />
+        <ParallelStepsIcon className="text-description-fg" />
         <span className="font-semibold">
           Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
         </span>
