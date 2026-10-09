@@ -12,6 +12,7 @@ import type { WorkflowTextSpan } from "@root/completions/WorkflowTextDecoding";
 import {
   createPromptMarkdownLanguage,
   createUnclosedFenceTheme,
+  PROMPT_MARKDOWN_DECORATION_CLASSES,
   PROMPT_MARKDOWN_NODE_NAMES,
 } from "@utils/codemirrorLanguage";
 import { createCtrlYokeHighlightStyle } from "@utils/syntaxPalette";
@@ -111,7 +112,9 @@ export function createWorkflowPromptMarkdownDecorations(
                 decorations.push({
                   from: sourceFrom,
                   to: sourceTo,
-                  decoration: Decoration.mark({ class: "cm-unclosed-fence" }),
+                  decoration: Decoration.mark({
+                    class: PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE,
+                  }),
                 });
               }
             }

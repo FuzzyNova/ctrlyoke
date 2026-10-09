@@ -29,6 +29,10 @@ import {
 } from "@utils/syntaxPalette";
 import { CODEMIRROR_LANGUAGE_IDS } from "@root/types/DashboardConstants";
 
+export const PROMPT_MARKDOWN_DECORATION_CLASSES = {
+  UNCLOSED_FENCE: "cm-unclosed-fence",
+} as const;
+
 /**
  * Maps a language name or alias (a fence info string such as `ts` or
  * `language-yml`, or a canonical id from {@link getLanguageFromPath}) to its
@@ -213,7 +217,9 @@ export function createUnclosedFenceColorOverride(): Extension {
                 builder.add(
                   visibleFrom,
                   visibleTo,
-                  Decoration.mark({ class: "cm-unclosed-fence" })
+                  Decoration.mark({
+                    class: PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE,
+                  })
                 );
               }
             }
@@ -230,8 +236,9 @@ export function createUnclosedFenceColorOverride(): Extension {
 /** Keep transient unclosed fence text on the editor's live-text color. */
 export function createUnclosedFenceTheme(): Extension {
   return EditorView.baseTheme({
-    ".cm-unclosed-fence, .cm-unclosed-fence *": {
-      color: "inherit !important",
-    },
+    [`.${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE}, .${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE} *`]:
+      {
+        color: "inherit !important",
+      },
   });
 }

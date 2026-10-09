@@ -184,7 +184,7 @@ export function getWorkflowPromptCompletionContext(
     vars,
     field: diagnosticContext.field,
     hasPreCondition: diagnosticContext.hasPreCondition,
-    stepCount: diagnosticContext.stepIndex,
+    stepCount: diagnosticContext.stepCount,
     hasFinalStep: diagnosticContext.hasFinalStep,
   };
 }

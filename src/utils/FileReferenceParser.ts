@@ -132,7 +132,7 @@ function addFenceContainerContext(
 }> {
   let list: { id: number; contentIndent: number } | undefined;
   let nextListId = 0;
-  return lines.map((line) => {
+  const contextual = lines.map((line) => {
     let text = line.text;
     let offset = 0;
     let quoteDepth = 0;
@@ -182,6 +182,26 @@ function addFenceContainerContext(
       blockStart,
     };
   });
+
+  // A blank line is still inside a list item when its next content line is
+  // indented to the item's content column. Preserve that container context so
+  // a fenced block may contain blank lines without losing its closer.
+  const nextContent = Array<number>(contextual.length).fill(-1);
+  let nextContentIndex = -1;
+  for (let index = contextual.length - 1; index >= 0; index -= 1) {
+    if (contextual[index].fenceText.trim() !== "") nextContentIndex = index;
+    nextContent[index] = nextContentIndex;
+  }
+  for (let index = 0; index < contextual.length; index += 1) {
+    const line = contextual[index];
+    if (line.fenceText.trim() !== "" || line.listId !== undefined) continue;
+    const previous = contextual[index - 1];
+    if (previous?.listId === undefined) continue;
+    const next = contextual[nextContent[index + 1] ?? -1];
+    if (next?.listId !== previous.listId) continue;
+    line.listId = previous.listId;
+  }
+  return contextual;
 }
 
 function findClosedBlockFences(
@@ -202,6 +222,8 @@ function findClosedBlockFences(
   const ranges: Array<{ from: number; to: number }> = [];
   const fencedLines = Array<boolean>(lines.length).fill(false);
   const openerLines = new Set<number>();
+  const candidates = buildFenceCandidateIndex(lines);
+  const quoteEnds = nextShallowerQuoteLines(lines);
   let index = 0;
   while (index < lines.length) {
     const opener = getFenceOpener(lines[index]);
@@ -210,68 +232,49 @@ function findClosedBlockFences(
       continue;
     }
     openerLines.add(index);
-    let generatedFence:
-      { index: number; from: number; length: number } | undefined;
     const generatedRanges: Array<{ from: number; to: number }> = [];
     let closerIndex = -1;
 
-    for (
-      let candidateIndex = index + 1;
-      candidateIndex < lines.length;
-      candidateIndex += 1
-    ) {
+    let searchAfter = index;
+    while (true) {
+      const candidateIndex = findNextFenceCandidate(
+        candidates.get(fenceCandidateKey(lines[index], opener.marker)),
+        searchAfter,
+        opener.length,
+        quoteEnds[index]
+      );
+      if (candidateIndex < 0) break;
       const candidate = lines[candidateIndex];
-      if (candidate.quoteDepth < lines[index].quoteDepth) break;
-      if (
-        lines[index].listId !== undefined &&
-        candidate.quoteDepth === lines[index].quoteDepth &&
-        candidate.listId !== lines[index].listId
-      ) {
-        break;
-      }
-      if (!sameFenceContainer(lines[index], candidate)) continue;
-      const run = BLOCK_FENCE_RUN.exec(candidate.fenceText);
-      if (!run) continue;
-
-      if (generatedFence) {
-        if (
-          run[1][0] === "`" &&
-          run[1].length >= generatedFence.length &&
-          /^\s*$/.test(candidate.fenceText.slice(run[0].length))
-        ) {
-          const to =
-            candidate.fenceStart + run[0].indexOf(run[1]) + run[1].length;
-          generatedRanges.push({ from: generatedFence.from, to });
-          for (let n = generatedFence.index; n <= candidateIndex; n += 1)
-            fencedLines[n] = true;
-          generatedFence = undefined;
-        }
-        continue;
-      }
-
-      if (
+      const run = BLOCK_FENCE_RUN.exec(candidate.fenceText)!;
+      const isGeneratedFence =
         opener.marker === "`" &&
-        run[1][0] === "`" &&
-        run[1].length >= opener.length &&
-        candidate.fenceText.slice(run[0].length).trim() === LITERAL_FENCE_INFO
-      ) {
+        candidate.fenceText.slice(run[0].length).trim() === LITERAL_FENCE_INFO;
+      if (isGeneratedFence) {
         openerLines.add(candidateIndex);
-        generatedFence = {
-          index: candidateIndex,
+        const generatedCloseIndex = findNextFenceCandidate(
+          candidates.get(fenceCandidateKey(candidate, "`", "closer")),
+          candidateIndex,
+          run[1].length,
+          quoteEnds[candidateIndex]
+        );
+        if (generatedCloseIndex < 0) break;
+        const generatedClose = lines[generatedCloseIndex];
+        const closeRun = BLOCK_FENCE_RUN.exec(generatedClose.fenceText)!;
+        generatedRanges.push({
           from: candidate.fenceStart + run[0].indexOf(run[1]),
-          length: run[1].length,
-        };
+          to:
+            generatedClose.fenceStart +
+            closeRun[0].indexOf(closeRun[1]) +
+            closeRun[1].length,
+        });
+        for (let n = candidateIndex; n <= generatedCloseIndex; n += 1)
+          fencedLines[n] = true;
+        searchAfter = generatedCloseIndex;
         continue;
       }
 
-      if (
-        run[1][0] === opener.marker &&
-        run[1].length >= opener.length &&
-        /^\s*$/.test(candidate.fenceText.slice(run[0].length))
-      ) {
-        closerIndex = candidateIndex;
-        break;
-      }
+      closerIndex = candidateIndex;
+      break;
     }
 
     if (closerIndex < 0) {
@@ -292,6 +295,162 @@ function findClosedBlockFences(
   return { ranges, fencedLines, openerLines };
 }
 
+interface FenceCandidateIndex {
+  indices: number[];
+  size: number;
+  maxLengthTree: number[];
+}
+
+function fenceCandidateKey(
+  line: { quoteDepth: number; listId?: number },
+  marker: string,
+  kind: "any" | "closer" = "any"
+): string {
+  return `${line.quoteDepth}:${line.listId ?? "-"}:${marker}:${kind}`;
+}
+
+function buildFenceCandidateIndex(
+  lines: ReadonlyArray<{
+    fenceText: string;
+    quoteDepth: number;
+    listId?: number;
+  }>
+): Map<string, FenceCandidateIndex> {
+  const entries = new Map<string, Array<{ index: number; length: number }>>();
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const run = BLOCK_FENCE_RUN.exec(line.fenceText);
+    if (!run) continue;
+    const remainder = line.fenceText.slice(run[0].length).trim();
+    if (remainder === "" || remainder === LITERAL_FENCE_INFO) {
+      const anyKey = fenceCandidateKey(line, run[1][0]);
+      const anyGroup = entries.get(anyKey) ?? [];
+      anyGroup.push({ index, length: run[1].length });
+      entries.set(anyKey, anyGroup);
+    }
+    if (remainder === "") {
+      const closerKey = fenceCandidateKey(line, run[1][0], "closer");
+      const closerGroup = entries.get(closerKey) ?? [];
+      closerGroup.push({ index, length: run[1].length });
+      entries.set(closerKey, closerGroup);
+    }
+  }
+
+  const indexed = new Map<string, FenceCandidateIndex>();
+  for (const [key, group] of entries) {
+    let size = 1;
+    while (size < group.length) size *= 2;
+    const maxLengthTree = Array<number>(size * 2).fill(0);
+    group.forEach((entry, index) => {
+      maxLengthTree[size + index] = entry.length;
+    });
+    for (let node = size - 1; node > 0; node -= 1) {
+      maxLengthTree[node] = Math.max(
+        maxLengthTree[node * 2],
+        maxLengthTree[node * 2 + 1]
+      );
+    }
+    indexed.set(key, {
+      indices: group.map((entry) => entry.index),
+      size,
+      maxLengthTree,
+    });
+  }
+  return indexed;
+}
+
+function findNextFenceCandidate(
+  candidates: FenceCandidateIndex | undefined,
+  afterLine: number,
+  minimumLength: number,
+  throughLine: number
+): number {
+  if (!candidates) return -1;
+  let low = 0;
+  let high = candidates.indices.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (candidates.indices[middle] <= afterLine) low = middle + 1;
+    else high = middle;
+  }
+  const from = low;
+  const to = upperBound(candidates.indices, throughLine) - 1;
+  if (from > to) return -1;
+  const position = findFirstLongEnough(
+    candidates.maxLengthTree,
+    1,
+    0,
+    candidates.size - 1,
+    from,
+    to,
+    minimumLength
+  );
+  return position < 0 ? -1 : candidates.indices[position];
+}
+
+function findFirstLongEnough(
+  tree: number[],
+  node: number,
+  left: number,
+  right: number,
+  from: number,
+  to: number,
+  minimumLength: number
+): number {
+  if (right < from || left > to || tree[node] < minimumLength) return -1;
+  if (left === right) return left;
+  const middle = (left + right) >>> 1;
+  const first = findFirstLongEnough(
+    tree,
+    node * 2,
+    left,
+    middle,
+    from,
+    to,
+    minimumLength
+  );
+  return first >= 0
+    ? first
+    : findFirstLongEnough(
+        tree,
+        node * 2 + 1,
+        middle + 1,
+        right,
+        from,
+        to,
+        minimumLength
+      );
+}
+
+function upperBound(sorted: number[], value: number): number {
+  let low = 0;
+  let high = sorted.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (sorted[middle] <= value) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function nextShallowerQuoteLines(
+  lines: ReadonlyArray<{ quoteDepth: number }>
+): number[] {
+  const ends = Array<number>(lines.length).fill(lines.length - 1);
+  const stack: number[] = [];
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    while (
+      stack.length > 0 &&
+      lines[stack[stack.length - 1]].quoteDepth >= lines[index].quoteDepth
+    ) {
+      stack.pop();
+    }
+    if (stack.length > 0) ends[index] = stack[stack.length - 1] - 1;
+    stack.push(index);
+  }
+  return ends;
+}
+
 function getFenceOpener(line: {
   fenceText: string;
   fenceStart: number;
@@ -304,16 +463,6 @@ function getFenceOpener(line: {
     marker: match[1][0],
     length: match[1].length,
   };
-}
-
-function sameFenceContainer(
-  opener: { quoteDepth: number; listId?: number },
-  candidate: { quoteDepth: number; listId?: number }
-): boolean {
-  return (
-    opener.quoteDepth === candidate.quoteDepth &&
-    opener.listId === candidate.listId
-  );
 }
 
 function startsMarkdownBlock(line: string): boolean {
@@ -353,7 +502,9 @@ function findInlineCodeSpans(
   const runs: Array<{
     from: number;
     to: number;
+    delimiterFrom: number;
     length: number;
+    delimiterLength: number;
     escaped: boolean;
   }> = [];
   let index = 0;
@@ -382,32 +533,50 @@ function findInlineCodeSpans(
       let before = index - 1;
       before >= lineStartIndex && line[before] === "\\";
       before -= 1
-    ) {
+    )
       precedingBackslashes += 1;
-    }
+    const escaped = precedingBackslashes % 2 === 1;
+    const delimiterFrom = index + (escaped ? 1 : 0);
     runs.push({
       from: index,
       to: runEnd,
+      delimiterFrom,
       length: runEnd - index,
-      escaped: precedingBackslashes % 2 === 1,
+      delimiterLength: runEnd - delimiterFrom,
+      escaped,
     });
     index = runEnd;
   }
 
-  let openIndex: number | undefined;
-  for (let runIndex = 0; runIndex < runs.length; runIndex += 1) {
-    const run = runs[runIndex];
-    if (openIndex === undefined) {
-      if (!run.escaped) openIndex = runIndex;
+  const openByLength = new Map<number, (typeof runs)[number]>();
+  for (const run of runs) {
+    const open = openByLength.get(run.length);
+    if (open) {
+      ranges.push({ from: lineStart + open.from, to: lineStart + run.to });
+      openByLength.delete(run.length);
       continue;
     }
-    const open = runs[openIndex];
-    if (run.length !== open.length) continue;
-    ranges.push({
-      from: lineStart + open.from,
-      to: lineStart + run.to,
-    });
-    openIndex = undefined;
+    if (run.escaped) {
+      if (run.delimiterLength > 0) {
+        const escapedRun = {
+          ...run,
+          from: run.delimiterFrom,
+          length: run.delimiterLength,
+        };
+        const escapedOpen = openByLength.get(escapedRun.length);
+        if (escapedOpen) {
+          ranges.push({
+            from: lineStart + escapedOpen.from,
+            to: lineStart + run.to,
+          });
+          openByLength.delete(escapedRun.length);
+        } else {
+          openByLength.set(escapedRun.length, escapedRun);
+        }
+      }
+      continue;
+    }
+    openByLength.set(run.length, run);
   }
 }
 

@@ -8,9 +8,7 @@ import {
 import { fuzzyMatches } from "./FuzzyRanking";
 import type { PlainCompletionItem } from "./CompletionCore";
 import { getPriorContextCompletionItems } from "./PriorContextCompletions";
-import { VARIABLE_NAME_PATTERN_SOURCE } from "../utils/KeyValueKeyKinds";
-
-const VARIABLE_NAME_PATTERN = new RegExp(`^${VARIABLE_NAME_PATTERN_SOURCE}$`);
+import { VARIABLE_NAME_PATTERN } from "../utils/KeyValueKeyKinds";
 
 export interface PromptCompletionWorkflowContext {
   /** Names in runtime order, including only steps visible at this prompt. */

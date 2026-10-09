@@ -15,6 +15,7 @@ import {
 import {
   createPromptMarkdownExtension,
   createPromptMarkdownLanguage,
+  PROMPT_MARKDOWN_DECORATION_CLASSES,
   PROMPT_MARKDOWN_NODE_NAMES,
   resolveFenceLanguage,
 } from "@utils/codemirrorLanguage";
@@ -169,6 +170,23 @@ describe("markdown and code-range parity", () => {
     },
     { name: "backticks inside a fence", doc: "```\na `b` c\n```", agree: true },
     { name: "unmatched backtick", doc: "a ` b\nc", agree: true },
+    {
+      name: "inline span after an unmatched double-backtick opener",
+      doc: "``unclosed then `@x`",
+      agree: true,
+    },
+    {
+      name: "inline span after an unmatched single-backtick opener",
+      doc: "a ` b ``@x``",
+      agree: true,
+    },
+    {
+      name: "backslash escapes only the first tick in a run",
+      doc: "\\``@x`",
+      // Runtime follows CommonMark's escaped-run rule; Lezer treats the whole
+      // run as escaped and leaves this span unmarked.
+      agree: false,
+    },
     { name: "unclosed fence", doc: "```ts\nsee @src/a.ts", agree: true },
     {
       name: "fence indented in a list item",
@@ -259,12 +277,20 @@ describe("markdown and code-range parity", () => {
     const view = mount("```ts\nconst value = 1;", [
       createPromptMarkdownExtension(),
     ]);
-    expect(view.dom.querySelector(".cm-unclosed-fence")).not.toBeNull();
+    expect(
+      view.dom.querySelector(
+        `.${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE}`
+      )
+    ).not.toBeNull();
 
     view.dispatch({
       changes: { from: view.state.doc.length, insert: "\n```" },
     });
-    expect(view.dom.querySelector(".cm-unclosed-fence")).toBeNull();
+    expect(
+      view.dom.querySelector(
+        `.${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE}`
+      )
+    ).toBeNull();
   });
 });
 

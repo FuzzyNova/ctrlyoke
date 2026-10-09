@@ -13,10 +13,11 @@ import { EditorState } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import { activateHover, EditorView } from "@codemirror/view";
 import { diagnosticCount, forEachDiagnostic } from "@codemirror/lint";
-import { ensureSyntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, forceParsing } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceFileEditor } from "@components/workspace-viewer/WorkspaceFileEditor";
+import { PROMPT_MARKDOWN_DECORATION_CLASSES } from "@utils/codemirrorLanguage";
 import { createCtrlYokeHighlightStyle } from "@utils/syntaxPalette";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { loadWorkflowFileSupport } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
@@ -108,7 +109,10 @@ function getDiagnostics(view: EditorView) {
 
 function highlightedText(view: EditorView) {
   const style = createCtrlYokeHighlightStyle();
-  ensureSyntaxTree(view.state, view.state.doc.length, 5000);
+  if (!ensureSyntaxTree(view.state, view.state.doc.length, 30_000)) {
+    throw new Error("editor syntax tree did not parse in time");
+  }
+  forceParsing(view);
   const spans = Array.from(
     view.dom.querySelectorAll<HTMLElement>(".cm-content span[class]")
   ).map((element) => ({
@@ -241,7 +245,11 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
       "steps:\n  - prompt: |\n      ```\n      # live heading\n"
     );
     const { spans, style } = highlightedText(view);
-    expect(view.dom.querySelector(".cm-unclosed-fence")).not.toBeNull();
+    expect(
+      view.dom.querySelector(
+        `.${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE}`
+      )
+    ).not.toBeNull();
     expect(
       spans.some(
         (span) =>
@@ -285,6 +293,45 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
             )
         )
       ).toBe(true);
+    });
+  });
+
+  it("drops plain YAML highlighting when the reused editor opens another file", async () => {
+    const yamlContent = 'title: "highlighted"\n';
+    const result = await renderEditor("foo.yaml", yamlContent);
+    const source = "const value = 1;\n";
+    result.rerender(
+      <WorkspaceFileEditor
+        filePath="bar.ts"
+        content={source}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(
+        result.container.querySelector<HTMLElement>(".cm-editor")!
+      )!;
+      const highlighted = highlightedText(view);
+      expect(
+        highlighted.spans.some(
+          (span) =>
+            span.text === "const" &&
+            span.classes.includes(
+              createCtrlYokeHighlightStyle().style([tags.keyword]) ?? "\0"
+            )
+        )
+      ).toBe(true);
+      expect(
+        highlighted.spans.some(
+          (span) =>
+            span.text === "title" &&
+            span.classes.includes(
+              syntaxClass(highlighted.style, "property") ?? "\0"
+            )
+        )
+      ).toBe(false);
     });
   });
 

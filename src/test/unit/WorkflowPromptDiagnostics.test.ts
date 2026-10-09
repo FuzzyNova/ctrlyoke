@@ -1,6 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { getWorkflowPromptDiagnostics } from "../../completions/WorkflowPromptDiagnostics";
+import { getWorkflowPromptCompletionContext } from "../../completions/WorkflowPromptDiagnostics";
+import { getContextualPriorCompletions } from "../../completions/PromptContextCompletions";
 import {
   CTRLYOKE_FILE_KINDS,
   PROMPT_DIAGNOSTIC_CODES,
@@ -119,6 +121,32 @@ suite("getWorkflowPromptDiagnostics", () => {
           text: "$step:4",
         },
       ]
+    );
+  });
+
+  test("completion context uses flat step counts after a parallel group", () => {
+    const text = [
+      "steps:",
+      "  - prompt: first",
+      "  - parallel:",
+      "      - prompt: second",
+      "      - prompt: third",
+      "  - prompt: |",
+      "      use $step:",
+      "",
+    ].join("\n");
+    const context = getWorkflowPromptCompletionContext(
+      text,
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+      text.indexOf("$step:")
+    );
+
+    assert.strictEqual(context?.stepCount, 3);
+    assert.deepStrictEqual(
+      getContextualPriorCompletions("step:3", context!).map(
+        (completion) => completion.label
+      ),
+      ["step:3"]
     );
   });
 

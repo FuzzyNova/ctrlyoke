@@ -39,6 +39,7 @@ import {
   WORKFLOW_VALIDATION_WARNING_CODES,
   type WorkflowDocumentIssueSeverity,
   USER_FEEDBACK_ACTIONS,
+  USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
   SCRIPT_STEP_COPY_FIELDS,
 } from "../types/DashboardConstants";
@@ -460,7 +461,7 @@ export class PromptFileParser {
       if (variableKeyErrors.length > 0) {
         issues.push({
           instancePath: "/vars",
-          message: `Validation failed: vars: ${variableKeyErrors.join(", ")}`,
+          message: variableKeyErrors.join(", "),
           severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
         });
       }
@@ -856,7 +857,7 @@ export class PromptFileParser {
       if (isNewerSchemaError(error)) {
         this.lastNewerSchemaError = error;
         this.userFeedbackSink?.notify({
-          severity: "error",
+          severity: USER_FEEDBACK_SEVERITY.ERROR,
           message: error.message,
           action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
         });

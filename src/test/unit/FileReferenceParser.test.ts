@@ -79,6 +79,25 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("finds inline spans after an unmatched opener", () => {
+      for (const text of ["``unclosed then `@x`", "a ` b ``@x``"]) {
+        const from = text.indexOf("`@x`");
+        const closer = text.indexOf("``@x``");
+        const expectedFrom = closer >= 0 ? closer : from;
+        const expectedTo = closer >= 0 ? closer + 6 : from + 4;
+        assert.deepStrictEqual(findCodeRanges(text), [
+          { from: expectedFrom, to: expectedTo },
+        ]);
+      }
+    });
+
+    test("a backslash escapes only the first tick in a backtick run", () => {
+      const text = "\\``@x`";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 2, to: text.length },
+      ]);
+    });
+
     test("ignores backslashes inside inline code when pairing delimiters", () => {
       const text = "Run `C:\\tmp\\` then @file.md and `x`";
       assert.deepStrictEqual(findCodeRanges(text), [
@@ -150,6 +169,23 @@ suite("FileReferenceParser", () => {
         Date.now() - startedAt < 2500,
         `findCodeRanges took ${Date.now() - startedAt}ms for ${text.length} chars`
       );
+    });
+
+    test("scans many unclosed fence openers in linear time", () => {
+      const text = "```x\n".repeat(20_000);
+      const startedAt = Date.now();
+      assert.deepStrictEqual(findCodeRanges(text), []);
+      assert.ok(
+        Date.now() - startedAt < 1000,
+        `findCodeRanges took ${Date.now() - startedAt}ms for ${text.length} chars`
+      );
+    });
+
+    test("keeps a list fence open across a blank line before indented content", () => {
+      const text = "* item\n\n  ```\n  @x\n\n  ```";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+      ]);
     });
   });
 

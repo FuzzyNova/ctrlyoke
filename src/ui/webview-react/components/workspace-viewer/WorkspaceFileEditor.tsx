@@ -540,11 +540,16 @@ export const WorkspaceFileEditor = forwardRef<
     ]);
 
     useEffect(() => {
-      if (
-        ctrlyokeFileKind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML ||
-        getLanguageFromPath(filePath) !== CODEMIRROR_LANGUAGE_IDS.YAML
-      )
+      const isPlainYaml =
+        ctrlyokeFileKind !== CTRLYOKE_FILE_KINDS.WORKFLOW_YAML &&
+        getLanguageFromPath(filePath) === CODEMIRROR_LANGUAGE_IDS.YAML;
+      if (!isPlainYaml) {
+        yamlLanguageExtensionRef.current = [];
+        viewRef.current?.dispatch({
+          effects: yamlLanguageCompartment.current.reconfigure([]),
+        });
         return;
+      }
       let cancelled = false;
       void loadYamlLanguageExtension().then((extension) => {
         if (cancelled || !viewRef.current) return;
