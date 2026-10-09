@@ -15,6 +15,7 @@ import {
   maskCodeRanges,
   fenceLiteral,
   LITERAL_FENCE_INFO,
+  findCodeRanges,
 } from "../../utils/FileReferenceParser";
 import { parseSecretReferences } from "../../utils/SecretReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../../utils/CtrlYokeSlashTokens";
@@ -25,6 +26,205 @@ import {
 } from "../../completions/ContextReferenceBuilder";
 
 suite("FileReferenceParser", () => {
+  suite("findCodeRanges markdown parity", () => {
+    test("masks tilde fences", () => {
+      const text = "~~~ts\n@src/a.ts\n~~~";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 0, to: text.length },
+      ]);
+      assert.deepStrictEqual(parseAtReferences(text), []);
+    });
+
+    test("does not close a fence with an info string", () => {
+      const text = "```\n@src/a.ts\n```js\n@src/b.ts\n```";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 0, to: text.length },
+      ]);
+      assert.deepStrictEqual(parseAtReferences(text), []);
+    });
+
+    test("masks a fence indented inside a list item", () => {
+      const text = "- item\n\n    ```\n    @src/a.ts\n    ```";
+      assert.deepStrictEqual(parseAtReferences(text), []);
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+      ]);
+    });
+
+    test("masks a fence inside a blockquote", () => {
+      const text = "> ```\n> @src/a.ts\n> ```";
+      assert.deepStrictEqual(parseAtReferences(text), []);
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+      ]);
+    });
+
+    test("masks inline code across one line break but not a blank line", () => {
+      const text = "a `@src/a.ts\n@src/b.ts` c\n\n@src/c.ts";
+      assert.deepStrictEqual(
+        parseAtReferences(text).map(({ path }) => path),
+        ["src/c.ts"]
+      );
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 2, to: text.indexOf("` c") + 1 },
+      ]);
+    });
+
+    test("keeps an unclosed fence live", () => {
+      const text = "```ts\n@src/a.ts";
+      assert.deepStrictEqual(findCodeRanges(text), []);
+      assert.deepStrictEqual(
+        parseAtReferences(text).map(({ path }) => path),
+        ["src/a.ts"]
+      );
+    });
+
+    test("finds inline spans after an unmatched opener", () => {
+      for (const text of ["``unclosed then `@x`", "a ` b ``@x``"]) {
+        const from = text.indexOf("`@x`");
+        const closer = text.indexOf("``@x``");
+        const expectedFrom = closer >= 0 ? closer : from;
+        const expectedTo = closer >= 0 ? closer + 6 : from + 4;
+        assert.deepStrictEqual(findCodeRanges(text), [
+          { from: expectedFrom, to: expectedTo },
+        ]);
+      }
+    });
+
+    test("a backslash escapes only the first tick in a backtick run", () => {
+      const text = "\\``@x`";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: 2, to: text.length },
+      ]);
+    });
+
+    test("ignores backslashes inside inline code when pairing delimiters", () => {
+      const text = "Run `C:\\tmp\\` then @file.md and `x`";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("`C:"), to: text.indexOf(" then") },
+        { from: text.lastIndexOf("`x`"), to: text.length },
+      ]);
+      assert.deepStrictEqual(
+        parseAtReferences(text).map(({ path }) => path),
+        ["file.md"]
+      );
+    });
+
+    test("finds later closed fences after an unclosed fence opener", () => {
+      for (const text of [
+        "~~~~~~~~~~\nNotes\n\n```\n$previous\n```",
+        "````\n\n```\n$previous\n```",
+      ]) {
+        const from = text.indexOf("```", text.indexOf("\n\n") + 2);
+        assert.deepStrictEqual(findCodeRanges(text), [
+          { from, to: text.lastIndexOf("```") + 3 },
+        ]);
+        assert.deepStrictEqual(parseInlinePriorContextRefs(text), []);
+      }
+    });
+
+    test("recognizes a fence on a list marker line", () => {
+      for (const text of ["- ```\n  code @x\n  ```", "1. ```\n   @x\n   ```"]) {
+        assert.deepStrictEqual(parseAtReferences(text), []);
+        assert.deepStrictEqual(findCodeRanges(text), [
+          { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+        ]);
+      }
+    });
+
+    test("ends a blockquote fence with its container and rejects lazy code continuation", () => {
+      const endedQuote = "> ```\n> code\n\nRegular @src/ref.md text\n\n```\nx";
+      assert.deepStrictEqual(
+        findCodeRanges(endedQuote).map(({ from, to }) => ({ from, to })),
+        []
+      );
+      assert.deepStrictEqual(
+        parseAtReferences(endedQuote).map(({ path }) => path),
+        ["src/ref.md"]
+      );
+
+      const lazyContinuation = "> ```\n@src/x.md\n> ```";
+      assert.deepStrictEqual(
+        parseAtReferences(lazyContinuation).map(({ path }) => path),
+        ["src/x.md"]
+      );
+    });
+
+    test("allows backticks in tilde fence info and stops inline spans at block starts", () => {
+      const tilde = "~~~ `js`\n@a\n~~~";
+      assert.deepStrictEqual(findCodeRanges(tilde), [
+        { from: 0, to: tilde.length },
+      ]);
+      for (const text of ["- a `x\n- b` @y", "`a\n# H `b"]) {
+        assert.deepStrictEqual(findCodeRanges(text), []);
+      }
+    });
+
+    test("scans a dense backtick line within a linear-time budget", () => {
+      const text = "a`b``".repeat(50_000);
+      const startedAt = Date.now();
+      const ranges = findCodeRanges(text);
+      assert.ok(ranges.length > 0);
+      assert.ok(
+        Date.now() - startedAt < 2500,
+        `findCodeRanges took ${Date.now() - startedAt}ms for ${text.length} chars`
+      );
+    });
+
+    test("scans many unclosed fence openers in linear time", () => {
+      const text = "```x\n".repeat(20_000);
+      const startedAt = Date.now();
+      assert.deepStrictEqual(findCodeRanges(text), []);
+      assert.ok(
+        Date.now() - startedAt < 1000,
+        `findCodeRanges took ${Date.now() - startedAt}ms for ${text.length} chars`
+      );
+    });
+
+    test("never reports a span nested inside or overlapping another", () => {
+      for (const [text, expected] of [
+        ["`` x ` y `` @x ` z", ["`` x ` y ``"]],
+        ["``a`b`` c `@x", ["``a`b``"]],
+        ["``a `b` c`` @x", ["``a `b` c``"]],
+      ] as const) {
+        assert.deepStrictEqual(
+          findCodeRanges(text).map(({ from, to }) => text.slice(from, to)),
+          expected,
+          text
+        );
+      }
+    });
+
+    test("an escaped run's remainder can open a span but never closes one", () => {
+      for (const text of ["`a \\``@x`", "``a \\```@x``"]) {
+        assert.deepStrictEqual(
+          findCodeRanges(text),
+          [{ from: 0, to: text.length }],
+          text
+        );
+      }
+      assert.deepStrictEqual(findCodeRanges("#``-  \\`\\```"), []);
+    });
+
+    test("masks code in linear time", () => {
+      const text = "a`b``".repeat(80_000);
+      const startedAt = Date.now();
+      const masked = maskCodeRanges(text);
+      assert.strictEqual(masked.length, text.length);
+      assert.ok(
+        Date.now() - startedAt < 2500,
+        `maskCodeRanges took ${Date.now() - startedAt}ms for ${text.length} chars`
+      );
+    });
+
+    test("keeps a list fence open across a blank line before indented content", () => {
+      const text = "* item\n\n  ```\n  @x\n\n  ```";
+      assert.deepStrictEqual(findCodeRanges(text), [
+        { from: text.indexOf("```"), to: text.lastIndexOf("```") + 3 },
+      ]);
+    });
+  });
+
   suite("maskCodeRanges", () => {
     test("keeps a three-backtick block inside a four-backtick fence masked", () => {
       const prompt = "````markdown\n```html\n@src/x.ts $previous\n```\n````";
@@ -35,11 +235,11 @@ suite("FileReferenceParser", () => {
     });
 
     test("preserves triple-backtick masking behavior", () => {
-      const prompt = "```text\n@src/x.ts\n``` then @src/y.ts";
+      const prompt = "```text\n@src/x.ts\n```\nthen @src/y.ts";
 
       assert.strictEqual(
         maskCodeRanges(prompt),
-        "```text\n\x00src\x00x.ts\n``` then @src/y.ts"
+        "```text\n\x00src\x00x.ts\n```\nthen @src/y.ts"
       );
     });
 
@@ -758,10 +958,10 @@ suite("FileReferenceParser", () => {
       );
     });
 
-    test("a span cannot close on a later line", () => {
+    test("a span can close on the next line of the same paragraph", () => {
       assert.deepStrictEqual(
         liveTokens("Open `@src/a.ts !TOKEN_A\nclose /skill:alpha` $previous"),
-        ALL_LIVE
+        ["$previous"]
       );
     });
 

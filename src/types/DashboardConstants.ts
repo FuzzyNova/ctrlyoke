@@ -318,6 +318,8 @@ export const BOOLEAN_STRING_VALUES = {
 
 /** Workspace-local paths shared by the extension and standalone MCP server. */
 export const CTRLYOKE_DIR = ".ctrlyoke";
+/** Red Hat's YAML extension owns YAML schema validation when installed. */
+export const VSCODE_YAML_EXTENSION_ID = "redhat.vscode-yaml";
 export const LOGS_DIR = "logs";
 export const CAPABILITIES_FILE = "capabilities.json";
 
@@ -565,6 +567,8 @@ export const MESSAGE_TYPES = {
   FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: addressed file-ref result
   VALIDATE_CONTEXT_REFS: "validateContextRefs", // Webview -> Extension: Validate inline @/#/~ context references
   CONTEXT_REFS_VALIDATION: "contextRefsValidation", // Extension -> Webview: Inline context reference validation results
+  VALIDATE_WORKFLOW_DOCUMENT: "validateWorkflowDocument", // Webview -> Extension: Validate unsaved ctrlyoke workflow text
+  WORKFLOW_DOCUMENT_DIAGNOSTICS: "workflowDocumentDiagnostics", // Extension -> Webview: Path-based workflow schema issues
   INSERT_PROMPT_REFERENCES: "insertPromptReferences", // Extension -> Webview: insert raw context references into the live prompt editor
 
   // Image paste - Webview <-> Extension
@@ -1923,6 +1927,14 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   CONDITION_FIELD_UNKNOWN: "prompt.condition.field-unknown",
 } as const;
 
+/** Codes used by VS Code's YAML workflow schema diagnostics. */
+export const WORKFLOW_SCHEMA_DIAGNOSTIC_CODES = {
+  ERROR: "workflow.schema.error",
+  WARNING: "workflow.schema.warning",
+} as const;
+export type WorkflowSchemaDiagnosticCode =
+  (typeof WORKFLOW_SCHEMA_DIAGNOSTIC_CODES)[keyof typeof WORKFLOW_SCHEMA_DIAGNOSTIC_CODES];
+
 export type PromptDiagnosticCode =
   (typeof PROMPT_DIAGNOSTIC_CODES)[keyof typeof PROMPT_DIAGNOSTIC_CODES];
 
@@ -3153,6 +3165,11 @@ export type CodeMirrorEditorMode =
 /** Prompt diagnostics share the runtime's severity scale. */
 export type PromptDiagnosticSeverity =
   (typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES)[keyof typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES];
+/** Severity set used by workflow document schema issues (no informational state). */
+export type WorkflowDocumentIssueSeverity = Exclude<
+  PromptDiagnosticSeverity,
+  typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+>;
 
 // ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type

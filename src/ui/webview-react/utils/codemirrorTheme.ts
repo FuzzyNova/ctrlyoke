@@ -12,6 +12,16 @@ const CODEMIRROR_THEME_SURFACES = {
   INPUT: "input",
 } as const;
 
+/** Shared CodeMirror widget rules used wherever atomic reference chips render. */
+export function createAtomicReferenceWidgetTheme() {
+  return EditorView.baseTheme({
+    ".cm-atomic-ref": {
+      whiteSpace: "nowrap",
+      verticalAlign: "baseline",
+    },
+  });
+}
+
 type ThemeSurface =
   (typeof CODEMIRROR_THEME_SURFACES)[keyof typeof CODEMIRROR_THEME_SURFACES];
 

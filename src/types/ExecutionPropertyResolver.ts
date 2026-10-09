@@ -256,7 +256,7 @@ export function resolveSessionId(
   return { value: undefined, source: "defaults" };
 }
 
-function resolveNullable<T>(
+export function resolveNullable<T>(
   promptValue: T | null | undefined,
   workflowValue: T | null | undefined,
   defaultValue: T | null | undefined

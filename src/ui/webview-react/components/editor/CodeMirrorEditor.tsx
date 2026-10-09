@@ -16,7 +16,10 @@ import {
   WidgetType,
   repositionTooltips,
 } from "@codemirror/view";
-import { createThemeExtension } from "@utils/codemirrorTheme";
+import {
+  createAtomicReferenceWidgetTheme,
+  createThemeExtension,
+} from "@utils/codemirrorTheme";
 import { createPromptMarkdownExtension } from "@utils/codemirrorLanguage";
 import {
   DEFAULT_COMPLETION_ICON,
@@ -83,7 +86,6 @@ import {
   resolvePromptReferences,
   type ContextReferenceResolver,
   type ContextReferenceValidationResult,
-  type PromptDiagnostic,
 } from "@root/utils/PromptDiagnosticRules";
 import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
@@ -91,7 +93,11 @@ import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
 import { REFERENCE_BOUNDARY_CHAR_RE } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
+import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
 import { promptTokenCompletionExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
+import { createWorkflowContextCompletionSource } from "@utils/promptCompletion/promptTokenCompletionExtension";
+import type { PromptCompletionWorkflowContext } from "@root/completions/PromptContextCompletions";
+import { getContextualPriorCompletions } from "@root/completions/PromptContextCompletions";
 import {
   buildCodeMirrorCompletionResult,
   findCustomCompletionContext,
@@ -159,6 +165,8 @@ interface CodeMirrorEditorProps {
   hasFinalStep?: boolean;
   /** Whether this step has an effective pre-condition configured. */
   hasPreCondition?: boolean;
+  /** Workflow facts for scoped prompt-token completions. */
+  workflowCompletionContext?: PromptCompletionWorkflowContext;
   /** Pending external insert request from VS Code context menus. */
   pendingInsertRequest?: PromptEditorInsertRequest | null;
   /** Called after a pending external insert has been applied. */
@@ -269,6 +277,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const stepCountRef = useRef(props.stepCount ?? 0);
   const hasFinalStepRef = useRef(props.hasFinalStep ?? false);
   const hasPreConditionRef = useRef(props.hasPreCondition ?? false);
+  const workflowCompletionContextRef = useRef(props.workflowCompletionContext);
+  workflowCompletionContextRef.current = props.workflowCompletionContext;
   const modeRef = useRef<CodeMirrorEditorMode>(mode);
   const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
   const placeholderCompartmentRef = useRef(new Compartment());
@@ -860,6 +870,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         ]),
         placeholderCompartmentRef.current.of(placeholder(placeholderText)),
         createThemeExtension(surface),
+        createAtomicReferenceWidgetTheme(),
         createPromptDecorationThemeExtension(),
         createLinterThemeExtension(),
         createActiveLineHighlightExtension(),
@@ -873,7 +884,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           )
         ),
         promptTokenCompletionExtension({
-          sources: [completionClient.customSource, completionClient.pathSource],
+          sources: [
+            createWorkflowContextCompletionSource(
+              completionClient,
+              () => workflowCompletionContextRef.current,
+              getContextualPriorCompletions
+            ),
+            completionClient.pathSource,
+          ],
         }),
         EditorView.domEventHandlers({
           blur: () => {
@@ -1258,7 +1276,8 @@ export function relintForContextChange(view: EditorView): void {
 // decoration pipeline.
 export function createAtomicReferenceExtension(
   symbolIconCache?: Map<string, string>,
-  referenceValidity?: Map<string, boolean>
+  referenceValidity?: Map<string, boolean>,
+  rangeLimiter?: (view: EditorView, from: number, to: number) => boolean
 ) {
   const getSymbolIcon: SymbolIconResolver | undefined = symbolIconCache
     ? (path, symbolName, lineStart, lineEnd) =>
@@ -1277,6 +1296,9 @@ export function createAtomicReferenceExtension(
       view.state.doc.toString(),
       getSymbolIcon,
       getValidity
+    ).filter(
+      (candidate) =>
+        !rangeLimiter || rangeLimiter(view, candidate.from, candidate.to)
     )) {
       builder.add(
         chip.from,
@@ -1320,12 +1342,16 @@ export function createAtomicReferenceExtension(
 
 // Prompt-editor-specific decoration styles (link, file-ref, code-range, prior-context).
 // Generic base theme (colours, gutter, cursor, autocomplete) lives in codemirrorTheme.ts.
-function createPromptDecorationThemeExtension() {
+export function createPromptDecorationThemeExtension() {
   return EditorView.baseTheme({
-    ".cm-link": {
+    ".cm-link.cm-link": {
       color: "var(--vscode-textLink-foreground)",
       textDecoration: "underline",
       cursor: "pointer",
+      // Markdown emphasis can split a reference into adjacent link marks.
+      // Reset it on every fragment so the complete reference stays uniform.
+      fontStyle: "normal",
+      fontWeight: "normal",
     },
     ".cm-link:hover": {
       color: "var(--vscode-textLink-activeForeground)",
@@ -1335,26 +1361,23 @@ function createPromptDecorationThemeExtension() {
       textDecoration: "underline",
       fontFamily: "var(--vscode-editor-font-family)",
     },
-    // Literal (unexpanded) ranges: readable code, not greyed out. The
-    // suppressed-expansion lint warning is what flags a mistaken reference.
+    // Literal (unexpanded) ranges: inline code gets a subtle box; fenced code
+    // keeps nested-language colours visible. The suppressed-expansion lint
+    // warning is what flags a mistaken reference.
     ".cm-code-range": {
       fontFamily: "var(--vscode-editor-font-family)",
-      backgroundColor: "var(--vscode-textPreformat-background)",
+    },
+    ".cm-code-range-inline": {
+      color: "var(--cy-syntax-inline-code)",
+      border: "1px solid var(--vscode-panel-border, transparent)",
       borderRadius: "3px",
+      padding: "0 2px",
     },
     ".cm-prior-context-ref": {
       fontStyle: "italic",
     },
     ".cm-condition-output-ref": {
       fontStyle: "italic",
-    },
-    // Atomic-mode reference chip: the box/icon/label styling is the shared
-    // `.atomic-reference-chip` rule in globals.css. This is the CodeMirror-only
-    // adapter — editor widgets stay on one line even though output chips may
-    // wrap long find-expanded references.
-    ".cm-atomic-ref": {
-      whiteSpace: "nowrap",
-      verticalAlign: "baseline",
     },
   });
 }
@@ -1565,52 +1588,7 @@ function createSpellCheckExtension(
   );
 }
 
-/**
- * Map a shared {@link PromptDiagnostic} onto a CodeMirror diagnostic. The
- * `detail` line (the offending reference) is folded into the tooltip on its own
- * italic line; `replacements` become one-click "Change to" quick fixes.
- */
-function toCodeMirrorDiagnostic(diagnostic: PromptDiagnostic): Diagnostic {
-  const { detail, replacements } = diagnostic;
-  return {
-    from: diagnostic.from,
-    to: diagnostic.to,
-    severity: diagnostic.severity,
-    message: diagnostic.message,
-    // The atomic chip suppresses its native hover title while invalid (see
-    // AtomicReferenceWidget.toDOM), so the lint tooltip carries the full
-    // reference text — otherwise the chip's compact label (basename only)
-    // leaves the actual offending path invisible.
-    ...(detail
-      ? {
-          renderMessage: () => {
-            // Rendered inside lint's inline .cm-diagnosticText span, so the
-            // path line is a display:block span (not a div) to stay valid
-            // inline-nesting while still sitting on its own line.
-            const fragment = document.createDocumentFragment();
-            fragment.append(diagnostic.message);
-            const pathLine = document.createElement("span");
-            pathLine.className = "cm-reference-lint-path";
-            pathLine.textContent = detail;
-            fragment.appendChild(pathLine);
-            return fragment;
-          },
-        }
-      : {}),
-    // apply() uses the diagnostic's live from/to so the swap lands correctly
-    // even if the doc changed since linting.
-    ...(replacements?.length
-      ? {
-          actions: replacements.map((replacement) => ({
-            name: `Change to ${replacement}`,
-            apply: (view: EditorView, from: number, to: number) => {
-              view.dispatch({ changes: { from, to, insert: replacement } });
-            },
-          })),
-        }
-      : {}),
-  };
-}
+const toCodeMirrorDiagnostic = toCodeMirrorPromptDiagnostic;
 
 export function createContextReferenceLintExtension(
   validateReferences: ContextReferenceResolver,
@@ -1801,15 +1779,29 @@ export function createCodeRangeDecorationExtension() {
       }
 
       update(update: any) {
-        if (update.docChanged || update.viewportChanged) {
+        if (
+          update.docChanged ||
+          update.viewportChanged ||
+          syntaxTree(update.startState) !== syntaxTree(update.state)
+        ) {
           this.decorations = this.buildDecorations(update.view);
         }
       }
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const codeRanges = findCodeRanges(view.state.doc.toString());
+        const doc = view.state.doc.toString();
+        const codeRanges = findCodeRanges(doc);
+        const fencedRanges: Array<{ from: number; to: number }> = [];
+        syntaxTree(view.state).iterate({
+          enter: (node) => {
+            if (node.name === "FencedCode") {
+              fencedRanges.push({ from: node.from, to: node.to });
+            }
+          },
+        });
 
+        let fencedIndex = 0;
         for (const { from, to } of view.visibleRanges) {
           for (const range of codeRanges) {
             if (range.to <= from) continue;
@@ -1817,10 +1809,25 @@ export function createCodeRangeDecorationExtension() {
             const visFrom = Math.max(range.from, from);
             const visTo = Math.min(range.to, to);
             if (visFrom < visTo) {
+              while (
+                fencedIndex < fencedRanges.length &&
+                fencedRanges[fencedIndex].to < range.to
+              ) {
+                fencedIndex += 1;
+              }
+              const fence = fencedRanges[fencedIndex];
+              const isFenced =
+                fence !== undefined &&
+                fence.from <= range.from &&
+                fence.to >= range.to;
               builder.add(
                 visFrom,
                 visTo,
-                Decoration.mark({ class: "cm-code-range" })
+                Decoration.mark({
+                  class: isFenced
+                    ? "cm-code-range cm-code-range-fenced"
+                    : "cm-code-range cm-code-range-inline",
+                })
               );
             }
           }

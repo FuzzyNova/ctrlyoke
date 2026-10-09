@@ -1,6 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { getWorkflowPromptDiagnostics } from "../../completions/WorkflowPromptDiagnostics";
+import { getWorkflowPromptCompletionContext } from "../../completions/WorkflowPromptDiagnostics";
+import { getContextualPriorCompletions } from "../../completions/PromptContextCompletions";
 import {
   CTRLYOKE_FILE_KINDS,
   PROMPT_DIAGNOSTIC_CODES,
@@ -122,6 +124,32 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
+  test("completion context uses flat step counts after a parallel group", () => {
+    const text = [
+      "steps:",
+      "  - prompt: first",
+      "  - parallel:",
+      "      - prompt: second",
+      "      - prompt: third",
+      "  - prompt: |",
+      "      use $step:",
+      "",
+    ].join("\n");
+    const context = getWorkflowPromptCompletionContext(
+      text,
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+      text.indexOf("$step:")
+    );
+
+    assert.strictEqual(context?.stepCount, 3);
+    assert.deepStrictEqual(
+      getContextualPriorCompletions("step:3", context!).map(
+        (completion) => completion.label
+      ),
+      ["step:3"]
+    );
+  });
+
   test("only flags $finalStep when the workflow has no finalStep", async () => {
     const without = "steps:\n  - prompt: a\n  - prompt: use $finalStep\n";
     const withFinal = `${without}finalStep:\n  prompt: done\n`;
@@ -175,10 +203,64 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
-  test("does not guess about $preCondition: since pre-conditions can be inherited", async () => {
+  test("flags $preCondition: when the step, workflow, and settings have none", async () => {
     const text = "steps:\n  - prompt: out $preCondition:stdout\n";
     assert.deepStrictEqual(
       await diagnose(text, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML),
+      [
+        {
+          code: PROMPT_DIAGNOSTIC_CODES.CONDITION_NO_PRE_CONDITION,
+          text: "$preCondition:stdout",
+        },
+      ]
+    );
+  });
+
+  test("honors the runtime pre-condition inheritance order", async () => {
+    const prompt = (prefix: string) =>
+      `steps:\n  - ${prefix}prompt: out $preCondition:stdout\n`;
+    assert.deepStrictEqual(
+      await getWorkflowPromptDiagnostics(
+        prompt("preCondition:\n      script: check.sh\n    "),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+        resolver
+      ),
+      []
+    );
+    assert.deepStrictEqual(
+      await diagnose(
+        "preCondition:\n  script: check.sh\nsteps:\n  - prompt: out $preCondition:stdout\n",
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      ),
+      []
+    );
+    assert.deepStrictEqual(
+      await getWorkflowPromptDiagnostics(
+        prompt(""),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+        resolver,
+        { script: "settings-check.sh" }
+      ),
+      []
+    );
+    assert.deepStrictEqual(
+      await diagnose(
+        "preCondition:\n  script: check.sh\nsteps:\n  - preCondition: null\n    prompt: out $preCondition:stdout\n",
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      ).then((items) => items.map((item) => item.code)),
+      [PROMPT_DIAGNOSTIC_CODES.CONDITION_NO_PRE_CONDITION]
+    );
+  });
+
+  test("honors a settings default pre-condition in hosted prompt lint", async () => {
+    const text = "steps:\n  - prompt: out $preCondition:stdout\n";
+    assert.deepStrictEqual(
+      await getWorkflowPromptDiagnostics(
+        text,
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+        resolver,
+        { script: "settings-check.sh" }
+      ),
       []
     );
   });

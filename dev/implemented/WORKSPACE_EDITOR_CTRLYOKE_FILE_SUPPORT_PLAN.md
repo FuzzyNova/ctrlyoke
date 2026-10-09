@@ -1,8 +1,9 @@
 # Workspace Editor ctrlyoke File Support Plan
 
-**Status (2026-10-08):** Phases 0, 1, 2, 1b, 3 and 4 are implemented (see their entries under
-"Implementation phases"). Phase 1b fixed the bugs the Wave 1 review found in 1 and 2 and added
-the decoded prompt ranges Wave 2 needs. Phases 5–7 are not started. _Refreshed
+**Status (2026-10-08):** Phases 0, 1, 2, 1b, 3, 4, 5, 6 and 7 are implemented (see their
+entries under "Implementation phases"). Phase 1b fixed the
+bugs the Wave 1 review found in 1 and 2 and added the decoded prompt ranges Wave 2 needs.
+_Refreshed
 2026-10-08:_ the language intelligence plan shipped (`dev/implemented/`). Facts 2 and 9,
 "Editor integration" and "Coexistence with language servers" were re-audited against the
 merged code.
@@ -12,7 +13,7 @@ merged code.
 against the markdown highlighting and prompt diagnostics plans.
 
 **Priority:** P1. The built-in editor is the "real IDE on your phone" pitch
-([`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md) #10), and a workflow file is
+([`SCREENSHOTS_AND_MEDIA_PLAN.md`](../backlog/SCREENSHOTS_AND_MEDIA_PLAN.md) #10), and a workflow file is
 the file a ctrlyoke user is most likely to open in it. Today that file gets less help than it
 gets anywhere else in the product.
 
@@ -25,14 +26,14 @@ gets anywhere else in the product.
   rules (references, prior context, condition output) and VS Code's diagnostics provider. This
   plan's Phase 5 consumes those rules for prompt text and adds the schema diagnostics they
   don't cover.
-- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../implemented/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md)
+- [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md)
   (implemented 2026-10-08): generic LSP features for `WorkspaceFileEditor.tsx`. This plan is
   its ctrlyoke-specific sibling. The ctrlyoke-file exclusion that plan was meant to carry was
   not built there, so this plan now owns it. See "Coexistence with language servers".
-- [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](PROMPT_AUTHORING_SUGGESTIONS_PLAN.md): model-written
+- [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](../backlog/PROMPT_AUTHORING_SUGGESTIONS_PLAN.md): model-written
   prompt continuations in the prompt editor. It is out of scope here, but once Phase 0 extracts
   the shared prompt-editing extensions, they become the natural place to add it.
-- [`SCHEMASTORE_CATALOG_PLAN.md`](SCHEMASTORE_CATALOG_PLAN.md): schema validation in editors
+- [`SCHEMASTORE_CATALOG_PLAN.md`](../backlog/SCHEMASTORE_CATALOG_PLAN.md): schema validation in editors
   other than ctrlyoke. It does not overlap with this plan.
 
 ## Problem
@@ -392,6 +393,31 @@ JSON workflow files.
 
 ### Diagnostics
 
+**As built — F5 complete with review fixes 2026-10-08.**
+`PromptFileParser.validateWorkflowText` parses unsaved YAML, JSON and `.prompt.md`
+frontmatter without normalization or feedback side effects. The load path and editor validation
+share the pre-normalization checks for supported schema versions, authored parallel structure,
+variable keys, schema errors and unknown-key warnings. Markdown descriptions follow the loader's
+permissive metadata behavior. Schema findings are deduplicated by path and message; unknown-key
+findings include the key and point to its own range. Syntax findings retain their marked source
+position. The dashboard message pair routes through the shared webview router (including hosted
+clients); the editor validates only ctrlyoke files, debounces by 400 ms and drops stale sequences.
+Schema ranges are resolved by `findRangeForPath` from the lazy workflow-file support chunk.
+JSON Pointer indices become numbers only under array parents, preserving numeric object keys.
+
+Prompt-text lint runs `getWorkflowPromptDiagnostics` from the lazy support chunk, so the
+workspace editor shares D2's decoded `PROMPT_TEXT` spans, document-derived rule context,
+inexact-span filtering and source-offset mapping. Reference checks use the existing
+`VALIDATE_CONTEXT_REFS` round trip. Both lint extensions bind message listeners to each
+`ViewPlugin` lifetime, settle pending requests on teardown, and continue linting after an editor
+rebuild. Workspace context-reference requests use a separate sequence range from the prompt
+editor. Prompt lint includes the global `defaultPreCondition` setting and reconfigures when it
+changes. The generated outline description is shown over the key's own source range using
+`getWorkflowLocation` and the key's object kind; the completion extension's body-mounted tooltip
+configuration owns tooltip placement. Tests cover YAML and JSON source ranges, syntax positions,
+prompt/retry scope, reference resolution, settings changes, editor rebuilds, text outside prompt
+fields, and root and nested key hover.
+
 - **Schema validation stays host-side, in `PromptFileParser`.** Do not bundle ajv into the
   webview. It needs `unsafe-eval`, and a second validator would drift from the one that
   actually loads files. Add a message pair: `VALIDATE_WORKFLOW_DOCUMENT { text, kind, seq }`
@@ -719,7 +745,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      `nodeHostedServer.integration.test.ts` for a prompt-token request from a workflow-file
      context.
 
-7. **Phase 5: Diagnostics and hover.**
+7. **Phase 5: Diagnostics and hover.** **Done 2026-10-08.** As built: see "Diagnostics" above.
    - `VALIDATE_WORKFLOW_DOCUMENT` / `WORKFLOW_DOCUMENT_DIAGNOSTICS`, including the type
      definitions in `WebviewMessageTypes.ts` and the router entry.
    - A side-effect-free validate in `PromptFileParser`.
@@ -730,18 +756,40 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
    - Prompt-text lint through `PROMPT_DIAGNOSTICS_PLAN.md`'s CodeMirror adapter. That plan's
      Phase 1 has to land first.
 
-8. **Phase 6: Prompt-text polish.**
-   - Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md` bodies, gated by
-     `ui.atomicContextReferences` and never in JSON. This includes the range limiter for
-     `createAtomicReferenceExtension`.
-   - Tests (`WorkspaceFileEditor.test.tsx`):
+8. **Phase 6: Prompt-text polish.** **Done 2026-10-08.**
+   - **F6a — Done 2026-10-08:** Atomic chips in YAML `PROMPT_TEXT` ranges and `.prompt.md`
+     bodies, gated by `ui.atomicContextReferences` and never in JSON. This includes the range
+     limiter for `createAtomicReferenceExtension`.
+   - **F6b — Done 2026-10-08:** `$step:` items with visible step names,
+     `$endCondition:`/`$preCondition:` scoping, and workflow `{{var}}` completions;
+     the shared completion source is also used by the prompt editor.
+   - Tests (`WorkspaceFileEditor.ctrlyokeFiles.test.tsx`):
      - chips render inside a YAML `prompt:` block scalar but not in a comment or `name:`
      - an escaped reference in a quoted scalar stays a link
      - no chips in `.ctrlyoke.json`
+     - chips render in `.prompt.md` bodies but not frontmatter
      - toggling the setting adds and removes chips without recreating the view
      - the saved text is byte-identical
-   - `$step:` items with step names, and `$endCondition:`/`$preCondition:` scoping.
-   - `{{var}}` completions, adopted by the prompt editor too.
+
+   **As built — F6a done 2026-10-08, with review fixes.** `workflowPromptRanges.ts` adds a lazy CodeMirror
+   `StateField` containing decoded `WorkflowTextSpan` values from `getWorkflowTextSpans()`,
+   recomputed when the document changes. Its spans retain decoded text and `toSourceOffset()`
+   so M3's nested Markdown support can reuse the same source map. The workspace editor installs
+   this field only after the lazy support chunk loads. The atomic-reference extension accepts
+   an optional range predicate; the prompt editor omits it and keeps its existing whole-document
+   behavior. The workspace editor limits chips to exact YAML prompt values and `.prompt.md`
+   bodies, caches decoded code ranges per prompt-range field value to exclude code references,
+   skips quoted YAML scalars containing escapes, and keeps
+   ordinary reference links elsewhere. Toggling the setting reconfigures `ctrlyokeFileSupport`
+   without replacing the view. Tests cover YAML, quoted escapes, JSON, prompt Markdown,
+   navigation, live toggling and unchanged document bytes. Nested Markdown is M3.
+
+   **As built — F6b done 2026-10-08, with review fixes.** `PromptContextCompletions.ts` filters
+   the shared prior-context item list using step count, final-step presence, field and effective
+   pre-condition. The workspace editor and prompt editor derive their context from the same
+   span-position helper used by prompt diagnostics. Variable names share
+   `VARIABLE_NAME_PATTERN_SOURCE`, and completion preserves an existing `}}`. Tests cover step
+   bounds, final-step availability, condition scope, workflow vars and both CodeMirror paths.
 
 9. **Phase 7: VS Code parity.** **Done 2026-10-08.** This can be done on its own schedule.
    - `PromptPropertyCompletionProvider` gains value completions and covers JSON through
@@ -774,7 +822,7 @@ offset, location, documentRoot, data })` returns `{ items, replaceRange }`. The
      language `yaml`/`json` no longer gets prompt-token completions; both providers key off the
      ctrlyoke file name. Tests need `PromptDocumentStub` with a real file name.
 
-Phases 0, 1, 2, 1b, 3, 4 and 7 are done. Phase 5 needs F4 and D1, both landed. The F3 bug the
+Phases 0, 1, 1b, 2, 3, 4, 5, 6 and 7 are done. The F3 bug the
 Wave 2 review filed,
 [`workflow-completion-core-json-arrays-flow-maps-and-commas`](../bugs/implemented/workflow-completion-core-json-arrays-flow-maps-and-commas.md),
 is already fixed. The cross-plan order is in

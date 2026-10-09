@@ -1,5 +1,12 @@
-import { syntaxHighlighting, type Language } from "@codemirror/language";
+import {
+  LanguageDescription,
+  syntaxHighlighting,
+  syntaxTree,
+  type Language,
+} from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
+import { RangeSetBuilder } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
 import { styleTags } from "@lezer/highlight";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
@@ -10,7 +17,6 @@ import { css } from "@codemirror/lang-css";
 import { java } from "@codemirror/lang-java";
 import { cpp } from "@codemirror/lang-cpp";
 import { php } from "@codemirror/lang-php";
-import { yaml } from "@codemirror/lang-yaml";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import {
   getLanguageFromPath,
@@ -23,11 +29,15 @@ import {
 } from "@utils/syntaxPalette";
 import { CODEMIRROR_LANGUAGE_IDS } from "@root/types/DashboardConstants";
 
+export const PROMPT_MARKDOWN_DECORATION_CLASSES = {
+  UNCLOSED_FENCE: "cm-unclosed-fence",
+} as const;
+
 /**
  * Maps a language name or alias (a fence info string such as `ts` or
  * `language-yml`, or a canonical id from {@link getLanguageFromPath}) to its
- * CodeMirror LanguageSupport. Returns null for plain text or an unsupported
- * language.
+ * CodeMirror LanguageSupport. YAML is loaded through a separate dynamic
+ * import, so this synchronous resolver returns null for it.
  */
 export function resolveCodeMirrorLanguage(name: string | undefined) {
   switch (normalizeSyntaxLanguage(name)) {
@@ -50,8 +60,6 @@ export function resolveCodeMirrorLanguage(name: string | undefined) {
     case CODEMIRROR_LANGUAGE_IDS.CSS:
     case CODEMIRROR_LANGUAGE_IDS.SCSS:
       return css();
-    case CODEMIRROR_LANGUAGE_IDS.YAML:
-      return yaml();
     case CODEMIRROR_LANGUAGE_IDS.MARKDOWN:
       return markdown();
     case CODEMIRROR_LANGUAGE_IDS.JAVA:
@@ -66,12 +74,38 @@ export function resolveCodeMirrorLanguage(name: string | undefined) {
   }
 }
 
-/** Maps a file path to the appropriate CodeMirror LanguageSupport extension. Returns null for plain text. */
+/** Maps non-YAML file paths to their CodeMirror LanguageSupport extension. */
 export function getLanguageExtension(filePath: string) {
-  return resolveCodeMirrorLanguage(getLanguageFromPath(filePath));
+  const language = getLanguageFromPath(filePath);
+  if (language === CODEMIRROR_LANGUAGE_IDS.MARKDOWN) {
+    return [createPromptMarkdownLanguage(), createUnclosedFenceColorOverride()];
+  }
+  return resolveCodeMirrorLanguage(language);
 }
 
-const fenceLanguageCache = new Map<string, Language | null>();
+/** Load YAML support on demand so its parser never enters the dashboard chunk. */
+export async function loadYamlLanguageExtension(): Promise<Extension> {
+  const { yaml } = await import("@codemirror/lang-yaml");
+  return yaml();
+}
+
+const fenceLanguageCache = new Map<
+  string,
+  Language | LanguageDescription | null
+>();
+const yamlFenceLanguage = LanguageDescription.of({
+  name: "yaml",
+  alias: ["yml"],
+  load: async () => {
+    const { yaml } = await import("@codemirror/lang-yaml");
+    return yaml();
+  },
+});
+
+export const PROMPT_MARKDOWN_NODE_NAMES = {
+  FENCED_CODE: "FencedCode",
+  CODE_MARK: "CodeMark",
+} as const;
 
 /**
  * `codeLanguages` resolver for markdown: maps a fence info string to the
@@ -79,12 +113,19 @@ const fenceLanguageCache = new Map<string, Language | null>();
  * each language is built on first use and then reused, so a prompt with many
  * fences does not rebuild a `LanguageSupport` per fence.
  */
-export function resolveFenceLanguage(info: string): Language | null {
+export function resolveFenceLanguage(
+  info: string
+): Language | LanguageDescription | null {
   const name = info.trim().split(/\s+/, 1)[0] ?? "";
   const key = normalizeSyntaxLanguage(name) ?? "";
   let language = fenceLanguageCache.get(key);
   if (language === undefined) {
-    language = key ? (resolveCodeMirrorLanguage(key)?.language ?? null) : null;
+    language =
+      key === CODEMIRROR_LANGUAGE_IDS.YAML
+        ? yamlFenceLanguage
+        : key
+          ? (resolveCodeMirrorLanguage(key)?.language ?? null)
+          : null;
     fenceLanguageCache.set(key, language);
   }
   return language;
@@ -121,5 +162,83 @@ export function createPromptMarkdownExtension(): Extension {
   return [
     createPromptMarkdownLanguage(),
     createWorkspaceEditorHighlightExtension(),
+    createUnclosedFenceColorOverride(),
   ];
+}
+
+/** Keep a transient, unclosed fence visually live until it has a closer. */
+export function createUnclosedFenceColorOverride(): Extension {
+  return [
+    ViewPlugin.fromClass(
+      class {
+        decorations;
+
+        constructor(view: EditorView) {
+          this.decorations = this.buildDecorations(view);
+        }
+
+        update(update: {
+          docChanged: boolean;
+          viewportChanged: boolean;
+          view: EditorView;
+        }) {
+          if (update.docChanged || update.viewportChanged) {
+            this.decorations = this.buildDecorations(update.view);
+          }
+        }
+
+        buildDecorations(view: EditorView) {
+          const ranges: Array<{ from: number; to: number }> = [];
+          syntaxTree(view.state).iterate({
+            enter: (node) => {
+              if (node.name !== PROMPT_MARKDOWN_NODE_NAMES.FENCED_CODE) return;
+              let codeMarks = 0;
+              for (
+                let child = node.node.firstChild;
+                child;
+                child = child.nextSibling
+              ) {
+                if (child.name === PROMPT_MARKDOWN_NODE_NAMES.CODE_MARK) {
+                  codeMarks += 1;
+                }
+              }
+              if (codeMarks < 2) ranges.push({ from: node.from, to: node.to });
+            },
+          });
+
+          const builder = new RangeSetBuilder<Decoration>();
+          for (const range of ranges) {
+            for (const { from, to } of view.visibleRanges) {
+              if (range.to <= from) continue;
+              if (range.from >= to) break;
+              const visibleFrom = Math.max(range.from, from);
+              const visibleTo = Math.min(range.to, to);
+              if (visibleFrom < visibleTo) {
+                builder.add(
+                  visibleFrom,
+                  visibleTo,
+                  Decoration.mark({
+                    class: PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE,
+                  })
+                );
+              }
+            }
+          }
+          return builder.finish();
+        }
+      },
+      { decorations: (plugin) => plugin.decorations }
+    ),
+    createUnclosedFenceTheme(),
+  ];
+}
+
+/** Keep transient unclosed fence text on the editor's live-text color. */
+export function createUnclosedFenceTheme(): Extension {
+  return EditorView.baseTheme({
+    [`.${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE}, .${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE} *`]:
+      {
+        color: "inherit !important",
+      },
+  });
 }

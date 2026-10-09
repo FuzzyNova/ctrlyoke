@@ -22,6 +22,7 @@ import {
   REFERENCE_PATH_BASES,
   COMPLETION_TRIGGERS,
   WORKSPACE_ENTRY_KINDS,
+  type WorkflowDocumentIssueSeverity,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
@@ -93,6 +94,8 @@ import { encode } from "gpt-tokenizer";
 import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import { PromptFileParser } from "../core/PromptFileParser";
+import type { CtrlYokeFileKind } from "../types/DashboardConstants";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type { WebviewClientContext } from "./WebviewClientContext";
 import type { SecretRegistryService } from "./SecretRegistryService";
@@ -222,6 +225,7 @@ type ContextReferenceToValidate = Omit<
  * service.
  */
 export class PromptEditorSupportService {
+  private readonly workflowTextValidator = new PromptFileParser();
   constructor(
     private readonly getWorkspaceRoot: () => string,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
@@ -243,6 +247,25 @@ export class PromptEditorSupportService {
     private readonly fileWatcherFactory?: FileWatcherFactory,
     private readonly completionCore?: CompletionCore
   ) {}
+
+  validateWorkflowDocument(
+    text: string,
+    kind: CtrlYokeFileKind
+  ): Array<{
+    path: string;
+    message: string;
+    severity: WorkflowDocumentIssueSeverity;
+    position?: { line: number; column: number };
+  }> {
+    return this.workflowTextValidator
+      .validateWorkflowText(text, kind)
+      .issues.map(({ instancePath, message, severity, position }) => ({
+        path: instancePath,
+        message,
+        severity,
+        position,
+      }));
+  }
 
   private getTrustedWorkspaceRoots(): string[] {
     return [

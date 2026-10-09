@@ -17,6 +17,8 @@ import { parseWorkflowDocumentRoot } from "./WorkflowDocumentLocation";
 import { getWorkflowTextSpans } from "./WorkflowPromptRanges";
 import { isRecord, type WorkflowPath } from "./WorkflowLocationTypes";
 import type { WorkflowTextSpan } from "./WorkflowTextDecoding";
+import { resolveNullable } from "../types/ExecutionPropertyResolver";
+import type { PromptCompletionWorkflowContext } from "./PromptContextCompletions";
 
 /**
  * Prompt-text diagnostics for a whole ctrlyoke file: every prompt value runs
@@ -74,9 +76,10 @@ const PROMPT_MARKDOWN_SPAN_CONTEXT: PromptDiagnosticContext = {
  * quiet rather than guess. A `.prompt.md` body gets
  * {@link PROMPT_MARKDOWN_SPAN_CONTEXT} for the same reason.
  */
-function getSpanContext(
+export function getSpanContext(
   span: WorkflowTextSpan,
-  root: unknown
+  root: unknown,
+  settingsPreCondition?: unknown
 ): PromptDiagnosticContext {
   if (span.kind === CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN) {
     return PROMPT_MARKDOWN_SPAN_CONTEXT;
@@ -93,8 +96,11 @@ function getSpanContext(
     0
   );
   let owner: unknown = root;
+  let promptOwner: unknown;
   if (path[0] === PROMPT_PROPERTIES.FINAL_STEP) {
     owner = fields[PROMPT_PROPERTIES.FINAL_STEP];
+    promptOwner = owner;
+    stepIndex = stepCount;
   } else if (
     path[0] === PROMPT_PROPERTIES.STEPS &&
     typeof path[1] === "number"
@@ -104,21 +110,82 @@ function getSpanContext(
       .slice(0, stepIndex)
       .reduce<number>((n, entry) => n + flatStepCount(entry), 0);
     const entry = steps[stepIndex];
-    owner =
+    promptOwner =
       path[2] === PROMPT_PROPERTIES.PARALLEL && typeof path[3] === "number"
         ? parallelMembers(entry)?.[path[3]]
         : entry;
+    owner = promptOwner;
+  } else {
+    // Workflow-level prompts have no fixed execution position; use the most
+    // permissive view, after every queued step.
+    stepIndex = stepCount;
   }
+  const effectivePreCondition =
+    promptOwner && typeof promptOwner === "object"
+      ? resolveNullable(
+          (promptOwner as Record<string, unknown>)[
+            PROMPT_PROPERTIES.PRE_CONDITION
+          ],
+          fields[PROMPT_PROPERTIES.PRE_CONDITION],
+          settingsPreCondition
+        ).value
+      : undefined;
   return {
     stepIndex,
     stepCount,
     hasFinalStep:
       fields[PROMPT_PROPERTIES.FINAL_STEP] !== undefined &&
       fields[PROMPT_PROPERTIES.FINAL_STEP] !== null,
-    hasPreCondition: true,
+    hasPreCondition:
+      promptOwner === undefined ? true : Boolean(effectivePreCondition),
     hasEndCondition:
       isRecord(owner) && owner[PROMPT_PROPERTIES.END_CONDITION] != null,
     field: promptField(span),
+  };
+}
+
+/** Workflow facts used by prompt-token completions at a document offset. */
+export function getWorkflowPromptCompletionContext(
+  text: string,
+  kind: CtrlYokeFileKind,
+  offset: number
+): PromptCompletionWorkflowContext | undefined {
+  const span = getWorkflowTextSpans(text, kind).find(
+    (candidate) =>
+      candidate.exact &&
+      offset >= candidate.sourceRange.start &&
+      offset <= candidate.sourceRange.end
+  );
+  if (!span) return undefined;
+  const root =
+    kind === CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN
+      ? undefined
+      : parseWorkflowDocumentRoot(text, kind);
+  const fields = isRecord(root) ? root : {};
+  const steps = Array.isArray(fields[PROMPT_PROPERTIES.STEPS])
+    ? (fields[PROMPT_PROPERTIES.STEPS] as unknown[])
+    : [];
+  const diagnosticContext = getSpanContext(span, root);
+  const visibleEntries = steps.slice(0, diagnosticContext.stepIndex);
+  const stepNames = visibleEntries.flatMap((entry) => {
+    const members = parallelMembers(entry);
+    const authored = members ?? [entry];
+    return authored.map((member) =>
+      isRecord(member) && typeof member[PROMPT_PROPERTIES.NAME] === "string"
+        ? (member[PROMPT_PROPERTIES.NAME] as string)
+        : undefined
+    );
+  });
+  const vars = isRecord(fields[PROMPT_PROPERTIES.VARS])
+    ? (fields[PROMPT_PROPERTIES.VARS] as Record<string, unknown>)
+    : {};
+  return {
+    stepNames,
+    vars,
+    field: diagnosticContext.field,
+    hasPreCondition: diagnosticContext.hasPreCondition,
+    stepCount: diagnosticContext.stepCount,
+    hasFinalStep: diagnosticContext.hasFinalStep,
   };
 }
 
@@ -130,7 +197,8 @@ function getSpanContext(
 export async function getWorkflowPromptDiagnostics(
   text: string,
   kind: CtrlYokeFileKind,
-  resolve: ContextReferenceResolver
+  resolve: ContextReferenceResolver,
+  settingsPreCondition?: unknown
 ): Promise<PromptDiagnostic[]> {
   // An inexact span (a decoder gap) maps offsets only approximately; a squiggle
   // on the wrong characters is worse than none.
@@ -146,7 +214,10 @@ export async function getWorkflowPromptDiagnostics(
   const perSpan = await Promise.all(
     spans.map(async (span) => {
       const diagnostics = [
-        ...getPromptDiagnostics(span.text, getSpanContext(span, root)),
+        ...getPromptDiagnostics(
+          span.text,
+          getSpanContext(span, root, settingsPreCondition)
+        ),
         ...(await getReferenceDiagnostics(span.text, resolve)),
       ];
       return diagnostics.map((diagnostic) => ({

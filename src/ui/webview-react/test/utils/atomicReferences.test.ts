@@ -570,13 +570,13 @@ describe("atomic reference presentation", () => {
       ]);
     });
 
-    it("treats an unpaired or cross-line backtick as plain text", () => {
+    it("keeps unpaired backticks plain and multiline code spans inert", () => {
       expect(
         chipTexts("It's a ` stray @src/a.ts !TOKEN_A\n/skill:alpha $previous")
       ).toEqual(ALL_LIVE);
       expect(
         chipTexts("Open `@src/a.ts !TOKEN_A\nclose /skill:alpha` $previous")
-      ).toEqual(ALL_LIVE);
+      ).toEqual(["$previous"]);
     });
 
     it("does not treat an escaped backtick as a delimiter", () => {

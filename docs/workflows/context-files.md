@@ -111,11 +111,17 @@ not expanded. Wrap a token in backticks to write about it, and use a fence when
 you paste logs, examples, or earlier ctrlyoke instructions that contain `@`,
 `#`, `~`, `$`, `!`, or `/skill:` text.
 
-A fence starts with three or more backticks at the beginning of a line (up to
-three spaces of indentation) and ends at a line that starts with at least as
-many. Inline code must open and close on the same line with the same number of
-backticks; a backtick with no partner on its line is plain text and does not
-hide anything after it.
+A fence starts with three or more backticks or tildes at a CommonMark line
+boundary, including on a list marker line or inside a list item or blockquote.
+Its closer uses the same character, has at least as many marks, and contains
+only trailing whitespace. A closer with an info string does not close the
+fence. The fence ends with its list or blockquote container. An unclosed fence
+stays live until it has a closer, so references inside it can still expand
+while the prompt is being written; a later closed fence is still recognized.
+Inline code can cross one line break within a paragraph; a blank line, new list
+item or heading ends the paragraph. Its closing run must have the same number
+of backticks as its opener. Backslashes do not escape delimiters inside code.
+An unmatched backtick run is plain text and does not hide anything after it.
 
 A secret grant written in plain prompt text is real. A grant not yet approved
 for the workspace stops the workflow when that step starts.

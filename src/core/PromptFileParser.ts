@@ -34,11 +34,18 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
   STEP_TYPES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   WORKFLOW_PROPERTY_KEYS,
   WORKFLOW_VALIDATION_WARNING_CODES,
+  type WorkflowDocumentIssueSeverity,
   USER_FEEDBACK_ACTIONS,
+  USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
   SCRIPT_STEP_COPY_FIELDS,
+} from "../types/DashboardConstants";
+import {
+  CTRLYOKE_FILE_KINDS,
+  type CtrlYokeFileKind,
 } from "../types/DashboardConstants";
 import {
   describeIncompleteComparison,
@@ -68,6 +75,26 @@ type ParallelValidationProperties = Pick<
   PromptFile,
   "priorContext" | "sessionId" | "maxSteps"
 >;
+
+export interface WorkflowTextValidationIssue {
+  instancePath: string;
+  message: string;
+  severity: WorkflowDocumentIssueSeverity;
+  position?: { readonly line: number; readonly column: number };
+}
+
+export interface WorkflowTextValidationResult {
+  readonly issues: WorkflowTextValidationIssue[];
+}
+
+class WorkflowStructureValidationError extends Error {
+  constructor(
+    message: string,
+    readonly instancePath: string
+  ) {
+    super(message);
+  }
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -274,39 +301,211 @@ export class PromptFileParser {
     return this.validateSchemaAndGetWarnings(parsed);
   }
 
+  /**
+   * Validate unsaved workflow text without normalizing, loading, logging or
+   * notifying. Kept host-agnostic for dashboard and language-server callers.
+   */
+  validateWorkflowText(
+    text: string,
+    kind: CtrlYokeFileKind
+  ): WorkflowTextValidationResult {
+    let sourceLineOffset = 0;
+    try {
+      let parsed: unknown;
+      if (kind === CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN) {
+        const located = splitMarkdownFrontmatter(text);
+        if (!located) return { issues: [] };
+        sourceLineOffset =
+          text.slice(0, text.indexOf(located.frontmatter)).split("\n").length -
+          1;
+        const frontmatter = yaml.load(located.frontmatter, {
+          schema: WORKFLOW_YAML_SCHEMA,
+        });
+        if (
+          frontmatter !== null &&
+          frontmatter !== undefined &&
+          !isObject(frontmatter)
+        ) {
+          return {
+            issues: [
+              {
+                instancePath: "",
+                message:
+                  "Markdown frontmatter must contain a YAML mapping or null",
+                severity: "error",
+              },
+            ],
+          };
+        }
+        this.validateWorkflowBeforeNormalization(
+          frontmatter,
+          "prompt.prompt.md",
+          "Markdown frontmatter",
+          true
+        );
+        return { issues: [] };
+      } else if (kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON) {
+        parsed = JSON.parse(text);
+      } else {
+        parsed = yaml.load(text, { schema: WORKFLOW_YAML_SCHEMA });
+      }
+
+      return {
+        issues: this.validateWorkflowBeforeNormalization(
+          structuredClone(parsed),
+          kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+            ? "workflow.ctrlyoke.json"
+            : "workflow.ctrlyoke.yaml",
+          kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON ? "JSON" : "YAML"
+        ).issues,
+      };
+    } catch (error) {
+      const issue: WorkflowTextValidationIssue = {
+        instancePath:
+          error instanceof WorkflowStructureValidationError
+            ? error.instancePath
+            : "",
+        message: error instanceof Error ? error.message : String(error),
+        severity: "error",
+      };
+      const mark = (error as { mark?: { line?: number; column?: number } })
+        ?.mark;
+      if (
+        mark &&
+        typeof mark.line === "number" &&
+        typeof mark.column === "number"
+      ) {
+        issue.position = {
+          line: mark.line + sourceLineOffset + 1,
+          column: mark.column + 1,
+        };
+      } else if (error instanceof SyntaxError) {
+        const match = /position\s+(\d+)/i.exec(error.message);
+        if (match) {
+          const before = text.slice(0, Number(match[1]));
+          issue.position = {
+            line: (before.match(/\n/g)?.length ?? 0) + 1,
+            column: before.length - before.lastIndexOf("\n"),
+          };
+        }
+      }
+      return { issues: [issue] };
+    }
+  }
+
   private async validateAndNormalizeWithWarnings(
     parsed: any,
     contentPath: string
   ): Promise<{ workflow: PromptFile; warnings: WorkflowValidationWarning[] }> {
-    this.assertSupportedWorkflowSchema(
+    const validation = this.validateWorkflowBeforeNormalization(
       parsed,
       contentPath,
       path.extname(contentPath).toLowerCase() === ".json" ? "JSON" : "YAML"
     );
-    parsed = migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, parsed).doc;
-    if (parsed?._runtime) {
-      parsed = migrateToCurrent(PERSISTED_STORES.RUN_FILE, parsed).doc;
+    const errors = validation.issues.filter(
+      (issue) => issue.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    );
+    if (errors.length > 0) {
+      throw new Error(
+        `Validation failed: ${errors.map((issue) => `${issue.instancePath}: ${issue.message}`).join(", ")}`
+      );
     }
-    this.validateAuthoredParallelStructure(parsed);
-
-    if (
-      parsed?.vars &&
-      typeof parsed.vars === "object" &&
-      !Array.isArray(parsed.vars)
-    ) {
-      const variableKeyErrors = getVariableKeyErrors(Object.keys(parsed.vars));
-      if (variableKeyErrors.length > 0) {
-        throw new Error(
-          `Validation failed: vars: ${variableKeyErrors.join(", ")}`
-        );
-      }
-    }
-
-    const warnings = this.validateSchemaAndGetWarnings(parsed);
+    parsed = validation.parsed;
+    const warnings = validation.warnings;
     const workflow = await this.normalizePromptFile(parsed, contentPath);
     workflow.schemaVersion =
       CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION];
     return { workflow, warnings };
+  }
+
+  /**
+   * Shared, side-effect-free checks run before workflow normalization. The
+   * file loader consumes the migrated value and warnings; editor callers get
+   * the same findings without logging, notifications or filesystem access.
+   */
+  private validateWorkflowBeforeNormalization(
+    source: unknown,
+    contentPath: string,
+    format: string,
+    markdownFrontmatter = false
+  ): {
+    parsed: unknown;
+    issues: WorkflowTextValidationIssue[];
+    warnings: WorkflowValidationWarning[];
+  } {
+    this.assertSupportedWorkflowSchema(source, contentPath, format);
+    let parsed = migrateToCurrent(
+      PERSISTED_STORES.WORKFLOW_DEFINITION,
+      source
+    ).doc;
+    if (!markdownFrontmatter && isObject(parsed) && parsed._runtime) {
+      parsed = migrateToCurrent(PERSISTED_STORES.RUN_FILE, parsed).doc;
+    }
+    if (markdownFrontmatter) return { parsed, issues: [], warnings: [] };
+
+    const issues: WorkflowTextValidationIssue[] = [];
+    try {
+      this.validateAuthoredParallelStructure(parsed);
+    } catch (error) {
+      issues.push({
+        instancePath:
+          error instanceof WorkflowStructureValidationError
+            ? error.instancePath
+            : "",
+        message: error instanceof Error ? error.message : String(error),
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+      });
+    }
+    if (isObject(parsed) && isObject(parsed.vars)) {
+      const variableKeyErrors = getVariableKeyErrors(Object.keys(parsed.vars));
+      if (variableKeyErrors.length > 0) {
+        issues.push({
+          instancePath: "/vars",
+          message: variableKeyErrors.join(", "),
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+        });
+      }
+    }
+
+    const validation = this.validateSchema(parsed);
+    const warningByPointer = new Map(
+      validation.warnings.map((warning) => [warning.propertyPointer, warning])
+    );
+    for (const error of validation.errors) {
+      const property = error.params.unevaluatedProperty;
+      const instancePath =
+        typeof property === "string"
+          ? PromptFileParser.joinPointer(error.instancePath, property)
+          : error.instancePath;
+      const warning = warningByPointer.get(instancePath);
+      issues.push({
+        instancePath,
+        message:
+          warning?.message ??
+          (typeof property === "string"
+            ? `Unknown property '${property}' at ${instancePath}: ${error.message ?? "schema validation failed"}`
+            : (error.message ?? "Schema validation failed")),
+        severity: warning
+          ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+          : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+      });
+    }
+    for (const warning of validation.warnings) {
+      issues.push({
+        instancePath: warning.propertyPointer,
+        message: warning.message,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      });
+    }
+    const uniqueIssues = new Map<string, WorkflowTextValidationIssue>();
+    for (const issue of issues) {
+      uniqueIssues.set(`${issue.instancePath}\0${issue.message}`, issue);
+    }
+    return {
+      parsed,
+      issues: [...uniqueIssues.values()],
+      warnings: validation.warnings,
+    };
   }
 
   private assertSupportedWorkflowSchema(
@@ -351,12 +550,25 @@ export class PromptFileParser {
   private validateSchemaAndGetWarnings(
     parsed: unknown
   ): WorkflowValidationWarning[] {
-    if (!this.strictValidator || !this.relaxedValidator) return [];
+    const result = this.validateSchema(parsed);
+    if (result.errors.length > 0) {
+      throw this.schemaValidationError(result.errors);
+    }
+    return result.warnings;
+  }
 
-    if (this.strictValidator(parsed)) return [];
+  private validateSchema(parsed: unknown): {
+    errors: ErrorObject[];
+    warnings: WorkflowValidationWarning[];
+  } {
+    if (!this.strictValidator || !this.relaxedValidator) {
+      return { errors: [], warnings: [] };
+    }
+
+    if (this.strictValidator(parsed)) return { errors: [], warnings: [] };
     const originalErrors = [...(this.strictValidator.errors ?? [])];
     if (!this.relaxedValidator(parsed)) {
-      throw this.schemaValidationError(originalErrors);
+      return { errors: originalErrors, warnings: [] };
     }
 
     let scratch = structuredClone(parsed);
@@ -408,11 +620,11 @@ export class PromptFileParser {
       }
 
       if (!removed) {
-        throw this.schemaValidationError(errors);
+        return { errors, warnings };
       }
     }
 
-    return warnings;
+    return { errors: [], warnings };
   }
 
   private schemaValidationError(errors: readonly ErrorObject[]): Error {
@@ -608,14 +820,15 @@ export class PromptFileParser {
             "Markdown frontmatter must contain a YAML mapping or null"
           );
         }
-        this.assertSupportedWorkflowSchema(
+        const validation = this.validateWorkflowBeforeNormalization(
           frontmatter,
           filePath,
-          "Markdown frontmatter"
+          "Markdown frontmatter",
+          true
         );
         if (isObject(frontmatter)) {
-          migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
-          description = frontmatter.description;
+          description = (validation.parsed as Record<string, unknown>)
+            .description;
         }
       }
 
@@ -644,7 +857,7 @@ export class PromptFileParser {
       if (isNewerSchemaError(error)) {
         this.lastNewerSchemaError = error;
         this.userFeedbackSink?.notify({
-          severity: "error",
+          severity: USER_FEEDBACK_SEVERITY.ERROR,
           message: error.message,
           action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
         });
@@ -900,14 +1113,18 @@ export class PromptFileParser {
     }
 
     if (hasOwn(parsed, "parallel")) {
-      throw new Error(
-        "`parallel` is only accepted as an item of the root `steps` array"
+      throw new WorkflowStructureValidationError(
+        "`parallel` is only accepted as an item of the root `steps` array",
+        "/parallel"
       );
     }
 
     const finalStep = parsed.finalStep;
     if (isObject(finalStep) && hasOwn(finalStep, "parallel")) {
-      throw new Error("finalStep cannot be parallel");
+      throw new WorkflowStructureValidationError(
+        "finalStep cannot be parallel",
+        "/finalStep/parallel"
+      );
     }
 
     if (!Array.isArray(parsed.steps)) {
@@ -919,8 +1136,9 @@ export class PromptFileParser {
         isObject(item) && hasOwn(item, "parallel")
     );
     if (authoredGroups.length > 0 && parsed.parallelGroups !== undefined) {
-      throw new Error(
-        "A workflow cannot contain both `parallel:` items and root `parallelGroups`"
+      throw new WorkflowStructureValidationError(
+        "A workflow cannot contain both `parallel:` items and root `parallelGroups`",
+        "/parallelGroups"
       );
     }
 
@@ -929,22 +1147,28 @@ export class PromptFileParser {
         return;
       }
       if (!Array.isArray(item.parallel)) {
-        throw new Error(`Step ${stepIndex + 1}: parallel must be an array`);
+        throw new WorkflowStructureValidationError(
+          `Step ${stepIndex + 1}: parallel must be an array`,
+          `/steps/${stepIndex}/parallel`
+        );
       }
       if (item.parallel.length < 2) {
-        throw new Error(
-          `Step ${stepIndex + 1}: parallel must contain at least two prompt or script steps`
+        throw new WorkflowStructureValidationError(
+          `Step ${stepIndex + 1}: parallel must contain at least two prompt or script steps`,
+          `/steps/${stepIndex}/parallel`
         );
       }
       item.parallel.forEach((member, memberIndex) => {
         if (isObject(member) && hasOwn(member, "parallel")) {
-          throw new Error(
-            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} cannot be a nested parallel container`
+          throw new WorkflowStructureValidationError(
+            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} cannot be a nested parallel container`,
+            `/steps/${stepIndex}/parallel/${memberIndex}/parallel`
           );
         }
         if (!this.isPromptOrScriptSource(member)) {
-          throw new Error(
-            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt or script step`
+          throw new WorkflowStructureValidationError(
+            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt or script step`,
+            `/steps/${stepIndex}/parallel/${memberIndex}`
           );
         }
       });

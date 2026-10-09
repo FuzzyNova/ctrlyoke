@@ -10,10 +10,13 @@ import {
   createCodeRangeDecorationExtension,
   createContextReferenceLintExtension,
   createLinkDecorationExtension,
+  createPromptDecorationThemeExtension,
 } from "@components/editor/CodeMirrorEditor";
 import {
   createPromptMarkdownExtension,
   createPromptMarkdownLanguage,
+  PROMPT_MARKDOWN_DECORATION_CLASSES,
+  PROMPT_MARKDOWN_NODE_NAMES,
   resolveFenceLanguage,
 } from "@utils/codemirrorLanguage";
 import {
@@ -50,12 +53,23 @@ function parse(doc: string) {
   return tree;
 }
 
-function nodeRanges(doc: string, names: readonly string[]) {
+function visuallyCodedRanges(doc: string) {
   const ranges: Array<{ from: number; to: number }> = [];
   parse(doc).iterate({
     enter: (node) => {
-      if (names.includes(node.name)) {
+      if (node.name === "InlineCode") {
         ranges.push({ from: node.from, to: node.to });
+      } else if (node.name === PROMPT_MARKDOWN_NODE_NAMES.FENCED_CODE) {
+        let codeMarks = 0;
+        for (
+          let child = node.node.firstChild;
+          child;
+          child = child.nextSibling
+        ) {
+          if (child.name === PROMPT_MARKDOWN_NODE_NAMES.CODE_MARK)
+            codeMarks += 1;
+        }
+        if (codeMarks >= 2) ranges.push({ from: node.from, to: node.to });
       }
     },
   });
@@ -141,9 +155,9 @@ describe("prompt markdown highlighting", () => {
 });
 
 describe("markdown and code-range parity", () => {
-  // Each entry: a doc, and whether Lezer's code nodes line up with
-  // `findCodeRanges`. `findCodeRanges` is the only authority on what is
-  // literal; where Lezer disagrees the entry documents the gap.
+  // `visuallyCodedRanges` excludes unclosed fences, whose editor colours are
+  // suppressed while the user is still typing. All other cases must match the
+  // runtime authority exactly.
   const corpus: Array<{ name: string; doc: string; agree: boolean }> = [
     { name: "inline span", doc: "use `code` here", agree: true },
     { name: "double-backtick span", doc: "use ``a ` b`` here", agree: true },
@@ -156,35 +170,101 @@ describe("markdown and code-range parity", () => {
     },
     { name: "backticks inside a fence", doc: "```\na `b` c\n```", agree: true },
     { name: "unmatched backtick", doc: "a ` b\nc", agree: true },
-    // Known gaps: Lezer colours these as code while `findCodeRanges` leaves
-    // their references live. Filed as
-    // dev/bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md.
-    { name: "unclosed fence", doc: "```ts\nsee @src/a.ts", agree: false },
+    {
+      name: "inline span after an unmatched double-backtick opener",
+      doc: "``unclosed then `@x`",
+      agree: true,
+    },
+    {
+      name: "inline span after an unmatched single-backtick opener",
+      doc: "a ` b ``@x``",
+      agree: true,
+    },
+    {
+      name: "backslash escapes only the first tick in a run",
+      doc: "\\``@x`",
+      // Runtime follows CommonMark's escaped-run rule; Lezer treats the whole
+      // run as escaped and leaves this span unmarked.
+      agree: false,
+    },
+    { name: "unclosed fence", doc: "```ts\nsee @src/a.ts", agree: true },
     {
       name: "fence indented in a list item",
       doc: "- item\n\n    ```\n    code\n    ```",
-      agree: false,
+      agree: true,
     },
-    { name: "tilde fence", doc: "~~~\ncode\n~~~", agree: false },
+    { name: "tilde fence", doc: "~~~\ncode\n~~~", agree: true },
     {
       name: "closer with an info string",
       doc: "```\na\n```js\nb\n```",
-      agree: false,
+      agree: true,
     },
     {
       name: "inline span across a line break",
       doc: "a `b\nc` d",
-      agree: false,
+      agree: true,
     },
     {
       name: "fence in a blockquote",
       doc: "> ```\n> code\n> ```",
+      agree: true,
+    },
+    {
+      name: "backslash inside inline code",
+      doc: "Run `C:\\tmp\\` then @file.md and `x`",
+      agree: true,
+    },
+    {
+      name: "later fence after an unclosed tilde opener",
+      doc: "~~~~~~~~~~\nNotes\n\n```\n$previous\n```",
+      // Runtime recovers and masks the later closed fence; Lezer keeps the
+      // unclosed tilde fence open through EOF, so it paints no later range.
       agree: false,
+    },
+    {
+      name: "later fence after an unclosed shorter backtick opener",
+      doc: "````\n\n```\n$previous\n```",
+      agree: false,
+    },
+    {
+      name: "fence on a list marker line",
+      doc: "- ```\n  code @x\n  ```",
+      agree: true,
+    },
+    {
+      name: "ordered list fence on its marker line",
+      doc: "1. ```\n   @x\n   ```",
+      agree: true,
+    },
+    {
+      name: "blockquote fence ends with its container",
+      doc: "> ```\n> code\n\nRegular @ref text\n\n```\nx",
+      agree: true,
+    },
+    {
+      name: "blockquote fence rejects lazy continuation",
+      doc: "> ```\n@x\n> ```",
+      agree: true,
+    },
+    {
+      name: "tilde fence info may contain backticks",
+      doc: "~~~ `js`\n@a\n~~~",
+      agree: true,
+    },
+    {
+      name: "inline span stops at a new list item",
+      doc: "- a `x\n- b` @y",
+      agree: true,
+    },
+    {
+      name: "inline span stops at an ATX heading",
+      doc: "`a\n# H `b",
+      agree: true,
     },
   ];
 
   it.each(corpus)("$name", ({ doc, agree }) => {
-    const lezer = nodeRanges(doc, ["InlineCode", "FencedCode"]);
+    const lezer = visuallyCodedRanges(doc);
     const authority = findCodeRanges(doc);
     if (agree) {
       expect(lezer).toEqual(authority);
@@ -192,13 +272,43 @@ describe("markdown and code-range parity", () => {
       expect(lezer).not.toEqual(authority);
     }
   });
+
+  it("suppresses syntax colours until an opened fence has a closer", () => {
+    const view = mount("```ts\nconst value = 1;", [
+      createPromptMarkdownExtension(),
+    ]);
+    expect(
+      view.dom.querySelector(
+        `.${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE}`
+      )
+    ).not.toBeNull();
+
+    view.dispatch({
+      changes: { from: view.state.doc.length, insert: "\n```" },
+    });
+    expect(
+      view.dom.querySelector(
+        `.${PROMPT_MARKDOWN_DECORATION_CLASSES.UNCLOSED_FENCE}`
+      )
+    ).toBeNull();
+  });
 });
 
 describe("ctrlyoke decorations over markdown highlighting", () => {
   const withMarkdown = (...extensions: Extension[]) => [
     createPromptMarkdownExtension(),
+    createPromptDecorationThemeExtension(),
     ...extensions,
   ];
+
+  it("uses a valid VS Code variable for the inline code border", () => {
+    mount("`inline`", withMarkdown());
+    const styleText = Array.from(document.querySelectorAll("style"))
+      .map((style) => style.textContent ?? "")
+      .join("\n");
+    expect(styleText).toContain("--vscode-panel-border");
+    expect(styleText).not.toContain("--vscode-markdown-extension.");
+  });
 
   it("renders a link as the innermost span inside emphasis and link syntax", () => {
     const view = mount(
@@ -219,6 +329,21 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
     }
   });
 
+  it("keeps every fragment of a reference visually uniform inside emphasis", () => {
+    const view = mount(
+      "see @src/a*b*c.ts",
+      withMarkdown(Prec.highest(createLinkDecorationExtension()))
+    );
+    const links = Array.from(view.dom.querySelectorAll(".cm-link"));
+    expect(links.map((el) => el.textContent).join("")).toBe("@src/a*b*c.ts");
+    expect(links.length).toBeGreaterThan(1);
+    for (const link of links) {
+      expect(getComputedStyle(link).fontStyle).toBe("normal");
+      expect(getComputedStyle(link).fontWeight).toBe("normal");
+      expect(link.classList.contains("cm-link")).toBe(true);
+    }
+  });
+
   it("still replaces a reference inside emphasis with a chip", () => {
     const view = mount(
       "**read @src/a.ts**",
@@ -227,18 +352,24 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
     expect(view.dom.querySelectorAll(".cm-atomic-ref")).toHaveLength(1);
   });
 
-  it("decorates no reference inside code and marks the code range", () => {
+  it("decorates no reference inside code and distinguishes inline and fenced ranges", () => {
     const view = mount(
-      'see `@src/a.ts`\n```json\n{"a": 1}\n```',
+      'see `@src/a.ts`\n```json\n{"a": "value", "n": 1}\n```',
       withMarkdown(
         createCodeRangeDecorationExtension(),
         Prec.highest(createLinkDecorationExtension())
       )
     );
     expect(view.dom.querySelector(".cm-link")).toBeNull();
-    expect(view.dom.querySelectorAll(".cm-code-range").length).toBeGreaterThan(
-      0
-    );
+    expect(view.dom.querySelector(".cm-code-range-inline")).not.toBeNull();
+    expect(view.dom.querySelector(".cm-code-range-fenced")).not.toBeNull();
+    const stringClass = createCtrlYokeHighlightStyle().style([tags.string]);
+    if (!stringClass) throw new Error("string highlight class is missing");
+    expect(
+      Array.from(view.dom.querySelectorAll("span")).some((span) =>
+        span.classList.contains(stringClass)
+      )
+    ).toBe(true);
   });
 });
 
@@ -289,10 +420,10 @@ describe("suppressed-expansion warning with markdown on", () => {
     await lint("Read `@src/real.ts` now", new Set(["src/real.ts"]));
     const lintRange = lastView!.dom.querySelector(".cm-lintRange");
     expect(lintRange).not.toBeNull();
-    // The code range's opaque background would hide the squiggle drawn on
-    // the lint span's own background if it sat inside it.
-    expect(lintRange!.querySelector(".cm-code-range")).toBeNull();
-    expect(lintRange!.closest(".cm-code-range")).not.toBeNull();
+    // The lint span sits beside (and outside) the code mark, so its squiggle
+    // remains visible with the inline border.
+    expect(lintRange!.querySelector(".cm-code-range-inline")).toBeNull();
+    expect(lintRange!.closest(".cm-code-range-inline")).not.toBeNull();
   });
 
   it("stays silent for a missing file in code", async () => {

@@ -1,8 +1,8 @@
 # Prompt Editor Markdown Highlighting Plan
 
 **Status (2026-10-08):** Phases 0 (readable code ranges), 1 (single-source palette), 2
-(markdown in the prompt editor) and 4 (VS Code injection grammar, with the literal-reference
-bug fix) are done. Phase 3 is not started.
+(markdown in the prompt editor), 3 (workspace editor and YAML prompts) and 4 (VS Code injection
+grammar, with the literal-reference bug fix) are done.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -10,13 +10,13 @@ against the ctrlyoke file support and prompt diagnostics plans.
 
 **Priority:** P2. This is readability polish on the product's most-used surface. It is also
 visible in every prompt-editor capture in
-[`SCREENSHOTS_AND_MEDIA_PLAN.md`](SCREENSHOTS_AND_MEDIA_PLAN.md) (#9's completion clip, #13a).
+[`SCREENSHOTS_AND_MEDIA_PLAN.md`](../backlog/SCREENSHOTS_AND_MEDIA_PLAN.md) (#9's completion clip, #13a).
 
 **Related plans:**
 
 - [`WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md`](WORKSPACE_EDITOR_CTRLYOKE_FILE_SUPPORT_PLAN.md):
   its `PROMPT_TEXT` ranges are where Phase 3 here nests markdown inside YAML prompt values.
-- [`STANDALONE_THEME_SNAPSHOTS_PLAN.md`](STANDALONE_THEME_SNAPSHOTS_PLAN.md): how the hosted
+- [`STANDALONE_THEME_SNAPSHOTS_PLAN.md`](../backlog/STANDALONE_THEME_SNAPSHOTS_PLAN.md): how the hosted
   browser gets VS Code's colour variables. The palette below must work when only a snapshot is
   available.
 
@@ -234,6 +234,8 @@ These were verified against `src/` on 2026-10-07.
 - **Workspace editor, `.prompt.md`.** `getLanguageExtension` already gives `.md` files
   `markdown()`, and since Phase 1 the shared `HighlightStyle`. Switch it to the same configured
   markdown, with nested languages, so a prompt looks the same in both editors.
+  Plain `.md` files use the same configuration too; the workspace editor has one markdown
+  experience, regardless of whether the file is a ctrlyoke prompt.
 - **YAML prompt values.** In `.ctrlyoke.yaml` opened in the workspace editor, a
   `prompt: |` block scalar is markdown. Use `parseMixed` on lang-yaml's block-literal nodes,
   limited to the `PROMPT_TEXT` ranges from the ctrlyoke file support plan's
@@ -349,23 +351,47 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
        `Prec.high`. **The code-range mark stays at default precedence** (Wave 3 review fix):
        a higher-precedence mark is drawn inside a lower one, and at `Prec.highest` its opaque
        background covered the suppressed-expansion squiggle and selection matches inside code.
-     - **Not built: the planned code-range restyle** (the inline `codeSpan.border` box, and
-       fences with no background so nested colours show through). `.cm-code-range` still has
-       Phase 0's preformat background on both. Deferred, not dropped.
+     - **Wave 5 code-range restyle:** `.cm-code-range` keeps the editor code font;
+       `.cm-code-range-inline` adds `--cy-syntax-inline-code` and
+       `--vscode-panel-border`; `.cm-code-range-fenced` has no background so nested-language
+       colours show through.
+       The range remains at default precedence, keeping lint squiggles and selection matches
+       visible. A reference split by emphasis is also reset to normal font style/weight on each
+       `.cm-link` fragment, preserving a uniform link appearance while allowing the DOM spans
+       to remain split.
+     - **M2b review fixes:** `findCodeRanges` ignores escapes only outside inline code, rescans
+       after unclosed fence openers, recognizes fences on list-marker lines, scopes fences to
+       their list/blockquote container, and accepts backticks in tilde-fence info strings.
+       Inline delimiter scanning tracks line starts in one pass and stops at list-item and ATX
+       heading boundaries. The code-range decoration rebuilds when Lezer advances its syntax
+       tree and classifies ranges against sorted fences in one pass. Unit and editor parity
+       tests cover these cases and a large backtick-heavy performance budget. The two
+       later-fence-after-unclosed-opener cases are intentional parity gaps: runtime recovers at
+       later closed fences, while Lezer keeps the unclosed opener live through EOF.
      - Spellcheck now also skips fence info strings (`CodeInfo`) and link destinations
        (`URL`) via `getMarkdownNonProseRanges`. **The plan said it already skipped
        `findCodeRanges` ranges; it does not** (it skips only `@`/`#`/`~` references). That is
        unchanged here, so words inside backticks and fences are still spellchecked.
-     - Tests are in `test/components/editor/CodeMirrorEditorMarkdown.test.tsx`: the parity
-       corpus. The original seven cases agree with `findCodeRanges`; the Wave 3 review added
-       the six that don't (unclosed, list-indented, `~~~` and blockquote fences, a closer with
-       an info string, inline code across a line break), filed as
-       [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/backlog/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md),
-       fenced JSON highlighting, quote/list tags, `#selection:` not a heading, Enter unchanged,
-       links and chips inside emphasis and link syntax, the suppressed-expansion warning with
-       markdown on, and a ~100KB parse and edit budget. Completions inside a fence are
-       untouched: the prompt editor passes its own completion sources (`override`), so the
-       markdown language's `autocomplete` data is never consulted.
+     - **Wave 5 parity fix:** `findCodeRanges` now matches CommonMark for tilde fences, fences
+       in list items and blockquotes, bare fence closers (a closer with an info string does
+       not close), and inline spans across one line break. These runtime semantics flow
+       through the existing consumers: `PromptCodeRanges`, `WorkflowPromptRanges`,
+       `WorkflowTextDecoding`, `PromptReferenceScanner`, `PromptDiagnosticRules`,
+       `atomicReferences`, and runtime expansion all continue to use `findCodeRanges`.
+       Unclosed fences remain live at runtime; a prompt-editor decoration suppresses the
+       nested syntax colours until Lezer finds a closing `CodeMark`. The code-range mark stays
+       at default precedence, so the suppressed-expansion squiggle remains visible.
+     - Tests are in `test/components/editor/CodeMirrorEditorMarkdown.test.tsx` and
+       `src/test/unit/FileReferenceParser.test.ts`: the parity corpus now agrees for every
+       visible code range, and the unit tests pin each changed runtime case plus the unclosed
+       fence exception. The same editor tests cover fenced JSON highlighting, quote/list tags,
+       `#selection:` not a heading, Enter unchanged, links and chips inside emphasis and link
+       syntax, the suppressed-expansion warning with markdown on, and a ~100KB parse and edit
+       budget. Completions inside a fence are untouched: the prompt editor passes its own
+       completion sources (`override`), so the markdown language's `autocomplete` data is
+       never consulted. See the resolved
+       [`prompt-markdown-code-colouring-disagrees-with-find-code-ranges`](../bugs/implemented/prompt-markdown-code-colouring-disagrees-with-find-code-ranges.md)
+       bug for the per-case decision.
    - Original scope, kept for reference:
    - Add the `markdown()` compartment with GFM and lazy nested languages.
    - **The markdown roles mostly exist already** (Phase 1 maps heading, strong, emphasis,
@@ -396,11 +422,23 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
        precedence rule holds.
      - a performance check on a ~25K-token prompt, where the typing-latency budget must hold
 
-4. **Phase 3: Workspace editor and YAML prompts.**
-   - `.prompt.md` gets the shared markdown configuration with nested languages. It already
-     uses the shared `HighlightStyle` (Phase 1 did that for every `.md` file).
-   - YAML `prompt:` block scalars get nested markdown, scheduled with the ctrlyoke file support
-     plan's Phase 6.
+4. **Phase 3: Workspace editor and YAML prompts.** **Done 2026-10-08.**
+   - **As built:** `getLanguageExtension` applies `createPromptMarkdownLanguage()` to `.md`,
+     including `.prompt.md`, so GFM, nested fence languages and the shared highlight style are
+     consistent across the workspace and prompt editors. YAML workflow files keep the configured
+     `yamlLanguage` through the existing lazy workflow-file support compartment. A single
+     source-mapped decoration plugin parses each decoded `PROMPT_TEXT` span as Markdown and maps
+     tokens back through `toSourceOffset`; it does not overlay a second parser onto YAML. Span
+     parse results are cached by text, and unclosed-fence ranges stay live text without code
+     coloring. Quoted scalars remain YAML strings.
+   - The parser lives in its own dynamic YAML chunk. Workflow Markdown is installed in the
+     existing ctrlyoke support compartment after the workflow support chunk loads, so the editor
+     view stays mounted and F4 completions, F5 lint and hover, and F6a chips keep their state.
+     Tests in
+     `WorkspaceFileEditor.ctrlyokeFiles.test.tsx` cover `.prompt.md` JSON/heading classes, YAML
+     headings, emphasis, inline code and fenced JSON in root, retry and parallel prompt values,
+     indented code blocks and unclosed fences,
+     YAML keys/comments/following lines and quoted prompts, chips, and a large YAML edit budget.
 
 5. **Phase 4: VS Code injection grammar.** **Done 2026-10-08**, together with the bug fix
    below. This is independent of the webview phases and can land at any point.

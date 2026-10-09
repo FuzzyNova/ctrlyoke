@@ -3,6 +3,7 @@ import {
   useCallback,
   useRef,
   useMemo,
+  useState,
   useImperativeHandle,
   forwardRef,
 } from "react";
@@ -13,6 +14,7 @@ import {
   EditorSelection,
   RangeSetBuilder,
   type Extension,
+  type StateField,
 } from "@codemirror/state";
 import { keymap, repositionTooltips, type PluginValue } from "@codemirror/view";
 import {
@@ -23,11 +25,16 @@ import {
   redoDepth,
 } from "@codemirror/commands";
 import { Transaction } from "@codemirror/state";
-import { createThemeExtension } from "@utils/codemirrorTheme";
+import {
+  createAtomicReferenceWidgetTheme,
+  createThemeExtension,
+} from "@utils/codemirrorTheme";
 import {
   getLanguageExtension,
   createWorkspaceEditorHighlightExtension,
+  loadYamlLanguageExtension,
 } from "@utils/codemirrorLanguage";
+import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useLanguageIntelligence } from "@hooks/useLanguageIntelligence";
@@ -47,12 +54,25 @@ import {
   type WorkflowFileSupport,
 } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
 import { createWorkflowFileCompletionExtension } from "@utils/workflowFileSupport/workflowFileCompletionExtension";
+import {
+  createWorkflowOutlineHoverExtension,
+  createWorkflowPromptLintExtension,
+} from "@utils/workflowFileSupport/workflowPromptLintExtension";
+import {
+  createWorkflowDocumentLintExtension,
+  forceLinting,
+} from "@utils/workflowFileSupport/workflowDocumentLintExtension";
 import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/workflowValueDataSource";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
+import { createAtomicReferenceExtension } from "@components/editor/CodeMirrorEditor";
+import type { WorkflowTextSpan } from "@root/completions/WorkflowTextDecoding";
 import {
   ATOMIC_REFERENCE_KINDS,
+  CODEMIRROR_LANGUAGE_IDS,
+  CTRLYOKE_FILE_KINDS,
   LSP_METHODS,
+  PROMPT_FILE_LANGUAGE_IDS,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,
 } from "@root/types/DashboardConstants";
@@ -133,6 +153,8 @@ export const WorkspaceFileEditor = forwardRef<
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    const yamlLanguageCompartment = useRef(new Compartment());
+    const yamlLanguageExtensionRef = useRef<Extension>([]);
     const languageIntelligenceCompartment = useRef(new Compartment());
     const languageIntelligence = useLanguageIntelligence(filePath);
     const languageIntelligenceRef = useRef(languageIntelligence);
@@ -147,6 +169,22 @@ export const WorkspaceFileEditor = forwardRef<
     // Null until the lazily loaded location/completion chunk arrives; the
     // sources answer nothing meanwhile.
     const workflowSupportRef = useRef<WorkflowFileSupport | null>(null);
+    const [workflowSupportRevision, setWorkflowSupportRevision] = useState(0);
+    const workflowPromptRangesField = useMemo(
+      () =>
+        workflowSupportRevision > 0 && ctrlyokeFileKind
+          ? workflowSupportRef.current?.createWorkflowPromptRangesField(
+              ctrlyokeFileKind
+            )
+          : undefined,
+      [ctrlyokeFileKind, workflowSupportRevision]
+    );
+    const atomicContextReferences = useSettingsStore(
+      (state) => state.globalSettings.atomicContextReferences
+    );
+    const defaultPreCondition = useSettingsStore(
+      (state) => state.globalSettings.defaultPreCondition
+    );
     const isMultiRootWorkspace = useSettingsStore(
       (state) => state.globalSettings.isMultiRoot
     );
@@ -344,15 +382,71 @@ export const WorkspaceFileEditor = forwardRef<
     const ctrlyokeFileSupportExtension = useMemo<Extension>(
       () =>
         ctrlyokeFileKind && workflowPromptClient
-          ? createWorkflowFileCompletionExtension({
-              kind: ctrlyokeFileKind,
-              getSupport: () => workflowSupportRef.current,
-              getDataSource: createStoreWorkflowValueDataSource,
-              transport: getVsCodeApi(),
-              promptClient: workflowPromptClient,
-            })
+          ? [
+              ...(ctrlyokeFileKind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML &&
+              workflowSupportRef.current
+                ? [
+                    workflowSupportRef.current.createWorkflowPromptMarkdownLanguage(),
+                    ...(workflowPromptRangesField
+                      ? [
+                          workflowSupportRef.current.createWorkflowPromptMarkdownDecorations(
+                            workflowPromptRangesField
+                          ),
+                        ]
+                      : []),
+                  ]
+                : []),
+              createWorkflowFileCompletionExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
+                getDataSource: createStoreWorkflowValueDataSource,
+                transport: getVsCodeApi(),
+                promptClient: workflowPromptClient,
+              }),
+              createWorkflowDocumentLintExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
+                transport: getVsCodeApi(),
+              }),
+              createWorkflowPromptLintExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
+                transport: getVsCodeApi(),
+                getSettingsPreCondition: () => defaultPreCondition,
+              }),
+              createWorkflowOutlineHoverExtension({
+                kind: ctrlyokeFileKind,
+                getSupport: () => workflowSupportRef.current,
+              }),
+              ...(workflowPromptRangesField ? [workflowPromptRangesField] : []),
+              ...(atomicContextReferences && workflowPromptRangesField
+                ? [
+                    createAtomicReferenceExtension(
+                      undefined,
+                      undefined,
+                      (view, from, to) =>
+                        isWorkspacePromptReferenceRange(
+                          view,
+                          from,
+                          to,
+                          workflowPromptRangesField,
+                          ctrlyokeFileKind,
+                          filePath,
+                          workflowSupportRef.current
+                        )
+                    ),
+                  ]
+                : []),
+            ]
           : [],
-      [ctrlyokeFileKind, workflowPromptClient]
+      [
+        atomicContextReferences,
+        ctrlyokeFileKind,
+        defaultPreCondition,
+        filePath,
+        workflowPromptClient,
+        workflowPromptRangesField,
+      ]
     );
     const ctrlyokeFileSupportExtensionRef = useRef(
       ctrlyokeFileSupportExtension
@@ -363,7 +457,10 @@ export const WorkspaceFileEditor = forwardRef<
       if (!ctrlyokeFileKind) return;
       let cancelled = false;
       void loadWorkflowFileSupport().then((support) => {
-        if (!cancelled) workflowSupportRef.current = support;
+        if (!cancelled) {
+          workflowSupportRef.current = support;
+          setWorkflowSupportRevision((revision) => revision + 1);
+        }
       });
       return () => {
         cancelled = true;
@@ -372,10 +469,14 @@ export const WorkspaceFileEditor = forwardRef<
     }, [ctrlyokeFileKind]);
 
     const extensions = useMemo<Extension[]>(() => {
-      const langExt = getLanguageExtension(filePath);
+      const langExt =
+        ctrlyokeFileKind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+          ? null
+          : getLanguageExtension(filePath);
       return [
         basicSetup,
         createThemeExtension("editor"),
+        createAtomicReferenceWidgetTheme(),
         createWorkspaceEditorHighlightExtension(),
         createWorkspaceEditorLinkThemeExtension(),
         createWorkspaceReferenceDecorationExtension(),
@@ -385,6 +486,7 @@ export const WorkspaceFileEditor = forwardRef<
           openSecretsSettings
         ),
         ...(langExt ? [langExt] : []),
+        yamlLanguageCompartment.current.of(yamlLanguageExtensionRef.current),
         languageIntelligenceCompartment.current.of(
           languageIntelligenceRef.current.extensions
         ),
@@ -434,7 +536,32 @@ export const WorkspaceFileEditor = forwardRef<
       openToDirectory,
       openToFile,
       readOnly,
+      ctrlyokeFileKind,
     ]);
+
+    useEffect(() => {
+      const isPlainYaml =
+        ctrlyokeFileKind !== CTRLYOKE_FILE_KINDS.WORKFLOW_YAML &&
+        getLanguageFromPath(filePath) === CODEMIRROR_LANGUAGE_IDS.YAML;
+      if (!isPlainYaml) {
+        yamlLanguageExtensionRef.current = [];
+        viewRef.current?.dispatch({
+          effects: yamlLanguageCompartment.current.reconfigure([]),
+        });
+        return;
+      }
+      let cancelled = false;
+      void loadYamlLanguageExtension().then((extension) => {
+        if (cancelled || !viewRef.current) return;
+        yamlLanguageExtensionRef.current = extension;
+        viewRef.current.dispatch({
+          effects: yamlLanguageCompartment.current.reconfigure(extension),
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [ctrlyokeFileKind, filePath]);
 
     useEffect(() => {
       const view = viewRef.current;
@@ -454,6 +581,7 @@ export const WorkspaceFileEditor = forwardRef<
           ctrlyokeFileSupportExtension
         ),
       });
+      forceLinting(view);
     }, [ctrlyokeFileSupportExtension]);
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
@@ -651,6 +779,77 @@ function createWorkspaceEditorLinkThemeExtension() {
   });
 }
 
+function isWorkspacePromptReferenceRange(
+  view: EditorView,
+  from: number,
+  to: number,
+  field: StateField<readonly WorkflowTextSpan[]>,
+  kind: NonNullable<ReturnType<typeof getCtrlYokeFileKind>>,
+  filePath: string,
+  support: WorkflowFileSupport | null
+): boolean {
+  if (
+    !support ||
+    (kind !== CTRLYOKE_FILE_KINDS.WORKFLOW_YAML &&
+      kind !== CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN)
+  )
+    return false;
+
+  const spans = view.state.field(field, false) ?? [];
+  const docText = view.state.doc.toString();
+  const codeRanges = getCachedPromptCodeRanges(
+    spans,
+    docText,
+    support,
+    filePath,
+    kind
+  );
+
+  return spans.some((span) => {
+    if (
+      !span.exact ||
+      from < span.sourceRange.start ||
+      to > span.sourceRange.end
+    )
+      return false;
+
+    const source = docText.slice(span.sourceRange.start, span.sourceRange.end);
+    const quote = docText[span.sourceRange.start - 1];
+    if (
+      (quote === '"' && source.includes("\\")) ||
+      (quote === "'" && source.includes("''"))
+    )
+      return false;
+
+    return !codeRanges.some((range) => from >= range.from && to <= range.to);
+  });
+}
+
+const promptCodeRangesBySpans = new WeakMap<
+  readonly WorkflowTextSpan[],
+  ReturnType<WorkflowFileSupport["getPromptCodeRanges"]>
+>();
+
+function getCachedPromptCodeRanges(
+  spans: readonly WorkflowTextSpan[],
+  text: string,
+  support: WorkflowFileSupport,
+  filePath: string,
+  kind: NonNullable<ReturnType<typeof getCtrlYokeFileKind>>
+) {
+  const cached = promptCodeRangesBySpans.get(spans);
+  if (cached) return cached;
+  const ranges = support.getPromptCodeRanges(
+    text,
+    filePath,
+    kind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      ? PROMPT_FILE_LANGUAGE_IDS.YAML
+      : PROMPT_FILE_LANGUAGE_IDS.MARKDOWN
+  );
+  promptCodeRangesBySpans.set(spans, ranges);
+  return ranges;
+}
+
 function findWorkspaceReferenceMatches(
   text: string,
   offset = 0
@@ -821,7 +1020,9 @@ function createWorkspaceReferenceDecorationExtension() {
 }
 
 function getLinkElement(target: EventTarget | null): HTMLElement | null {
-  return target instanceof HTMLElement ? target.closest(".cm-link") : null;
+  return target instanceof HTMLElement
+    ? target.closest(".cm-link, .cm-atomic-ref")
+    : null;
 }
 
 function openWorkspaceReferenceLink(

@@ -56,6 +56,7 @@ import {
   type WorkflowFileFormat,
   type StepColorMode,
   type HarnessStatusString,
+  type CtrlYokeFileKind,
 } from "./DashboardConstants";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
 import type { LanguageServerDefinition } from "./CtrlYokeSettings";
@@ -90,6 +91,7 @@ import type {
   PromptResult,
   FinalStepRuntimeState,
 } from "./CtrlYokeTypes";
+import type { WorkflowDocumentIssueSeverity } from "./DashboardConstants";
 import type {
   CtrlYokeGlobalSettings,
   HarnessColorSettings,
@@ -3053,6 +3055,26 @@ export interface OpenHarnessDirResultMessage {
   error?: string;
 }
 
+/** Webview → Extension: validate the current unsaved ctrlyoke document. */
+export interface ValidateWorkflowDocumentMessage {
+  type: typeof MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT;
+  text: string;
+  kind: CtrlYokeFileKind;
+  seq: number;
+}
+
+/** Extension → Webview: schema findings for one unsaved document version. */
+export interface WorkflowDocumentDiagnosticsMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_DOCUMENT_DIAGNOSTICS;
+  seq: number;
+  issues: Array<{
+    path: string;
+    message: string;
+    severity: WorkflowDocumentIssueSeverity;
+    position?: { line: number; column: number };
+  }>;
+}
+
 /**
  * Union type for all incoming messages from extension to webview
  */
@@ -3131,6 +3153,7 @@ export type IncomingMessage =
       }>;
       seq?: number;
     }
+  | WorkflowDocumentDiagnosticsMessage
   | {
       type: typeof MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE;
       /** Map from reference key (e.g. "file:src/foo.ts") to token count */

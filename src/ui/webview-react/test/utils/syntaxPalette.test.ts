@@ -12,6 +12,7 @@ import {
 import {
   getLanguageExtension,
   resolveCodeMirrorLanguage,
+  resolveFenceLanguage,
 } from "@utils/codemirrorLanguage";
 
 const globalsCss = readFileSync(
@@ -466,9 +467,11 @@ describe("syntax palette", () => {
 describe("resolveCodeMirrorLanguage", () => {
   it("resolves fence info strings and aliases", () => {
     expect(resolveCodeMirrorLanguage("ts")?.language.name).toBe("typescript");
-    expect(resolveCodeMirrorLanguage("language-yml")?.language.name).toBe(
-      "yaml"
+    expect(resolveFenceLanguage("language-yml")).toBe(
+      resolveFenceLanguage("yaml")
     );
+    expect(resolveFenceLanguage("yaml")?.name).toBe("yaml");
+    expect(resolveCodeMirrorLanguage("yaml")).toBeNull();
     expect(resolveCodeMirrorLanguage("JSON")?.language.name).toBe("json");
     expect(resolveCodeMirrorLanguage("md")?.language.name).toBe("markdown");
   });
@@ -482,9 +485,12 @@ describe("resolveCodeMirrorLanguage", () => {
   });
 
   it("backs getLanguageExtension for file paths", () => {
-    expect(getLanguageExtension("src\\App.TSX")?.language.name).toBe(
-      "typescript"
-    );
+    const extension = getLanguageExtension("src\\App.TSX");
+    expect(Array.isArray(extension)).toBe(false);
+    if (!extension || Array.isArray(extension)) {
+      throw new Error("Expected TypeScript language support");
+    }
+    expect(extension.language.name).toBe("typescript");
     expect(getLanguageExtension("notes.txt")).toBeNull();
   });
 });
