@@ -158,13 +158,13 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
 - `.ctrlyoke.json`: **no** ctrlyoke schema diagnostics. VS Code's built-in JSON validation
   already reports them, and a second set would duplicate every error.
 - `.ctrlyoke.yaml`: report schema errors from the file support plan's side-effect-free
-  `PromptFileParser` validate, mapped with `findRangeForPath`, **only when Red Hat YAML is not
-  active** (`vscode.extensions.getExtension("redhat.vscode-yaml")?.isActive`). Re-check when
-  extensions change. This closes fact 4's gap without double-reporting for users who have Red
-  Hat YAML.
-- `.prompt.md` frontmatter is intentionally excluded. Its supported metadata is a small,
-  separate format (`description` only); the validator currently checks that field directly,
-  while the requested workflow schema diagnostics target `.ctrlyoke.yaml`/`.yml` files.
+  `PromptFileParser` validate, mapped with `findRangeForPath`, only when Red Hat YAML is not
+  installed and enabled (`vscode.extensions.getExtension(VSCODE_YAML_EXTENSION_ID) ===
+undefined`). Re-check when extensions change. This closes fact 4's gap without double-reporting
+  for users whose Red Hat YAML extension takes ownership.
+- `.prompt.md` frontmatter is intentionally excluded from workflow schema diagnostics. Its
+  supported metadata is a small, separate format (`description` only) and follows the loader's
+  permissive metadata behavior.
 - Schema diagnostics use the same `ctrlyoke` collection and source as prompt lint, with distinct
   `WORKFLOW_SCHEMA_DIAGNOSTIC_CODES` for errors and warnings. JSON workflows remain excluded
   because VS Code's JSON validation already covers them.
@@ -210,17 +210,23 @@ concerns, not rules. Their delays and `needsRefresh` settings don't change.
 
 - `PromptDiagnosticsProvider` runs the F5a `PromptFileParser.validateWorkflowText()` entry point
   for workflow YAML only. JSON remains covered by VS Code's JSON validation. `.prompt.md`
-  frontmatter is excluded because it has its own small metadata contract, checked by the parser,
-  rather than the workflow schema.
-- Schema issue pointers use `workflowPathFromInstancePath()` and `findRangeForPath()`; parser
-  syntax positions map to the marked character. Schema diagnostics share the `ctrlyoke` source
-  and collection but use `WORKFLOW_SCHEMA_DIAGNOSTIC_CODES`.
-- Red Hat YAML's active state suppresses ctrlyoke schema diagnostics. The provider listens for
-  extension changes and refreshes open files; the active-state check is injectable for tests.
+  frontmatter keeps its own metadata contract; non-string `description` values are accepted as
+  the loader accepts them.
+- The loader and text validator share a side-effect-free pre-normalization pass for schema
+  version refusal, authored parallel structure, variable keys, schema errors and unknown-key
+  warnings. Duplicate findings are collapsed by path and message; unknown keys include their
+  name and point to their key range. Schema issue pointers use `workflowPathFromInstancePath()`
+  with the parsed document, so only array indices become numbers and numeric object keys remain
+  intact. Parser syntax positions map to the marked character. Schema diagnostics share the
+  `ctrlyoke` source and collection but use `WORKFLOW_SCHEMA_DIAGNOSTIC_CODES`.
+- Red Hat YAML's installed/enabled presence suppresses ctrlyoke schema diagnostics immediately;
+  the extension id comes from `VSCODE_YAML_EXTENSION_ID`. The provider listens for extension
+  changes and refreshes open files; the check is injectable for tests.
 - `$preCondition:` uses the same nullable precedence resolver as execution for step, workflow,
-  and settings defaults. A step's explicit `null` disables inheritance. Workflow-level retry
-  prompts and `.prompt.md` bodies retain permissive context because they may run in a step with
-  a pre-condition.
+  and settings defaults in both VS Code and the workspace editor. Workspace lint reconfigures
+  when `defaultPreCondition` changes. A step's explicit `null` disables inheritance.
+  Workflow-level retry prompts and `.prompt.md` bodies retain permissive context because they may
+  run in a step with a pre-condition.
 - Tests cover Red Hat gating, YAML issue range mapping, JSON exclusion, and the inherited
   pre-condition cases, alongside the Phase 2 final-step and retry-prompt context tests.
 

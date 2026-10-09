@@ -23,13 +23,15 @@ interface ValidationTransport {
   postMessage(message: unknown): void;
 }
 
-let nextValidationSequence = 0;
+// Kept separate from the prompt editor's sequence space (which starts at 0).
+let nextValidationSequence = 1_000_000_000;
 
 /** Prompt lint uses the shared span runner and host resolver round trip. */
 export function createWorkflowPromptLintExtension(options: {
   kind: CtrlYokeFileKind;
   getSupport: () => WorkflowFileSupport | null;
   transport: ValidationTransport;
+  getSettingsPreCondition?: () => unknown;
 }): Extension {
   let latestLint = 0;
   const pending = new Map<
@@ -44,8 +46,6 @@ export function createWorkflowPromptLintExtension(options: {
     pending.delete(message.seq);
     resolve([...message.results]);
   };
-  window.addEventListener("message", onMessage);
-
   const resolveReferences: ContextReferenceResolver = (references) => {
     if (references.length === 0) return Promise.resolve([]);
     const seq = ++nextValidationSequence;
@@ -68,20 +68,24 @@ export function createWorkflowPromptLintExtension(options: {
         const diagnostics = await support.getWorkflowPromptDiagnostics(
           view.state.doc.toString(),
           options.kind,
-          resolveReferences
+          resolveReferences,
+          options.getSettingsPreCondition?.()
         );
         if (lintSequence !== latestLint) return [];
         return diagnostics.map(toCodeMirrorPromptDiagnostic);
       },
       { delay: 300 }
     ),
-    ViewPlugin.define(() => ({
-      destroy() {
-        window.removeEventListener("message", onMessage);
-        for (const resolve of pending.values()) resolve([]);
-        pending.clear();
-      },
-    })),
+    ViewPlugin.define(() => {
+      window.addEventListener("message", onMessage);
+      return {
+        destroy() {
+          window.removeEventListener("message", onMessage);
+          for (const resolve of pending.values()) resolve([]);
+          pending.clear();
+        },
+      };
+    }),
   ];
 }
 
@@ -106,9 +110,15 @@ export function createWorkflowOutlineHoverExtension(options: {
           location.key
         ]?.description;
       if (!description) return null;
+      const line = view.state.doc.lineAt(position);
+      const keyStart = view.state.doc
+        .sliceString(line.from, line.to)
+        .indexOf(location.key);
+      if (keyStart < 0) return null;
+      const from = line.from + keyStart;
       return {
-        pos: position,
-        end: position + location.key.length,
+        pos: from,
+        end: from + location.key.length,
         create() {
           const dom = document.createElement("div");
           dom.className = "cm-tooltip-workflow-outline";

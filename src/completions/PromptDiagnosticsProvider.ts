@@ -3,6 +3,7 @@ import { getCtrlYokeFileKind } from "./CtrlYokeFileKind";
 import { getWorkflowPromptDiagnostics } from "./WorkflowPromptDiagnostics";
 import {
   findRangeForPath,
+  parseWorkflowDocumentRoot,
   workflowPathFromInstancePath,
 } from "./WorkflowDocumentLocation";
 import type { WorkflowTextValidationResult } from "../core/PromptFileParser";
@@ -255,7 +256,10 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
   ): vscode.Diagnostic[] {
     const text = document.getText();
     return issues.map((issue) => {
-      const path = workflowPathFromInstancePath(issue.instancePath);
+      const path = workflowPathFromInstancePath(
+        issue.instancePath,
+        parseWorkflowDocumentRoot(text, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML)
+      );
       const mapped = findRangeForPath(
         text,
         path,

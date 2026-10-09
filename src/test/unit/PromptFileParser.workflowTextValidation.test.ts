@@ -58,7 +58,7 @@ suite("PromptFileParser.validateWorkflowText", () => {
     assert.deepStrictEqual(notifications, []);
   });
 
-  test("accepts prompt markdown frontmatter and validates its description", () => {
+  test("accepts prompt markdown frontmatter using the loader's metadata rules", () => {
     assert.deepStrictEqual(
       parser.validateWorkflowText(
         "---\ndescription: A prompt\n---\nBody\n",
@@ -66,10 +66,76 @@ suite("PromptFileParser.validateWorkflowText", () => {
       ),
       { issues: [] }
     );
-    const invalid = parser.validateWorkflowText(
+    const nonStringDescription = parser.validateWorkflowText(
       "---\ndescription: [bad]\n---\nBody\n",
       CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN
     );
-    assert.strictEqual(invalid.issues[0].instancePath, "/description");
+    assert.deepStrictEqual(nonStringDescription, { issues: [] });
+  });
+
+  test("uses the same pre-normalization checks as workflow loading", async () => {
+    const invalidVars = "steps:\n  - prompt: hi\nvars:\n  bad-key: value\n";
+    assert.ok(
+      parser
+        .validateWorkflowText(invalidVars, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML)
+        .issues.some((issue) => issue.instancePath === "/vars")
+    );
+    await assert.rejects(
+      parser.validateAndNormalize(
+        { steps: [{ prompt: "hi" }], vars: { "bad-key": "value" } },
+        "workflow.ctrlyoke.json"
+      ),
+      /bad-key/
+    );
+    const parallel = parser.validateWorkflowText(
+      "steps:\n  - parallel: nope\n",
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+    );
+    assert.ok(
+      parallel.issues.some(
+        (issue) =>
+          issue.instancePath === "/steps/0/parallel" &&
+          issue.message.includes("parallel")
+      )
+    );
+    const newer = JSON.stringify({
+      schemaVersion: 999,
+      steps: [{ prompt: "hi" }],
+    });
+    assert.ok(
+      parser
+        .validateWorkflowText(newer, CTRLYOKE_FILE_KINDS.WORKFLOW_JSON)
+        .issues.some((issue) => issue.message.toLowerCase().includes("newer"))
+    );
+    await assert.rejects(
+      parser.validateAndNormalize(
+        { schemaVersion: 999, steps: [{ prompt: "hi" }] },
+        "workflow.ctrlyoke.json"
+      ),
+      /newer/i
+    );
+  });
+
+  test("accepts non-string prompt markdown descriptions like the loader", () => {
+    assert.deepStrictEqual(
+      parser.validateWorkflowText(
+        "---\ndescription: [metadata]\n---\nBody\n",
+        CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN
+      ),
+      { issues: [] }
+    );
+  });
+
+  test("deduplicates identical schema issues and names unknown properties", () => {
+    const result = parser.validateWorkflowText(
+      "steps:\n  - prompt: hi\n    promtp: typo\n",
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+    );
+    const duplicates = result.issues.filter((issue) =>
+      issue.message.includes("promtp")
+    );
+    assert.strictEqual(duplicates.length, 1);
+    assert.ok(duplicates[0].message.includes("promtp"));
+    assert.strictEqual(duplicates[0].severity, "warning");
   });
 });

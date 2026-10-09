@@ -178,6 +178,9 @@ export const WorkspaceFileEditor = forwardRef<
     const atomicContextReferences = useSettingsStore(
       (state) => state.globalSettings.atomicContextReferences
     );
+    const defaultPreCondition = useSettingsStore(
+      (state) => state.globalSettings.defaultPreCondition
+    );
     const isMultiRootWorkspace = useSettingsStore(
       (state) => state.globalSettings.isMultiRoot
     );
@@ -407,6 +410,7 @@ export const WorkspaceFileEditor = forwardRef<
                 kind: ctrlyokeFileKind,
                 getSupport: () => workflowSupportRef.current,
                 transport: getVsCodeApi(),
+                getSettingsPreCondition: () => defaultPreCondition,
               }),
               createWorkflowOutlineHoverExtension({
                 kind: ctrlyokeFileKind,
@@ -436,6 +440,7 @@ export const WorkspaceFileEditor = forwardRef<
       [
         atomicContextReferences,
         ctrlyokeFileKind,
+        defaultPreCondition,
         filePath,
         workflowPromptClient,
         workflowPromptRangesField,

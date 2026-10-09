@@ -224,6 +224,19 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
+  test("honors a settings default pre-condition in hosted prompt lint", async () => {
+    const text = "steps:\n  - prompt: out $preCondition:stdout\n";
+    assert.deepStrictEqual(
+      await getWorkflowPromptDiagnostics(
+        text,
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+        resolver,
+        { script: "settings-check.sh" }
+      ),
+      []
+    );
+  });
+
   test("judges a workflow-level retryPrompt from the final step's view", async () => {
     const text = [
       "endCondition:",

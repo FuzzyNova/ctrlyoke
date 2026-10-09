@@ -393,23 +393,30 @@ JSON workflow files.
 
 ### Diagnostics
 
-**As built — F5 done 2026-10-08.** `PromptFileParser.validateWorkflowText`
-parses unsaved YAML, JSON and `.prompt.md` frontmatter without normalization or feedback
-side effects, sharing the schema validator used by the load path. The dashboard message pair
-routes through the shared webview router (including hosted clients); the editor validates only
-ctrlyoke files, debounces by 400 ms and drops stale sequences. Schema ranges are resolved by
-`findRangeForPath` from the lazy workflow-file support chunk, using the pure RFC 6901 pointer
-converter in `src/completions/WorkflowPathFromInstancePath.ts`.
+**As built — F5 complete with review fixes 2026-10-08.**
+`PromptFileParser.validateWorkflowText` parses unsaved YAML, JSON and `.prompt.md`
+frontmatter without normalization or feedback side effects. The load path and editor validation
+share the pre-normalization checks for supported schema versions, authored parallel structure,
+variable keys, schema errors and unknown-key warnings. Markdown descriptions follow the loader's
+permissive metadata behavior. Schema findings are deduplicated by path and message; unknown-key
+findings include the key and point to its own range. Syntax findings retain their marked source
+position. The dashboard message pair routes through the shared webview router (including hosted
+clients); the editor validates only ctrlyoke files, debounces by 400 ms and drops stale sequences.
+Schema ranges are resolved by `findRangeForPath` from the lazy workflow-file support chunk.
+JSON Pointer indices become numbers only under array parents, preserving numeric object keys.
 
 Prompt-text lint runs `getWorkflowPromptDiagnostics` from the lazy support chunk, so the
 workspace editor shares D2's decoded `PROMPT_TEXT` spans, document-derived rule context,
 inexact-span filtering and source-offset mapping. Reference checks use the existing
-`VALIDATE_CONTEXT_REFS` round trip. Its CodeMirror diagnostic mapping is shared with the prompt
-editor, including detail lines and replacement actions. The generated outline description is
-shown on key hover using `getWorkflowLocation` and the key's object kind; the completion
-extension's body-mounted tooltip configuration owns tooltip placement. Tests cover YAML and JSON
-source ranges, prompt/retry scope, reference resolution, text outside prompt fields, and root and
-nested key hover.
+`VALIDATE_CONTEXT_REFS` round trip. Both lint extensions bind message listeners to each
+`ViewPlugin` lifetime, settle pending requests on teardown, and continue linting after an editor
+rebuild. Workspace context-reference requests use a separate sequence range from the prompt
+editor. Prompt lint includes the global `defaultPreCondition` setting and reconfigures when it
+changes. The generated outline description is shown over the key's own source range using
+`getWorkflowLocation` and the key's object kind; the completion extension's body-mounted tooltip
+configuration owns tooltip placement. Tests cover YAML and JSON source ranges, syntax positions,
+prompt/retry scope, reference resolution, settings changes, editor rebuilds, text outside prompt
+fields, and root and nested key hover.
 
 - **Schema validation stays host-side, in `PromptFileParser`.** Do not bundle ajv into the
   webview. It needs `unsafe-eval`, and a second validator would drift from the one that

@@ -22,6 +22,7 @@ import {
   REFERENCE_PATH_BASES,
   COMPLETION_TRIGGERS,
   WORKSPACE_ENTRY_KINDS,
+  type WorkflowDocumentIssueSeverity,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
@@ -250,13 +251,19 @@ export class PromptEditorSupportService {
   validateWorkflowDocument(
     text: string,
     kind: CtrlYokeFileKind
-  ): Array<{ path: string; message: string; severity: "error" | "warning" }> {
+  ): Array<{
+    path: string;
+    message: string;
+    severity: WorkflowDocumentIssueSeverity;
+    position?: { line: number; column: number };
+  }> {
     return this.workflowTextValidator
       .validateWorkflowText(text, kind)
-      .issues.map(({ instancePath, message, severity }) => ({
+      .issues.map(({ instancePath, message, severity, position }) => ({
         path: instancePath,
         message,
         severity,
+        position,
       }));
   }
 

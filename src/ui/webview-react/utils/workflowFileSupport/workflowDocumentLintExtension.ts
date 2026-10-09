@@ -3,18 +3,12 @@ import { forceLinting } from "@codemirror/lint";
 import type { Extension } from "@codemirror/state";
 import { ViewPlugin } from "@codemirror/view";
 import type { CtrlYokeFileKind } from "@root/types/DashboardConstants";
-import { MESSAGE_TYPES as MESSAGE_TYPE_VALUES } from "@root/types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  MESSAGE_TYPES,
+} from "@root/types/DashboardConstants";
+import type { WorkflowDocumentDiagnosticsMessage } from "@root/types/WebviewMessageTypes";
 import type { WorkflowFileSupport } from "./loadWorkflowFileSupport";
-
-interface WorkflowDiagnosticsMessage {
-  readonly type: typeof MESSAGE_TYPE_VALUES.WORKFLOW_DOCUMENT_DIAGNOSTICS;
-  readonly seq: number;
-  readonly issues: readonly {
-    readonly path: string;
-    readonly message: string;
-    readonly severity: "error" | "warning";
-  }[];
-}
 
 interface ValidationTransport {
   postMessage(message: unknown): void;
@@ -31,12 +25,14 @@ export function createWorkflowDocumentLintExtension(options: {
   let latestSequence = 0;
   const pending = new Map<number, (diagnostics: Diagnostic[]) => void>();
   const onMessage = (event: MessageEvent) => {
-    const message = event.data as WorkflowDiagnosticsMessage | undefined;
-    if (message?.type !== MESSAGE_TYPE_VALUES.WORKFLOW_DOCUMENT_DIAGNOSTICS)
-      return;
+    const message = event.data as
+      WorkflowDocumentDiagnosticsMessage | undefined;
+    if (message?.type !== MESSAGE_TYPES.WORKFLOW_DOCUMENT_DIAGNOSTICS) return;
     const resolve = pending.get(message.seq);
     if (!resolve) return;
     pending.delete(message.seq);
+    const text = documentTextBySequence.get(message.seq) ?? "";
+    documentTextBySequence.delete(message.seq);
     if (message.seq !== latestSequence) {
       resolve([]);
       return;
@@ -48,10 +44,26 @@ export function createWorkflowDocumentLintExtension(options: {
     }
     resolve(
       message.issues.flatMap((issue) => {
-        const text = documentTextBySequence.get(message.seq) ?? "";
+        if (issue.position) {
+          const from = lineColumnOffset(text, issue.position);
+          return [
+            {
+              from,
+              to: Math.min(from + 1, text.length),
+              severity:
+                issue.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                  ? "warning"
+                  : "error",
+              message: issue.message,
+            },
+          ];
+        }
         const range = support.findRangeForPath(
           text,
-          support.workflowPathFromInstancePath(issue.path),
+          support.workflowPathFromInstancePath(
+            issue.path,
+            support.parseWorkflowDocumentRoot(text, options.kind)
+          ),
           options.kind
         );
         if (!range) return [];
@@ -59,16 +71,17 @@ export function createWorkflowDocumentLintExtension(options: {
           {
             from: range.start,
             to: Math.min(text.length, Math.max(range.start + 1, range.end)),
-            severity: issue.severity,
+            severity:
+              issue.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                ? "warning"
+                : "error",
             message: issue.message,
           },
         ];
       })
     );
-    documentTextBySequence.delete(message.seq);
   };
   const documentTextBySequence = new Map<number, string>();
-  window.addEventListener("message", onMessage);
   return [
     linter(
       (view) =>
@@ -88,7 +101,7 @@ export function createWorkflowDocumentLintExtension(options: {
           pending.set(seq, resolve);
           documentTextBySequence.set(seq, text);
           options.transport.postMessage({
-            type: MESSAGE_TYPE_VALUES.VALIDATE_WORKFLOW_DOCUMENT,
+            type: MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT,
             text,
             kind: options.kind,
             seq,
@@ -96,15 +109,30 @@ export function createWorkflowDocumentLintExtension(options: {
         }),
       { delay: 400 }
     ),
-    ViewPlugin.define(() => ({
-      destroy() {
-        window.removeEventListener("message", onMessage);
-        for (const resolve of pending.values()) resolve([]);
-        pending.clear();
-        documentTextBySequence.clear();
-      },
-    })),
+    ViewPlugin.define(() => {
+      window.addEventListener("message", onMessage);
+      return {
+        destroy() {
+          window.removeEventListener("message", onMessage);
+          for (const resolve of pending.values()) resolve([]);
+          pending.clear();
+          documentTextBySequence.clear();
+        },
+      };
+    }),
   ];
+}
+
+function lineColumnOffset(
+  text: string,
+  position: { readonly line: number; readonly column: number }
+): number {
+  const lines = text.split("\n");
+  const lineIndex = Math.max(0, Math.min(position.line - 1, lines.length - 1));
+  const beforeLine = lines
+    .slice(0, lineIndex)
+    .reduce((length, line) => length + line.length + 1, 0);
+  return Math.min(beforeLine + Math.max(position.column - 1, 0), text.length);
 }
 
 export { forceLinting };

@@ -244,6 +244,7 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
       globalSettings: {
         ...state.globalSettings,
         atomicContextReferences: false,
+        defaultPreCondition: null,
       },
     }));
     postMessage.mockClear();
@@ -689,6 +690,169 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
     expect(diagnosticCount(view.state)).toBe(0);
   });
 
+  it("maps syntax diagnostics by their marked source position", async () => {
+    const content = "steps:\n  - prompt: [\n";
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+    const offset = content.indexOf("[");
+    const request = await waitFor(() =>
+      latestPostedMessage<RequestMessage>(
+        postMessage,
+        (message) => message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+      )
+    );
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.WORKFLOW_DOCUMENT_DIAGNOSTICS,
+          seq: request.seq,
+          issues: [
+            {
+              path: "",
+              message: "Unexpected end of stream",
+              severity: "error",
+              position: {
+                line: 2,
+                column: offset - content.lastIndexOf("\n", offset - 1),
+              },
+            },
+          ],
+        },
+      })
+    );
+    await waitFor(() => {
+      const diagnostic = getDiagnostics(view).find((item) =>
+        item.message.includes("Unexpected end")
+      );
+      expect(diagnostic?.from).toBe(offset);
+      expect(diagnostic?.to).toBe(offset + 1);
+    });
+  });
+
+  it("continues receiving diagnostics after the EditorView is rebuilt", async () => {
+    const content = "steps:\n  - prompt: 42\n";
+    const editor = await renderEditor("a.ctrlyoke.yaml", content);
+    const answer = async (afterSequence = -1) => {
+      const request = await waitFor(() => {
+        const current = latestPostedMessage<RequestMessage>(
+          postMessage,
+          (message) => message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+        );
+        expect(current.seq).toBeGreaterThan(afterSequence);
+        return current;
+      });
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.WORKFLOW_DOCUMENT_DIAGNOSTICS,
+            seq: request.seq,
+            issues: [
+              {
+                path: "/steps/0/prompt",
+                message: "must be string",
+                severity: "error",
+              },
+            ],
+          },
+        })
+      );
+    };
+    await answer();
+    await waitFor(() => expect(diagnosticCount(editor.view.state)).toBe(1));
+    const firstRequest = latestPostedMessage<RequestMessage>(
+      postMessage,
+      (message) => message.type === MESSAGE_TYPES.VALIDATE_WORKFLOW_DOCUMENT
+    );
+    editor.rerender(
+      <WorkspaceFileEditor
+        filePath="a.ctrlyoke.yaml"
+        content={content}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        readOnly
+      />
+    );
+    await answer(firstRequest.seq);
+    await waitFor(() => {
+      const rebuilt = EditorView.findFromDOM(
+        editor.container.querySelector<HTMLElement>(".cm-editor")!
+      )!;
+      expect(diagnosticCount(rebuilt.state)).toBe(1);
+      expect(
+        rebuilt.dom.querySelector(".cm-lintRange-error")?.textContent
+      ).toBe("42");
+    });
+  });
+
+  it("continues receiving prompt reference lint replies after rebuilding", async () => {
+    const content = "steps:\n  - prompt: @missing.ts\n";
+    const editor = await renderEditor("a.ctrlyoke.yaml", content);
+    const reply = async (afterSequence = -1) => {
+      const request = await waitFor(() => {
+        const current = latestPostedMessage<RequestMessage>(
+          postMessage,
+          (message) => message.type === MESSAGE_TYPES.VALIDATE_CONTEXT_REFS
+        );
+        expect(current.seq).toBeGreaterThan(afterSequence);
+        return current;
+      });
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.CONTEXT_REFS_VALIDATION,
+            seq: request.seq,
+            results: request.references?.map((reference) => ({
+              id: reference.id,
+              exists: false,
+              message: "missing file",
+            })),
+          },
+        })
+      );
+    };
+    await reply();
+    await waitFor(() =>
+      expect(
+        getDiagnostics(editor.view).some(
+          (item) => item.message === "missing file"
+        )
+      ).toBe(true)
+    );
+    const firstRequest = latestPostedMessage<RequestMessage>(
+      postMessage,
+      (message) => message.type === MESSAGE_TYPES.VALIDATE_CONTEXT_REFS
+    );
+    editor.rerender(
+      <WorkspaceFileEditor
+        filePath="a.ctrlyoke.yaml"
+        content={content}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        readOnly
+      />
+    );
+    await reply(firstRequest.seq);
+    await waitFor(() => {
+      const rebuilt = EditorView.findFromDOM(
+        editor.container.querySelector<HTMLElement>(".cm-editor")!
+      )!;
+      expect(
+        getDiagnostics(rebuilt).some((item) => item.message === "missing file")
+      ).toBe(true);
+    });
+  });
+
+  it("re-lints pre-condition references when the settings default changes", async () => {
+    const { view } = await renderEditor(
+      "a.ctrlyoke.yaml",
+      "steps:\n  - prompt: $preCondition:stdout\n"
+    );
+    await waitFor(() => expect(diagnosticCount(view.state)).toBe(1));
+    useSettingsStore.getState().updateGlobalSetting("defaultPreCondition", {
+      script: "settings-check.sh",
+    });
+    await waitFor(() => expect(diagnosticCount(view.state)).toBe(0));
+  });
+
   it("does not validate plain YAML files", async () => {
     const { view } = await renderEditor(
       "config/plain.yaml",
@@ -745,6 +909,7 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
         (message) => message.type === MESSAGE_TYPES.VALIDATE_CONTEXT_REFS
       );
       expect(request.references).toHaveLength(2);
+      expect(request.seq).toBeGreaterThanOrEqual(1_000_000_000);
       window.dispatchEvent(
         new MessageEvent("message", {
           data: {

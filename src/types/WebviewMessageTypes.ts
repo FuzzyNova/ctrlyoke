@@ -91,6 +91,7 @@ import type {
   PromptResult,
   FinalStepRuntimeState,
 } from "./CtrlYokeTypes";
+import type { WorkflowDocumentIssueSeverity } from "./DashboardConstants";
 import type {
   CtrlYokeGlobalSettings,
   HarnessColorSettings,
@@ -3069,7 +3070,8 @@ export interface WorkflowDocumentDiagnosticsMessage {
   issues: Array<{
     path: string;
     message: string;
-    severity: "error" | "warning";
+    severity: WorkflowDocumentIssueSeverity;
+    position?: { line: number; column: number };
   }>;
 }
 

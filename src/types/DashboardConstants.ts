@@ -318,6 +318,8 @@ export const BOOLEAN_STRING_VALUES = {
 
 /** Workspace-local paths shared by the extension and standalone MCP server. */
 export const CTRLYOKE_DIR = ".ctrlyoke";
+/** Red Hat's YAML extension owns YAML schema validation when installed. */
+export const VSCODE_YAML_EXTENSION_ID = "redhat.vscode-yaml";
 export const LOGS_DIR = "logs";
 export const CAPABILITIES_FILE = "capabilities.json";
 
@@ -3163,6 +3165,11 @@ export type CodeMirrorEditorMode =
 /** Prompt diagnostics share the runtime's severity scale. */
 export type PromptDiagnosticSeverity =
   (typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES)[keyof typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES];
+/** Severity set used by workflow document schema issues (no informational state). */
+export type WorkflowDocumentIssueSeverity = Exclude<
+  PromptDiagnosticSeverity,
+  typeof COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+>;
 
 // ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type

@@ -52,6 +52,7 @@ import {
   MESSAGE_TYPES,
   RUNNER_IDS,
   USER_FEEDBACK_SEVERITY,
+  VSCODE_YAML_EXTENSION_ID,
   VSCODE_COMMANDS,
   VSCODE_GIT_COMMANDS,
 } from "./types/DashboardConstants";
@@ -751,8 +752,8 @@ export async function activate(context: vscode.ExtensionContext) {
             (listener) => externalRootsTrustStore.subscribe(listener),
           ],
           isYamlSchemaValidationSuppressed: () =>
-            vscode.extensions.getExtension("redhat.vscode-yaml")?.isActive ===
-            true,
+            vscode.extensions.getExtension(VSCODE_YAML_EXTENSION_ID) !==
+            undefined,
           validateWorkflowText: (text, kind) =>
             workflowTextValidator.validateWorkflowText(text, kind),
           getSettingsPreCondition: () =>
