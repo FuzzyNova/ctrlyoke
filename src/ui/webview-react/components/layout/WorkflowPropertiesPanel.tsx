@@ -116,9 +116,12 @@ import {
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { Icon } from "../shared/Icon";
+import { findKeyValueRowValueInput } from "../shared/KeyValueRowsEditor";
 import { schemaAriaLabel, schemaFieldTitle } from "@utils/schemaPropertyLabels";
+import { commitWorkflowVars } from "@utils/workflowVars";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
+const WORKFLOW_VARS_EDITOR_ID = "settings-vars";
 
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
@@ -1030,22 +1033,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   );
 
   const handleVarsChange = useCallback(
-    (vars: Record<string, string>) => {
-      // An empty map means the root property should be removed, not persisted
-      // as an empty object. The extension's workflow-property path treats an
-      // undefined value as an explicit delete.
-      const nextVars = Object.keys(vars).length > 0 ? vars : undefined;
-      const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.VARS, nextVars);
-      syncWorkflowPropertiesForUndo();
-
-      postWorkflowDefinitionMutation(vscode, {
-        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: PROMPT_PROPERTIES.VARS,
-        value: nextVars,
-      });
-    },
-    [syncWorkflowPropertiesForUndo, vscode]
+    (vars: Record<string, string>) => commitWorkflowVars(vscode, vars),
+    [vscode]
   );
 
   const handleSecretsChange = useCallback(
@@ -1529,6 +1518,30 @@ const WorkflowPropertiesPanelInner: React.FC<{
       document.getElementById(firstProperty)?.focus();
     });
   }, [permissionDiagnostics]);
+
+  // Ctrl+click on a prompt's `{{name}}` (or its "add to vars" quick fix) asks
+  // for that variable's row. Wait until the panel is actually showing, switch
+  // to the page that holds Variables, then focus the row's value once the
+  // page (and any just-added row) has rendered.
+  const workflowVariableRevealRequest = useUiStore(
+    (state) => state.workflowVariableRevealRequest
+  );
+  useEffect(() => {
+    if (!workflowVariableRevealRequest) return;
+    if (settingsCollapsed && !isMobileMode) return;
+    setActivePage(DRAWER_PAGES.CONTEXT);
+    // Clear inside the frame: clearing now would re-run this effect, whose
+    // cleanup cancels the frame before it focuses anything.
+    const frame = window.requestAnimationFrame(() => {
+      useUiStore.getState().clearWorkflowVariableRevealRequest();
+      // focus() also scrolls the row into view.
+      findKeyValueRowValueInput(
+        document.getElementById(WORKFLOW_VARS_EDITOR_ID),
+        workflowVariableRevealRequest.name
+      )?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [workflowVariableRevealRequest, settingsCollapsed, isMobileMode]);
 
   function handleToggle() {
     if (isMobileMode) return;
@@ -2161,7 +2174,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               >
                 <KeyValueRowsEditor
                   label="name=value"
-                  id="settings-vars"
+                  id={WORKFLOW_VARS_EDITOR_ID}
                   ariaLabel="Variables"
                   value={workflowProperties.vars ?? {}}
                   onChange={handleVarsChange}

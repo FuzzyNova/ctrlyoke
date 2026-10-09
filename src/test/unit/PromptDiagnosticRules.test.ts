@@ -5,6 +5,7 @@ import {
   getPriorContextDiagnostics,
   getPromptDiagnostics,
   getReferenceDiagnostics,
+  getUndefinedVariableDiagnostics,
   type ContextReferenceResolver,
   type PromptDiagnosticContext,
 } from "../../utils/PromptDiagnosticRules";
@@ -233,6 +234,49 @@ suite("PromptDiagnosticRules", () => {
         PROMPT_DIAGNOSTIC_CODES.CONDITION_NO_PRE_CONDITION,
       ]
     );
+  });
+
+  suite("variables", () => {
+    test("warns on a placeholder the vars don't define, naming the variable", () => {
+      const text = "Use {{known}} and {{missing}}";
+      const diagnostics = getUndefinedVariableDiagnostics(text, {
+        known: "x",
+      });
+      assert.deepStrictEqual(
+        diagnostics.map((d) => ({
+          code: d.code,
+          severity: d.severity,
+          text: text.slice(d.from, d.to),
+          variableName: d.variableName,
+        })),
+        [
+          {
+            code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_UNDEFINED,
+            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+            text: "{{missing}}",
+            variableName: "missing",
+          },
+        ]
+      );
+      assert.match(diagnostics[0].message, /--var missing=/);
+    });
+
+    test("flags inline-code placeholders but not fenced ones", () => {
+      const text = "`{{inline}}`\n```\n{{fenced}}\n```";
+      assert.deepStrictEqual(
+        getUndefinedVariableDiagnostics(text, {}).map((d) => d.variableName),
+        ["inline"]
+      );
+    });
+
+    test("getPromptDiagnostics lints vars only when the context knows them", () => {
+      const text = "{{missing}}";
+      assert.deepStrictEqual(getPromptDiagnostics(text, baseContext), []);
+      assert.deepStrictEqual(
+        getPromptDiagnostics(text, context({ vars: {} })).map((d) => d.code),
+        [PROMPT_DIAGNOSTIC_CODES.VARIABLE_UNDEFINED]
+      );
+    });
   });
 
   suite("references", () => {

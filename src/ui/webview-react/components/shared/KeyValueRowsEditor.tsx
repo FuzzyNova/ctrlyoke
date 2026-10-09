@@ -53,7 +53,23 @@ interface RowDiagnostics {
 }
 
 const SECRET_REFERENCE_PATTERN = /\$\{secret:([^}]+)\}/g;
+/** Carries a value input's row key, so callers can focus one row by name. */
+const ROW_KEY_ATTRIBUTE = "data-entry-key";
 let nextRowId = 0;
+
+/** The value input of the row named `key` inside a rendered editor, if any. */
+export function findKeyValueRowValueInput(
+  editor: Element | null,
+  key: string
+): HTMLInputElement | null {
+  if (!editor) return null;
+  for (const input of editor.querySelectorAll<HTMLInputElement>(
+    `input[${ROW_KEY_ATTRIBUTE}]`
+  )) {
+    if (input.getAttribute(ROW_KEY_ATTRIBUTE) === key) return input;
+  }
+  return null;
+}
 
 function createRowId(): string {
   nextRowId += 1;
@@ -388,6 +404,7 @@ export function KeyValueRowsEditor({
             type="text"
             value={row.value}
             aria-label={valueLabel}
+            {...{ [ROW_KEY_ATTRIBUTE]: row.key }}
             aria-invalid={rowDiagnostics.value.length > 0 ? "true" : undefined}
             aria-describedby={
               rowDiagnostics.value.length > 0 ? valueDiagnosticId : undefined

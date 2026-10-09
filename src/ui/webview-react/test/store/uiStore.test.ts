@@ -57,6 +57,32 @@ function store() {
 // Section collapse toggles
 // ---------------------------------------------------------------------------
 
+describe("revealWorkflowVariable", () => {
+  it("expands the desktop sidebar and records the request", () => {
+    useUiStore.setState({ settingsCollapsed: true });
+    store().revealWorkflowVariable("region", { mobile: false });
+    expect(store().settingsCollapsed).toBe(false);
+    expect(store().mobileWorkflowPropsOpen).toBe(false);
+    expect(store().workflowVariableRevealRequest?.name).toBe("region");
+  });
+
+  it("opens the mobile overlay instead on mobile", () => {
+    useUiStore.setState({ settingsCollapsed: true });
+    store().revealWorkflowVariable("region", { mobile: true });
+    expect(store().mobileWorkflowPropsOpen).toBe(true);
+    expect(store().settingsCollapsed).toBe(true);
+  });
+
+  it("makes a repeat request for the same name observable", () => {
+    store().revealWorkflowVariable("region", { mobile: false });
+    const first = store().workflowVariableRevealRequest;
+    store().revealWorkflowVariable("region", { mobile: false });
+    expect(store().workflowVariableRevealRequest).not.toBe(first);
+    store().clearWorkflowVariableRevealRequest();
+    expect(store().workflowVariableRevealRequest).toBeNull();
+  });
+});
+
 describe("togglePromptsCollapse", () => {
   it("flips promptsCollapsed", () => {
     expect(store().stepsCollapsed).toBe(false);

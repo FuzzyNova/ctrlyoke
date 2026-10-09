@@ -32,6 +32,10 @@ import {
   type ContextReferenceMatch,
 } from "./PromptReferenceScanner";
 import { formatRangeNotation } from "./RangeNotationParser";
+import {
+  findVariablePlaceholders,
+  isVariableDefined,
+} from "./VariablePlaceholders";
 
 /** What the text alone can't say about where it sits in a workflow. */
 export interface PromptDiagnosticContext {
@@ -43,6 +47,12 @@ export interface PromptDiagnosticContext {
   hasPreCondition: boolean;
   hasEndCondition: boolean;
   field: PromptDiagnosticField;
+  /**
+   * The workflow's `vars` defaults. Omitted when the text has no knowable set
+   * of vars (a `.prompt.md` body can run under any workflow), which turns the
+   * undefined-variable rule off rather than flagging every placeholder.
+   */
+  vars?: Readonly<Record<string, unknown>>;
 }
 
 export interface PromptDiagnostic {
@@ -55,6 +65,11 @@ export interface PromptDiagnostic {
   detail?: string;
   /** Replacement text for the range, offered by hosts as quick fixes. */
   replacements?: string[];
+  /**
+   * The undefined variable's name on a `VARIABLE_UNDEFINED` diagnostic, for
+   * hosts that offer an "add it to the workflow's vars" quick fix.
+   */
+  variableName?: string;
 }
 
 export interface ContextReferenceValidationResult {
@@ -262,7 +277,29 @@ export function getConditionOutputDiagnostics(
   return diagnostics;
 }
 
-/** The synchronous rules (prior context and condition output) over the whole text. */
+/**
+ * `{{name}}` placeholders the workflow's `vars` don't define. A warning, not
+ * an error: the CLI's `--var name=value` can still supply the value at run
+ * time, and without one the placeholder is sent as literal text. Fenced
+ * placeholders are never substituted, so they are never flagged.
+ */
+export function getUndefinedVariableDiagnostics(
+  text: string,
+  vars: Readonly<Record<string, unknown>>
+): PromptDiagnostic[] {
+  return findVariablePlaceholders(text)
+    .filter(({ name, inFence }) => !inFence && !isVariableDefined(vars, name))
+    .map(({ from, to, name }) => ({
+      from,
+      to,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_UNDEFINED,
+      message: `Variable "${name}" is not defined in this workflow's vars — it is sent as literal text unless passed with --var ${name}=<value>`,
+      variableName: name,
+    }));
+}
+
+/** The synchronous rules (prior context, condition output, vars) over the whole text. */
 export function getPromptDiagnostics(
   text: string,
   context: PromptDiagnosticContext
@@ -270,6 +307,9 @@ export function getPromptDiagnostics(
   return [
     ...getPriorContextDiagnostics(text, context),
     ...getConditionOutputDiagnostics(text, context),
+    ...(context.vars
+      ? getUndefinedVariableDiagnostics(text, context.vars)
+      : []),
   ];
 }
 

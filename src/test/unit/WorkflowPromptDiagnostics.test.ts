@@ -168,6 +168,27 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
+  test("flags placeholders the workflow's vars don't define", async () => {
+    const text =
+      "vars:\n  known: x\nsteps:\n  - prompt: '{{known}} {{missing}}'\n";
+    assert.deepStrictEqual(
+      await diagnose(text, CTRLYOKE_FILE_KINDS.WORKFLOW_YAML),
+      [
+        {
+          code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_UNDEFINED,
+          text: "{{missing}}",
+        },
+      ]
+    );
+  });
+
+  test("does not lint vars in a .prompt.md body, which any workflow can run", async () => {
+    assert.deepStrictEqual(
+      await diagnose("Use {{anything}}\n", CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN),
+      []
+    );
+  });
+
   test("the final step sees every step", async () => {
     const text =
       "steps:\n  - prompt: a\n  - prompt: b\nfinalStep:\n  prompt: $step:2 $step:3\n";

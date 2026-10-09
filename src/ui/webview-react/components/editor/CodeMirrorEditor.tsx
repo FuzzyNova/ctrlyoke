@@ -87,10 +87,13 @@ import {
   resolvePromptReferences,
   type ContextReferenceResolver,
   type ContextReferenceValidationResult,
+  type PromptDiagnostic,
 } from "@root/utils/PromptDiagnosticRules";
 import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
+import { findVariablePlaceholders } from "@root/utils/VariablePlaceholders";
+import { createWorkflowVariableExtension } from "@utils/codemirrorWorkflowVariables";
 import { REFERENCE_BOUNDARY_CHAR_RE } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 import {
@@ -175,8 +178,16 @@ interface CodeMirrorEditorProps {
   hasFinalStep?: boolean;
   /** Whether this step has an effective pre-condition configured. */
   hasPreCondition?: boolean;
-  /** Workflow facts for scoped prompt-token completions. */
+  /**
+   * Workflow facts for scoped prompt-token completions. Its `vars` also drive
+   * the `{{name}}` hover and undefined-variable lint; without it the editor
+   * cannot know the vars, so it styles placeholders but does not lint them.
+   */
   workflowCompletionContext?: PromptCompletionWorkflowContext;
+  /** Ctrl/Cmd+click on a `{{name}}`: show that variable's workflow setting. */
+  onRevealVariable?: (name: string) => void;
+  /** The undefined-variable lint's "add to workflow vars" quick fix. */
+  onDefineVariable?: (name: string) => void;
   /** Pending external insert request from VS Code context menus. */
   pendingInsertRequest?: PromptEditorInsertRequest | null;
   /** Called after a pending external insert has been applied. */
@@ -289,6 +300,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const hasPreConditionRef = useRef(props.hasPreCondition ?? false);
   const workflowCompletionContextRef = useRef(props.workflowCompletionContext);
   workflowCompletionContextRef.current = props.workflowCompletionContext;
+  const onRevealVariableRef = useRef(props.onRevealVariable);
+  onRevealVariableRef.current = props.onRevealVariable;
+  const onDefineVariableRef = useRef(props.onDefineVariable);
+  onDefineVariableRef.current = props.onDefineVariable;
+  // Only whether a handler exists is baked into the editor's extensions (it
+  // decides the Ctrl+click handler, hover hint and quick fix); the handlers
+  // themselves are read through the refs above.
+  const canRevealVariables = Boolean(props.onRevealVariable);
+  const canDefineVariables = Boolean(props.onDefineVariable);
+  // A content signature, not the object: callers rebuild the vars map on
+  // every render.
+  const workflowVarsSignature = JSON.stringify(
+    props.workflowCompletionContext?.vars ?? null
+  );
   const modeRef = useRef<CodeMirrorEditorMode>(mode);
   const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
   const placeholderCompartmentRef = useRef(new Compartment());
@@ -395,6 +420,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       relintForContextChange(viewRef.current);
     }
   }, [props.hasPreCondition]);
+
+  useEffect(() => {
+    if (viewRef.current) {
+      relintForContextChange(viewRef.current);
+    }
+  }, [workflowVarsSignature]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -888,6 +919,16 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createActiveLineHighlightExtension(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
         createSpellCheckExtension(typoCheckerRef, isMultiRootWorkspace),
+        createWorkflowVariableExtension({
+          getVars: () => workflowCompletionContextRef.current?.vars,
+          revealVariable: canRevealVariables
+            ? (name) => onRevealVariableRef.current?.(name)
+            : undefined,
+          defineVariable: canDefineVariables
+            ? (name) => onDefineVariableRef.current?.(name)
+            : undefined,
+          needsRefresh: isLintRefreshUpdate,
+        }),
         Prec.high(
           createContextReferenceLintExtension(
             validateContextReferences,
@@ -1064,6 +1105,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     surface,
     atomicContextReferences,
     isMultiRootWorkspace,
+    canRevealVariables,
+    canDefineVariables,
   ]);
   useEffect(() => {
     const view = viewRef.current;
@@ -1610,7 +1653,8 @@ function createSpellCheckExtension(
   );
 }
 
-const toCodeMirrorDiagnostic = toCodeMirrorPromptDiagnostic;
+const toCodeMirrorDiagnostic = (diagnostic: PromptDiagnostic): Diagnostic =>
+  toCodeMirrorPromptDiagnostic(diagnostic);
 
 export function createContextReferenceLintExtension(
   validateReferences: ContextReferenceResolver,
@@ -1693,7 +1737,8 @@ export function createContextReferenceLintExtension(
   );
 }
 
-// Get ranges of @ and # completions to exclude from spell checking
+// Get ranges of @/#/~ references and {{var}} placeholders to exclude from
+// spell checking — a variable name is an identifier, not prose.
 function getCompletionRanges(
   text: string
 ): Array<{ from: number; to: number }> {
@@ -1716,6 +1761,10 @@ function getCompletionRanges(
         to: match.index + match[0].length,
       });
     }
+  }
+
+  for (const { from, to } of findVariablePlaceholders(text)) {
+    ranges.push({ from, to });
   }
 
   return ranges;
