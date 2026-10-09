@@ -93,6 +93,15 @@ import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
 import { REFERENCE_BOUNDARY_CHAR_RE } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
+import {
+  buildReferenceChipMenuItems,
+  wrapInInlineCode,
+} from "@utils/referenceChipMenu";
+import {
+  useReferenceChipContextMenu,
+  type ReferenceChipMenuOpener,
+} from "@hooks/useReferenceChipContextMenu";
+import type { StepContextMenuEntry } from "@components/shared/StepContextMenu";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import { toCodeMirrorPromptDiagnostic } from "@utils/promptDiagnosticCodeMirror";
 import { promptTokenCompletionExtension } from "@utils/promptCompletion/promptTokenCompletionExtension";
@@ -326,6 +335,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // symbolIconCacheRef; persists across setup-effect re-runs.
   const referenceValidityRef = useRef<Map<string, boolean>>(new Map());
   const vscode = getVsCodeApi();
+  const { openReferenceChipMenu, referenceChipMenuPortal } =
+    useReferenceChipContextMenu();
   // When on, context references behave as atomic units (see
   // createAtomicReferenceExtension). Toggling recreates the editor via the
   // setup effect's dependency array.
@@ -942,7 +953,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           ),
           createConditionOutputLintExtension(hasPreConditionRef, modeRef),
         ]),
-        createClickHandlerExtension(vscode, stepCountRef),
+        createClickHandlerExtension(
+          vscode,
+          stepCountRef,
+          openReferenceChipMenu
+        ),
         // iOS Safari: enable the word-suggestion bar above the keyboard and
         // autocapitalization. CodeMirror defaults these to "off" which suppresses
         // the native suggestion strip entirely on iPhone/iPad.
@@ -1090,7 +1105,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     .filter(Boolean)
     .join(" ");
 
-  return <div id={id} ref={editorRef} className={editorClassName} />;
+  return (
+    <>
+      <div id={id} ref={editorRef} className={editorClassName} />
+      {referenceChipMenuPortal}
+    </>
+  );
 };
 
 // Fixes the "cursor stuck at the start of the editor" bug in the VS Code webview.
@@ -1222,6 +1242,7 @@ class AtomicReferenceWidget extends WidgetType {
 
 const ATOMIC_REFERENCE_LINK_EVENTS = new Set([
   "click",
+  "contextmenu",
   "touchstart",
   "touchmove",
   "touchcancel",
@@ -2285,21 +2306,86 @@ export function openContextReferenceLink(
 /** The prompt editor's link handler: opens through the extension host. */
 export function createClickHandlerExtension(
   vscode: { postMessage: (message: unknown) => void },
-  stepCountRef: React.RefObject<number>
+  stepCountRef: React.RefObject<number>,
+  openChipMenu?: ReferenceChipMenuOpener
 ) {
-  return createReferenceLinkHandlerExtension((target) =>
-    openContextReferenceLink(target, vscode, stepCountRef.current ?? 0)
+  return createReferenceLinkHandlerExtension(
+    (target) =>
+      openContextReferenceLink(target, vscode, stepCountRef.current ?? 0),
+    openChipMenu
   );
 }
 
-// Handle clicks/taps on links. Atomic chips and git/priorContext links respond
-// to plain clicks; non-atomic file/directory/lineRange/symbol text links require
-// Ctrl/Cmd+Click on pointer devices. Short touch taps open directly because
-// mobile has no modifier-key equivalent. Long press remains available for
-// native editor positioning/selection behavior. `openLink` returns true when
-// it handled the target.
-export function createReferenceLinkHandlerExtension(
+function isAtomicReferenceChip(element: HTMLElement): boolean {
+  return element.classList.contains(ATOMIC_REFERENCE_CHIP_CLASS);
+}
+
+/** The document range a chip's replace widget stands in for. */
+function findChipRange(
+  view: EditorView,
+  chip: HTMLElement
+): { from: number; to: number } | null {
+  let pos: number;
+  try {
+    pos = view.posAtDOM(chip);
+  } catch {
+    return null;
+  }
+  let found: { from: number; to: number } | null = null;
+  for (const source of view.state.facet(EditorView.atomicRanges)) {
+    source(view).between(pos, pos, (from, to) => {
+      if (from !== pos) return;
+      found = { from, to };
+      return false;
+    });
+    if (found) break;
+  }
+  return found;
+}
+
+/**
+ * Items for a chip's context menu in an editor. The range is captured when the
+ * menu opens and re-checked when an item runs, so an edit that lands while the
+ * menu is open can't make Send as Plain Text wrap the wrong text.
+ */
+export function buildEditorReferenceChipMenuItems(
+  chip: HTMLElement,
+  view: EditorView,
   openLink: (target: HTMLElement, view: EditorView) => boolean
+): StepContextMenuEntry[] {
+  const range = findChipRange(view, chip);
+  const sourceText = range ? view.state.sliceDoc(range.from, range.to) : null;
+  return buildReferenceChipMenuItems({
+    open: () => {
+      openLink(chip, view);
+    },
+    sourceText,
+    invalid: chip.getAttribute("data-invalid") === BOOLEAN_STRING_VALUES.TRUE,
+    readOnly: view.state.readOnly,
+    sendAsPlainText: () => {
+      if (!range || sourceText === null) return;
+      if (view.state.sliceDoc(range.from, range.to) !== sourceText) return;
+      const insert = wrapInInlineCode(sourceText);
+      view.dispatch({
+        changes: { from: range.from, to: range.to, insert },
+        selection: { anchor: range.from + insert.length },
+        userEvent: "input",
+      });
+      view.focus();
+    },
+  });
+}
+
+// Handle clicks/taps on links. Atomic chips respond to plain clicks; text links
+// require Ctrl/Cmd+Click on pointer devices. Short touch taps open directly because
+// mobile has no modifier-key equivalent. Long press on a text link remains
+// available for native editor positioning/selection behavior; long press (or
+// right-click) on a chip opens `openChipMenu` instead, since there is no caret
+// position inside a chip to protect. `openLink` returns true when it handled
+// the target.
+export function createReferenceLinkHandlerExtension(
+  openLink: (target: HTMLElement, view: EditorView) => boolean,
+  openChipMenu?: ReferenceChipMenuOpener
 ) {
   let touchStart: {
     x: number;
@@ -2307,23 +2393,38 @@ export function createReferenceLinkHandlerExtension(
     time: number;
     target: HTMLElement;
   } | null = null;
+  let chipLongPressTimer: ReturnType<typeof setTimeout> | null = null;
 
   const cancelTouch = () => {
     touchStart = null;
+    if (chipLongPressTimer !== null) {
+      clearTimeout(chipLongPressTimer);
+      chipLongPressTimer = null;
+    }
   };
 
   return EditorView.domEventHandlers({
-    touchstart: (event) => {
-      if (event.touches.length !== 1) {
-        cancelTouch();
-        return false;
-      }
+    contextmenu: (event, view) => {
+      if (!openChipMenu) return false;
+      const target = getLinkElement(event.target);
+      if (!target || !isAtomicReferenceChip(target)) return false;
+      // Stop it here so a host's own editor menu (the workspace viewer's
+      // Cut/Copy/... menu on the editor wrapper) doesn't open as well.
+      event.preventDefault();
+      event.stopPropagation();
+      openChipMenu(
+        event.clientX,
+        event.clientY,
+        buildEditorReferenceChipMenuItems(target, view, openLink)
+      );
+      return true;
+    },
+    touchstart: (event, view) => {
+      cancelTouch();
+      if (event.touches.length !== 1) return false;
 
       const target = getLinkElement(event.target);
-      if (!target) {
-        cancelTouch();
-        return false;
-      }
+      if (!target) return false;
 
       const touch = event.touches[0];
       touchStart = {
@@ -2332,6 +2433,20 @@ export function createReferenceLinkHandlerExtension(
         time: Date.now(),
         target,
       };
+
+      if (openChipMenu && isAtomicReferenceChip(target)) {
+        // Keep the host's editor-wide long-press menu from arming too.
+        event.stopPropagation();
+        const { clientX, clientY } = touch;
+        chipLongPressTimer = setTimeout(() => {
+          chipLongPressTimer = null;
+          openChipMenu(
+            clientX,
+            clientY,
+            buildEditorReferenceChipMenuItems(target, view, openLink)
+          );
+        }, LINK_TOUCH_LONG_PRESS_MS);
+      }
       return false;
     },
     touchmove: (event) => {
@@ -2376,18 +2491,11 @@ export function createReferenceLinkHandlerExtension(
       const target = getLinkElement(event.target);
       if (!target) return false;
 
-      // Atomic chips are button-like and open on a plain click. Text links keep
-      // the conventional editor behavior: file/directory/lineRange/symbol
-      // require Ctrl/Cmd+Click, while previews open on a plain click.
-      const type = target.getAttribute("data-type");
-      if (
-        !target.classList.contains(ATOMIC_REFERENCE_CHIP_CLASS) &&
-        type !== ATOMIC_REFERENCE_KINDS.GIT &&
-        type !== ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT &&
-        type !== ATOMIC_REFERENCE_KINDS.SKILL &&
-        type !== ATOMIC_REFERENCE_KINDS.MCP &&
-        !(event.ctrlKey || event.metaKey)
-      ) {
+      // Chips open on a plain click: a chip has no caret position inside it,
+      // so the click has no other job. Every text link, whatever it opens,
+      // needs Ctrl/Cmd+Click as in VS Code, because a plain click inside text
+      // places the caret.
+      if (!isAtomicReferenceChip(target) && !(event.ctrlKey || event.metaKey)) {
         return false;
       }
 

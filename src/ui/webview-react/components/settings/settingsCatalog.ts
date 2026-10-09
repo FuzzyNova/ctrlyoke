@@ -133,7 +133,7 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.GENERAL,
     label: "Atomic context references",
     description:
-      "In the prompt editor, treat @file, #symbol, ~git, and $context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or long-pressing a reference still opens it; when off, editor references edit character by character and output uses ordinary text links.",
+      "In the prompt editor, treat @file, #symbol, ~git, and $context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or tapping a chip opens it, and right-clicking or long-pressing it offers Go to Reference, Copy Reference, and Send as Plain Text; when off, editor references edit character by character and output uses ordinary text links.",
   },
   "ui.useAbsolutePathReferences": {
     id: "ui.useAbsolutePathReferences",

@@ -46,6 +46,10 @@ import {
 } from "@utils/languageIntelligenceClient";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import {
+  useReferenceChipContextMenu,
+  type ReferenceChipMenuOpener,
+} from "@hooks/useReferenceChipContextMenu";
 import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
 import { createPromptCompletionClient } from "@utils/promptCompletion/createPromptCompletionClient";
 import {
@@ -154,6 +158,8 @@ export const WorkspaceFileEditor = forwardRef<
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    const { openReferenceChipMenu, referenceChipMenuPortal } =
+      useReferenceChipContextMenu();
     const yamlLanguageCompartment = useRef(new Compartment());
     const yamlLanguageExtensionRef = useRef<Extension>([]);
     const languageIntelligenceCompartment = useRef(new Compartment());
@@ -477,7 +483,8 @@ export const WorkspaceFileEditor = forwardRef<
         createWorkspaceReferenceDecorationExtension(),
         createWorkspaceReferenceLinkHandlerExtension(
           ctrlyokeFileKind,
-          () => workflowSupportRef.current
+          () => workflowSupportRef.current,
+          openReferenceChipMenu
         ),
         ...(langExt ? [langExt] : []),
         yamlLanguageCompartment.current.of(yamlLanguageExtensionRef.current),
@@ -523,7 +530,13 @@ export const WorkspaceFileEditor = forwardRef<
         }),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ];
-    }, [filePath, goToDefinition, readOnly, ctrlyokeFileKind]);
+    }, [
+      filePath,
+      goToDefinition,
+      readOnly,
+      ctrlyokeFileKind,
+      openReferenceChipMenu,
+    ]);
 
     useEffect(() => {
       const isPlainYaml =
@@ -693,6 +706,7 @@ export const WorkspaceFileEditor = forwardRef<
             {languageIntelligence.statusHint}
           </p>
         )}
+        {referenceChipMenuPortal}
       </div>
     );
   }
@@ -1012,7 +1026,8 @@ function createWorkspaceReferenceDecorationExtension() {
  */
 function createWorkspaceReferenceLinkHandlerExtension(
   kind: CtrlYokeFileKind | null,
-  getSupport: () => WorkflowFileSupport | null
+  getSupport: () => WorkflowFileSupport | null,
+  openChipMenu: ReferenceChipMenuOpener
 ) {
   return createReferenceLinkHandlerExtension((target, view) => {
     const support = getSupport();
@@ -1027,5 +1042,5 @@ function createWorkspaceReferenceLinkHandlerExtension(
     return openContextReferenceLink(target, getVsCodeApi(), stepCount, {
       inWorkspaceViewer: true,
     });
-  });
+  }, openChipMenu);
 }

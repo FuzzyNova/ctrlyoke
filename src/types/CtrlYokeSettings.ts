@@ -298,7 +298,8 @@ export interface CtrlYokeGlobalSettings {
      * Treat `@file`/`#symbol`/`~git`/`$context` references in the prompt editor
      * as atomic units: cursor motion skips over them and Backspace/Delete
      * removes the whole reference at once (no character-by-character editing
-     * inside a reference). Clicking/long-pressing a reference still opens it.
+     * inside a reference). Clicking a chip opens it; right-click/long-press
+     * opens its context menu.
      */
     atomicContextReferences: boolean;
     /**

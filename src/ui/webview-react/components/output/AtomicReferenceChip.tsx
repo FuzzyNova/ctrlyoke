@@ -1,4 +1,7 @@
-import type { CSSProperties, MouseEventHandler, ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useLongPress } from "@hooks/useLongPress";
+import { useReferenceChipContextMenu } from "@hooks/useReferenceChipContextMenu";
+import { buildReferenceChipMenuItems } from "@utils/referenceChipMenu";
 import {
   projectAtomicReferenceFind,
   SYMBOL_ICON_COLORS,
@@ -13,7 +16,8 @@ export interface AtomicReferenceChipProps {
   descriptor: AtomicReferenceDescriptor;
   presentation: AtomicReferencePresentation;
   findMatches?: RowFindDecoration["matches"];
-  onOpen: MouseEventHandler<HTMLButtonElement>;
+  /** Open the reference; also the context menu's Go to Reference. */
+  onOpen: () => void;
   className?: string;
 }
 
@@ -75,7 +79,11 @@ function renderLabel(
   return parts;
 }
 
-/** A native, selectable output reference chip. */
+/**
+ * A native, selectable output reference chip. Right-click or long-press opens
+ * the shared chip menu (Go to / Copy Reference); the output is read-only, so
+ * it has no Send as Plain Text.
+ */
 export function AtomicReferenceChip({
   descriptor,
   presentation,
@@ -88,24 +96,56 @@ export function AtomicReferenceChip({
   const style = {
     "--atomic-reference-accent": iconColor,
   } as CSSProperties;
+  const { openReferenceChipMenu, referenceChipMenuPortal } =
+    useReferenceChipContextMenu();
+  const openMenu = (x: number, y: number) =>
+    openReferenceChipMenu(
+      x,
+      y,
+      buildReferenceChipMenuItems({
+        open: onOpen,
+        sourceText: presentation.sourceText,
+        invalid: descriptor.invalid,
+      })
+    );
+  const longPressHandlers = useLongPress(openMenu);
 
+  // The portal is a sibling, not a child: React bubbles synthetic events
+  // through portals, so a menu inside the button would reach its handlers.
   return (
-    <button
-      type="button"
-      className={["atomic-reference-chip", className].filter(Boolean).join(" ")}
-      title={descriptor.title}
-      aria-label={atomicReferenceAriaLabel(descriptor)}
-      onClick={onOpen}
-      style={style}
-      data-atomic-reference-copy-text={projected.selectionText}
-      data-atomic-reference-source-text={presentation.sourceText}
-      {...descriptor.attrs}
-      {...(descriptor.invalid ? { "data-invalid": "true" } : {})}
-    >
-      <Icon name={descriptor.icon} className="atomic-reference-chip-icon" />
-      <span className="atomic-reference-chip-label">
-        {renderLabel(projected.text, projected.marks)}
-      </span>
-    </button>
+    <>
+      <button
+        type="button"
+        className={["atomic-reference-chip", className]
+          .filter(Boolean)
+          .join(" ")}
+        title={descriptor.title}
+        aria-label={atomicReferenceAriaLabel(descriptor)}
+        onClick={() => onOpen()}
+        onContextMenu={(event) => {
+          // Take precedence over the output pane's own context menu.
+          event.preventDefault();
+          event.stopPropagation();
+          openMenu(event.clientX, event.clientY);
+        }}
+        {...longPressHandlers}
+        onTouchStart={(event) => {
+          // Keep the output pane's long-press menu from arming as well.
+          event.stopPropagation();
+          longPressHandlers.onTouchStart(event);
+        }}
+        style={style}
+        data-atomic-reference-copy-text={projected.selectionText}
+        data-atomic-reference-source-text={presentation.sourceText}
+        {...descriptor.attrs}
+        {...(descriptor.invalid ? { "data-invalid": "true" } : {})}
+      >
+        <Icon name={descriptor.icon} className="atomic-reference-chip-icon" />
+        <span className="atomic-reference-chip-label">
+          {renderLabel(projected.text, projected.marks)}
+        </span>
+      </button>
+      {referenceChipMenuPortal}
+    </>
   );
 }

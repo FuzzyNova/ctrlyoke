@@ -200,7 +200,8 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
     await waitFor(() => {
       expect(container.querySelector(".cm-lintRange-info")).not.toBeNull();
     });
-    fireEvent.click(priorContextChip);
+    // A text link (not a chip) opens on Ctrl/Cmd+Click, as in VS Code.
+    fireEvent.click(priorContextChip, { ctrlKey: true });
 
     await waitFor(() => {
       expect(
@@ -239,7 +240,7 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
       '.cm-link[data-type="priorContext"]'
     );
     expect(chip).not.toBeNull();
-    fireEvent.click(chip!);
+    fireEvent.click(chip!, { ctrlKey: true });
 
     expect(
       postMessageSpy.mock.calls

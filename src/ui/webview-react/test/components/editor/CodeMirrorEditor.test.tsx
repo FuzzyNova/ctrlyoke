@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
-import type { Extension } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import type { Completion } from "@codemirror/autocomplete";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
 import {
@@ -30,6 +30,12 @@ import {
   SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import type {
+  StepContextMenuEntry,
+  StepContextMenuItem,
+} from "@components/shared/StepContextMenu";
+import { REFERENCE_CHIP_MENU_LABELS } from "@utils/referenceChipMenu";
+import { writeClipboardText } from "@utils/stepClipboard";
 import { EDITOR_PLACEHOLDER_TEXT } from "@root/types/DashboardConstants";
 
 describe("CodeMirrorEditor bulk placeholders", () => {
@@ -809,9 +815,20 @@ describe("CodeMirrorEditor ctrlyoke skill/mcp links", () => {
       expect(skillLink.textContent).toBe("/skill:commit");
       expect(skillLink.getAttribute("data-skill-name")).toBe("commit");
 
+      // A plain click on a text link places the caret, as in VS Code...
+      const plainClick = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+      });
+      skillLink.dispatchEvent(plainClick);
+      expect(postMessage).not.toHaveBeenCalled();
+      expect(plainClick.defaultPrevented).toBe(false);
+
+      // ...and Ctrl/Cmd+Click follows it.
       const click = new MouseEvent("click", {
         bubbles: true,
         cancelable: true,
+        ctrlKey: true,
       });
       skillLink.dispatchEvent(click);
 
@@ -848,6 +865,7 @@ describe("CodeMirrorEditor ctrlyoke skill/mcp links", () => {
       const click = new MouseEvent("click", {
         bubbles: true,
         cancelable: true,
+        ctrlKey: true,
       });
       mcpLink.dispatchEvent(click);
 
@@ -1727,5 +1745,230 @@ describe("keyboardTooltipSpace", () => {
       bottom: 900,
       right: 1280,
     });
+  });
+});
+
+vi.mock("@utils/stepClipboard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@utils/stepClipboard")>()),
+  writeClipboardText: vi.fn(() => Promise.resolve()),
+}));
+
+describe("CodeMirrorEditor atomic reference chip context menu", () => {
+  function mountChipEditor(doc: string, extraExtensions: Extension[] = []) {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const postMessage = vi.fn();
+    const openChipMenu =
+      vi.fn<(x: number, y: number, items: StepContextMenuEntry[]) => void>();
+    const view = new EditorView({
+      parent,
+      doc,
+      extensions: [
+        createAtomicReferenceExtension(),
+        createClickHandlerExtension(
+          { postMessage },
+          { current: 0 },
+          openChipMenu
+        ),
+        ...extraExtensions,
+      ],
+    });
+    const chip = () => view.dom.querySelector<HTMLElement>(".cm-atomic-ref")!;
+    const item = (label: string) => {
+      const items = openChipMenu.mock.lastCall?.[2] ?? [];
+      return items.find(
+        (entry): entry is StepContextMenuItem =>
+          "label" in entry && entry.label === label
+      )!;
+    };
+    const cleanup = () => {
+      view.destroy();
+      parent.remove();
+    };
+    return { parent, view, postMessage, openChipMenu, chip, item, cleanup };
+  }
+
+  function rightClick(target: HTMLElement): MouseEvent {
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 12,
+      clientY: 34,
+    });
+    target.dispatchEvent(event);
+    return event;
+  }
+
+  function touch(type: string, target: HTMLElement): Event {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    const point = { clientX: 5, clientY: 6, target };
+    Object.assign(event, {
+      touches: type === "touchend" ? [] : [point],
+      targetTouches: type === "touchend" ? [] : [point],
+      changedTouches: [point],
+    });
+    target.dispatchEvent(event);
+    return event;
+  }
+
+  it("opens on right-click and keeps the host's editor menu from opening", () => {
+    const editor = mountChipEditor("see @src/deep/file.ts now");
+    const hostMenu = vi.fn();
+    editor.parent.addEventListener("contextmenu", hostMenu);
+    try {
+      const event = rightClick(editor.chip());
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(hostMenu).not.toHaveBeenCalled();
+      expect(editor.openChipMenu).toHaveBeenCalledWith(
+        12,
+        34,
+        expect.any(Array)
+      );
+      expect(
+        editor.openChipMenu.mock.lastCall![2].map((entry) =>
+          "label" in entry ? entry.label : entry.type
+        )
+      ).toEqual([
+        REFERENCE_CHIP_MENU_LABELS.GO_TO,
+        REFERENCE_CHIP_MENU_LABELS.COPY,
+        "divider",
+        REFERENCE_CHIP_MENU_LABELS.SEND_AS_PLAIN_TEXT,
+      ]);
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  it("goes to and copies the reference exactly as written", () => {
+    const editor = mountChipEditor("see #selection:src/a.ts:3-4 now");
+    try {
+      rightClick(editor.chip());
+
+      editor.item(REFERENCE_CHIP_MENU_LABELS.COPY).onClick();
+      expect(writeClipboardText).toHaveBeenCalledWith(
+        "#selection:src/a.ts:3-4"
+      );
+
+      editor.item(REFERENCE_CHIP_MENU_LABELS.GO_TO).onClick();
+      expect(editor.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.OPEN_FILE,
+        path: "src/a.ts",
+        lineStart: 3,
+        lineEnd: 4,
+      });
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  it("sends the reference as plain text by wrapping it in backticks", () => {
+    const editor = mountChipEditor("see @src/deep/file.ts now");
+    try {
+      rightClick(editor.chip());
+      editor.item(REFERENCE_CHIP_MENU_LABELS.SEND_AS_PLAIN_TEXT).onClick();
+
+      expect(editor.view.state.doc.toString()).toBe(
+        "see `@src/deep/file.ts` now"
+      );
+      // Inside a code span it is literal, so it is no longer a chip.
+      expect(editor.view.dom.querySelector(".cm-atomic-ref")).toBeNull();
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  it("does not rewrite a reference whose text moved while the menu was open", () => {
+    const editor = mountChipEditor("@src/a.ts");
+    try {
+      rightClick(editor.chip());
+      editor.view.dispatch({ changes: { from: 0, insert: "x " } });
+      editor.item(REFERENCE_CHIP_MENU_LABELS.SEND_AS_PLAIN_TEXT).onClick();
+
+      expect(editor.view.state.doc.toString()).toBe("x @src/a.ts");
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  it("disables Send as Plain Text in a read-only editor", () => {
+    const editor = mountChipEditor("@src/a.ts", [
+      EditorState.readOnly.of(true),
+    ]);
+    try {
+      rightClick(editor.chip());
+      const send = editor.item(REFERENCE_CHIP_MENU_LABELS.SEND_AS_PLAIN_TEXT);
+      expect(send.disabled).toBe(true);
+      expect(send.disabledTitle).toBe("This file is read-only");
+    } finally {
+      editor.cleanup();
+    }
+  });
+
+  it("leaves right-clicks on text links to the host", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const openChipMenu = vi.fn();
+    const view = new EditorView({
+      parent,
+      doc: "@src/a.ts",
+      extensions: [
+        createLinkDecorationExtension(),
+        createClickHandlerExtension(
+          { postMessage: vi.fn() },
+          { current: 0 },
+          openChipMenu
+        ),
+      ],
+    });
+    try {
+      const event = rightClick(
+        view.dom.querySelector<HTMLElement>(".cm-link")!
+      );
+      expect(openChipMenu).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("opens on long-press without opening the reference or the host's long-press menu", () => {
+    vi.useFakeTimers();
+    const editor = mountChipEditor("@src/a.ts");
+    const hostTouch = vi.fn();
+    editor.parent.addEventListener("touchstart", hostTouch);
+    try {
+      touch("touchstart", editor.chip());
+      vi.advanceTimersByTime(500);
+      touch("touchend", editor.chip());
+
+      expect(hostTouch).not.toHaveBeenCalled();
+      expect(editor.openChipMenu).toHaveBeenCalledWith(5, 6, expect.any(Array));
+      expect(editor.postMessage).not.toHaveBeenCalled();
+    } finally {
+      editor.cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens the reference on a short tap without opening the menu", () => {
+    vi.useFakeTimers();
+    const editor = mountChipEditor("@src/a.ts");
+    try {
+      touch("touchstart", editor.chip());
+      vi.advanceTimersByTime(100);
+      touch("touchend", editor.chip());
+      vi.advanceTimersByTime(1000);
+
+      expect(editor.openChipMenu).not.toHaveBeenCalled();
+      expect(editor.postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.OPEN_FILE,
+        path: "src/a.ts",
+      });
+    } finally {
+      editor.cleanup();
+      vi.useRealTimers();
+    }
   });
 });

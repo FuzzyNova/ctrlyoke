@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { writeClipboardText } from "@utils/stepClipboard";
+import { REFERENCE_CHIP_MENU_LABELS } from "@utils/referenceChipMenu";
 import { AtomicReferenceChip } from "@components/output/AtomicReferenceChip";
 import { findAtomicReferences } from "@utils/atomicReferences";
 
 function renderReference(
   token: string,
-  findMatches: Parameters<typeof AtomicReferenceChip>[0]["findMatches"] = []
+  findMatches: Parameters<typeof AtomicReferenceChip>[0]["findMatches"] = [],
+  parentHandlers: React.HTMLAttributes<HTMLDivElement> = {}
 ) {
   const descriptor = findAtomicReferences(token)[0];
   if (!descriptor) throw new Error(`No reference found in ${token}`);
@@ -30,15 +33,22 @@ function renderReference(
   };
   const onOpen = vi.fn();
   render(
-    <AtomicReferenceChip
-      descriptor={descriptor}
-      presentation={presentation}
-      findMatches={findMatches}
-      onOpen={onOpen}
-    />
+    // Stands in for the output pane, whose own menus are React handlers.
+    <div {...parentHandlers}>
+      <AtomicReferenceChip
+        descriptor={descriptor}
+        presentation={presentation}
+        findMatches={findMatches}
+        onOpen={onOpen}
+      />
+    </div>
   );
   return { descriptor, onOpen };
 }
+
+vi.mock("@utils/stepClipboard", () => ({
+  writeClipboardText: vi.fn(() => Promise.resolve()),
+}));
 
 describe("AtomicReferenceChip", () => {
   it("uses native button semantics for pointer, Enter, and Space activation", async () => {
@@ -165,5 +175,57 @@ describe("AtomicReferenceChip", () => {
     expect(button).toHaveAttribute("data-atomic-reference-copy-text", source);
     expect(button).toHaveAttribute("data-atomic-reference-source-text", source);
     expect(button).toHaveClass("atomic-reference-chip");
+  });
+
+  it("opens a Go to / Copy menu on right-click without opening the output pane's menu", () => {
+    const outerMenu = vi.fn();
+    const { onOpen } = renderReference("#selection:src/file.ts:10-20", [], {
+      onContextMenu: outerMenu,
+    });
+    const button = screen.getByRole("button");
+
+    fireEvent.contextMenu(button, { clientX: 10, clientY: 20 });
+
+    expect(outerMenu).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", {
+        name: REFERENCE_CHIP_MENU_LABELS.SEND_AS_PLAIN_TEXT,
+      })
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: REFERENCE_CHIP_MENU_LABELS.COPY })
+    );
+    expect(writeClipboardText).toHaveBeenCalledWith(
+      "#selection:src/file.ts:10-20"
+    );
+    expect(onOpen).not.toHaveBeenCalled();
+
+    fireEvent.contextMenu(button);
+    fireEvent.click(
+      screen.getByRole("button", { name: REFERENCE_CHIP_MENU_LABELS.GO_TO })
+    );
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the menu on long-press and keeps the press from reaching the output pane", () => {
+    vi.useFakeTimers();
+    try {
+      const outerTouch = vi.fn();
+      renderReference("@src/file.ts", [], { onTouchStart: outerTouch });
+      const button = screen.getByRole("button");
+
+      fireEvent.touchStart(button, { touches: [{ clientX: 5, clientY: 5 }] });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(outerTouch).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("button", { name: REFERENCE_CHIP_MENU_LABELS.COPY })
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
