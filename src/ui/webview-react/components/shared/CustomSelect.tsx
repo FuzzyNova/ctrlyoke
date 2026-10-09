@@ -12,7 +12,11 @@ import {
 } from "@utils/dropdownValidation";
 import { Icon } from "./Icon";
 import type { SelectOption as SharedSelectOption } from "@root/types/SelectOption";
-import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  schemaAriaLabel,
+  schemaOptionTitle,
+  schemaTitle,
+} from "@utils/schemaPropertyLabels";
 
 interface CustomSelectOption extends SharedSelectOption {
   /** Optional className override for the description text (defaults to muted). */
@@ -129,8 +133,15 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     option.schemaPath ?? schemaPath;
   const optionTitle = (option: CustomSelectOption) => {
     const path = optionSchemaPath(option);
-    if (!schemaPath || !path) return option.label;
-    return schemaTitle(path, option.pseudo ?? option.value);
+    if (!schemaPath || !path) {
+      return schemaOptionTitle(option.label, option.description);
+    }
+    return schemaOptionTitle(
+      option.label,
+      option.description,
+      path,
+      option.pseudo ?? option.value
+    );
   };
   const optionAriaLabel = (option: CustomSelectOption) => {
     const path = optionSchemaPath(option);
@@ -211,15 +222,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               onClick={() => !option.disabled && handleSelect(option.value)}
               disabled={option.disabled}
               aria-label={optionAriaLabel(option)}
+              title={optionTitle(option)}
               className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-hidden border-none bg-transparent cursor-inherit disabled:cursor-not-allowed"
             >
               <span className="flex flex-col min-w-0">
-                <span title={optionTitle(option)} className="truncate">
-                  {option.label}
-                </span>
+                <span className="truncate">{option.label}</span>
                 {option.description && (
                   <span
-                    title={option.description}
                     className={`text-xxs truncate ${option.descriptionClassName ?? "text-description-fg"}`}
                   >
                     {truncateOptionDescription(option.description)}
@@ -273,15 +282,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 type="button"
                 onClick={() => handleSelectHidden(option.value)}
                 aria-label={optionAriaLabel(option)}
+                title={optionTitle(option)}
                 className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-hidden border-none bg-transparent cursor-pointer"
               >
                 <span className="flex flex-col min-w-0">
-                  <span title={optionTitle(option)} className="truncate">
-                    {option.label}
-                  </span>
+                  <span className="truncate">{option.label}</span>
                   {option.description && (
                     <span
-                      title={option.description}
                       className={`text-xxs truncate ${option.descriptionClassName ?? ""}`}
                     >
                       {truncateOptionDescription(option.description)}

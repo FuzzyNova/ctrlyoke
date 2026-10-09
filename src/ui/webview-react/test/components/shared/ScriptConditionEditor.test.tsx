@@ -1117,11 +1117,9 @@ describe("ScriptConditionEditor", () => {
       );
       fireEvent.click(source);
       expect(
-        within(
-          screen.getByRole("button", {
-            name: "Stdout, defaults.preCondition.compareSource: stdout",
-          })
-        ).getByText("Stdout")
+        screen.getByRole("button", {
+          name: "Stdout, defaults.preCondition.compareSource: stdout",
+        })
       ).toHaveAttribute(
         "title",
         expect.stringContaining(

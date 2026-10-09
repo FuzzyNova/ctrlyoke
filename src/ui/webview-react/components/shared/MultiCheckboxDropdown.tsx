@@ -12,6 +12,7 @@ import {
 } from "@utils/dropdownValidation";
 import type { HideableProps } from "./CustomSelect";
 import { Icon } from "./Icon";
+import { schemaOptionTitle } from "@utils/schemaPropertyLabels";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
 
@@ -44,6 +45,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   triggerAriaLabel?: string;
   /** Values granted by another authoring surface and therefore not toggleable here. */
   lockedValues?: readonly string[];
+  /** Schema property the selected values are written to; adds its help to each row tooltip. */
+  schemaPath?: string;
 }
 
 /**
@@ -68,6 +71,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   hiddenValues = [],
   onHideOption,
   onUnhideOption,
+  schemaPath,
   nonHideableValues,
   dropdownMaxHeight = "60vh",
   dropdownMinWidth,
@@ -161,6 +165,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     }
   };
 
+  const optionTitle = (option: MultiCheckboxDropdownOption) =>
+    schemaOptionTitle(option.label, option.description, schemaPath);
+
   const canHide = (value: string) =>
     hideEnabled && !nonHideable.includes(value);
 
@@ -181,6 +188,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
           onClick={() => toggleValue(option.value)}
           disabled={isLocked}
           aria-disabled={isLocked}
+          title={optionTitle(option)}
           className={`flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-hidden border-none bg-transparent ${isLocked ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
         >
           <input
@@ -500,6 +508,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                     <button
                       type="button"
                       onClick={() => handleUnhideAndCheck(option.value)}
+                      title={optionTitle(option)}
                       className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-hidden border-none bg-transparent cursor-pointer"
                     >
                       <input

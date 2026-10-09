@@ -92,10 +92,13 @@ describe("CustomSelect — basic behavior", () => {
     expect(screen.getByText(`${"A".repeat(117)}...`)).toHaveClass(
       "text-description-fg"
     );
-    expect(screen.getByTitle(description)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Described/ })).toHaveAttribute(
+      "title",
+      `Described\n\n${description}`
+    );
   });
 
-  it("provides each option's full label as hover text", async () => {
+  it("provides each option's full label as the row's hover text", async () => {
     const user = userEvent.setup();
     const longLabel = "opencode/very-long-model-name-that-overflows-the-menu";
     render(
@@ -108,7 +111,7 @@ describe("CustomSelect — basic behavior", () => {
 
     await user.click(getTrigger());
 
-    expect(screen.getByTitle(longLabel)).toHaveClass("truncate");
+    expect(screen.getByTitle(longLabel)).toHaveAttribute("type", "button");
   });
 
   it("adds schema property names to trigger and option tooltip and accessible names", async () => {
@@ -143,21 +146,20 @@ describe("CustomSelect — basic behavior", () => {
     const noneOption = screen.getByRole("button", {
       name: "None, toolPermissions.mode: none",
     });
-    expect(
-      screen.getByTitle(/property: toolPermissions\.mode = none/)
-    ).toHaveAttribute(
+    expect(noneOption).toHaveAttribute(
       "title",
-      expect.stringContaining("property: toolPermissions.mode = none")
+      expect.stringMatching(
+        /^None\n\n[\s\S]*\n\nproperty: toolPermissions\.mode = none$/
+      )
     );
-    expect(noneOption).toBeInTheDocument();
 
     const inheritOption = screen.getByRole("button", {
       name: "Inherit (Allow All), omit toolPermissions",
     });
     expect(inheritOption).toBeInTheDocument();
-    expect(inheritOption.querySelector("span.truncate")).toHaveAttribute(
+    expect(inheritOption).toHaveAttribute(
       "title",
-      "omit toolPermissions property: toolPermissions.mode"
+      "Inherit (Allow All)\n\nomit toolPermissions\n\nproperty: toolPermissions.mode"
     );
   });
 
@@ -187,12 +189,10 @@ describe("CustomSelect — basic behavior", () => {
 
     expect(
       screen.getByRole("button", { name: 'None, agent: ""' })
-    ).toBeInTheDocument();
-    expect(screen.getByTitle('agent: "" property: agent')).toBeInTheDocument();
+    ).toHaveAttribute("title", 'None\n\nagent: ""\n\nproperty: agent');
     expect(
       screen.getByRole("button", { name: "Inherit (None), omit agent" })
-    ).toBeInTheDocument();
-    expect(screen.getByTitle("omit agent")).toBeInTheDocument();
+    ).toHaveAttribute("title", "Inherit (None)\n\nomit agent");
   });
 
   it("dropdown options are not rendered when closed", () => {
@@ -378,7 +378,7 @@ describe("CustomSelect — hide/unhide feature", () => {
     await user.click(getTrigger());
     await user.click(screen.getByRole("button", { name: /Show hidden/i }));
 
-    expect(screen.getByTitle(longLabel)).toHaveClass("truncate");
+    expect(screen.getByTitle(longLabel)).toHaveAttribute("type", "button");
   });
 
   it("calls onUnhideOption when unhide button clicked on hidden row", async () => {

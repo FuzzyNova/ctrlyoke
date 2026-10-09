@@ -116,8 +116,7 @@ import {
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { Icon } from "../shared/Icon";
-import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
-import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
+import { schemaAriaLabel, schemaFieldTitle } from "@utils/schemaPropertyLabels";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
@@ -257,11 +256,7 @@ const FormField: React.FC<{
     <div className="flex items-center justify-between min-h-[18px]">
       <label
         htmlFor={htmlFor}
-        title={schemaTitle(
-          schemaPath,
-          undefined,
-          SCHEMA_DESCRIPTIONS[schemaPath] ?? description
-        )}
+        title={schemaFieldTitle(label, schemaPath, description)}
         aria-label={schemaAriaLabel(label, schemaPath)}
         className="text-xs font-semibold uppercase text-description-fg cursor-help"
       >
@@ -1790,6 +1785,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <MultiCheckboxDropdown
                     id="settings-skills"
                     triggerAriaLabel="Skills"
+                    schemaPath="skills"
                     selectedValues={effectiveSkills}
                     onChange={handleSkillsChange}
                     options={availableSkills.map((s) => ({

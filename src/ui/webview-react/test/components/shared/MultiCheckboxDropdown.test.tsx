@@ -114,6 +114,26 @@ describe("MultiCheckboxDropdown", () => {
     expect(screen.getByRole("button", { name: "Test" })).toBeInTheDocument();
   });
 
+  it("gives each row one tooltip: full label, its description, then schema help", () => {
+    render(
+      <MultiCheckboxDropdown
+        id="skills"
+        schemaPath="skills"
+        selectedValues={[]}
+        onChange={vi.fn()}
+        options={[{ value: "lint", label: "lint", description: "Run lint" }]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Select..." }));
+    expect(
+      screen.getByRole("button", { name: "lintRun lint" })
+    ).toHaveAttribute(
+      "title",
+      expect.stringMatching(/^lint\n\nRun lint\n\n[\s\S]*\n\nproperty: skills$/)
+    );
+  });
+
   it("select-all header toggles every visible option, including grouped ones", () => {
     const onChange = vi.fn();
     const { rerender } = render(

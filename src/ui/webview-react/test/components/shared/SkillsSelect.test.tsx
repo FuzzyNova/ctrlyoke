@@ -100,7 +100,11 @@ describe("SkillsSelect", () => {
 
     await user.click(screen.getByRole("button"));
 
-    expect(screen.getByTitle(description)).toHaveTextContent("lint");
+    expect(
+      screen.getByTitle(new RegExp(`^lint\n\n${description}\n\n`), {
+        normalizer: (title) => title,
+      })
+    ).toHaveTextContent("lint");
   });
 
   it("reveals hidden skills and lets the user unhide them", async () => {
@@ -144,6 +148,10 @@ describe("SkillsSelect", () => {
     await user.click(screen.getByRole("button"));
     await user.click(screen.getByRole("button", { name: /Show hidden/i }));
 
-    expect(screen.getByTitle(description)).toHaveTextContent("test");
+    expect(
+      screen.getByTitle(new RegExp(`^test\n\n${description}\n\n`), {
+        normalizer: (title) => title,
+      })
+    ).toHaveTextContent("test");
   });
 });

@@ -14,7 +14,11 @@ import {
 } from "@utils/dropdownValidation";
 import type { HideableProps } from "./CustomSelect";
 import { Icon } from "./Icon";
-import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  schemaAriaLabel,
+  schemaOptionTitle,
+  schemaTitle,
+} from "@utils/schemaPropertyLabels";
 import {
   SKILLS_SELECTION_OPTIONS_META,
   toSelectOptions,
@@ -206,7 +210,12 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
               disabled={disabled}
               onClick={() => handleKeywordSelect(keyword)}
               aria-label={schemaAriaLabel(label, schemaPath, schemaValue)}
-              title={schemaTitle(schemaPath, schemaValue)}
+              title={schemaOptionTitle(
+                label,
+                undefined,
+                schemaPath,
+                schemaValue
+              )}
               className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-hidden border-none ${
                 isSelected
                   ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
@@ -244,7 +253,11 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             return (
               <div
                 key={skill.name}
-                title={skill.description}
+                title={schemaOptionTitle(
+                  skill.name,
+                  skill.description,
+                  schemaPath
+                )}
                 className={`group w-full flex items-start focus:outline-hidden border-none ${
                   isChecked
                     ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
@@ -301,7 +314,11 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 return (
                   <div
                     key={skill.name}
-                    title={skill.description}
+                    title={schemaOptionTitle(
+                      skill.name,
+                      skill.description,
+                      schemaPath
+                    )}
                     className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cy-dropdown-row"
                   >
                     <button

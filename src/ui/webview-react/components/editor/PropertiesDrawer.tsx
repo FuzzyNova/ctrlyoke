@@ -78,6 +78,7 @@ import {
   skillsWarning,
 } from "@utils/dropdownValidation";
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
+import { schemaFieldTitle } from "@utils/schemaPropertyLabels";
 import {
   diagnosticsForPermissionField,
   diagnosticsForHookEvents,
@@ -616,7 +617,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-harness"
-                  className="text-xs font-semibold uppercase text-description-fg"
+                  title={schemaFieldTitle("Harness", "harness")}
+                  className="text-xs font-semibold uppercase text-description-fg cursor-help"
                 >
                   Harness
                 </label>
@@ -659,7 +661,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-model"
-                  className="text-xs font-semibold uppercase text-description-fg"
+                  title={schemaFieldTitle("Model", "model")}
+                  className="text-xs font-semibold uppercase text-description-fg cursor-help"
                 >
                   Model
                 </label>
@@ -726,7 +729,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-agent"
-                  className="text-xs font-semibold uppercase text-description-fg"
+                  title={schemaFieldTitle("Agent", "agent")}
+                  className="text-xs font-semibold uppercase text-description-fg cursor-help"
                 >
                   Agent
                 </label>
@@ -794,7 +798,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-skills"
-                  className="text-xs font-semibold uppercase text-description-fg"
+                  title={schemaFieldTitle("Skills", "skills")}
+                  className="text-xs font-semibold uppercase text-description-fg cursor-help"
                 >
                   Skills
                 </label>

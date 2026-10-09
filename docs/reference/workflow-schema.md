@@ -129,7 +129,7 @@ Harness to use for this prompt. Determines which AI CLI executes the prompt. Opt
 
 - **Type:** `string`
 
-AI model to use for this prompt. Use IntelliSense (Ctrl+Space) to see available models. Each harness supports different models — unsupported models fall back to the harness default with a warning. Use 'none' to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to the active harness model setting.
+AI model to use for this prompt. Each harness supports different models — unsupported models fall back to the harness default with a warning. Use 'none' (the None option) to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to the active harness model setting.
 
 ### `executionMode` {#execution-properties-executionmode}
 
@@ -143,7 +143,7 @@ Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the 
 - **Type:** `string` or `""` or `null`
 - **Settings default:** [`defaults.agent`](/reference/settings#defaults-agent)
 
-Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in &lt;agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. Use null to explicitly disable inherited agent selection.
+Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in &lt;agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow.
 
 Accepted forms:
 
@@ -197,7 +197,7 @@ Session ID for resuming CLI conversations. Can be: a string (exact CLI session I
 - **Type:** `string[]` or `null`
 - **Settings default:** [`defaults.skills`](/reference/settings#defaults-skills)
 
-Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly disable inherited workflow skills; skills declared by the selected agent still attach.
+Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach.
 
 ### `secrets` {#execution-properties-secrets}
 
@@ -211,14 +211,14 @@ Secret environment-variable names granted to this prompt or workflow. Prompt-lev
 - **Type:** [End condition](#end-condition) or `null`
 - **Settings default:** [`defaults.endCondition`](/reference/settings#defaults-endcondition)
 
-End condition validation to run after this prompt completes. Use null to explicitly disable end condition inheritance from the workflow level (even if the workflow defines one). Omitting this field inherits the workflow-level end condition (if any).
+End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).
 
 ### `preCondition` {#execution-properties-precondition}
 
 - **Type:** [Pre-condition](#pre-condition) or `null`
 - **Settings default:** [`defaults.preCondition`](/reference/settings#defaults-precondition)
 
-Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. Use null to disable an inherited pre-condition for a specific prompt.
+Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.
 
 ### `priorContext` {#execution-properties-priorcontext}
 
@@ -247,7 +247,7 @@ How many of the most recent earlier outputs to include
 - **Type:** `string` or `null`
 - **Settings default:** [`defaults.additionalArgs`](/reference/settings#defaults-additionalargs)
 
-Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: "--effort high --max-turns 10"
+Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: "--effort high --max-turns 10"
 
 ### `toolPermissions` {#execution-properties-toolpermissions}
 

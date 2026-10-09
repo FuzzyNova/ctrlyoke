@@ -14,6 +14,7 @@ properties:
       Marks the file as a reusable template and describes its placeholders. Removed when the
       template is instantiated.
     $ref: '#/$defs/templateMetadata'
+    title: Template Meta
 allOf:
   - if:
       not:
@@ -23,6 +24,7 @@ allOf:
       properties:
         harness:
           $ref: '#/$defs/harnessId'
+          title: Harness
         steps:
           type: array
           items:
@@ -30,11 +32,14 @@ allOf:
             properties:
               harness:
                 $ref: '#/$defs/harnessId'
+                title: Harness
               _runtime:
                 type: object
                 properties:
                   harness:
                     $ref: '#/$defs/harnessId'
+                    title: Harness
+                title: Runtime
               parallel:
                 type: array
                 items:
@@ -42,21 +47,30 @@ allOf:
                   properties:
                     harness:
                       $ref: '#/$defs/harnessId'
+                      title: Harness
                     _runtime:
                       type: object
                       properties:
                         harness:
                           $ref: '#/$defs/harnessId'
+                          title: Harness
+                      title: Runtime
+                title: Parallel
+          title: Steps
         finalStep:
           type: object
           properties:
             harness:
               $ref: '#/$defs/harnessId'
+              title: Harness
             _runtime:
               type: object
               properties:
                 harness:
                   $ref: '#/$defs/harnessId'
+                  title: Harness
+              title: Runtime
+          title: Final Step
 oneOf:
   - title: Single Step
     $ref: '#/$defs/singleStepRoot'
@@ -66,14 +80,17 @@ oneOf:
         type: string
         format: uri
         description: Schema URL used by JSON-aware editors for validation and completion.
+        title: Schema
       schemaVersion:
         type: integer
         minimum: 1
         description: >-
           Workflow definition format version. Absent means format 1. ctrlyoke stamps this field when
           it writes workflow files; older ctrlyoke versions refuse to open a newer format.
+        title: Schema Version
       _templateMeta:
         $ref: '#/properties/_templateMeta'
+        title: Template Meta
   - title: Multiple Steps (or Working File)
     allOf:
       - $ref: '#/$defs/executionProperties'
@@ -88,6 +105,7 @@ oneOf:
               oneOf:
                 - $ref: '#/$defs/workflowStep'
                 - $ref: '#/$defs/parallelGroupItem'
+            title: Steps
           finalStep:
             $ref: '#/$defs/workflowStep'
             description: >-
@@ -96,14 +114,17 @@ oneOf:
               those prompts run before finalStep executes again. Working files store resolved
               harness/model/session metadata on finalStep._runtime; workflow phase/status remains in
               the root _runtime.finalStep block.
+            title: Final Step
           parallelGroups:
             type: array
             description: Normalized working-file topology for authored parallel groups.
             items:
               $ref: '#/$defs/parallelGroupDefinition'
+            title: Parallel Groups
           startedAt:
             type: number
             description: Timestamp when workflow started (working files only)
+            title: Started At
           definitionRevision:
             type: integer
             minimum: 1
@@ -111,8 +132,10 @@ oneOf:
               Monotonic optimistic-concurrency counter, bumped on every definition-changing edit and
               not on runtime-only writes. Starts at 1; each promoted run restarts its own sequence
               at 1 (working files only).
+            title: Definition Revision
           _runtime:
             $ref: '#/$defs/runtimeMetadata'
+            title: Runtime
         required:
           - steps
     type: object
@@ -121,14 +144,17 @@ oneOf:
         type: string
         format: uri
         description: Schema URL used by JSON-aware editors for validation and completion.
+        title: Schema
       schemaVersion:
         type: integer
         minimum: 1
         description: >-
           Workflow definition format version. Absent means format 1. Run files use this root field
           for the workflow definition and `_runtime.schemaVersion` independently for run metadata.
+        title: Schema Version
       _templateMeta:
         $ref: '#/properties/_templateMeta'
+        title: Template Meta
     unevaluatedProperties: false
 $defs:
   unlimitedValue:
@@ -163,9 +189,11 @@ $defs:
       name:
         type: string
         description: Display name shown in the template picker.
+        title: Name
       description:
         type: string
         description: Short explanation shown in the template picker.
+        title: Description
       variables:
         type: object
         description: Metadata for placeholders used by this template, keyed by variable name.
@@ -173,6 +201,7 @@ $defs:
           pattern: ^[a-z][a-zA-Z0-9]*$
         additionalProperties:
           $ref: '#/$defs/templateVariableMetadata'
+        title: Variables
     additionalProperties: false
   templateVariableMetadata:
     type: object
@@ -186,29 +215,36 @@ $defs:
           - select
           - harness
         description: Control used to collect this variable in the template dialog.
+        title: Type
       fileFilter:
         type: array
         items:
           type: string
         description: File-picker glob patterns used by file variables.
+        title: File Filter
       options:
         type: array
         items:
           type: string
         minItems: 1
         description: Available values for a select variable.
+        title: Options
       autoFillFilename:
         type: boolean
         description: Use the selected file or directory basename as the initial workflow name.
+        title: Auto Fill Filename
       description:
         type: string
         description: Help text shown below the variable control.
+        title: Description
       default:
         type: string
         description: Initial value used when the user leaves the variable unchanged.
+        title: Default
       multiline:
         type: boolean
         description: Render a text variable as a multiline input.
+        title: Multiline
     additionalProperties: false
   promptFileFrontmatter:
     type: object
@@ -224,12 +260,14 @@ $defs:
         description: >-
           Workflow definition format version. Absent means format 1. An older ctrlyoke refuses to
           load a file with a newer version.
+        title: Schema Version
       description:
         type: string
         description: >-
           Short summary of the prompt. When the file runs on its own, it becomes the step's `name`
           in the dashboard (cut to 100 characters). It is display metadata only and is never sent to
           the harness.
+        title: Description
   worktreeConfig:
     oneOf:
       - type: boolean
@@ -250,9 +288,11 @@ $defs:
           mode:
             type: string
             const: managed
+            title: Mode
           merge:
             type: boolean
             description: Merge the managed branch into the captured source checkout after the run.
+            title: Merge
           keep:
             type: boolean
             description: >-
@@ -261,10 +301,12 @@ $defs:
               such as node_modules are gone and the setup command runs again, so a long setup pays
               that cost on every append. Removing the directory also ends filesystem undo for that
               run.
+            title: Keep
           base:
             type: string
             minLength: 1
             description: Optional Git ref resolved to a commit when the worktree is created.
+            title: Base
           setup:
             type: string
             description: >-
@@ -272,6 +314,7 @@ $defs:
               the step-scoped errorBehavior policy: it runs before any step is in flight, so a
               non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded
               outcome is skipped.
+            title: Setup
         required:
           - mode
         additionalProperties: false
@@ -283,14 +326,17 @@ $defs:
           mode:
             type: string
             const: named
+            title: Mode
           branch:
             type: string
             minLength: 1
             description: Local Git branch name for the named worktree.
+            title: Branch
           base:
             type: string
             minLength: 1
             description: Optional Git ref resolved to a commit when the worktree is created.
+            title: Base
           setup:
             type: string
             description: >-
@@ -298,6 +344,7 @@ $defs:
               step-scoped errorBehavior policy: it runs before any step is in flight, so a
               non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded
               outcome is skipped.
+            title: Setup
         required:
           - mode
           - branch
@@ -326,14 +373,17 @@ $defs:
           Maximum number of entries in the run's `steps` array, regardless of who queued them,
           including parallel members and disabled steps. `finalStep` iterations and retries are not
           counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.
+        title: Max Steps
       worktree:
         description: >-
           Run the workflow in the working checkout or in a Git worktree. When omitted, the
           `defaults.worktree` setting applies.
         $ref: '#/$defs/worktreeConfig'
+        title: Worktree
       vars:
         description: Default values for `{{varName}}` substitutions.
         $ref: '#/$defs/varsConfig'
+        title: Vars
       trustedExternalRoots:
         oneOf:
           - type: array
@@ -366,6 +416,7 @@ $defs:
           roots (restricting a risky workflow to less than the everyday default); either way every
           root in the array still needs its own one-time approval unless already approved at a
           broader scope.
+        title: Trusted External Roots
   singleStepRoot:
     oneOf:
       - type: object
@@ -377,12 +428,15 @@ $defs:
             type: string
             format: uri
             description: Schema URL used by JSON-aware editors for validation and completion.
+            title: Schema
           schemaVersion:
             type: integer
             minimum: 1
             description: Workflow definition format version. Absent means format 1.
+            title: Schema Version
           _templateMeta:
             $ref: '#/properties/_templateMeta'
+            title: Template Meta
         unevaluatedProperties: false
       - type: object
         allOf:
@@ -393,12 +447,15 @@ $defs:
             type: string
             format: uri
             description: Schema URL used by JSON-aware editors for validation and completion.
+            title: Schema
           schemaVersion:
             type: integer
             minimum: 1
             description: Workflow definition format version. Absent means format 1.
+            title: Schema Version
           _templateMeta:
             $ref: '#/properties/_templateMeta'
+            title: Template Meta
   rootScriptStep:
     type: object
     description: A top-level script workflow with workflow-only properties.
@@ -407,58 +464,84 @@ $defs:
         type: string
         format: uri
         description: Schema URL used by JSON-aware editors for validation and completion.
+        title: Schema
       schemaVersion:
         type: integer
         minimum: 1
         description: Workflow definition format version. Absent means format 1.
+        title: Schema Version
       type:
         $ref: '#/$defs/scriptStep/properties/type'
+        title: Type
       name:
         $ref: '#/$defs/scriptStep/properties/name'
+        title: Name
       enabled:
         $ref: '#/$defs/scriptStep/properties/enabled'
+        title: Enabled
       color:
         $ref: '#/$defs/scriptStep/properties/color'
+        title: Color
       executionMode:
         $ref: '#/$defs/scriptStep/properties/executionMode'
+        title: Execution Mode
       script:
         $ref: '#/$defs/scriptStep/properties/script'
+        title: Script
       env:
         $ref: '#/$defs/scriptStep/properties/env'
+        title: Env
       compareSource:
         $ref: '#/$defs/scriptStep/properties/compareSource'
+        title: Compare Source
       timeoutSec:
         $ref: '#/$defs/scriptStep/properties/timeoutSec'
+        title: Timeout Sec
       shell:
         $ref: '#/$defs/scriptStep/properties/shell'
+        title: Shell
       errorBehavior:
         $ref: '#/$defs/scriptStep/properties/errorBehavior'
+        title: Error Behavior
       secrets:
         $ref: '#/$defs/scriptStep/properties/secrets'
+        title: Secrets
       onPass:
         $ref: '#/$defs/scriptStep/properties/onPass'
+        title: On Pass
       onFail:
         $ref: '#/$defs/scriptStep/properties/onFail'
+        title: On Fail
       _runtime:
         $ref: '#/$defs/scriptStep/properties/_runtime'
+        title: Runtime
       worktree:
         $ref: '#/$defs/workflowOnlyProperties/properties/worktree'
+        title: Worktree
       vars:
         $ref: '#/$defs/workflowOnlyProperties/properties/vars'
+        title: Vars
       trustedExternalRoots:
         $ref: '#/$defs/workflowOnlyProperties/properties/trustedExternalRoots'
+        title: Trusted External Roots
       maxSteps:
         $ref: '#/$defs/workflowOnlyProperties/properties/maxSteps'
+        title: Max Steps
       _templateMeta:
         $ref: '#/properties/_templateMeta'
+        title: Template Meta
       operator:
         $ref: '#/$defs/scriptStep/properties/operator'
+        title: Operator
       expected:
         $ref: '#/$defs/scriptStep/properties/expected'
+        title: Expected
       ignoreCase:
         $ref: '#/$defs/scriptStep/properties/ignoreCase'
+        title: Ignore Case
       returns:
         $ref: '#/$defs/scriptStep/properties/returns'
+        title: Returns
     required:
       - type
       - script
@@ -475,10 +558,12 @@ $defs:
         minLength: 1
         pattern: ^(?!\.{1,2}$)[^/\\]+$
         description: Stable workflow lineage key within the current workspace.
+        title: Workflow Key
       runRef:
         type: string
         pattern: ^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$
         description: Stable completed-run reference within workflowKey.
+        title: Run Ref
   executionProperties:
     type: object
     description: >-
@@ -492,14 +577,14 @@ $defs:
         oneOf:
           - $ref: '#/$defs/harnessId'
           - $ref: '#/$defs/templatePlaceholder'
+        title: Harness
       model:
         type: string
         description: >-
-          AI model to use for this prompt. Use IntelliSense (Ctrl+Space) to see available models.
-          Each harness supports different models — unsupported models fall back to the harness
-          default with a warning. Use 'none' to skip the --model flag entirely (e.g. for custom
-          Bedrock model strings passed via additionalArgs). Optional - defaults to the active
-          harness model setting.
+          AI model to use for this prompt. Each harness supports different models — unsupported
+          models fall back to the harness default with a warning. Use 'none' (the None option) to
+          skip the --model flag entirely (e.g. for custom Bedrock model strings passed via
+          additionalArgs). Optional - defaults to the active harness model setting.
         examples:
           - claude-fable-5
           - claude-fable-5.1
@@ -554,6 +639,7 @@ $defs:
           - qwen3.5-plus
           - sonnet
           - sonnet[1m]
+        title: Model
       executionMode:
         type: string
         enum:
@@ -563,6 +649,7 @@ $defs:
           Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background
           with output in the Output panel. Pre/end-condition scripts always run headless. Omitting
           this field inherits the workflow/global default.
+        title: Execution Mode
       agent:
         description: >-
           Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions
@@ -570,8 +657,10 @@ $defs:
           ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags,
           so it works the same on every harness. Native harness agent discovery is managed
           separately in the Agents & Skills settings page and does not determine workflow agent
-          support. Use null to explicitly disable inherited agent selection.
+          support. On a step, null (None in the step properties) disables the agent inherited from
+          the workflow.
         $ref: '#/$defs/agent'
+        title: Agent
       resumeSession:
         type: boolean
         description: >-
@@ -579,6 +668,7 @@ $defs:
           `defaults.resumeSession` setting (default: false). Set to true to continue in the existing
           session for context continuity. Retries continue in the same session by default; set
           endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
+        title: Resume Session
       mcpServers:
         oneOf:
           - type: array
@@ -595,6 +685,7 @@ $defs:
           extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a
           managed server; an inline reference wins over null, which otherwise explicitly disables
           inherited servers.
+        title: MCP Servers
       hooks:
         oneOf:
           - type: array
@@ -608,6 +699,7 @@ $defs:
         description: >-
           User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events
           vary by harness; unsupported events are silently skipped.
+        title: Hooks
       sessionId:
         oneOf:
           - type: string
@@ -621,6 +713,7 @@ $defs:
           session exists yet, a new session starts). When omitted and resumeSession=true,
           automatically resumes previous prompt's session. Working file runtime metadata stores the
           actual session ID used during execution.
+        title: Session ID
       skills:
         description: >-
           Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke
@@ -629,23 +722,27 @@ $defs:
           embedded. This makes workflow skills available on every harness. The Agents & Skills
           settings page separately manages optional harness-native discovery directories whose
           behavior varies by harness; native discovery does not determine workflow skills support.
-          Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly
-          disable inherited workflow skills; skills declared by the selected agent still attach.
+          Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in
+          the step properties) disables inherited workflow skills; skills declared by the selected
+          agent still attach.
         $ref: '#/$defs/skills'
+        title: Skills
       secrets:
         description: >-
           Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets
           replace workflow-level secrets (no merging). Use null to explicitly disable an inherited
           grant array; inline !NAME references in prompt text remain authoritative grants.
         $ref: '#/$defs/secrets'
+        title: Secrets
       endCondition:
         oneOf:
           - $ref: '#/$defs/endCondition'
           - type: 'null'
         description: >-
-          End condition validation to run after this prompt completes. Use null to explicitly
-          disable end condition inheritance from the workflow level (even if the workflow defines
-          one). Omitting this field inherits the workflow-level end condition (if any).
+          End condition validation to run after this prompt completes. On a step, null (None in the
+          step properties) disables the inherited workflow end condition, even if the workflow
+          defines one. Omitting this field inherits the workflow-level end condition (if any).
+        title: End Condition
       preCondition:
         oneOf:
           - $ref: '#/$defs/preCondition'
@@ -653,7 +750,8 @@ $defs:
         description: >-
           Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or
           stop the workflow. When set at workflow level, all prompts inherit it unless overridden.
-          Use null to disable an inherited pre-condition for a specific prompt.
+          On a step, null (None in the step properties) disables an inherited pre-condition.
+        title: Pre Condition
       priorContext:
         description: >-
           Controls injection of prior prompt outputs into this prompt's text before sending to the
@@ -664,6 +762,7 @@ $defs:
           never contain local paths. When omitted, no context is injected. Note: combining with
           resumeSession:true may duplicate context (accepted limitation).
         $ref: '#/$defs/priorContext'
+        title: Prior Context
       additionalArgs:
         oneOf:
           - type: string
@@ -672,9 +771,10 @@ $defs:
           Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to
           manage model, permissions, workspace dirs, and session flags normally. Tokens are injected
           before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli,
-          codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to
-          explicitly disable additional args even if the workflow or settings define some. Example:
-          "--effort high --max-turns 10"
+          codex-cli, opencode-cli, qwen-cli, antigravity-cli). On a step, null (None in the step
+          properties) disables additional args even if the workflow or settings define some.
+          Example: "--effort high --max-turns 10"
+        title: Additional Args
       toolPermissions:
         description: >-
           Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the
@@ -682,6 +782,7 @@ $defs:
           rely entirely on the harness's own local configuration; null behaves the same as mode
           'none'.
         $ref: '#/$defs/toolPermissions'
+        title: Tool Permissions
       errorBehavior:
         description: >-
           Internal-error policy for every step phase: pre-conditions, prompts/harnesses,
@@ -690,6 +791,7 @@ $defs:
           any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is
           the recovery gesture. Use null to explicitly disable an inherited policy.
         $ref: '#/$defs/errorBehaviorDefault'
+        title: Error Behavior
   workflowStep:
     type: object
     allOf:
@@ -731,10 +833,12 @@ $defs:
                 required:
                   - parallel
         minItems: 2
+        title: Parallel
       failFast:
         description: 'Stop the remaining members as soon as one member fails. Default: true.'
         type: boolean
         default: true
+        title: Fail Fast
     required:
       - parallel
     unevaluatedProperties: false
@@ -745,14 +849,18 @@ $defs:
       id:
         type: string
         minLength: 1
+        title: ID
       startIndex:
         type: integer
         minimum: 0
+        title: Start Index
       endIndex:
         type: integer
         minimum: 0
+        title: End Index
       failFast:
         type: boolean
+        title: Fail Fast
     required:
       - id
       - startIndex
@@ -770,21 +878,25 @@ $defs:
             description: >-
               Optional step type discriminator. When omitted, the step is treated as an AI prompt
               (backwards compatible).
+            title: Type
           name:
             type: string
             description: >-
               Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the
               dashboard shows a truncated preview of the prompt text.
             maxLength: 100
+            title: Name
           enabled:
             type: boolean
             description: >-
               Whether this step executes. When omitted, the step is enabled. Set to false to keep
               the step in the workflow but skip execution.
+            title: Enabled
           color:
             type: string
             pattern: ^#[0-9a-fA-F]{6}$
             description: Optional authored identity colour for this step.
+            title: Color
           prompt:
             type: string
             description: >-
@@ -796,9 +908,11 @@ $defs:
               generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt.
               File paths are resolved relative to the prompt file's directory, then workspace root,
               then .ctrlyoke directory. Absolute paths are also supported.
+            title: Prompt
           _runtime:
             $ref: '#/$defs/promptRuntimeMetadata'
             description: Per-prompt runtime execution metadata (optional, added automatically during execution)
+            title: Runtime
         required:
           - prompt
       - not:
@@ -813,21 +927,25 @@ $defs:
         description: Step type discriminator. Required, and must be "script", for script steps.
         type: string
         const: script
+        title: Type
       name:
         description: >-
           Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows
           the script text.
         type: string
         maxLength: 100
+        title: Name
       enabled:
         type: boolean
         description: >-
           Whether this step executes. When omitted, the step is enabled. Set to false to keep the
           step in the workflow but skip execution.
+        title: Enabled
       color:
         type: string
         pattern: ^#[0-9a-fA-F]{6}$
         description: Optional authored identity colour for this step.
+        title: Color
       executionMode:
         type: string
         enum:
@@ -838,16 +956,22 @@ $defs:
           background with output in the Output panel. Pre/end-condition scripts always run headless.
           Omitting this field inherits the workflow's executionMode, then the defaults.executionMode
           setting.
+        title: Execution Mode
       script:
         $ref: '#/$defs/scriptProperties/properties/script'
+        title: Script
       env:
         $ref: '#/$defs/scriptProperties/properties/env'
+        title: Env
       compareSource:
         $ref: '#/$defs/scriptProperties/properties/compareSource'
+        title: Compare Source
       timeoutSec:
         $ref: '#/$defs/scriptProperties/properties/timeoutSec'
+        title: Timeout Sec
       shell:
         $ref: '#/$defs/scriptProperties/properties/shell'
+        title: Shell
       errorBehavior:
         oneOf:
           - $ref: '#/$defs/errorBehavior'
@@ -855,6 +979,7 @@ $defs:
         description: >-
           Internal-error policy for this script step when it cannot run or evaluation breaks. Use
           null to explicitly disable an inherited workflow policy.
+        title: Error Behavior
       secrets:
         oneOf:
           - type: array
@@ -865,6 +990,7 @@ $defs:
         description: >-
           Secret environment-variable names granted to this script step. Use null to explicitly
           disable an inherited grant array.
+        title: Secrets
       onPass:
         type: string
         enum:
@@ -874,6 +1000,7 @@ $defs:
         description: >-
           What to do when the script passes (exit 0 / returns matches). 'continue': advance the
           queue (default). 'stopWorkflow': halt execution immediately.
+        title: On Pass
       onFail:
         type: string
         enum:
@@ -883,17 +1010,23 @@ $defs:
         description: >-
           What to do when the script fails or returns is not matched. 'continue': log a warning and
           advance the queue. 'stopWorkflow': halt execution (default).
+        title: On Fail
       _runtime:
         $ref: '#/$defs/promptRuntimeMetadata'
         description: Per-step runtime execution metadata (optional, added automatically during execution)
+        title: Runtime
       operator:
         $ref: '#/$defs/scriptProperties/properties/operator'
+        title: Operator
       expected:
         $ref: '#/$defs/scriptProperties/properties/expected'
+        title: Expected
       ignoreCase:
         $ref: '#/$defs/scriptProperties/properties/ignoreCase'
+        title: Ignore Case
       returns:
         $ref: '#/$defs/scriptProperties/properties/returns'
+        title: Returns
     required:
       - type
       - script
@@ -908,22 +1041,31 @@ $defs:
     properties:
       script:
         $ref: '#/$defs/scriptProperties/properties/script'
+        title: Script
       env:
         $ref: '#/$defs/scriptProperties/properties/env'
+        title: Env
       compareSource:
         $ref: '#/$defs/scriptProperties/properties/compareSource'
+        title: Compare Source
       returns:
         $ref: '#/$defs/scriptProperties/properties/returns'
+        title: Returns
       timeoutSec:
         $ref: '#/$defs/scriptProperties/properties/timeoutSec'
+        title: Timeout Sec
       shell:
         $ref: '#/$defs/scriptProperties/properties/shell'
+        title: Shell
       operator:
         $ref: '#/$defs/scriptProperties/properties/operator'
+        title: Operator
       expected:
         $ref: '#/$defs/scriptProperties/properties/expected'
+        title: Expected
       ignoreCase:
         $ref: '#/$defs/scriptProperties/properties/ignoreCase'
+        title: Ignore Case
       maxRetries:
         oneOf:
           - $ref: '#/$defs/unlimitedValue'
@@ -934,6 +1076,7 @@ $defs:
           Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or
           1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted,
           one retry is allowed.
+        title: Max Retries
       retryPrompt:
         type: string
         description: >-
@@ -941,6 +1084,7 @@ $defs:
           condition output fields (stdout, stderr, exitCode, actual, expected, compareSource).
           $preCondition:* works in the step and retry prompts; $endCondition:* is only available in
           the retry prompt.
+        title: Retry Prompt
       passRetryPrompt:
         type: string
         description: >-
@@ -948,11 +1092,13 @@ $defs:
           Supports $preCondition:<field> and $endCondition:<field> for condition output fields
           (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted
           on a pass retry. If omitted, the step's own prompt is re-sent.
+        title: Pass Retry Prompt
       resumeSessionOnRetry:
         type: boolean
         description: >-
           Whether retries continue in the same session. Default: true (retries resume the existing
           session for context continuity). Set to false to start a fresh session for each retry.
+        title: Resume Session On Retry
       onPass:
         type: string
         enum:
@@ -965,6 +1111,7 @@ $defs:
           'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries;
           exhausting the retries advances to the next step. A failure during the loop is handled by
           onFail. 'stopWorkflow': halt execution immediately.
+        title: On Pass
       onFail:
         type: string
         enum:
@@ -979,6 +1126,7 @@ $defs:
           advance to the next step even if validation fails. 'stopWorkflow': halt execution
           (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the
           condition or in defaults.endCondition.maxRetries, or use onFail: retry.
+        title: On Fail
     required:
       - script
     unevaluatedProperties: false
@@ -991,6 +1139,7 @@ $defs:
         description: >-
           Shell command or path to script. Relative paths are checked in this order: execution
           directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.
+        title: Script
       env:
         type: object
         additionalProperties:
@@ -998,6 +1147,7 @@ $defs:
         description: >-
           Environment map consumed by the script process. Secret references are allowed only as
           ${secret:NAME} values.
+        title: Env
       compareSource:
         type: string
         enum:
@@ -1008,15 +1158,18 @@ $defs:
           Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the
           trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit
           requirement layered onto a text comparison.
+        title: Compare Source
       returns:
         not: {}
         description: >-
           Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes.
           Omit it entirely to pass on exit code 0.
+        title: Returns
       timeoutSec:
         type: number
         exclusiveMinimum: 0
         description: Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
+        title: Timeout Sec
       shell:
         type: string
         description: >-
@@ -1031,6 +1184,7 @@ $defs:
           - zsh
           - sh
           - cmd
+        title: Shell
       operator:
         type: string
         enum:
@@ -1054,6 +1208,7 @@ $defs:
           timeout; a timeout fails the comparison. 'isEmpty'/'isNotEmpty' take no `expected`. Use
           word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse
           errors.
+        title: Operator
       expected:
         type:
           - string
@@ -1064,11 +1219,13 @@ $defs:
           Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores
           that comparison and still falls back to exit code 0; the dashboard flags this as a warning
           rather than refusing the workflow.
+        title: Expected
       ignoreCase:
         type: boolean
         description: >-
           Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default:
           false.
+        title: Ignore Case
     required:
       - script
   preCondition:
@@ -1081,22 +1238,31 @@ $defs:
     properties:
       script:
         $ref: '#/$defs/scriptProperties/properties/script'
+        title: Script
       env:
         $ref: '#/$defs/scriptProperties/properties/env'
+        title: Env
       compareSource:
         $ref: '#/$defs/scriptProperties/properties/compareSource'
+        title: Compare Source
       returns:
         $ref: '#/$defs/scriptProperties/properties/returns'
+        title: Returns
       timeoutSec:
         $ref: '#/$defs/scriptProperties/properties/timeoutSec'
+        title: Timeout Sec
       shell:
         $ref: '#/$defs/scriptProperties/properties/shell'
+        title: Shell
       operator:
         $ref: '#/$defs/scriptProperties/properties/operator'
+        title: Operator
       expected:
         $ref: '#/$defs/scriptProperties/properties/expected'
+        title: Expected
       ignoreCase:
         $ref: '#/$defs/scriptProperties/properties/ignoreCase'
+        title: Ignore Case
       onPass:
         type: string
         enum:
@@ -1108,6 +1274,7 @@ $defs:
           What to do when the pre-condition check passes (script exits 0 / returns matches).
           'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the
           queue. 'stopWorkflow': halt execution.
+        title: On Pass
       onFail:
         type: string
         enum:
@@ -1119,6 +1286,7 @@ $defs:
           What to do when the pre-condition check fails. 'continue': run the prompt anyway
           (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue
           (default). 'stopWorkflow': halt execution.
+        title: On Fail
     required:
       - script
     unevaluatedProperties: false
@@ -1137,14 +1305,17 @@ $defs:
           - retry
           - continue
         description: What to do when a step phase cannot run or otherwise encounters an internal error.
+        title: On Error
       maxRetries:
         type: integer
         minimum: 1
         description: Maximum retry attempts when onError is retry. When omitted, one retry is allowed.
+        title: Max Retries
       retryDelaySec:
         type: number
         exclusiveMinimum: 0
         description: Delay before retrying, in seconds.
+        title: Retry Delay Sec
     required:
       - onError
     additionalProperties: false
@@ -1170,14 +1341,17 @@ $defs:
           startedAt:
             type: number
             description: Timestamp when the executor claimed this step for dispatch
+            title: Started At
           stepId:
             type: string
             description: Stable internal identity for this queue step within its run
+            title: Step ID
           completedAt:
             type: number
             description: >-
               Timestamp when this prompt completed execution (set for all terminal states, not just
               successful completion)
+            title: Completed At
           terminalStatus:
             type: string
             enum:
@@ -1188,18 +1362,23 @@ $defs:
             description: >-
               Terminal state of this prompt. Absent or 'completed' means successful completion. Used
               to restore the correct visual status after a working file reload.
+            title: Terminal Status
           retryCount:
             type: number
             description: Number of retry attempts for this prompt
+            title: Retry Count
           elapsed:
             type: number
             description: Completed prompt duration in seconds
+            title: Elapsed
           contextWindowUsed:
             type: number
             description: Context window tokens in use, captured from the last completed output
+            title: Context Window Used
           contextWindowSize:
             type: number
             description: Context window size in tokens, captured from the last completed output
+            title: Context Window Size
           failureKind:
             type: string
             enum:
@@ -1210,14 +1389,17 @@ $defs:
               - timeout
               - unknown
             description: Structured classification of the last harness/session failure for this prompt.
+            title: Failure Kind
           failureMessage:
             type: string
             description: Human-readable message describing the last harness/session failure.
+            title: Failure Message
           terminalFailure:
             type: boolean
             description: >-
               Whether a failed member remains terminal for its parallel group. False when a per-step
               continue policy resolved the failure.
+            title: Terminal Failure
     unevaluatedProperties: false
   runtimeMetadata:
     type: object
@@ -1232,14 +1414,17 @@ $defs:
           Run-file format version for _runtime metadata and run bookkeeping, stamped on every write.
           It is independent of the root schemaVersion, which versions the workflow definition
           format. A file written by a newer ctrlyoke is refused rather than overwritten.
+        title: Schema Version
       lastActivityAt:
         type: number
         description: >-
           Latest persisted activity for the run, including an appended step that has not started
           yet.
+        title: Last Activity At
       currentIndex:
         type: number
         description: Index of currently executing prompt (0-based)
+        title: Current Index
       executionState:
         type: string
         enum:
@@ -1251,38 +1436,47 @@ $defs:
           - completed
           - error
         description: Current execution state
+        title: Execution State
       startTime:
         type: number
         description: Wall-clock timestamp when active workflow execution timing began
+        title: Start Time
       pausedTime:
         type: number
         description: Wall-clock timestamp when the current pause began
+        title: Paused Time
       totalPausedDuration:
         type: number
         description: Accumulated time spent paused before the current pause, in milliseconds
+        title: Total Paused Duration
       executionEndTime:
         type: number
         description: Wall-clock timestamp when workflow execution reached a terminal state
+        title: Execution End Time
       activeParallelGroup:
         type: object
         description: Durable admission state for the currently executing parallel group
         properties:
           groupId:
             type: string
+            title: Group ID
           admission:
             type: string
             enum:
               - accepting
               - closing
+            title: Admission
         required:
           - groupId
           - admission
         additionalProperties: false
+        title: Active Parallel Group
       tokenTotals:
         $ref: '#/$defs/workflowTokenTotals'
         description: >-
           Latest run-scoped token aggregate projected from timeline history (working files only,
           written automatically during execution)
+        title: Token Totals
       pendingRewind:
         type: object
         description: >-
@@ -1292,13 +1486,16 @@ $defs:
           fromStepIndex:
             type: number
             description: 0-based index of the first rewound step
+            title: From Step Index
           baseDefinitionRevision:
             type: number
             description: Definition revision the rewind was taken from
+            title: Base Definition Revision
         required:
           - fromStepIndex
           - baseDefinitionRevision
         additionalProperties: false
+        title: Pending Rewind
       worktree:
         type: object
         description: >-
@@ -1308,11 +1505,13 @@ $defs:
           schemaVersion:
             type: number
             const: 1
+            title: Schema Version
           mode:
             type: string
             enum:
               - managed
               - named
+            title: Mode
           origin:
             type: string
             enum:
@@ -1322,16 +1521,22 @@ $defs:
             description: >-
               Whether ctrlyoke created the worktree, found it already present, or recovered it after
               an interrupted run
+            title: Origin
           branchName:
             type: string
+            title: Branch Name
           worktreePath:
             type: string
+            title: Worktree Path
           executionRoot:
             type: string
+            title: Execution Root
           executionCheckoutRoot:
             type: string
+            title: Execution Checkout Root
           sourceCheckoutRoot:
             type: string
+            title: Source Checkout Root
           namedWorkspaceRoots:
             type: array
             items:
@@ -1339,35 +1544,46 @@ $defs:
               properties:
                 name:
                   type: string
+                  title: Name
                 fsPath:
                   type: string
+                  title: Fs Path
               required:
                 - name
                 - fsPath
               additionalProperties: false
+            title: Named Workspace Roots
           baseCommit:
             type: string
+            title: Base Commit
           comparisonBaseLabel:
             type: string
             description: Recorded comparison base used for named-branch divergence, when known
+            title: Comparison Base Label
           comparisonBaseCommit:
             type: string
+            title: Comparison Base Commit
           changedFileCount:
             type: number
             description: Number of files in the landed branch diff from baseCommit, when known
+            title: Changed File Count
           dirty:
             type: boolean
             description: Whether the named checkout had uncommitted changes at run start
+            title: Dirty
           sourceCheckoutDirty:
             type: boolean
             description: Whether source checkout changes existed when the managed worktree was created
+            title: Source Checkout Dirty
           targetBranch:
             type: string
+            title: Target Branch
           lifecycleOwner:
             type: string
             enum:
               - ctrlyoke
               - user
+            title: Lifecycle Owner
           lifecycleState:
             type: string
             enum:
@@ -1377,6 +1593,7 @@ $defs:
               - settled
               - blocked
               - orphaned
+            title: Lifecycle State
           setupOutcome:
             type: string
             enum:
@@ -1384,12 +1601,14 @@ $defs:
               - running
               - succeeded
               - failed
+            title: Setup Outcome
           landingOutcome:
             type: string
             enum:
               - landed
               - no-changes
               - blocked
+            title: Landing Outcome
           mergeOutcome:
             type: string
             enum:
@@ -1398,6 +1617,7 @@ $defs:
               - conflict
               - blocked
               - abort-failed
+            title: Merge Outcome
           directoryState:
             type: string
             enum:
@@ -1405,22 +1625,28 @@ $defs:
               - removed
               - missing
               - remove-failed
+            title: Directory State
           branchState:
             type: string
             enum:
               - present
               - deleted
               - missing
+            title: Branch State
           finalBranchTip:
             type: string
+            title: Final Branch Tip
           conflictFiles:
             type: array
             items:
               type: string
+            title: Conflict Files
           message:
             type: string
+            title: Message
           updatedAt:
             type: number
+            title: Updated At
         required:
           - schemaVersion
           - mode
@@ -1438,9 +1664,11 @@ $defs:
           - branchState
           - updatedAt
         additionalProperties: false
+        title: Worktree
       worktreeNotice:
         type: string
         description: Durable notice recorded when an inherited worktree default degraded to ordinary execution
+        title: Worktree Notice
       finalStep:
         type: object
         description: >-
@@ -1453,9 +1681,11 @@ $defs:
               - queue
               - finalStep
             description: Current workflow execution phase
+            title: Phase
           loopCount:
             type: number
             description: 0-based index of the current final-step pass (pass N is loopCount N-1)
+            title: Loop Count
           status:
             type: string
             enum:
@@ -1467,6 +1697,7 @@ $defs:
               - cancelled
               - skipped
             description: Current final step status
+            title: Status
           failureKind:
             type: string
             enum:
@@ -1477,29 +1708,36 @@ $defs:
               - timeout
               - unknown
             description: Structured classification for the latest final-step failure
+            title: Failure Kind
           failureMessage:
             type: string
             description: Human-readable reason for the latest final-step failure
+            title: Failure Message
           startedAt:
             type: number
             description: Timestamp when final step execution started
+            title: Started At
           completedAt:
             type: number
             description: Timestamp when final step execution completed
+            title: Completed At
           preCondition:
             $ref: '#/$defs/conditionEvaluationSummary'
             description: >-
               Latest pre-condition evaluation retained for the final step's automation result
               projection
+            title: Pre Condition
           endCondition:
             $ref: '#/$defs/conditionEvaluationSummary'
             description: >-
               Latest end-condition evaluation retained for the final step's automation result
               projection
+            title: End Condition
         required:
           - phase
           - loopCount
         additionalProperties: false
+        title: Final Step
     required:
       - currentIndex
       - executionState
@@ -1512,6 +1750,7 @@ $defs:
     properties:
       passed:
         type: boolean
+        title: Passed
       action:
         type: string
         enum:
@@ -1520,22 +1759,31 @@ $defs:
           - retry
           - skipPrompt
         description: Populated for pre-conditions, where it explains the gate decision.
+        title: Action
       script:
         type: string
+        title: Script
       actual:
         type: string
+        title: Actual
       stdout:
         type: string
+        title: Stdout
       stderr:
         type: string
+        title: Stderr
       exitCode:
         type: number
+        title: Exit Code
       durationMs:
         type: number
+        title: Duration Ms
       error:
         type: string
+        title: Error
       operator:
         $ref: '#/$defs/scriptProperties/properties/operator'
+        title: Operator
     required:
       - passed
       - script
@@ -1549,29 +1797,40 @@ $defs:
     properties:
       input:
         type: number
+        title: Input
       output:
         type: number
+        title: Output
       cachedInput:
         type: number
+        title: Cached Input
       cacheCreated:
         type: number
+        title: Cache Created
       reasoningOutput:
         type: number
+        title: Reasoning Output
       total:
         type: number
+        title: Total
       coverage:
         type: string
         enum:
           - complete
           - partial
+        title: Coverage
       reportedAttemptCount:
         type: number
+        title: Reported Attempt Count
       attemptCount:
         type: number
+        title: Attempt Count
       costUsd:
         type: number
+        title: Cost USD
       costPartial:
         type: boolean
+        title: Cost Partial
       costSources:
         type: array
         items:
@@ -1580,6 +1839,7 @@ $defs:
             - harness-reported
             - price-table
             - user-override
+        title: Cost Sources
   workflowTokenTotals:
     type: object
     description: >-
@@ -1589,23 +1849,30 @@ $defs:
       total:
         type: number
         description: Sum of every AI attempt's token total observed in this run
+        title: Total
       coverage:
         type: string
         enum:
           - complete
           - partial
         description: '''complete'' only when every executed AI attempt reported a usable total'
+        title: Coverage
       reportedAttemptCount:
         type: number
+        title: Reported Attempt Count
       attemptCount:
         type: number
+        title: Attempt Count
       isFinal:
         type: boolean
         description: False while the run can still add usage
+        title: Is Final
       costUsd:
         type: number
+        title: Cost USD
       costPartial:
         type: boolean
+        title: Cost Partial
       costSources:
         type: array
         items:
@@ -1614,6 +1881,7 @@ $defs:
             - harness-reported
             - price-table
             - user-override
+        title: Cost Sources
       byHarness:
         type: object
         description: Same aggregate partitioned by the harness recorded on each immutable attempt output.
@@ -1621,6 +1889,7 @@ $defs:
           $ref: '#/$defs/harnessId'
         additionalProperties:
           $ref: '#/$defs/harnessTokenTotals'
+        title: By Harness
       byLocalDay:
         type: object
         description: Same per-harness subtotals partitioned by the attempt start's local day (YYYY-MM-DD).
@@ -1632,6 +1901,7 @@ $defs:
             $ref: '#/$defs/harnessId'
           additionalProperties:
             $ref: '#/$defs/harnessTokenTotals'
+        title: By Local Day
   userHookConfig:
     type: object
     required:
@@ -1655,9 +1925,11 @@ $defs:
           maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex).
           'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for
           Codex/Antigravity/OpenCode.
+        title: Event
       command:
         type: string
         description: Command to execute. Resolved relative to workspace root if not absolute.
+        title: Command
       env:
         type: object
         additionalProperties:
@@ -1665,10 +1937,12 @@ $defs:
         description: >-
           Environment map consumed by the hook process. Secret references are allowed only as
           ${secret:NAME} values.
+        title: Env
       timeoutSec:
         type: integer
         minimum: 1
         description: Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
+        title: Timeout Sec
   mcpServerConfig:
     type: object
     description: >-
@@ -1679,25 +1953,30 @@ $defs:
       id:
         type: string
         description: Unique server identifier
+        title: ID
       description:
         type: string
         description: >-
           Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately
           omitted by every harness export path so it never leaks an unrecognized key into an
           external tool's native config file.
+        title: Description
       command:
         type: string
         description: Command to run the MCP server process (stdio servers, e.g. "npx" or "node")
+        title: Command
       args:
         type: array
         items:
           type: string
         description: Arguments to pass to the command (stdio servers only)
+        title: Args
       env:
         type: object
         additionalProperties:
           type: string
         description: Environment variables for the server process (stdio servers only)
+        title: Env
       autoApprove:
         oneOf:
           - type: boolean
@@ -1705,15 +1984,18 @@ $defs:
             items:
               type: string
         description: 'Tools to auto-approve: true = all tools, string[] = specific tools'
+        title: Auto Approve
       url:
         type: string
         description: Remote endpoint URL for streamable-http or SSE servers (e.g. "https://mcp.example.com")
+        title: URL
       transport:
         type: string
         enum:
           - streamable-http
           - sse
         description: Transport protocol for remote servers. Defaults to "streamable-http".
+        title: Transport
       headers:
         type: object
         additionalProperties:
@@ -1721,6 +2003,7 @@ $defs:
         description: >-
           HTTP headers to send with every request (remote servers only, e.g. { "Authorization":
           "Bearer token" }). Secret references are allowed as ${secret:NAME} values.
+        title: Headers
       deniedTools:
         type: array
         items:
@@ -1730,6 +2013,7 @@ $defs:
           mcp__<serverid>__ prefix (e.g. ["append_step"]). Translated to mcp__<id>__<tool> deny
           patterns and merged into the harness permission args. Supported on harnesses that accept
           tool deny patterns.
+        title: Denied Tools
     oneOf:
       - required:
           - command
@@ -1745,6 +2029,7 @@ $defs:
       properties:
         id:
           const: ctrlyoke
+          title: ID
       required:
         - id
     required:
@@ -1770,6 +2055,7 @@ $defs:
               'none' passes no permission flags at all — it does not deny tools; the harness applies
               whatever permissions are configured in its own local settings (e.g.
               ~/.claude/settings.json, Copilot CLI config).
+            title: Mode
           allowedTools:
             type: array
             items:
@@ -1780,6 +2066,7 @@ $defs:
               delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace
               opencode.json. Codex and Antigravity only support an overall permission mode, not
               individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.
+            title: Allowed Tools
           deniedTools:
             type: array
             items:
@@ -1790,6 +2077,7 @@ $defs:
               OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace
               opencode.json. Codex and Antigravity only support an overall permission mode, not
               individual tool patterns; Denied Tools are NOT ENFORCED by those harnesses.
+            title: Denied Tools
         additionalProperties: false
       - type: 'null'
   priorContext:
@@ -1828,6 +2116,7 @@ $defs:
         type: integer
         minimum: 1
         description: How many of the most recent earlier outputs to include
+        title: Previous
     required:
       - previous
     additionalProperties: false
@@ -1875,10 +2164,12 @@ $defs:
         properties:
           id:
             const: ctrlyoke
+            title: ID
           deniedTools:
             type: array
             items:
               type: string
+            title: Denied Tools
         required:
           - id
         additionalProperties: false
