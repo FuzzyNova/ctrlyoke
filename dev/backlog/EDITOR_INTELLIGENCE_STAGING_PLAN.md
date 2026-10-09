@@ -250,6 +250,12 @@ nothing needs fixing first. D3 starts once F5 lands, since it needs F5's side-ef
 | **F5:** workspace editor diagnostics and hover                        | `WorkspaceFileEditor.tsx` | Adds the `PromptFileParser` validate entry point |
 | **D3:** workflow-aware context and YAML schema diagnostics in VS Code | —                         | After F5                                         |
 
+**Session split (orchestrated run, 2026-10-08).** F5 runs as two sessions: **F5a** is the
+host-side validate entry point, the message pair, the `instancePath` converter and schema lint
+in the workspace editor; **F5b** is prompt-text lint over `PROMPT_TEXT` ranges and the outline
+hover. D3 needs only F5a's validate, but runs after F5b so the two never share a working tree.
+D3 also takes the `$preCondition:` caveat left by D2 (plan D, "Phase 2 as built").
+
 ### Wave 5: prompt-text polish
 
 **Runs after Wave 4**, in this order. M2b and F6 + M3 are on different hot files, but M3
@@ -278,6 +284,14 @@ M2b covers:
 
 Move each bug to `dev/bugs/implemented/` in the commit that fixes it, and mark the restyle
 done in plan M's Phase 2 entry.
+
+**Session split (orchestrated run, 2026-10-08).** M2b runs as two sessions: item 1 alone
+(it can change runtime expansion), then items 2 and 3. F6 + M3 runs as three: **F6a** the
+YAML/`.prompt.md` chips and the shared `PROMPT_TEXT` range state they need; **M3** nested
+markdown in `.prompt.md` and YAML prompt values, reusing that range state; **F6b** the
+completion polish (`$step:` names, `$endCondition:`/`$preCondition:` scoping, `{{var}}` in
+both editors). The orchestrator's review pass makes the move to `dev/implemented/` described
+under "Keeping this plan current".
 
 ## Release-relevance
 
