@@ -567,6 +567,123 @@ suite("WorktreeManager", function () {
     assert.strictEqual(record?.setupOutcome, "failed");
   });
 
+  test("runs concurrent managed setup outside the mutation lock", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-concurrent-setup"
+    );
+    let releaseFirstSetup!: () => void;
+    let markFirstSetupStarted!: () => void;
+    const firstSetupStarted = new Promise<void>(
+      (resolve) => (markFirstSetupStarted = resolve)
+    );
+    const firstSetupGate = new Promise<void>(
+      (resolve) => (releaseFirstSetup = resolve)
+    );
+    let firstSetupFinished = false;
+    let setupCalls = 0;
+    const runner: WorktreeSetupRunner = {
+      async run() {
+        setupCalls += 1;
+        if (setupCalls === 1) {
+          markFirstSetupStarted();
+          await firstSetupGate;
+          firstSetupFinished = true;
+        }
+        return {
+          success: true,
+          result: "",
+          stdout: "",
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+
+    const firstCreation = ensureManaged(instance, repository, {
+      setup: "npm ci",
+      runRef: "run-concurrent-1" as RunRef,
+    });
+    try {
+      await firstSetupStarted;
+      const secondInfo = await ensureManaged(instance, repository, {
+        setup: "npm ci",
+        runRef: "run-concurrent-2" as RunRef,
+      });
+      assert.strictEqual(firstSetupFinished, false);
+      assert.strictEqual(secondInfo.setupOutcome, "succeeded");
+      assert.strictEqual(
+        (
+          await instance.readManagedWorktreeRecord(
+            repository,
+            secondInfo.branchName
+          )
+        )?.lifecycleState,
+        "ready"
+      );
+      assert.strictEqual(
+        (await ExecutionRootLeaseManager.inspectLeases(secondInfo.worktreePath))
+          .length,
+        1
+      );
+      releaseFirstSetup();
+      const firstInfo = await firstCreation;
+      assert.strictEqual(firstInfo.setupOutcome, "succeeded");
+      assert.strictEqual(
+        (
+          await instance.readManagedWorktreeRecord(
+            repository,
+            firstInfo.branchName
+          )
+        )?.lifecycleState,
+        "ready"
+      );
+      assert.strictEqual(
+        (await ExecutionRootLeaseManager.inspectLeases(firstInfo.worktreePath))
+          .length,
+        1
+      );
+      await Promise.all([
+        firstInfo.lease.release(),
+        secondInfo.lease.release(),
+      ]);
+    } finally {
+      releaseFirstSetup();
+      await firstCreation.catch(() => {});
+    }
+  });
+
+  test("releases a managed lease after setup failure", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-setup-failure-lease"
+    );
+    const instance = manager(parent);
+    await assert.rejects(
+      ensureManaged(instance, repository, {
+        setup: `node -e "process.exit(7)"`,
+      }),
+      (error: unknown) => error instanceof WorktreeSetupError
+    );
+    const worktree = (await listWorktrees(repository)).find((entry) =>
+      entry.branchName?.includes("managed-test-workflow")
+    );
+    assert.ok(worktree);
+    assert.strictEqual(
+      (await ExecutionRootLeaseManager.inspectLeases(worktree!.worktreePath))
+        .length,
+      0
+    );
+    const record = await instance.readManagedWorktreeRecord(
+      repository,
+      worktree!.branchName!
+    );
+    assert.strictEqual(record?.lifecycleState, "blocked");
+    assert.strictEqual(record?.setupOutcome, WORKTREE_SETUP_OUTCOMES.FAILED);
+  });
+
   test("summarizes setup errors instead of duplicating the raw output", async () => {
     const { parent, repository } = await makeRepository("setup-error-summary");
     const rawError = `\u001b[31mfirst line\u001b[0m\r\nsecond line ${"details ".repeat(40)}`;
