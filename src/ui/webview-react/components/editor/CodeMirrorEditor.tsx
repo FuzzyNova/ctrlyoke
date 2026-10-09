@@ -54,6 +54,7 @@ import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import {
   asAtomicReferenceKind,
   openContextReference,
+  type OpenContextReferenceOptions,
 } from "@utils/contextReferenceActions";
 import {
   ATOMIC_REFERENCE_KINDS,
@@ -2216,10 +2217,16 @@ function getLinkElement(target: EventTarget | null): HTMLElement | null {
     : null;
 }
 
-function openContextReferenceLink(
+/**
+ * Open the reference a link mark or atomic chip stands for, reading its
+ * `data-*` attributes. Shared by the prompt editor and the workspace file
+ * editor; `options` lets the latter keep navigation in the workspace viewer.
+ */
+export function openContextReferenceLink(
   target: HTMLElement,
-  vscode: any,
-  stepCountRef: React.RefObject<number>
+  vscode: { postMessage: (message: unknown) => void },
+  stepCount: number,
+  options?: OpenContextReferenceOptions
 ): boolean {
   if (target.getAttribute("data-type") === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL) {
     const skillName = target.getAttribute("data-skill-name");
@@ -2270,7 +2277,18 @@ function openContextReferenceLink(
       secretName: target.getAttribute("data-secret-name"),
     },
     vscode,
-    stepCountRef.current
+    stepCount,
+    options
+  );
+}
+
+/** The prompt editor's link handler: opens through the extension host. */
+export function createClickHandlerExtension(
+  vscode: { postMessage: (message: unknown) => void },
+  stepCountRef: React.RefObject<number>
+) {
+  return createReferenceLinkHandlerExtension((target) =>
+    openContextReferenceLink(target, vscode, stepCountRef.current ?? 0)
   );
 }
 
@@ -2278,10 +2296,10 @@ function openContextReferenceLink(
 // to plain clicks; non-atomic file/directory/lineRange/symbol text links require
 // Ctrl/Cmd+Click on pointer devices. Short touch taps open directly because
 // mobile has no modifier-key equivalent. Long press remains available for
-// native editor positioning/selection behavior.
-export function createClickHandlerExtension(
-  vscode: any,
-  stepCountRef: React.RefObject<number>
+// native editor positioning/selection behavior. `openLink` returns true when
+// it handled the target.
+export function createReferenceLinkHandlerExtension(
+  openLink: (target: HTMLElement, view: EditorView) => boolean
 ) {
   let touchStart: {
     x: number;
@@ -2332,7 +2350,7 @@ export function createClickHandlerExtension(
       cancelTouch();
       return false;
     },
-    touchend: (event) => {
+    touchend: (event, view) => {
       if (!touchStart) return false;
 
       const start = touchStart;
@@ -2347,7 +2365,7 @@ export function createClickHandlerExtension(
         return false;
       }
 
-      if (!openContextReferenceLink(start.target, vscode, stepCountRef)) {
+      if (!openLink(start.target, view)) {
         return false;
       }
 
@@ -2377,7 +2395,7 @@ export function createClickHandlerExtension(
       // is all we need. Requiring a resolvable doc position broke clicks on
       // atomic-mode chips — posAtCoords over a replaced widget's DOM can
       // return null even though the click plainly landed on a real link.
-      if (!openContextReferenceLink(target, vscode, stepCountRef)) {
+      if (!openLink(target, view)) {
         return false;
       }
 

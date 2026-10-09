@@ -12,8 +12,7 @@
   ],
   "repository": {
     "prompt-block-scalar": {
-      "begin": "(?<=\\bpassRetryPrompt: |\\bprompt: |\\bretryPrompt: )(?>(\\|)|(>))([+-]?+)",
-      "while": "\\G",
+      "begin": "(?<=\\bpassRetryPrompt: |\\bprompt: |\\bretryPrompt: )(?:(\\|)|(>))([1-9])?([-+])?(.*\\n?)",
       "beginCaptures": {
         "1": {
           "name": "keyword.control.flow.block-scalar.literal.yaml"
@@ -22,102 +21,57 @@
           "name": "keyword.control.flow.block-scalar.folded.yaml"
         },
         "3": {
+          "name": "constant.numeric.indentation-indicator.yaml"
+        },
+        "4": {
           "name": "storage.modifier.chomping-indicator.yaml"
+        },
+        "5": {
+          "patterns": [
+            {
+              "include": "#comment"
+            },
+            {
+              "match": "\\S.*",
+              "name": "invalid.illegal.expected-comment-or-newline.yaml"
+            }
+          ]
         }
       },
+      "end": "^(?=\\S)|(?!\\G)(?![ \\t]*$)",
       "name": "meta.scalar.yaml",
       "patterns": [
         {
-          "begin": "$",
-          "while": "\\G",
-          "patterns": [
-            {
-              "begin": "\\G( ++)$",
-              "while": "\\G(?>(\\1)$|(?!\\1)( *+)($|.))",
-              "captures": {
-                "1": {
-                  "name": "punctuation.whitespace.indentation.yaml"
-                },
-                "2": {
-                  "name": "punctuation.whitespace.indentation.yaml"
-                },
-                "3": {
-                  "name": "invalid.illegal.expected-indentation.yaml"
-                }
-              },
-              "contentName": "string.unquoted.block.yaml meta.embedded.block.markdown",
-              "patterns": [
-                {
-                  "include": "source.yaml#non-printable"
-                },
-                {
-                  "include": "#fenced-code"
-                },
-                {
-                  "include": "#heading"
-                },
-                {
-                  "include": "text.html.markdown#inline"
-                }
-              ]
-            },
-            {
-              "begin": "\\G(?!$)(?=( *+))",
-              "end": "\\G(?!\\1)(?=[\\t ]*+#)",
-              "patterns": [
-                {
-                  "begin": "\\G( *+)",
-                  "while": "\\G(?>(\\1)|( *+)($|[^\\t#]|[\\t ]++[^#]))",
-                  "captures": {
-                    "1": {
-                      "name": "punctuation.whitespace.indentation.yaml"
-                    },
-                    "2": {
-                      "name": "punctuation.whitespace.indentation.yaml"
-                    },
-                    "3": {
-                      "name": "invalid.illegal.expected-indentation.yaml"
-                    }
-                  },
-                  "contentName": "string.unquoted.block.yaml meta.embedded.block.markdown",
-                  "patterns": [
-                    {
-                      "include": "source.yaml#non-printable"
-                    },
-                    {
-                      "include": "#fenced-code"
-                    },
-                    {
-                      "include": "#heading"
-                    },
-                    {
-                      "include": "text.html.markdown#inline"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "begin": "(?!\\G)(?=[\\t ]*+#)",
-              "while": "\\G",
-              "patterns": [
-                {
-                  "include": "source.yaml.1.2#presentation-detail"
-                }
-              ]
+          "begin": "(?:^|\\G)([ ]+)(?! )",
+          "while": "(?:^|\\G)(?>\\1|(?=[ \\t]*$))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.whitespace.indentation.yaml"
             }
-          ]
-        },
-        {
-          "begin": "\\G",
-          "end": "$",
+          },
+          "contentName": "string.unquoted.block.yaml meta.embedded.block.markdown",
           "patterns": [
             {
-              "include": "source.yaml.1.2#presentation-detail"
+              "include": "#fenced-code"
+            },
+            {
+              "include": "#heading"
+            },
+            {
+              "include": "text.html.markdown#inline"
             }
           ]
         }
       ]
+    },
+    "comment": {
+      "match": "(?:^|[ \\t]+)(#).*$",
+      "name": "comment.line.number-sign.yaml",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.comment.yaml"
+        }
+      }
     },
     "prompt-inline": {
       "begin": "(?<=\\bpassRetryPrompt:|\\bprompt:|\\bretryPrompt:)([ \\t]++)(?![|>\"'#&*!\\[{%@`\\s])",

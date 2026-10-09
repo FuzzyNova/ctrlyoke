@@ -139,20 +139,22 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     );
 
     // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
-    links.push(
-      ...this.findFileLinks(
-        document,
-        text,
-        workspaceRoot,
-        namedRoots,
-        trustedRoots,
-        approvedExternalRoots,
-        ownStateRoots,
-        sourceDefinitionDir
-      )
+    const fileLinks = this.findFileLinks(
+      document,
+      text,
+      workspaceRoot,
+      namedRoots,
+      trustedRoots,
+      approvedExternalRoots,
+      ownStateRoots,
+      sourceDefinitionDir
     );
+    links.push(...fileLinks);
 
-    // 2. Detect directory references (@dir/ and @"path with spaces/dir/")
+    // 2. Detect directory references (@dir/ and @"path with spaces/dir/").
+    // The directory pattern also matches the folder prefix of a file
+    // reference (`@src/dir/` in `@src/dir/a.ts`), which would nest a second
+    // link inside the file's.
     links.push(
       ...this.findDirectoryLinks(
         document,
@@ -163,6 +165,11 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         approvedExternalRoots,
         ownStateRoots,
         sourceDefinitionDir
+      ).filter(
+        (directoryLink) =>
+          !fileLinks.some((fileLink) =>
+            fileLink.range.contains(directoryLink.range)
+          )
       )
     );
 
@@ -495,9 +502,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const range = new vscode.Range(startPos, endPos);
 
       if (decision.allowed) {
-        const dirUri = vscode.Uri.file(decision.normalizedPath);
         const commandUri = vscode.Uri.parse(
-          `command:revealInExplorer?${encodeURIComponent(JSON.stringify(dirUri.toString()))}`
+          `command:${VSCODE_COMMANDS.REVEAL_DIRECTORY}?${encodeURIComponent(
+            JSON.stringify({ path: decision.normalizedPath })
+          )}`
         );
         const link = new vscode.DocumentLink(range, commandUri);
         link.tooltip = `Reveal ${relativePath} in File Explorer`;

@@ -37,6 +37,15 @@ interface VsCodeLike {
   postMessage: (message: unknown) => void;
 }
 
+export interface OpenContextReferenceOptions {
+  /**
+   * Open files, directories and commits in the workspace viewer even inside
+   * VS Code: a reference clicked in the viewer's own file editor should
+   * navigate there, not to a native editor behind the panel.
+   */
+  inWorkspaceViewer?: boolean;
+}
+
 /**
  * Read the open target back off an atomic-reference descriptor's `data-*`
  * attributes, so every output renderer that starts from a parsed descriptor
@@ -81,24 +90,27 @@ function toLineNumber(
 
 /**
  * Single source of truth for "open this context reference". Used by the prompt
- * editor's CodeMirror click handler and by the output prompt row's inline link
- * rendering so both open symbols, selections, directories, files, and git
- * commits identically. Transport-aware: in the hosted browser (`isStandalone`)
- * navigation routes through the workspace-viewer store; in the VS Code panel it
- * posts messages the extension host turns into native editor/diff actions.
+ * and workspace file editors' CodeMirror click handlers and by the output
+ * prompt row's inline link rendering so all of them open symbols, selections,
+ * directories, files, and git commits identically. Transport-aware: in the
+ * hosted browser (`isStandalone`) or with `inWorkspaceViewer`, navigation
+ * routes through the workspace-viewer store; otherwise it posts messages the
+ * extension host turns into native editor/diff actions.
  *
  * Returns true when the reference was handled.
  */
 export function openContextReference(
   target: ContextReferenceTarget,
   vscode: VsCodeLike,
-  stepCount?: number
+  stepCount?: number,
+  options: OpenContextReferenceOptions = {}
 ): boolean {
   const { type } = target;
+  const navigateInViewer = isStandalone || options.inWorkspaceViewer === true;
 
   if (type === ATOMIC_REFERENCE_KINDS.GIT) {
     const gitRef = target.gitRef ?? "";
-    if (isStandalone) {
+    if (navigateInViewer) {
       void useWorkspaceViewerStore.getState().openToGitRef(gitRef);
     } else {
       vscode.postMessage({ type: MESSAGE_TYPES.OPEN_GIT_CHANGE, ref: gitRef });
@@ -142,7 +154,7 @@ export function openContextReference(
   const lineStart = toLineNumber(target.lineStart);
   const lineEnd = toLineNumber(target.lineEnd);
 
-  if (isStandalone) {
+  if (navigateInViewer) {
     const store = useWorkspaceViewerStore.getState();
     if (type === ATOMIC_REFERENCE_KINDS.DIRECTORY) {
       store.openToDirectory(path);

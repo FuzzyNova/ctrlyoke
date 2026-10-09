@@ -389,6 +389,52 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
     });
   });
 
+  it("opens each chip kind on a plain click, inside the workspace viewer", async () => {
+    const content = [
+      "steps:",
+      "  - prompt: first",
+      "  - prompt: |",
+      "      @src/a.ts @src/editor/ ~783fdb5 $previous",
+      "",
+    ].join("\n");
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        atomicContextReferences: true,
+      },
+    }));
+
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+    const chip = (type: string) =>
+      view.dom.querySelector<HTMLElement>(
+        `.cm-atomic-ref[data-type="${type}"]`
+      )!;
+
+    fireEvent.click(chip("file"));
+    expect(useWorkspaceViewerStore.getState().pendingNavigation).toMatchObject({
+      type: "file",
+      filePath: "src/a.ts",
+    });
+
+    fireEvent.click(chip("directory"));
+    expect(useWorkspaceViewerStore.getState().pendingNavigation).toMatchObject({
+      type: "directory",
+      dirPath: "src/editor/",
+    });
+
+    fireEvent.click(chip("git"));
+    expect(useWorkspaceViewerStore.getState().diffRef).toBe("783fdb5");
+
+    // The second step's prompt has one step before it.
+    postMessage.mockClear();
+    fireEvent.click(chip("priorContext"));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+      ref: "previous",
+      stepCount: 1,
+    });
+  });
+
   it("keeps an escaped reference in a quoted YAML prompt as a link", async () => {
     const content = 'steps:\n  - prompt: "line\\n @src/escaped.ts"\n';
     useSettingsStore.setState((state) => ({

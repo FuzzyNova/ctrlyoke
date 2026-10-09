@@ -62,7 +62,6 @@ async function loadPromptKeys() {
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const IDENT = { name: "punctuation.whitespace.indentation.yaml" };
-const PRESENTATION_DETAIL = { include: "source.yaml.1.2#presentation-detail" };
 
 /**
  * The markdown rules shared by every prompt value. Block scalar content has
@@ -76,19 +75,6 @@ const MARKDOWN_PATTERNS = [
   { include: "#heading" },
   { include: `${MARKDOWN_SCOPE}#inline` },
 ];
-
-/** One content line rule of the YAML grammar's block scalar, plus markdown. */
-const blockContent = (begin, whileRule) => ({
-  begin,
-  while: whileRule,
-  captures: {
-    1: IDENT,
-    2: IDENT,
-    3: { name: "invalid.illegal.expected-indentation.yaml" },
-  },
-  contentName: BLOCK_CONTENT_NAME,
-  patterns: [{ include: "source.yaml#non-printable" }, ...MARKDOWN_PATTERNS],
-});
 
 export function buildPromptMarkdownInjection(keys) {
   // The lookbehind is the only place the key is visible, and it consumes
@@ -111,47 +97,52 @@ export function buildPromptMarkdownInjection(keys) {
       { include: "#prompt-inline" },
     ],
     repository: {
-      // The YAML 1.2 grammar's own `block-scalar` rule (yaml-1.2.tmLanguage.json,
-      // the form without an indentation indicator), with the key lookbehind
-      // in front and markdown patterns in the content. Its `while` rules end
-      // the scalar on exactly the lines YAML's would, which is what keeps the
-      // surrounding mapping and sequence state intact.
+      // Self-terminating, so it works under whichever grammar owns
+      // `source.yaml`: VS Code's YAML 1.2 grammar, or the older TextMate one
+      // that Red Hat's YAML extension registers in its place. The shape is
+      // that older grammar's `block-scalar`: the header consumes its line end,
+      // which keeps `\G` on the next line start, and `(?!\G)` closes the
+      // scalar once its content ends. The content captures its own
+      // indentation and ends at the first non-blank line without it. Under
+      // VS Code's grammar the enclosing mapping's `while` rules consume the
+      // parent indentation first, so the content anchors on `\G` there and
+      // the mapping still closes the scalar on dedent.
       "prompt-block-scalar": {
-        begin: `${afterKey}(?>(\\|)|(>))([+-]?+)`,
-        while: "\\G",
+        begin: `${afterKey}(?:(\\|)|(>))([1-9])?([-+])?(.*\\n?)`,
         beginCaptures: {
           1: { name: "keyword.control.flow.block-scalar.literal.yaml" },
           2: { name: "keyword.control.flow.block-scalar.folded.yaml" },
-          3: { name: "storage.modifier.chomping-indicator.yaml" },
-        },
-        name: "meta.scalar.yaml",
-        patterns: [
-          {
-            begin: "$",
-            while: "\\G",
+          3: { name: "constant.numeric.indentation-indicator.yaml" },
+          4: { name: "storage.modifier.chomping-indicator.yaml" },
+          5: {
             patterns: [
-              blockContent("\\G( ++)$", "\\G(?>(\\1)$|(?!\\1)( *+)($|.))"),
+              { include: "#comment" },
               {
-                // Matches at most once: its `end` clears the parent `\G`
-                // anchor (microsoft/vscode-textmate#114).
-                begin: "\\G(?!$)(?=( *+))",
-                end: "\\G(?!\\1)(?=[\\t ]*+#)",
-                patterns: [
-                  blockContent(
-                    "\\G( *+)",
-                    "\\G(?>(\\1)|( *+)($|[^\\t#]|[\\t ]++[^#]))"
-                  ),
-                ],
-              },
-              {
-                begin: "(?!\\G)(?=[\\t ]*+#)",
-                while: "\\G",
-                patterns: [PRESENTATION_DETAIL],
+                match: "\\S.*",
+                name: "invalid.illegal.expected-comment-or-newline.yaml",
               },
             ],
           },
-          { begin: "\\G", end: "$", patterns: [PRESENTATION_DETAIL] },
+        },
+        // Blank lines before the first content line keep the scalar open.
+        end: "^(?=\\S)|(?!\\G)(?![ \\t]*$)",
+        name: "meta.scalar.yaml",
+        patterns: [
+          {
+            // `while`, not `end`: an `end` is also tried right after the
+            // begin, where `\G` would close the content at once.
+            begin: "(?:^|\\G)([ ]+)(?! )",
+            while: "(?:^|\\G)(?>\\1|(?=[ \\t]*$))",
+            beginCaptures: { 1: IDENT },
+            contentName: BLOCK_CONTENT_NAME,
+            patterns: MARKDOWN_PATTERNS,
+          },
         ],
+      },
+      comment: {
+        match: "(?:^|[ \\t]+)(#).*$",
+        name: "comment.line.number-sign.yaml",
+        captures: { 1: { name: "punctuation.definition.comment.yaml" } },
       },
       // `prompt: Review **this**`: an unquoted single-line scalar. Quoted
       // values, anchors, tags, flow collections and block headers stay with

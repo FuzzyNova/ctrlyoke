@@ -113,6 +113,57 @@ suite("PromptLinkProvider slash-token links", () => {
     assert.ok(links[0].target?.query.includes("a.ts"));
   });
 
+  test("reveals a directory reference through ctrlyoke's own command", async () => {
+    const text = "Look in @src/editor/";
+    const document = new PromptDocumentStub(
+      path.join(workspaceRoot, "prompt.prompt.md"),
+      "markdown",
+      text
+    ).asDocument();
+
+    const links = await new PromptLinkProvider().provideDocumentLinks(
+      document,
+      {} as vscode.CancellationToken
+    );
+
+    assert.ok(links);
+    assert.strictEqual(links.length, 1);
+    assert.strictEqual(links[0].target?.scheme, "command");
+    assert.strictEqual(links[0].target?.path, "ctrlyoke.revealDirectory");
+    // `revealInExplorer` ignores a JSON URI string and reveals the active
+    // editor's file instead, so the argument is a path for our command.
+    const args = JSON.parse(links[0].target?.query ?? "") as { path: string };
+    assert.ok(
+      pathsEqual(args.path, path.join(workspaceRoot, "src", "editor")),
+      `expected ${args.path} to be the referenced directory`
+    );
+  });
+
+  test("gives a file reference one link, not one for its folder too", async () => {
+    const text = "Open @src/editor/CodeMirrorEditor.tsx and @src/editor/";
+    const document = new PromptDocumentStub(
+      path.join(workspaceRoot, "prompt.prompt.md"),
+      "markdown",
+      text
+    );
+
+    const links =
+      (await new PromptLinkProvider().provideDocumentLinks(
+        document.asDocument(),
+        {} as vscode.CancellationToken
+      )) ?? [];
+
+    assert.deepStrictEqual(
+      links.map((link) =>
+        text.slice(
+          document.offsetAt(link.range.start),
+          document.offsetAt(link.range.end)
+        )
+      ),
+      ["@src/editor/CodeMirrorEditor.tsx", "@src/editor/"]
+    );
+  });
+
   test("does not link partial git-change references inside longer tokens", async () => {
     const text = "~differently ~1500000x ~staged_files ~stash:1a";
     const document = new PromptDocumentStub(

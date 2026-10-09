@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { Modal } from "./Modal";
 import { useUiStore } from "@store/uiStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { MESSAGE_TYPES } from "@/types/messages";
@@ -22,6 +23,9 @@ import { Icon } from "./Icon";
 export const ContentPreviewModal: React.FC = () => {
   const modal = useUiStore((s) => s.contentPreviewModal);
   const setContentPreviewModal = useUiStore((s) => s.setContentPreviewModal);
+  // A reference chip in the workspace file editor opens previews from inside
+  // the full-screen viewer, so the modal must sit above it while it is open.
+  const workspaceViewerOpen = useWorkspaceViewerStore((s) => s.isOpen);
   const [copied, setCopied] = useState(false);
 
   const handleClose = useCallback(() => {
@@ -68,6 +72,7 @@ export const ContentPreviewModal: React.FC = () => {
       onClose={handleClose}
       size="xl"
       fullWidthOnNarrow
+      elevated={workspaceViewerOpen}
       footer={
         <>
           <button

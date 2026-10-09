@@ -104,6 +104,7 @@ import { NotificationManager } from "./ui/NotificationManager";
 import { promptBatchApprovalForPendingWorkspaceExternalRoots } from "./ui/ExternalRootsApproval";
 import {
   confirmExternalFileTrustAndOpen,
+  openResolvedTarget,
   type FileOpenTarget,
 } from "./ui/ExternalFileTrustPrompt";
 import { ScmCommitCommand } from "./scm/ScmCommitCommand";
@@ -1246,6 +1247,17 @@ function registerCommands(
     }
   );
 
+  // Reveal Directory command (for directory links in prompt files). Takes a
+  // path rather than a URI: `revealInExplorer` needs a real `Uri`, and a
+  // command link can only pass JSON, which VS Code ignores in favor of the
+  // active editor's file.
+  const revealDirectoryCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.REVEAL_DIRECTORY,
+    async (args: { path: string }) => {
+      await openResolvedTarget({ path: args.path, isDirectory: true });
+    }
+  );
+
   // Confirm External File Trust command — shared "Trust Parent Folder" /
   // Cancel flow for file links (editor Ctrl+click and dashboard output
   // links) that resolve outside the workspace and outside every currently
@@ -1852,6 +1864,7 @@ function registerCommands(
     runCommand,
     showOutputPanelCommand,
     openFileWithSelectionCommand,
+    revealDirectoryCommand,
     confirmExternalFileTrustCommand,
     clearWorkflowCommand,
     openGitChangeCommand,

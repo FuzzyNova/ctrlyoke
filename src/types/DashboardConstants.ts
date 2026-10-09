@@ -4955,6 +4955,7 @@ export type RetryPromptPlaceholder =
 export const VSCODE_COMMANDS = {
   RESOLVE_OUTPUT_CAPTURE: "ctrlyoke.resolveOutputCapture",
   OPEN_SECRETS_SETTINGS: "ctrlyoke.openSecretsSettings",
+  REVEAL_DIRECTORY: "ctrlyoke.revealDirectory",
   REVIEW_WORKSPACE_SETTINGS_TRUST: "ctrlyoke.reviewWorkspaceSettingsTrust",
   ENABLE_SERVER: "ctrlyoke.enableServer",
   DISABLE_SERVER: "ctrlyoke.disableServer",

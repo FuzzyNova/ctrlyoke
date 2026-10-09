@@ -44,7 +44,6 @@ import {
   viewerPathFromUri,
   workspaceFileUri,
 } from "@utils/languageIntelligenceClient";
-import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { getCtrlYokeFileKind } from "@root/completions/CtrlYokeFileKind";
@@ -65,13 +64,18 @@ import {
 import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/workflowValueDataSource";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
-import { createAtomicReferenceExtension } from "@components/editor/CodeMirrorEditor";
+import {
+  createAtomicReferenceExtension,
+  createReferenceLinkHandlerExtension,
+  openContextReferenceLink,
+} from "@components/editor/CodeMirrorEditor";
 import type { WorkflowTextSpan } from "@root/completions/WorkflowTextDecoding";
 import {
   ATOMIC_REFERENCE_KINDS,
   CODEMIRROR_LANGUAGE_IDS,
   CTRLYOKE_FILE_KINDS,
   LSP_METHODS,
+  type CtrlYokeFileKind,
   PROMPT_FILE_LANGUAGE_IDS,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,
@@ -129,9 +133,6 @@ interface WorkspaceReferenceMatch {
   lineStart?: string;
   lineEnd?: string;
 }
-
-const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
-const LINK_TOUCH_LONG_PRESS_MS = 500;
 
 export const WorkspaceFileEditor = forwardRef<
   WorkspaceFileEditorHandle,
@@ -197,12 +198,6 @@ export const WorkspaceFileEditor = forwardRef<
     const onPendingSelectionAppliedRef = useRef(onPendingSelectionApplied);
     const ignoreUpdateRef = useRef(false);
     const openToFile = useWorkspaceViewerStore((s) => s.openToFile);
-    const openToDirectory = useWorkspaceViewerStore((s) => s.openToDirectory);
-    const openSecretsSettings = useCallback(() => {
-      const ui = useUiStore.getState();
-      ui.setGlobalSettingsTab("secrets");
-      if (!ui.globalSettingsOpen) ui.toggleGlobalSettings();
-    }, []);
 
     // Keep callback refs current without triggering re-creation of the editor
     useEffect(() => {
@@ -480,10 +475,9 @@ export const WorkspaceFileEditor = forwardRef<
         createWorkspaceEditorHighlightExtension(),
         createWorkspaceEditorLinkThemeExtension(),
         createWorkspaceReferenceDecorationExtension(),
-        createWorkspaceReferenceClickHandlerExtension(
-          openToFile,
-          openToDirectory,
-          openSecretsSettings
+        createWorkspaceReferenceLinkHandlerExtension(
+          ctrlyokeFileKind,
+          () => workflowSupportRef.current
         ),
         ...(langExt ? [langExt] : []),
         yamlLanguageCompartment.current.of(yamlLanguageExtensionRef.current),
@@ -529,15 +523,7 @@ export const WorkspaceFileEditor = forwardRef<
         }),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ];
-    }, [
-      filePath,
-      goToDefinition,
-      openSecretsSettings,
-      openToDirectory,
-      openToFile,
-      readOnly,
-      ctrlyokeFileKind,
-    ]);
+    }, [filePath, goToDefinition, readOnly, ctrlyokeFileKind]);
 
     useEffect(() => {
       const isPlainYaml =
@@ -1019,165 +1005,27 @@ function createWorkspaceReferenceDecorationExtension() {
   );
 }
 
-function getLinkElement(target: EventTarget | null): HTMLElement | null {
-  return target instanceof HTMLElement
-    ? target.closest(".cm-link, .cm-atomic-ref")
-    : null;
-}
-
-function openWorkspaceReferenceLink(
-  target: HTMLElement,
-  openToFile: (filePath: string, startLine?: number, endLine?: number) => void,
-  openToDirectory: (dirPath: string) => void,
-  openSecretsSettings: () => void
-): boolean {
-  const type = target.getAttribute("data-type");
-  if (type === ATOMIC_REFERENCE_KINDS.SECRET) {
-    openSecretsSettings();
-    return true;
-  }
-  const path = target.getAttribute("data-path");
-  if (!type || !path) return false;
-
-  if (type === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
-    openToDirectory(path);
-    return true;
-  }
-
-  if (type === ATOMIC_REFERENCE_KINDS.LINE_RANGE) {
-    const lineStart = target.getAttribute("data-line-start");
-    const lineEnd = target.getAttribute("data-line-end");
-    openToFile(
-      path,
-      lineStart ? parseInt(lineStart, 10) : undefined,
-      lineEnd ? parseInt(lineEnd, 10) : undefined
-    );
-    return true;
-  }
-
-  if (type === ATOMIC_REFERENCE_KINDS.SYMBOL) {
-    const lineStart = target.getAttribute("data-line-start");
-    const lineEnd = target.getAttribute("data-line-end");
-    openToFile(
-      path,
-      lineStart ? parseInt(lineStart, 10) : undefined,
-      lineEnd ? parseInt(lineEnd, 10) : undefined
-    );
-    return true;
-  }
-
-  if (type === WORKSPACE_ENTRY_KINDS.FILE) {
-    openToFile(path);
-    return true;
-  }
-
-  return false;
-}
-
-function createWorkspaceReferenceClickHandlerExtension(
-  openToFile: (filePath: string, startLine?: number, endLine?: number) => void,
-  openToDirectory: (dirPath: string) => void,
-  openSecretsSettings: () => void
+/**
+ * Chips and links open like the prompt editor's (shared handler and opener),
+ * but navigate inside the workspace viewer. A `$step:`/`$previous` preview
+ * needs the number of steps before the prompt the reference sits in.
+ */
+function createWorkspaceReferenceLinkHandlerExtension(
+  kind: CtrlYokeFileKind | null,
+  getSupport: () => WorkflowFileSupport | null
 ) {
-  let touchStart: {
-    x: number;
-    y: number;
-    time: number;
-    target: HTMLElement;
-  } | null = null;
-
-  const cancelTouch = () => {
-    touchStart = null;
-  };
-
-  return EditorView.domEventHandlers({
-    touchstart: (event) => {
-      if (event.touches.length !== 1) {
-        cancelTouch();
-        return false;
-      }
-
-      const target = getLinkElement(event.target);
-      if (!target) {
-        cancelTouch();
-        return false;
-      }
-
-      const touch = event.touches[0];
-      touchStart = {
-        x: touch.clientX,
-        y: touch.clientY,
-        time: Date.now(),
-        target,
-      };
-      return false;
-    },
-    touchmove: (event) => {
-      if (!touchStart || event.touches.length === 0) return false;
-
-      const touch = event.touches[0];
-      const dx = touch.clientX - touchStart.x;
-      const dy = touch.clientY - touchStart.y;
-      if (Math.sqrt(dx * dx + dy * dy) > LINK_TOUCH_MOVE_THRESHOLD_PX) {
-        cancelTouch();
-      }
-
-      return false;
-    },
-    touchcancel: () => {
-      cancelTouch();
-      return false;
-    },
-    touchend: (event) => {
-      if (!touchStart) return false;
-
-      const start = touchStart;
-      cancelTouch();
-
-      if (Date.now() - start.time >= LINK_TOUCH_LONG_PRESS_MS) {
-        return false;
-      }
-
-      const endTarget = getLinkElement(event.target);
-      if (endTarget !== start.target) {
-        return false;
-      }
-
-      if (
-        !openWorkspaceReferenceLink(
-          start.target,
-          openToFile,
-          openToDirectory,
-          openSecretsSettings
-        )
-      ) {
-        return false;
-      }
-
-      event.preventDefault();
-      return true;
-    },
-    click: (event, view) => {
-      const target = getLinkElement(event.target);
-      if (!target) return false;
-      if (!(event.ctrlKey || event.metaKey)) return false;
-
-      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-      if (pos === null) return false;
-
-      if (
-        !openWorkspaceReferenceLink(
-          target,
-          openToFile,
-          openToDirectory,
-          openSecretsSettings
-        )
-      ) {
-        return false;
-      }
-
-      event.preventDefault();
-      return true;
-    },
+  return createReferenceLinkHandlerExtension((target, view) => {
+    const support = getSupport();
+    const stepCount =
+      kind && support
+        ? (support.getWorkflowPromptCompletionContext(
+            view.state.doc.toString(),
+            kind,
+            view.posAtDOM(target)
+          )?.stepCount ?? 0)
+        : 0;
+    return openContextReferenceLink(target, getVsCodeApi(), stepCount, {
+      inWorkspaceViewer: true,
+    });
   });
 }
