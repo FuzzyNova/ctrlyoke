@@ -34,6 +34,7 @@ import {
   BUNDLE_MANIFEST_FILE_NAME,
   BUNDLE_MANIFEST_VERSION,
 } from "../../utils/WorkflowBundleAnalyzer";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 /** Minimal in-memory vscode.Memento stub for tests that don't exercise persistence. */
 function fakeWorkspaceState(): any {
@@ -259,7 +260,10 @@ async function withWorkspace(
   run: (workspaceRoot: string) => Promise<void>
 ): Promise<void> {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
-  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+  const restoreWorkspaceFolders = snapshotProperty(
+    vscode.workspace,
+    "workspaceFolders"
+  );
   try {
     Object.defineProperty(vscode.workspace, "workspaceFolders", {
       value: [
@@ -273,10 +277,7 @@ async function withWorkspace(
     });
     await run(workspaceRoot);
   } finally {
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      value: originalWorkspaceFolders,
-      configurable: true,
-    });
+    restoreWorkspaceFolders();
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   }
 }
@@ -335,7 +336,10 @@ suite("WorkflowSerializer", () => {
         /^([A-Z]):/,
         (_drive, letter: string) => `${letter.toLowerCase()}:`
       );
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       const requests: any[] = [];
       let callCount = 0;
 
@@ -392,10 +396,7 @@ suite("WorkflowSerializer", () => {
           },
         ]);
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
       }
     });
   });
@@ -792,7 +793,10 @@ suite("WorkflowSerializer", () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-serializer-bundle-roundtrip-")
       );
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       const workingFilePath = WorkflowPaths.draftFilePath(
         workspaceRoot,
         "serializer-bundle-roundtrip-1" as WorkflowKey
@@ -978,10 +982,7 @@ suite("WorkflowSerializer", () => {
           )
         );
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
@@ -990,7 +991,10 @@ suite("WorkflowSerializer", () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-serializer-template-bundle-")
       );
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       const workingFilePath = WorkflowPaths.draftFilePath(
         workspaceRoot,
         "serializer-template-bundle-1" as WorkflowKey
@@ -1109,10 +1113,7 @@ suite("WorkflowSerializer", () => {
           /steps\[2\].*bundle-managed asset.*\.\/fix-tests\.assets\/inherited\.png/i
         );
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
@@ -1123,7 +1124,10 @@ suite("WorkflowSerializer", () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-save-path-")
       );
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       const messages: any[] = [];
       const address = {
         workflowKey: "save-path-test-1",
@@ -1190,10 +1194,7 @@ suite("WorkflowSerializer", () => {
         assert.strictEqual(escaped.exists, false);
         assert.match(escaped.error, /inside the open workspace/i);
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
@@ -1239,7 +1240,10 @@ suite("WorkflowSerializer", () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-save-blocker-")
       );
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       const address = {
         workflowKey: "save-blocker-test-1",
         kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
@@ -1343,10 +1347,7 @@ suite("WorkflowSerializer", () => {
           false
         );
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });
@@ -1357,7 +1358,10 @@ suite("WorkflowSerializer", () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-save-frame-")
       );
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       const messages: any[] = [];
 
       try {
@@ -1455,10 +1459,7 @@ suite("WorkflowSerializer", () => {
           path.join(workspaceRoot, "source.ctrlyoke.yaml")
         );
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });

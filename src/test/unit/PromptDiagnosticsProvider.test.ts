@@ -37,10 +37,58 @@ suite("PromptDiagnosticsProvider", () => {
     fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5 });
   });
 
+  // Shown, not just opened. A document opened only through openTextDocument
+  // sits in VS Code's bounded hidden-model pool (50 references), and under a
+  // sharded run other tests' hidden opens can evict it from `textDocuments`,
+  // which is the list a refresh trigger re-checks. An editor holds it open
+  // until teardown closes all editors.
   async function open(name: string, content: string) {
     const file = path.join(tempDir, name);
     fs.writeFileSync(file, content);
-    return vscode.workspace.openTextDocument(file);
+    const document = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(document, { preview: false });
+    return document;
+  }
+
+  /**
+   * Resolve once `uri`'s diagnostics satisfy `done`, re-checking on every
+   * diagnostics change rather than on a clock. The deadline only bounds a
+   * genuine hang, so it is generous; the rejection reports what was seen.
+   */
+  function waitForDiagnostics(
+    uri: vscode.Uri,
+    done: (diagnostics: readonly vscode.Diagnostic[]) => boolean,
+    describe: () => string,
+    timeoutMs = 60_000
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        if (done(provider.getDiagnostics(uri))) finish();
+      };
+      const subscription = vscode.languages.onDidChangeDiagnostics((event) => {
+        if (
+          event.uris.some((changed) => changed.toString() === uri.toString())
+        ) {
+          check();
+        }
+      });
+      const timer = setTimeout(
+        () =>
+          finish(
+            new Error(
+              `diagnostics never settled within ${timeoutMs}ms: ${describe()}`
+            )
+          ),
+        timeoutMs
+      );
+      function finish(error?: Error) {
+        clearTimeout(timer);
+        subscription.dispose();
+        if (error) reject(error);
+        else resolve();
+      }
+      check();
+    });
   }
 
   test("publishes diagnostics for a missing reference and a missing step", async () => {
@@ -155,7 +203,10 @@ suite("PromptDiagnosticsProvider", () => {
     assert.deepStrictEqual(provider.getDiagnostics(document.uri), []);
   });
 
-  test("re-checks open files when a refresh trigger fires, until disposed", async () => {
+  test("re-checks open files when a refresh trigger fires, until disposed", async function () {
+    // Above the suite default on purpose: waitForDiagnostics carries its own
+    // 60s bound so that a hang fails with what it saw, not a bare timeout.
+    this.timeout(90_000);
     // Stands in for a trust decision or settings write that makes a
     // previously unresolvable reference resolve.
     let trusted = false;
@@ -187,19 +238,15 @@ suite("PromptDiagnosticsProvider", () => {
 
     trusted = true;
     fire?.();
-    // The extension suite runs in a VS Code shard beside the UI and other
-    // extension hosts; allow the debounced refresh to settle under that load.
-    const deadline = Date.now() + 20_000;
-    while (
-      provider.getDiagnostics(document.uri).length > 0 &&
-      Date.now() < deadline
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    assert.deepStrictEqual(
-      provider.getDiagnostics(document.uri),
-      [],
-      `still flagged after the refresh trigger fired; document still open: ${vscode.workspace.textDocuments.includes(document)}, closed: ${document.isClosed}`
+    // The trigger's refresh is debounced; wait for it to publish rather than
+    // for a fixed time. A refresh only re-checks `textDocuments`, so a miss
+    // says whether the document was in it (and how big it was: a stubbed,
+    // never-restored list is how this test once failed).
+    await waitForDiagnostics(
+      document.uri,
+      (diagnostics) => diagnostics.length === 0,
+      () =>
+        `still flagged after the refresh trigger fired; in textDocuments: ${vscode.workspace.textDocuments.includes(document)} (of ${vscode.workspace.textDocuments.length})`
     );
 
     provider.dispose();

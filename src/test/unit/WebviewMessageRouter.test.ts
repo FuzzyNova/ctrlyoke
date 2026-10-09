@@ -41,6 +41,7 @@ import {
   type LicenseMachineSummary,
 } from "../../license/LicenseService";
 import type { LicenseActionService } from "../../ui/LicenseSettingsHandlers";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 function buildRouter(
   orchestrator: unknown,
@@ -1369,7 +1370,10 @@ suite("WebviewMessageRouter — license actions", () => {
       emitted: any[];
     } {
       const emitted: any[] = [];
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       Object.defineProperty(vscode.workspace, "workspaceFolders", {
         value: [{ uri: vscode.Uri.file(path.join(__dirname, "workspace")) }],
         configurable: true,
@@ -1425,11 +1429,7 @@ suite("WebviewMessageRouter — license actions", () => {
       return {
         router,
         emitted,
-        restore: () =>
-          Object.defineProperty(vscode.workspace, "workspaceFolders", {
-            value: originalWorkspaceFolders,
-            configurable: true,
-          }),
+        restore: restoreWorkspaceFolders,
       };
     }
 
@@ -1624,7 +1624,10 @@ suite("WebviewMessageRouter — license actions", () => {
 
     test("returns invalid regex patterns as typed webview errors", async () => {
       const emitted: any[] = [];
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       Object.defineProperty(vscode.workspace, "workspaceFolders", {
         value: [{ uri: vscode.Uri.file(path.join(__dirname, "workspace")) }],
         configurable: true,
@@ -1673,16 +1676,16 @@ suite("WebviewMessageRouter — license actions", () => {
           },
         ]);
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
       }
     });
 
     test("returns regex timeouts as a typed webview error", async () => {
       const emitted: any[] = [];
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       Object.defineProperty(vscode.workspace, "workspaceFolders", {
         value: [{ uri: vscode.Uri.file(path.join(__dirname, "workspace")) }],
         configurable: true,
@@ -1725,10 +1728,7 @@ suite("WebviewMessageRouter — license actions", () => {
           },
         ]);
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
       }
     });
 

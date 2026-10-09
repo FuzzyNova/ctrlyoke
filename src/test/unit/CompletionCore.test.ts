@@ -39,6 +39,7 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   WORKSPACE_ENTRY_KINDS,
 } from "../../types/DashboardConstants";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 function createCore(
   options: {
@@ -629,8 +630,14 @@ suite("CompletionCore git change completions", function () {
 
 suite("VsCodeSymbolIndex completion golden", () => {
   const originalExecuteCommand = vscode.commands.executeCommand;
-  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
-  const originalTextDocuments = vscode.workspace.textDocuments;
+  const restoreWorkspaceFolders = snapshotProperty(
+    vscode.workspace,
+    "workspaceFolders"
+  );
+  const restoreTextDocuments = snapshotProperty(
+    vscode.workspace,
+    "textDocuments"
+  );
   const originalOpenTextDocument = vscode.workspace.openTextDocument;
   const originalShowTextDocument = vscode.window.showTextDocument;
   const originalGetConfiguration = vscode.workspace.getConfiguration;
@@ -659,14 +666,8 @@ suite("VsCodeSymbolIndex completion golden", () => {
       configurable: true,
       value: originalExecuteCommand,
     });
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      configurable: true,
-      value: originalWorkspaceFolders,
-    });
-    Object.defineProperty(vscode.workspace, "textDocuments", {
-      configurable: true,
-      value: originalTextDocuments,
-    });
+    restoreWorkspaceFolders();
+    restoreTextDocuments();
     Object.defineProperty(vscode.workspace, "openTextDocument", {
       configurable: true,
       value: originalOpenTextDocument,

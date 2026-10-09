@@ -46,6 +46,7 @@ import {
 } from "../../core/harness/shared/StatuslineManager";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 import { VsCodeDashboardHostActions } from "../../platform/VsCodeDashboardHostActions";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 function nodeSettingsHost(
   workspaceRoot?: string,
@@ -990,7 +991,10 @@ suite("WebviewSettingsSync", () => {
 
   suite("discoverAgents", () => {
     test("should expose bundled agents when no workspace is open", async () => {
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const restoreWorkspaceFolders = snapshotProperty(
+        vscode.workspace,
+        "workspaceFolders"
+      );
       const messages: any[] = [];
 
       try {
@@ -1017,10 +1021,7 @@ suite("WebviewSettingsSync", () => {
           "the bundled workflow composer should be available without a workspace"
         );
       } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
+        restoreWorkspaceFolders();
       }
     });
   });
@@ -2333,7 +2334,10 @@ suite("WebviewSettingsSync external root decisions", () => {
     const originalShowOpenDialog = vscode.window.showOpenDialog;
     const originalGetRoots = ConfigurationUtils.getTrustedExternalRootsByScope;
     const originalSetDecisions = externalRootsTrustStore.setDecisions;
-    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
     const workspaceRoot = externalRootTestPath("workspace");
     const newRoot = externalRootTestPath("external");
     const writes: unknown[] = [];
@@ -2392,10 +2396,7 @@ suite("WebviewSettingsSync external root decisions", () => {
         value: originalShowOpenDialog,
         configurable: true,
       });
-      Object.defineProperty(vscode.workspace, "workspaceFolders", {
-        value: originalWorkspaceFolders,
-        configurable: true,
-      });
+      restoreWorkspaceFolders();
     }
   });
 
@@ -2551,7 +2552,10 @@ suite("WebviewSettingsSync external root decisions", () => {
     const originalSet = configService.set;
     const originalGetRoots = ConfigurationUtils.getTrustedExternalRootsByScope;
     const originalSetDecisions = externalRootsTrustStore.setDecisions;
-    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
     const workspaceRoot = externalRootTestPath("workspace");
     const oldRoot = externalRootTestPath("old");
     const newRoot = externalRootTestPath("new");
@@ -2598,16 +2602,16 @@ suite("WebviewSettingsSync external root decisions", () => {
       configService.set = originalSet;
       ConfigurationUtils.getTrustedExternalRootsByScope = originalGetRoots;
       externalRootsTrustStore.setDecisions = originalSetDecisions;
-      Object.defineProperty(vscode.workspace, "workspaceFolders", {
-        value: originalWorkspaceFolders,
-        configurable: true,
-      });
+      restoreWorkspaceFolders();
     }
   });
 
   test("updates a workspace decision without changing the request list", async () => {
     const originalSetDecisions = externalRootsTrustStore.setDecisions;
-    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
     const workspaceRoot = externalRootTestPath("workspace");
     const root = externalRootTestPath("root");
     const decisions: unknown[] = [];
@@ -2645,10 +2649,7 @@ suite("WebviewSettingsSync external root decisions", () => {
       ]);
     } finally {
       externalRootsTrustStore.setDecisions = originalSetDecisions;
-      Object.defineProperty(vscode.workspace, "workspaceFolders", {
-        value: originalWorkspaceFolders,
-        configurable: true,
-      });
+      restoreWorkspaceFolders();
     }
   });
 });

@@ -7,9 +7,13 @@ import { PromptLinkProvider } from "../../completions/PromptLinkProvider";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { pathsEqual } from "../../utils/PathCasing";
 import { PromptDocumentStub } from "../helpers/PromptDocumentStub";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 suite("PromptLinkProvider slash-token links", () => {
-  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+  const restoreWorkspaceFolders = snapshotProperty(
+    vscode.workspace,
+    "workspaceFolders"
+  );
   const originalDiscoverSkills = SkillDiscovery.discoverSkills;
   const workspaceRoot = path.join(os.tmpdir(), "ctrlyoke-prompt-links");
   const skillPath = path.join(
@@ -42,10 +46,7 @@ suite("PromptLinkProvider slash-token links", () => {
   });
 
   teardown(() => {
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      value: originalWorkspaceFolders,
-      configurable: true,
-    });
+    restoreWorkspaceFolders();
     SkillDiscovery.discoverSkills = originalDiscoverSkills;
   });
 

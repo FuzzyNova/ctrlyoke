@@ -21,6 +21,7 @@ import {
   type TestTimings,
 } from "./sharding";
 import { startEventLoopStallWatchdog } from "./eventLoopStallWatchdog";
+import { vscodeGetterGuardHooks } from "./vscodeGetterGuard";
 
 async function activateExtensionForTests(): Promise<void> {
   const extension = vscode.extensions.all.find(
@@ -78,6 +79,9 @@ export function run(): Promise<void> {
     // hang, not an assertion about performance: a real hang still fails, just
     // later.
     timeout: 30_000,
+    // Fails the exact test that leaves a VS Code API getter frozen, instead of
+    // whichever later file in the shard happens to read it.
+    rootHooks: vscodeGetterGuardHooks,
     // Allow focused runs via `MOCHA_GREP="<pattern>"` for fast local iteration.
     ...(process.env.MOCHA_GREP ? { grep: process.env.MOCHA_GREP } : {}),
   });

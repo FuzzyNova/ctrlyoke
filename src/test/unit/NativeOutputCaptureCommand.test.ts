@@ -8,6 +8,7 @@ import {
   executeNativeOutputCaptureCommand,
   registerNativeOutputCaptureCommand,
 } from "../../ui/NativeOutputCaptureCommand";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 interface RecordedEdit {
   range: vscode.Range;
@@ -168,7 +169,10 @@ suite("NativeOutputCaptureCommand", () => {
   test("registers the command and uses the active editor at invocation time", async () => {
     const text = `prompt @${CAPTURING_OUTPUT_PLACEHOLDER}`;
     const editor = await MockNativeTextEditor.create(text, text.length);
-    const originalActiveEditor = vscode.window.activeTextEditor;
+    const restoreActiveEditor = snapshotProperty(
+      vscode.window,
+      "activeTextEditor"
+    );
     const originalRegisterCommand = vscode.commands.registerCommand;
     let registeredCommand: string | undefined;
     let registeredHandler: ((captureId: unknown) => Promise<void>) | undefined;
@@ -203,10 +207,7 @@ suite("NativeOutputCaptureCommand", () => {
       await registeredHandler?.("capture-4");
       assert.strictEqual(editor.currentText, "prompt @attachments/output.log ");
     } finally {
-      Object.defineProperty(vscode.window, "activeTextEditor", {
-        configurable: true,
-        value: originalActiveEditor,
-      });
+      restoreActiveEditor();
       Object.defineProperty(vscode.commands, "registerCommand", {
         configurable: true,
         value: originalRegisterCommand,

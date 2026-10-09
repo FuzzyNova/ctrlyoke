@@ -8,6 +8,7 @@ import { PromptCompletionProvider } from "../../completions/PromptCompletionProv
 import { clearFilesCache } from "../../completions/CompletionHelpers";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { PromptDocumentStub } from "../helpers/PromptDocumentStub";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 interface SelectionEditorLike {
   selection: vscode.Selection;
@@ -29,8 +30,14 @@ class MockCancellationToken implements vscode.CancellationToken {
 suite("PromptCompletionProvider", () => {
   const originalFindFiles = vscode.workspace.findFiles;
   const originalAsRelativePath = vscode.workspace.asRelativePath;
-  const originalVisibleTextEditors = vscode.window.visibleTextEditors;
-  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+  const restoreVisibleTextEditors = snapshotProperty(
+    vscode.window,
+    "visibleTextEditors"
+  );
+  const restoreWorkspaceFolders = snapshotProperty(
+    vscode.workspace,
+    "workspaceFolders"
+  );
   const originalExecuteCommand = vscode.commands.executeCommand;
   const originalShouldRespectGitignore =
     ConfigurationUtils.shouldRespectGitignoreForCompletions;
@@ -45,14 +52,8 @@ suite("PromptCompletionProvider", () => {
       configurable: true,
       value: originalAsRelativePath,
     });
-    Object.defineProperty(vscode.window, "visibleTextEditors", {
-      configurable: true,
-      value: originalVisibleTextEditors,
-    });
-    Object.defineProperty(vscode.workspace, "workspaceFolders", {
-      configurable: true,
-      value: originalWorkspaceFolders,
-    });
+    restoreVisibleTextEditors();
+    restoreWorkspaceFolders();
     Object.defineProperty(vscode.commands, "executeCommand", {
       configurable: true,
       value: originalExecuteCommand,

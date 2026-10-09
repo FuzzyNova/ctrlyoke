@@ -15,6 +15,7 @@ import type {
   UserInteractionPort,
 } from "../../ui/UserInteractionPort";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 
 class RecordingPromptEditorInsertSink implements ContextMenuPromptEditorInsertSink {
   readonly requests: PromptEditorInsertRequest[] = [];
@@ -66,13 +67,13 @@ class FakeInteractionPort implements UserInteractionPort {
 
 suite("ContextMenuReferenceCommands", () => {
   const workspaceRoots: string[] = [];
-  const originalActiveEditor = vscode.window.activeTextEditor;
+  const restoreActiveEditor = snapshotProperty(
+    vscode.window,
+    "activeTextEditor"
+  );
 
   afterEach(async () => {
-    Object.defineProperty(vscode.window, "activeTextEditor", {
-      configurable: true,
-      value: originalActiveEditor,
-    });
+    restoreActiveEditor();
     for (const workspaceRoot of workspaceRoots.splice(0)) {
       removeTempDir(workspaceRoot);
     }
@@ -385,7 +386,10 @@ suite("ContextMenuReferenceCommands", () => {
   });
 
   test("includes the workspace folder name for targets in a multi-root workspace", async () => {
-    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
     const originalGetWorkspaceFolder = vscode.workspace.getWorkspaceFolder;
     const originalAsRelativePath = vscode.workspace.asRelativePath;
     const firstRoot = vscode.Uri.file("/workspace/frontend");
@@ -423,10 +427,7 @@ suite("ContextMenuReferenceCommands", () => {
         "@backend/src/app.ts",
       ]);
     } finally {
-      Object.defineProperty(vscode.workspace, "workspaceFolders", {
-        configurable: true,
-        value: originalWorkspaceFolders,
-      });
+      restoreWorkspaceFolders();
       Object.defineProperty(vscode.workspace, "getWorkspaceFolder", {
         configurable: true,
         value: originalGetWorkspaceFolder,
@@ -439,7 +440,10 @@ suite("ContextMenuReferenceCommands", () => {
   });
 
   test("keeps workspace-relative references unprefixed in a single-root workspace", async () => {
-    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
     const originalGetWorkspaceFolder = vscode.workspace.getWorkspaceFolder;
     const originalAsRelativePath = vscode.workspace.asRelativePath;
     const root = vscode.Uri.file("/workspace/project");
@@ -470,10 +474,7 @@ suite("ContextMenuReferenceCommands", () => {
       assert.strictEqual(includeWorkspaceFolder, false);
       assert.deepStrictEqual(sink.requests[0].references, ["@src/app.ts"]);
     } finally {
-      Object.defineProperty(vscode.workspace, "workspaceFolders", {
-        configurable: true,
-        value: originalWorkspaceFolders,
-      });
+      restoreWorkspaceFolders();
       Object.defineProperty(vscode.workspace, "getWorkspaceFolder", {
         configurable: true,
         value: originalGetWorkspaceFolder,
