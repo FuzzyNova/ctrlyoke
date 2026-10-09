@@ -13,8 +13,11 @@ import { EditorState } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import { activateHover, EditorView } from "@codemirror/view";
 import { diagnosticCount, forEachDiagnostic } from "@codemirror/lint";
+import { ensureSyntaxTree } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceFileEditor } from "@components/workspace-viewer/WorkspaceFileEditor";
+import { createCtrlYokeHighlightStyle } from "@utils/syntaxPalette";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { loadWorkflowFileSupport } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
@@ -103,6 +106,45 @@ function getDiagnostics(view: EditorView) {
   return diagnostics;
 }
 
+function highlightedText(view: EditorView) {
+  const style = createCtrlYokeHighlightStyle();
+  ensureSyntaxTree(view.state, view.state.doc.length, 5000);
+  const spans = Array.from(
+    view.dom.querySelectorAll<HTMLElement>(".cm-content span[class]")
+  ).map((element) => ({
+    text: element.textContent ?? "",
+    classes: element.className,
+  }));
+  return { spans, style };
+}
+
+function syntaxClass(
+  style: ReturnType<typeof createCtrlYokeHighlightStyle>,
+  role: string
+) {
+  const tag = {
+    heading: tags.heading,
+    strong: tags.strong,
+    "inline-code": tags.monospace,
+    string: tags.string,
+    number: tags.number,
+    emphasis: tags.emphasis,
+    property: tags.propertyName,
+    comment: tags.comment,
+  }[
+    role as
+      | "heading"
+      | "strong"
+      | "inline-code"
+      | "string"
+      | "number"
+      | "emphasis"
+      | "property"
+      | "comment"
+  ];
+  return tag ? style.style([tag]) : null;
+}
+
 describe("WorkspaceFileEditor ctrlyoke file support", () => {
   beforeAll(async () => {
     // Pay the dynamic import's cost once, before any case races it.
@@ -113,6 +155,87 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
         value: () => [],
       });
     }
+  });
+
+  it("uses the shared Markdown configuration for prompt files", async () => {
+    const { view } = await renderEditor(
+      "notes.prompt.md",
+      '# Heading\n\n```json\n{"name": "yes", "count": 12}\n```'
+    );
+    const { spans, style } = highlightedText(view);
+    expect(
+      spans.some(
+        (span) =>
+          span.text.includes("Heading") &&
+          span.classes.includes(syntaxClass(style, "heading") ?? "\0")
+      )
+    ).toBe(true);
+    expect(
+      spans.some(
+        (span) =>
+          span.text.includes("yes") &&
+          span.classes.includes(syntaxClass(style, "string") ?? "\0")
+      )
+    ).toBe(true);
+    expect(
+      spans.some(
+        (span) =>
+          span.text === "12" &&
+          span.classes.includes(syntaxClass(style, "number") ?? "\0")
+      )
+    ).toBe(true);
+  });
+
+  it("nests Markdown only inside YAML prompt block scalars", async () => {
+    const content = [
+      'name: "workflow"',
+      "# keep this YAML comment",
+      "steps:",
+      "  - prompt: |",
+      "      ## Main heading",
+      "      **strong** and `inline`",
+      "      ```json",
+      '      {"name": "yes", "count": 12}',
+      "      ```",
+      "  - parallel:",
+      "      - prompt: >-",
+      "          ### Parallel heading",
+      "          *emphasis*",
+      '  - prompt: "quoted text"',
+      "nameAfter: stillYaml",
+      "endCondition:",
+      "  retryPrompt: |",
+      "    # Retry heading",
+    ].join("\n");
+    const { view } = await renderEditor("a.ctrlyoke.yaml", content);
+    const { spans, style } = highlightedText(view);
+    const has = (text: string, className: string) =>
+      spans.some(
+        (span) =>
+          span.text.includes(text) &&
+          span.classes.includes(syntaxClass(style, className) ?? "\0")
+      );
+
+    expect(has("Main heading", "heading")).toBe(true);
+    expect(has("strong", "strong")).toBe(true);
+    expect(has("inline", "inline-code")).toBe(true);
+    expect(has("yes", "string")).toBe(true);
+    expect(has("12", "number")).toBe(true);
+    expect(has("Parallel heading", "heading")).toBe(true);
+    expect(has("emphasis", "emphasis")).toBe(true);
+    expect(has("Retry heading", "heading")).toBe(true);
+    expect(has("name", "property")).toBe(true);
+    expect(has("keep this YAML comment", "comment")).toBe(true);
+    expect(has("nameAfter", "property")).toBe(true);
+    expect(has("quoted text", "string")).toBe(true);
+  });
+
+  it("keeps large YAML prompt edits within the editor parse budget", async () => {
+    const content = `steps:\n  - prompt: |\n${"      # heading and plain text\n".repeat(3000)}  - prompt: done\n`;
+    const { view } = await renderEditor("large.ctrlyoke.yaml", content);
+    const startedAt = performance.now();
+    view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    expect(performance.now() - startedAt).toBeLessThan(250);
   });
 
   beforeEach(() => {

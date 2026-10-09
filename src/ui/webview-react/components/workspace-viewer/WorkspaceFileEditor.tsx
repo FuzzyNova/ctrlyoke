@@ -29,7 +29,9 @@ import { createThemeExtension } from "@utils/codemirrorTheme";
 import {
   getLanguageExtension,
   createWorkspaceEditorHighlightExtension,
+  loadYamlLanguageExtension,
 } from "@utils/codemirrorLanguage";
+import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useLanguageIntelligence } from "@hooks/useLanguageIntelligence";
@@ -64,6 +66,7 @@ import { createAtomicReferenceExtension } from "@components/editor/CodeMirrorEdi
 import type { WorkflowTextSpan } from "@root/completions/WorkflowTextDecoding";
 import {
   ATOMIC_REFERENCE_KINDS,
+  CODEMIRROR_LANGUAGE_IDS,
   CTRLYOKE_FILE_KINDS,
   LSP_METHODS,
   PROMPT_FILE_LANGUAGE_IDS,
@@ -147,6 +150,7 @@ export const WorkspaceFileEditor = forwardRef<
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    const yamlLanguageCompartment = useRef(new Compartment());
     const languageIntelligenceCompartment = useRef(new Compartment());
     const languageIntelligence = useLanguageIntelligence(filePath);
     const languageIntelligenceRef = useRef(languageIntelligence);
@@ -372,6 +376,21 @@ export const WorkspaceFileEditor = forwardRef<
       () =>
         ctrlyokeFileKind && workflowPromptClient
           ? [
+              ...(ctrlyokeFileKind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML &&
+              workflowSupportRef.current
+                ? [
+                    workflowSupportRef.current.createWorkflowPromptMarkdownLanguage(
+                      ctrlyokeFileKind
+                    ),
+                    ...(workflowPromptRangesField
+                      ? [
+                          workflowSupportRef.current.createWorkflowPromptMarkdownDecorations(
+                            workflowPromptRangesField
+                          ),
+                        ]
+                      : []),
+                  ]
+                : []),
               createWorkflowFileCompletionExtension({
                 kind: ctrlyokeFileKind,
                 getSupport: () => workflowSupportRef.current,
@@ -443,7 +462,10 @@ export const WorkspaceFileEditor = forwardRef<
     }, [ctrlyokeFileKind]);
 
     const extensions = useMemo<Extension[]>(() => {
-      const langExt = getLanguageExtension(filePath);
+      const langExt =
+        ctrlyokeFileKind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+          ? null
+          : getLanguageExtension(filePath);
       return [
         basicSetup,
         createThemeExtension("editor"),
@@ -456,6 +478,7 @@ export const WorkspaceFileEditor = forwardRef<
           openSecretsSettings
         ),
         ...(langExt ? [langExt] : []),
+        yamlLanguageCompartment.current.of([]),
         languageIntelligenceCompartment.current.of(
           languageIntelligenceRef.current.extensions
         ),
@@ -505,7 +528,26 @@ export const WorkspaceFileEditor = forwardRef<
       openToDirectory,
       openToFile,
       readOnly,
+      ctrlyokeFileKind,
     ]);
+
+    useEffect(() => {
+      if (
+        ctrlyokeFileKind === CTRLYOKE_FILE_KINDS.WORKFLOW_YAML ||
+        getLanguageFromPath(filePath) !== CODEMIRROR_LANGUAGE_IDS.YAML
+      )
+        return;
+      let cancelled = false;
+      void loadYamlLanguageExtension().then((extension) => {
+        if (cancelled || !viewRef.current) return;
+        viewRef.current.dispatch({
+          effects: yamlLanguageCompartment.current.reconfigure(extension),
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [ctrlyokeFileKind, filePath]);
 
     useEffect(() => {
       const view = viewRef.current;

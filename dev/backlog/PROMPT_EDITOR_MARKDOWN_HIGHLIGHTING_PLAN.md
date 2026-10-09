@@ -1,8 +1,8 @@
 # Prompt Editor Markdown Highlighting Plan
 
 **Status (2026-10-08):** Phases 0 (readable code ranges), 1 (single-source palette), 2
-(markdown in the prompt editor) and 4 (VS Code injection grammar, with the literal-reference
-bug fix) are done. Phase 3 is not started.
+(markdown in the prompt editor), 3 (workspace editor and YAML prompts) and 4 (VS Code injection
+grammar, with the literal-reference bug fix) are done.
 
 **Sequencing:**
 [`EDITOR_INTELLIGENCE_STAGING_PLAN.md`](EDITOR_INTELLIGENCE_STAGING_PLAN.md) orders this plan
@@ -234,6 +234,8 @@ These were verified against `src/` on 2026-10-07.
 - **Workspace editor, `.prompt.md`.** `getLanguageExtension` already gives `.md` files
   `markdown()`, and since Phase 1 the shared `HighlightStyle`. Switch it to the same configured
   markdown, with nested languages, so a prompt looks the same in both editors.
+  Plain `.md` files use the same configuration too; the workspace editor has one markdown
+  experience, regardless of whether the file is a ctrlyoke prompt.
 - **YAML prompt values.** In `.ctrlyoke.yaml` opened in the workspace editor, a
   `prompt: |` block scalar is markdown. Use `parseMixed` on lang-yaml's block-literal nodes,
   limited to the `PROMPT_TEXT` ranges from the ctrlyoke file support plan's
@@ -411,11 +413,24 @@ completeHTMLTags: false })` with `styleTags` giving `QuoteMark`/`ListMark` the n
        precedence rule holds.
      - a performance check on a ~25K-token prompt, where the typing-latency budget must hold
 
-4. **Phase 3: Workspace editor and YAML prompts.**
-   - `.prompt.md` gets the shared markdown configuration with nested languages. It already
-     uses the shared `HighlightStyle` (Phase 1 did that for every `.md` file).
-   - YAML `prompt:` block scalars get nested markdown, scheduled with the ctrlyoke file support
-     plan's Phase 6.
+4. **Phase 3: Workspace editor and YAML prompts.** **Done 2026-10-08.**
+   - **As built:** `getLanguageExtension` applies `createPromptMarkdownLanguage()` to `.md`,
+     including `.prompt.md`, so GFM, nested fence languages and the shared highlight style are
+     consistent across the workspace and prompt editors. YAML workflow files get a configured
+     `yamlLanguage` through the existing lazy workflow-file support compartment. Its `parseMixed`
+     wrapper selects only YAML `BlockLiteral` nodes whose decoded `PROMPT_TEXT` spans overlap
+     them, and uses the F6a range state for source-mapped Markdown token decorations. The
+     decoded spans remove YAML's common block indentation before Markdown parses headings,
+     inline syntax and fenced languages; quoted scalars remain YAML strings. Code ranges come
+     from the shared `findCodeRanges` authority, and the nested decoration path suppresses
+     syntax inside an unclosed fence consistently with M2b.
+   - The parser lives in its own dynamic YAML chunk. Workflow Markdown is installed in the
+     existing ctrlyoke support compartment after the workflow support chunk loads, so the editor
+     view stays mounted and F4 completions, F5 lint and hover, and F6a chips keep their state.
+     Tests in
+     `WorkspaceFileEditor.ctrlyokeFiles.test.tsx` cover `.prompt.md` JSON/heading classes, YAML
+     headings, emphasis, inline code and fenced JSON in root, retry and parallel prompt values,
+     YAML keys/comments/following lines and quoted prompts, chips, and a large YAML edit budget.
 
 5. **Phase 4: VS Code injection grammar.** **Done 2026-10-08**, together with the bug fix
    below. This is independent of the webview phases and can land at any point.
