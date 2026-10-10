@@ -553,6 +553,7 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    wordWrap?: boolean;
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
@@ -1659,6 +1660,7 @@ export interface GlobalSettingsUpdatedMessage {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    wordWrap?: boolean;
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];

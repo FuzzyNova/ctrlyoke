@@ -26,6 +26,7 @@ import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
+  CODE_MIRROR_EDITOR_MODES,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
@@ -37,6 +38,8 @@ import type {
 import { REFERENCE_CHIP_MENU_LABELS } from "@utils/referenceChipMenu";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { EDITOR_PLACEHOLDER_TEXT } from "@root/types/DashboardConstants";
+import { useSettingsStore } from "@store/settingsStore";
+import { act } from "react";
 
 describe("CodeMirrorEditor bulk placeholders", () => {
   it.each([
@@ -104,6 +107,45 @@ async function getConditionOutputDiagnostics(
     parent.remove();
   }
 }
+
+// `ui.wordWrap` governs code views; a prompt is prose and always wraps.
+describe("CodeMirrorEditor ui.wordWrap", () => {
+  afterEach(() => {
+    useSettingsStore.getState().updateGlobalSetting("wordWrap", true);
+  });
+
+  const renderEditor = (mode: CodeMirrorEditorMode) =>
+    render(
+      <CodeMirrorEditor
+        value="echo hi"
+        onChange={vi.fn()}
+        affUri=""
+        dicUri=""
+        mode={mode}
+      />
+    );
+
+  it("unwraps a condition script editor when off", () => {
+    const { container } = renderEditor(CODE_MIRROR_EDITOR_MODES.END_CONDITION);
+    const content = container.querySelector(".cm-content");
+    expect(content).toHaveClass("cm-lineWrapping");
+
+    act(() => {
+      useSettingsStore.getState().updateGlobalSetting("wordWrap", false);
+    });
+
+    expect(container.querySelector(".cm-content")).toBe(content);
+    expect(content).not.toHaveClass("cm-lineWrapping");
+  });
+
+  it("keeps the prompt editor wrapped", () => {
+    useSettingsStore.getState().updateGlobalSetting("wordWrap", false);
+    const { container } = renderEditor(CODE_MIRROR_EDITOR_MODES.PROMPT);
+    expect(container.querySelector(".cm-content")).toHaveClass(
+      "cm-lineWrapping"
+    );
+  });
+});
 
 describe("CodeMirrorEditor condition-output references", () => {
   it("offers both condition-output namespaces through the dollar completion source", () => {

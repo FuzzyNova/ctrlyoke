@@ -9,6 +9,7 @@ import {
   type RenderedDiffRun,
 } from "@utils/rdvAdapter";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
+import { DIFF_HORIZONTAL_SCROLLBAR_HEIGHT } from "@utils/outputLineMetrics";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 import {
   getLanguageFromPath,
@@ -210,6 +211,80 @@ describe("buildDiffRenderPlan", () => {
     expect(splitPlan.renderedRows).toBe(2);
     expect(splitPlan.bodyHeight).toBeLessThan(unifiedPlan.bodyHeight);
     expect(splitPlan.totalHeight).toBeLessThan(unifiedPlan.totalHeight);
+  });
+
+  // `ui.wordWrap` off: a change never wraps, so it is exactly one row, and the
+  // only extra height is the scrollbar track DiffView's wrapper grows once a
+  // line overflows the pane.
+  describe("unwrapped (ui.wordWrap off)", () => {
+    const singleLineHunk = (content: string) => [
+      {
+        content: "@@ -1,1 +1,1 @@",
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        changes: [
+          {
+            type: "normal" as const,
+            isNormal: true as const,
+            oldLineNumber: 1,
+            newLineNumber: 1,
+            content,
+          },
+        ],
+      },
+    ];
+    const longLine = "x".repeat(400);
+
+    it("keeps an overflowing line on one row and charges the scrollbar", () => {
+      const options = {
+        viewType: "unified" as const,
+        outputFontSize: 13,
+        outputContentWidth: 400,
+      };
+      const wrapped = buildDiffRenderPlan(singleLineHunk(longLine), options);
+      const unwrapped = buildDiffRenderPlan(singleLineHunk(longLine), {
+        ...options,
+        wordWrap: false,
+      });
+
+      expect(wrapped.bodyHeight).toBeGreaterThan(2 * wrapped.lineHeight);
+      expect(wrapped.horizontalScrollbarHeight).toBe(0);
+      expect(unwrapped.horizontalScrollbarHeight).toBe(
+        DIFF_HORIZONTAL_SCROLLBAR_HEIGHT
+      );
+      expect(unwrapped.bodyHeight).toBeCloseTo(
+        unwrapped.lineHeight + DIFF_HORIZONTAL_SCROLLBAR_HEIGHT
+      );
+      expect(unwrapped.diffBlockHeight).toBeCloseTo(
+        unwrapped.headerHeight + unwrapped.bodyHeight
+      );
+    });
+
+    it("charges no scrollbar when every line fits", () => {
+      const plan = buildDiffRenderPlan(replaceHunk, {
+        viewType: "unified",
+        outputFontSize: 13,
+        wordWrap: false,
+      });
+
+      expect(plan.horizontalScrollbarHeight).toBe(0);
+      expect(plan.bodyHeight).toBeCloseTo(3 * plan.lineHeight);
+    });
+
+    it("charges nothing while collapsed", () => {
+      const plan = buildDiffRenderPlan(singleLineHunk(longLine), {
+        viewType: "unified",
+        outputFontSize: 13,
+        outputContentWidth: 400,
+        collapsed: true,
+        wordWrap: false,
+      });
+
+      expect(plan.horizontalScrollbarHeight).toBe(0);
+      expect(plan.bodyHeight).toBe(0);
+    });
   });
 
   // Each collapsed gap between hunks renders its own "Show N hidden lines" bar

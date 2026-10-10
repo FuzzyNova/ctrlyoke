@@ -1030,6 +1030,13 @@ Show a confirmation dialog before discarding a continuation's edited suffix (Dis
 
 Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker.
 
+### `ui.wordWrap` {#ui-wordwrap}
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Wrap long lines in code views: the workspace file editor, script and condition editors, and diffs. When off, long lines extend past the view and scroll horizontally. The prompt editor always wraps.
+
 ### `ui.atomicContextReferences` {#ui-atomiccontextreferences}
 
 - **Type:** `boolean`

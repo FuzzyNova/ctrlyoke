@@ -936,6 +936,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "ui.showHeadlessPermissionWarning": "Show a warning when headless execution uses limited tool permissions.",
   "ui.stepColorMode": "Choose how workflow step identity colors are rendered: none uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step.",
   "ui.useAbsolutePathReferences": "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text stays relative regardless of this setting. Forced on in multi-root workspaces and by harnesses that require it (e.g. Antigravity).",
+  "ui.wordWrap": "Wrap long lines in code views: the workspace file editor, script and condition editors, and diffs. When off, long lines extend past the view and scroll horizontally. The prompt editor always wraps.",
   "usageTracking": "Controls workspace-local provider quota and observed-usage collection.",
   "usageTracking.enabled": "Enable usage collection for ctrlyoke-started harness sessions.",
   "usageTracking.percentDirection": "Whether quota percentages are displayed as used or remaining.",

@@ -317,6 +317,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const modeRef = useRef<CodeMirrorEditorMode>(mode);
   const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
   const placeholderCompartmentRef = useRef(new Compartment());
+  const lineWrappingCompartmentRef = useRef(new Compartment());
 
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -371,6 +372,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const isMultiRootWorkspace = useSettingsStore(
     (state) => state.globalSettings.isMultiRoot
   );
+  // `ui.wordWrap` governs code views only; a prompt is prose and always wraps.
+  const wordWrapSetting = useSettingsStore(
+    (state) => state.globalSettings.wordWrap
+  );
+  const lineWrapping =
+    mode === CODE_MIRROR_EDITOR_MODES.PROMPT || wordWrapSetting;
+  const lineWrappingRef = useRef(lineWrapping);
+  lineWrappingRef.current = lineWrapping;
 
   // Keep callback refs current
   useEffect(() => {
@@ -874,7 +883,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               ),
             ]
           : []),
-        EditorView.lineWrapping,
+        lineWrappingCompartmentRef.current.of(
+          lineWrappingRef.current ? EditorView.lineWrapping : []
+        ),
         EditorState.readOnly.of(readOnlyRef.current),
         history(),
         // Highest precedence: minimalSetup's defaultKeymap already binds
@@ -1117,6 +1128,13 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       ),
     });
   }, [placeholderText, viewReady]);
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: lineWrappingCompartmentRef.current.reconfigure(
+        lineWrapping ? EditorView.lineWrapping : []
+      ),
+    });
+  }, [lineWrapping, viewReady]);
   // `value` is intentionally omitted — the setup effect initializes the editor
   // once; value changes are handled by the separate effect below.
   // `vscode` is a stable singleton — never changes.

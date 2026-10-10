@@ -8,6 +8,7 @@ import { DiffFileCard, type DiffFileCardProps } from "./DiffFileCard";
 import { VirtualizedList } from "@components/shared/VirtualizedList";
 import { useElementTier } from "@hooks/useElementNarrow";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import {
   type DiffFileListRow,
   diffFileListRowGapClass,
@@ -116,6 +117,7 @@ export const DiffFileList = React.forwardRef<
       ? DIFF_VIEW_TYPES.SPLIT
       : DIFF_VIEW_TYPES.UNIFIED;
   const outputFontSize = useUiStore((state) => state.outputFontSize);
+  const wordWrap = useSettingsStore((state) => state.globalSettings.wordWrap);
   const rows = projectDiffFileListRows(
     { groups, selectionSummary },
     {
@@ -123,6 +125,7 @@ export const DiffFileList = React.forwardRef<
       outputFontSize,
       outputContentWidth,
       viewType,
+      wordWrap,
     }
   );
   const fileRows = rows.filter(
@@ -336,6 +339,7 @@ export const DiffFileList = React.forwardRef<
     contentWidthBucket,
     command.version,
     command.collapsed,
+    wordWrap,
   ].join(":");
 
   return (

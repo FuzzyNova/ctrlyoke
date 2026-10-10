@@ -50,6 +50,7 @@ const globalSettings: GlobalSettings = {
   confirmResetOperations: true,
   confirmContinuationDiscardOperations: true,
   hideGitIgnoredFiles: false,
+  wordWrap: true,
   isMultiRoot: false,
   priorContext: PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
   workspaceRoot: "",

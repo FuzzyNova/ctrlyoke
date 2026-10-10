@@ -129,6 +129,8 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
             collapsed={false}
             viewType="unified"
             outerMarginClassName="my-1"
+            // Prompt text is prose, which wraps like the prompt editor does.
+            wordWrap
           />
         </div>
       )}

@@ -417,6 +417,8 @@ export interface BuildOutputRowsInput {
   outputContentWidth?: number;
   /** Approximate number of wrapped result lines shown before Bash and generic tool output collapses. */
   collapsedToolOutputLineCount?: number;
+  /** `ui.wordWrap`; diff row heights are baked in at build time, so it lives here. */
+  wordWrap?: boolean;
 }
 
 export function getParallelGroupForStep(
@@ -2746,6 +2748,7 @@ export function buildOutputRows(
               expandedGaps: diffExpandedGaps,
               outputFontSize: input.outputFontSize,
               outputContentWidth: input.outputContentWidth,
+              wordWrap: input.wordWrap,
             })
           : null;
       const diffKey =

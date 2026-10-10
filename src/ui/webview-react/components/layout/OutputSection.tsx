@@ -356,6 +356,7 @@ const OutputSectionInner: React.FC = () => {
   const collapsedToolOutputLineCount = useSettingsStore(
     (s) => s.globalSettings.collapsedToolOutputLineCount
   );
+  const wordWrap = useSettingsStore((s) => s.globalSettings.wordWrap);
   const effectiveHarness = useSettingsStore((s) => s.getEffectiveHarness());
   const harnessColorSettings = useSettingsStore(
     (s) => s.globalSettings.harnessColors
@@ -557,6 +558,7 @@ const OutputSectionInner: React.FC = () => {
     outputFontSize,
     outputContentWidth,
     collapsedToolOutputLineCount,
+    wordWrap,
     invalidateMeasuredRow: invalidateMeasuredRowForRowModel,
     invalidateMeasuredRowForUserResize:
       invalidateMeasuredRowForUserResizeForRowModel,

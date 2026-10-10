@@ -1,7 +1,10 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
+import { unwrappedDiffTableWidth } from "@utils/outputLineMetrics";
 
 const {
   mockGetRenderedDiffStats,
@@ -107,6 +110,7 @@ import { DiffView } from "@components/output/DiffView";
 describe("DiffView", () => {
   beforeEach(() => {
     useUiStore.setState({ diffsCollapsed: false, diffResetVersion: 0 });
+    useSettingsStore.getState().updateGlobalSetting("wordWrap", true);
     mockGetRenderedDiffStats.mockClear();
     mockDiff.mockClear();
     mockToRdvHunks.mockClear();
@@ -285,6 +289,63 @@ describe("DiffView", () => {
       />
     );
     expect(getByText(/Hide diff/)).toBeTruthy();
+  });
+
+  describe("ui.wordWrap", () => {
+    beforeEach(() => {
+      mockToRdvFromContent.mockReturnValue({
+        hunks: [
+          {
+            content: "@@ -1,1 +1,1 @@",
+            oldStart: 1,
+            oldLines: 1,
+            newStart: 1,
+            newLines: 1,
+            changes: [
+              { type: "delete", content: "a\tb" },
+              { type: "insert", content: "x".repeat(40) },
+            ],
+          },
+        ],
+        diffType: "modify",
+      });
+    });
+
+    const renderDiff = (wordWrap?: boolean) =>
+      render(
+        <DiffView
+          oldContent={"a\tb\n"}
+          newContent={"x".repeat(40) + "\n"}
+          globallyCollapsed={false}
+          wordWrap={wordWrap}
+        />
+      );
+
+    it("wraps by default", () => {
+      const { container } = renderDiff();
+      expect(container.querySelector(".cy-diff-nowrap")).toBeNull();
+    });
+
+    it("widens the table to the longest line when off, and follows the setting live", () => {
+      const { container } = renderDiff();
+
+      act(() => {
+        useSettingsStore.getState().updateGlobalSetting("wordWrap", false);
+      });
+
+      const wrapper = container.querySelector<HTMLElement>(".cy-diff-nowrap");
+      expect(wrapper).not.toBeNull();
+      // useElementNarrow is mocked narrow, so the view is unified.
+      expect(wrapper!.style.getPropertyValue("--cy-diff-table-width")).toBe(
+        unwrappedDiffTableWidth("unified", false, 40)
+      );
+    });
+
+    it("lets a prose diff override the setting", () => {
+      useSettingsStore.getState().updateGlobalSetting("wordWrap", false);
+      const { container } = renderDiff(true);
+      expect(container.querySelector(".cy-diff-nowrap")).toBeNull();
+    });
   });
 
   it("force-expands a collapsed diff (uncontrolled) that contains the active find match", () => {

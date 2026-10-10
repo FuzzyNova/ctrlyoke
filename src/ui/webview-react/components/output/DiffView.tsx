@@ -51,11 +51,17 @@ import {
   OUTPUT_FIND_ACTIVE_CLASS,
 } from "@utils/outputFind";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
+import {
+  diffLineColumns,
+  unwrappedDiffTableWidth,
+} from "@utils/outputLineMetrics";
 import {
   DIFF_MARK_TYPES,
   DIFF_TOKEN_TYPES,
   DIFF_VIEW_TYPES,
+  RDV_DIFF_TYPES,
   type DiffViewType,
 } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
@@ -176,6 +182,12 @@ interface DiffViewProps {
    * so the match can be found and scrolled to at all.
    */
   activeMatchRange?: { start: number; end: number } | null;
+  /**
+   * Overrides `ui.wordWrap`. Prose diffs (prompt text) pass true; code diffs
+   * leave it unset. Whoever estimates this diff's height must pass the same
+   * value to its render plan.
+   */
+  wordWrap?: boolean;
 }
 
 export const DiffView: React.FC<DiffViewProps> = ({
@@ -198,8 +210,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
   findQuery,
   findCaseSensitive = false,
   activeMatchRange,
+  wordWrap: wordWrapProp,
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
+  const wordWrapSetting = useSettingsStore((s) => s.globalSettings.wordWrap);
+  const wordWrap = wordWrapProp ?? wordWrapSetting;
   const isControlled = collapsed !== undefined;
   const [uncontrolledExpanded, setUncontrolledExpanded] =
     useState(!globallyCollapsed);
@@ -571,6 +586,26 @@ export const DiffView: React.FC<DiffViewProps> = ({
     []
   );
 
+  // Unwrapped, the table keeps its fixed layout and grows to fit the longest
+  // line; see unwrappedDiffTableWidth.
+  const unwrappedTableWidth = useMemo(() => {
+    if (wordWrap || expandedHunks.length === 0) return undefined;
+    let maxLineColumns = 0;
+    for (const hunk of expandedHunks) {
+      for (const change of hunk.changes) {
+        maxLineColumns = Math.max(
+          maxLineColumns,
+          diffLineColumns(change.content)
+        );
+      }
+    }
+    return unwrappedDiffTableWidth(
+      viewType,
+      diffType === RDV_DIFF_TYPES.ADD || diffType === RDV_DIFF_TYPES.DELETE,
+      maxLineColumns
+    );
+  }, [diffType, expandedHunks, viewType, wordWrap]);
+
   const minimapStats = useMemo(
     () => getRenderedDiffStats(expandedHunks, viewType),
     [expandedHunks, viewType]
@@ -676,13 +711,24 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
       {/* Diff — only mounted when expanded and there are hunks */}
       {isExpanded && parsedDiff.fallbackText !== undefined && (
-        <pre className="max-h-96 overflow-auto whitespace-pre-wrap wrap-break-word rounded-[3px] border border-panel-border bg-editor-bg p-2 font-mono text-(length:--cy-output-font-size-xs) text-description-fg">
+        <pre
+          className={`max-h-96 overflow-auto ${wordWrap ? "whitespace-pre-wrap wrap-break-word" : "whitespace-pre"} rounded-[3px] border border-panel-border bg-editor-bg p-2 font-mono text-(length:--cy-output-font-size-xs) text-description-fg`}
+        >
           {parsedDiff.fallbackText}
         </pre>
       )}
 
       {isExpanded && expandedHunks.length > 0 && (
-        <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-panel-border">
+        <div
+          className={`rounded-[3px] overflow-x-auto overflow-y-hidden border border-panel-border${unwrappedTableWidth ? " cy-diff-nowrap" : ""}`}
+          style={
+            unwrappedTableWidth
+              ? ({
+                  "--cy-diff-table-width": unwrappedTableWidth,
+                } as React.CSSProperties)
+              : undefined
+          }
+        >
           <Diff
             viewType={viewType}
             diffType={diffType}

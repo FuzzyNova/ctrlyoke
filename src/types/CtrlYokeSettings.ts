@@ -295,6 +295,12 @@ export interface CtrlYokeGlobalSettings {
     confirmContinuationDiscardOperations: boolean;
     hideGitIgnoredFiles: boolean;
     /**
+     * Wrap long lines in code views (workspace file editor, script/condition
+     * editors, diffs). When false they scroll horizontally. The prompt editor
+     * always wraps.
+     */
+    wordWrap: boolean;
+    /**
      * Treat `@file`/`#symbol`/`~git`/`$context` references in the prompt editor
      * as atomic units: cursor motion skips over them and Backspace/Delete
      * removes the whole reference at once (no character-by-character editing
@@ -598,6 +604,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     confirmResetOperations: true,
     confirmContinuationDiscardOperations: true,
     hideGitIgnoredFiles: false,
+    wordWrap: true,
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
     showCostEstimates: true,

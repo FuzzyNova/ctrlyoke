@@ -205,6 +205,10 @@ export const WorkspaceFileEditor = forwardRef<
     const isMultiRootWorkspace = useSettingsStore(
       (state) => state.globalSettings.isMultiRoot
     );
+    const wordWrap = useSettingsStore((state) => state.globalSettings.wordWrap);
+    const wordWrapRef = useRef(wordWrap);
+    wordWrapRef.current = wordWrap;
+    const wordWrapCompartment = useRef(new Compartment());
     const isMultiRootWorkspaceRef = useRef(isMultiRootWorkspace);
     isMultiRootWorkspaceRef.current = isMultiRootWorkspace;
     const symbolIconCacheRef = useRef(new Map<string, string>());
@@ -525,7 +529,9 @@ export const WorkspaceFileEditor = forwardRef<
             },
           },
         ]),
-        EditorView.lineWrapping,
+        wordWrapCompartment.current.of(
+          wordWrapRef.current ? EditorView.lineWrapping : []
+        ),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !ignoreUpdateRef.current) {
             onChangeRef.current(update.state.doc.toString());
@@ -580,6 +586,14 @@ export const WorkspaceFileEditor = forwardRef<
         ),
       });
     }, [languageIntelligence.extensions]);
+
+    useEffect(() => {
+      viewRef.current?.dispatch({
+        effects: wordWrapCompartment.current.reconfigure(
+          wordWrap ? EditorView.lineWrapping : []
+        ),
+      });
+    }, [wordWrap]);
 
     useEffect(() => {
       const view = viewRef.current;

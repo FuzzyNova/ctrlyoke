@@ -75,6 +75,8 @@ interface UseOutputRowsModelInput {
   outputFontSize: number;
   outputContentWidth: number;
   collapsedToolOutputLineCount: number;
+  /** `ui.wordWrap`: whether diff rows are estimated wrapped or scrolling. */
+  wordWrap: boolean;
   /** Drops the cached measured height for a row and re-measures it. */
   invalidateMeasuredRow: (rowKey: string) => void;
   /** Like invalidateMeasuredRow, but also re-anchors the viewport to the row
@@ -119,6 +121,7 @@ export function useOutputRowsModel({
   outputFontSize,
   outputContentWidth,
   collapsedToolOutputLineCount,
+  wordWrap,
   invalidateMeasuredRow,
   invalidateMeasuredRowForUserResize,
   onDiffViewReset,
@@ -221,6 +224,7 @@ export function useOutputRowsModel({
           outputContentWidth,
           outputFontSize,
           collapsedToolOutputLineCount,
+          wordWrap,
           hiddenTargets: hiddenTargetKeys.size,
         },
         () =>
@@ -255,6 +259,7 @@ export function useOutputRowsModel({
             outputFontSize,
             outputContentWidth,
             collapsedToolOutputLineCount,
+            wordWrap,
           })
       ),
     [
@@ -288,6 +293,7 @@ export function useOutputRowsModel({
       outputFontSize,
       outputContentWidth,
       collapsedToolOutputLineCount,
+      wordWrap,
     ]
   );
 

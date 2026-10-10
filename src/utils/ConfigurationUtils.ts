@@ -1434,6 +1434,10 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).hideGitIgnoredFiles;
   },
 
+  shouldWrapCodeLines(): boolean {
+    return configService.get(CONFIG_KEYS.UI).wordWrap;
+  },
+
   async setConfirmResetOperations(enabled: boolean): Promise<void> {
     await configService.set(
       CONFIG_KEYS.UI_CONFIRM_RESET_OPERATIONS,

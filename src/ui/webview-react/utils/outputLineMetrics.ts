@@ -215,6 +215,54 @@ const DIFF_WRAPPER_BORDER_WIDTH = 2;
 export const MIN_DIFF_CODE_COLUMN_WIDTH = 120;
 
 /**
+ * `::-webkit-scrollbar { height: 10px }` in globals.css: the horizontal track
+ * DiffView's `overflow-x-auto` wrapper adds below an unwrapped (`ui.wordWrap`
+ * off) table once a line overflows it.
+ */
+export const DIFF_HORIZONTAL_SCROLLBAR_HEIGHT = 10;
+
+/** CSS's default `tab-size`; react-diff-view renders tabs as raw characters. */
+const DIFF_TAB_SIZE = 8;
+
+/** Columns one diff line occupies under `white-space: pre` (tabs expanded to tab stops). */
+export function diffLineColumns(line: string): number {
+  let columns = 0;
+  for (const char of line) {
+    columns =
+      char === "\t"
+        ? (Math.floor(columns / DIFF_TAB_SIZE) + 1) * DIFF_TAB_SIZE
+        : columns + 1;
+  }
+  return columns;
+}
+
+/**
+ * CSS `width` of an unwrapped diff table, as a function of its longest line.
+ *
+ * The table keeps react-diff-view's `table-layout: fixed`, so split view's two
+ * code columns stay equal halves; auto layout would size each half to its own
+ * content and lopsides the split even when every line fits. Instead the table
+ * is made wide enough for the longest line in every code column, from the same
+ * geometry {@link diffHorizontalChrome} reads: `7ch` per gutter column and
+ * `.5em` of padding per code cell. `ch` resolves against the table's own font,
+ * which globals.css sets to the diff's monospace face while unwrapped.
+ * Monotonous (add-only/delete-only) split diffs render one gutter and one code
+ * column, not two of each.
+ */
+export function unwrappedDiffTableWidth(
+  viewType: DiffViewType,
+  monotonous: boolean,
+  maxLineColumns: number
+): string {
+  const singleSide = monotonous && viewType === DIFF_VIEW_TYPES.SPLIT;
+  const gutterColumns = singleSide ? 1 : DIFF_GUTTER_COLUMNS;
+  const codeColumns = singleSide ? 1 : diffCodeColumns(viewType);
+  const ch =
+    gutterColumns * DIFF_GUTTER_COLUMN_CH + codeColumns * maxLineColumns;
+  return `max(100%, calc(${ch}ch + ${codeColumns * DIFF_CODE_CELL_PADDING_EM}em))`;
+}
+
+/**
  * Width the `⎿` marker and its `gap-1` take from a result line's text column.
  * The marker is `shrink-0`, so unlike the text it never wraps.
  */

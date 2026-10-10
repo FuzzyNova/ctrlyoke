@@ -127,6 +127,12 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted.",
   },
+  "ui.wordWrap": {
+    id: "ui.wordWrap",
+    path: "ui.wordWrap",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Wrap long lines in code views",
+  },
   "ui.atomicContextReferences": {
     id: "ui.atomicContextReferences",
     path: "ui.atomicContextReferences",

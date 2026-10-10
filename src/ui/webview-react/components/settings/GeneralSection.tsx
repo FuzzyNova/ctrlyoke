@@ -187,6 +187,12 @@ export function GeneralSection({
           {...rowProps}
         />
         <SettingToggleRow
+          settingKey="ui.wordWrap"
+          checked={ui.wordWrap}
+          onChange={(v) => onUpdate("ui.wordWrap", v)}
+          {...rowProps}
+        />
+        <SettingToggleRow
           settingKey="ui.atomicContextReferences"
           checked={ui.atomicContextReferences}
           onChange={(v) => onUpdate("ui.atomicContextReferences", v)}

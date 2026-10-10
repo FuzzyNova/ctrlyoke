@@ -16,12 +16,14 @@ import {
 import {
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,
+  DIFF_HORIZONTAL_SCROLLBAR_HEIGHT,
   MIN_DIFF_CODE_COLUMN_WIDTH,
   OUTPUT_RELAXED_LINE_HEIGHT,
   diffCharWidth,
   diffCodeColumns,
   diffGapDecorationHeight,
   diffHorizontalChrome,
+  diffLineColumns,
   diffLineHeight,
   toolCallLineHeight,
 } from "./outputLineMetrics";
@@ -220,6 +222,11 @@ export interface DiffRenderPlan {
   gapDecorationRows: number;
   /** Total height those bars contribute — already folded into {@link bodyHeight}. */
   gapDecorationsHeight: number;
+  /**
+   * Horizontal scrollbar track under an unwrapped table whose longest line
+   * overflows it — already folded into {@link bodyHeight}.
+   */
+  horizontalScrollbarHeight: number;
   bodyHeight: number;
   diffBlockHeight: number;
   totalHeight: number;
@@ -241,6 +248,11 @@ export interface DiffRenderPlanOptions {
    * full line height.
    */
   toolHeaderLines?: number;
+  /**
+   * `ui.wordWrap`. Defaults to true. When false every change is one visual row
+   * and an overflowing line instead adds a horizontal scrollbar.
+   */
+  wordWrap?: boolean;
 }
 
 /**
@@ -301,14 +313,8 @@ function getApproximateDiffCharsPerLine(
 function estimateRenderedVisualRows(
   hunks: readonly HunkData[],
   viewType: ViewType,
-  outputContentWidth: number | undefined,
-  outputFontSize: number
+  charsPerLine: number
 ): number {
-  const charsPerLine = getApproximateDiffCharsPerLine(
-    viewType,
-    outputContentWidth,
-    outputFontSize
-  );
   let visualRows = 0;
 
   for (const hunk of hunks) {
@@ -343,6 +349,17 @@ function estimateRenderedVisualRows(
   }
 
   return Math.max(0, visualRows);
+}
+
+function hasLineWiderThan(
+  hunks: readonly HunkData[],
+  charsPerLine: number
+): boolean {
+  return hunks.some((hunk) =>
+    hunk.changes.some(
+      (change) => diffLineColumns(change.content) > charsPerLine
+    )
+  );
 }
 
 /**
@@ -556,6 +573,7 @@ export function buildDiffRenderPlanFromStats(
       decorationHeight: 0,
       gapDecorationRows: 0,
       gapDecorationsHeight: 0,
+      horizontalScrollbarHeight: 0,
       bodyHeight: 0,
       diffBlockHeight: STANDALONE_DIFF_HEIGHT,
       totalHeight: STANDALONE_DIFF_HEIGHT,
@@ -577,13 +595,18 @@ export function buildDiffRenderPlanFromStats(
   // over-predicted every row for any base font below 13.
   const lineHeight = diffLineHeight(outputFontSize);
   const decorationHeight = DIFF_VERTICAL_CHROME_HEIGHT;
+  const wordWrap = options.wordWrap ?? true;
+  const charsPerLine = getApproximateDiffCharsPerLine(
+    viewType,
+    outputContentWidth,
+    outputFontSize
+  );
   const visualRenderedRows =
     options.hunks && options.hunks.length > 0
       ? estimateRenderedVisualRows(
           options.hunks,
           viewType,
-          outputContentWidth,
-          outputFontSize
+          wordWrap ? charsPerLine : Number.POSITIVE_INFINITY
         )
       : renderedRows;
   // Each collapsed gap between hunks renders its own "Show N hidden lines" bar
@@ -596,14 +619,25 @@ export function buildDiffRenderPlanFromStats(
   const gapDecorationsHeight = collapsed
     ? 0
     : gapDecorationRows * diffGapDecorationHeight(outputFontSize);
+  const horizontalScrollbarHeight =
+    !collapsed &&
+    !wordWrap &&
+    options.hunks &&
+    hasLineWiderThan(options.hunks, charsPerLine)
+      ? DIFF_HORIZONTAL_SCROLLBAR_HEIGHT
+      : 0;
   const bodyHeight = collapsed
     ? 0
-    : visualRenderedRows * lineHeight + gapDecorationsHeight;
+    : visualRenderedRows * lineHeight +
+      gapDecorationsHeight +
+      horizontalScrollbarHeight;
   const diffBlockHeight =
     headerHeight +
     (collapsed
       ? 0
-      : Math.max(1, visualRenderedRows) * lineHeight + gapDecorationsHeight);
+      : Math.max(1, visualRenderedRows) * lineHeight +
+        gapDecorationsHeight +
+        horizontalScrollbarHeight);
 
   return {
     viewType,
@@ -618,6 +652,7 @@ export function buildDiffRenderPlanFromStats(
     decorationHeight,
     gapDecorationRows,
     gapDecorationsHeight,
+    horizontalScrollbarHeight,
     bodyHeight,
     diffBlockHeight,
     totalHeight: toolLineHeight + headerHeight + decorationHeight + bodyHeight,

@@ -6,7 +6,9 @@ import {
   type WorkspaceFileEditorHandle,
 } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { act } from "react";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 describe("WorkspaceFileEditor link navigation", () => {
@@ -173,6 +175,31 @@ describe("WorkspaceFileEditor link navigation", () => {
       expect(nav.startLine).toBe(42);
       expect(nav.endLine).toBe(58);
     }
+  });
+
+  it("follows ui.wordWrap without rebuilding the editor", () => {
+    useSettingsStore.getState().updateGlobalSetting("wordWrap", true);
+    const { container } = render(
+      <WorkspaceFileEditor
+        filePath="src/a.ts"
+        content="const a = 1;"
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    const editor = container.querySelector(".cm-content");
+    expect(editor).toHaveClass("cm-lineWrapping");
+
+    act(() => {
+      useSettingsStore.getState().updateGlobalSetting("wordWrap", false);
+    });
+    expect(container.querySelector(".cm-content")).toBe(editor);
+    expect(editor).not.toHaveClass("cm-lineWrapping");
+
+    act(() => {
+      useSettingsStore.getState().updateGlobalSetting("wordWrap", true);
+    });
+    expect(editor).toHaveClass("cm-lineWrapping");
   });
 
   it("renders an <img> instead of the editor for a known image type", () => {

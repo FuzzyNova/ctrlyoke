@@ -1912,3 +1912,19 @@ button .cy-lucide-icon {
   );
   color: var(--vscode-diffEditor-unchangedRegionForeground, #bfbfbf);
 }
+
+/* `ui.wordWrap` off: lines keep their length and DiffView's wrapper scrolls
+   horizontally. The table keeps react-diff-view's fixed layout (equal split
+   halves) at the width DiffView computes from its longest line
+   (unwrappedDiffTableWidth); that width is in `ch`, so the table itself takes
+   the monospace face its code cells render in. */
+.cy-diff-nowrap .diff {
+  width: var(--cy-diff-table-width);
+  font-family: var(--diff-font-family);
+}
+
+.cy-diff-nowrap .diff-code {
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}

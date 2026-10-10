@@ -134,6 +134,7 @@ export interface GlobalSettings {
   confirmResetOperations: boolean;
   confirmContinuationDiscardOperations: boolean;
   hideGitIgnoredFiles: boolean;
+  wordWrap: boolean;
   isMultiRoot: boolean;
   priorContext: string;
   workspaceRoot: string;
@@ -431,6 +432,7 @@ const initialGlobalSettings: GlobalSettings = {
   confirmResetOperations: true,
   confirmContinuationDiscardOperations: true,
   hideGitIgnoredFiles: false,
+  wordWrap: CTRLYOKE_SETTINGS_DEFAULTS.ui.wordWrap,
   isMultiRoot: false,
   priorContext: "none",
   workspaceRoot: "",

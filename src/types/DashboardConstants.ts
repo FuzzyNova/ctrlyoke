@@ -3235,6 +3235,15 @@ export const DIFF_LINE_TYPES = {
 export type DiffLineType =
   (typeof DIFF_LINE_TYPES)[keyof typeof DIFF_LINE_TYPES];
 
+/** react-diff-view's file-level `DiffType` values. */
+export const RDV_DIFF_TYPES = {
+  ADD: "add",
+  DELETE: "delete",
+  MODIFY: "modify",
+  RENAME: "rename",
+  COPY: "copy",
+} as const;
+
 // ============================================================================
 // FILE OPERATION KINDS - File-operation and prompt undo change discriminants
 // ============================================================================

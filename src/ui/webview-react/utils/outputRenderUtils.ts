@@ -56,6 +56,8 @@ export interface ComputeOutputDiffStatsOptions {
   expandedGaps?: DiffGapExpansionState;
   outputFontSize?: number;
   outputContentWidth?: number;
+  /** `ui.wordWrap`; see `DiffRenderPlanOptions.wordWrap`. */
+  wordWrap?: boolean;
 }
 
 interface AppliedDiffGapExpansionResult {
@@ -74,6 +76,7 @@ function buildOutputDiffStats(
     gapExpansion,
     layoutMode = "file-edit",
     toolHeaderLines,
+    wordWrap,
   }: {
     viewType: ViewType;
     collapsed: boolean;
@@ -83,6 +86,7 @@ function buildOutputDiffStats(
     gapExpansion?: DiffGapExpansionPlanState;
     layoutMode?: "file-edit" | "standalone";
     toolHeaderLines?: number;
+    wordWrap?: boolean;
   }
 ): OutputDiffStats {
   return {
@@ -96,6 +100,7 @@ function buildOutputDiffStats(
       layoutMode,
       gapExpansion,
       toolHeaderLines,
+      wordWrap,
     }),
   };
 }
@@ -192,6 +197,7 @@ export function computeOutputDiffStats(
     expandedGaps,
     outputFontSize,
     outputContentWidth,
+    wordWrap,
   } = options;
 
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
@@ -237,6 +243,7 @@ export function computeOutputDiffStats(
           hunks: expandedDiff.hunks,
           gapExpansion: expandedDiff.gapExpansion,
           toolHeaderLines,
+          wordWrap,
         }
       );
     }
@@ -257,6 +264,7 @@ export function computeOutputDiffStats(
           hunks: expandedDiff.hunks,
           gapExpansion: expandedDiff.gapExpansion,
           toolHeaderLines,
+          wordWrap,
         }
       );
     }

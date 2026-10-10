@@ -9,8 +9,10 @@ import {
   diffCodeColumns,
   diffGapDecorationHeight,
   diffHorizontalChrome,
+  diffLineColumns,
   diffLineHeight,
   estimateFileOperationHeaderLines,
+  unwrappedDiffTableWidth,
   FILE_OPERATION_PATH_MIN_CH,
   fileWriteActionLabel,
 } from "@utils/outputLineMetrics";
@@ -32,6 +34,36 @@ describe("diff geometry", () => {
     it("keeps scaling below the default font size", () => {
       expect(diffLineHeight(12)).toBeCloseTo(16.5);
       expect(diffLineHeight(11)).toBeLessThan(diffLineHeight(12));
+    });
+  });
+
+  describe("unwrapped diff tables", () => {
+    // `white-space: pre` with CSS's default `tab-size: 8`.
+    it("counts tabs to the next tab stop", () => {
+      expect(diffLineColumns("")).toBe(0);
+      expect(diffLineColumns("abc")).toBe(3);
+      expect(diffLineColumns("\tx")).toBe(9);
+      expect(diffLineColumns("ab\tx")).toBe(9);
+      expect(diffLineColumns("abcdefgh\tx")).toBe(17);
+    });
+
+    // `7ch` per gutter column and `.5em` per code cell, once per code column.
+    it("sizes every code column for the longest line", () => {
+      expect(unwrappedDiffTableWidth("unified", false, 100)).toBe(
+        "max(100%, calc(114ch + 0.5em))"
+      );
+      expect(unwrappedDiffTableWidth("split", false, 100)).toBe(
+        "max(100%, calc(214ch + 1em))"
+      );
+    });
+
+    it("sizes a one-sided split diff as one gutter and one code column", () => {
+      expect(unwrappedDiffTableWidth("split", true, 100)).toBe(
+        "max(100%, calc(107ch + 0.5em))"
+      );
+      expect(unwrappedDiffTableWidth("unified", true, 100)).toBe(
+        unwrappedDiffTableWidth("unified", false, 100)
+      );
     });
   });
 

@@ -65,6 +65,8 @@ export interface DiffFileRowEstimateOptions {
   viewType?: DiffViewType;
   outputFontSize?: number;
   outputContentWidth?: number;
+  /** `ui.wordWrap`; defaults to true. */
+  wordWrap?: boolean;
 }
 
 interface DiffFileListRowBase {
@@ -114,6 +116,7 @@ function normalizedOptions(
       options.outputContentWidth && options.outputContentWidth > 0
         ? options.outputContentWidth
         : DEFAULT_OUTPUT_CONTENT_WIDTH,
+    wordWrap: options.wordWrap ?? true,
   };
 }
 
@@ -237,6 +240,7 @@ function getPatchEstimate(
       outputContentWidth: options.outputContentWidth,
       hunks,
       layoutMode: "file-edit",
+      wordWrap: options.wordWrap,
     }
   ).diffBlockHeight;
 }
@@ -344,6 +348,7 @@ function getHunkEstimate(
     outputContentWidth: options.outputContentWidth,
     hunks: file.source.hunks,
     layoutMode: "file-edit",
+    wordWrap: options.wordWrap,
   }).diffBlockHeight;
 }
 
@@ -357,6 +362,7 @@ function getDiffBodyEstimate(
     options.viewType,
     options.outputFontSize,
     contentWidthBucket(options.outputContentWidth),
+    options.wordWrap ? "wrap" : "nowrap",
   ].join(GROUP_KEY_SEPARATOR);
   let sourceCache = diffGeometryCache.get(file.source);
   if (!sourceCache) {

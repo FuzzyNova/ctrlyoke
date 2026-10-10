@@ -180,6 +180,7 @@ describe("setGlobalSettings", () => {
       confirmResetOperations: false,
       confirmContinuationDiscardOperations: false,
       hideGitIgnoredFiles: true,
+      wordWrap: true,
       isMultiRoot: false,
       priorContext: "none",
       workspaceRoot: "",
