@@ -34,10 +34,18 @@ We are pre-release with no backward-compatibility constraints; nothing here need
 >
 > - the full worktree rules (D4a–e): the parent's checkout is the child's source checkout, a
 >   dirty check before fan-out, lease delegation chains, and delegated merge leases;
-> - a result summary as the step's output, so merge steps can find each lane's branch (D12);
+> - the step's output exposes each lane's branch to merge steps (D12, redesigned in Revision 3);
 > - a [Parallel Sub-workflow Steps](#parallel-sub-workflow-steps) section listing each blocker
 >   and its fix;
 > - two prerequisite worktree bugs filed in `dev/bugs/backlog/`.
+>
+> **Revision 3 (2026-10-09).** A root-level workflow step is now allowed (D8): a one-step file
+> is the start of a lazy queue that more workflows are appended to. D12 is redesigned. `$previous`
+> and the other step references mean the step's **full** output for every step kind; for a
+> workflow step, that is every step of the child run. A new `$summary:` prefix gives a bounded,
+> deterministic excerpt of any step kind. The earlier "final response only" summary is gone.
+> `ctrlyoke history show` and an extended MCP `read_output` are documented as on-demand
+> alternatives (D12c).
 
 ---
 
@@ -132,7 +140,7 @@ interface SubWorkflowResult {
   /** For CANCELLED: whether the parent requested it via handle.stop(), or the child was stopped directly. */
   cancelledBy?: "parent" | "child";
   failureMessage?: string;
-  /** Projected from the child's `_runtime.worktree`; feeds D4e and the D12 summary. */
+  /** Projected from the child's `_runtime.worktree`; feeds D4e and the D12 `subWorkflowOutput` metadata. */
   worktree?: Pick<
     WorkingFileWorktreeRuntime,
     | "mode"
@@ -144,7 +152,6 @@ interface SubWorkflowResult {
     | "mergeOutcome"
     | "conflictFiles"
   >;
-  finalResponse?: string;
 }
 ```
 
@@ -255,7 +262,8 @@ blocked, and D8's preflight rejects that combination up front.
 **D4e. Merge results are data, not failures.** `merge: true` can end `fast-forward`,
 `merge-commit`, `conflict` (aborted cleanly, with `conflictFiles`), or `blocked`. The child
 run's outcome is not changed by these, and neither is the parent step's: a COMPLETED child is a
-COMPLETED step. The outcome goes into the step's result summary (D12), with a warning badge when
+COMPLETED step. The outcome goes into the step's recorded metadata (D12a), so both `$step:N` and
+`$summary:step:N` report it, with a warning badge when
 it isn't a clean merge. This fits the merge-and-fix pattern: the parent's next step resolves
 whatever didn't merge cleanly.
 
@@ -325,8 +333,13 @@ This is new and separate from the existing variant/re-run provenance (`sourceWor
 - **Inside a `parallel` group:** **yes, in v1.** This is the main driver: fan out several
   workflows onto their own worktrees, join, then merge on the parent's branch before the next
   wave. See [Parallel Sub-workflow Steps](#parallel-sub-workflow-steps) for what this needs.
-- **Single-step root** (`singleStepRoot`/`rootScriptStep`): no. A file that is only a reference
-  to another file has no purpose.
+- **Single-step root** (`singleStepRoot`): **yes**, as a new `rootWorkflowStep` arm alongside
+  `rootScriptStep`. A file that holds only `type: workflow` / `workflow: waves/f1.ctrlyoke.yaml`
+  is the start of a lazy queue: you run it, then append the next workflows while the first one
+  runs. `steps: [ { type: workflow, … } ]` already covers this, but blocking the shorter form
+  gains nothing and leaves an odd gap next to root prompts and scripts. As with a root script,
+  workflow-only keys at the root (`worktree`, for example) belong to the **parent**; the child's
+  worktree still comes from the child file (D4), and nothing else is inherited (D11). `.prompt.md` cannot express this form.
 
 ### D9. Outcome mapping and `onFail`
 
@@ -362,7 +375,7 @@ back to settings defaults (not the parent's harness). `{{var}}` substitution is 
 the `workflow` path in v1. Only the execution root is inherited (D4), because it is about _where_
 the code lives, not _how_ the workflow is configured.
 
-### D12. The step's output is a result summary that later steps can reference
+### D12. Step references mean the same thing for every step kind; `$summary:` bounds any of them
 
 A merge step has to know what each lane produced. Today it has no way to find out:
 
@@ -374,29 +387,145 @@ A merge step has to know what each lane produced. Today it has no way to find ou
 - cross-run `priorContext: { workflowKey, runRef }` needs keys known when the workflow is
   authored.
 
-**Decision:** when the child settles, the sub-workflow step records a **result summary** as its
-output, written to the parent's timeline the same way script steps record stdout. It is
-therefore reachable with `$step:N`, `$previous`, and `priorContext`. Referencing a whole
-parallel group (`$step:2-5`) collects every lane. The format is a stable, agent-readable
-block:
+A previous draft solved this with a "result summary" (metadata plus the child's final response)
+as the step's output. That made `$previous` mean a summary after a workflow step and the full
+output after any other step, and most workflows' final response is just "committed abc123".
+Rejected.
 
-```text
-Sub-workflow: f1-location (waves/f1-location.ctrlyoke.yaml)
-Run: f1-location-2026-10-09T10-12-03 / run-2026-10-09T10-12-03
-Outcome: completed
-Worktree: managed, branch ctrlyoke/f1-location/run-2026-10-09T10-12-03 (base 5a1c460, tip 9f02c1d, 14 files changed)
-Merge: conflict (src/completions/WorkflowLocationTypes.ts) — branch left unmerged
-Final response:
-<the child's last completed step output, capped at 8 KB>
+#### D12a. Full output: one meaning for every step kind
+
+`$previous`, `$previous:N`, `$step:…`, `$all`, `$finalStep`, `$allFinalStep`, and every
+`priorContext` selector mean the step's **full output**, whatever its kind:
+
+| Step kind | Full output                                                                                                                       |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Prompt    | Authored prompt + response (unchanged)                                                                                            |
+| Script    | Command, stdout, stderr, exit code (unchanged) **plus the verdict**: passed/failed, `expected`, `actual` (from `ScriptVerdict`)   |
+| Workflow  | A metadata block, then **every step of the child run**, each rendered by these same rules (recursively for nested workflow steps) |
+
+- **Selection counts parent-level steps.** A workflow step is one step for `$previous`,
+  `$previous:3`, and `$step:N`; the child's steps are nested inside it, not counted. `$step:1-3`
+  over a three-lane wave yields three workflow entries.
+- **The child's steps come from the existing cross-run reader.** The run-address form of
+  `priorContext` (`{ workflowKey, runRef }`) already imports a whole run through
+  `RunOutputResolver.resolveAllPriorContextItems` (`:1057`). The workflow arm calls it with the
+  child's manifest, located from `_runtime.childWorkflowKey`/`childRunRef`.
+- **The metadata is the workflow step's own recorded output.** When the child settles, the step
+  writes a structured `subWorkflowOutput` event to the parent's timeline, the counterpart of
+  `scriptOutput`. It holds the resolved path, `childWorkflowKey`, `childRunRef`, and outcome.
+  When the child had a worktree, it also holds mode, branch, base, tip, files changed, and the
+  merge result (D4e), taken from the child's `_runtime.worktree` (`WorkingFileWorktreeRuntime`,
+  `CtrlYokeTypes.ts:580-612`). A workflow step therefore always has output and is never skipped
+  by `$previous`.
+- **Missing child history** (run directory deleted): the metadata renders with a
+  `<childRunUnavailable/>` marker instead of child steps. This is not an error.
+- **The script verdict is new for every script step**, not only inside workflows, so `$previous`
+  after a script reports pass/fail the same way at every level. `PriorContextItem`
+  (`HarnessIntegration.ts:44`) gains `scriptVerdict?` and `subWorkflow?: { output, children }`,
+  and `buildPriorContextXmlFromItems` (`:111`) renders both.
+
+```xml
+<step index="2" type="workflow" name="f1-location" workflow="waves/f1-location.ctrlyoke.yaml"
+      workflowKey="f1-location-2026-10-09T10-12-03" runRef="run-2026-10-09T10-12-03" outcome="completed">
+<worktree mode="managed" branch="ctrlyoke/f1-location/run-2026-10-09T10-12-03" base="5a1c460" tip="9f02c1d" filesChanged="14"/>
+<merge result="conflict">src/completions/WorkflowLocationTypes.ts</merge>
+<step index="1" name="Implement">
+<prompt>…</prompt>
+<response>…</response>
+</step>
+<step index="2" type="script" name="Tests">
+<command>npm test</command>
+<stdout>…</stdout>
+<exitCode>0</exitCode>
+<verdict outcome="passed" compareSource="exitCode" expected="0" actual="0"/>
+</step>
+</step>
 ```
 
-Fields come from the child's `_runtime.worktree` (`WorkingFileWorktreeRuntime`,
-`CtrlYokeTypes.ts:580-612`) and its last completed step's output. Lines that don't apply are
-omitted. A script merge step that needs fixed branch names should use named worktrees, whose
-branch is authored. An AI merge step reads the summary.
+The full output of a large child is large. That is the same trade-off as `$all` today, and the
+editor's prior-context preview and token count show it before the run. `$summary:` is the
+bounded alternative.
 
-Expanding the child's complete output into the parent is still out of scope; the summary plus
-the "Open run" link cover what a merge step needs.
+#### D12b. `$summary:` — a bounded excerpt of any step
+
+**Grammar:** `$summary:` is a prefix on the existing selectors, not a new set of selectors:
+`$summary:previous`, `$summary:previous:3`, `$summary:step:1,4-5`, `$summary:all`,
+`$summary:finalStep`, `$summary:allFinalStep`. The body after `summary:` goes through the same
+`parseInlinePriorContextBody` (`FileReferenceParser.ts:896`), so every selector works in both
+forms and they cannot fall out of step. The YAML equivalent is a separate property,
+`priorContextDetail: full | summary` (default `full`, resolved prompt → workflow like
+`priorContext`), so all four existing `priorContext` forms keep working unchanged.
+
+**Rule: a summary only truncates the full form; it never adds anything.** It uses the same XML,
+with truncated elements marked (`truncated="head"` or `truncated="tail"`, plus `omittedBytes`).
+An agent reads both forms the same way, and the two cannot drift.
+
+| Step kind | Summary                                                                                                                                              |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prompt    | First 2 KB of the **authored** prompt (`PriorContextItem.prompt`, not the expanded one); last 4 KB of the response                                   |
+| Script    | First 2 KB of the command; last 4 KB of stdout and stderr combined; exit code and verdict in full                                                    |
+| Workflow  | Metadata in full; each child step's summary by these rules, within a **24 KB budget per workflow step**; the earliest steps are elided first (below) |
+
+- **Head of prompts, tail of output.** The start of a prompt says what was asked. Agents and
+  test runners put their conclusions and failures at the end.
+- **Cuts land on line boundaries.** Each truncated element carries a one-line marker naming the
+  run and step, so an agent that needs more reads it on demand (D12c) rather than relying on a
+  bigger cap.
+- **Workflow budget.** Render the metadata and every child step's summary. While the total is
+  over 24 KB, replace the earliest remaining child step with one status line
+  (`<step index="3" name="implement" status="completed" outputBytes="41213" elided="true"/>`).
+  The last child step is never elided. Nested workflow steps count toward the enclosing budget,
+  so recursion stays bounded.
+- **Fixed caps, not settings.** They live in one constant, `PRIOR_CONTEXT_SUMMARY_LIMITS`
+  (`PROMPT_HEAD_BYTES: 2048`, `OUTPUT_TAIL_BYTES: 4096`, `WORKFLOW_BUDGET_BYTES: 24576`). A
+  setting can come later if real use asks for one.
+- **Deterministic; no AI call.** "Summary" means an excerpt, and the docs and the completion
+  detail say so. An AI-written summary was considered and rejected: it costs money, is slow,
+  and is not reproducible.
+- **One renderer per step kind**, dispatched through Phase 0's exhaustive `getStepType` switch,
+  so a future step kind must define its summary to compile.
+- **Mixing detail levels.** When one prompt selects the same step at both levels (for example
+  `$previous` and `$summary:step:2`), full wins. `mergePriorContextReferences` tracks a detail
+  per selected index instead of one per prompt.
+
+The staging-plan merge step therefore says "Merge every branch reported in `$summary:step:1-3`
+…". That gives each lane's branch, its merge result, and the tail of each of its step outputs, at
+a bounded size. A script merge step that needs fixed branch names should use named worktrees,
+whose branch is authored.
+
+#### D12c. Alternatives: pulling child output on demand
+
+Prior context _pushes_ output into the prompt before the step starts. An agent can also _pull_
+it while it works, which suits a merge step that only needs to dig into one lane. Neither path
+replaces `$previous`/`$summary:`: both need the agent to know to look, cost turns, and give an
+author no way to state up front what the step depends on. They are the escape hatch behind the
+summary's truncation markers, and they need the D12a metadata (child `workflowKey`/`runRef`) to
+find the child run.
+
+- **`ctrlyoke history show` already works, with no change.** It addresses any run in the
+  project, with `--limit`/`--json`/`--kind` paging and filters:
+
+  ```sh
+  ctrlyoke history show --workflow <childWorkflowKey> --run <childRunRef> --step 2 --tail 4000
+  ```
+
+  Managed worktree runs keep the initiating checkout's `stateRoot`, so child runs live in the
+  same history as the parent.
+  Verify during implementation that the CLI resolves that same state root when invoked from
+  inside a managed worktree; if it does not, the guide passes `--cwd <source checkout>`. It
+  requires a shell tool and the CLI on `PATH`.
+
+- **MCP `read_output` needs one addition.** It is scoped to the agent's own attached run
+  (`mcp-server.ts:1566-1629`: `resolveRun` → that run's manifest), and `indices` select that
+  run's steps. On a workflow step it would return only the metadata. Add an optional
+  `run: { workflowKey, runRef }` argument that redirects the read, with `indices` and the
+  existing `cursor`/`limit`/`tail` paging applying to that run unchanged. Only **descendants** of
+  the attached run are accepted: walk the target's `parentRun` chain (D7) up to the attached run,
+  and reject anything else with a message naming the allowed scope. This keeps `read_output`'s
+  "your own workflow" contract while extending it to the children your steps started.
+  `workflow_status` gains the same `run` argument so the agent can list a child's steps first.
+  The truncation markers name the call directly, for example
+  `read_output { run: {…}, indices: [3], tail: 8000 }`.
 
 ---
 
@@ -495,6 +624,12 @@ a third copy.
   new kind with no structural change. Update its description: "members share the workspace
   and worktree" now applies only to prompt and script members, and to sub-workflow members
   whose file has no `worktree` key (D4).
+- `singleStepRoot` gains a third arm, `rootWorkflowStep`: `allOf` `subWorkflowStep` +
+  `workflowOnlyProperties`, mirroring the `rootScriptStep` arm (D8).
+- `executionProperties` gains `priorContextDetail` next to `priorContext`:
+  `{ "type": "string", "enum": ["full", "summary"], "default": "full" }`, described as "How much
+  of each step selected by `priorContext` to include: `full` output, or a deterministic
+  `summary` excerpt (head of the prompt or command, tail of the output; see `$summary:`)."
 - The loose `steps[]`/`finalStep` re-description in the root `allOf/if not _templateMeta` block
   (`:13-82`) must not reject the new kind. Verify it doesn't, and widen it if it does.
 - After editing, run `npm run schema:update`. This regenerates the YAML schema,
@@ -521,6 +656,16 @@ WORKFLOW_REF: "workflow",
 
 // New: SUB_WORKFLOW_STEP_COPY_FIELDS, the parser's copy whitelist, alongside
 // SCRIPT_STEP_COPY_FIELDS (:3806).
+
+// D12:
+export const PRIOR_CONTEXT_DETAILS = { FULL: "full", SUMMARY: "summary" } as const;
+export const PRIOR_CONTEXT_SUMMARY_PREFIX = "summary:"; // the inline `$summary:` prefix
+export const PRIOR_CONTEXT_SUMMARY_LIMITS = {
+  PROMPT_HEAD_BYTES: 2048,
+  OUTPUT_TAIL_BYTES: 4096,
+  WORKFLOW_BUDGET_BYTES: 24576,
+} as const;
+// PROMPT_PROPERTIES gains PRIOR_CONTEXT_DETAIL: "priorContextDetail".
 ```
 
 ```typescript
@@ -556,6 +701,9 @@ export function isSubWorkflowStep(step: WorkflowStep): step is SubWorkflowStep {
 ```
 
 `PromptRuntimeMetadata` (`:968`) extends `StepLifecycleRuntime`, matching the schema extraction.
+`SubWorkflowOutput` (the D12a metadata: resolved path, child keys, outcome, and the
+`SubWorkflowResult.worktree` projection) sits next to `ScriptRuntimeOutput` (`:918`). The inline
+reference type in `FileReferenceParser.ts:649-653` gains `detail: PriorContextDetail` on every arm.
 `WorkflowExecutionContext` gains `subWorkflowHost?` (D1) and `ancestorPaths?: readonly string[]`
 (D10).
 
@@ -574,8 +722,12 @@ export function isSubWorkflowStep(step: WorkflowStep): step is SubWorkflowStep {
   explicit-opt-in rule.
 - `validateWorkflowSteps` (`:1441`): a sub-workflow branch before the `!item.prompt` check
   (`:1507`). It requires a non-empty `workflow` and runs the file-existence check from D5.
-- The root `type: "script"` single-step branch (`:973`) needs no change; a root
-  `type: "workflow"` fails schema validation (D8).
+- The root `type: "script"` single-step branch (`:973`) gets a sibling for root
+  `type: "workflow"`, which builds a one-step queue through `buildSubWorkflowStep` (D8).
+  `getValidKeysAtPointer` (`:666-674`) already routes a root without `steps` to
+  `singleStepRoot`, so unknown-key warnings pick up the new arm with no change.
+- `priorContextDetail` is copied like `priorContext` and validated against
+  `PRIOR_CONTEXT_DETAILS`.
 
 ---
 
@@ -614,8 +766,8 @@ group itself needs is in [Parallel Sub-workflow Steps](#parallel-sub-workflow-st
    `cancelTarget` (`:959-976`), `releaseTargetResources` (`:874`) and `stop()` (`:2464-2476`) to
    call `handle.stop()`, which is what D2 needs. Extend `pause()`/`cancelPause()` to forward to
    every live `subWorkflow` handle (D3).
-8. `await handle.done`, then map the result using D9. Record the D12 result summary as the
-   step's output event. Record the outcome through the same `promptQueue` calls
+8. `await handle.done`, then map the result using D9. Record the D12a `subWorkflowOutput`
+   metadata as the step's output event. Record the outcome through the same `promptQueue` calls
    `executeScriptStep` uses (`failStep`, `cancelStep`, and normal completion), so
    `commitSequentialOutcome` (`:1722`), the final-step loop (`:621-840`) and `ParallelGroupRun`
    need no sub-workflow knowledge beyond what the parallel section lists.
@@ -642,6 +794,28 @@ queue, which the loop-back check (`:793-821`) already sees. The open bug
 _external on-disk_ appends (MCP, `ctrlyoke step add`), not the dashboard path here, so it does
 not block this plan.
 
+### Prior-context resolution (D12)
+
+- **Parsing.** `createInlinePriorContextReferencePattern` (`ReferencePatterns.ts:15`) accepts an
+  optional `summary:` prefix before the existing body alternatives. `parseInlinePriorContextBody`
+  strips it, parses the rest unchanged, and sets `detail`. `$summary` with no selector, or with an
+  unknown one, is a diagnostic, like `$step:` with no indices today.
+- **Merging.** `mergePriorContextReferences` keeps a `Map<index, PriorContextDetail>` alongside
+  its index sets, combining the `priorContext` property (at `priorContextDetail`) with the inline
+  tokens; full wins on overlap.
+- **Resolving.** `resolvePriorContextItems` (`RunOutputResolver.ts:967`) gains a third item
+  arm after Phase 0's switch. A workflow step's value carries the `subWorkflowOutput` event; its
+  children come from `resolveAllPriorContextItems(childManifestPath)` (`:1057`), recursively
+  for nested workflow steps. Script items attach the latest `ScriptVerdict`.
+- **Rendering.** `buildPriorContextXmlFromItems` (`HarnessIntegration.ts:111`) stays the single
+  renderer for live injection and the editor preview (`PriorContextPreviewBuilder.ts`). A new
+  `summarizePriorContextItems(items)` runs before it when the detail is `summary`, applying
+  `PRIOR_CONTEXT_SUMMARY_LIMITS` per kind and the workflow budget. Truncation therefore never
+  forks the XML format.
+- **Renumbering and diagnostics.** `StepReferenceRenumbering.ts` must rewrite the body inside
+  `$summary:step:…` exactly as it does for `$step:…`. The parser's sibling-reference check
+  (`PromptFileParser.ts:1244`) applies to both forms.
+
 ---
 
 ## Parallel Sub-workflow Steps
@@ -667,18 +841,18 @@ steps:
     failFast: false # one lane failing should not kill hours of work in the others
   - name: Merge wave 1 and fix
     prompt: |
-      Merge every branch reported in $step:1-3 into the current branch, resolve conflicts,
+      Merge every branch reported in $summary:step:1-3 into the current branch, resolve conflicts,
       run `npm test`, fix failures, and commit the result.
   - parallel: # wave 2 branches from the merge step's commit (D4b/D4c)
       - { type: workflow, workflow: waves/f3-completions.ctrlyoke.yaml }
       - { type: workflow, workflow: waves/d2-diagnostics.ctrlyoke.yaml }
     failFast: false
   - name: Merge wave 2 and fix
-    prompt: Merge every branch reported in $step:5-6 into the current branch, …
+    prompt: Merge every branch reported in $summary:step:5-6 into the current branch, …
 ```
 
 A lane can instead use `merge: true` in its own file to auto-merge at settlement. Conflicts are
-then reported in the summary (D4e) and left for the merge step. Auto-merge suits lanes that
+then reported in the step's metadata (D4e/D12a) and left for the merge step. Auto-merge suits lanes that
 rarely conflict; leaving the merge to the AI step suits overlapping lanes.
 
 ### What currently prevents this, and the fix for each
@@ -693,7 +867,7 @@ rarely conflict; leaving the merge to the AI step suits overlapping lanes.
 | P6  | Wave N+1 branches from `HEAD`, so uncommitted fixes from the merge step are silently missing                                                                                                                 | D4c dirty-parent check before fan-out                                                                                                         |
 | P7  | Concurrent managed starts with a slow `setup` fail with a lock timeout, or take over the 30 s-stale mutation lock                                                                                            | Fixed; managed `setup` runs outside the mutation lock                                                                                         |
 | P8  | A child whose agent commits its own work never lands or merges                                                                                                                                               | Fixed; managed settlement accepts forward commits on the recorded branch                                                                      |
-| P9  | The merge step has no way to learn each lane's branch                                                                                                                                                        | D12 result summary                                                                                                                            |
+| P9  | The merge step has no way to learn each lane's branch                                                                                                                                                        | D12: the step's output carries the branch metadata; `$summary:step:a-b` reads every lane at a bounded size                                    |
 | P10 | Several children inheriting one exclusive worktree root would conflict on their leases                                                                                                                       | D4d sibling-delegation rule                                                                                                                   |
 
 ### Group preflight for sub-workflow members
@@ -832,11 +1006,24 @@ renders:
   (`utils/runNavigation.ts:111`). One run-address link covers both a live child and a finished
   one, so no separate "View live output" and "View run" states are needed.
 
-The step's output area (`layout/OutputSection.tsx`) renders the D12 result summary: outcome,
-branch, and merge result, with the child's final response collapsed. It does not mirror the
-child's full output; that lives in the child's own view. Inside a `ParallelGroupPanel`, members
+The step's output area (`layout/OutputSection.tsx`) renders the D12a metadata: outcome, branch,
+and merge result. It does not mirror the child's step output; that lives in the child's own view
+behind "Open run →". (Prompts in the parent that reference the step still receive the child's
+output, per D12.) Inside a `ParallelGroupPanel`, members
 are ordinary `WorkflowStepRow`s, so each lane gets this variant with no panel change. The
-existing per-member output filter chips (`utils/outputRows.ts:179-209`) filter the summaries.
+existing per-member output filter chips (`utils/outputRows.ts:179-209`) filter those metadata blocks.
+
+### Prior-context controls
+
+- The prior-context select (`components/shared/PriorContextSelect.tsx`, used by
+  `PropertiesDrawer.tsx`) gains a **Full / Summary** toggle bound to `priorContextDetail`.
+- The prior-context preview and `useAttachmentTokenCount` go through the same resolver and
+  renderer as live injection, so they reflect the detail level and the nested workflow output
+  with no separate code path.
+- Inline-token decoration (`utils/atomicReferences.ts`, `CodeMirrorEditor.tsx`,
+  `output/MarkdownText.tsx`) uses the shared pattern, so `$summary:…` chips appear once
+  `ReferencePatterns.ts` changes. Verify each consumer reads capture 1 through
+  `parseInlinePriorContextBody` and does not re-parse it.
 
 ### Child run
 
@@ -877,7 +1064,11 @@ step previews as a single "Runs _<file>_" entry. The preview does not expand chi
     Phase 0.
 - **MCP server (`src/mcp-server.ts`):** no new tool. Existing append tools validate against
   `workflowStep`, so they accept `type: workflow` once the schema arm exists. Its 7 script
-  branches are covered by Phase 0.
+  branches are covered by Phase 0. `read_output` and `workflow_status` gain the optional
+  descendant-only `run` argument (D12c); the tool descriptions in `McpToolDefinitions.ts`
+  mention it.
+- **`ctrlyoke history show`:** no change; it already reads any run, including child runs
+  (D12c). The authoring guide shows the command next to `$summary:`.
 - **`SCRIPT_GENERATED_STEPS_PLAN.md`:** `ctrlyoke step add` gets sub-workflow steps for free,
   for the same reason.
 
@@ -891,12 +1082,19 @@ step previews as a single "Runs _<file>_" entry. The preview does not expand chi
   - map its text-holding key (`workflow`) to a new file-path role (`:52-91`).
 - `WorkflowFileCompletionCore.ts`: key filtering (`:161-203`) gains a `subWorkflowOnly` set from
   `WORKFLOW_SCHEMA_OUTLINE[SUB_WORKFLOW_STEP]`, which `schema:update` generates. Prompt and
-  script keys are suppressed. Exclude sub-workflow steps from session/prior-context candidates
-  (`:470-472`).
+  script keys are suppressed. Exclude sub-workflow steps from session candidates (`:470-472`);
+  they stay prior-context candidates, because D12 gives them output.
 - `WorkflowPropertySnippets.ts`: update the `type` snippet detail (`:31`) to
   `"prompt" | "script" | "workflow"`, and add a sub-workflow step snippet.
 - Path completion for the `workflow` value: reuse the existing prompt-file-path completion,
   filtered to workflow file extensions.
+- `PriorContextCompletions.ts`: offer `$summary:` with each existing selector after it, with the
+  detail "deterministic excerpt: head of prompt, tail of output; no AI call".
+  `PromptDiagnosticRules.ts`/`WorkflowPromptDiagnostics.ts` validate the `$summary:` body like
+  the bare one. Add `priorContextDetail` value completion.
+- Docs: the `ctrlyoke-syntax` skill table (`src/templates/skills/ctrlyoke-syntax/SKILL.md:45-48`)
+  and the tech-support agent gain the `$summary:` row and the workflow-step meaning of
+  `$previous`.
 
 ---
 
@@ -943,7 +1141,7 @@ finalStep:
 | Child has no `worktree` key                           | Runs in the parent's execution root via a delegated lease (D4a/D4d)                                                                           |
 | Child has `worktree: false` / managed / named         | Honoured as authored. Worktrees branch from, and merge into, the parent's checkout (D4b)                                                      |
 | Parent checkout dirty when a worktree child starts    | Managed parent: checkpoint commit. Main/named parent: start failure → `onFail` (D4c)                                                          |
-| Child `merge: true` conflicts or is blocked           | Step COMPLETED with warning; reported in the result summary for the next step (D4e/D12)                                                       |
+| Child `merge: true` conflicts or is blocked           | Step COMPLETED with warning; recorded in the step's metadata for later steps (D4e/D12a)                                                       |
 | Child names the same named worktree the parent holds  | Delegated lease applies only to inheritance; an explicit conflicting worktree raises `ExecutionLeaseConflictError` → start failure → `onFail` |
 | Child has its own `finalStep`                         | Runs as part of the child run                                                                                                                 |
 | Two parallel members target the same named worktree   | `WORKTREE_COLLISION` preflight issue                                                                                                          |
@@ -954,6 +1152,11 @@ finalStep:
 | `worktree` key on a sub-workflow step                 | Schema error (the existing `workflowStep` wrapper rule)                                                                                       |
 | `{{var}}` in the `workflow` path                      | Not substituted in v1 (D11)                                                                                                                   |
 | Host without `subWorkflowHost`                        | Step fails with "not supported in this host"                                                                                                  |
+| Root file is only a workflow step                     | Valid one-step queue; append more workflows while it runs (D8)                                                                                |
+| `$previous` after a workflow step                     | Metadata plus every child step's full output, recursively (D12a)                                                                              |
+| `$summary:` over a very long child                    | 24 KB budget; earliest child steps elided to status lines, the last always kept (D12b)                                                        |
+| Child run history deleted before a later reference    | Metadata with `<childRunUnavailable/>`; not an error                                                                                          |
+| Same step selected at both detail levels              | Full wins                                                                                                                                     |
 
 ---
 
@@ -973,7 +1176,13 @@ finalStep:
 | `src/core/orchestration/ExecutionRootLeaseManager.ts`                                                                                    | `delegationChain` on requests and leases; ancestor and sibling compatibility (D4d)                                                                                |
 | `src/core/orchestration/WorktreeManager.ts`, `src/core/WorkflowInstance.ts` (`:4364-4411`)                                               | Source-checkout override (D4b), worktrees root from the main checkout, checkpoint commit (D4c), delegated merge lease (D4d), plus the two prerequisite bugs       |
 | `src/core/ParallelGroupRun.ts`, `src/core/ParallelGroupPreflight.ts`, `DashboardConstants.ts` (preflight codes)                          | Sub-workflow preflight branch, `WORKTREE_COLLISION` / `MERGE_INTO_SHARED_ROOT`, once-per-group dirty check, user-cancelled lane → stop at join                    |
-| `src/core/orchestration/RunOutputResolver.ts` (verify only)                                                                              | Confirm the D12 summary is picked up as step output; it should need no change                                                                                     |
+| `src/core/orchestration/RunOutputResolver.ts`                                                                                            | Workflow item arm (child run via `resolveAllPriorContextItems`), script verdict, per-index detail in `mergePriorContextReferences`                                |
+| `src/core/HarnessIntegration.ts`, `src/utils/PriorContextPreviewBuilder.ts`                                                              | `PriorContextItem.scriptVerdict`/`subWorkflow`, nested and verdict XML, `summarizePriorContextItems`                                                              |
+| `src/utils/ReferencePatterns.ts`, `src/utils/FileReferenceParser.ts`, `src/core/StepReferenceRenumbering.ts`                             | `$summary:` prefix, `detail` on parsed references, renumbering inside the prefix                                                                                  |
+| `src/completions/PriorContextCompletions.ts`, `src/utils/PromptDiagnosticRules.ts`, `src/completions/WorkflowPromptDiagnostics.ts`       | `$summary:` completions and diagnostics, `priorContextDetail` values                                                                                              |
+| `src/mcp-server.ts`, `src/utils/McpToolDefinitions.ts`                                                                                   | Descendant-only `run` argument on `read_output` and `workflow_status` (D12c)                                                                                      |
+| `src/ui/webview-react/components/shared/PriorContextSelect.tsx`, `PropertiesDrawer.tsx`                                                  | Full / Summary toggle                                                                                                                                             |
+| `src/templates/skills/ctrlyoke-syntax/SKILL.md`, `src/templates/agents/ctrlyoke-tech-support.agent.md`                                   | `$summary:` and workflow-step `$previous` documentation                                                                                                           |
 | Run manifest writer (where `manifest.json` is built)                                                                                     | `parentRun` (D7)                                                                                                                                                  |
 | `src/core/WorkflowOrchestrator.ts`, `WorkflowInstanceRegistry.ts`                                                                        | Launcher factory via `createExternalWorkflowInstance`; `appendFromFileForClient` `appendMode` routing                                                             |
 | `src/ui/WebviewMessageRouter.ts`                                                                                                         | `APPEND_FILE` handler passes `appendMode`                                                                                                                         |
@@ -991,8 +1200,21 @@ finalStep:
 
 ## Tests
 
-- **Schema:** valid in `steps`, `finalStep`, and `parallel`; rejected at the single-step root and
-  with `worktree` or unknown keys.
+- **Schema:** valid in `steps`, `finalStep`, `parallel`, and at the single-step root (with a
+  root `worktree` applying to the parent); rejected with a step-level `worktree` or unknown keys.
+  `priorContextDetail` accepts only `full`/`summary`.
+- **Prior context (D12):**
+  - `$previous` after a workflow step yields the metadata plus every child step, recursively
+    for a three-level chain; `$previous:2` counts parent-level steps;
+  - script items carry the verdict in both forms;
+  - summary caps: authored-prompt head, output tail, line-boundary cuts, `omittedBytes`;
+  - workflow budget: earliest steps elided first, last kept, nested budget shared;
+  - deleted child history renders `<childRunUnavailable/>`;
+  - full wins when one step is selected at both levels;
+  - `$summary:step:…` renumbers with step moves; the sibling-reference parser check applies;
+  - the editor preview matches live injection for both detail levels.
+- **`read_output` / `workflow_status` (D12c):** a child and a grandchild run are readable through
+  `run`, with paging unchanged; a sibling's or unrelated run is rejected with the scope message.
 - **Parser:** normalization of the `finalStep` and parallel-member arms; missing-file
   validation; `userInput` still rejected in groups.
 - **Parallel (fake host):**
@@ -1001,7 +1223,7 @@ finalStep:
   - a user-stopped lane lets its siblings finish, then stops the parent, and resume reattaches it;
   - each new preflight code;
   - the once-per-group dirty check;
-  - the summaries of all lanes resolve through `$step:a-b`.
+  - every lane's metadata resolves through `$step:a-b` and `$summary:step:a-b`.
 - **Worktrees (real git, temp repos):**
   - a managed child of a worktree parent branches from the parent's `HEAD` and merges into the
     parent's branch;
@@ -1036,8 +1258,8 @@ finalStep:
 ## Not In Scope (v1)
 
 - **Variable passthrough** from parent to child (D11).
-- **Full output piping** of a child's complete output into the parent. Only the D12 result
-  summary, including the child's final response, is exposed.
+- **AI-generated summaries.** `$summary:` is a deterministic excerpt (D12b).
+- **Configurable summary caps.** Fixed constants in v1 (D12b).
 - **Automatic merging at the join.** Merge-back is the child's own `merge: true` or an authored
   merge step. ctrlyoke does not add an implicit "merge all lanes" phase.
 - **A global concurrency cap** across nested fan-outs (see Parallel, Width).
@@ -1061,7 +1283,8 @@ finalStep:
 | Stop/pause forwarding (D2/D3)                                                                                  | 1     |
 | Prerequisite bugs: setup outside the mutation lock; agent-commit landing                                       | 1–1.5 |
 | Worktree rules D4a–e: source-checkout override, dirty check, lease chains, delegated merge                     | 2–2.5 |
-| D12 result summary as step output                                                                              | 0.5–1 |
+| D12: workflow output via the child run, script verdict, `$summary:` grammar and renderer, `priorContextDetail` | 2–2.5 |
+| D12c: descendant-only `run` argument on `read_output`/`workflow_status`                                        | 0.5   |
 | Parallel: member acceptance, preflight branch and codes, user-cancelled lane at join, ad-hoc "alongside" entry | 2     |
 | Resume reattach (D6) + manifest parent link (D7)                                                               | 1     |
 | Queue-after-running: `appendMode` plumbing + entry points                                                      | 1     |
@@ -1069,16 +1292,19 @@ finalStep:
 | CLI integration + completions                                                                                  | 1     |
 | Tests (including real-git worktree fan-out tests)                                                              | 3–4   |
 
-**Total: about 20–23 days.** That is up from 13–15 for the sequential-only version: parallel
+**Total: about 23–26 days.** That is up from 13–15 for the sequential-only version: parallel
 members, the worktree rules that make fan-out and merge-back correct, the two prerequisite
-worktree bugs, and the result summary the merge step needs.
+worktree bugs, and D12's consistent step references plus `$summary:`. The two prerequisite bugs
+have since been fixed (`87c4065e4`, `1f4a87c1e`), so about 1–1.5 of those days are spent.
 
 **Suggested landing order** (each step after Phase 0 ships on its own):
 
 1. **Phase 0**, plus the **two prerequisite worktree bugs**. These are independent of each
    other and fix real problems today, so they can run in parallel worktrees.
 2. **Sequential core:** schema, types, parser, executor arm, launcher, stop/pause, cycle
-   detection, D12 summary. Usable from authored YAML.
+   detection, root workflow step, D12a metadata and full output. Usable from authored YAML.
+   `$summary:` (D12b) can land in this step or right after it; it is independent of the
+   worktree work.
 3. **Worktree rules D4a–e.** Lease chains, source-checkout override, dirty check, delegated
    merge.
 4. **Parallel members:** preflight, join semantics, recovery. This is the staging-plan pattern
