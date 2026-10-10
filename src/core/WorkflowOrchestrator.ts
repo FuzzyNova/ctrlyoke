@@ -111,6 +111,7 @@ import type { WorkspaceStatsSnapshot } from "../types/UsageTypes";
 import {
   getPtyProcessManager,
   ptyPostMessage,
+  setPtyPostMessage,
 } from "./harness/PtyProcessManager";
 
 // Orchestration classes that remain at orchestrator level
@@ -1144,6 +1145,28 @@ export class WorkflowOrchestrator {
     this.dashboardBroadcastHub.postMessage({
       type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
       workflows: this.getActiveTerminalWorkflowRefs(),
+    });
+  }
+
+  /**
+   * Route every PTY message through the broadcast hub so all clients (panel +
+   * browser tabs) receive TERMINAL_STARTED/OUTPUT/ENDED in real time. Each host
+   * calls this once the PTY manager and this orchestrator both exist.
+   *
+   * This is also the single chokepoint for every PTY lifecycle message, so it
+   * keeps the global active-terminal set in sync: whenever a session starts or
+   * ends it re-broadcasts which workflows have running terminals.
+   */
+  routePtyMessagesToDashboard(): void {
+    setPtyPostMessage((msg) => {
+      this.dashboardBroadcastHub.postMessage(msg);
+      const msgType = (msg as { type?: string } | null)?.type;
+      if (
+        msgType === MESSAGE_TYPES.TERMINAL_STARTED ||
+        msgType === MESSAGE_TYPES.TERMINAL_ENDED
+      ) {
+        this.broadcastActiveTerminalWorkflows();
+      }
     });
   }
 

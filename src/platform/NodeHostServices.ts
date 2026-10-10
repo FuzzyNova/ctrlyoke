@@ -35,6 +35,10 @@ import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import { DashboardApplication } from "../ui/DashboardApplication";
 import { TemplateManager } from "../core/TemplateManager";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import {
+  createPtyDimensionsPersistence,
+  initPtyProcessManager,
+} from "../core/harness/PtyProcessManager";
 import { CtrlYokeHostedServer } from "../server/CtrlYokeHostedServer";
 import { createHostedServerOptions } from "../server/HostedServerOptionsFactory";
 import { LanguageIntelligenceHost } from "../server/lsp/LanguageIntelligenceHost";
@@ -245,6 +249,13 @@ export async function createNodeHostedServer(options: {
     getDevStatus: async () => undefined,
     notifyActiveWorkflowChanged: () => undefined,
   });
+  // The server's CliAdapter selects the embedded-PTY terminal mode, so
+  // interactive steps need this manager exactly as they do in VS Code.
+  const ptyManager = initPtyProcessManager(
+    (message) => hub.postMessage(message),
+    createPtyDimensionsPersistence(services.workspaceState)
+  );
+  services.disposableRegistry.add(ptyManager);
   let orchestrator!: WorkflowOrchestrator;
   orchestrator = new WorkflowOrchestrator({
     platform: services.platform,
@@ -265,6 +276,7 @@ export async function createNodeHostedServer(options: {
   });
   hub = orchestrator.getDashboardBroadcastHub();
   services.setDashboardHub(hub);
+  orchestrator.routePtyMessagesToDashboard();
   dashboardApplication.setWorkflowOrchestrator(orchestrator);
   dashboardApplication.setHub(hub);
   orchestrator.getDashboardBroadcastHub().addClient(dashboardApplication);
@@ -386,7 +398,12 @@ export async function createNodeHostedServer(options: {
     dispose: async () => {
       server?.dispose();
       dashboardApplication.dispose();
-      await orchestrator.shutdown();
+      // Concurrent, as in the extension's deactivate(): Ctrl+C every AI CLI
+      // session while the workflow instances flush their durable state.
+      await Promise.all([
+        ptyManager.gracefulShutdownAllAiCliSessions(),
+        orchestrator.shutdown(),
+      ]);
       orchestrator.dispose();
       services.dispose();
       unprotectToken();

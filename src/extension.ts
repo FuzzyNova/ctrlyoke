@@ -90,8 +90,8 @@ import {
   MemoryWatchdog,
 } from "./utils/MemoryWatchdog";
 import {
+  createPtyDimensionsPersistence,
   initPtyProcessManager,
-  setPtyPostMessage,
   getPtyProcessManager,
 } from "./core/harness/PtyProcessManager";
 import { configService } from "./config/CtrlYokeConfigService";
@@ -530,17 +530,11 @@ export async function activate(context: vscode.ExtensionContext) {
     // The globalState-backed persistence seeds the cold-start fallback size so new
     // PTYs spawn near the real xterm width (instead of the 220-col default) even on
     // the first run after a restart — see PtyProcessManager.clientSpawnDimensions.
-    const TERMINAL_SPAWN_DIMENSIONS_KEY = "ctrlyoke.terminalSpawnDimensions";
     const ptyManager = initPtyProcessManager(
       (msg) => webviewProvider.postMessagePublic(msg),
-      {
-        loadDimensions: () =>
-          context.globalState.get<{ cols: number; rows: number }>(
-            TERMINAL_SPAWN_DIMENSIONS_KEY
-          ),
-        saveDimensions: (dims) =>
-          void context.globalState.update(TERMINAL_SPAWN_DIMENSIONS_KEY, dims),
-      }
+      createPtyDimensionsPersistence(
+        new VsCodeKeyValueStore(context.globalState)
+      )
     );
     context.subscriptions.push(ptyManager);
     Log.debug("[Extension] ctrlyoke: PTY process manager initialized");
@@ -586,26 +580,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Give the provider the hub so config-change broadcasts reach browser tabs too
     webviewProvider.setHub(workflowOrchestrator.getDashboardBroadcastHub());
 
-    // Upgrade PTY postMessage to broadcast terminal messages to all connected clients
-    // (panel + browser tabs). initPtyProcessManager only had the panel reference; now
-    // that the hub exists we redirect through it so browser tabs receive TERMINAL_STARTED,
-    // TERMINAL_OUTPUT, and TERMINAL_ENDED in real-time.
-    //
-    // This is also the single chokepoint for every PTY lifecycle message, so we use
-    // it to keep the global active-terminal set in sync: whenever a session starts or
-    // ends we re-broadcast which workflows have running terminals. That drives the
-    // dropdown terminal icon for all workflows on every client, not just the one each
-    // client happens to be viewing.
-    setPtyPostMessage((msg) => {
-      workflowOrchestrator.getDashboardBroadcastHub().postMessage(msg);
-      const msgType = (msg as { type?: string } | null)?.type;
-      if (
-        msgType === MESSAGE_TYPES.TERMINAL_STARTED ||
-        msgType === MESSAGE_TYPES.TERMINAL_ENDED
-      ) {
-        workflowOrchestrator.broadcastActiveTerminalWorkflows();
-      }
-    });
+    // initPtyProcessManager only had the panel reference; now that the hub
+    // exists, broadcast terminal messages to browser tabs as well.
+    workflowOrchestrator.routePtyMessagesToDashboard();
 
     // Register notification manager as a dashboard client so it observes
     // workflow state transitions and fires VS Code toasts as configured.

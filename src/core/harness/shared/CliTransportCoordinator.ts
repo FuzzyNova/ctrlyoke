@@ -210,125 +210,130 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       cliCommand: command.displayCommand,
     });
 
-    const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
-    if (ptyManager) {
-      const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
-      const workflowId =
-        workflowContext?.instanceId ??
-        workflowContext?.filePath ??
-        this.deps.runtimeState.getWorkflowName?.() ??
-        "unknown";
-      const stepMetadata = this.getWorkflowStepMetadata(workflowContext) ?? {
-        stepName: EXECUTION_MODES.INTERACTIVE,
-        stepIndex: -1,
-        promptNumber: undefined,
-        parallelGroupId: undefined,
-      };
-      const { stepName, stepIndex, promptNumber, parallelGroupId } =
-        stepMetadata;
-      const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
-      // Provider-level interactive env (e.g. Copilot's OTel export path override,
-      // see CopilotCliProvider.getInteractiveSpawnEnv()) must be merged in here too —
-      // this is the VS Code PTY spawn path, a separate call site from
-      // executeStandaloneInteractiveProcess() above, which already does this.
-      const providerEnv = this.deps.provider.getInteractiveSpawnEnv?.();
-      const secretEnv = await this.resolveSecretEnvironment(
-        workflowContext?.resolvedProperties?.secrets ?? []
+    const ptyManager = this.resolvePtyManager();
+    if (!ptyManager) {
+      // Returning here would leave the step waiting forever on a harness that
+      // was never launched, so fail it with a reason instead.
+      throw new CliTransportError(
+        "Embedded terminal is unavailable: this host never initialized the PTY process manager, so the interactive harness could not be started.",
+        FAILURE_KINDS.HARNESS_ERROR
       );
-      const mergedEnv = {
-        ...CliProviderUtils.buildProcessEnv(),
-        ...providerEnv,
-        ...env,
-        ...secretEnv,
-      };
-      const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const harnessId = this.deps.provider.config.harnessId;
-      // Peek at the expected controller before spawning so TERMINAL_STARTED carries
-      // controllerClientId from the outset. Without this, all observers see undefined
-      // and race to claim control, so a random client wins instead of the one that
-      // actually triggered the run.
-      const controllerClientId = ptyManager.getExpectedController(workflowId);
+    }
+    const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
+    const workflowId =
+      workflowContext?.instanceId ??
+      workflowContext?.filePath ??
+      this.deps.runtimeState.getWorkflowName?.() ??
+      "unknown";
+    const stepMetadata = this.getWorkflowStepMetadata(workflowContext) ?? {
+      stepName: EXECUTION_MODES.INTERACTIVE,
+      stepIndex: -1,
+      promptNumber: undefined,
+      parallelGroupId: undefined,
+    };
+    const { stepName, stepIndex, promptNumber, parallelGroupId } = stepMetadata;
+    const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
+    // Provider-level interactive env (e.g. Copilot's OTel export path override,
+    // see CopilotCliProvider.getInteractiveSpawnEnv()) must be merged in here too —
+    // this is the VS Code PTY spawn path, a separate call site from
+    // executeStandaloneInteractiveProcess() above, which already does this.
+    const providerEnv = this.deps.provider.getInteractiveSpawnEnv?.();
+    const secretEnv = await this.resolveSecretEnvironment(
+      workflowContext?.resolvedProperties?.secrets ?? []
+    );
+    const mergedEnv = {
+      ...CliProviderUtils.buildProcessEnv(),
+      ...providerEnv,
+      ...env,
+      ...secretEnv,
+    };
+    const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const harnessId = this.deps.provider.config.harnessId;
+    // Peek at the expected controller before spawning so TERMINAL_STARTED carries
+    // controllerClientId from the outset. Without this, all observers see undefined
+    // and race to claim control, so a random client wins instead of the one that
+    // actually triggered the run.
+    const controllerClientId = ptyManager.getExpectedController(workflowId);
 
-      const terminalStartedMessage: TerminalStartedMessage = {
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
+    const terminalStartedMessage: TerminalStartedMessage = {
+      type: MESSAGE_TYPES.TERMINAL_STARTED,
+      workflowId,
+      sessionId: preSessionId,
+      stepName,
+      stepIndex,
+      kind: SESSION_KINDS.AI_CLI,
+      promptNumber,
+      harnessId,
+      parallelGroupId,
+      controllerClientId,
+    };
+    postMessage(terminalStartedMessage);
+
+    let session: PtySession;
+    try {
+      session = await ptyManager.spawnPty({
         workflowId,
-        sessionId: preSessionId,
         stepName,
         stepIndex,
         kind: SESSION_KINDS.AI_CLI,
         promptNumber,
         harnessId,
         parallelGroupId,
-        controllerClientId,
-      };
-      postMessage(terminalStartedMessage);
-
-      let session: PtySession;
-      try {
-        session = await ptyManager.spawnPty({
-          workflowId,
-          stepName,
-          stepIndex,
-          kind: SESSION_KINDS.AI_CLI,
-          promptNumber,
-          harnessId,
-          parallelGroupId,
-          sessionId: preSessionId,
-          command: command.command,
-          args: toPtySpawnArgs(
-            command.args,
-            command.requiresShellVerbatimArgs ?? false
-          ),
-          cwd,
-          env: mergedEnv,
-          streamingSecretRedaction: true,
-          onData: (ptySession, chunk) => {
-            postMessage({
-              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-              workflowId: ptySession.workflowId,
-              sessionId: ptySession.id,
-              data: chunk,
-            });
-          },
-          onExit: (ptySession, exitCode) => {
-            postMessage(buildTerminalEndedMessage(ptySession, exitCode));
-            if (this.currentPtySession === ptySession) {
-              this.currentPtySession = undefined;
-            }
-            this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
-          },
-        });
-      } catch (error) {
-        const message = getErrorMessage(error);
-        Log.warn(
-          `[CliTransportCoordinator] Failed to start embedded terminal: ${message}`
-        );
-        postMessage({
-          type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-          workflowId,
-          sessionId: preSessionId,
-          data: `${message}\r\n`,
-        });
-        postMessage(
-          buildTerminalEndedMessage(
-            {
-              workflowId,
-              id: preSessionId,
-              kind: SESSION_KINDS.AI_CLI,
-              status: TERMINAL_SESSION_STATUS.FAILED,
-            },
-            1
-          )
-        );
-        throw error;
-      }
-
-      this.lastPtySessionId = session.id;
-      this.currentPtySession = session;
-      Log.info(
-        `[CliTransportCoordinator] PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
+        sessionId: preSessionId,
+        command: command.command,
+        args: toPtySpawnArgs(
+          command.args,
+          command.requiresShellVerbatimArgs ?? false
+        ),
+        cwd,
+        env: mergedEnv,
+        streamingSecretRedaction: true,
+        onData: (ptySession, chunk) => {
+          postMessage({
+            type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+            workflowId: ptySession.workflowId,
+            sessionId: ptySession.id,
+            data: chunk,
+          });
+        },
+        onExit: (ptySession, exitCode) => {
+          postMessage(buildTerminalEndedMessage(ptySession, exitCode));
+          if (this.currentPtySession === ptySession) {
+            this.currentPtySession = undefined;
+          }
+          this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
+        },
+      });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      Log.warn(
+        `[CliTransportCoordinator] Failed to start embedded terminal: ${message}`
       );
+      postMessage({
+        type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+        workflowId,
+        sessionId: preSessionId,
+        data: `${message}\r\n`,
+      });
+      postMessage(
+        buildTerminalEndedMessage(
+          {
+            workflowId,
+            id: preSessionId,
+            kind: SESSION_KINDS.AI_CLI,
+            status: TERMINAL_SESSION_STATUS.FAILED,
+          },
+          1
+        )
+      );
+      throw error;
     }
+
+    this.lastPtySessionId = session.id;
+    this.currentPtySession = session;
+    Log.info(
+      `[CliTransportCoordinator] PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
+    );
   }
 
   /**
@@ -562,7 +567,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     if (!this.currentPtySession) {
       return false;
     }
-    const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+    const ptyManager = this.resolvePtyManager();
     if (!ptyManager) {
       return false;
     }
@@ -606,7 +611,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     Log.info(
       `[CliTransportCoordinator] Terminating PTY session ${sessionId.slice(0, 8)} before ${reason}`
     );
-    const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+    const ptyManager = this.resolvePtyManager();
     if (ptyManager) {
       await ptyManager.gracefulKillAiCliSession(
         sessionId,
@@ -630,7 +635,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     const sessionId = this.currentPtySession.id;
     const ptySession = this.currentPtySession;
     this.currentPtySession = undefined; // clear immediately so inject mode won't see a stale session
-    const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+    const ptyManager = this.resolvePtyManager();
     // Fire-and-forget: send Ctrl+C and schedule the kill — callers are sync so we can't await here.
     if (ptyManager) {
       void ptyManager.gracefulKillAiCliSession(sessionId, reason);
@@ -651,7 +656,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     this.activeHeadlessLogTail?.abort();
 
     if (this.currentPtySession) {
-      const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+      const ptyManager = this.resolvePtyManager();
       if (ptyManager) {
         ptyManager.killSession(
           this.currentPtySession.id,
@@ -728,6 +733,16 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     names: readonly string[] | undefined
   ): Promise<Record<string, string>> {
     return (await this.deps.resolveSecretEnvironment?.(names ?? [])) ?? {};
+  }
+
+  /**
+   * An injected getter is authoritative, including when it returns null, so a
+   * host (or test) can state that it has no embedded terminal support.
+   */
+  private resolvePtyManager(): PtyProcessManager | null {
+    return this.deps.getPtyManager
+      ? this.deps.getPtyManager()
+      : getPtyProcessManager();
   }
 
   private getWorkflowStepMetadata(workflowContext?: WorkflowContext):

@@ -19,6 +19,10 @@ import {
   RUNNER_IDS,
 } from "../../types/DashboardConstants";
 import { setRuntimeMode } from "../../utils/RuntimeMode";
+import {
+  getPtyProcessManager,
+  ptyPostMessage,
+} from "../../core/harness/PtyProcessManager";
 
 type ReceivedMessage = Record<string, unknown>;
 
@@ -242,6 +246,41 @@ suite("Node hosted server composition", function () {
     );
     socket.send(JSON.stringify({ type: MESSAGE_TYPES.READY }));
     await startupComplete;
+  });
+
+  test("initializes the PTY manager and broadcasts terminal messages to browser tabs", async () => {
+    assert.ok(runtime);
+    // The server selects the embedded-PTY terminal mode, but only extension.ts
+    // ever created the manager, so interactive steps silently never launched.
+    const ptyManager = getPtyProcessManager();
+    assert.ok(
+      ptyManager,
+      "createNodeHostedServer must initialize the PTY manager"
+    );
+
+    const socket = await openSocket(runtime.url, "terminal-client");
+    sockets.push(socket);
+    const terminalStarted = waitForMessage(
+      socket,
+      (message) =>
+        message.type === MESSAGE_TYPES.TERMINAL_STARTED &&
+        message.sessionId === "pty-broadcast-session"
+    );
+    const activeTerminals = waitForMessage(
+      socket,
+      (message) => message.type === MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS
+    );
+    ptyPostMessage({
+      type: MESSAGE_TYPES.TERMINAL_STARTED,
+      workflowId: "pty-broadcast-workflow",
+      sessionId: "pty-broadcast-session",
+    });
+    await terminalStarted;
+    await activeTerminals;
+
+    await runtime.dispose();
+    runtime = undefined;
+    assert.strictEqual(getPtyProcessManager(), null);
   });
 
   test("delivers discovered model lists to browser tabs without a VS Code panel", async () => {

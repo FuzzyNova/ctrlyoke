@@ -23,6 +23,7 @@ import {
   type TerminalSessionStatus,
 } from "../../types/DashboardConstants";
 import type { TerminalEndedMessage } from "../../types/WebviewMessageTypes";
+import type { KeyValueStore } from "../HostPorts";
 
 type NodePtyModule = typeof import("node-pty");
 const NODE_PTY_UNAVAILABLE_MESSAGE =
@@ -266,6 +267,20 @@ export type { SessionKind, ShellKind };
 export interface PtyDimensionsPersistence {
   loadDimensions(): { cols: number; rows: number } | undefined;
   saveDimensions(dims: { cols: number; rows: number }): void;
+}
+
+const TERMINAL_SPAWN_DIMENSIONS_KEY = "ctrlyoke.terminalSpawnDimensions";
+
+/** Back the remembered terminal spawn size with a host key-value store. */
+export function createPtyDimensionsPersistence(
+  store: KeyValueStore
+): PtyDimensionsPersistence {
+  return {
+    loadDimensions: () =>
+      store.get<{ cols: number; rows: number }>(TERMINAL_SPAWN_DIMENSIONS_KEY),
+    saveDimensions: (dims) =>
+      void store.update(TERMINAL_SPAWN_DIMENSIONS_KEY, dims),
+  };
 }
 
 const DEFAULT_COLS = 220;
@@ -980,9 +995,15 @@ export class PtyProcessManager {
   }
 
   /**
-   * Implements vscode.Disposable. Kills all PTY processes on extension deactivation.
+   * Implements vscode.Disposable. Kills all PTY processes when the host shuts
+   * down, and unregisters this manager if it is the module singleton so no
+   * caller reaches a disposed manager through `getPtyProcessManager()`.
    */
   dispose(): void {
+    if (_instance === this) {
+      _instance = null;
+      _postMessage = null;
+    }
     for (const session of this.sessions.values()) {
       session.markEnding(TERMINAL_END_REASONS.CLOSED);
       this.streamingFlushes.get(session.id)?.();
@@ -1000,14 +1021,15 @@ export class PtyProcessManager {
 }
 
 // ============================================================================
-// Module-level singleton (initialized by extension.ts)
+// Module-level singleton (initialized by each dashboard host: extension.ts and
+// the standalone server in NodeHostServices.ts)
 // ============================================================================
 
 let _instance: PtyProcessManager | null = null;
 let _postMessage: ((msg: unknown) => void) | null = null;
 
 /**
- * Initialize the singleton PtyProcessManager. Called once from extension.ts.
+ * Initialize the singleton PtyProcessManager. Called once per dashboard host.
  * @param postMessage Function to post messages to the webview
  * @param dimensionsPersistence Optional backend (extension globalState) for
  *   persisting the last controller viewport size across sessions so the harness
@@ -1041,9 +1063,8 @@ export function ptyPostMessage(msg: unknown): void {
 
 /**
  * Update the PTY postMessage callback without recreating the singleton.
- * Called from extension.ts after the DashboardBroadcastHub is available so
- * terminal messages are broadcast to all connected clients (panel + browser tabs)
- * instead of only the VS Code panel webview.
+ * `WorkflowOrchestrator.routePtyMessagesToDashboard()` calls this once the
+ * DashboardBroadcastHub exists so terminal messages reach every connected client.
  */
 export function setPtyPostMessage(postMessage: (msg: unknown) => void): void {
   _postMessage = postMessage;

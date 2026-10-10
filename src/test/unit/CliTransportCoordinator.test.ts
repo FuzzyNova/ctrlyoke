@@ -266,6 +266,34 @@ suite("CliTransportCoordinator", () => {
     );
   });
 
+  test("fails an interactive start when the host has no PTY manager", async () => {
+    const postedMessages: unknown[] = [];
+    const coordinator = new CliTransportCoordinator({
+      provider: createHeadlessProvider(),
+      processManager: {} as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+      postTerminalMessage: (message: unknown) => postedMessages.push(message),
+      getPtyManager: () => null,
+    });
+
+    // Returning normally left the step waiting on a harness that never started.
+    await assert.rejects(
+      coordinator.startInteractiveProcess([], "prompt"),
+      (error: unknown) => {
+        assert.ok(error instanceof CliTransportError);
+        assert.strictEqual(error.failureKind, FAILURE_KINDS.HARNESS_ERROR);
+        assert.match(error.message, /Embedded terminal is unavailable/);
+        return true;
+      }
+    );
+    assert.deepStrictEqual(postedMessages, []);
+  });
+
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
       { promptArgument: string; cliCommand: string } | undefined;

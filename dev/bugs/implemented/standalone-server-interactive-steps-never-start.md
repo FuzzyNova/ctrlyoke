@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by backlog audit (static reading; not yet reproduced with a live harness)
 - **Area:** `src/platform/NodeHostServices.ts`, `src/core/harness/shared/CliTransportCoordinator.ts`, `src/core/harness/PtyProcessManager.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
