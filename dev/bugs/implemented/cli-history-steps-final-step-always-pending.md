@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with the built CLI on a script-only workflow)
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (final-step row of `history steps`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

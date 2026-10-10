@@ -45,6 +45,18 @@ export function selectTerminalFailure(
 /** Exit code for CLI usage, parsing, and unexpected errors. */
 export const CLI_USAGE_EXIT_CODE = 2;
 
+/** Report an unexpected CLI error and exit with the documented usage code. */
+export function handleCliError(
+  error: unknown,
+  writeError: (message: string) => void = (message) =>
+    console.error(message),
+  exit: (code: number) => void = (code) => process.exit(code)
+): void {
+  const message = error instanceof Error ? error.message : String(error);
+  writeError(`Error: ${message}`);
+  exit(CLI_USAGE_EXIT_CODE);
+}
+
 /** Determine the CLI process exit code from the final workflow state. */
 export function getExitCode(
   state: Pick<QueueState, "status" | "results">,

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with the built CLI)
 - **Area:** `src/cli.ts` (`program.parse()`), `src/cli/ServerCommand.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

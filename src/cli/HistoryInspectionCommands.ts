@@ -1249,6 +1249,8 @@ export async function stepsHistoryCommand(
         name: definition.finalStep.name?.trim() || null,
         state:
           finalStepState ??
+          definition._runtime?.finalStep?.status ??
+          passes[passes.length - 1]?.state ??
           historyWorkingStepState(definition.finalStep._runtime),
         harness: definition.finalStep._runtime?.harness ?? null,
         model: definition.finalStep._runtime?.model ?? null,
@@ -2074,6 +2076,7 @@ interface RunWorkingDefinition {
   _runtime?: {
     currentIndex?: number;
     executionState?: string;
+    finalStep?: { status?: string };
   };
   steps: Array<{
     name?: string;

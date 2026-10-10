@@ -7,6 +7,7 @@ import {
   resolveServerSettings,
   type ServerSignalSource,
 } from "../../cli/ServerCommand";
+import { handleCliError } from "../../cli/CliExitCode";
 
 const settings = {
   autoStart: false,
@@ -43,6 +44,30 @@ suite("ServerCommand", () => {
         .fallbackPorts.length,
       0
     );
+  });
+
+  test("maps invalid server ports to a clean CLI usage error", () => {
+    let error: unknown;
+    assert.throws(
+      () => resolveServerSettings({ port: "abc" }, "C:/repo", settings),
+      (caught: unknown) => {
+        error = caught;
+        return true;
+      }
+    );
+
+    const messages: string[] = [];
+    const exitCodes: number[] = [];
+    handleCliError(
+      error,
+      (message) => messages.push(message),
+      (code) => exitCodes.push(code)
+    );
+
+    assert.deepStrictEqual(messages, [
+      "Error: --port must be an integer between 0 and 65535.",
+    ]);
+    assert.deepStrictEqual(exitCodes, [2]);
   });
 
   test("formats a plain redirected banner and a TTY hyperlink", () => {
