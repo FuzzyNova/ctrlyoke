@@ -21,11 +21,13 @@ import {
   EXECUTION_STATES,
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
+  GUARDRAIL_STOP_CODES,
   HARNESS_IDS,
   OUTPUT_HISTORY_KINDS,
   PROMPT_TERMINAL_STATUS,
   SNAPSHOT_BASE_SOURCES,
   SNAPSHOT_STRATEGIES,
+  WORKFLOW_RUNTIME_COMMANDS,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
@@ -2069,6 +2071,57 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const manifest = await recorder.readManifest(historyInit.filePath);
     assert.strictEqual(manifest.executionState, EXECUTION_STATES.PAUSED);
     assert.strictEqual(manifest.lastUpdatedAt, 150);
+  });
+
+  test("persists each guardrail stop reason to the run manifest", async () => {
+    const historyInit = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-guardrail-stop-reasons"
+    );
+    const reasons = [
+      {
+        code: GUARDRAIL_STOP_CODES.QUEUE_SIZE_LIMIT,
+        threshold: 10,
+        observed: 11,
+        unit: "steps" as const,
+        message: "Step limit reached",
+      },
+      {
+        code: GUARDRAIL_STOP_CODES.WORKFLOW_TIME_LIMIT,
+        threshold: 120,
+        observed: 121,
+        unit: "seconds" as const,
+        message: "Workflow time limit reached",
+      },
+      {
+        code: GUARDRAIL_STOP_CODES.PROMPT_TIMEOUT,
+        threshold: 30,
+        observed: 31,
+        unit: "seconds" as const,
+        message: "Prompt timed out",
+      },
+    ];
+
+    for (const stopReason of reasons) {
+      await manager.appendRuntimeTransition(historyInit.filePath, {
+        command: WORKFLOW_RUNTIME_COMMANDS.FAIL,
+        previous: {
+          status: EXECUTION_STATES.RUNNING,
+          stopped: false,
+          totalPausedDuration: 0,
+        },
+        current: {
+          status: EXECUTION_STATES.ERROR,
+          stopped: false,
+          totalPausedDuration: 0,
+          stopReason,
+        },
+        timestampMs: 200,
+      });
+      const manifest = await recorder.readManifest(historyInit.filePath);
+      assert.deepStrictEqual(manifest.stopReason, stopReason);
+    }
   });
 
   test("saveExecutionOutput commits a definition revision snapshot only when it advances, and tags output with it", async () => {

@@ -148,13 +148,26 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   the same text. A prompt timeout stays a step failure (`FailureKind.TIMEOUT`)
   but the run-level stop it causes carries the prompt-timeout code.
 
+- **Core contract implemented:** `GUARDRAIL_STOP_CODES` / `GuardrailStopCode`
+  define `queue-size-limit`, `workflow-time-limit`, and `prompt-timeout`.
+  `WorkflowStopReason` has `code`, `threshold`, `observed`, `unit`, and
+  `message`; queue thresholds/observations use `steps`, while both time codes
+  use `seconds`. `WorkflowStateMachine` exposes it as `stopReason` in runtime
+  snapshots/transitions, and `QueueState` projects it to adapters. It is stored
+  in run `workflow.ctrlyoke.json` at `_runtime.stopReason`, in `manifest.json`
+  as `stopReason`, and in the run summary/history metadata. Resume/restart clears
+  the reason; user cancellation and ordinary harness failures leave it absent.
+  The workflow runtime schema and generated references include the optional
+  field. CLI, MCP result, and dashboard rendering remain in later stages.
+
 ### Staging (queued by the orchestrator)
 
 1. ~~Prompt-timeout audit and fixes across transports/harnesses.~~
 2. ~~Workflow-time audit and fixes; `PromptFileParser`/editor validation against
    the effective global `queue.maxSteps`; queue counting consistency.~~
-3. Structured stop-reason contract in core (constants, state machine,
-   persistence, executor call sites, message builder).
+3. ~~Structured stop-reason contract in core (constants, state machine,
+   persistence, executor call sites, message builder).~~ — done; see the
+   contract and persistence fields above.
 4. CLI, MCP, and dry-run surfaces for stop reasons and effective guardrails.
 5. Dashboard and notification surfaces; settings copy; close out the plan and
    release-checklist item.

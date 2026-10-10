@@ -19,6 +19,7 @@ import {
   type ParallelGroupOutcome,
   type ParallelGroupDefinition,
   type ScriptProperties,
+  type WorkflowStopReason,
 } from "../types/CtrlYokeTypes";
 import {
   WorkflowContext,
@@ -84,10 +85,14 @@ import {
   isUnlimited,
 } from "../utils/LimitUtils";
 import {
-  buildStepLimitError,
   getEffectiveMaxStepsSource,
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
+import {
+  buildPromptTimeoutStopReason,
+  buildQueueSizeLimitStopReason,
+  buildWorkflowTimeLimitStopReason,
+} from "../utils/GuardrailStopMessages";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
@@ -476,6 +481,7 @@ function getAttemptStartReason(
 export class WorkflowExecutor {
   private readonly waitingResponseTargets = new Set<string>();
   private readonly targetExecutionErrors = new Map<string, unknown>();
+  private readonly targetRunStopReasons = new Map<string, WorkflowStopReason>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
   private activeParallelGroupRun:
     ParallelGroupRun<WorkflowExecutionContext> | undefined;
@@ -561,6 +567,15 @@ export class WorkflowExecutor {
 
   private getRuntime() {
     return this.promptQueue.getRuntimeStateMachine();
+  }
+
+  private takeTargetRunStopReason(
+    target: ExecutionTarget
+  ): WorkflowStopReason | undefined {
+    const key = getExecutionTargetRunKey(target);
+    const reason = this.targetRunStopReasons.get(key);
+    this.targetRunStopReasons.delete(key);
+    return reason;
   }
 
   /**
@@ -766,7 +781,7 @@ export class WorkflowExecutor {
 
         if (!shouldContinue) {
           if (finalOutcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
-            runtime.fail();
+            runtime.fail(this.takeTargetRunStopReason(finalOutcome.target));
             await this.promptQueue.commitRuntimeTransition();
           } else if (
             finalOutcome.status === PROMPT_TERMINAL_STATUS.CANCELLED &&
@@ -1296,7 +1311,12 @@ export class WorkflowExecutor {
           await this.promptQueue.commitRuntimeTransition();
         }
         if (groupOutcome.terminalFailure && !groupOutcome.stopped) {
-          this.getRuntime().fail();
+          const stopReason = groupOutcome.outcomes
+            .map((outcome) =>
+              this.takeTargetRunStopReason(outcome.target)
+            )
+            .find((reason) => reason !== undefined);
+          this.getRuntime().fail(stopReason);
           await this.promptQueue.commitRuntimeTransition();
         }
       }
@@ -1776,7 +1796,9 @@ export class WorkflowExecutor {
 
     if (outcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
       if (outcome.terminalFailure !== false) {
-        this.getRuntime().fail();
+        this.getRuntime().fail(
+          this.takeTargetRunStopReason(outcome.target)
+        );
         await this.promptQueue.commitRuntimeTransition();
         const targetKey = getExecutionTargetRunKey(outcome.target);
         const executionError = this.targetExecutionErrors.get(targetKey);
@@ -5027,33 +5049,22 @@ export class WorkflowExecutor {
         totalSteps - this.promptQueue.getTerminalCount()
       );
 
-      const message = this.buildWorkflowTimeLimitMessage(
+      const stopReason = buildWorkflowTimeLimitStopReason(
         elapsedSec,
         maxTimeSec,
-        completedCount,
-        totalSteps,
-        remainingCount
+        { completedCount, totalSteps, remainingCount }
       );
+      const message = stopReason.message;
 
       notifyUserFeedback(this.userFeedbackSink, "warning", message);
       Log.trace(`[WorkflowExecutor] ${message}`);
 
-      this.promptQueue.getRuntimeStateMachine().fail();
+      this.promptQueue.getRuntimeStateMachine().fail(stopReason);
       await this.promptQueue.commitRuntimeTransition();
       return true;
     }
 
     return false;
-  }
-
-  private buildWorkflowTimeLimitMessage(
-    elapsedSec: number,
-    maxTimeSec: number,
-    completedCount: number,
-    totalSteps: number,
-    remainingCount: number
-  ): string {
-    return `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalSteps} steps. ${remainingCount} steps remaining in queue.`;
   }
 
   private async checkExecutionTimeLimitBeforeRetry(): Promise<boolean> {
@@ -5074,14 +5085,15 @@ export class WorkflowExecutor {
       return false;
     }
 
-    const message = buildStepLimitError(
+    const stopReason = buildQueueSizeLimitStopReason(
       totalSteps,
       effectiveMaxSteps,
       getEffectiveMaxStepsSource(workflowMaxSteps)
     );
+    const message = stopReason.message;
     notifyUserFeedback(this.userFeedbackSink, "warning", message);
     Log.trace(`[WorkflowExecutor] ${message}`);
-    this.promptQueue.getRuntimeStateMachine().fail();
+    this.promptQueue.getRuntimeStateMachine().fail(stopReason);
     await this.promptQueue.commitRuntimeTransition();
     return true;
   }
@@ -5350,6 +5362,7 @@ export class WorkflowExecutor {
     const failureOutput = integration.getLastFailureOutput?.();
     const attemptTimestampMs =
       this.getPromptPhaseStartedAt(target) ?? Date.now();
+    const failureObservedAtMs = Date.now();
     const statusTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
     const errorBehavior = resolvedProperties?.errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -5486,6 +5499,26 @@ export class WorkflowExecutor {
     );
 
     await persistFailureOutput();
+
+    if (failureKind === FAILURE_KINDS.TIMEOUT) {
+      const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
+      const startedAt = this.getPromptPhaseStartedAt(target);
+      const observedSeconds = startedAt === undefined
+        ? (timeoutMs === undefined ? 0 : Math.ceil(timeoutMs / 1000))
+        : Math.floor(Math.max(0, failureObservedAtMs - startedAt) / 1000);
+      const thresholdSeconds = timeoutMs === undefined
+        ? Math.max(1, observedSeconds)
+        : Math.ceil(timeoutMs / 1000);
+      const stopReason = buildPromptTimeoutStopReason(
+        observedSeconds,
+        thresholdSeconds
+      );
+      this.targetRunStopReasons.set(
+        getExecutionTargetRunKey(target),
+        stopReason
+      );
+      notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
+    }
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       await this.promptQueue.failStep(

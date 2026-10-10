@@ -285,6 +285,33 @@ suite("WorkingFileManager", () => {
     });
   });
 
+  test("persists the structured run stop reason in workflow runtime metadata", async () => {
+    const workingFilePath = tempFile("guardrail-stop-reason");
+    await writeTempJson(workingFilePath, makeMinimalWorkingFile());
+    const stopReason = {
+      code: "workflow-time-limit" as const,
+      threshold: 120,
+      observed: 121,
+      unit: "seconds" as const,
+      message: "Workflow time limit reached",
+    };
+    const access = makeMockAccess(workingFilePath);
+    access.getRuntimeState = () => ({
+      status: EXECUTION_STATES.ERROR,
+      stopped: false,
+      totalPausedDuration: 0,
+      stopReason,
+    });
+    const manager = new WorkingFileManager(access);
+
+    await manager.updateWorkingFile();
+
+    const persisted = JSON.parse(
+      await fs.readFile(workingFilePath, "utf8")
+    ) as WorkingFile;
+    assert.deepStrictEqual(persisted._runtime?.stopReason, stopReason);
+  });
+
   test("persists a finalStep session ID through PromptQueue", async () => {
     const workingFilePath = tempFile("final-step-session");
     const workingFile = makeMinimalWorkingFile();

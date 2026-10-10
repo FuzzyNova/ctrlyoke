@@ -53,10 +53,10 @@ import {
 } from "../utils/ScriptComparison";
 import { exceedsLimit } from "../utils/LimitUtils";
 import {
-  buildStepLimitError,
   getEffectiveMaxStepsSource,
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
+import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
   flattenParallelItems,
@@ -1511,11 +1511,11 @@ export class PromptFileParser {
     if (!exceedsLimit(stepCount, effectiveMaxSteps)) return undefined;
     return {
       code: WORKFLOW_VALIDATION_WARNING_CODES.STEP_LIMIT_EXCEEDED,
-      message: buildStepLimitError(
+      message: buildQueueSizeLimitStopReason(
         stepCount,
         effectiveMaxSteps,
         getEffectiveMaxStepsSource(workflowMaxSteps)
-      ),
+      ).message,
       propertyPointer:
         workflowMaxSteps === undefined ? "/steps" : "/maxSteps",
     };

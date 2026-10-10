@@ -41,6 +41,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   type ParallelGroupAdmission,
   type WorkflowValidationWarningCode,
+  type GuardrailStopCode,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
@@ -708,6 +709,8 @@ export interface WorkingFileRuntime {
   totalPausedDuration?: number;
   /** Wall-clock timestamp when execution reached a terminal state. */
   executionEndTime?: number;
+  /** Structured reason when a run ended because an execution guardrail fired. */
+  stopReason?: WorkflowStopReason;
   /** Durable admission state for the currently executing parallel group. */
   activeParallelGroup?: ActiveParallelGroupRuntime;
   finalStep?: FinalStepRuntimeState;
@@ -741,6 +744,17 @@ export interface WorkflowRuntimeState {
   pausedTime?: number;
   totalPausedDuration: number;
   executionEndTime?: number;
+  /** Structured reason when a run ended because an execution guardrail fired. */
+  stopReason?: WorkflowStopReason;
+}
+
+/** Run-level execution guardrail stop details; thresholds use their native unit. */
+export interface WorkflowStopReason {
+  code: GuardrailStopCode;
+  threshold: number;
+  observed: number;
+  unit: "steps" | "seconds";
+  message: string;
 }
 
 export type WorkflowRuntimeCommand =
@@ -1253,6 +1267,8 @@ export interface WorkflowSummary {
   filePath: string;
   workingFilePath?: string; // Path to .ctrlyoke.json working file (for dedup with recent workflows list)
   executionState: ExecutionState;
+  /** Structured reason when a run ended because an execution guardrail fired. */
+  stopReason?: WorkflowStopReason;
   /** 0-indexed: index of the next prompt to execute (mirrors PromptQueue.state.currentIndex) */
   currentStep: number;
   totalSteps: number;

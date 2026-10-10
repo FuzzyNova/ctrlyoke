@@ -130,6 +130,43 @@ Accumulated time spent paused before the current pause, in milliseconds
 
 Wall-clock timestamp when workflow execution reached a terminal state
 
+### `stopReason` {#workflow-runtime-stopreason}
+
+- **Type:** `{ code, threshold, observed, … }`
+
+Structured reason when a run ended because an execution guardrail fired.
+
+### `stopReason.code` {#workflow-runtime-stopreason-code}
+
+- **Type:** `"queue-size-limit" | "workflow-time-limit" | "prompt-timeout"`
+- **Required:** yes
+
+### `stopReason.threshold` {#workflow-runtime-stopreason-threshold}
+
+- **Type:** `number`
+- **Required:** yes
+
+Configured guardrail threshold in the unit named by `unit`.
+
+### `stopReason.observed` {#workflow-runtime-stopreason-observed}
+
+- **Type:** `number`
+- **Required:** yes
+
+Observed value in the unit named by `unit`.
+
+### `stopReason.unit` {#workflow-runtime-stopreason-unit}
+
+- **Type:** `"steps" | "seconds"`
+- **Required:** yes
+
+### `stopReason.message` {#workflow-runtime-stopreason-message}
+
+- **Type:** `string`
+- **Required:** yes
+
+Canonical human-readable message for the stop.
+
 ### `activeParallelGroup` {#workflow-runtime-activeparallelgroup}
 
 - **Type:** `{ groupId, admission }`

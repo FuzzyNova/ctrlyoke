@@ -100,6 +100,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.startTime": "Wall-clock timestamp when active workflow execution timing began",
   "_runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
   "_runtime.stepId": "Stable internal identity for this queue step within its run",
+  "_runtime.stopReason": "Structured reason when a run ended because an execution guardrail fired.",
+  "_runtime.stopReason.message": "Canonical human-readable message for the stop.",
+  "_runtime.stopReason.observed": "Observed value in the unit named by `unit`.",
+  "_runtime.stopReason.threshold": "Configured guardrail threshold in the unit named by `unit`.",
   "_runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
   "_runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload.",
   "_runtime.tokenTotals": "Latest run-scoped token aggregate projected from timeline history (working files only, written automatically during execution)",
@@ -1137,6 +1141,15 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "none",
     "finalStepAll",
     "finalStepPrevious"
+  ],
+  "_runtime.stopReason.code": [
+    "queue-size-limit",
+    "workflow-time-limit",
+    "prompt-timeout"
+  ],
+  "_runtime.stopReason.unit": [
+    "steps",
+    "seconds"
   ],
   "_runtime.terminalStatus": [
     "completed",

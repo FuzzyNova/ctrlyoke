@@ -2429,9 +2429,19 @@ export class WorkingFileManager {
 
   private getPersistedExecutionTiming(): Pick<
     WorkingFileRuntime,
-    "startTime" | "pausedTime" | "totalPausedDuration" | "executionEndTime"
+    | "startTime"
+    | "pausedTime"
+    | "totalPausedDuration"
+    | "executionEndTime"
+    | "stopReason"
   > {
-    const { startTime, pausedTime, totalPausedDuration, executionEndTime } =
+    const {
+      startTime,
+      pausedTime,
+      totalPausedDuration,
+      executionEndTime,
+      stopReason,
+    } =
       this.queueAccess.getRuntimeState?.() ?? {
         status: this.queueAccess.getStatus(),
         stopped: false,
@@ -2444,6 +2454,7 @@ export class WorkingFileManager {
         ? { totalPausedDuration }
         : {}),
       ...(executionEndTime !== undefined ? { executionEndTime } : {}),
+      ...(stopReason !== undefined ? { stopReason } : {}),
     };
   }
 

@@ -1455,6 +1455,43 @@ $defs:
         type: number
         description: Wall-clock timestamp when workflow execution reached a terminal state
         title: Execution End Time
+      stopReason:
+        type: object
+        description: Structured reason when a run ended because an execution guardrail fired.
+        properties:
+          code:
+            type: string
+            enum:
+              - queue-size-limit
+              - workflow-time-limit
+              - prompt-timeout
+            title: Code
+          threshold:
+            type: number
+            description: Configured guardrail threshold in the unit named by `unit`.
+            title: Threshold
+          observed:
+            type: number
+            description: Observed value in the unit named by `unit`.
+            title: Observed
+          unit:
+            type: string
+            enum:
+              - steps
+              - seconds
+            title: Unit
+          message:
+            type: string
+            description: Canonical human-readable message for the stop.
+            title: Message
+        required:
+          - code
+          - threshold
+          - observed
+          - unit
+          - message
+        additionalProperties: false
+        title: Stop Reason
       activeParallelGroup:
         type: object
         description: Durable admission state for the currently executing parallel group

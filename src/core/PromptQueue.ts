@@ -622,6 +622,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         pausedTime: runtime?.pausedTime,
         totalPausedDuration: runtime?.totalPausedDuration ?? 0,
         executionEndTime: runtime?.executionEndTime,
+        stopReason: runtime?.stopReason,
       });
 
       // Rebuild results array with proper status based on completion state
@@ -1919,6 +1920,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       pausedTime: runtime?.pausedTime,
       totalPausedDuration: runtime?.totalPausedDuration ?? 0,
       executionEndTime: runtime?.executionEndTime,
+      stopReason: runtime?.stopReason,
     });
     this.state.results = this.state.steps.map((step, index) => ({
       prompt: isScriptStep(step) ? step.script : step.prompt,

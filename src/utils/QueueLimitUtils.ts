@@ -39,14 +39,6 @@ export function getEffectiveMaxStepsSource(
     : "workflow maxSteps";
 }
 
-export function buildStepLimitError(
-  count: number,
-  limit: number,
-  source: EffectiveMaxStepsSource
-): string {
-  return `Step limit reached: this run has ${count}/${limit} steps (${source}: ${limit}). Do not retry; finish without appending.`;
-}
-
 /**
  * Read the active parallel-group width exported to a harness MCP process.
  * Invalid, missing, and non-positive values use the shared settings default.

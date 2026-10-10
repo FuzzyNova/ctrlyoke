@@ -12,6 +12,7 @@ import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
   WorktreeRunProjection,
+  WorkflowStopReason,
 } from "./CtrlYokeTypes";
 import {
   CliEvent,
@@ -97,6 +98,8 @@ export interface WorkflowOutputHistory {
   startedAt: number;
   completedAt?: number;
   executionState: ExecutionState;
+  /** Structured reason when a run ended because an execution guardrail fired. */
+  stopReason?: WorkflowStopReason;
   /** Status projection sourced from this run's persisted `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
   /** Durable notice when an inherited worktree default degraded to none. */
@@ -124,6 +127,7 @@ export type WorkflowRunMetadata = Pick<
   | "startedAt"
   | "completedAt"
   | "executionState"
+  | "stopReason"
   | "worktree"
   | "worktreeNotice"
 >;

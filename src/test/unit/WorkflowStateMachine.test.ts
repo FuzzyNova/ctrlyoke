@@ -1,14 +1,63 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { WorkflowStateMachine } from "../../core/WorkflowStateMachine";
+import type { WorkflowStopReason } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  GUARDRAIL_STOP_CODES,
   WORKFLOW_ATTEMPT_COMMANDS,
   WORKFLOW_ATTEMPT_STATUS,
 } from "../../types/DashboardConstants";
 
 suite("WorkflowStateMachine", () => {
+  test("records guardrail reasons and clears them on continue or restart", () => {
+    const runtime = new WorkflowStateMachine();
+    const stopReason = {
+      code: GUARDRAIL_STOP_CODES.QUEUE_SIZE_LIMIT,
+      threshold: 10,
+      observed: 11,
+      unit: "steps" as const,
+      message: "Step limit reached",
+    };
+    let failedTransitionReason: WorkflowStopReason | undefined;
+    runtime.onDidTransition((transition) => {
+      if (transition.current.status === EXECUTION_STATES.ERROR) {
+        failedTransitionReason = transition.current.stopReason;
+      }
+    });
+
+    runtime.startExecution();
+    runtime.fail(stopReason);
+    assert.deepStrictEqual(runtime.getSnapshot().stopReason, stopReason);
+    assert.deepStrictEqual(failedTransitionReason, stopReason);
+
+    runtime.restore({
+      ...runtime.getSnapshot(),
+      status: EXECUTION_STATES.STOPPED,
+      stopped: true,
+    });
+    assert.strictEqual(runtime.resume(), true);
+    assert.strictEqual(runtime.getSnapshot().stopReason, undefined);
+
+    runtime.fail(stopReason);
+    runtime.reset();
+    assert.strictEqual(runtime.getSnapshot().stopReason, undefined);
+  });
+
+  test("cancellations and ordinary failures do not carry a guardrail code", () => {
+    const cancelled = new WorkflowStateMachine();
+    cancelled.startExecution();
+    cancelled.requestStop();
+    cancelled.confirmStopped();
+    assert.strictEqual(cancelled.getSnapshot().stopReason, undefined);
+
+    const failed = new WorkflowStateMachine();
+    failed.startExecution();
+    failed.fail();
+    assert.strictEqual(failed.getSnapshot().stopReason, undefined);
+  });
+
   test("emits ordered runtime transitions with previous and current snapshots", () => {
     const runtime = new WorkflowStateMachine();
     const transitions: Array<{
