@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (deterministic `npx tsx` repro with a watched run directory and a hooked `fs.promises.cp`)
 - **Area:** `src/core/orchestration/HistoryTrashRepository.ts` (`recoverPendingEntries`, `publishEntry`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -29,6 +29,7 @@ import {
   type ExecutionState,
   HISTORY_TRASH_ENTRY_KINDS,
   type HarnessId,
+  MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_LOCK_LIVENESS,
   WORKFLOW_LOCK_LOCALITIES,
@@ -1091,30 +1092,37 @@ export class RunLifecycleService {
       HISTORY_TRASH_ENTRY_KINDS.RUN,
       clientId
     );
-    let trashed;
     try {
       await historyManager.deleteRunByRef(
         address.workflowKey,
         address.runRef,
         trash
       );
-    } finally {
-      // Also clears the empty pending entry a refused delete leaves behind.
-      trashed = await trash.commit();
+    } catch (error) {
+      if (trash.isEmpty) throw error;
+      // The run is already safely in this batch. Search-index refresh failures
+      // after the move must not turn a successful delete into an error toast.
+      Log.warn(
+        `[RunLifecycleService] post-delete work failed for ${address.workflowKey}/${address.runRef}: ${getErrorMessage(error)}`
+      );
     }
+    let remaining = await historyManager.getRunSummaries(address.workflowKey);
+    let fallback = await this.getExistingLineageFallback(
+      workspaceRoot,
+      address.workflowKey,
+      remaining
+    );
+    if (!fallback) {
+      await trash.moveLineageDir(address.workflowKey);
+      remaining = [];
+    }
+    const trashed = await trash.commit();
     if (trashed) send(toHistoryTrashedMessage(trashed));
     this.host.forgetRunActivity(address.workflowKey, address.runRef);
-    const remaining = await historyManager.getRunSummaries(address.workflowKey);
-    const fallback: WorkflowViewAddress = remaining[0]
-      ? {
-          workflowKey: address.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: remaining[0].runRef,
-        }
-      : {
-          workflowKey: address.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-        };
+    if (!fallback) {
+      this.unloadLineageViewers(address.workflowKey, clientId, send);
+      return;
+    }
     const targets = [
       ...this.host.registry.getViewAddressRegistry().entries(),
     ].filter(([, candidate]) => candidate?.workflowKey === address.workflowKey);
@@ -1123,21 +1131,31 @@ export class RunLifecycleService {
         currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         currentAddress.runRef === address.runRef
     );
-    await this.refreshRunViewsForLineages(
-      [address.workflowKey],
-      send,
-      clientId,
-      (currentAddress) =>
-        currentAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        currentAddress.runRef === address.runRef
-          ? fallback
-          : currentAddress
-    );
+    try {
+      await this.refreshRunViewsForLineages(
+        [address.workflowKey],
+        send,
+        clientId,
+        (currentAddress) =>
+          currentAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+          currentAddress.runRef === address.runRef
+            ? fallback
+            : currentAddress
+      );
+    } catch (error) {
+      Log.warn(
+        `[RunLifecycleService] could not refresh views after deleting ${address.workflowKey}/${address.runRef}: ${getErrorMessage(error)}`
+      );
+    }
     if (displacedAViewer) {
-      const fallbackLabel =
-        fallback.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-          ? `Run ${remaining[0].runId}`
-          : "the draft";
+      const fallbackSummary = remaining.find(
+        (summary) =>
+          fallback.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+          summary.runRef === fallback.runRef
+      );
+      const fallbackLabel = fallbackSummary
+        ? `Run ${fallbackSummary.runId}`
+        : "the draft";
       const message =
         deletedRunId !== undefined
           ? `Run ${deletedRunId} was deleted — you're now viewing ${fallbackLabel}.`
@@ -1170,6 +1188,16 @@ export class RunLifecycleService {
         );
       }
     }
+    let remaining = await historyManager.getRunSummaries(workflowKey);
+    let fallback = await this.getExistingLineageFallback(
+      workspaceRoot,
+      workflowKey,
+      remaining
+    );
+    if (!fallback && executionRunRef === undefined) {
+      await trash.moveLineageDir(workflowKey);
+      remaining = [];
+    }
     const trashed = await trash.commit();
     if (trashed) send(toHistoryTrashedMessage(trashed));
     for (const item of trashed?.items ?? []) {
@@ -1181,24 +1209,67 @@ export class RunLifecycleService {
         }
       }
     }
-    const remaining = await historyManager.getRunSummaries(workflowKey);
-    const fallback: WorkflowViewAddress = remaining[0]
-      ? {
-          workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: remaining[0].runRef,
-        }
-      : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
-    await this.refreshRunViewsForLineages(
-      [workflowKey],
-      send,
-      clientId,
-      (currentAddress) =>
-        currentAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        currentAddress.runRef !== executionRunRef
-          ? fallback
-          : currentAddress
-    );
+    if (!fallback) {
+      this.unloadLineageViewers(workflowKey, clientId, send);
+      return;
+    }
+    try {
+      await this.refreshRunViewsForLineages(
+        [workflowKey],
+        send,
+        clientId,
+        (currentAddress) =>
+          currentAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+          currentAddress.runRef !== executionRunRef
+            ? fallback
+            : currentAddress
+      );
+    } catch (error) {
+      Log.warn(
+        `[RunLifecycleService] could not refresh views after deleting runs for ${workflowKey}: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
+  private async getExistingLineageFallback(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    remaining: Awaited<ReturnType<OutputHistoryManager["getRunSummaries"]>>
+  ): Promise<WorkflowViewAddress | undefined> {
+    try {
+      await fs.access(WorkflowPaths.draftFilePath(workspaceRoot, workflowKey));
+      return { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
+    } catch {
+      const newestRun = [...remaining].sort(
+        (left, right) => right.runRef.localeCompare(left.runRef)
+      )[0];
+      return newestRun
+        ? {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: newestRun.runRef,
+          }
+        : undefined;
+    }
+  }
+
+  private unloadLineageViewers(
+    workflowKey: WorkflowKey,
+    clientId: string,
+    send: (message: unknown) => void
+  ): void {
+    const registry = this.host.registry;
+    for (const [viewerClientId, address] of registry
+      .getViewAddressRegistry()
+      .entries()) {
+      if (address?.workflowKey !== workflowKey) continue;
+      registry.setViewedWorkflowId(viewerClientId, null);
+      registry.getViewAddressRegistry().set(viewerClientId, null);
+      const targetSend =
+        registry.getViewMessageSinks().get(viewerClientId) ??
+        (viewerClientId === clientId ? send : undefined);
+      targetSend?.({ type: MESSAGE_TYPES.WORKFLOW_UNLOADED });
+    }
   }
 
   /** Reloads open views and drilled caches after a lineage's run set changes. */

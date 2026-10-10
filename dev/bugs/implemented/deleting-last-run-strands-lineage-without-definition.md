@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch `npx tsx` script against `WorkflowLineageRepository`/`RunLifecycleService`)
 - **Area:** `src/core/orchestration/RunLifecycleService.ts` (`deleteRunAtAddress`, `deleteAllRunsForLineage`), `src/core/orchestration/WorkflowLineageRepository.ts` (`deleteRun`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
