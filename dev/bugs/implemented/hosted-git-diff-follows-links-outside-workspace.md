@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed on Windows with a directory junction and a scratch `npx tsx` script against `HostedWorkspaceViewerService`)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`readWorkingTreeDiffBytes`, `buildGitRefDiffPageEntry`, `buildNonTextDiffEntries`, `getGitRefDiff`)
-- **Severity:** medium (security: file contents outside the workspace are served to the dashboard)
+**Resolution:** fixed in this commit
 
 ## Symptom
 
