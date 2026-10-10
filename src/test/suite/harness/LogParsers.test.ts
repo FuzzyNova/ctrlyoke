@@ -2159,6 +2159,24 @@ suite("ClaudeLogParser", () => {
 
       assert.strictEqual(classification, "injected-prompt");
     });
+
+    test("should not classify a subagent's prompt as a human steer", () => {
+      const prompt = "You are bug-hunting in the ctrlyoke repo.";
+      const subagentPrompt = {
+        type: "user",
+        parent_tool_use_id: "toolu_agent",
+        message: { role: "user", content: [{ type: "text", text: prompt }] },
+      };
+
+      assert.strictEqual(parser.classifyUserEvent(subagentPrompt, {}), "other");
+      assert.strictEqual(
+        parser.classifyUserEvent(
+          { ...subagentPrompt, parent_tool_use_id: null },
+          {}
+        ),
+        "human-steer"
+      );
+    });
   });
 
   suite("readNewLines", () => {

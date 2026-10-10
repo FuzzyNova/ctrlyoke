@@ -106,6 +106,11 @@ interface ClaudeProviderEvent extends BaseCliEvent {
   toolUseResult?: unknown;
   /** Human guidance accompanying a tool-use rejection, when they typed one. */
   userFeedback?: string;
+  /**
+   * Set in headless stream-json output on every message a foreground subagent
+   * exchanges, naming the parent's Agent tool_use. `null` on the main thread.
+   */
+  parent_tool_use_id?: string | null;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -625,6 +630,12 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
     if (this.hasToolResultBlock(e)) {
       return "tool-result";
+    }
+
+    // A subagent's prompt arrives as a `user` turn on its own thread; it was
+    // written by the parent agent, not by a human.
+    if (e.parent_tool_use_id) {
+      return "other";
     }
 
     const text = this.extractUserMessageText(e);
