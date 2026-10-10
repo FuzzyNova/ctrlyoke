@@ -68,6 +68,14 @@ suite("VarSubstitutor Tests", () => {
       );
     });
 
+    test("leaves CRLF fenced placeholders untouched", () => {
+      const text = "```text\r\n{{resolved}}\r\n```\r\n";
+      assert.strictEqual(
+        VarSubstitutor.substitute(text, { resolved: "yes" }),
+        text
+      );
+    });
+
     test("substitutes placeholders inside inline code spans", () => {
       // Vars reach script text, where backticks are shell command
       // substitution, so only block fences keep a placeholder literal.

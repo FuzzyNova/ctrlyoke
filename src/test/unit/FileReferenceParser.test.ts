@@ -43,6 +43,28 @@ suite("FileReferenceParser", () => {
       assert.deepStrictEqual(parseAtReferences(text), []);
     });
 
+    test("recognizes CRLF fences and keeps ranges indexed to the original text", () => {
+      const lf = "Intro\n```ts\nsee $previous and @src/a.ts\n```\nafter";
+      const crlf = lf.replace(/\n/g, "\r\n");
+      const lfRange = findCodeRanges(lf)[0];
+      const crlfRange = findCodeRanges(crlf)[0];
+
+      assert.deepStrictEqual(
+        lfRange && lf.slice(lfRange.from, lfRange.to),
+        "```ts\nsee $previous and @src/a.ts\n```"
+      );
+      assert.deepStrictEqual(
+        crlfRange && crlf.slice(crlfRange.from, crlfRange.to),
+        "```ts\r\nsee $previous and @src/a.ts\r\n```"
+      );
+      assert.strictEqual(
+        lf.slice(lfRange!.from, lfRange!.to).replace(/\r\n/g, "\n"),
+        crlf.slice(crlfRange!.from, crlfRange!.to).replace(/\r\n/g, "\n")
+      );
+      assert.deepStrictEqual(parseAtReferences(crlf), []);
+      assert.deepStrictEqual(parseInlinePriorContextRefs(crlf), []);
+    });
+
     test("masks a fence indented inside a list item", () => {
       const text = "- item\n\n    ```\n    @src/a.ts\n    ```";
       assert.deepStrictEqual(parseAtReferences(text), []);

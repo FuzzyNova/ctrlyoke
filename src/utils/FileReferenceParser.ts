@@ -78,7 +78,11 @@ export function findCodeRanges(
   const lines: Array<{ text: string; start: number }> = [];
   let lineStart = 0;
   for (const line of text.split("\n")) {
-    lines.push({ text: line, start: lineStart });
+    // `split("\n")` leaves the CR from CRLF line endings on each line. Keep
+    // offsets based on the original line, but exclude that terminator from
+    // Markdown fence detection (including the opener's end-anchored match).
+    const lineText = line.endsWith("\r") ? line.slice(0, -1) : line;
+    lines.push({ text: lineText, start: lineStart });
     lineStart += line.length + 1;
   }
 

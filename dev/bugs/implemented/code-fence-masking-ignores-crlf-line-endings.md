@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a tsx probe)
 - **Area:** `src/utils/FileReferenceParser.ts` (`findCodeRanges` / `maskCodeRanges`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
