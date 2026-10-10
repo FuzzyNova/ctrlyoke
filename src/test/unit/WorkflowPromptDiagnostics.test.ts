@@ -150,6 +150,25 @@ suite("getWorkflowPromptDiagnostics", () => {
     );
   });
 
+  test("completion context includes a settings default pre-condition", () => {
+    const text = 'steps:\n  - prompt: "Check $preC now"\n';
+    const offset = text.indexOf("$preC") + "$preC".length;
+    const withoutSetting = getWorkflowPromptCompletionContext(
+      text,
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+      offset
+    );
+    const withSetting = getWorkflowPromptCompletionContext(
+      text,
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+      offset,
+      { script: "echo hi" }
+    );
+
+    assert.strictEqual(withoutSetting?.hasPreCondition, false);
+    assert.strictEqual(withSetting?.hasPreCondition, true);
+  });
+
   test("only flags $finalStep when the workflow has no finalStep", async () => {
     const without = "steps:\n  - prompt: a\n  - prompt: use $finalStep\n";
     const withFinal = `${without}finalStep:\n  prompt: done\n`;

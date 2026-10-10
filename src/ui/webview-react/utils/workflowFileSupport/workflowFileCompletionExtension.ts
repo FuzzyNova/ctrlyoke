@@ -37,6 +37,8 @@ export interface WorkflowFileCompletionExtensionOptions {
   /** The lazily loaded location/completion modules; null until the chunk arrives. */
   getSupport: () => WorkflowFileSupport | null;
   getDataSource: () => WorkflowValueDataSource;
+  /** Settings-level pre-condition used by the runtime property resolver. */
+  getSettingsPreCondition?: () => unknown;
   promptClient: PromptCompletionClient;
   transport: HostRangeCompletionTransport;
 }
@@ -184,7 +186,8 @@ function createPromptTokenSource(
           ?.getWorkflowPromptCompletionContext(
             completionContext.state.doc.toString(),
             options.kind,
-            completionContext.pos
+            completionContext.pos,
+            options.getSettingsPreCondition?.()
           ),
       getContextualPriorCompletions,
       () => getWorkflowInsertEscape(located.location)

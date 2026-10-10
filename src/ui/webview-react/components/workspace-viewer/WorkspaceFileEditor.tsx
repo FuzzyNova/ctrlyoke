@@ -410,6 +410,7 @@ export const WorkspaceFileEditor = forwardRef<
                 kind: ctrlyokeFileKind,
                 getSupport: () => workflowSupportRef.current,
                 getDataSource: createStoreWorkflowValueDataSource,
+                getSettingsPreCondition: () => defaultPreCondition,
                 transport: getVsCodeApi(),
                 promptClient: workflowPromptClient,
               }),

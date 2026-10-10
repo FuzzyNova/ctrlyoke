@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` script)
 - **Area:** `src/completions/WorkflowPromptDiagnostics.ts` (`getWorkflowPromptCompletionContext`), workflow-file completion extension in the workspace editor
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

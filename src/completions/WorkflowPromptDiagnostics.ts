@@ -70,11 +70,11 @@ const PROMPT_MARKDOWN_SPAN_CONTEXT: PromptDiagnosticContext = {
  * steps before it (a parallel group's members share the group's start, and the
  * final step sees every step). A workflow-level default such as the root
  * `endCondition.retryPrompt` applies to every step, so it is judged from the
- * most permissive one, the final step's view. `hasPreCondition` is always
- * true: a step can inherit a pre-condition from the workflow or the global
- * default, and the file cannot say which, so the "no pre-condition" rule stays
- * quiet rather than guess. A `.prompt.md` body gets
- * {@link PROMPT_MARKDOWN_SPAN_CONTEXT} for the same reason.
+ * most permissive one, the final step's view. A step's `hasPreCondition`
+ * reflects the resolved step → workflow → settings value; contexts without a
+ * specific prompt owner stay permissive because their eventual owner is
+ * unknown. A `.prompt.md` body gets {@link PROMPT_MARKDOWN_SPAN_CONTEXT} for
+ * the same reason.
  */
 export function getSpanContext(
   span: WorkflowTextSpan,
@@ -151,7 +151,8 @@ export function getSpanContext(
 export function getWorkflowPromptCompletionContext(
   text: string,
   kind: CtrlYokeFileKind,
-  offset: number
+  offset: number,
+  settingsPreCondition?: unknown
 ): PromptCompletionWorkflowContext | undefined {
   const span = getWorkflowTextSpans(text, kind).find(
     (candidate) =>
@@ -168,7 +169,7 @@ export function getWorkflowPromptCompletionContext(
   const steps = Array.isArray(fields[PROMPT_PROPERTIES.STEPS])
     ? (fields[PROMPT_PROPERTIES.STEPS] as unknown[])
     : [];
-  const diagnosticContext = getSpanContext(span, root);
+  const diagnosticContext = getSpanContext(span, root, settingsPreCondition);
   const visibleEntries = steps.slice(0, diagnosticContext.stepIndex);
   const stepNames = visibleEntries.flatMap((entry) => {
     const members = parallelMembers(entry);
