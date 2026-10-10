@@ -1269,7 +1269,7 @@ export class ExecutionPreviewService {
       maxRetries: ConfigurationUtils.getDefaultMaxRetries(),
       retryPrompt: ConfigurationUtils.getDefaultRetryPrompt(),
       passRetryPrompt: ConfigurationUtils.getDefaultPassRetryPrompt(),
-    }).permittedRetries;
+    }).anyRetryBudget;
     const retry: RetryPreview = {
       maxAttempts: isUnlimited(retries) ? -1 : retries + 1,
       ...(end?.timeoutSec !== undefined ? { backoffSeconds: 0 } : {}),

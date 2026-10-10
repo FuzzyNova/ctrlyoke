@@ -27,6 +27,7 @@ import {
   PROMPT_DIAGNOSTIC_CODES,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
   WORKTREE_MODES,
+  DEFAULT_ERROR_BEHAVIOR_RETRIES,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
 import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
@@ -1011,6 +1012,18 @@ suite("ExecutionPreviewService", () => {
             retryPrompt: "try again",
           },
           expected: 4,
+        },
+        {
+          endCondition: {
+            script: "check",
+            onPass: "retry",
+            maxRetries: 3,
+          },
+          expected: 4,
+        },
+        {
+          endCondition: { script: "check", onPass: "retry" },
+          expected: DEFAULT_ERROR_BEHAVIOR_RETRIES + 1,
         },
       ];
       for (const { endCondition, expected } of cases) {

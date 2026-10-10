@@ -55,6 +55,7 @@ import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ScriptProcessRunner } from "../../core/orchestration/ScriptProcessRunner";
 import { calculateAttemptCost } from "../../utils/ModelPricing";
 import {
@@ -3514,6 +3515,76 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         "Task: Write {{name}} literally",
         scenario.expectedRetry,
       ]);
+    }
+  });
+
+  test("substitutes variables in settings-default retry prompts once", async () => {
+    const originalRetryPrompt = ConfigurationUtils.getDefaultRetryPrompt;
+    const originalPassRetryPrompt =
+      ConfigurationUtils.getDefaultPassRetryPrompt;
+    ConfigurationUtils.getDefaultRetryPrompt = () => "Fix {{target}}";
+    ConfigurationUtils.getDefaultPassRetryPrompt = () =>
+      "Review {{target}} again";
+    try {
+      const failureQueue = new PromptQueue();
+      const failureIntegration = new MockHarnessIntegration(undefined, false);
+      const failureEvaluator = new RecordingShellEvaluator(
+        new MockPlatform(),
+        [shellEvaluationResult(false), shellEvaluationResult(true)]
+      );
+      failureQueue.loadPrompts({
+        vars: { target: "src/foo.ts" },
+        steps: [
+          {
+            prompt: "Check the result",
+            endCondition: {
+              script: "check-result",
+              onFail: CONDITION_ACTIONS.RETRY,
+              maxRetries: 1,
+            },
+          },
+        ],
+      });
+      await makeExecutor(failureQueue, failureEvaluator).execute(
+        failureIntegration,
+        makeContext(failureIntegration)
+      );
+      assert.deepStrictEqual(failureIntegration.sentPrompts, [
+        "Check the result",
+        "Fix src/foo.ts",
+      ]);
+
+      const passQueue = new PromptQueue();
+      const passIntegration = new MockHarnessIntegration(undefined, false);
+      const passEvaluator = new RecordingShellEvaluator(new MockPlatform(), [
+        shellEvaluationResult(true),
+        shellEvaluationResult(false),
+      ]);
+      passQueue.loadPrompts({
+        vars: { target: "src/foo.ts" },
+        steps: [
+          {
+            prompt: "Check the result",
+            endCondition: {
+              script: "check-result",
+              onPass: CONDITION_ACTIONS.RETRY,
+              onFail: CONDITION_ACTIONS.CONTINUE,
+              maxRetries: 1,
+            },
+          },
+        ],
+      });
+      await makeExecutor(passQueue, passEvaluator).execute(
+        passIntegration,
+        makeContext(passIntegration)
+      );
+      assert.deepStrictEqual(passIntegration.sentPrompts, [
+        "Check the result",
+        "Review src/foo.ts again",
+      ]);
+    } finally {
+      ConfigurationUtils.getDefaultRetryPrompt = originalRetryPrompt;
+      ConfigurationUtils.getDefaultPassRetryPrompt = originalPassRetryPrompt;
     }
   });
 
