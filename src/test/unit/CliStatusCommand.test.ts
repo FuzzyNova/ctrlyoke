@@ -6,7 +6,11 @@ import { suite, teardown, test } from "mocha";
 import { statusCommand } from "../../cli/CliStatusCommand";
 import type { CliWorkspaceBootstrap } from "../../cli/CliWorkspaceBootstrap";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
-import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  RUNNER_IDS,
+} from "../../types/DashboardConstants";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
@@ -20,7 +24,9 @@ suite("CliStatusCommand", () => {
   async function createWorkspace(
     withLock: boolean,
     lockOverrides: Record<string, unknown> = {},
-    executionState: string = EXECUTION_STATES.RUNNING
+    executionState: string = EXECUTION_STATES.RUNNING,
+    runtimeOverrides: Record<string, unknown> = {},
+    steps: { prompt: string }[] = [{ prompt: "fixture" }]
   ): Promise<CliWorkspaceBootstrap> {
     if (root) await fs.rm(root, { recursive: true, force: true });
     root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-status-"));
@@ -50,8 +56,8 @@ suite("CliStatusCommand", () => {
         definitionRevision: 1,
         harness: "codex-cli",
         model: "gpt-6-luna",
-        steps: [{ prompt: "fixture" }],
-        _runtime: { currentIndex: 0, executionState },
+        steps,
+        _runtime: { currentIndex: 0, executionState, ...runtimeOverrides },
       })
     );
     if (withLock) {
@@ -103,6 +109,38 @@ suite("CliStatusCommand", () => {
     });
     assert.strictEqual(result.workflows[0].workflowName, "Status fixture");
     assert.strictEqual(result.workflows[0].currentStep, 1);
+  });
+
+  test("reports the final-step pass instead of a queue position past the end", async () => {
+    const workspace = await createWorkspace(
+      true,
+      {},
+      EXECUTION_STATES.RUNNING,
+      {
+        currentIndex: 2,
+        finalStep: { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 1 },
+      },
+      [{ prompt: "one" }, { prompt: "two" }]
+    );
+    const jsonOutput: string[] = [];
+    await statusCommand(
+      { json: true },
+      { writeOut: (message) => jsonOutput.push(message) },
+      { bootstrapCliWorkspace: async () => workspace, now: () => 10_000 }
+    );
+    const row = JSON.parse(jsonOutput[0]).workflows[0];
+    assert.strictEqual(row.currentStep, null);
+    assert.strictEqual(row.finalStepPass, 2);
+    assert.strictEqual(row.totalSteps, 2);
+
+    const tableOutput: string[] = [];
+    await statusCommand(
+      {},
+      { writeOut: (message) => tableOutput.push(message) },
+      { bootstrapCliWorkspace: async () => workspace, now: () => 10_000 }
+    );
+    assert.match(tableOutput[0], /Pass 2/);
+    assert.doesNotMatch(tableOutput[0], /3\/2/);
   });
 
   test("reports the locked older run as alive when a newer run is latest", async () => {

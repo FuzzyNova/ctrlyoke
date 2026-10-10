@@ -608,7 +608,9 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       lastStepStatuses: deriveStepStatusesFromRuntime(
         (workingFile.steps as StepWithRuntimeStatus[] | undefined) ?? [],
         currentIndex,
-        executionState
+        executionState,
+        undefined,
+        workingFile._runtime?.finalStep?.phase
       ),
     });
     await session.start();
@@ -632,7 +634,9 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     const statuses = deriveStepStatusesFromRuntime(
       steps,
       summary.currentStep ?? 0,
-      summary.executionState
+      summary.executionState,
+      undefined,
+      summary.finalStepPhase
     );
     for (const [index, status] of statuses.entries()) {
       if (entry.lastStepStatuses[index] === status) continue;
@@ -686,7 +690,9 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     const statuses = deriveStepStatusesFromRuntime(
       steps,
       currentIndex,
-      externalEntry.summary.executionState
+      externalEntry.summary.executionState,
+      undefined,
+      finalStepRuntime?.phase
     );
     externalEntry.lastStepStatuses = statuses;
     const results = statuses.map((status) => ({ status }));

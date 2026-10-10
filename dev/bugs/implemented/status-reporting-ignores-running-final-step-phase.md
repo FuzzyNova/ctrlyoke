@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch `npx tsx` script calling `CtrlYokeMCPServer.invokeTool` against a temporary run)
 - **Area:** `src/utils/StepStatusDerivation.ts` (`deriveStepStatusesFromRuntime`), `src/core/orchestration/GlobalWorkflowStatusService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

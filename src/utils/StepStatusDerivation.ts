@@ -132,7 +132,8 @@ export function deriveStepStatusesFromRuntime(
   steps: readonly StepWithRuntimeStatus[],
   currentIndex: number,
   executionState: string | undefined,
-  inFlightStatus: StepStatus = STEP_STATUS.RUNNING
+  inFlightStatus: StepStatus = STEP_STATUS.RUNNING,
+  finalStepPhase?: FinalStepPhase
 ): StepStatus[] {
   return steps.map((step, index) => {
     const stepRuntime = step._runtime;
@@ -142,7 +143,11 @@ export function deriveStepStatusesFromRuntime(
     if (!IN_FLIGHT_EXECUTION_STATES.has(executionState as ExecutionState)) {
       return STEP_STATUS.PENDING;
     }
-    if (stepRuntime?.startedAt !== undefined || index === currentIndex) {
+    if (
+      stepRuntime?.startedAt !== undefined ||
+      (index === currentIndex &&
+        hasInFlightStep(executionState as ExecutionState | undefined, finalStepPhase))
+    ) {
       return inFlightStatus;
     }
     return STEP_STATUS.PENDING;

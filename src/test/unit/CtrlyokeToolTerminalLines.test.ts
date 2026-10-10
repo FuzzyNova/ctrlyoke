@@ -139,6 +139,7 @@ const calls: Array<{ name: string; data: McpToolCallData; expected?: string }> =
               harness: "claude-cli",
               model: null,
               currentStep: 1,
+              finalStepPass: null,
               totalSteps: 2,
               completedSteps: 0,
             },

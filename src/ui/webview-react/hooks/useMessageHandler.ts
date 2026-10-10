@@ -2665,7 +2665,8 @@ export function createMessageHandlers(
       liveState?.steps ?? workingFile.steps ?? [],
       currentIndex,
       liveState?.executionState ?? runtime?.executionState,
-      STEP_STATUS.SENT
+      STEP_STATUS.SENT,
+      runtime?.finalStep?.phase
     ).map((status) => ({ status }));
     // Guard against a requestless snapshot regressing a genuinely live
     // execution state. `readAddressedRunView` reads the run's working file

@@ -174,6 +174,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       parallelGroups?: WorkingFile["parallelGroups"];
       draftOnly?: boolean;
       executionState?: ExecutionState;
+      finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
       maxSteps?: number;
     } = {}
   ): Promise<RunFixture> {
@@ -221,6 +222,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           ? { currentIndex: options.currentIndex }
           : {}),
         executionState,
+        ...(options.finalStep ? { finalStep: options.finalStep } : {}),
         ...(options.worktree ? { worktree: options.worktree } : {}),
       },
     };
@@ -1423,6 +1425,23 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       lifecycleState: "settled",
       directoryState: "removed",
     });
+  });
+
+  test("global_status reports the running final-step pass without a queue position", async () => {
+    const server = await setup();
+    const run = await createRun("final-step-status", "2026-01-07T00-00-00-000Z", {
+      stepCount: 2,
+      currentIndex: 2,
+      executionState: EXECUTION_STATES.RUNNING,
+      finalStep: { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 1 },
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(await server.invokeTool("global_status", {}));
+    const row = result.workflows[0];
+    assert.strictEqual(row.currentStep, null);
+    assert.strictEqual(row.finalStepPass, 2);
+    assert.strictEqual(row.totalSteps, 2);
   });
 
   test("allows global_status without an attached run", async () => {

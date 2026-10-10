@@ -9,6 +9,7 @@ import type {
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   WORKFLOW_LOCK_LIVENESS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
@@ -35,8 +36,10 @@ export interface GlobalWorkflowStatusRow {
   executionState: ExecutionState;
   harness: string | null;
   model: string | null;
-  /** 1-based position of the step being executed. */
-  currentStep: number;
+  /** 1-based position of the step being executed, or null while finalStep runs. */
+  currentStep: number | null;
+  /** 1-based final-step pass when finalStep is running; otherwise null. */
+  finalStepPass: number | null;
   totalSteps: number;
   completedSteps: number;
   startedAt: number | null;
@@ -188,6 +191,9 @@ export class GlobalWorkflowStatusService {
           const completedCount = allSteps.filter(
             (step) => step._runtime?.completedAt !== undefined
           ).length;
+          const finalStepRunning =
+            runtime.finalStep?.phase === FINAL_STEP_PHASES.FINAL_STEP;
+          const totalSteps = allSteps.length;
           const row: GlobalWorkflowStatusRow = {
             workflowKey,
             runRef,
@@ -195,8 +201,13 @@ export class GlobalWorkflowStatusService {
             executionState: runtime.executionState,
             harness: data.harness ?? null,
             model: data.model ?? null,
-            currentStep: runtime.currentIndex + 1,
-            totalSteps: allSteps.length,
+            currentStep: finalStepRunning
+              ? null
+              : Math.min(runtime.currentIndex + 1, totalSteps),
+            finalStepPass: finalStepRunning
+              ? (runtime.finalStep?.loopCount ?? 0) + 1
+              : null,
+            totalSteps,
             completedSteps: completedCount,
             startedAt: data.startedAt ?? null,
             lastModifiedAt: await getLineageLastModifiedAt(

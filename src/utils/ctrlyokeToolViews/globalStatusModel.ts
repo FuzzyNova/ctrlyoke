@@ -4,6 +4,7 @@ import {
   EXECUTION_STATES,
   getHarnessDisplayName,
 } from "../../types/DashboardConstants";
+import { formatFinalPassBadge } from "../FinalStepLabels";
 
 export interface GlobalStatusWorkflow {
   workflowKey: string;
@@ -12,7 +13,8 @@ export interface GlobalStatusWorkflow {
   executionState: string;
   harness: string | null;
   model: string | null;
-  currentStep: number;
+  currentStep: number | null;
+  finalStepPass: number | null;
   totalSteps: number;
   completedSteps: number;
 }
@@ -67,7 +69,8 @@ export function parseGlobalStatusResultText(
           typeof w.executionState === "string" &&
           (typeof w.harness === "string" || w.harness === null) &&
           (typeof w.model === "string" || w.model === null) &&
-          Number.isInteger(w.currentStep) &&
+          (Number.isInteger(w.currentStep) || w.currentStep === null) &&
+          (Number.isInteger(w.finalStepPass) || w.finalStepPass === null) &&
           Number.isInteger(w.totalSteps) &&
           Number.isInteger(w.completedSteps)
       )
@@ -109,7 +112,7 @@ export function globalStatusSearchText(
 ): string[] {
   const lines = result.workflows.map(
     (w) =>
-      `${w.executionState} · ${w.workflowName} · ${w.workflowKey} · ${w.currentStep}/${w.totalSteps} · ${globalStatusHarnessLabel(w)}`
+      `${w.executionState} · ${w.workflowName} · ${w.workflowKey} · ${w.finalStepPass === null ? `${w.currentStep}/${w.totalSteps}` : formatFinalPassBadge(w.finalStepPass)} · ${globalStatusHarnessLabel(w)}`
   );
   if (result.truncated)
     lines.push(`Truncated · ${result.omittedCount} omitted`);

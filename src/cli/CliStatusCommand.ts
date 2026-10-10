@@ -20,6 +20,7 @@ import {
   readWorkflowLockInspection,
 } from "../utils/WorkflowLockInspector";
 import type { WorkflowLockInspection } from "../utils/WorkflowLockInspector";
+import { formatFinalPassBadge } from "../utils/FinalStepLabels";
 import {
   isProcessAlive,
   type ProcessLivenessCheck,
@@ -197,7 +198,9 @@ function formatStatusTable(workflows: readonly CliStatusWorkflow[]): string {
     workflow.workflowKey,
     workflow.runRef ?? "—",
     workflow.executionState,
-    `${workflow.currentStep}/${workflow.totalSteps}`,
+    workflow.finalStepPass === null
+      ? `${workflow.currentStep}/${workflow.totalSteps}`
+      : formatFinalPassBadge(workflow.finalStepPass),
     workflow.harness ?? "—",
     workflow.model ?? "—",
     workflow.startedAt === null

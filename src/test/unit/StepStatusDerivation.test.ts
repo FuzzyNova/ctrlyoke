@@ -1,5 +1,9 @@
 import * as assert from "assert";
-import { EXECUTION_STATES, STEP_STATUS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  STEP_STATUS,
+} from "../../types/DashboardConstants";
 import {
   deriveStepStatusesFromRuntime,
   isUnstartedRun,
@@ -95,6 +99,40 @@ suite("StepStatusDerivation", () => {
       deriveStepStatusesFromRuntime(steps, 1, EXECUTION_STATES.PAUSED),
       [STEP_STATUS.COMPLETED, STEP_STATUS.PENDING, STEP_STATUS.PENDING]
     );
+  });
+
+  test("does not mark appended pending steps in flight during final-step execution", () => {
+    const statuses = deriveStepStatusesFromRuntime(
+      [
+        { _runtime: { completedAt: 1 } },
+        { _runtime: { completedAt: 2 } },
+        {},
+        {},
+      ],
+      2,
+      EXECUTION_STATES.RUNNING,
+      STEP_STATUS.RUNNING,
+      FINAL_STEP_PHASES.FINAL_STEP
+    );
+
+    assert.deepStrictEqual(statuses, [
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.PENDING,
+      STEP_STATUS.PENDING,
+    ]);
+  });
+
+  test("keeps a started parallel member in flight during final-step execution", () => {
+    const statuses = deriveStepStatusesFromRuntime(
+      [{ _runtime: { startedAt: 3 } }, {}],
+      0,
+      EXECUTION_STATES.RUNNING,
+      STEP_STATUS.RUNNING,
+      FINAL_STEP_PHASES.FINAL_STEP
+    );
+
+    assert.deepStrictEqual(statuses, [STEP_STATUS.RUNNING, STEP_STATUS.PENDING]);
   });
 
   test("keeps the current step in flight while pausing or cancelling", () => {
