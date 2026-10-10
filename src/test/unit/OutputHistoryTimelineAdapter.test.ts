@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import { promises as fs } from "fs";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   EXECUTION_PHASES,
@@ -7,6 +10,7 @@ import {
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
 } from "../../types/DashboardConstants";
+import type { WorkflowOutputHistory } from "../../types/OutputHistoryTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import {
   TIMELINE_ATTEMPT_KINDS,
@@ -326,5 +330,58 @@ suite("OutputHistoryTimelineAdapter", () => {
     assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
     assert.strictEqual(entry.cliOutput.response, "final response");
     assert.strictEqual(entry.cliOutput.structured, undefined);
+  });
+
+  // A paused-while-running step keeps streaming until it finishes. Sealing it
+  // made the dashboard render its next batch under a "Follow-up" divider,
+  // which a headless step can never produce.
+  suite("keeps an in-flight attempt streaming", () => {
+    const streamingPlaceholder: CliOutputRecordedEvent = {
+      ...cliEvent(0, EXECUTION_PHASES.PROMPT, ""),
+      payload: { cliOutput: { ...output(""), isStreaming: true } },
+    };
+    const cases = [
+      { executionState: EXECUTION_STATES.RUNNING, isStreaming: true },
+      { executionState: EXECUTION_STATES.PAUSING, isStreaming: true },
+      { executionState: EXECUTION_STATES.CANCELLING, isStreaming: true },
+      { executionState: EXECUTION_STATES.PAUSED, isStreaming: false },
+      { executionState: EXECUTION_STATES.STOPPED, isStreaming: false },
+    ];
+
+    for (const { executionState, isStreaming } of cases) {
+      test(`${executionState} -> isStreaming ${isStreaming}`, async () => {
+        const manifest = { ...MANIFEST, executionState };
+        const events = [streamingPlaceholder, eventsAppended(1, "live")];
+        const findCli = (history: WorkflowOutputHistory) =>
+          history.orderedEntries.find(
+            (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
+          );
+
+        const projected = findCli(
+          new OutputHistoryTimelineAdapter().project(manifest, events)
+        );
+        assert.ok(projected && projected.kind === OUTPUT_HISTORY_KINDS.CLI);
+        assert.strictEqual(projected.cliOutput.isStreaming, isStreaming);
+
+        const runDir = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-timeline-adapter-")
+        );
+        try {
+          const manifestPath = path.join(runDir, "manifest.json");
+          await fs.writeFile(manifestPath, JSON.stringify(manifest));
+          await fs.writeFile(
+            path.join(runDir, "events.jsonl"),
+            events.map((event) => JSON.stringify(event)).join("\n") + "\n"
+          );
+          const loaded = findCli(
+            await new OutputHistoryTimelineAdapter().loadHistory(manifestPath)
+          );
+          assert.ok(loaded && loaded.kind === OUTPUT_HISTORY_KINDS.CLI);
+          assert.strictEqual(loaded.cliOutput.isStreaming, isStreaming);
+        } finally {
+          await fs.rm(runDir, { recursive: true, force: true });
+        }
+      });
+    }
   });
 });

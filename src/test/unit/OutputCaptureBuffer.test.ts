@@ -1073,6 +1073,59 @@ suite("OutputCaptureBuffer", () => {
       assert.ok(fpCall!.args[1].structured?.events?.length === 1);
     });
 
+    // Pausing or cancelling lets the current step keep running. Skipping its
+    // buffer left the client holding a sealed output, so its next streamed
+    // batch rendered under a "Follow-up" divider.
+    for (const status of [
+      EXECUTION_STATES.PAUSING,
+      EXECUTION_STATES.CANCELLING,
+    ]) {
+      test(`should replay in-flight streaming buffers while ${status}`, () => {
+        const { callbacks } = makeCallbacks();
+        const buffer = new OutputCaptureBuffer("tag", callbacks);
+        buffer.captureOutputInit(
+          1,
+          "queue p",
+          undefined,
+          undefined,
+          undefined,
+          100,
+          0,
+          false
+        );
+        buffer.captureChunk(1, "queue data");
+        buffer.captureFinalStepOutputInit(
+          3,
+          "final q",
+          "cmd",
+          undefined,
+          "/ws",
+          999,
+          0,
+          false
+        );
+        buffer.captureFinalStepChunk(3, "fp response");
+
+        const { sink, calls } = makeDashboardSink();
+        buffer.replayTo(
+          sink,
+          { status, currentIndex: 1 },
+          { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 3 },
+          "tag"
+        );
+
+        const queueCall = calls.find(
+          (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT
+        );
+        assert.ok(queueCall, "should replay the queue step's buffer");
+        assert.strictEqual(queueCall!.args[1].isStreaming, true);
+        const fpCall = calls.find((c) => c.method === "updateFinalStepOutput");
+        assert.ok(fpCall, "should replay the final step's buffer");
+        assert.strictEqual(fpCall!.args[0], 3);
+        assert.strictEqual(fpCall!.args[1].isStreaming, true);
+      });
+    }
+
     test("should replay finalStep status messages", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);

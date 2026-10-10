@@ -4,9 +4,10 @@ import type {
   TokenStats,
 } from "../types/WebviewMessageTypes";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
-import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
+  IN_FLIGHT_EXECUTION_STATES,
+  type ExecutionState,
   type HarnessId,
   type StatusMessageSeverity,
 } from "../types/DashboardConstants";
@@ -490,7 +491,7 @@ export class OutputCaptureBuffer {
    */
   replayTo(
     dashboardSink: IDashboardSink,
-    state: { status: string; currentIndex: number },
+    state: { status: ExecutionState; currentIndex: number },
     finalRuntime: { phase: string; loopCount: number } | null | undefined,
     instanceTag: string,
     activeTargets: ReadonlySet<string> = new Set()
@@ -551,15 +552,16 @@ export class OutputCaptureBuffer {
     // Replay every active queue target. Before target-keyed execution this
     // reduces to the current index; with multiple in-flight targets each
     // buffer must survive a reconnect independently.
+    // PAUSING/CANCELLING still have a live step, so its buffer must replay
+    // as streaming; otherwise its next batch reads as a post-completion
+    // follow-up on the client.
+    const hasInFlightStep = IN_FLIGHT_EXECUTION_STATES.has(state.status);
     if (
       this.stepOutputBuffer.size > 0 &&
-      (state.status === EXECUTION_STATES.RUNNING || activeTargets.size > 0)
+      (hasInFlightStep || activeTargets.size > 0)
     ) {
       for (const [stepIndex, buffer] of this.stepOutputBuffer) {
-        if (
-          state.status !== EXECUTION_STATES.RUNNING &&
-          !activeTargets.has(`queue:${stepIndex}`)
-        ) {
+        if (!hasInFlightStep && !activeTargets.has(`queue:${stepIndex}`)) {
           continue;
         }
         Log.trace(
@@ -640,7 +642,7 @@ export class OutputCaptureBuffer {
 
     // Replay in-flight finalStep streaming output when switching back mid-loop.
     if (
-      state.status === EXECUTION_STATES.RUNNING &&
+      hasInFlightStep &&
       finalRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP
     ) {
       const loopIndex = finalRuntime.loopCount;

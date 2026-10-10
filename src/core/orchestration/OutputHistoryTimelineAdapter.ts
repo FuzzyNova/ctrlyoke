@@ -1,7 +1,7 @@
 import {
-  EXECUTION_STATES,
   FINAL_STEP_PHASES,
   getExecutionPhaseKeySuffix,
+  IN_FLIGHT_EXECUTION_STATES,
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
@@ -127,7 +127,7 @@ export class OutputHistoryTimelineAdapter {
       if (output) entry.cliOutput = output;
       if (
         output &&
-        history.executionState !== EXECUTION_STATES.RUNNING &&
+        !IN_FLIGHT_EXECUTION_STATES.has(history.executionState) &&
         output.isStreaming
       ) {
         entry.cliOutput = { ...output, isStreaming: false };
@@ -305,7 +305,9 @@ export class OutputHistoryTimelineAdapter {
     ].sort(compareOrderedHistoryEntries);
     history.activityEntries = activityEntries.sort(compareActivityEntries);
 
-    if (manifest.executionState !== EXECUTION_STATES.RUNNING) {
+    // PAUSING and CANCELLING still have a live step whose output keeps
+    // streaming; sealing it here makes every later batch read as a follow-up.
+    if (!IN_FLIGHT_EXECUTION_STATES.has(manifest.executionState)) {
       for (const entry of history.orderedEntries) {
         if (
           entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
