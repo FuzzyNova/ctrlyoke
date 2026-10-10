@@ -312,7 +312,6 @@ Design documents and implementation notes are in `dev/implemented/`.
 | `dev/implemented/SESSION_MANAGEMENT.md`        | Session resumption across prompts and harnesses             |
 | `dev/implemented/HOOKS_EXPOSURE_PLAN.md`       | User-defined hooks: events, merge behavior, harness support |
 | `dev/implemented/MCP_SERVERS_PROPERTY_PLAN.md` | `mcpServers` property design and per-harness behavior       |
-| `dev/implemented/ADDING_NEW_CLI_HARNESS.md`    | Guide for adding a new CLI harness                          |
 | `QUICK_START.md`                               | Five-minute setup walkthrough                               |
 
 ---

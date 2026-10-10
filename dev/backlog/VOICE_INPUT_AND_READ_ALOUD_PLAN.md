@@ -3,6 +3,18 @@
 **Status:** backlog, not started. Research was verified against current sources on 2026-10-05.
 Facts marked _(verify)_ could not be confirmed and need to be checked in the Phase 1 spike.
 
+> **2026-10-10 audit:** Still not started. There is no speech code, the output pane has no
+> live region, and xterm `screenReaderMode` is never set. Two updates:
+>
+> - The standalone server now exists (`ctrlyoke server`), so "once it exists" no longer
+>   applies.
+> - The hosted server already has a separate, token-gated WebSocket path (`/ws/lsp`, the
+>   LSP JSON-RPC proxy in `CtrlYokeHostedServer.ts`). That is the precedent for the proposed
+>   speech socket, so name it `/ws/speech` to match.
+>
+> Note that `package.json` pins `@codemirror/view` `^6.39.12`. The 6.43.13 below is the
+> installed version.
+
 ## Goal
 
 Run the whole loop by voice:
@@ -11,8 +23,8 @@ Run the whole loop by voice:
 2. Run or queue it.
 3. Hear the response read back.
 
-The loop must work in the **hosted browser dashboard** and, once it exists, the **standalone
-server** ([`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md)). It should also work
+The loop must work in the **hosted browser dashboard** and the **standalone server**
+(`ctrlyoke server`, [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md)). It should also work
 in the VS Code webview as far as VS Code allows. The phone case matters most, because the hosted
 dashboard is already used from phones (QR code, mobile layout, terminal control bar).
 
@@ -172,8 +184,8 @@ useReadAloud ─ AudioContext playback           ├─ VoicePackManager (downlo
   or speechSynthesis (client-only provider)
 ```
 
-- **Separate `/speech` WebSocket path** on the hosted (later standalone) server. It is gated by
-  the same token check as the dashboard socket and carries binary audio frames plus small JSON
+- **Separate `/ws/speech` WebSocket path** on the hosted and standalone server, following the
+  existing `/ws/lsp` upgrade route. It is gated by the same token check as the dashboard socket and carries binary audio frames plus small JSON
   control frames. This keeps the dashboard protocol JSON-only, so the existing
   `ws.on("message")` → `JSON.parse` path and the shared router are untouched. Audio is 32 KB/s
   upstream, far below `HOSTED_WEBSOCKET_MAX_PAYLOAD_BYTES`.
@@ -198,7 +210,7 @@ Measure the following, record the numbers in this doc, and only then commit to P
    paths and harness names, which is where general models struggle.
 3. **Hotwords.** Does sherpa-onnx contextual biasing / hotwords help with identifiers such as
    step names, file names, `claude-cli`?
-4. **Latency.** End-to-end latency over `/speech` from an iPhone on LAN (HTTPS with the
+4. **Latency.** End-to-end latency over `/ws/speech` from an iPhone on LAN (HTTPS with the
    self-signed cert) and over a tunnel.
 5. **`speechSynthesis` in the webview.** Does it return voices in the VS Code webview on
    Windows, macOS and Linux? Can the webview play Web Audio without an extra gesture?
@@ -281,7 +293,7 @@ device, and mid-session mute. A phone and a desktop must be able to differ.
 
 - Audio and transcripts are never written to disk, run history or `events.jsonl`. Only the final
   inserted text exists, as part of the prompt the user chose to send.
-- `/speech` uses the same token gate as the dashboard socket. Add an Origin check to it from the
+- `/ws/speech` uses the same token gate as the dashboard socket. Add an Origin check to it from the
   start. The standalone plan already lists that as defense in depth for the main socket.
 - Voice-pack downloads come only from pinned URLs and are checksum-verified. No arbitrary model
   URLs come from settings.
@@ -298,7 +310,7 @@ device, and mid-session mute. A phone and a desktop must be able to differ.
   headings, articles, speaker button.
 - New hooks: `useOutputAnnouncer`, `useVoiceInput`, `useReadAloud`. Add a `public/` AudioWorklet module.
 - `src/server/CtrlYokeHostedServer.ts`:
-  - `/speech` upgrade route.
+  - `/ws/speech` upgrade route (alongside `/ws/lsp`).
   - CSP: add `media-src 'self' blob:` if `<audio>` is used. `'wasm-unsafe-eval'` is needed only
     if a browser-side engine is ever added.
 - `src/ui/CtrlYokeWebviewProvider.ts`: webview CSP for audio playback, and the TTS message bridge.

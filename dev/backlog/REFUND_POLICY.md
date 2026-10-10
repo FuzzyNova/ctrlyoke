@@ -1,8 +1,25 @@
 # Refund Policy (Pro + Enterprise)
 
 **Created:** October 4, 2026
-**Status:** Decided, not yet published. Launch work is tracked from
-[`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 7.
+**Status:** Partial. The repo side is implemented; the Lemon Squeezy dashboard steps and the
+test-mode refund check are still open. Launch work is tracked from
+[`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 7 (refund item) and
+Phase 12 (refund check).
+
+> **2026-10-10 audit:** All three code and copy items are done. `87ba0728a` suspends only on full
+> refunds, handles `subscription_payment_refunded`, and adds the pricing FAQ, the Pro card line
+> ("30-day money-back guarantee.") and the `docs/pro/index.md` "Buy Pro" sentence. `1eae68844`
+> added the refund confirmation email (`sendRefundEmail`). The "What exists today" table below is
+> the pre-decision snapshot: the pricing page and `docs/pro/index.md` now state the policy. Still
+> open, none of it verifiable from the repo: steps 1–3 under "Manual steps in Lemon Squeezy" below
+> (product description and receipt copy, `subscription_payment_refunded` on the test **and**
+> live-mode webhooks, and the test-mode full/partial refund check).
+>
+> **Pre-release: yes.** The published policy is already live on the pricing page, so the LS
+> product and receipt copy must match it before the first real sale. The live-mode webhook (created
+> when Test mode is flipped off) must also subscribe to `order_refunded` and
+> `subscription_payment_refunded`, or refunds won't suspend licenses or send the confirmation
+> email. Both are dashboard clicks, not code.
 **Related:** [`../implemented/PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) (the
 LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPRISE_TERMS.md) §6–7,
 [`../../LICENSE.md`](../../LICENSE.md) §6(e),
@@ -10,7 +27,7 @@ LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPR
 
 ---
 
-## What exists today
+## What existed before the decision (October 4, 2026)
 
 | Where                             | What it says                                                                                                                                                                                                           |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -18,7 +35,7 @@ LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPR
 | `ENTERPRISE_TERMS.md` §6          | Cancellation stops renewal at term end and does not refund the unused term.                                                                                                                                            |
 | `LICENSE.md` §6(e)                | A license may be revoked for fraudulent purchase, payment reversal, or chargeback. **Says nothing about refunds for Pro.**                                                                                             |
 | Pricing page, `docs/pro/index.md` | **Nothing.**                                                                                                                                                                                                           |
-| `netlify/functions/ls-webhook.ts` | `order_refunded` → suspend the Keygen license for that order.                                                                                                                                                          |
+| `netlify/functions/ls-webhook.ts` | `order_refunded` → suspend the Keygen license for that order (since `87ba0728a`: full refunds only; renewal refunds also handled).                                                                                                                                                          |
 
 So the **individual Pro ($59) SKU has no refund policy at all**. A buyer reading the site can't tell
 whether a refund is possible, and the only governing text is Lemon Squeezy's buyer terms

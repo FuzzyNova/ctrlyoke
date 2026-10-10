@@ -8,104 +8,115 @@ Excludes `src/test/**` and `*.test.tsx?`/`*.spec.tsx?` files (test assertions/mo
 
 ---
 
-## Backend (`Log.*`) — 1073 call sites across 113 file(s)
+## Backend (`Log.*`) — 1219 call sites across 137 file(s)
 
-Totals by level: trace=132, debug=296, info=175, warn=308, error=160, appendLine=2
+Totals by level: trace=126, debug=322, info=214, warn=381, error=174, appendLine=2
 
 Ranked by call count (highest first).
 
 | File                                                          | trace | debug | info | warn | error | appendLine | Total |
 | ------------------------------------------------------------- | ----- | ----- | ---- | ---- | ----- | ---------- | ----- |
-| `src/core/WorkflowInstance.ts`                                | 2     | 36    | 33   | 23   | 14    |            | 108   |
-| `src/core/WorkflowOrchestrator.ts`                            | 6     | 41    | 16   | 39   | 6     |            | 108   |
-| `src/server/CtrlYokeHostedServer.ts`                          |       | 6     |      | 11   | 19    |            | 36    |
-| `src/ui/WebviewMessageRouter.ts`                              | 2     | 3     | 6    | 6    | 9     |            | 26    |
+| `src/core/WorkflowInstance.ts`                                |       | 26    | 31   | 17   | 8     |            | 82    |
+| `src/server/CtrlYokeHostedServer.ts`                          |       | 6     |      | 20   | 22    |            | 48    |
+| `src/core/WorkflowOrchestrator.ts`                            | 2     | 20    | 6    | 9    | 4     |            | 41    |
+| `src/core/orchestration/ExternalRunWatchCoordinator.ts`       |       | 2     | 10   | 25   | 1     |            | 38    |
+| `src/core/WorkflowExecutor.ts`                                | 3     |       | 16   | 13   | 3     |            | 35    |
+| `src/extension.ts`                                            | 1     | 10    | 6    | 10   | 3     |            | 30    |
+| `src/ui/WebviewMessageRouter.ts`                              | 2     | 4     | 6    | 8    | 9     |            | 29    |
+| `src/ui/WorkflowSerializer.ts`                                | 2     | 4     | 3    | 8    | 10    |            | 27    |
+| `src/core/orchestration/WorkflowStartupPipeline.ts`           |       | 12    | 6    | 3    | 5     |            | 26    |
+| `src/core/PromptQueue.ts`                                     | 2     | 7     | 13   | 2    | 2     |            | 26    |
 | `src/core/harness/shared/interfaces/INotificationMonitor.ts`  | 14    | 4     | 2    | 4    |       |            | 24    |
-| `src/core/PromptQueue.ts`                                     | 2     | 7     | 11   | 2    | 2     |            | 24    |
-| `src/core/WorkflowExecutor.ts`                                | 3     |       | 14   | 4    | 3     |            | 24    |
-| `src/ui/WorkflowSerializer.ts`                                | 2     | 3     | 1    | 6    | 12    |            | 24    |
-| `src/extension.ts`                                            |       | 10    | 6    | 5    | 2     |            | 23    |
-| `src/core/harness/CliIntegration.ts`                          |       | 7     | 8    | 3    | 2     | 2          | 22    |
-| `src/core/harness/shared/CliExecutionRunner.ts`               | 5     | 2     | 4    | 7    | 4     |            | 22    |
+| `src/core/orchestration/HistorySearchIndexService.ts`         |       | 12    | 10   | 2    |       |            | 24    |
+| `src/core/harness/CliIntegration.ts`                          |       | 7     | 7    | 5    | 2     | 2          | 23    |
 | `src/core/harness/shared/CliInteractiveStartupCoordinator.ts` |       | 5     | 10   | 2    | 5     |            | 22    |
+| `src/core/harness/copilot/CopilotCliProvider.ts`              | 1     | 10    | 3    | 5    | 1     |            | 20    |
 | `src/core/orchestration/OutputHistoryManager.ts`              | 2     | 1     |      | 15   | 2     |            | 20    |
 | `src/utils/ContextExpander.ts`                                | 8     | 2     |      | 7    | 3     |            | 20    |
-| `src/core/harness/copilot/CopilotCliProvider.ts`              | 1     | 10    | 3    | 4    | 1     |            | 19    |
 | `src/core/harness/copilot/CopilotLogParser.ts`                | 4     | 13    |      | 2    |       |            | 19    |
 | `src/utils/ModelRegistry.ts`                                  |       | 12    | 4    | 3    |       |            | 19    |
+| `src/core/harness/shared/CliExecutionRunner.ts`               | 5     | 2     | 1    | 7    | 3     |            | 18    |
+| `src/ui/PromptEditorSupportService.ts`                        | 5     |       |      | 7    | 6     |            | 18    |
+| `src/ui/WorkflowStepHandlers.ts`                              |       |       |      |      | 18    |            | 18    |
 | `src/core/orchestration/PromptFileLoader.ts`                  | 6     | 3     | 1    | 2    | 5     |            | 17    |
+| `src/core/orchestration/WorkflowInstanceRegistry.ts`          |       | 15    | 1    | 1    |       |            | 17    |
 | `src/dev/DevCommands.ts`                                      | 4     |       | 7    |      | 5     |            | 16    |
-| `src/core/harness/qwen/QwenLogParser.ts`                      | 3     | 10    |      | 1    |       |            | 14    |
-| `src/ui/PromptEditorSupportService.ts`                        | 4     |       |      | 6    | 4     |            | 14    |
-| `src/core/harness/CliLogMonitor.ts`                           | 3     | 3     | 3    | 4    |       |            | 13    |
-| `src/ui/WebviewSettingsSync.ts`                               |       | 1     |      | 9    | 3     |            | 13    |
-| `src/utils/TempFileManager.ts`                                | 2     |       |      | 5    | 6     |            | 13    |
+| `src/core/orchestration/historySearchRebuildWorker.ts`        |       | 4     | 7    | 3    | 1     |            | 15    |
+| `src/core/EndConditionEvaluator.ts`                           | 1     | 3     | 4    |      | 6     |            | 14    |
+| `src/core/orchestration/HistoryTrashRepository.ts`            |       |       | 7    | 7    |       |            | 14    |
+| `src/ui/WebviewSettingsSync.ts`                               |       | 2     |      | 9    | 3     |            | 14    |
+| `src/core/harness/qwen/QwenLogParser.ts`                      | 3     | 9     |      | 1    |       |            | 13    |
+| `src/core/harness/shared/HeadlessLogTail.ts`                  | 9     | 4     |      |      |       |            | 13    |
+| `src/core/WorkingFileManager.ts`                              | 4     |       | 4    | 3    | 2     |            | 13    |
+| `src/core/harness/claude/ClaudeCliProvider.ts`                |       | 4     | 3    | 5    |       |            | 12    |
 | `src/core/harness/claude/ClaudeLogParser.ts`                  | 3     | 8     |      | 1    |       |            | 12    |
+| `src/core/harness/CliLogMonitor.ts`                           | 3     | 3     | 3    | 3    |       |            | 12    |
 | `src/core/harness/codex/CodexCliProvider.ts`                  |       | 4     | 3    | 4    | 1     |            | 12    |
-| `src/core/EndConditionEvaluator.ts`                           | 1     |       | 4    |      | 6     |            | 11    |
-| `src/core/harness/claude/ClaudeCliProvider.ts`                |       | 4     | 3    | 4    |       |            | 11    |
+| `src/utils/WorkflowLockManager.ts`                            |       | 2     | 3    | 7    |       |            | 12    |
 | `src/core/harness/codex/CodexLogParser.ts`                    | 5     | 4     |      | 2    |       |            | 11    |
+| `src/core/harness/opencode/OpenCodeCliProvider.ts`            |       | 1     | 4    | 6    |       |            | 11    |
 | `src/core/harness/PtyProcessManager.ts`                       | 1     | 9     |      | 1    |       |            | 11    |
-| `src/core/harness/shared/CliTransportCoordinator.ts`          | 1     | 1     | 7    | 1    | 1     |            | 11    |
-| `src/core/harness/shared/HeadlessLogTail.ts`                  | 8     | 3     |      |      |       |            | 11    |
-| `src/ui/WorkflowStepHandlers.ts`                              |       |       |      |      | 11    |            | 11    |
-| `src/core/harness/opencode/OpenCodeCliProvider.ts`            |       | 1     | 3    | 6    |       |            | 10    |
-| `src/core/harness/shared/SettingsJsonMcpTracker.ts`           |       | 6     |      | 4    |       |            | 10    |
-| `src/core/WorkingFileManager.ts`                              | 4     |       | 4    | 1    | 1     |            | 10    |
-| `src/utils/SessionResolver.ts`                                |       | 5     |      | 5    |       |            | 10    |
-| `src/utils/WorkflowLockManager.ts`                            |       | 2     | 2    | 6    |       |            | 10    |
-| `src/core/harness/qwen/QwenCliProvider.ts`                    | 1     | 3     | 3    | 2    |       |            | 9     |
-| `src/core/harness/qwen/QwenToolPermissionMapper.ts`           |       | 7     |      | 2    |       |            | 9     |
 
-_73 more file(s) not shown — re-run the script and inspect its output, or grep directly._
+_97 more file(s) not shown — re-run the script and inspect its output, or grep directly._
 
 ---
 
-## Webview dashboard (`WebviewLog.*`) — 107 call sites across 31 file(s)
+## Webview dashboard (`WebviewLog.*`) — 147 call sites across 48 file(s)
 
-Totals by level: trace=13, debug=46, info=14, warn=15, error=19
+Totals by level: trace=30, debug=58, info=15, warn=23, error=21
 
 Ranked by call count (highest first).
 
-| File                                                                   | trace | debug | info | warn | error | Total |
-| ---------------------------------------------------------------------- | ----- | ----- | ---- | ---- | ----- | ----- |
-| `src/ui/webview-react/hooks/useMessageHandler.ts`                      |       | 8     | 10   | 1    |       | 19    |
-| `src/ui/webview-react/components/output/TerminalInstance.tsx`          | 5     | 10    | 1    |      | 1     | 17    |
-| `src/ui/webview-react/terminalRegistry.ts`                             | 3     | 7     |      | 1    |       | 11    |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`                | 1     | 9     |      |      |       | 10    |
-| `src/ui/webview-react/hooks/useDesktopLayout.ts`                       |       |       |      |      | 6     | 6     |
-| `src/ui/webview-react/hooks/useUndoRedoKeyHandler.ts`                  |       | 4     |      |      |       | 4     |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`          | 1     |       |      |      | 2     | 3     |
-| `src/ui/webview-react/components/output/DiffView.tsx`                  |       |       |      | 2    |       | 2     |
-| `src/ui/webview-react/components/output/MarkdownText.tsx`              |       |       |      | 2    |       | 2     |
-| `src/ui/webview-react/components/output/TerminalView.tsx`              | 1     | 1     |      |      |       | 2     |
-| `src/ui/webview-react/components/settings/stats/StatsUsageSection.tsx` |       |       |      | 1    | 1     | 2     |
-| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`          |       | 2     |      |      |       | 2     |
-| `src/ui/webview-react/hooks/useDuplicateWorkflowWatchdog.ts`           |       |       |      | 2    |       | 2     |
-| `src/ui/webview-react/hooks/useNewWorkflowKeyHandler.ts`               |       |       | 2    |      |       | 2     |
-| `src/ui/webview-react/hooks/useRunViewLoadWatchdog.ts`                 |       |       |      | 2    |       | 2     |
-| `src/ui/webview-react/hooks/useWorkspaceExplorerContextMenu.tsx`       |       |       |      |      | 2     | 2     |
-| `src/ui/webview-react/main.tsx`                                        |       |       |      |      | 2     | 2     |
-| `src/ui/webview-react/store/workflowStore.ts`                          |       | 2     |      |      |       | 2     |
-| `src/ui/webview-react/utils/runNavigation.ts`                          |       | 1     | 1    |      |       | 2     |
-| `src/ui/webview-react/wdyr.ts`                                         |       | 1     |      | 1    |       | 2     |
-| `src/ui/webview-react/BootstrapApp.tsx`                                |       |       |      |      | 1     | 1     |
-| `src/ui/webview-react/components/dev/UxSnapshotButton.tsx`             |       |       |      |      | 1     | 1     |
-| `src/ui/webview-react/components/layout/Header.tsx`                    |       | 1     |      |      |       | 1     |
-| `src/ui/webview-react/components/layout/OutputSection.tsx`             | 1     |       |      |      |       | 1     |
-| `src/ui/webview-react/components/layout/StartupOverlay.tsx`            |       |       |      | 1    |       | 1     |
-| `src/ui/webview-react/components/shared/ErrorBoundary.tsx`             |       |       |      |      | 1     | 1     |
-| `src/ui/webview-react/hooks/reconnectWatchdog.ts`                      |       |       |      | 1    |       | 1     |
-| `src/ui/webview-react/hooks/useOutputExport.ts`                        |       |       |      |      | 1     | 1     |
-| `src/ui/webview-react/utils/panelSnapshot.ts`                          |       |       |      | 1    |       | 1     |
-| `src/ui/webview-react/utils/performanceProfiler.ts`                    | 1     |       |      |      |       | 1     |
-| `src/ui/webview-react/utils/tokenizer.ts`                              |       |       |      |      | 1     | 1     |
+| File                                                                    | trace | debug | info | warn | error | Total |
+| ----------------------------------------------------------------------- | ----- | ----- | ---- | ---- | ----- | ----- |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`                       |       | 10    | 10   | 1    |       | 21    |
+| `src/ui/webview-react/components/output/TerminalInstance.tsx`           | 5     | 10    | 1    |      | 1     | 17    |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`                 | 1     | 10    |      |      |       | 11    |
+| `src/ui/webview-react/terminalRegistry.ts`                              | 3     | 7     |      | 1    |       | 11    |
+| `src/ui/webview-react/hooks/useDesktopLayout.ts`                        |       |       |      | 1    | 6     | 7     |
+| `src/ui/webview-react/store/workflowStore.ts`                           |       | 6     |      |      |       | 6     |
+| `src/ui/webview-react/hooks/useOutputScrollTarget.ts`                   | 4     |       |      |      |       | 4     |
+| `src/ui/webview-react/hooks/useUndoRedoKeyHandler.ts`                   |       | 4     |      |      |       | 4     |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`           |       |       |      |      | 3     | 3     |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`         | 3     |       |      |      |       | 3     |
+| `src/ui/webview-react/components/output/DiffView.tsx`                   |       |       |      | 3    |       | 3     |
+| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`           |       | 3     |      |      |       | 3     |
+| `src/ui/webview-react/components/output/MarkdownText.tsx`               |       |       |      | 2    |       | 2     |
+| `src/ui/webview-react/components/output/TerminalView.tsx`               | 1     | 1     |      |      |       | 2     |
+| `src/ui/webview-react/components/prompts/ExecutingStepHighlight.tsx`    |       | 2     |      |      |       | 2     |
+| `src/ui/webview-react/components/settings/stats/StatsUsageSection.tsx`  |       |       |      | 1    | 1     | 2     |
+| `src/ui/webview-react/components/shared/AdditionalArgsEditor.tsx`       | 2     |       |      |      |       | 2     |
+| `src/ui/webview-react/components/shared/BranchNameEditor.tsx`           | 2     |       |      |      |       | 2     |
+| `src/ui/webview-react/components/shared/PermissionListEditor.tsx`       | 2     |       |      |      |       | 2     |
+| `src/ui/webview-react/components/shared/ScriptCommandEditor.tsx`        | 2     |       |      |      |       | 2     |
+| `src/ui/webview-react/components/shared/SingleLineCompletionEditor.tsx` |       | 2     |      |      |       | 2     |
+| `src/ui/webview-react/hooks/useDuplicateWorkflowWatchdog.ts`            |       |       |      | 2    |       | 2     |
+| `src/ui/webview-react/hooks/useNewWorkflowKeyHandler.ts`                |       |       | 2    |      |       | 2     |
+| `src/ui/webview-react/hooks/useRunViewLoadWatchdog.ts`                  |       |       |      | 2    |       | 2     |
+| `src/ui/webview-react/hooks/useWorkspaceExplorerContextMenu.tsx`        |       |       |      |      | 2     | 2     |
+| `src/ui/webview-react/main.tsx`                                         |       |       |      |      | 2     | 2     |
+| `src/ui/webview-react/utils/languageReferences.ts`                      |       |       |      | 2    |       | 2     |
+| `src/ui/webview-react/utils/runNavigation.ts`                           |       | 1     | 1    |      |       | 2     |
+| `src/ui/webview-react/utils/storeWriteWatch.ts`                         | 1     |       |      | 1    |       | 2     |
+| `src/ui/webview-react/wdyr.ts`                                          |       | 1     |      | 1    |       | 2     |
+| `src/ui/webview-react/BootstrapApp.tsx`                                 |       |       |      |      | 1     | 1     |
+| `src/ui/webview-react/components/dev/UxSnapshotButton.tsx`              |       |       |      |      | 1     | 1     |
+| `src/ui/webview-react/components/layout/Header.tsx`                     |       | 1     |      |      |       | 1     |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`              | 1     |       |      |      |       | 1     |
+| `src/ui/webview-react/components/layout/StartupOverlay.tsx`             |       |       |      | 1    |       | 1     |
+| `src/ui/webview-react/components/settings/ServerSection.tsx`            |       |       |      | 1    |       | 1     |
+| `src/ui/webview-react/components/shared/ErrorBoundary.tsx`              |       |       |      |      | 1     | 1     |
+| `src/ui/webview-react/hooks/reconnectWatchdog.ts`                       |       |       |      | 1    |       | 1     |
+| `src/ui/webview-react/hooks/useLanguageIntelligence.ts`                 |       |       |      | 1    |       | 1     |
+| `src/ui/webview-react/hooks/useOutputExport.ts`                         |       |       |      |      | 1     | 1     |
+
+_8 more file(s) not shown — re-run the script and inspect its output, or grep directly._
 
 ---
 
-## Raw `console.*` usage — 177 call sites across 30 file(s)
+## Raw `console.*` usage — 287 call sites across 42 file(s)
 
-Totals by level: log=114, debug=2, info=1, warn=11, error=49, trace=0
+Totals by level: log=192, debug=2, info=1, warn=14, error=78, trace=0
 
 `npm run lint` already fails on new `console.*` in the ts/tsx source tree (`no-console`
 in `eslint.config.mjs`) outside its explicit exemption list — standalone processes with no
@@ -118,35 +129,47 @@ block) rather than real calls; check the line before acting on a single-digit co
 
 Ranked by call count (highest first).
 
-| File                                                  | log | debug | info | warn | error | trace | Total |
-| ----------------------------------------------------- | --- | ----- | ---- | ---- | ----- | ----- | ----- |
-| `src/cli.ts`                                          | 38  |       |      |      | 35    |       | 73    |
-| `src/cli/CliTerminalFormatter.ts`                     | 48  |       |      |      |       |       | 48    |
-| `src/test/harness/hooks.harness.test.ts`              | 9   |       |      |      |       |       | 9     |
-| `src/ui/webview-react/utils/logger.ts`                | 1   | 1     | 1    | 1    | 1     |       | 5     |
-| `src/templates/check_condition.js`                    | 3   |       |      |      | 1     |       | 4     |
-| `src/test/endConditionEvaluator.test.ts`              | 3   |       |      |      | 1     |       | 4     |
-| `src/test/suite/harness/LogParsers.test.ts`           | 4   |       |      |      |       |       | 4     |
-| `src/scripts/ctrlyoke-hook-utils.js`                  |     |       |      |      | 3     |       | 3     |
-| `src/ui/webview-react/scripts/bootstrapScript.ts`     |     | 1     |      | 1    | 1     |       | 3     |
-| `src/core/orchestration/WorkflowLineageRepository.ts` |     |       |      | 2    |       |       | 2     |
-| `src/ui/webview-react/hooks/useVsCodeApi.ts`          |     |       |      |      | 2     |       | 2     |
-| `src/ui/webview-react/scripts/moduleLoaderScript.ts`  |     |       |      | 1    | 1     |       | 2     |
-| `src/cli/CliRunCommandDefinitions.ts`                 |     |       |      |      | 1     |       | 1     |
-| `src/config/CtrlYokeConfigService.ts`                 |     |       |      | 1    |       |       | 1     |
-| `src/config/ExternalRootsTrustStore.ts`               |     |       |      | 1    |       |       | 1     |
-| `src/config/FileConfigBackend.ts`                     |     |       |      | 1    |       |       | 1     |
-| `src/config/SecretGrantsTrustStore.ts`                |     |       |      | 1    |       |       | 1     |
-| `src/core/harness/shared/interfaces/ILogParser.ts`    | 1   |       |      |      |       |       | 1     |
-| `src/scripts/ctrlyoke-copilot-hook.js`                |     |       |      |      | 1     |       | 1     |
-| `src/test/harness/helpers/harnessRunner.ts`           | 1   |       |      |      |       |       | 1     |
-| `src/test/harness/inline-config.harness.test.ts`      | 1   |       |      |      |       |       | 1     |
-| `src/test/harness/mcp.harness.test.ts`                | 1   |       |      |      |       |       | 1     |
-| `src/test/harness/workflow.harness.test.ts`           | 1   |       |      |      |       |       | 1     |
-| `src/test/runTest.ts`                                 |     |       |      |      | 1     |       | 1     |
-| `src/test/suite/index.ts`                             |     |       |      |      | 1     |       | 1     |
-| `src/test/unit/SecretResolver.test.ts`                | 1   |       |      |      |       |       | 1     |
-| `src/utils/FileLockUtils.ts`                          |     |       |      | 1    |       |       | 1     |
-| `src/utils/FileReferenceParser.ts`                    |     |       |      | 1    |       |       | 1     |
-| `src/utils/Log.ts`                                    | 1   |       |      |      |       |       | 1     |
-| `src/utils/RetryUtils.ts`                             | 1   |       |      |      |       |       | 1     |
+| File                                                              | log | debug | info | warn | error | trace | Total |
+| ----------------------------------------------------------------- | --- | ----- | ---- | ---- | ----- | ----- | ----- |
+| `src/cli.ts`                                                      | 58  |       |      |      | 56    |       | 114   |
+| `src/cli/CliTerminalFormatter.ts`                                 | 99  |       |      |      |       |       | 99    |
+| `src/test/harness/hooks.harness.test.ts`                          | 9   |       |      |      |       |       | 9     |
+| `src/test/endConditionEvaluator.test.ts`                          | 4   |       |      |      | 1     |       | 5     |
+| `src/ui/webview-react/utils/logger.ts`                            | 1   | 1     | 1    | 1    | 1     |       | 5     |
+| `src/cli/CliRunCommandDefinitions.ts`                             |     |       |      |      | 4     |       | 4     |
+| `src/test/suite/harness/LogParsers.test.ts`                       | 4   |       |      |      |       |       | 4     |
+| `src/scripts/ctrlyoke-hook-utils.js`                              |     |       |      |      | 3     |       | 3     |
+| `src/test/runTest.ts`                                             |     |       |      | 1    | 2     |       | 3     |
+| `src/ui/webview-react/scripts/bootstrapScript.ts`                 |     | 1     |      | 1    | 1     |       | 3     |
+| `src/cli/ServerCommand.ts`                                        | 1   |       |      | 1    |       |       | 2     |
+| `src/core/orchestration/WorkflowLineageRepository.ts`             |     |       |      | 2    |       |       | 2     |
+| `src/test/suite/index.ts`                                         | 1   |       |      |      | 1     |       | 2     |
+| `src/test/unit/ExecutionPreviewService.test.ts`                   | 2   |       |      |      |       |       | 2     |
+| `src/ui/webview-react/hooks/useVsCodeApi.ts`                      |     |       |      |      | 2     |       | 2     |
+| `src/ui/webview-react/scripts/moduleLoaderScript.ts`              |     |       |      | 1    | 1     |       | 2     |
+| `src/cli/CliRunSelector.ts`                                       |     |       |      |      | 1     |       | 1     |
+| `src/cli/CliStatusCommand.ts`                                     |     |       |      |      | 1     |       | 1     |
+| `src/cli/StepCommands.ts`                                         |     |       |      |      | 1     |       | 1     |
+| `src/config/CtrlYokeConfigService.ts`                             |     |       |      | 1    |       |       | 1     |
+| `src/config/FileConfigBackend.ts`                                 |     |       |      | 1    |       |       | 1     |
+| `src/config/TrustDecisionFile.ts`                                 |     |       |      | 1    |       |       | 1     |
+| `src/core/harness/shared/interfaces/ILogParser.ts`                | 1   |       |      |      |       |       | 1     |
+| `src/core/orchestration/RunContinuationService.ts`                |     |       |      | 1    |       |       | 1     |
+| `src/scripts/ctrlyoke-copilot-hook.js`                            |     |       |      |      | 1     |       | 1     |
+| `src/templates/check_condition.js`                                |     |       |      |      | 1     |       | 1     |
+| `src/test/harness/conditions.harness.test.ts`                     | 1   |       |      |      |       |       | 1     |
+| `src/test/harness/helpers/harnessRunner.ts`                       | 1   |       |      |      |       |       | 1     |
+| `src/test/harness/inline-config.harness.test.ts`                  | 1   |       |      |      |       |       | 1     |
+| `src/test/harness/mcp-probe.harness.test.ts`                      | 1   |       |      |      |       |       | 1     |
+| `src/test/harness/mcp.harness.test.ts`                            | 1   |       |      |      |       |       | 1     |
+| `src/test/harness/workflow.harness.test.ts`                       | 1   |       |      |      |       |       | 1     |
+| `src/test/integration/cli-interactive-output.integration.test.ts` | 1   |       |      |      |       |       | 1     |
+| `src/test/unit/ExecutionRootCoordinationStore.test.ts`            |     |       |      |      | 1     |       | 1     |
+| `src/test/unit/ScriptProcessRunner.test.ts`                       | 1   |       |      |      |       |       | 1     |
+| `src/test/unit/SecretResolver.test.ts`                            | 1   |       |      |      |       |       | 1     |
+| `src/test/unit/StatuslineWrapper.test.ts`                         |     |       |      | 1    |       |       | 1     |
+| `src/test/unit/WorkflowExecutor.test.ts`                          | 1   |       |      |      |       |       | 1     |
+| `src/utils/FileLockUtils.ts`                                      |     |       |      | 1    |       |       | 1     |
+| `src/utils/Log.ts`                                                | 1   |       |      |      |       |       | 1     |
+
+_2 more file(s) not shown — re-run the script and inspect its output, or grep directly._

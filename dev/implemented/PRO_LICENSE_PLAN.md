@@ -3,7 +3,7 @@
 **Created:** June 12, 2026
 **Status:** IMPLEMENTED (Phase 1 — Launch Licensing). The `LicenseService`, both activation flows, all gate sites, and the remote-access trial described below are built and tested; see [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 6 for the execution record. Phase 2 (Accounts & Sign-In) and the Enterprise SKU (§1.7.1) remain future work, tracked as deferred items in that checklist.
 **Roadmap item:** 0.B (launch blocker) / 4.2 (Pro tier)
-**Split from:** [`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md) Phase 5 (Pro Licensing) — moved here so the long-term model is decided on its own merits.
+**Split from:** [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 5 (Pro Licensing) — moved here so the long-term model is decided on its own merits.
 **Launch dependency:** create the `ctrlyoke.dev` business email/support identity and vendor account ownership first; tracked in [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md).
 
 ---
@@ -12,11 +12,11 @@
 
 **Chosen architecture: Lemon Squeezy (storefront / Merchant of Record) + Keygen (licensing), with offline cryptographic licensing and air-gapped activation supported from launch.**
 
-| Concern                                                                                                                      | Owner                | Why                                                                                                                                              |
-| ---------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Checkout, payment, **global tax/VAT (Merchant of Record)**, receipts, refunds                                                | **Lemon Squeezy**    | Already have an account; mature MoR; we own no payment/tax liability                                                                             |
-| License issuance, **Ed25519-signed offline license files**, machine/device limits, expiry, revocation, air-gapped activation | **Keygen**           | Purpose-built licensing; offline crypto is its core competency, not a bolt-on                                                                    |
-| Glue (purchase → license)                                                                                                    | **Netlify Function** | We're already deploying the site on Netlify ([`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md)); one serverless webhook handler |
+| Concern                                                                                                                      | Owner                | Why                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Checkout, payment, **global tax/VAT (Merchant of Record)**, receipts, refunds                                                | **Lemon Squeezy**    | Already have an account; mature MoR; we own no payment/tax liability                                                         |
+| License issuance, **Ed25519-signed offline license files**, machine/device limits, expiry, revocation, air-gapped activation | **Keygen**           | Purpose-built licensing; offline crypto is its core competency, not a bolt-on                                                |
+| Glue (purchase → license)                                                                                                    | **Netlify Function** | We're already deploying the site on Netlify ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)); one serverless webhook handler |
 
 **Activation model: license key now, user accounts as a later UX layer.** A pasted Keygen license key (or imported license file) at launch; "Sign in with ctrlyoke" device-code flow added later when the hosted dashboard becomes a paid cloud product. Both sit behind a single `LicenseService` interface, so Phase 2 is an internal swap.
 
@@ -310,7 +310,7 @@ The bind gate is an **honor gate**, not a tamper-proof control, and that is inte
 
 ### 1.9 Website / docs coupling
 
-The pricing page, LS checkout link, and customer portal live on `ctrlyoke.dev` ([`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md) Phase 6). This plan owns extension-side activation, verification, gating, **and the Netlify webhook function**. `docs/pro/index.md` documents both the online and air-gapped activation steps.
+The pricing page, LS checkout link, and customer portal live on `ctrlyoke.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 6). This plan owns extension-side activation, verification, gating, **and the Netlify webhook function**. `docs/pro/index.md` documents both the online and air-gapped activation steps.
 
 ---
 
@@ -389,9 +389,9 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 
 ## Related Documents
 
-- [`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md) — website, pricing page, LS checkout, Netlify deploy (hosts the webhook function)
+- [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) — website, pricing page, LS checkout, Netlify deploy (hosts the webhook function)
 - [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) — top-level launch sequence, business email, vendor ownership, legal, and support readiness
 - [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md) — docs site (`docs/pro/index.md`)
-- [`../backlog/TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md) — usage data to tune tiers/pricing post-launch
+- [`../backlog/TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) — usage data to tune tiers/pricing post-launch
 - [`../active/ROADMAP.md`](../active/ROADMAP.md) — items 0.B and 4.2
 - Keygen: [offline cryptography](https://keygen.sh/docs/api/cryptography/) · [offline licensing model](https://keygen.sh/docs/choosing-a-licensing-model/offline-licenses/) · [air-gapped activation example](https://github.com/keygen-sh/air-gapped-activation-example) · [hybrid online/offline example](https://github.com/keygen-sh/example-csharp-hybrid-online-offline-licensing)

@@ -1,5 +1,19 @@
 # Test Suite CPU Efficiency Plan
 
+**Status:** Partial. Below-normal priority (d7cb672bf), Vitest `isolate: false`
+(783fb03ed) and the per-operation `WorktreeManager` location memo (261431b48)
+have landed. Sections 2 and 3 and the remaining items in sections 1 and 4 are
+still open.
+
+> **2026-10-10 audit:** Checked against the code. Commit hashes added for the
+> landed pieces. `uiWorkers` is still `cpus - extensionShards - 2` (16 on 24
+> threads), and `WorkflowPropertiesPanelUndoRedo.test.tsx` is still a single
+> file. No cross-run registry exists in `scripts/run-test-suites.mjs`. Vitest is
+> now 5 (9b4148010), so the section 1 note about `environment` reporting needs
+> re-checking. The `HostedWorkspaceViewerService` flakes listed in section 3 were
+> traced to a Windows git fixture problem and fixed in 540ffa9a2/f17ce6373 (see
+> `dev/bugs/implemented/hosted-viewer-git-tests-fail-on-windows.md`).
+
 `npm test` is used from several worktrees at once, often by concurrent
 ctrlyoke workflows. One run already oversubscribes the machine on purpose (see
 `planParallelism` in `scripts/run-test-suites.mjs`), and two runs double that.
@@ -53,7 +67,9 @@ treat the figures as indicative.
 
 Findings worth keeping:
 
-- **Ignore the `environment` figure in shared mode.** Vitest 4's
+- **Ignore the `environment` figure in shared mode.** (Measured on Vitest 4.
+  The repo has since moved to Vitest 5, so re-check this before relying on it.)
+  Vitest 4's
   `runBaseTests` re-reports the worker's one-time environment setup time for
   every file, so it stays around 420s even though jsdom is now built once per
   worker. The real change shows in `setup` (73s → 7s), `import` (120s → 65s)
@@ -62,7 +78,9 @@ Findings worth keeping:
   `WorkflowPropertiesPanelUndoRedo.test.tsx` runs 86 synchronous full-panel
   tests at about 1s each, which takes 83–86s even on an idle machine and in
   either mode. That is why 8 and 16 workers finish together. Splitting it into
-  3–4 files is the next cheap wall-time win.
+  3–4 files is the next cheap wall-time win. Its three top-level `describe`
+  blocks (panel round-trips, through-the-extension, sequences) are the obvious
+  places to split. Not done as of 2026-10-10.
 - **Re-tune `uiWorkers`.** 8 workers match 16 on both wall time and CPU, and
   would leave more cores to the extension shards that run beside it.
   `planParallelism` in `scripts/run-test-suites.mjs` still gives the suite 16.
@@ -115,7 +133,9 @@ means run at full budget, never block.
 ## 3. Reduce timing dependence in the remaining flakes
 
 Failures seen in recent `.ctrlyoke/logs/test-runs/` logs:
-`HostedWorkspaceViewerService` (twice), `CliInteractiveStartupCoordinator >
+`HostedWorkspaceViewerService` (twice; probably the Windows git fixture bug
+fixed 2026-09-28 in 540ffa9a2/f17ce6373, so watch for a recurrence before
+chasing it), `CliInteractiveStartupCoordinator >
 should recover via delayed log discovery…`, `ExecutionRootCoordinationStore >
 assigns gapless sequences across separate node processes`,
 `HarnessCapabilityRegistry` (3 cases in one run), `WorkflowVariantService`, and

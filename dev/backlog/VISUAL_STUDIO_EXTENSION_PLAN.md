@@ -1,8 +1,27 @@
 # Visual Studio Extension Plan
 
-**Status (2026-09-28):** Proposed and researched. Not started. **Blocked on the standalone
-server:** `STANDALONE_SERVER_PLAN.md` and `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` through
-Stage 11 of the decoupling plan's canonical order.
+**Status (2026-10-10):** Proposed and researched. Not started. The blocker is now
+**unblocked**: `ctrlyoke server` exists (`src/cli/ServerCommand.ts`,
+`createNodeHostedServer` in `src/platform/NodeHostServices.ts`), and both prerequisite plans
+are in `dev/implemented/`. The Phase 1 spike can run now.
+
+> **2026-10-10 audit:** Updated "What ctrlyoke Already Has", Phase 0 and Phase 4 to match
+> the current code:
+>
+> - **Landed:** `ctrlyoke server` with `--port 0` and a static `--theme auto|light|dark`
+>   (`server.theme` is now read; defaults in `src/server/HostedThemeDefaults.ts` and
+>   `src/server/themes/*.css`). The `interactiveTerminal` capability replaced
+>   `isVsCodeContext()`, and `PlatformAdapter.isVsCode()` is deleted. A server-wide host
+>   capability list exists (`DASHBOARD_HOST_CAPABILITIES`, `hostCapabilities` in the
+>   settings payload, d0e62a32e).
+> - **Still missing for an embedding host:** a machine-readable ready line (the server
+>   prints a human banner plus QR code), `--parent-pid`, a host-push theme channel,
+>   per-client capabilities, and removal of `isStandalone` (still about 84 references
+>   across 27 dashboard files).
+> - **Filed as [`standalone-server-interactive-steps-never-start.md`](../bugs/backlog/standalone-server-interactive-steps-never-start.md):** `initPtyProcessManager` is still called only from `src/extension.ts`.
+>   `createNodeHostedServer` declares `embedded-pty`, but nothing creates a PTY manager on
+>   the Node path. Confirm that interactive steps in `ctrlyoke server` reach a dashboard
+>   terminal before running the spike.
 
 **Related plans:**
 
@@ -11,7 +30,7 @@ Stage 11 of the decoupling plan's canonical order.
 - [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md): the
   canonical stage order and the `DashboardHostActions` port this plan implements for a
   third host.
-- [`CLI_DISTRIBUTION_PLAN.md`](./CLI_DISTRIBUTION_PLAN.md): the one-artifact, one-version
+- [`CLI_DISTRIBUTION_PLAN.md`](../implemented/CLI_DISTRIBUTION_PLAN.md): the one-artifact, one-version
   rule. The VSIX follows it too.
 
 ## Question
@@ -186,34 +205,33 @@ Audited against `src/` on 2026-09-28.
   - `?token=` or the `x-ctrlyoke-token` header (`CtrlYokeHostedServer.requestHasValidToken`);
   - WebSocket close code 4401 on an invalid token.
 - **Theme transport is already a message:** `THEME_VARS_UPDATED` plus an initial
-  `<style>` block (`CtrlYokeHostedServer.buildThemeStyleBlock` / `updateThemeVars`). Today the
-  only source is the VS Code webview's `CAPTURE_THEME_VARS` round trip. **No static or
-  external theme source exists yet**, and `server.theme` is in the schema but no code reads
-  it.
+  `<style>` block (`CtrlYokeHostedServer.buildThemeStyleBlock` / `updateThemeVars`). Sources:
+  in VS Code, the webview's `CAPTURE_THEME_VARS` round trip; in `ctrlyoke server`, a
+  **static** theme chosen by `--theme` / `server.theme` (`HostedThemeDefaults.ts`,
+  `src/server/themes/vscode-default-{dark,light}.css`). **No external host-push theme source
+  exists yet.** That is still a Phase 3 requirement.
 - **Secrets:** `OsCredentialStore` already uses Windows Credential Manager, and it is the
-  `CliAdapter` default. The license and server token work outside VS Code once the trial state
-  has a non-`Memento` store. The standalone server needs that anyway.
+  `CliAdapter` default. `ctrlyoke server` builds `LicenseService` over `OsCredentialStore`
+  with no `trialState`. The remote-access trial is deliberately extension-only, so no
+  file-backed trial store is needed unless the Visual Studio host should offer the trial.
 - **Harness hooks and MCP configs call a bare `node` from `PATH`**
   (`CliNotificationMonitor.buildNodeCommand`, `CliMcpConfigGenerator`). Hook scripts resolve
   from `platform.getExtensionPath()`. The npm-installed harness CLIs need Node too. **A system
   Node ≥ 22.12 on `PATH` is already a hard requirement for any ctrlyoke host.**
 
-**Gaps that are standalone-server prerequisites, not Visual Studio work:**
+**Standalone-server prerequisites (status as of 2026-10-10):**
 
-- **`ctrlyoke server` does not exist.** `CtrlYokeHostedServer` is constructed only in
-  `extension.ts`. It routes through `CtrlYokeWebviewProvider.routeExternalMessage` and
-  captures its theme from the VS Code webview.
-- **Dashboard PTY terminals depend on a VS Code `ExtensionContext`.**
-  - `CliIntegration.isVsCodeContext()` is `"getExtensionContext" in platform`. It chooses the
-    `PtyProcessManager` path at `CliExecutionRunner.ts`.
-  - Without it, interactive runs fall back to `stdio: "inherit"` (the `ctrlyoke run` path).
-  - `initPtyProcessManager` is only called from `extension.ts`.
-  - The standalone server must key this on "a PTY manager is available". This matters to the
-    Visual Studio host too, because interactive harness terminals are the product.
-  - Make sure `STANDALONE_SERVER_PLAN.md` Phase 5 covers it.
-- **`PlatformAdapter.isVsCode()`** is declared and implemented but has no callers, and its
-  doc comment ("create a vscode.Terminal") is stale. Delete it as part of decoupling-plan
-  Open Question 4 rather than giving it a third-host meaning.
+- **Done: `ctrlyoke server` exists.** `src/cli/ServerCommand.ts` composes
+  `createNodeHostedServer` (`src/platform/NodeHostServices.ts`). It supports `--cwd`,
+  `--port` (0 allowed), `--strict-port`, `--bind`, `--theme` and `--open`.
+- **Done: the PTY choice is an explicit capability.** `isVsCodeContext()` is gone.
+  `PlatformAdapter.interactiveTerminal` (`embedded-pty` | `inherit-stdio`) drives
+  `CliExecutionRunner`, and the Node host declares `embedded-pty`. **Open:**
+  `initPtyProcessManager` is still called only from `extension.ts`, and
+  `CliTransportCoordinator` silently skips the spawn when `getPtyProcessManager()` is null.
+  Verify that interactive runs work under `ctrlyoke server`. The Visual Studio host depends
+  on this, because interactive harness terminals are the product.
+- **Done: `PlatformAdapter.isVsCode()` deleted** (decoupling staging Stage 2).
 
 ## Target Architecture
 
@@ -265,13 +283,15 @@ node sidecar = the standalone `ctrlyoke server`, unchanged except:
 
 ### Phase 0: Prerequisites (not Visual Studio work)
 
-- Decoupling-plan stages 0–11: `ctrlyoke server` boots from Node host services and the
-  shared router.
-- **PTY-backed interactive runs in the standalone server** (see the gap above).
-- A **file-backed license trial state store** that replaces `context.globalState`.
-- Three **standalone CLI hooks** for any embedding host. Add them to
-  `STANDALONE_SERVER_PLAN.md` Phase 10 rather than inventing them here:
-  - `--port 0`, which picks a free port;
+- ~~Decoupling-plan stages 0–11: `ctrlyoke server` boots from Node host services and the
+  shared router.~~ Done.
+- **PTY-backed interactive runs in the standalone server.** Capability done, PTY manager
+  initialization on the Node path still to verify (see above).
+- ~~A file-backed license trial state store.~~ Not needed: the trial is extension-only by
+  design (`LicenseService` `trialState` is optional).
+- **Standalone CLI hooks** for any embedding host. `STANDALONE_SERVER_PLAN.md` is now
+  implemented, so add the missing ones to `src/cli/ServerCommandDefinitions.ts` directly:
+  - ~~`--port 0`, which picks a free port~~ (done: `--port` accepts 0);
   - a **machine-readable ready line** on stdout (`{"event":"ready","url":…}`), with the token
     delivered on stdout and never on the command line;
   - a **parent-PID watchdog** (`--parent-pid`), so an orphaned sidecar exits when
@@ -329,10 +349,16 @@ Build a minimal VSIX whose tool window is a WebView2 pointed at a manually start
 
 ### Phase 4: Host capabilities in the React client
 
-- **Replace the boolean `isStandalone`** (`useVsCodeApi.ts`; about 30 call sites) with a
-  **host capability set** advertised in the server's initial state. For example:
-  `nativeOpenFile`, `nativeFolderPicker`, `nativeNotifications`, `serverSettingsSection`,
-  `vsCodeCommands`.
+- **Partly done:** a server-wide capability list already exists.
+  `DASHBOARD_HOST_CAPABILITIES` in `DashboardConstants.ts` is derived from which optional
+  `DashboardHostActions` methods a host implements (`getDashboardHostCapabilities`). It is
+  sent as `hostCapabilities` in the settings payload (`WebviewSettingsSync.ts`) and stored in
+  `uiStore` (d0e62a32e).
+- **Remaining:** replace the boolean `isStandalone` (`useVsCodeApi.ts`; now about 84
+  references across 27 dashboard files) with those capabilities, and add any missing ones
+  (for example native open-file and native notifications). For reference, the original
+  proposal was `nativeOpenFile`, `nativeFolderPicker`, `nativeNotifications`,
+  `serverSettingsSection` and `vsCodeCommands`.
   - Components branch on capabilities, not on host identity. VS Code, the hosted or
     standalone browser, and Visual Studio are then configurations, not a three-way `if`.
   - Constants go in `DashboardConstants.ts`.
@@ -375,8 +401,10 @@ decoupling plan's native-versus-built-in-modal policy. No native VS dialogs for 
   - `LicenseService` works unchanged in the sidecar.
   - Telemetry needs a host tag (`visualstudio`) with the same opt-out semantics as the
     other hosts.
-  - `@vscode/extension-telemetry` is VS Code-only, so this depends on the telemetry
-    abstraction chosen for the standalone server.
+  - `@vscode/extension-telemetry` is VS Code-only. Today the CLI and `ctrlyoke server` send
+    no telemetry at all, and `PRIVACY.md` §3.1 says so. Telemetry from a Visual Studio
+    sidecar would need a new non-VS Code telemetry path and a privacy-policy update, or
+    ship v1 without telemetry.
 - **Docs:** add a `docs/` page for Visual Studio setup, including the Node requirement and
   the browser fallback.
 
@@ -388,9 +416,10 @@ These are the VS Code features that sit outside the dashboard. None of them is n
   equivalent of `ContextMenuReferenceCommands`. Reuse `ContextReferenceBuilder`, which has no
   `vscode` dependency, through a host-to-sidecar request.
 - **Prompt-file IntelliSense** for `.ctrlyoke.yaml` / `.prompt.md`:
-  - VS supports LSP clients (`ILanguageClient`), so this should come from the language
-    server in `WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md` / `VSCODE_LSP_MCP_PLAN.md`, if
-    that exists.
+  - VS supports LSP clients (`ILanguageClient`), so this should come from a ctrlyoke
+    prompt-file language server. None exists yet. `src/server/lsp/`
+    (`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`, implemented) proxies third-party
+    language servers for workspace files. It does not serve `src/completions/` over LSP.
   - A C# reimplementation of `src/completions/` is **not** an option (DRY).
   - The JSON schema alone gives some YAML and JSON validation through VS's built-in schema
     support.

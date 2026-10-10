@@ -1,9 +1,32 @@
 # ctrlyoke Documentation Strategy Plan
 
-> **Status:** Active — Infrastructure ready, content pending  
+> **Status:** Partial — infrastructure and core content implemented; the remaining content backlog lives in [`../backlog/DOCUMENTATION_GAPS_PLAN.md`](../backlog/DOCUMENTATION_GAPS_PLAN.md)  
 > **Date:** March 2026  
 > **Updated:** March 2026 — `docs/` cleaned and empty; `dev/` folder convention established  
-> **Scope:** Public-facing documentation for the ctrlyoke VS Code extension, companion CLI binaries (`ctrlyoke-mcp`, `ctrlyoke`), and YAML/JSON workflow file format.
+> **Scope:**
+
+> **2026-10-10 audit:** The platform decision was implemented with two deviations. The site
+> landed as VitePress in `docs/` (`eae8cd0eb`, 2026-05-06), but it is **not** on GitHub Pages at
+> `docs.<domain>`. It is built into the Astro landing output (`scripts/merge-docs-into-landing.mjs`,
+> `build:site`) and deployed by Netlify (`.github/workflows/deploy.yml`) at
+> **`https://ctrlyoke.dev/docs/`** (`base: "/docs/"`, `cleanUrls: true`). The schema and settings
+> reference is **generated** from the schemas (`scripts/generate-schema-docs.mjs`, `0f4983bfd`),
+> not hand-maintained (§9), and `check:docs` fails on drift (§12). Phases 1 and 2 are done. In
+> Phase 3, `docs/pro/` (both pages), harness pages, the examples page and schema hover
+> descriptions are done. Still open: the README rewrite and README hero GIF (3.1/3.2; see
+> `DOCUMENTATION_GAPS_PLAN.md` §2.2 and `SCREENSHOTS_AND_MEDIA_PLAN.md`), a `Documentation:`
+> docs link at the end of CLI `--help` (§10; no `ctrlyoke.dev/docs` URL in `src/cli*`), and the
+> optional Algolia DocSearch. Phase 3 item 6 (`package.json` `markdownDescription`) is
+> **obsolete**: `package.json` is not a settings surface (see `.github/copilot-instructions.md`).
+> Sections 1–10 are kept as the original research record. Where they name "Gemini", seven
+> harnesses, `docs.yoursite.com`, an MIT license or the `--resume`/`--allow-all-tools` flags, they
+> are stale. The harnesses are the six in `HARNESS_IDS` (Antigravity, not Gemini), the license is
+> the ctrlyoke Commercial License, and the real CLI surface is in `docs/cli/ctrlyoke.md`.
+>
+> **Pre-release:** the docs URL scheme (`ctrlyoke.dev/docs/<section>/<page>`, no `.html`) is
+> effectively locked once the Marketplace README and the extension link to it. A later move to a
+> `docs.` subdomain, or renaming sections, would need Netlify redirects, so don't change it after
+> launch. The README rewrite is the only item here that blocks release (see the gaps plan). Public-facing documentation for the ctrlyoke VS Code extension, companion CLI binaries (`ctrlyoke-mcp`, `ctrlyoke`), and YAML/JSON workflow file format.
 
 ---
 
@@ -28,16 +51,16 @@
 
 ### Project Context
 
-ctrlyoke is a VS Code extension (publisher: `fuzzynova`) that automates AI coding assistants — GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini — through structured YAML/JSON workflow files. The product surface area includes:
+ctrlyoke is a VS Code extension (publisher: `fuzzynova`) that automates AI coding assistants — GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity — through structured YAML/JSON workflow files. The product surface area includes:
 
-| Surface                                            | Notes                                            |
-| -------------------------------------------------- | ------------------------------------------------ |
-| VS Code Extension                                  | Published/to be published on VS Code Marketplace |
-| `ctrlyoke-mcp` CLI binary                          | Standalone MCP server for queue management       |
-| `ctrlyoke` CLI binary                              | CLI adapter for direct workflow execution        |
-| `.ctrlyoke.yaml` / `.ctrlyoke.json` / `.prompt.md` | Workflow file formats with JSON Schema           |
-| Owner's existing website                           | Already exists                                   |
-| GitHub repository                                  | Public, `github.com/FuzzyNova/ctrlyoke`          |
+| Surface                                            | Notes                                                                                               |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| VS Code Extension                                  | Published/to be published on VS Code Marketplace                                                    |
+| `ctrlyoke-mcp` CLI binary                          | Standalone MCP server for queue management                                                          |
+| `ctrlyoke` CLI binary                              | CLI adapter for direct workflow execution                                                           |
+| `.ctrlyoke.yaml` / `.ctrlyoke.json` / `.prompt.md` | Workflow file formats with JSON Schema                                                              |
+| Owner's existing website                           | Already exists                                                                                      |
+| GitHub repository                                  | `github.com/FuzzyNova/ctrlyoke` (private until the `RELEASE_CHECKLIST.md` Phase 14 visibility flip) |
 
 ### Documentation Goals
 
@@ -439,6 +462,8 @@ If ctrlyoke eventually needs versioned docs (maintaining docs for v0.x and v1.x 
 
 ### Repository Layout
 
+**Update 2026-10-10:** this tree is implemented, with these differences. The config is `docs/.vitepress/config.mts`. There is no `docs-deploy.yml`. `examples/` is a single `index.md`. It adds `guide/privacy.md`, `workflows/{json-format,prompt-md-format,properties-panel,templates}.md`, `reference/run-files.md`, `harnesses/compatibility.md`, `cli/{server,ci}.md` and `troubleshooting/investigating-a-run.md`. It omits `guide/workflow-from-existing-project.md`. The live sidebar is in `config.mts`; the snippet below is the original proposal.
+
 **Current state as of March 2026:** `docs/` is empty and ready for VitePress. Internal developer docs have been moved to `dev/` following the backlog → active → implemented → research → reference convention.
 
 ```
@@ -790,7 +815,7 @@ Each CLI page should include:
 
 **Goal:** Get a basic VitePress site live at GitHub Pages.
 
-**Current status:** `docs/` is already empty and ready — internal docs have been moved to `dev/`. Steps 1–3 below are the remaining work.
+**Current status (2026-10-10): Done**, except that deployment is Netlify via `.github/workflows/deploy.yml` at `ctrlyoke.dev/docs/` (steps 4 and 7 as written, GitHub Pages and a CNAME, were not used).
 
 1. **Install VitePress:**
 
@@ -835,7 +860,7 @@ Priority order:
 2. `guide/quick-start.md` — First workflow in 5 minutes
 3. `guide/concepts.md` — Harnesses, prompts, end conditions explained in plain language
 4. `guide/your-first-workflow.md` — Step-by-step tutorial with a realistic example
-5. `harnesses/index.md` — Comparison table, choose the right harness (all 7 covered)
+5. `harnesses/index.md` — Comparison table, choose the right harness (all 6 covered, plus the generated `harnesses/compatibility.md`)
 6. `harnesses/copilot-cli.md` + `harnesses/claude-cli.md` — The two most common harnesses
 7. `reference/settings.md` — All 30+ settings documented with defaults
 8. `reference/workflow-schema.md` — All YAML properties documented with types, defaults, examples
@@ -862,7 +887,9 @@ Priority order:
 3. **Complete all harness pages.**
 4. **Add at least 2–3 examples** with full workflow YAML.
 5. **Add Algolia DocSearch** (apply at algolia.com/docsearch once the site has content).
-6. **Configure `package.json` `markdownDescription`** for all settings (links to docs pages).
+6. ~~**Configure `package.json` `markdownDescription`** for all settings (links to docs pages).~~
+   **Obsolete:** settings live in `schemas/settings-schema.json` and `.ctrlyoke/settings.json`, not
+   `package.json` `contributes.configuration`.
 7. **Add JSON Schema `description` fields** for all workflow properties (they become hover docs in VS Code).
 8. **Write `docs/pro/`** — this is the documentation for [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)'s
    entire feature (remote/on-the-go access is essentially the one thing Pro sells; see that plan's §1.6

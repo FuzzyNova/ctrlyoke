@@ -1,9 +1,25 @@
 # Cline CLI Integration Plan
 
+> **2026-10-10 audit:** Not started — no `cline` directory, `HARNESS_IDS` entry, or
+> schema enum value exists; `HARNESS_IDS` still has exactly six harnesses. `ROADMAP.md`
+> parks this at P3 ("add another harness only when user demand justifies its
+> maintenance matrix"). The Cline-side research (§1–3, Appendix A) is from March 2026
+> and was **not** re-verified — re-capture JSONL/task-storage samples against the
+> current Cline CLI before building (`cline --version` on the dev machine now reports
+> `3.0.46`, a different numbering from the `3.74.0` recorded below, so confirm which
+> version string `versionPolicy` should key on). The ctrlyoke-side design was corrected
+> to match today's code: there is no `Harness` enum or per-provider
+> `ResponseParser`/`TuiStreamProcessor`; headless stdout goes through
+> `ICliProvider.parseHeadlessStdout()` → `ILogParser.extractResponse()`; permission
+> mappers implement `prepare()`/`capabilities`; `HarnessConfig` needs `harnessId` and
+> `versionPolicy`; and `package.json` is not a settings surface. §5.2 Steps 6–9 were
+> replaced with the current registration checklist (taken from where `qwen-cli` is
+> wired today).
+
 **Date:** March 19, 2026  
-**Status:** Ready for Implementation  
-**Cline CLI Version:** 3.74.0  
-**Target ctrlyoke Version:** 1.2.0
+**Status:** Not started (P3, deferred)  
+**Cline CLI Version:** 3.74.0 (March 2026 research; re-verify)  
+**Target ctrlyoke Version:** TBD
 
 ---
 
@@ -253,14 +269,14 @@ cline --continue "Pick up where we left off"
 
 **Goal:** Headless mode with `--json` output, process-exit completion detection.
 
-**Deliverables:**
+**Deliverables (none built yet):**
 
-- ✅ 5 provider files in `src/core/harness/cline/`
-- ✅ JSONL parser for real-time output
-- ✅ Task ID extraction from stdout
-- ✅ Process-exit completion detection
-- ✅ Tool permission mapping (mode-based)
-- ✅ Basic task storage parser for session discovery
+- Provider files in `src/core/harness/cline/` (see §5.1)
+- JSONL parsing for real-time output (`parseHeadlessStdout` + log parser mapping)
+- Task ID extraction from stdout (`extractSessionIdFromStdout`)
+- Process-exit completion detection (shared headless path)
+- Tool permission mapping (mode-based, with compatibility diagnostics)
+- Basic task storage parser for session discovery
 
 ---
 
@@ -268,11 +284,12 @@ cline --continue "Pick up where we left off"
 
 **Goal:** TUI support with task storage monitoring for completion detection.
 
-**Deliverables:**
+**Deliverables (none built yet):**
 
-- ✅ Task storage monitor with inactivity timeout
-- ✅ Session discovery via task metadata matching
-- ✅ TUI stream processor for terminal UI
+- Task storage monitor with inactivity timeout
+- Session discovery via task metadata matching
+- Interactive (PTY) launch via `buildInteractiveArgs()`; TUI output is not parsed —
+  interactive content comes from the log parser, like every other harness
 
 ---
 
@@ -282,12 +299,26 @@ cline --continue "Pick up where we left off"
 
 ```
 src/core/harness/cline/
-├── ClineCliProvider.ts           # Main provider descriptor
-├── ClineResponseParser.ts        # JSONL parser, task ID extraction
-├── ClineNotificationMonitor.ts   # Process exit detection (headless)
-├── ClineToolPermissionMapper.ts  # Mode-based permission mapping
-└── ClineLogParser.ts             # Task storage parser for session discovery
+├── ClineCliProvider.ts           # ICliProvider: config, capabilities, args, parseHeadlessStdout
+├── ClineLogParser.ts             # extends BaseLogParser: event → UniversalCliOutput mapping,
+│                                 #   task-storage discovery, classifyUserEvent
+├── ClineNotificationMonitor.ts   # INotificationMonitor (no hooks in Phase 1)
+├── ClineToolPermissionMapper.ts  # IToolPermissionMapper.prepare() — mode-based
+├── ClineProtocolConstants.ts     # `say` kinds / event type strings (no inline flow-control literals)
+└── ClineToolBuilder.ts           # optional: extends BaseToolBuilder for structured tool events
 ```
+
+> 2026-10-10: there is no separate `ResponseParser` per provider any more. Every
+> current provider (`src/core/harness/{claude,codex,copilot,opencode,qwen,antigravity}/`)
+> has `*CliProvider`, `*LogParser`, `*NotificationMonitor`, `*ToolPermissionMapper`, and
+> `*ProtocolConstants`. Headless stdout records are converted by
+> `ICliProvider.parseHeadlessStdout()` into the log parser's event vocabulary and then
+> mapped by the **same** `ILogParser.extractResponse()` used for interactive logs
+> (`harness-cli-providers.instructions.md` → "one mapping in the provider's
+> `ILogParser`"). Read the sample code in Steps 2 and 5 and Appendix C with that in
+> mind: the `say`-event switch belongs in `ClineLogParser`, not a response parser.
+> Unit tests go in `src/test/unit/Cline*.test.ts` and fixtures in
+> `src/test/suite/harness/LogParsers.test.ts`, not beside the source.
 
 ### 5.2 Implementation Checklist
 
@@ -301,39 +332,66 @@ src/core/harness/cline/
 export class ClineCliProvider implements ICliProvider {
   readonly config: HarnessConfig = {
     name: "cline",
+    harnessId: HARNESS_IDS.CLINE_CLI,
     displayName: "Cline CLI",
     terminalName: "Cline",
-    installHint: "Install via: npm install -g cline",
+    installHint: installHintFor(/* per-OS hint, see HarnessInstallHint.ts */),
+    npmPackage: "cline",
+    versionPolicy: {/* see dev/reference/HARNESS_VERSION_SUPPORT.md */},
     shouldStreamHeadlessOutput: true,
     usesInteractiveNotificationMonitor: false, // Phase 1: process exit
   };
 
-  readonly responseParser = new ClineResponseParser();
+  readonly capabilities: HarnessCapabilityFacts = {
+    /* feeds HarnessCapabilityRegistry + generated docs/harnesses/compatibility.md */
+  };
   readonly notificationMonitor = new ClineNotificationMonitor();
   readonly toolPermissionMapper = new ClineToolPermissionMapper();
   readonly logParser = new ClineLogParser();
+
+  parseHeadlessStdout(stdout: string): BaseCliEvent[] {
+    /* one complete JSONL record → Cline events */
+  }
+  extractSessionIdFromStdout(chunk: string): string | undefined {
+    /* task_started.taskId */
+  }
 }
 ```
 
 **Implementation:**
 
 - [ ] Create class implementing `ICliProvider`
-- [ ] Define `config` with `name: "cline"`, `displayName: "Cline CLI"`
+- [ ] Define `config` (incl. `harnessId`, `versionPolicy`) and `capabilities`
 - [ ] Set `shouldStreamHeadlessOutput: true`
-- [ ] Wire up parser, monitor, mapper, logParser
-- [ ] Implement `buildCliArgs()` with model, session, workspace, permissions
+- [ ] Wire up monitor, mapper, logParser
+- [ ] Implement `parseHeadlessStdout()` / `extractSessionIdFromStdout()`
+- [ ] Implement `buildCliArgs()` with model, session, workspace, additionalArgs
+      (permissions come from `prepareToolPermissions`/the mapper, hooks from
+      `buildNotificationHookArgs()`)
 - [ ] Implement `buildHeadlessArgs()` with `--json` flag
-- [ ] Implement `buildInteractiveTuiCommand()` for TUI mode
-- [ ] Implement `checkAvailability()` via `cline --version`
-- [ ] Implement `getVersion()` via `cline --version`
+- [ ] Implement `buildInteractiveArgs()` for PTY mode
+- [ ] Implement `checkAvailability()` / `getVersion()` via `cline --version` — no
+      provider-local version gate; the minimum is enforced once in `detectHarness()`
+- [ ] MCP: implement `getMcpConfigArgs`/`planMcpConfigArgs`. `cline mcp add` mutates
+      Cline's global config, so it needs baseline restoration through a shared tracker
+      (cf. `SettingsJsonMcpTracker`) rather than per-run adds — prefer a process-local
+      config flag if current Cline offers one
 
 **Reference:** `src/core/harness/claude/ClaudeCliProvider.ts`
 
 ---
 
-#### Step 2: ClineResponseParser.ts (4-5 hours)
+#### Step 2: Event mapping in ClineLogParser.ts (4-5 hours)
 
 **Purpose:** Parse JSONL output, extract task IDs, tokens, tool calls
+
+> 2026-10-10: `ResponseParserBase` no longer exists. Put this switch in
+> `ClineLogParser.extractResponse()` / `extractStructuredEventsFromEvent()` (returning
+> `UniversalCliOutput` / `CliEvent[]`), fed by `ClineCliProvider.parseHeadlessStdout()`
+> in headless mode and by task-storage reads in interactive mode. The `say` kind
+> strings belong in `ClineProtocolConstants.ts`. Map tool names via
+> `CliEventMapper.ts`, and use `augmentParsedOutput()` for any post-parse token/session
+> back-fill.
 
 **Key Methods:**
 
@@ -433,7 +491,7 @@ export class ClineResponseParser extends ResponseParserBase {
 - [ ] Handle `api_req_started` events for model info
 - [ ] Map Cline event format to ctrlyoke `CliEvent` interface
 
-**Reference:** `src/core/harness/claude/ClaudeResponseParser.ts`
+**Reference:** `OpenCodeCliProvider.parseHeadlessStdout` + `OpenCodeLogParser` (stdout-sourced JSONL); `ClaudeCliProvider`/`ClaudeLogParser` (stream-json)
 
 ---
 
@@ -476,8 +534,13 @@ export class ClineNotificationMonitor implements INotificationMonitor {
 
 **Implementation:**
 
-- [ ] Implement `monitorForCompletion()` for headless mode (process exit)
-- [ ] Implement `buildHookConfig()` returning `{ type: "none" }`
+> 2026-10-10: headless completion is already process exit in shared code
+> (`CliTransportCoordinator`/`CliExecutionRunner`); the monitor only matters for
+> interactive mode. Check `HookConfig` in `INotificationMonitor.ts` for the current
+> "no hooks" shape rather than assuming `{ type: "none" }`.
+
+- [ ] Implement `monitorForCompletion()` (signature now also takes an optional `runId`)
+- [ ] Implement `buildHookConfig()` returning the no-hook config
 - [ ] Implement `getNotificationDirectory()`
 - [ ] Handle cancellation via `onCancel` callback
 
@@ -491,11 +554,21 @@ export class ClineNotificationMonitor implements INotificationMonitor {
 
 **Mapping Table:**
 
-| ctrlyoke Setting      | Cline Mapping                  |
-| --------------------- | ------------------------------ |
-| `dangerouslyAllowAll` | `--yolo`                       |
-| `allowAll`            | `--auto-approve-all`           |
-| `custom`              | No flag (interactive approval) |
+| ctrlyoke Setting      | Cline Mapping                                                    |
+| --------------------- | ---------------------------------------------------------------- |
+| `dangerouslyAllowAll` | `--yolo`                                                         |
+| `allowAll`            | `--auto-approve-all` (deny list unsupported → diagnostic)        |
+| `custom`              | No flag (interactive approval) + compatibility diagnostic        |
+| `none`                | No flag — Cline's own configured permissions apply (schema mode) |
+
+> 2026-10-10: the mapper interface is now `IToolPermissionMapper.prepare(config,
+context) → ToolPermissionApplication` (`cliArgs`, optional `mutations`,
+> `diagnostics: CompatibilityDiagnostic[]`) plus a static
+> `capabilities: PermissionCapabilityDescriptor`; `buildArgs()` no longer exists.
+> Unsupported `allowedTools`/`deniedTools` must surface as diagnostics (see
+> `CodexToolPermissionMapper`), not be silently dropped. The sample below shows only
+> the mode→flag mapping. Switch on `PERMISSION_MODES.*` (`DashboardConstants.ts`), not
+> string literals.
 
 **Implementation:**
 
@@ -528,9 +601,10 @@ export class ClineToolPermissionMapper extends ToolPermissionMapperBase {
 
 **Implementation:**
 
-- [ ] Implement `buildArgs()` mapping permission modes to CLI flags
+- [ ] Implement `prepare()` mapping permission modes to CLI flags + diagnostics
+- [ ] Declare `capabilities` (mode-only; no per-tool allow/deny)
 - [ ] Implement `hasFullPermissions()` for headless mode safety check
-- [ ] Handle `custom` mode (no CLI flag, interactive approval)
+- [ ] Handle `custom` mode (no CLI flag, interactive approval) and `none` (no flag)
 
 **Reference:** `src/core/harness/claude/ClaudeToolPermissionMapper.ts`
 
@@ -640,105 +714,113 @@ export class ClineLogParser implements ILogParser {
 - [ ] Implement `readNewLines()` for task storage monitoring
 - [ ] Implement `watchLogFile()` for task storage file watching
 - [ ] Implement `extractResponse()` to build `UniversalCliOutput` from task events
+- [ ] Implement `classifyUserEvent()`/`extractUserSteerText()` if Cline's task storage
+      records follow-up user messages (live steer display; also reused by
+      `HARNESS_SESSION_IMPORT_PLAN.md`)
+- [ ] Extend `BaseLogParser` (shared `readNewLines`, `findModifiedSessionLogs`,
+      `readFirstNJsonlEvents`) rather than implementing `ILogParser` from scratch. Note
+      `ui_messages.json` is a `.json` file (verify: likely one JSON array, not JSONL),
+      so the line-splitting `readNewLines` in Appendix C.2 would not work as written
 
 **Reference:** `src/core/harness/claude/ClaudeLogParser.ts`
 
 ---
 
-#### Step 6: Add Harness Enum Value (30 min)
+#### Step 6: Harness ID and shared constants (1 hour)
 
-**File:** `src/types/CtrlYokeTypes.ts`
+> 2026-10-10: rewritten. There is no `Harness` enum in `CtrlYokeTypes.ts`;
+> `HARNESS_IDS` in `src/types/DashboardConstants.ts` is the only harness ID source and
+> most per-harness maps are `Record<HarnessId, …>`, so `npm run typecheck` flags most
+> missed spots once the ID is added. Use the places `qwen-cli` is wired as the
+> checklist.
 
-```typescript
-export enum Harness {
-  CopilotCli = "copilot-cli",
-  ClaudeCli = "claude-cli",
-  CodexCli = "codex-cli",
-  OpenCodeCli = "opencode-cli",
-  QwenCli = "qwen-cli",
-  AntigravityCli = "antigravity-cli",
-  ClineCli = "cline-cli", // NEW
-}
-```
+**`src/types/DashboardConstants.ts`:**
 
-**File:** `src/types/DashboardConstants.ts`
+- [ ] `HARNESS_IDS.CLINE_CLI = "cline-cli"`
+- [ ] `HARNESS_DISPLAY_ORDER` (alphabetical — `cline-cli` goes after `claude-cli`;
+      this order also drives auto-detection of `defaults.harness`)
+- [ ] `HARNESS_INFO`, harness colour map, `DEFAULT_MODELS`, and the per-harness model
+      list export (`CLINE_CLI_MODELS`, mirroring `ANTIGRAVITY_CLI_MODELS`)
+- [ ] `STATUS_LINE_HARNESS_IDS` only if Cline gets statusline support
 
-```typescript
-export const HARNESS_IDS = {
-  COPILOT_CLI: "copilot-cli",
-  CLAUDE_CLI: "claude-cli",
-  CODEX_CLI: "codex-cli",
-  OPENCODE_CLI: "opencode-cli",
-  QWEN_CLI: "qwen-cli",
-  ANTIGRAVITY_CLI: "antigravity-cli",
-  CLINE_CLI: "cline-cli", // NEW
-} as const;
-```
+**Other type/constant files:** `src/types/CtrlYokeSettings.ts` (default
+`defaults.models["cline-cli"]`, statusline defaults if applicable),
+`src/types/SchemaUiMetadata.ts`.
 
 ---
 
-#### Step 7: Integration Factory Registration (1 hour)
+#### Step 7: Wiring (1–2 hours)
 
-**File:** `src/core/IntegrationFactory.ts`
+**`src/core/IntegrationFactory.ts`:**
 
-```typescript
-import { ClineCliProvider } from "./harness/cline/ClineCliProvider";
+- [ ] `createCapabilityProvider()` switch → `new ClineCliProvider()` (single
+      HarnessId→provider source for `HarnessCapabilityRegistry` and `detectHarness`)
+- [ ] `createClineCli(registerWithContext, executionWorkspace?)` passing the same
+      `CliIntegration` constructor arguments as the other `create*Cli` methods
+      (`platform`, `registerWithContext`, `userFeedbackSink`, `onProviderUsageUpdate`,
+      `executionWorkspace`, `disposableRegistry`)
+- [ ] `createForHarness()` switch case
 
-export class IntegrationFactory {
-  // ... existing methods
+**`src/core/WorkflowOrchestrator.ts`:** cached `clineCliIntegration` field +
+construction, the harness→integration map, `initialize()` fan-out, the
+execution-preview switch, the integration-lookup switch, and `setWorkflowName`
+fan-out (follow every `antigravityCliIntegration` occurrence).
 
-  /** Create a new Cline CLI integration */
-  createClineCli(registerWithContext: boolean = true): CliIntegration {
-    const provider = new ClineCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
-  }
-
-  /** Create a new integration for the given harness */
-  createForHarness(
-    harness: Harness,
-    registerWithContext: boolean = true
-  ): HarnessIntegration {
-    switch (harness) {
-      case Harness.ClineCli:
-        return this.createClineCli(registerWithContext);
-      // ... existing cases
-    }
-  }
-}
-```
+**Elsewhere:** `src/core/harness/CliIntegration.ts` (only if Cline needs a
+harness-specific branch), `src/core/harness/shared/usage/providers/` +
+`index.ts` (usage provider, if Cline exposes quota/usage),
+`src/core/harness/shared/StatuslineManager.ts` (if applicable),
+`src/core/harness/shared/CliEventMapper.ts` (tool-name mappings).
 
 ---
 
-#### Step 8: Add VS Code Settings (1 hour)
+#### Step 8: Settings and schemas (1 hour)
 
-**File:** `package.json` (contributes.configuration)
+> 2026-10-10: `package.json` `contributes.configuration` is **not** a settings surface
+> (see `.github/copilot-instructions.md`); there is no per-harness
+> `ctrlyoke.<harness>CliModel` setting any more. All settings live in
+> `schemas/settings-schema.json` and are read via `CtrlYokeConfigService` /
+> `ConfigurationUtils`.
 
-```json
-{
-  "ctrlyoke.clineCliModel": {
-    "type": "string",
-    "default": "",
-    "description": "Default model for Cline CLI (e.g., anthropic/claude-sonnet-4-5). Leave empty to use Cline's configured default.",
-    "order": 4
-  }
-}
-```
+- [ ] `schemas/settings-schema.json`: add a `"cline-cli"` property under
+      `defaults.models`, `defaults.additionalArgs`, `ui.harnessColors.byHarness`, and
+      (if supported) `statusLine.byHarness`; update the `defaults.harness` description
+      listing the auto-detect order (its values `$ref` the workflow schema's
+      `harnessId`, so the enum itself comes from the next bullet)
+- [ ] `schemas/workflow-schema.json`: add `"cline-cli"` to `$defs.harnessId` enum and to
+      the `additionalArgs` description listing all harnesses
+- [ ] Run `npm run schema:update` (regenerates `workflow-schema.yaml`,
+      `SchemaDescriptions.ts`, `WorkflowSchemaOutline.ts`, reference docs). Adding an
+      enum value is additive — no `schema:bump`
+- [ ] `src/utils/ConfigurationUtils.ts`: `getClineCliModel()` + the
+      model-for-harness switch
 
 ---
 
-#### Step 9: Add Model Constants (30 min)
+#### Step 9: Models, UI, utilities, docs (2–3 hours)
 
-**File:** `src/utils/ModelConstants.ts`
-
-```typescript
-export const CLINE_CLI_MODELS = [
-  { id: "anthropic/claude-sonnet-4-5", displayName: "Claude Sonnet 4.5" },
-  { id: "anthropic/claude-opus-4", displayName: "Claude Opus 4" },
-  { id: "openai/gpt-4o", displayName: "GPT-4o" },
-  { id: "openai/o3-mini", displayName: "o3-mini" },
-  { id: "google/gemini-2.5-pro", displayName: "Gemini 2.5 Pro" },
-] as const;
-```
+- [ ] `src/utils/ModelConstants.ts`: `CLINE_CLI_MODELS` (IDs) + labels map +
+      `MODEL_LABEL_HARNESS_IDS` entry; `src/utils/HarnessModelOptions.ts`;
+      `src/utils/ModelRegistry.ts` (live discovery, if Cline can list models);
+      `src/utils/ModelPricingRegistry.ts`; `scripts/sync-models.mjs`. The March 2026
+      model list (`anthropic/claude-sonnet-4-5`, …) is stale — regenerate it.
+- [ ] `src/utils/SessionValidator.ts`: Cline task IDs are numeric millisecond
+      timestamps, not UUIDs — add an explicit case
+- [ ] `src/utils/{HarnessDirectoryUtils,McpDiscoveryUtils,HarnessMcpExporter,TokenSemantics}.ts`
+- [ ] UI: `src/ui/WebviewSettingsSync.ts`, `src/ui/PromptEditorSupportService.ts`,
+      `src/ui/webview-react/store/settingsStore.ts`,
+      `components/shared/{HarnessIcon,ModelPricingEditor}.tsx`,
+      `components/settings/{settingsCatalog.ts,McpManagerSection.tsx,stats/StatusLineTrackingControls.tsx}`
+- [ ] Docs: `docs/harnesses/cline-cli.md` + `docs/harnesses/index.md`; regenerate
+      `docs/harnesses/compatibility.md` (`scripts/generate-compatibility-docs.mjs`;
+      update the harness list in `scripts/generate-compatibility-docs.test.mjs`);
+      `npm run check:docs` must pass
+- [ ] `config.versionPolicy` entry and `dev/reference/HARNESS_VERSION_SUPPORT.md`;
+      `scripts/chores.mjs` `update-clis`
+- [ ] Project instructions: add `src/core/harness/cline/**` to the `applyTo` of
+      `.github/instructions/harness-cli-providers.instructions.md`, the routing table in
+      `CLAUDE.md`, and the "exactly six" harness statements in
+      `.github/copilot-instructions.md`
 
 ---
 
@@ -766,7 +848,7 @@ export const CLINE_CLI_MODELS = [
 
 **Settings:**
 
-- [ ] `ctrlyoke.clineCliModel` setting respected
+- [ ] `defaults.models["cline-cli"]` (settings.json) respected
 - [ ] YOLO mode (`--yolo`) applied for `dangerouslyAllowAll`
 - [ ] Auto-approve mode (`--auto-approve-all`) applied for `allowAll`
 
@@ -916,9 +998,13 @@ export class ClineLogParser {
 
 ---
 
-#### Step 3: TUI Stream Processor (2-3 hours)
+#### Step 3: ~~TUI Stream Processor~~ (dropped 2026-10-10)
 
-**Purpose:** Filter TUI artifacts from terminal output
+> No harness has a `TuiStreamProcessor` and the base class does not exist. Interactive
+> output is never scraped from the PTY: content comes from the session log via
+> `CliLogMonitor`/`CliLogEventPump` and the provider's `ILogParser`. If Cline's task
+> storage can't supply interactive content, that's a blocker for Phase 2, not a reason
+> to add terminal scraping. The sample below is kept only as historical context.
 
 ```typescript
 export class ClineTuiStreamProcessor extends TuiStreamProcessor {
@@ -958,12 +1044,9 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 - [ ] Completion detected via inactivity timeout
 - [ ] Session discovery finds correct task
 
-**TUI Filtering:**
+**Interactive content:**
 
-- [ ] Box drawing characters filtered
-- [ ] Cursor movement codes filtered
-- [ ] Spinner characters filtered
-- [ ] JSON output preserved
+- [ ] Interactive turns render from task storage via `ClineLogParser` (no PTY scraping)
 
 ---
 
@@ -973,9 +1056,12 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 
 **Files:**
 
-- `src/core/harness/cline/ClineResponseParser.test.ts`
-- `src/core/harness/cline/ClineLogParser.test.ts`
-- `src/core/harness/cline/ClineToolPermissionMapper.test.ts`
+- `src/test/unit/ClineCliProvider.test.ts` (args, `parseHeadlessStdout`, session ID)
+- `src/test/unit/ClineLogParser.test.ts`
+- `src/test/unit/ClineToolPermissionMapper.test.ts`
+- Fixture coverage in `src/test/suite/harness/LogParsers.test.ts`
+- Real-CLI coverage belongs in `src/test/harness/` (`npm run test:harness` — costs
+  money; only run when explicitly asked)
 
 **Test Fixtures:**
 
@@ -1105,18 +1191,18 @@ steps:
 
 ## Appendix B: Comparison to Existing Harnesses
 
-| Feature               | Cline CLI              | Claude Code                      | Codex CLI             | Copilot CLI           |
-| --------------------- | ---------------------- | -------------------------------- | --------------------- | --------------------- |
-| JSON output           | ✅ `--json`            | ✅ `--output-format stream-json` | ✅ `--format json`    | ❌                    |
-| Session ID in stdout  | ✅ `task_started`      | ✅ `system.init`                 | ✅ `session_id`       | ❌                    |
-| Session resumption    | ✅ `--taskId`          | ✅ `--resume`                    | ✅ `--resume`         | ✅ `--resume`         |
-| Tool permission model | Mode-based (`--yolo`)  | Pattern-based                    | Pattern-based         | Pattern-based         |
-| Task storage          | `~/.cline/data/tasks/` | `~/.claude/projects/`            | `~/.codex/sessions/`  | `~/.copilot/`         |
-| MCP support           | ✅ `cline mcp add`     | ✅ `--mcp-config`                | ✅ `--mcp-config`     | ✅ `--mcp-config`     |
-| Completion detection  | Process exit           | Stop hook                        | Notify hook           | SessionEnd hook       |
-| Thinking/reasoning    | ✅ `reasoning` events  | ✅ `thinking` blocks             | ✅ `thinking` blocks  | ✅ `reasoning` events |
-| Cost tracking         | ✅ `usage.cost`        | ✅ `usage`                       | ✅ `usage`            | ❌                    |
-| Extended thinking     | ✅ `--thinking`        | ✅ `thinking` budget             | ✅ `reasoning.effort` | ❌                    |
+| Feature               | Cline CLI              | Claude Code                      | Codex CLI             | Copilot CLI               |
+| --------------------- | ---------------------- | -------------------------------- | --------------------- | ------------------------- |
+| JSON output           | ✅ `--json`            | ✅ `--output-format stream-json` | ✅ `--json`           | ✅ `--output-format json` |
+| Session ID in stdout  | ✅ `task_started`      | ✅ `system.init`                 | ✅ `session_id`       | ❌                        |
+| Session resumption    | ✅ `--taskId`          | ✅ `--resume`                    | ✅ `--resume`         | ✅ `--resume`             |
+| Tool permission model | Mode-based (`--yolo`)  | Pattern-based                    | Pattern-based         | Pattern-based             |
+| Task storage          | `~/.cline/data/tasks/` | `~/.claude/projects/`            | `~/.codex/sessions/`  | `~/.copilot/`             |
+| MCP support           | ✅ `cline mcp add`     | ✅ `--mcp-config`                | ✅ `--mcp-config`     | ✅ `--mcp-config`         |
+| Completion detection  | Process exit           | Stop hook                        | Notify hook           | SessionEnd hook           |
+| Thinking/reasoning    | ✅ `reasoning` events  | ✅ `thinking` blocks             | ✅ `thinking` blocks  | ✅ `reasoning` events     |
+| Cost tracking         | ✅ `usage.cost`        | ✅ `usage`                       | ✅ `usage`            | ❌                        |
+| Extended thinking     | ✅ `--thinking`        | ✅ `thinking` budget             | ✅ `reasoning.effort` | ❌                        |
 
 ### B.1 Key Differences
 
@@ -1138,17 +1224,22 @@ steps:
 
 ### B.2 Integration Complexity
 
-| Component              | Cline CLI             | Claude Code             | Copilot CLI               |
-| ---------------------- | --------------------- | ----------------------- | ------------------------- |
-| CLI Provider           | Medium                | Medium                  | Medium                    |
-| Response Parser        | Medium (JSONL events) | Medium (stream-json)    | Medium (JSONL events)     |
-| Notification Monitor   | Simple (process exit) | Complex (Stop hook)     | Complex (SessionEnd hook) |
-| Log Parser             | Medium (task storage) | Medium (session logs)   | Complex (session logs)    |
-| Tool Permission Mapper | Simple (mode-based)   | Complex (pattern-based) | Complex (pattern-based)   |
+| Component                            | Cline CLI             | Claude Code             | Copilot CLI               |
+| ------------------------------------ | --------------------- | ----------------------- | ------------------------- |
+| CLI Provider                         | Medium                | Medium                  | Medium                    |
+| Headless stdout → log-parser mapping | Medium (JSONL events) | Medium (stream-json)    | Medium (JSONL events)     |
+| Notification Monitor                 | Simple (process exit) | Complex (Stop hook)     | Complex (SessionEnd hook) |
+| Log Parser                           | Medium (task storage) | Medium (session logs)   | Complex (session logs)    |
+| Tool Permission Mapper               | Simple (mode-based)   | Complex (pattern-based) | Complex (pattern-based)   |
 
 ---
 
 ## Appendix C: Code Samples
+
+> 2026-10-10: these March 2026 samples predate the current interfaces. The class names
+> `ClineResponseParser`/`ResponseParserBase` are obsolete — the parsing switch lives in
+> `ClineLogParser` (extending `BaseLogParser`), fed by `ClineCliProvider.parseHeadlessStdout()`.
+> Keep the event-shape handling; discard the class scaffolding.
 
 ### C.1 Sample Response Parser
 
@@ -1312,7 +1403,7 @@ export class ClineLogParser implements ILogParser {
 
 - **Cline CLI GitHub:** https://github.com/cline/cline
 - **Cline CLI Version:** 3.74.0 (as of March 2026)
-- **ctrlyoke Harness Guide:** `docs/ADDING_NEW_CLI_HARNESS.md`
+- **ctrlyoke Harness Guide:** `dev/implemented/ADDING_NEW_CLI_HARNESS.md` (FlightPath-era and badly stale — trust §5.2 Steps 6–9 above instead)
 - **Claude Integration:** `src/core/harness/claude/` (reference implementation)
 - **Codex Integration:** `src/core/harness/codex/` (reference implementation)
 - **OpenCode Integration:** `src/core/harness/opencode/` (reference implementation)

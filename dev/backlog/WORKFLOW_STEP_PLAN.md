@@ -1,5 +1,14 @@
 # Workflow Step Plan
 
+> **2026-10-10 audit:** Not started apart from the two prerequisite worktree bugs (fixed in
+> `87c4065e4`, `1f4a87c1e`). No `STEP_TYPES.WORKFLOW`, `subWorkflowStep`, `getStepType`,
+> `$summary:`, or `priorContextDetail` exists yet. Line references re-verified and corrected
+> where they drifted: the execution context is built in
+> `WorkflowStartupPipeline.buildWorkflowExecutionContext`, not in `WorkflowInstance`'s
+> constructor; `CommitMessageGenerator` lives in `src/git/` and `WorkflowSerializer` in
+> `src/ui/`; the source checkout today is `workspaceFolderPath ?? getWorkspaceRoot()`; the
+> final-step external-append bug is now fixed (`234708f1e`).
+
 ## Overview
 
 Add a first-class `type: "workflow"` step to ctrlyoke. Its schema definition is named
@@ -87,13 +96,14 @@ implementation, `SubWorkflowLauncher` in `src/core/orchestration/`, constructed 
 `createInstance: () => WorkflowInstance` factory:
 
 - **VS Code and the hosted server:** `() => orchestrator.createExternalWorkflowInstance()`
-  (`WorkflowInstanceRegistry.ts:218`). This is the same path `CommitMessageGenerator` uses. The
+  (`WorkflowInstanceRegistry.ts:218`). This is the same path `CommitMessageGenerator` uses
+  (wired in `extension.ts:1614`). The
   instance is registered and announced to the dashboard, so it gets a dropdown row without
   changes to the dropdown.
 - **CLI:** a factory that builds `new WorkflowInstance(...)` with the CLI's existing
   dependencies.
 
-The launcher follows `CommitMessageGenerator.ts:563-670`: create the instance, load the file,
+The launcher follows `src/git/CommitMessageGenerator.ts:563-680`: create the instance, load the file,
 `await instance.executeLoadedPromptFile()`, then read `promptQueue.getState()` for the outcome.
 `executeLoadedPromptFile` can return without throwing on preflight problems, with the state still
 IDLE, so the launcher must classify the outcome from queue state, not from "it returned". The
@@ -155,8 +165,11 @@ interface SubWorkflowResult {
 }
 ```
 
-`WorkflowInstance` is where the context is built (`WorkflowInstance.ts:707-715`), so it is the
-one place the port gets plumbed in. A missing host is a configuration error: the step fails with
+The context is assembled in one place, `WorkflowStartupPipeline.buildWorkflowExecutionContext`
+(`src/core/orchestration/WorkflowStartupPipeline.ts:429`), from ports `WorkflowInstance`
+supplies (`createWorkflowStartupContextPort`, `WorkflowInstance.ts:1986`). The host is passed
+to `WorkflowInstance` and threaded through that port, so it is the one place the port gets
+plumbed in. A missing host is a configuration error: the step fails with
 "Sub-workflow steps are not supported in this host".
 
 ### D2. Stop: forward through the step's cancel resource, and propagate up through the outcome
@@ -218,8 +231,9 @@ it is a worktree), so the inheriting child needs a **delegated lease** (D4d).
 
 **D4b. Source checkout = the parent's execution checkout.** `SubWorkflowLaunchRequest` carries
 the parent's execution checkout root. The child's `WorktreeManager` call uses it as
-`sourceCheckoutRoot`, instead of `repoToplevel(workspaceFolderPath)`
-(`WorkflowInstance.ts:4364-4365`). That gives:
+`sourceCheckoutRoot`, instead of `this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()`
+(`WorkflowInstance.ts:4364-4365`; `WorktreeManager` then normalizes it with `repoToplevel`).
+That gives:
 
 - `base` defaults to the parent's current `HEAD`;
 - `targetBranch` is the parent's branch;
@@ -253,7 +267,8 @@ base, check the parent's execution checkout:
 2. Two delegated leases with the same immediate delegator. These are siblings inheriting one
    root, the same sharing parallel prompt members already have.
 
-A **merge lease** from a child (`mergeManagedWorktree`, `WorktreeManager.ts:880-888`) carries
+A **merge lease** from a child (`mergeManagedWorktree`, `WorktreeManager.ts:877`; the
+source-lease acquire is at `:902-912`) carries
 the chain too, so the blocked parent's own lease (shared-native on main, or exclusive on a
 worktree) no longer turns `merge: true` into `blocked`. Rule 2 deliberately does **not** apply
 to merge leases. A merge into a checkout where an inheriting sibling is still editing stays
@@ -283,7 +298,7 @@ unreliable):
 
 The previous draft claimed the resolution order was "same as promptStep" and listed
 `.ctrlyoke/workflows/`. That directory is not a candidate today, and ctrlyoke does not own a
-durable workflows folder (`WorkflowSerializer.ts:415`). Resolve the `workflow` value with
+durable workflows folder (`src/ui/WorkflowSerializer.ts:415`). Resolve the `workflow` value with
 `PromptFileResolver.resolvePath` (`src/core/PromptFileResolver.ts:228`). Its order is: absolute
 path, then the source definition's directory (trusted roots only), then the workspace root or
 named root, then `<workspaceRoot>/.ctrlyoke/`. It applies the same trusted-root filtering
@@ -718,7 +733,7 @@ reference type in `FileReferenceParser.ts:649-653` gains `detail: PriorContextDe
 - The parallel-member path (`:1009-1035`): `isPromptOrScriptSource` (`:1178-1189`) becomes
   `isParallelMemberSource` and accepts `type: workflow`. Members go through
   `buildSubWorkflowStep`. Other step kinds (e.g. `USER_INPUT_STEP_PLAN.md`'s `userInput`) are
-  still rejected (`promptFileParser.test.ts:604-617`), following `PARALLEL_STEPS_PLAN.md:53-56`'s
+  still rejected (`promptFileParser.test.ts:604-617`), following `dev/implemented/PARALLEL_STEPS_PLAN.md:53-56`'s
   explicit-opt-in rule.
 - `validateWorkflowSteps` (`:1441`): a sub-workflow branch before the `!item.prompt` check
   (`:1507`). It requires a non-empty `workflow` and runs the file-existence check from D5.
@@ -735,11 +750,11 @@ reference type in `FileReferenceParser.ts:649-653` gains `detail: PriorContextDe
 
 ### Dispatch
 
-`executeTargetContract` (`WorkflowExecutor.ts:1910`) currently routes disabled steps to
+`executeTargetContract` (`WorkflowExecutor.ts:1913`) currently routes disabled steps to
 `handleSkippedStep`, script steps to `executeScriptStep(step, stepIndex, context, target)`
-(`:1944`), and everything else into the inline AI attempt loop (`:1955`). After Phase 0 this is
+(`:1947-1950`), and everything else into the inline AI attempt loop (`:1958`). After Phase 0 this is
 a `switch (getStepType(step))` with a new `executeSubWorkflowStep(step, stepIndex, context, target)`
-arm. Final-step script dispatch passes `stepIndex = -1` (`:1945`), and the new arm follows the
+arm. Final-step script dispatch passes `stepIndex = -1` (`:1948-1949`), and the new arm follows the
 same convention.
 
 Parallel members reach the same `executeTargetContract` through `ParallelGroupRun.runMember` →
@@ -769,7 +784,7 @@ group itself needs is in [Parallel Sub-workflow Steps](#parallel-sub-workflow-st
 8. `await handle.done`, then map the result using D9. Record the D12a `subWorkflowOutput`
    metadata as the step's output event. Record the outcome through the same `promptQueue` calls
    `executeScriptStep` uses (`failStep`, `cancelStep`, and normal completion), so
-   `commitSequentialOutcome` (`:1722`), the final-step loop (`:621-840`) and `ParallelGroupRun`
+   `commitSequentialOutcome` (`:1725`), the final-step loop (`:621-840`) and `ParallelGroupRun`
    need no sub-workflow knowledge beyond what the parallel section lists.
 9. Always clear the `subWorkflow` field in `finally`.
 
@@ -789,10 +804,10 @@ group itself needs is in [Parallel Sub-workflow Steps](#parallel-sub-workflow-st
 
 A sub-workflow `finalStep` runs inside the outer final-step loop like any other final step.
 Appending a sub-workflow step to a running instance (see Queuing below) grows the in-memory
-queue, which the loop-back check (`:793-821`) already sees. The open bug
-`dev/bugs/backlog/final-step-loop-decision-misses-unmerged-external-appends.md` affects only
-_external on-disk_ appends (MCP, `ctrlyoke step add`), not the dashboard path here, so it does
-not block this plan.
+queue, which the loop-back check (`:796-824`) already sees. External on-disk appends (MCP,
+a future `ctrlyoke step add`) are also seen now: the loop merges the run file under lock before
+the check (`mergeDiskStepsUnderLock`, fixed in `234708f1e`;
+`dev/bugs/implemented/final-step-loop-decision-misses-unmerged-external-appends.md`).
 
 ### Prior-context resolution (D12)
 
@@ -904,7 +919,7 @@ child's own preflight surfaces it as a start failure.
 - **Stopping one lane directly** (from the child's own dropdown row): only that member settles
   CANCELLED. Its siblings keep running, because stopping one lane should not discard others'
   work. At the join, any user-cancelled member makes the group return `stopped`, so
-  `finishParallelGroupRun` (`WorkflowExecutor.ts:1262-1311`) stops the parent **instead of
+  `finishParallelGroupRun` (`WorkflowExecutor.ts:1265`) stops the parent **instead of
   advancing to the merge step with a missing lane**. Resuming the parent recovers the settled
   members (`getRecoveredGroupOutcome`) and reattaches the stopped lane's child run (D6). The
   handle tells the two cancellations apart: `SubWorkflowResult.cancelledBy` is `"parent"` when

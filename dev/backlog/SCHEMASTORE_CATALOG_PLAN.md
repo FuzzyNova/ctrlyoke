@@ -1,7 +1,18 @@
 # Register ctrlyoke's Schemas in the SchemaStore Catalog
 
-> **Status:** Backlog. Do this at or after the release cut, once `/schema/v1/` is live
-> (`SCHEMA_RELEASE_READINESS_PLAN.md` §12 checklist).
+> **Status:** Backlog. Not started, but unblocked: `/schema/v1/` is live (see the audit
+> note). The original gate was "at or after the release cut, once `/schema/v1/` is live"
+> (`dev/implemented/SCHEMA_RELEASE_READINESS_PLAN.md` §12 checklist).
+>
+> **2026-10-10 audit:** `https://ctrlyoke.dev/schema/v1/workflow.json` and
+> `…/settings.json` both return 200 with `Content-Type: application/schema+json` and
+> `Access-Control-Allow-Origin: *` (published by `deploy.yml` via
+> `scripts/publish-schemas-to-landing.mjs`), so §4's prerequisite is checked off. No
+> SchemaStore PR exists yet. The `$schema`-writer ban is in `config.instructions.md`
+> as described. The version-bump procedure that §4's last item refers to now lives in
+> `CONTRIBUTING.md` "Changing the schemas" (`npm run schema:bump`), and docs regenerate
+> through `npm run schema:update`. Noted that the extension's own globs carry a `**/`
+> prefix.
 >
 > **Problem in one line:** editors other than VS Code with the ctrlyoke extension only validate
 > ctrlyoke files when the file itself links a schema, and ctrlyoke deliberately no longer
@@ -51,8 +62,10 @@ Add two entries to `src/api/json/catalog.json` in `SchemaStore/schemastore`:
 ```
 
 - **`fileMatch` must stay as narrow as the extension's.** Copy the `package.json`
-  `jsonValidation`/`yamlValidation` globs. Never use a bare `settings.json`: that would claim
-  every settings file in the world.
+  `jsonValidation`/`yamlValidation` globs (`**/*.ctrlyoke.json`, `**/*.ctrlyoke.yaml`,
+  `**/*.ctrlyoke.yml`, `**/.ctrlyoke/settings.json`), adapting the `**/` prefix to
+  SchemaStore's convention. Never use a bare `settings.json`: that would claim every
+  settings file in the world.
 - **`.prompt.md` is excluded.** Its schema applies only to the frontmatter, which catalog
   consumers can't validate.
 - **`versions`** records each format version. When `/schema/v2/` ships (readiness plan §2.6),
@@ -86,17 +99,20 @@ Add two entries to `src/api/json/catalog.json` in `SchemaStore/schemastore`:
 
 ## 4. Work
 
-- [ ] `/schema/v1/` deployed with `Content-Type: application/schema+json` and
-      `Access-Control-Allow-Origin: *` (readiness plan checklist; prerequisite).
+- [x] `/schema/v1/` deployed with `Content-Type: application/schema+json` and
+      `Access-Control-Allow-Origin: *` (readiness plan checklist; prerequisite). Verified
+      2026-10-10 for both `workflow.json` and `settings.json`.
 - [ ] Answer §3's questions with a local catalog: VS Code with and without the extension,
       Red Hat YAML, one JetBrains IDE, and `yaml-language-server` from the command line.
 - [ ] Open the SchemaStore PR with the §2 entries (and test files, if required).
 - [ ] Docs: `docs/reference/_partials/settings/intro.md` and the workflow-schema intro
       partial should say that other editors pick the schema up automatically through
       SchemaStore, and drop the "set `$schema` by hand" advice where it is no longer needed.
-      Regenerate with `npm run generate-schema-docs`.
-- [ ] Add "update the SchemaStore `versions` map" to the version-bump steps in the readiness
-      plan's §2.6 successor (wherever the v2 procedure ends up documented).
+      Today `settings/intro.md` tells other-editor users to set `$schema` by hand
+      (lines ~48–53). Regenerate with `npm run schema:update` (or
+      `npm run generate-schema-docs`).
+- [ ] Add "update the SchemaStore `versions` map" to the bump steps in `CONTRIBUTING.md`
+      "Changing the schemas" (and/or the checklist `scripts/schema-bump.mjs` prints).
 
 ## 5. Out of scope
 

@@ -2,6 +2,16 @@
 
 **Date:** 2026-03-24
 **Purpose:** Research `vscode.lm` capabilities and how they could enhance ctrlyoke's prompt editor with an "Improve Prompt" button, smart completions, and other AI-powered features.
+**Status:** Research / not started. Nothing in `src/` calls `vscode.lm`. The one exception is the token counter in §4, which shipped in a different form (local `gpt-tokenizer`, not `model.countTokens()`).
+
+> **2026-10-10 audit:**
+>
+> - **Done differently (§4):** the token counter exists. `EditorFooter.tsx` shows a count from `useAttachmentTokenCount` (aade9c7c0), which uses `src/ui/webview-react/utils/tokenizer.ts` (`gpt-tokenizer`) and asks the extension for counts of expanded attachments. It needs no LM provider, so it also works in the hosted dashboard. §4 is kept as background only.
+> - **Settings (§6):** the proposed settings are now framed for `schemas/settings-schema.json` + `src/types/CtrlYokeSettings.ts`. `package.json` `contributes.configuration` is not a settings surface.
+> - **Message handling (§1, §6):** dashboard requests are dispatched in `src/ui/WebviewMessageRouter.ts`, not `CtrlYokeWebviewProvider.ts`.
+> - **Stale model list:** the Copilot model-family table is from March 2026. Select models through `selectChatModels` at runtime. Don't hardcode families.
+> - **`copilot-chat` boundary:** these are authoring aids that make bounded, user-initiated `vscode.lm` requests. That is the "public API" direction named in `dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`. Any design that runs workflow steps through `vscode.lm`, or treats it as a seventh harness, would recreate the removed `copilot-chat` harness and is out of scope. Option B's `CtrlYokeManager.runHeadless` never existed. A headless harness path for authoring aids would need a new one-shot API.
+> - **Canonical plan:** prompt suggestions and Improve Prompt are owned by [`PROMPT_AUTHORING_SUGGESTIONS_PLAN.md`](PROMPT_AUTHORING_SUGGESTIONS_PLAN.md).
 
 ---
 
@@ -55,7 +65,7 @@ const tokenCount = await model.countTokens(messages, cancellationToken);
 The webview (`CodeMirrorEditor.tsx`, React components) **cannot** call `vscode.lm` directly. All LM requests must be:
 
 1. Triggered by the webview via `vscode.postMessage({ type: 'SOME_REQUEST', ... })`
-2. Handled in the extension host (e.g., `CtrlYokeWebviewProvider.ts`)
+2. Handled in the extension host (a handler registered in `src/ui/WebviewMessageRouter.ts`'s dispatch table)
 3. Results streamed back via `panel.webview.postMessage({ type: 'SOME_RESPONSE', chunk: '...' })`
 
 This is the same pattern already used for completions (`REQUEST_COMPLETIONS` / `COMPLETIONS_RESPONSE`).
@@ -194,6 +204,12 @@ only after measuring suggestion quality, latency, cancellation, and quota use.
 
 ## 4. Token Counter / Budget Indicator
 
+> **Implemented differently (aade9c7c0):** `EditorFooter.tsx` already shows a
+> live token count through `useAttachmentTokenCount`, which uses a local
+> `gpt-tokenizer` and counts expanded `@file` attachments. The only thing left
+> from this section is the green/yellow/red context-budget bar. Don't switch to
+> `model.countTokens()`: it would tie the counter to Copilot being available.
+
 `model.countTokens()` enables a live token count display in the editor UI.
 
 **Feature:** A small indicator below or beside the editor showing estimated token count for the current prompt text. Could include a colored bar that shifts from green → yellow → red as the prompt approaches typical model context limits.
@@ -244,16 +260,23 @@ COUNT_TOKENS_REQUEST: 'countTokensRequest',
 COUNT_TOKENS_RESPONSE: 'countTokensResponse',
 ```
 
-### New Extension-Side Handler (in `CtrlYokeWebviewProvider.ts`)
+Message payload types also belong in `src/types/WebviewMessageTypes.ts`. Drop
+the `COUNT_TOKENS_*` pair, because the token count is computed locally (§4).
 
-A new `LmFeatureHandler` class (or methods added to the existing webview provider) that:
+### New Extension-Side Handler (registered in `src/ui/WebviewMessageRouter.ts`)
+
+A new `LmFeatureHandler` class (the canonical plan places it under `src/ui/prompt-suggestions/`) that:
 
 1. Receives the above message types from the webview
 2. Calls `vscode.lm.selectChatModels` with fallback handling
 3. Streams results back via `panel.webview.postMessage`
 4. Manages `CancellationTokenSource` instances so requests can be cancelled
 
-### New Settings (in `package.json` + `ConfigurationUtils.ts`)
+### New Settings (in `schemas/settings-schema.json` + `src/types/CtrlYokeSettings.ts`, read via `ConfigurationUtils.ts`)
+
+Illustrative only. Real settings live in `.ctrlyoke/settings.json`, so the keys
+would be nested (for example under `editor`), not flat `ctrlyoke.*` VS Code
+settings. Final names belong in the canonical plan.
 
 ```jsonc
 "ctrlyoke.improvePromptEnabled": {
@@ -289,7 +312,7 @@ A new `LmFeatureHandler` class (or methods added to the existing webview provide
 | Priority | Feature                                           | Complexity | Value      |
 | -------- | ------------------------------------------------- | ---------- | ---------- |
 | 1        | Manual "Suggest continuation" (canonical P2 plan) | Medium     | High       |
-| 2        | Token counter indicator                           | Low        | High       |
+| 2        | ~~Token counter indicator~~ (done locally, §4)    | Low        | High       |
 | 3        | "Improve Prompt" with a review/diff UX            | Medium     | Very High  |
 | 4        | Opt-in automatic ghost text                       | High       | Medium     |
 | 5        | Additional configured-provider adapter            | Medium     | Medium     |

@@ -1,5 +1,14 @@
 # User Input Step Plan
 
+**Status:** Not started.
+
+> **2026-10-10 audit:** Still not implemented (no `userInput` step type in
+> `schemas/workflow-schema.json` or `src/types/`). Refreshed stale references: schema source is
+> `schemas/workflow-schema.json` (`$defs`, the `.yaml` is generated), `executeScriptStep` moved,
+> `buildWorkflowInstance` now delegates to `WorkflowInstanceRegistry`, `ExecutionPropertyResolver`
+> lives in `src/types/`, and the `useCompatibilityDiagnostics` PTY discrepancy was fixed
+> (`ca9fdf925`). Added notes on parallel groups and the `workflowStep` `allOf`/`oneOf` shape.
+
 ## Problem
 
 A user wants to insert a manual checkpoint into a workflow — e.g. after a step that
@@ -19,10 +28,10 @@ No existing backlog doc covers this — `dev/backlog/` was searched and nothing 
 
 ### 1. `scriptStep` + `executionMode: interactive` already supports blocking on stdin
 
-`ScriptStep` (schema: `scriptStep` in `schemas/workflow-schema.yaml`) has an
+`ScriptStep` (schema: `$defs/scriptStep` in `schemas/workflow-schema.json`) has an
 `executionMode` field. When resolved to `interactive` (step → workflow → global setting;
 see `PropertyResolver.resolveExecutionMode`), `WorkflowExecutor.executeScriptStep`
-(`src/core/WorkflowExecutor.ts:1095-1279`) does **not** run the script through
+(`src/core/WorkflowExecutor.ts`, ~line 2537) does **not** run the script through
 `ScriptProcessRunner`/`CliProcessManager` at all — it calls `context.spawnScriptPty(...)`
 instead, which spawns the command inside a real PTY (`PtyProcessManager`) wired to an
 embedded xterm terminal (`TerminalInstance.tsx`) in the dashboard. The user can type into
@@ -52,17 +61,17 @@ end. What's missing is polish and reach, covered next.
   just relaying dashboard I/O over HTTP/WebSocket instead of postMessage. The PTY for an
   interactive script step is spawned server-side in that same extension host either way,
   which is why an interactive script step works fine from a browser tab in practice.
-  `WorkflowOrchestrator.buildWorkflowInstance()` confirms this: it passes
-  `hostCanProvidePty: true` unconditionally to every `WorkflowInstance` it creates
-  (`WorkflowOrchestrator.ts:5502-5512`), with no `isStandalone` branch anywhere in the
-  real execution path. (Note: `useCompatibilityDiagnostics.ts:233`'s
-  `hostCanProvidePty: !isStandalone` is a separate, client-side-only compatibility-
-  diagnostics preview computation, not wired to the real gate — it looks stale/inaccurate
-  and may be worth a fix on its own, but that's outside this plan's scope.) The one place
+  `WorkflowOrchestrator.buildWorkflowInstance()` (which delegates to
+  `WorkflowInstanceRegistry.buildWorkflowInstanceForHost()`) never sets it to `false`;
+  `PropertyResolver.createContext` defaults `hostCanProvidePty` to `true`, and
+  `ExecutionPreviewService` is constructed with `hostCanProvidePty: true`, with no
+  `isStandalone` branch anywhere in the real execution path. (The client-side
+  `useCompatibilityDiagnostics.ts` preview also hard-codes `hostCanProvidePty: true` now —
+  the old `!isStandalone` discrepancy was fixed in `ca9fdf925`.) The one place
   `hostCanProvidePty` is genuinely conditional is the standalone `ctrlyoke` CLI binary,
   which has no extension host at all — there it's only `true` when the CLI process itself
-  has a real TTY on both stdin/stdout (`CliExecutionMode.ts:17-38`), and `PropertyResolver`
-  clamps `interactive` down to `headless` otherwise (`ExecutionPropertyResolver.ts:292`,
+  has a real TTY on both stdin/stdout (`src/cli/CliExecutionMode.ts`, `resolveCliExecutionMode`), and the resolver
+  clamps `interactive` down to `headless` otherwise (`src/types/ExecutionPropertyResolver.ts`, ~line 407,
   surfaced via `cli.ts`'s `warnAboutClampedInteractiveSteps`). So the PTY/`read` approach
   already covers VS Code + hosted browser; only pure headless CLI runs (no TTY — e.g. CI)
   are the actual gap, not "browser vs desktop."
@@ -122,7 +131,7 @@ prompt, and there's no evidence of demand for structured data collection as oppo
 checkpoint/gate. Revisit only if a concrete use case surfaces that buttons + freeform
 can't satisfy.
 
-### Schema (`schemas/workflow-schema.yaml`)
+### Schema (`schemas/workflow-schema.json`, shown as YAML for brevity)
 
 ```yaml
 userInputStep:
@@ -179,14 +188,22 @@ userInputStep:
         type: string
         enum: [continue, stopWorkflow]
     _runtime:
-      $ref: "#/definitions/promptRuntimeMetadata"
+      $ref: "#/$defs/promptRuntimeMetadata"
   required: [type, question]
   additionalProperties: false
 ```
 
-`workflowStep` (`#/definitions/workflowStep`) becomes a three-way `oneOf` alongside
-`promptStep`/`scriptStep`, matching the pattern already used in
-`dev/backlog/WORKFLOW_STEP_PLAN.md` for its own step-type addition.
+`workflowStep` (`#/$defs/workflowStep`) is an `allOf` whose first member is a `oneOf` of
+`promptStep`/`scriptStep` (the other members forbid root-only keys such as `worktree`). Add
+`userInputStep` to that inner `oneOf`, matching the pattern in
+`dev/backlog/WORKFLOW_STEP_PLAN.md` (whose new definition is `subWorkflowStep`). Run
+`npm run schema:update` afterwards to regenerate the `.yaml`, `SchemaDescriptions.ts`, and
+reference docs.
+
+**Parallel groups**: `parallelGroupItem.parallel[]` also references `workflowStep`. A
+human-review gate inside a concurrent group makes little sense (several gates could be pending
+at once, and the group's other members keep running); exclude `userInputStep` from group
+members with a `not` clause, the same way nested `parallel` is excluded.
 
 ### Types (`src/types/CtrlYokeTypes.ts`)
 

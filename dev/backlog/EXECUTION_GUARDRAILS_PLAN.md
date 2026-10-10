@@ -4,6 +4,15 @@
 >
 > **Priority:** P2 — complete with or before unattended scheduling
 
+> **2026-10-10 audit:** Partially done. The `queue.maxSteps` single-sourcing landed: every path
+> resolves the limit through `src/utils/QueueLimitUtils.ts` (`resolveEffectiveMaxSteps`,
+> `buildStepLimitError`) plus `exceedsLimit` from `LimitUtils` (append paths in `1661a4231`), and
+> `WorkflowExecutor.checkStepLimit` already fails an oversized run at execution start before the first
+> step and again after out-of-process appends. Still open: the timeout audits and Phase 2 (structured
+> stop reason codes). Setting names corrected to `execution.maxPromptTimeoutSec` /
+> `execution.scriptTimeoutSec`. Parallel steps shipped with `queue.maxParallelSteps`, and the related
+> plans now live in `dev/implemented/`.
+
 ## Existing Product Contract
 
 ctrlyoke already exposes and enforces execution guardrails through the settings
@@ -11,10 +20,11 @@ layer:
 
 | Concern           | Existing setting                    | Current role                                             |
 | ----------------- | ----------------------------------- | -------------------------------------------------------- |
-| Prompt duration   | `execution.maxPromptTimeout`        | Bounds one harness prompt; `-1` is unlimited             |
-| Script duration   | `execution.scriptTimeout`           | Default timeout for pre/end-condition scripts            |
+| Prompt duration   | `execution.maxPromptTimeoutSec`     | Bounds one harness prompt; `-1` is unlimited             |
+| Script duration   | `execution.scriptTimeoutSec`        | Default timeout for pre/end-condition scripts            |
 | Workflow growth   | `queue.maxSteps`                    | Bounds the workflow step list, including dynamic appends |
 | Workflow duration | `queue.maxWorkflowExecutionTimeSec` | Stops at safe execution boundaries; `-1` is unlimited    |
+| Concurrency       | `queue.maxParallelSteps`            | Caps how many members of a parallel group run at once    |
 
 Retry behavior already has focused controls:
 
@@ -55,15 +65,21 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 
 ### Phase 1 — Single-source existing enforcement
 
-- Create or identify one shared queue-limit check used by initial workflow load,
-  manual append, MCP/API append, working-file reload, and `finalStep` dynamic
-  extension.
-- Reject an initially loaded workflow whose executable step count exceeds
-  `queue.maxSteps` before its first step starts. Current append paths enforce the
-  limit, but initial loading relies on later execution checks.
+- ~~Create or identify one shared queue-limit check~~ — **done**: `QueueLimitUtils`
+  (`resolveEffectiveMaxSteps`, `getEffectiveMaxStepsSource`, `buildStepLimitError`)
+  with `LimitUtils.exceedsLimit`, used by `WorkflowInstance` (manual/topology
+  append), `mcp-server.ts` (MCP append), `RunContinuationService`,
+  `ExecutionPreviewService`, and `WorkflowExecutor.checkStepLimit`.
+- ~~Reject an oversized initial workflow before its first step starts~~ —
+  **done**: `WorkflowExecutor` calls `checkStepLimit` right after the run starts
+  and before the first step, and again after merging out-of-process appends.
+  Remaining gap: `PromptFileParser` validation only *warns*
+  (`STEP_LIMIT_EXCEEDED`) and only against an authored workflow `maxSteps`, not
+  the global setting, so the editor/dry-run cannot flag a run that will fail on
+  `queue.maxSteps`.
 - Count enabled and disabled queue entries consistently with the existing queue
   definition; do not create a second “billable step” count.
-- Audit `execution.maxPromptTimeout` across interactive/headless transports and
+- Audit `execution.maxPromptTimeoutSec` across interactive/headless transports and
   completion monitors so `-1` and finite values have the same meaning for every
   CLI harness.
 - Audit `queue.maxWorkflowExecutionTimeSec` across normal steps, script steps,
@@ -78,8 +94,12 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   workflow-time stops across dashboard status/output, CLI results, MCP results,
   logs, and notifications.
 - State the configured threshold and observed value in each stop message.
-- Include the effective global guardrails in dry-run output once
-  `DRY_RUN_PREVIEW_PLAN.md` is implemented.
+- Include the effective global guardrails in dry-run output
+  (`dev/implemented/DRY_RUN_PREVIEW_PLAN.md` has shipped;
+  `ExecutionPreviewService` already resolves the effective `maxSteps`).
+- Today a step-limit stop is a `notifyUserFeedback` warning plus a generic
+  runtime `fail()`, which is indistinguishable from a harness failure in run
+  state — this is the gap the reason codes close.
 - Keep configuration in the existing Execution and Queue settings sections; do
   not add workflow or prompt property controls.
 
@@ -94,8 +114,8 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   behavior, and an aggregate counter would add another surprising stop rule.
 - `maxObservedTokens`; usage is incomplete for some harnesses and belongs in
   usage visibility, not a purported hard guardrail.
-- `maxConcurrentSteps`; parallel-step execution must own its global concurrency
-  setting when that feature is designed.
+- `maxConcurrentSteps`; parallel-step execution owns its global concurrency
+  setting, `queue.maxParallelSteps`.
 - Administrator ceilings that workflow files may lower but not raise.
 - Live remaining-budget widgets in workflow authoring.
 
@@ -107,11 +127,12 @@ values for a particular unattended mode, make that an explicit scheduler policy
 and user choice.
 
 Parallel steps inherit the existing queue and workflow-time settings. Their
-concurrency cap belongs to `PARALLEL_STEPS_PLAN.md`, while safe file isolation
-belongs to `WORKTREE_SUPPORT_PLAN.md`.
+concurrency cap (`queue.maxParallelSteps`) came from
+`dev/implemented/PARALLEL_STEPS_PLAN.md`, and worktree isolation from
+`dev/implemented/WORKTREE_SUPPORT_PLAN.md` (both shipped).
 
 Observed token totals remain reporting data under
-`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`. They do not block execution.
+`dev/implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`. They do not block execution.
 
 ## Acceptance Criteria
 

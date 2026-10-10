@@ -1,5 +1,29 @@
 # VS Code IDE MCP Integration Plan
 
+**Status:** Not started. No `DiagnosticsSource`, no `kind: "diagnostics"`
+end condition, and no `ctrlyoke-ide` server exist.
+
+> **2026-10-10 audit:** Corrected the parts of the design that conflicted with
+> the current code:
+>
+> - The `endCondition` schema has no `kind` discriminator. `script` is
+>   required, and `unevaluatedProperties: false` is set. Phase 1 must add `kind`
+>   as an optional field (defaulting to script) and make `script` conditionally
+>   required.
+> - Retry interpolation is `$endCondition:<field>` in
+>   `EndConditionHandler.buildRetryPrompt` (`src/core/EndConditionHandler.ts`).
+>   There is no `{stderr}`/`{stdout}` handling in `WorkflowExecutor`. Phase 2 is
+>   now `$endCondition:diagnostics`.
+> - MCP injection is per harness, via `CliMcpConfigGenerator` and
+>   `CliProviderUtils`. `SettingsJsonMcpTracker` only serves Qwen and
+>   Antigravity. The `ctrlyoke` server is injected only when a workflow's
+>   resolved `mcpServers` includes `MCP_SERVER_IDS.CTRLYOKE`, so it is not
+>   always present.
+> - "Seven harnesses" corrected to six.
+>
+> Pre-release impact: none. Every change here is additive: an optional `kind`,
+> a new `$endCondition:` field, and new MCP tools.
+
 ## Summary
 
 > **Follow-up owned here (2026-10-08):** Phase 1 should define the gate's
@@ -49,11 +73,11 @@ The same limitation applies to GitHub Copilot CLI's IDE integration — it's sco
 
 ### Gaps no existing solution solves
 
-1. **Detached subprocess access.** ctrlyoke spawns CLI agents as automated background processes. No existing bridge auto-registers with ctrlyoke's per-harness MCP injection. Users must manually configure `~/.claude.json` or `.vscode/mcp.json` and the agent must be in a controlled terminal.
+1. **Detached subprocess access.** ctrlyoke spawns CLI agents as automated background processes. No existing bridge auto-registers with ctrlyoke's per-harness MCP injection. Users must configure each bridge by hand (for example in `~/.claude.json` or `.vscode/mcp.json`), and the agent has to run in a terminal the bridge controls.
 
 2. **Diagnostics as end-condition gates.** Every existing solution exposes diagnostics as a read-only AI tool call. None uses diagnostic state as a structured pass/fail gate that triggers a retry loop with the actual error list injected into the retry prompt.
 
-3. **Cross-harness uniformity.** Each community extension targets one or two agents. ctrlyoke runs seven harnesses — a native integration would give all of them the same capability automatically.
+3. **Cross-harness uniformity.** Each community extension targets one or two agents. ctrlyoke runs six harnesses (`HARNESS_IDS`), and a native integration would give all of them the same capability automatically.
 
 4. **Millisecond diagnostic checks.** `vscode.languages.getDiagnostics()` is synchronous and returns in <1 ms. Cold `tsc --noEmit` takes 5–30 seconds. For tight retry loops, this is the difference between a workflow that feels instant and one that grinds.
 
@@ -77,12 +101,19 @@ endCondition:
   sources: [typescript, eslint] # omit = all sources
 ```
 
+The current `endCondition` def (`$defs/endCondition`) has no `kind`, requires
+`script`, and sets `unevaluatedProperties: false`. Add `kind` as an optional
+enum (`script` | `diagnostics`, defaulting to `script`). Then use `if/then` so
+`script` is required only for `kind: script`, and the diagnostics fields are
+allowed only for `kind: diagnostics`. Existing workflows stay valid unchanged.
+Run `npm run schema:update` afterwards.
+
 **Implementation touch points:**
 
 - `src/types/CtrlYokeTypes.ts` — add `DiagnosticsEndCondition` to `EndCondition` union type
-- `src/core/EndConditionEvaluator.ts` — add `evaluateDiagnostics()` that calls `vscode.languages.getDiagnostics()` (cannot run in child process since it needs the VS Code API; needs a new in-process evaluation path)
+- `src/core/EndConditionEvaluator.ts` — add `evaluateDiagnostics()` that reads from a host-neutral `DiagnosticsSource` port. This is a new in-process evaluation path, separate from the child-process script path.
 - `src/core/EndConditionHandler.ts` — route `kind: "diagnostics"` to new evaluator
-- `src/platform/VsCodeAdapter.ts` — expose `getDiagnostics(scope, filter)` through `PlatformAdapter` so CLI adapter can stub it for tests
+- `src/platform/` — a `VsCodeDiagnosticsSource` (`vscode.languages.getDiagnostics()`), wired through `PlatformAdapter`/`VsCodeAdapter`, plus a Node implementation over `src/server/lsp/ManagedLanguageServerBackend.ts` (pull diagnostics) for `CliAdapter`/`ctrlyoke server`. See the follow-up note above.
 
 ### Phase 2: `{diagnostics}` Retry Prompt Interpolation
 
@@ -94,10 +125,10 @@ endCondition:
   maxErrors: 0
   retryPrompt: |
     The following TypeScript errors still exist. Fix them:
-    {diagnostics}
+    $endCondition:diagnostics
 ```
 
-`{diagnostics}` expands to a formatted list:
+`$endCondition:diagnostics` expands to a formatted list:
 
 ```
 src/foo.ts:12:4 error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
@@ -106,11 +137,13 @@ src/bar.ts:8:1 error TS2304: Cannot find name 'Foo'.
 
 **Implementation:**
 
-- `src/core/WorkflowExecutor.ts` — extend the retry prompt interpolation (currently handles `{stderr}`, `{stdout}`) to also resolve `{diagnostics}` when end-condition kind is `diagnostics`
+- `src/core/EndConditionHandler.ts` (`buildRetryPrompt`) — retry prompts already substitute `$endCondition:<field>` (stdout, stderr, exitCode, actual, expected, compareSource). Add a `diagnostics` field, populated when the kind is `diagnostics`. Also set `stdout` to the formatted list so the fallback retry prompt (no `retryPrompt`) includes it.
+- `src/utils/PromptDiagnosticRules.ts` — teach the `$endCondition:` ref validator the new field
+- `schemas/workflow-schema.json` — mention the field in the `retryPrompt`/`passRetryPrompt` descriptions
 
 ### Phase 3: `ctrlyoke-ide` MCP Server (auto-injected)
 
-A thin MCP server that exposes `getDiagnostics` to CLI harnesses running as detached processes. Unlike community extensions that require manual user configuration, this auto-registers via the existing `SettingsJsonMcpTracker` infrastructure.
+A thin MCP server that exposes `getDiagnostics` to CLI harnesses running as detached processes. Unlike community extensions that require manual user configuration, this registers through the existing per-harness MCP injection (`CliMcpConfigGenerator` and the `CliProviderUtils` MCP preparation path; `SettingsJsonMcpTracker` covers only Qwen and Antigravity). A simpler option to consider first: add the tools to the existing `ctrlyoke` MCP server (`src/mcp-server.ts`) instead of shipping a second binary.
 
 **Architecture:**
 
@@ -127,7 +160,7 @@ Claude Code / Copilot CLI / Codex (spawned by CliIntegration)
 - `ctrlyoke_ide_get_diagnostics(scope?, file?, severity?)` — returns Problems panel state
 - `ctrlyoke_ide_get_workspace_summary()` — file count, language breakdown, error/warning totals
 
-**Auto-injection:** `SettingsJsonMcpTracker` already injects the `ctrlyoke` MCP server into each harness's config at launch. The `ctrlyoke-ide` server would be injected the same way — zero user setup required. Agents running under ctrlyoke automatically have access; agents running standalone don't see it.
+**Auto-injection:** each harness provider already writes the `ctrlyoke` MCP server into that harness's config at launch. This happens only when the workflow's resolved `mcpServers` includes `MCP_SERVER_IDS.CTRLYOKE`, so it is opt-in per workflow. The `ctrlyoke-ide` server (or the extra tools) would follow the same rule, or would need its own default-on decision. Either way, no user setup is required. Agents running under ctrlyoke automatically have access; agents running standalone don't see it.
 
 **Scope note:** Skip `hover`, `findReferences`, `gotoDefinition`, `workspaceSymbols`, `executeCommand` — these have no workflow automation value and users who want them can install a community extension. Keep the surface to what drives the diagnostic gate loop.
 
@@ -167,7 +200,7 @@ This enables the dashboard to show diagnostic trend across a workflow run and gi
 ## Implementation Order
 
 1. **Phase 1** — Diagnostic end-condition gate (pure in-process, no new binaries, highest leverage)
-2. **Phase 2** — `{diagnostics}` interpolation (builds directly on Phase 1)
+2. **Phase 2** — `$endCondition:diagnostics` interpolation (builds directly on Phase 1)
 3. **Phase 3** — `ctrlyoke-ide` MCP stdio server (needed for harnesses to call diagnostics themselves during a step; Phases 1–2 cover the end-condition use case without it)
 4. **Phase 4** — Diagnostic snapshots in `_runtime` (quality-of-life, deferred)
 
@@ -177,12 +210,12 @@ Phases 1 and 2 together deliver the core value proposition with no new executabl
 
 ## Effort Estimate
 
-| Phase                             | Complexity  | New files                            | Key risk                                                                                                |
-| --------------------------------- | ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| 1 — Diagnostic end-condition      | Medium      | 1 (DiagnosticsEndConditionEvaluator) | In-process evaluation bypasses child process isolation; need to handle `PlatformAdapter` stub for tests |
-| 2 — `{diagnostics}` interpolation | Low         | 0                                    | Formatting long diagnostic lists into prompts                                                           |
-| 3 — `ctrlyoke-ide` MCP server     | Medium-High | 2–3 (binary + IPC bridge)            | Named pipe lifecycle, auth token, server discovery by harnesses                                         |
-| 4 — `_runtime` snapshots          | Low         | 0                                    | Working file schema churn                                                                               |
+| Phase                           | Complexity  | New files                            | Key risk                                                                                                |
+| ------------------------------- | ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| 1 — Diagnostic end-condition    | Medium      | 1 (DiagnosticsEndConditionEvaluator) | In-process evaluation bypasses child process isolation; need to handle `PlatformAdapter` stub for tests |
+| 2 — `$endCondition:diagnostics` | Low         | 0                                    | Formatting long diagnostic lists into prompts                                                           |
+| 3 — `ctrlyoke-ide` MCP server   | Medium-High | 2–3 (binary + IPC bridge)            | Named pipe lifecycle, auth token, server discovery by harnesses                                         |
+| 4 — `_runtime` snapshots        | Low         | 0                                    | Working file schema churn                                                                               |
 
 ---
 

@@ -1,5 +1,14 @@
 # Adding a New CLI Harness to FlightPath
 
+> **Superseded (2026-10-10 audit) — historical record only.** This FlightPath-era guide describes
+> a codebase that no longer exists. It mentions a `Harness` enum, harness settings declared in
+> `package.json`, `src/flightpath/` paths, and Gemini as the reference harness, all of which are
+> gone. For the current registration touchpoints, use
+> [`CLINE_INTEGRATION_PLAN.md`](../backlog/CLINE_INTEGRATION_PLAN.md) §5.2 Steps 6–9. That
+> checklist was rebuilt from every place `qwen-cli` is wired today. Pair it with
+> `.github/instructions/harness-cli-providers.instructions.md` and
+> `harness-shared.instructions.md`.
+
 **Last Updated**: March 2026
 **Reference Implementation**: `src/flightpath/harness/gemini/` (Gemini CLI)
 

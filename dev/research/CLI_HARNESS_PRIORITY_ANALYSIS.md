@@ -586,7 +586,7 @@ src/flightpath/harness/aider/
 4. **Existing FlightPath Research:**
    - `docs/research/GEMINI_INTEGRATION_PLAN.md` (March 17, 2026)
    - `docs/research/QWEN_INTEGRATION_RESEARCH.md` (March 13, 2026)
-   - `docs/research/CLINE_INTEGRATION_PLAN.md` (March 19, 2026)
+   - `dev/backlog/CLINE_INTEGRATION_PLAN.md` (March 19, 2026)
 
 ---
 

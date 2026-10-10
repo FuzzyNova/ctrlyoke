@@ -1,5 +1,19 @@
 # Localization Plan
 
+**Status:** Not started.
+
+> **2026-10-10 audit:** Still no `package.nls.json`, `l10n/`, `vscode.l10n`, or
+> `i18next` anywhere. Corrected stale facts: `package.json`'s
+> `contributes.configuration` now holds exactly one property
+> (`ctrlyoke.workspaceDirectory`) — every other setting lives in
+> `schemas/settings-schema.json`, whose `description`s reach the dashboard settings UI
+> and tooltips through the generated `src/types/generated/SchemaDescriptions.ts` — so
+> that schema text is a fourth string surface (added below). Refreshed the `.tsx` count
+> (~240 non-test files), the `buildHtml()` location, the VS Code boundary-file list (now
+> every file that imports `vscode`), the `UserFeedback` example's location, and noted that
+> the standalone-graph `vscode` guard already exists (`scripts/node-bundle-vscode-guard.cjs`,
+> wired into `esbuild.js`).
+
 **Related plans:** [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../implemented/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md),
 [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md),
 [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md).
@@ -11,14 +25,16 @@ decoupling and standalone-server plans" below before implementing Phase 2.
 
 ctrlyoke currently has zero localization infrastructure — no `vscode.l10n`, no
 `package.nls.json`, no i18n library in the React dashboard, no `l10n` field in
-`package.json`. All ~39 command titles and ~17 configuration
-descriptions/markdownDescriptions in `package.json` are hardcoded English, and
-user-facing strings are inlined directly as JSX text across ~265 `.tsx` files
-under `src/ui/webview-react/`.
+`package.json`. All 39 command titles, the menu entries, and the single
+configuration `markdownDescription` (`ctrlyoke.workspaceDirectory` — the only
+setting `package.json` still declares) are hardcoded English, and
+user-facing strings are inlined directly as JSX text across ~240 non-test `.tsx`
+files under `src/ui/webview-react/`.
 
 This is **not** a single-`resx`-file problem the way the C# experience was.
 ctrlyoke has **three distinct surfaces**, each with a different localization
-mechanism, and no single tool covers all three:
+mechanism, and no single tool covers all three (plus schema descriptions, see
+the fourth item):
 
 1. **Extension manifest** (`package.json` `contributes.commands/configuration/menus`)
    — resolved by VS Code itself before any of our code runs.
@@ -34,6 +50,17 @@ mechanism, and no single tool covers all three:
    so any solution that depends on `vscode.l10n` inside React code is a
    non-starter for that surface. Whatever we pick for #3 must work identically
    in both contexts.
+4. **Schema descriptions** (`schemas/workflow-schema.json`,
+   `schemas/settings-schema.json`) — the `description` of every field feeds
+   IntelliSense hovers (via the bundled `jsonValidation`/`yamlValidation`), the
+   generated reference docs, and, through the generated
+   `src/types/generated/SchemaDescriptions.ts`, the dashboard's settings catalog
+   (`settingsCatalog.ts`) and field/option tooltips (`schemaPropertyLabels.ts`).
+   The dashboard copy can be localized by having
+   `scripts/generate-schema-ui-descriptions.mjs` emit keys into the React locale
+   bundle; the editor-hover copy would need per-locale schema files and is a
+   non-goal for now. Editing descriptions never needs a schema version bump
+   (see "Changing the schemas" in `CONTRIBUTING.md`).
 
 ## Research Findings
 
@@ -81,7 +108,8 @@ authors covering exactly this "React inside a webview" scenario) is:
      injected today (see `CtrlYokeWebviewProvider`'s HTML templating).
    - **Hosted dashboard**: `buildHtml()` in `CtrlYokeHostedServer.ts` already
      does exactly this kind of placeholder-substitution for the standalone
-     bundle (theme vars, icon URIs, CSP, body class — see lines ~1334-1400).
+     bundle (theme vars, icon URIs, CSP, body class — see `buildHtml()` near
+     line ~2189).
      The same pattern extends naturally to injecting a resolved locale
      (e.g. `Accept-Language` header, falling back to a user-configurable
      setting) as another `{{placeholder}}` substituted into `index.html`
@@ -93,7 +121,7 @@ authors covering exactly this "React inside a webview" scenario) is:
 
 This is genuinely a good amount of engineering effort — there is no
 "automatic extraction" shortcut for JSX. Every user-facing string in the
-~265 `.tsx` files needs to be pulled into a `t("key")` call by hand (or with
+~240 `.tsx` files needs to be pulled into a `t("key")` call by hand (or with
 heavy tool assistance — see Tooling below). This is the part of the C#
 `resx` experience that _doesn't_ have a magic equivalent in React: the payoff
 of `react-i18next` is runtime locale-switching and translator-friendly JSON,
@@ -146,10 +174,14 @@ in files the decoupling plan explicitly keeps as native VS Code integrations.
 `vscode.l10n.t()` only works when the real `vscode` module is resolvable —
 i.e. inside the extension host process. The standalone `ctrlyoke server` is a
 plain Node process with **no VS Code runtime at all**, and
-`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` Phase 8 explicitly plans to
-**"fail CI if the Node bundle graph contains the `vscode` package or a VS
-Code-only source path."** Once that lands, a `vscode.l10n.t()` call anywhere
-in the standalone-reachable graph is a build break, not just a runtime no-op.
+`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` Phase 8 (now `STANDALONE_SERVER_PLAN.md`
+Phase 11) planned to **"fail CI if the Node bundle graph contains the `vscode`
+package or a VS Code-only source path."** That guard now exists:
+`scripts/node-bundle-vscode-guard.cjs`, an esbuild plugin wired into
+`esbuild.js`, fails the Node bundles on any `vscode` /
+`src/platform/VsCode*` input. A `vscode.l10n.t()` call anywhere in the
+standalone-reachable graph is therefore already a build break, not just a
+runtime no-op.
 
 ### Phase 2 (as originally scoped) targets the wrong files
 
@@ -170,10 +202,18 @@ silently stop working the moment those files run in the standalone process.
 
 **`vscode.l10n.t()` should only be used in the files
 `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` classifies as "VS Code boundary files —
-calls may remain"**: `src/platform/VsCodeAdapter.ts`,
-`src/ui/ExternalFileTrustPrompt.ts`, `src/ui/StatusBarManager.ts`,
-`src/ui/NotificationManager.ts`, `src/completions/*`, `src/scm/ScmCommitCommand.ts`,
-`src/dev/DevCommands.ts`, `src/extension.ts`, `src/ui/CtrlYokeWebviewProvider.ts`.
+calls may remain"** — as of 2026-10-10, exactly the files that import `vscode`:
+`src/extension.ts`, `src/platform/VsCode*.ts` (notably `VsCodeAdapter.ts` and
+`VsCodeUserFeedbackSink.ts`), `src/ui/CtrlYokeWebviewProvider.ts`,
+`src/ui/CtrlyokeCliCommands.ts`, `src/ui/ExternalFileTrustPrompt.ts`,
+`src/ui/NativeOutputCaptureCommand.ts`, `src/ui/NotificationManager.ts`,
+`src/ui/StatusBarManager.ts`, the `vscode`-importing `src/completions/*`
+providers (`PromptCompletionProvider`, `PromptDiagnosticsProvider`,
+`PromptLinkProvider`, `WorkflowFileCompletionProvider`,
+`ContextMenuReferenceCommands`, `CompletionHelpers`,
+`WorkspaceReferencePaths`), `src/scm/ScmCommitCommand.ts`, and
+`src/dev/DevCommands.ts`. Regenerate this list with a grep for
+`from "vscode"` rather than trusting it.
 These are genuinely native-only surfaces (VS Code QuickPick text, the trust
 prompt, the status bar item) with no browser/standalone equivalent, so a
 hard `vscode` dependency there is already accepted by the decoupling plan and
@@ -185,7 +225,7 @@ costs nothing extra.
 (`src/types/WebviewMessageTypes.ts`) both type `message` as a plain `string`,
 assembled deep in orchestration code — e.g.
 `` `Failed to export MCP servers: ${getErrorMessage(error)}` `` in
-`src/ui/WorkflowStepHandlers.ts`. This string is already fully rendered
+`src/ui/McpManagerService.ts`. This string is already fully rendered
 English by the time it reaches `notifyUser()`/the React toast. **My original
 Phase 4 plan (sweep `.tsx` JSX literals) would completely miss this
 category** — these are never JSX text nodes, they're payload data crossing a
@@ -223,11 +263,11 @@ authoring the English text twice.
   after (or alongside) `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`'s narrowing of
   `PlatformAdapter`/feedback sinks — it touches the same call sites, so doing
   it twice would waste effort.
-- Add "no `vscode.l10n` import outside the boundary-file list" as a check
-  alongside whatever automated dependency-boundary tooling the decoupling
-  plan introduces (its Phase 8 already wants CI to fail on stray `vscode`
-  imports in the standalone graph — this is the same check, just phrased for
-  the l10n-specific case as an early warning before Phase 8 actually ships).
+- The standalone-graph half of "no `vscode.l10n` outside the boundary files"
+  is already enforced by `scripts/node-bundle-vscode-guard.cjs`. If the
+  extension bundle also needs guarding (it legitimately imports `vscode`),
+  add an ESLint `no-restricted-imports` rule for `vscode` scoped to everything
+  except the boundary files.
 
 ## Recommended Architecture
 
@@ -301,7 +341,8 @@ Mirroring the old resx → translation-vendor → resx-back workflow:
 This is a multi-phase effort, not a single PR:
 
 1. **Phase 1 — Manifest** (`package.json` → `package.nls.json`): small,
-   mechanical, ~39 command titles + ~17 config descriptions. Good first PR to
+   mechanical, 39 command titles + menu entries + one config description
+   (`ctrlyoke.workspaceDirectory`). Good first PR to
    validate the toolchain works end-to-end for at least one non-English
    locale.
 2. **Phase 2 — Extension host**: wrap `vscode.window.show*Message`,
@@ -328,10 +369,12 @@ This is a multi-phase effort, not a single PR:
 
 - [ ] Phase 1: Convert `package.json` `contributes.commands/configuration/menus` literal strings to `%key%` + `package.nls.json`; add `"l10n": "./l10n"` root field
 - [ ] Phase 1: Verify with `--locale qps-ploc` that manifest strings pseudo-translate
-- [ ] Phase 2: Add `@vscode/l10n-dev` + `@vscode/l10n` deps; wrap strings **only** in the VS Code boundary files (`VsCodeAdapter.ts`, `ExternalFileTrustPrompt.ts`, `StatusBarManager.ts`, `NotificationManager.ts`, `completions/*`, `ScmCommitCommand.ts`, `DevCommands.ts`, `extension.ts`, `CtrlYokeWebviewProvider.ts`) in `vscode.l10n.t()` — do not touch `WorkflowInstance`/`WorkflowExecutor`/`PromptFileParser`/`EndConditionHandler`/`CliIntegration`/`WorkflowCommandHandler`/`McpManagerService`
+- [ ] Phase 2: Add `@vscode/l10n-dev` + `@vscode/l10n` deps; wrap strings **only** in the VS Code boundary files (the `vscode`-importing files listed above — `extension.ts`, `platform/VsCode*.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlyokeCliCommands.ts`, `ExternalFileTrustPrompt.ts`, `NativeOutputCaptureCommand.ts`, `NotificationManager.ts`, `StatusBarManager.ts`, the `vscode`-importing `completions/*` providers, `ScmCommitCommand.ts`, `DevCommands.ts`) in `vscode.l10n.t()` — do not touch `WorkflowInstance`/`WorkflowExecutor`/`PromptFileParser`/`EndConditionHandler`/`CliIntegration`/`WorkflowCommandHandler`/`McpManagerService`
 - [ ] Phase 2: Generate `l10n/bundle.l10n.json` via extraction script; document the translator handoff format
 - [ ] Phase 3: Refactor `UserFeedback`/`UserFeedbackMessage` from `message: string` to `{ code, params }`, coordinating with `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`'s `PlatformAdapter`/feedback-sink narrowing so the call sites are only touched once
-- [ ] Phase 3: Add a lint/CI check that `vscode.l10n` (and `vscode` generally) is never imported outside the boundary-file list, ahead of the decoupling plan's Phase 8 CI gate
+- [x] Phase 3: Standalone-graph `vscode` import gate — exists as `scripts/node-bundle-vscode-guard.cjs` (esbuild plugin)
+- [ ] Phase 3 (optional): ESLint `no-restricted-imports` for `vscode` outside the boundary files, to also cover the extension bundle
+- [ ] Phase 3: Have `scripts/generate-schema-ui-descriptions.mjs` emit schema descriptions as React locale keys so settings/tooltip help text is translatable
 - [ ] Phase 3: Add `react-i18next` (+ `i18next`) to `src/ui/webview-react/`; create `src/ui/webview-react/locales/en.json` and `i18n.ts` bootstrap
 - [ ] Phase 3: Thread `vscode.env.language` into the webview HTML template (mirrors existing webview-only config injection)
 - [ ] Phase 3: Extend `CtrlYokeHostedServer.buildHtml()` to resolve and inject a locale placeholder (setting → `Accept-Language` → `en` fallback), following the existing `themeBodyClass`/icon-URI substitution pattern

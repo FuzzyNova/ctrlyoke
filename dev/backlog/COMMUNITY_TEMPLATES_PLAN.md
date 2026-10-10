@@ -1,6 +1,15 @@
 # Community Templates Plan
 
-**Status:** Proposed
+**Status:** Proposed — not started (no `community-templates/` directory, no
+`CommunityTemplate*` code).
+
+> **2026-10-10 audit:** Not started. Refreshed stale code references
+> (`TemplateManager`, `PromptFileParser`, `McpDiscoveryUtils`,
+> `WebviewMessageRouter`, `DashboardConstants` line numbers; `ALL_TABS` moved to
+> `components/settings/settingsTabs.ts`; `McpManagerService` now takes only a
+> `workspaceRoot` accessor). Noted that `_templateMeta` has
+> `additionalProperties: false` and no `tags` field, so `author`/`tags` both need
+> schema additions. `FuzzyNova/ctrlyoke` is still private as of this audit.
 
 ## Goal
 
@@ -15,7 +24,7 @@ and remote-browse tabs.
 ## Why
 
 Built-in templates (`src/templates/workflows/*.ctrlyoke.yaml` +
-`manifest.json`) are the curated six shown in the New Workflow picker. Custom
+`manifest.json`) are the curated six (including `template-starter`) shown in the New Workflow picker. Custom
 templates already have a home — `.ctrlyoke/templates/` (workspace) and
 `~/.ctrlyoke/templates/` (user), both scanned by
 `TemplateManager.discoverCustomTemplates()` — but there is no way to get a
@@ -82,13 +91,19 @@ Filename convention `<author>-<slug>` avoids id collisions across independent
 contributors without a central registration step (built-ins don't need this —
 one maintainer, no collisions).
 
-### `_templateMeta` gets one more field: `author`
+### `_templateMeta` gets two more fields: `author` and `tags`
 
-Add optional `author?: string` to `_templateMeta`, parsed alongside
-`name`/`description` in `TemplateManager.parseTemplateMeta`
-(`src/core/TemplateManager.ts:143`), so a shared template can credit its
-source in the picker/gallery. Purely cosmetic — not used by `createWorkflow`
-substitution (`:520`).
+Add optional `author?: string` and `tags?: string[]` to `_templateMeta`, parsed
+alongside `name`/`description` in `TemplateManager.parseTemplateMeta`
+(`src/core/TemplateManager.ts:148`, `ParsedTemplateMeta` at `:106`), so a
+shared template can credit its source and be filtered in the gallery. Purely
+cosmetic — not used by `createWorkflow` substitution (`:543`). Both must also be
+added to `#/$defs/templateMetadata` in `schemas/workflow-schema.json` (it is
+`additionalProperties: false`, so a template using them fails strict
+validation and the CI gate below; the runtime loader's relaxed schema only
+downgrades unknown keys to warnings), followed by `npm run schema:update`. This
+is a no-bump additive schema change per `CONTRIBUTING.md`. Built-in `tags` live only in
+`manifest.json` today; `_templateMeta` has no `tags` field yet.
 
 ### Generated index, not a hand-maintained manifest
 
@@ -111,7 +126,7 @@ with `paths: [community-templates/**]`:
 2. Run a new `scripts/validate-community-templates.mjs` that, for each changed
    `.ctrlyoke.*` file, parses it and runs it through the same Ajv validation
    `PromptFileParser.validateAndNormalize` uses against
-   `schemas/workflow-schema.json` (`src/core/PromptFileParser.ts:168`) —
+   `schemas/workflow-schema.json` (`src/core/PromptFileParser.ts:288`) —
    rejects unknown top-level fields, bad `harness` enum values, malformed
    `_templateMeta`, etc. Also reject: missing `_templateMeta.name` or
    `description`, a filename that doesn't match
@@ -161,7 +176,7 @@ Once a public repo exists, serve `index.json` and each template file from
 jsDelivr's GitHub mirror
 (`https://cdn.jsdelivr.net/gh/<owner>/<repo>@main/community-templates/...`)
 rather than `api.github.com` — the same reasoning
-`McpDiscoveryUtils.fetchMcpRegistry` (`src/utils/McpDiscoveryUtils.ts:862`)
+`McpDiscoveryUtils.fetchMcpRegistry` (`src/utils/McpDiscoveryUtils.ts:911`)
 gives for hitting a purpose-built endpoint directly: no auth, no per-IP rate
 limit shared with every other GitHub API consumer, and it's a cached CDN.
 Accept jsDelivr's ~12h cache latency for v1; a merge-triggered cache-purge
@@ -170,9 +185,10 @@ webhook is a fast-follow if that's ever a real complaint.
 ### Backend: `CommunityTemplateService` (parallels `McpManagerService`)
 
 New `src/ui/CommunityTemplateService.ts`, constructed the same way
-`McpManagerService` is (a `workspaceRoot` accessor + `WebviewClientContext`),
+`McpManagerService` is (a `workspaceRoot` accessor; the per-request
+`WebviewClientContext` is passed to each handler, not the constructor),
 wired into `WebviewMessageRouter.ts` next to `this.mcpManager`
-(`src/ui/WebviewMessageRouter.ts:178`, `:208`).
+(`src/ui/WebviewMessageRouter.ts:268`, `:328`, dispatch near `:1395`).
 
 Responsibilities:
 
@@ -184,11 +200,11 @@ Responsibilities:
   validation (never trust a network payload straight onto disk), then write
   it via a new `TemplateManager.installTemplateContent(name, scope, format,
 content)` that shares `prepareCustomTemplatePath`'s existing name/collision
-  checks (`src/core/TemplateManager.ts:592`) rather than duplicating them →
+  checks (`src/core/TemplateManager.ts:616`) rather than duplicating them →
   emit success/failure the way `McpManagerService.handleSaveRegistryServer`
   does.
 
-### New message types (`DashboardConstants.ts`, alongside the `MCP_*` ones near `:2453`)
+### New message types (`DashboardConstants.ts`, alongside the `MCP_*` ones near `:696`)
 
 ```
 REQUEST_COMMUNITY_TEMPLATE_INDEX
@@ -214,8 +230,8 @@ scope)`.
 ### UI: `CommunityTemplatesSection.tsx`
 
 New `src/ui/webview-react/components/settings/CommunityTemplatesSection.tsx`,
-modeled directly on `McpManagerSection.tsx`'s "Discover & Import" registry tab
-(`:1345`–`1519`) — installing a community template is structurally the same
+modeled directly on `McpManagerSection.tsx`'s "Discover & import" registry tab
+(starts near `:1170`; registry search near `:1317`) — installing a community template is structurally the same
 action as importing a registry MCP server: search box, result list, a per-row
 "Install" button that disables once already present locally.
 
@@ -242,11 +258,15 @@ Community Templates (new settings tab)
 ### Settings drawer wiring
 
 Add `COMMUNITY_TEMPLATES: "communitytemplates"` to `GLOBAL_SETTINGS_TABS`
-(`src/types/DashboardConstants.ts:2440`), a tab entry in `ALL_TABS` right
+(`src/types/DashboardConstants.ts:3122`), a tab entry in `ALL_TABS` right
 after `MCP_MANAGER`
-(`src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx:97`–`101`),
-and a render branch next to the existing `MCP_MANAGER` one (`:380`–`382`). No
-`fullSettings` dependency, same as `mcpmanager`/`agentskillsmanager` (`:395`).
+(`src/ui/webview-react/components/settings/settingsTabs.ts:76`–`80`),
+and a render branch next to the existing `MCP_MANAGER` one in
+`src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` (`:545`).
+No `fullSettings` dependency, same as
+`mcpmanager`/`agentskillsmanager`/`languageservers` — add it to the
+`!fullSettings` exclusion list (`:566`) and, if it should render full-width,
+to `isFullWidthSettingsTab` (`:121`).
 
 ---
 

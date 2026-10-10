@@ -1,6 +1,12 @@
 # Template Required Variables + Feature-Driven Loop Plan
 
-**Status:** Proposed
+**Status:** Proposed (not started)
+
+> **2026-10-10 audit:** Nothing here has landed — `TemplateVariable` has no `required`, there is no
+> `feature-driven-loop` template, and untouched optional variables without a default still leave a
+> literal `{token}`. Refreshed every stale line reference. Substitution now runs per scalar value
+> through `substituteVariablesInValues` (which calls `replaceVariables`) after `yaml.load`, not over
+> raw template text; `parallel-research` is now a built-in; the `@`-reference regex moved.
 
 ## Goal
 
@@ -30,9 +36,10 @@ queue first.
 ### Related defect this closes
 
 Today an optional variable that the user never touches is **not substituted at all** — the literal
-`{token}` survives into the generated workflow (`replaceVariables` at `src/core/TemplateManager.ts:462`
-only iterates keys the caller supplied; the modal only sends keys it has values for). This is
-documented as current behavior in `docs/workflows/templates.md:77`, but it is a bug, not a feature:
+`{token}` survives into the generated workflow (`replaceVariables` at `src/core/TemplateManager.ts:502`
+leaves any placeholder whose key is absent from the map; `createWorkflow` only adds declared
+`default`s, and the modal only sends keys it has values for). This is
+documented as current behavior in `docs/workflows/templates.md:81` ("Defaults and blank fields"), but it is a bug, not a feature:
 the user sees `{constraints}` in their prompt text. Required-gating fixes it for mandatory inputs;
 Phase 2 fixes it for genuinely optional ones.
 
@@ -44,7 +51,7 @@ Phase 2 fixes it for genuinely optional ones.
   combined spec-or-description template, which this plan replaces with two templates. Substituting a
   blank optional variable to an empty string (Phase 2) covers the remaining need.
 - Any change to workflow execution, the queue, or the schema in `schemas/workflow-schema.json`.
-  `_templateMeta` is stripped before validation (`TemplateManager.createWorkflow:519`), so nothing
+  `_templateMeta` is stripped before validation (`TemplateManager.createWorkflow`, ~line 581), so nothing
   here touches the workflow contract.
 
 ---
@@ -70,21 +77,21 @@ _templateMeta:
 - Enforced in two places, because the modal is not the only caller:
   - **UI**: Create / Create & Run disabled, per-field error text on blur/submit.
   - **API**: `TemplateManager.createWorkflow` throws before substitution. `WorkflowSerializer.handleCreateWorkflow`
-    (`src/ui/WorkflowSerializer.ts:723`) already catches and surfaces the message.
+    (`src/ui/WorkflowSerializer.ts:986`) already catches and surfaces the message.
 
 ### Touchpoints
 
 | File                                                         | Change                                                                                                                       |
 | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `src/core/TemplateManager.ts:57`                             | Add `required?: boolean` to `TemplateVariable` + document it in the interface's `_templateMeta` example block (`:24`–`:56`)  |
-| `src/core/TemplateManager.ts:130` (`parseTemplateMeta`)      | Accept `required` alongside the other per-field reads (`:157`–`:182`): `if (vm["required"] === true) entry.required = true;` |
-| `src/core/TemplateManager.ts:199` (`mergeVariablesWithMeta`) | Copy `required` onto the merged variable, same shape as `multiline`                                                          |
-| `src/core/TemplateManager.ts:482` (`createWorkflow`)         | After the `withDefaults` loop (`:502`–`:511`), reject blank required variables with a message naming every missing one       |
-| `src/ui/webview-react/store/uiStore.ts:108`                  | Mirror `required?: boolean` (this interface is an explicit copy of the core one — keep them identical)                       |
+| `src/core/TemplateManager.ts:69`                             | Add `required?: boolean` to `TemplateVariable` + document it in the interface's `_templateMeta` example block (`:44`–`:66`)  |
+| `src/core/TemplateManager.ts:148` (`parseTemplateMeta`)      | Accept `required` alongside the other per-field reads (`:177`–`:200`): `if (vm["required"] === true) entry.required = true;` |
+| `src/core/TemplateManager.ts:218` (`mergeVariablesWithMeta`) | Copy `required` onto the merged variable, same shape as `multiline`                                                          |
+| `src/core/TemplateManager.ts:543` (`createWorkflow`)         | After the `withDefaults` loop (`:563`–`:572`), reject blank required variables with a message naming every missing one       |
+| `src/ui/webview-react/store/uiStore.ts:198`                  | Mirror `required?: boolean` (this interface is an explicit copy of the core one — keep them identical)                       |
 | `src/ui/webview-react/components/workflow/TemplateModal.tsx` | Required-field validation + visual marker; see below                                                                         |
-| `docs/workflows/templates.md:47`                             | New row in the metadata table; update the "Defaults and blank fields" section (`:75`)                                        |
+| `docs/workflows/templates.md:53`                             | New row in the metadata table; update the "Defaults and blank fields" section (`:79`)                                        |
 
-`WorkflowSerializer.toWireTemplates` (`src/ui/WorkflowSerializer.ts:662`) passes `variables` through
+`WorkflowSerializer.toWireTemplates` (`src/ui/WorkflowSerializer.ts:921`) passes `variables` through
 untouched, so no wire change is needed once both interfaces carry the field.
 
 ### Modal specifics
@@ -95,9 +102,9 @@ this is the single UI to change.
 
 - Label gets a required marker (`*` with `aria-required` on the input).
 - Add `variableErrors: Record<string, string>` state beside the existing `filenameError` and validate
-  in `handleSubmit` (`:309`) the same way `validateFilename` is called — return early, set errors.
-- Extend both Create buttons' `disabled` expressions (`:386`, `:393`) with a `hasUnsatisfiedRequired`
-  memo. Note `seedVariableDefaults` (`:24`) already pre-seeds declared defaults, `select` first
+  in `handleSubmit` (`:352`) the same way `validateFilename` is called — return early, set errors.
+- Extend both Create buttons' `disabled` expressions (`:429`, `:436`) with a `hasUnsatisfiedRequired`
+  memo. Note `seedVariableDefaults` (`:39`) already pre-seeds declared defaults, `select` first
   options, and the harness fallback, so those types satisfy the gate automatically.
 - Switching templates must clear variable errors along with the values.
 
@@ -118,16 +125,18 @@ Change `createWorkflow` so **every declared variable** is substituted, not only 
 supplied: after applying defaults, fill any still-absent declared variable with `""`. A blank
 optional input then leaves clean text instead of a literal `{token}`.
 
-Keep the substitution itself in `replaceVariables` (`:462`) unchanged — it already replaces all three
-token forms for whatever keys it is given.
+Keep the substitution itself in `replaceVariables` (`:502`, applied per scalar by
+`substituteVariablesInValues`) unchanged — it already replaces all three token forms for whatever
+keys it is given.
 
 Consequence to accept and document: a blank optional `{file:x}` written as `@{file:x}` leaves a bare
-`@`. That is inert — the file-reference regex (`src/utils/FileReferenceParser.ts:70`,
-`/@(?:"([^"]+)"|([^\s:]+))/`) requires at least one non-space character — but it is untidy, so
+`@`. That should be inert — the file-reference regex (`src/utils/FileReferenceParser.ts`, ~line 709,
+built from `UNQUOTED_AT_REFERENCE_PATH`) needs a quoted or unquoted path after the `@`; re-verify when
+implementing — but it is untidy, so
 templates should keep optional file variables off an `@` prefix and let the agent open the path.
 Neither new template does this.
 
-Update `docs/workflows/templates.md:77`, which currently documents the literal-`{token}` behavior.
+Update `docs/workflows/templates.md:81`, which currently documents the literal-`{token}` behavior.
 
 Tests: `TemplateManager.test.ts` — an untouched optional variable with no default produces empty
 text, not `{token}`; a declared default still wins over the blank fill.
@@ -203,7 +212,7 @@ returns: "true"
 Adding a built-in template requires all three, or it will not appear:
 
 1. `src/templates/workflows/feature-driven-loop.ctrlyoke.yaml` (filename must be `<id>.ctrlyoke.yaml`)
-2. `src/core/TemplateManager.ts:112` — add `"feature-driven-loop"` to `BUILT_IN_TEMPLATE_IDS`
+2. `src/core/TemplateManager.ts:124` — add `"feature-driven-loop"` to `BUILT_IN_TEMPLATE_IDS`
 3. `src/templates/workflows/manifest.json` — new entry (`id`, `label`, `description`, `file`, `tags`, `icon`)
 
 ### `spec-driven-loop` update
@@ -227,7 +236,8 @@ role, and a well-written prompt is enough. Revisit only if plan quality disappoi
 - `docs/workflows/templates.md` — the built-in list in the intro paragraph.
 - `.github/instructions/templates.instructions.md` — the `spec-driven-loop` bullet describes the
   final-step-only shape; extend it to name `feature-driven-loop` as the plan-first variant of the
-  same pattern. Keep it to one bullet.
+  same pattern. Keep it to one bullet. Also add the id to that file's built-in list (which is
+  already missing `parallel-research`).
 - `src/templates/agents/ctrlyoke-workflow-composer.agent.md:81` — the "fixed workflow vs
   self-extending loop" section points users at Spec-Driven Loop; mention the description-first
   variant in the same sentence.
@@ -243,7 +253,7 @@ variable inputs, and `autoFillFilename` already wires the file-variable → file
 Closing the loop the other way — reserving `{workflowName}` as a built-in token substituted from the
 filename field — would let `planDoc` default to `.ctrlyoke/plans/{workflowName}.md` and would be
 useful to any template. Implementation is small: exclude it from `extractVariables` the way
-`RETRY_PROMPT_PLACEHOLDERS` are excluded (`src/core/TemplateManager.ts:438`), and inject it into
+`RETRY_PROMPT_PLACEHOLDERS` are excluded (`src/core/TemplateManager.ts:475`), and inject it into
 `withDefaults` from the `filename` already passed to `handleCreateWorkflow`.
 
 Deliberately separate: Phase 3 must not block on it, and the fixed default is acceptable in the

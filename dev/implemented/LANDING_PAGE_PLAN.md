@@ -1,9 +1,11 @@
 # ctrlyoke Landing Page Plan
 
 **Created:** May 21, 2026  
-**Status:** ACTIVE — site, docs, and deploy pipeline implemented; DNS + first production deploy + testing pending. (Updated July 28, 2026.)  
+**Status:** IMPLEMENTED (verified October 10, 2026). The site, docs, deploy pipeline, DNS, production deploys, legal/Enterprise pages, and `ls-webhook` function have all shipped: `20b465d83` (landing foundation), `bd63c0faf` (VitePress merged at `/docs/`), `83e9c8c5d` (Netlify deploy workflows; GitHub Pages retired), `04b0e8131` (`ls-webhook`), `280128371` (DPA/Enterprise Terms/Trust pages). Two launch-day switches remain, flipping `LAUNCHED` and setting `CHECKOUT_URL`; both are owned by [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 9. A `/changelog/` page is deferred to post-launch.  
 **Domain:** ctrlyoke.dev (purchased, hosted on Netlify)
-**Launch dependency:** business email, support inboxes, vendor account ownership, and publisher identity are tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
+**Launch dependency:** business email, support inboxes, vendor account ownership, and publisher identity are tracked in [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) (Phase 3, done).
+
+> **2026-10-10 audit:** Checked against the repo and the live site. `https://ctrlyoke.dev/`, `/docs/`, and `/pricing/` return 200, and recent `deploy.yml` runs on `main` are green. `netlify/functions/ls-webhook.ts` exists. `LICENSE.md` and `PRIVACY.md` have no `[DATE]` placeholders. `docs/guide/installation.md` documents `npm install -g ctrlyoke`. Those checklist items are now ticked. `/changelog/` returns 404 and `docs/changelog.md` does not exist, so the changelog page moves to post-launch. The pricing section now matches the shipped page: 6 harnesses (not 7), plus an Enterprise tier and the refund FAQ. `TELEMETRY_PLAN.md` now lives in `dev/implemented/`.
 
 ---
 
@@ -26,7 +28,7 @@ The plan below is largely **implemented**. What exists in the repo today:
 - **Build:** root scripts `build:site` → `build:landing` → `build:docs` (order matters; see §2.3); `netlify.toml` updated.
 - **Deploy:** `.github/workflows/{deploy,deploy-preview,_netlify-deploy}.yml` (GitHub Actions + `netlify-cli`); legacy `docs-deploy.yml` retired. Netlify site created; `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets added.
 
-**Still pending:** point `ctrlyoke.dev` DNS at Netlify · first production deploy via push + verify the Action is green · test all live routes and the pre-launch state · `/changelog/` page · `ls-webhook` Netlify Function (tracked in `PRO_LICENSE_PLAN.md`) · set `[DATE]` in the legal docs and flip `LAUNCHED` at launch. The per-phase sections and the **Phase 7 checklist** below carry the detail.
+**Done since (verified 2026-10-10):** DNS points at Netlify, with DNS in Cloudflare. Production deploys run green. Live routes respond. The `ls-webhook` Netlify Function is deployed. `[DATE]` is set in the legal docs. Enterprise legal pages `dpa.astro`, `enterprise-terms.astro`, and `trust.astro` were added, plus `license/offline.astro`. **Still pending:** flip `LAUNCHED` and set `CHECKOUT_URL` at launch (RELEASE_CHECKLIST Phase 9). The `/changelog/` page is deferred to post-launch.
 
 ---
 
@@ -237,8 +239,8 @@ The existing `docs/` structure is solid and ships as-is. Minor additions needed 
 
 ### 4.1 Docs Additions Needed
 
-- [ ] `docs/guide/installation.md` — confirm CLI install instructions are up to date (`npm install -g ctrlyoke`)
-- [ ] `docs/changelog.md` — add as a redirect target or mirrored page
+- [x] `docs/guide/installation.md` — confirm CLI install instructions are up to date (`npm install -g ctrlyoke`)
+- [ ] `docs/changelog.md` — add as a redirect target or mirrored page (deferred to post-launch; does not exist as of 2026-10-10)
 - [x] `docs/pro/index.md` — Pro features overview, "Who needs a license?", and activation instructions
 - [x] Update `docs/.vitepress/config.mts` — `base: '/docs/'` (already default)
 - [x] Add `docs/.vitepress/config.mts` → `themeConfig.logo` (+ `socialLinks` already present); added Pro nav/sidebar entry; logo at `docs/public/ctrlyoke-icon.svg`
@@ -275,11 +277,11 @@ Route: `ctrlyoke.dev/pricing/`
 
 ### 6.1 Layout
 
-Two columns: **Free** (left) and **Pro** (right, highlighted).
+Two columns: **Free** (left) and **Pro** (right, highlighted). _As shipped, `pricing.astro` has a third **Enterprise** card ($5,000/yr site license, with "Contact sales" and PO/invoicing), added 2026-09-17. See `RELEASE_CHECKLIST.md` Phase 4.4._
 
 **Free column:**
 
-- All 7 harnesses
+- All 6 harnesses
 - YAML / JSON / Markdown workflows — **unlimited steps** (no caps)
 - End conditions, pre-conditions & error/retry behavior
 - Full local VS Code dashboard
@@ -306,7 +308,8 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - "What is a perpetual license?" — One-time purchase, yours forever, includes all future Pro features in the same tier.
 - "Can I use it on multiple machines?" — Yes, one license activates on up to 10 devices.
 - "Is there a trial?" — Yes. The free tier is fully functional forever (no time limit, no credit card), and remote "code on the go" access is free to trial for 14 days on top of that.
-- "Do you offer team/enterprise pricing?" — Not yet. Coming soon. Contact us.
+- "Do you offer team/enterprise pricing?" — As shipped: yes, a $5,000/year Enterprise site license; email sales@ctrlyoke.dev, which also handles POs.
+- "What's your refund policy?" — As shipped: Pro has a 30-day money-back guarantee, and Enterprise is non-refundable once the term starts (see `dev/backlog/REFUND_POLICY.md`).
 
 ---
 
@@ -314,23 +317,23 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 
 ### Pre-Launch
 
-- [ ] Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)
+- [x] Complete business email and account ownership setup. `RELEASE_CHECKLIST.md` Phase 3 marks the Google Workspace `@ctrlyoke.dev` role inboxes done; that checklist has no "Phase 0" any more.
 - [x] Create `landing/` Astro project in repo root (Astro 5 + Tailwind)
 - [x] Configure dual build + `/docs/` merge — root `build:site` script (`build:landing` → `build:docs` → `scripts/merge-docs-into-landing.mjs`); `netlify.toml` updated
-- [x] Add the three Netlify deploy workflows (§2.3, mirror `FuzzyNova/fuzzno`) and retire the legacy `docs-deploy.yml`. **Still TODO before first deploy:** create the ctrlyoke.dev Netlify site and add `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets, then confirm the first deploy is green
+- [x] Add the three Netlify deploy workflows (§2.3, mirror `FuzzyNova/fuzzno`) and retire the legacy `docs-deploy.yml`. Netlify site created, secrets added, deploys green. (`deploy.yml` has since gained `workflow_dispatch` and extra path filters such as `images/**` and `schemas/**`.)
 - [x] `base: '/docs/'` in `docs/.vitepress/config.mts` (already the default; old `DOCS_BASE=/ctrlyoke/` override retired with `docs-deploy.yml`)
-- [ ] **Point `ctrlyoke.dev` DNS to Netlify** ← next step
+- [x] **Point `ctrlyoke.dev` DNS to Netlify** (DNS in Cloudflare, DNS-only; see `dev/implemented/CTRLYOKE_REBRAND_CUTOVER.md` §1)
 - [x] Write landing page hero + features sections
 - [x] Add harness icon grid (`landing/public/icons/harnesses/`)
 - [x] Write pricing page (Free vs Pro columns + FAQ)
 - [x] Add `/terms` + `/privacy` pages (render canonical root `LICENSE.md` / `PRIVACY.md`)
 - [x] Pre-launch mode — `LAUNCHED` flag (`landing/src/config.ts`) gates disabled "Coming soon" CTAs, a banner, and `noindex`
 - [ ] Wire pricing-page checkout to Lemon Squeezy — **deferred:** disabled pre-launch; set `CHECKOUT_URL` and flip `LAUNCHED` at launch
-- [x] Publish `support@ctrlyoke.dev` as the support path on the site/docs (README/marketplace tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) Phase 0.3)
-- [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)
+- [x] Publish `support@ctrlyoke.dev` as the support path on the site/docs (README/Marketplace/site agreement is tracked in [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 12)
+- [x] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); `netlify/functions/ls-webhook.ts`, `04b0e8131`. Since extended for Enterprise subscriptions and full-vs-partial refunds (`87ba0728a`). Details in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)
 - [x] Add `docs/pro/index.md` (activation instructions)
 - [x] Add `docs/.vitepress/config.mts` logo + social links
-- [ ] **Push to `main` for the first production deploy; confirm the Action is green, then test all live routes + the pre-launch state**
+- [x] **Push to `main` for the first production deploy; confirm the Action is green, then test all live routes + the pre-launch state** (deploys green; `/`, `/docs/`, `/pricing/` return 200 as of 2026-10-10)
 
 > **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `CtrlYokeHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md), not here.
 
@@ -347,7 +350,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 ## Related Backlog Items
 
 - [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) — Pro licensing model, `LicenseService`, tier gating (split out of this plan)
-- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — top-level launch sequence, business email, account ownership, legal, and support readiness
+- [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) — top-level launch sequence, business email, account ownership, legal, and support readiness
 - [`RELEASE_PLAN.md`](RELEASE_PLAN.md) — VS Code Marketplace release prerequisites
-- [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md) — Usage telemetry for the extension
-- [`ROADMAP.md`](ROADMAP.md) — Long-term feature roadmap
+- [`TELEMETRY_PLAN.md`](../implemented/TELEMETRY_PLAN.md) — Usage telemetry for the extension (implemented)
+- [`ROADMAP.md`](../active/ROADMAP.md) — Long-term feature roadmap

@@ -2,6 +2,31 @@
 
 **Date:** 2026-03-13
 **Context:** Evaluated while adding Vitest webview unit testing (Phase 1). These are the two next-tier options beyond unit/component tests.
+**Status:** Obsolete / superseded. Option A was never adopted. Option B's goal, AI-driven end-to-end checks of the real dashboard, is met by a different route.
+
+> **2026-10-10 audit:** The dashboard is now one React client served both to the
+> VS Code webview and to the hosted browser dashboard (`src/server/`). That
+> removes this doc's central constraint ("VS Code provides no API to query
+> webview DOM"). An agent can drive the real dashboard with the Playwright MCP
+> server against the hosted URL:
+>
+> - Dev builds write `.ctrlyoke/dev/server-url.txt` (3e5bad095).
+> - A headless agent can launch and close an isolated dev host with
+>   `npm run dev:host:start|stop|restart[:shared|:onboarding]`
+>   (`scripts/dev-host.mjs`, 6158f7645). See the "Debugging" section of
+>   `.github/copilot-instructions.md` and
+>   `dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md`.
+>
+> That covers Option B's motivating use cases (AI-driven manual testing,
+> regression checks, exploratory testing) without a custom automation MCP
+> server or a webview `TEST_MODE` snapshot loop. A dev-only `UxSnapshotButton`
+> already captures live UI state to `.ctrlyoke/snapshots/`.
+>
+> Fixed stale reference: `docs/reference/VSCODE_COMMANDS.md` →
+> `dev/reference/VSCODE_COMMANDS.md`. The user-facing list is
+> `docs/reference/commands.md`. Command IDs in the scenario sketches
+> (`ctrlyoke.loadWorkflow`, `ctrlyoke.undo`) are illustrative. Kept as a record
+> of the evaluation.
 
 ---
 
@@ -180,4 +205,4 @@ The standalone extension approach is the most reusable and aligns with the "side
 - Dev-only commands pattern: `src/dev/DevCommands.ts` (stripped at `IS_DEV_MODE = false`)
 - VS Code webview message API: `WebviewView.webview.postMessage()`, `onDidReceiveMessage`
 - MCP SDK already in deps: `@modelcontextprotocol/sdk`
-- VS Code commands reference: `docs/reference/VSCODE_COMMANDS.md`
+- VS Code commands reference: `dev/reference/VSCODE_COMMANDS.md` (user-facing: `docs/reference/commands.md`)

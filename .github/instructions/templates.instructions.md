@@ -14,7 +14,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 </entryPoints>
 
 <workflowTemplates>
-- Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`template-starter`, `simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`). `blank` is special-cased in code and has no file here.
+- Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`template-starter`, `simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`, `parallel-research`). `blank` is special-cased in code and has no file here.
 - Workspace and user custom templates are discovered from `.ctrlyoke/templates/*.ctrlyoke.{yaml,yml,json}` as scope-qualified custom IDs. A basename is unique within a scope regardless of format. Do not assume files under `src/templates/workflows/` cover all available templates.
 - `_templateMeta` is authoring-only metadata for the picker UI; `createWorkflow()` strips it before writing the real workflow file.
 - `spec-driven-loop` is the canonical example of `finalStep` orchestration, and deliberately ships `steps: []` — the orchestrator stages every step itself. It relies on `agent`, `mcpServers: [ctrlyoke]`, `resumeSession: true`, and `sessionId: finalStep` together; the resumed session (not `priorContext`) is what carries the plan across loops.

@@ -1,11 +1,20 @@
 # Script-Generated Steps Plan
 
-**Status:** Proposed
+**Status:** Proposed — prerequisite done, Phases 1–2 not started
+
+> **2026-10-10 audit:** The final-step merge prerequisite is fixed (`234708f1e`:
+> `PromptQueue.mergeDiskStepsUnderLock()` runs before `queueSizeAfter` is read);
+> the bug doc moved to `dev/bugs/implemented/`. The sections below are marked
+> accordingly. Nothing from Phase 1 (`step add`, launcher on script PATH,
+> `CTRLYOKE_PROMPT_INDEX` for scripts) or Phase 2 (`forEach`) exists yet; the
+> other code claims were re-verified. Narrowed the `vars.item` rejection to
+> workflows that use `forEach`, so adding the feature after release cannot
+> invalidate existing workflows.
 
 **Related:** `COMPUTED_VARIABLES_PLAN.md` (the value-producing sibling of this
 plan: a script that produces a `{{var}}` instead of steps),
 `dev/rejected/TEMPLATE_SETUP_SCRIPTS.md` (create-time generation, rejected),
-`CLI_DISTRIBUTION_PLAN.md` (the `bin/` launcher this plan puts on script PATH)
+`dev/implemented/CLI_DISTRIBUTION_PLAN.md` (the `bin/` launcher this plan puts on script PATH)
 
 ## The ask
 
@@ -37,17 +46,23 @@ definition under the same lock whenever a queue step settles
 (`PromptQueue.commitStepOutcomeAndAdvance` → `mergeDiskDefinition`), and the
 file watcher merges in between (`PromptFileLoader` "Scenario 2"). Steps appended
 by any process before a **queue** script step exits are therefore picked up
-deterministically when that step settles. A **final** step has no such merge
-point; see "Final-step merge" below. The pieces still missing are a
-script-callable _add_, the `ctrlyoke` launcher on the script's PATH, and that
-final-step merge.
+deterministically when that step settles. A **final** step now has the same
+guarantee (see "Final-step merge" below). The pieces still missing are a
+script-callable _add_ and the `ctrlyoke` launcher on the script's PATH.
 
-### Final-step merge (prerequisite)
+### Final-step merge (prerequisite) — done
 
-The final-step loop decides whether a pass appended work by comparing
+> **Fixed in `234708f1e`.** The final-step loop now calls
+> `PromptQueue.mergeDiskStepsUnderLock()` (`WorkflowExecutor.ts:795`) before
+> reading `queueSizeAfter`, sharing `mergeDiskStepsWhileLocked()` with
+> `commitStepOutcomeAndAdvance`. The analysis below is kept as the record of
+> why it was needed; `forEach` (Phase 2) must still append before that merge
+> point or update the in-memory queue itself.
+
+The final-step loop decided whether a pass appended work by comparing
 **in-memory** queue sizes: `queueSizeBefore` (`WorkflowExecutor.ts` ~745)
-against `queueSizeAfter` (~793). There is no explicit re-read of the run file on
-this path:
+against `queueSizeAfter` (~796). Before the fix there was no explicit re-read
+of the run file on this path:
 
 - `PromptQueue.commitStepOutcomeAndAdvance`, the locked re-read + merge, returns
   early for non-queue targets.
@@ -65,11 +80,10 @@ MCP appends from AI final steps work today because of timing: the model keeps
 writing its summary for seconds after its last `append_step`, so the poll
 usually merges first. A script final step that calls `step add` and exits
 immediately would often lose that race. The workflow would then end with the
-appended steps stranded as pending steps of a completed run. This is filed as
-`dev/bugs/backlog/final-step-loop-decision-misses-unmerged-external-appends.md`
-and **must be fixed before Phase 1 ships**: merge the on-disk definition under
-the working-file lock before reading `queueSizeAfter`, mirroring
-`commitStepOutcomeAndAdvance`. `forEach` (Phase 2) should append before that
+appended steps stranded as pending steps of a completed run. This was filed as
+`dev/bugs/implemented/final-step-loop-decision-misses-unmerged-external-appends.md`
+and fixed as described: merge the on-disk definition under the working-file
+lock before reading `queueSizeAfter`, mirroring `commitStepOutcomeAndAdvance`. `forEach` (Phase 2) should append before that
 merge point, or update the in-memory queue as part of its own append. A
 disk-only append would hit the same gap.
 
@@ -163,8 +177,10 @@ optional step template to script steps:
 - **Substitute at generation time.** `{{item}}` and `{{itemIndex}}` are filled
   in when the steps are created, so the queued steps show concrete paths in the
   dashboard and run history. Other `{{vars}}` stay as placeholders and resolve
-  at execution time as usual. Reject a workflow whose `vars` defines `item` or
-  `itemIndex`.
+  at execution time as usual. Reject a `forEach` template whose workflow `vars`
+  (or `--var` overrides) define `item` or `itemIndex`. Scope the check to
+  workflows that use `forEach`; `item` stays a legal var name everywhere else,
+  so existing workflows never start failing validation.
 - **The template is a `workflowStep`.** It can be a prompt or a script step
   with full execution properties (`harness`, `model`, `skills`,
   `endCondition`, ...), and it inherits workflow defaults like any appended step.
@@ -199,8 +215,11 @@ complement each other.
 **Runaway loops.** If a fix step finishes without moving its bug doc, the next
 pass emits the same line again, forever. `maxSteps` is the backstop and
 already counts every appended step. The generator should also skip work this
-run already attempted: it can read `CTRLYOKE_WORKING_FILE` (reading is safe)
-or `ctrlyoke history steps`. Whether `forEach` should offer a built-in
+run already attempted: it can read `CTRLYOKE_WORKING_FILE` (reading is safe;
+script steps receive it from `WorkflowExecutor`'s script env builder) or
+`ctrlyoke history steps`. (Only `history search` has a `--this-workflow` flag
+that resolves the run from `CTRLYOKE_WORKING_FILE`; `history steps` requires
+`--workflow` and defaults `--run` to the latest run.) Whether `forEach` should offer a built-in
 `skipExisting` (match on the generated `name`) is an open question below.
 
 ## Rejected alternatives
@@ -242,31 +261,32 @@ or `ctrlyoke history steps`. Whether `forEach` should offer a built-in
   its own token syntax; deferred unless the one-string-per-line form proves too
   thin.
 - ~~Does the final-step path merge the on-disk definition under lock before
-  deciding whether the pass appended anything?~~ **Answered: no.** It relies on
-  the asynchronous watcher/poller. See "Final-step merge (prerequisite)" above
-  and `dev/bugs/backlog/final-step-loop-decision-misses-unmerged-external-appends.md`.
+  deciding whether the pass appended anything?~~ **Answered: it did not; fixed
+  in `234708f1e`.** See "Final-step merge (prerequisite)" above and
+  `dev/bugs/implemented/final-step-loop-decision-misses-unmerged-external-appends.md`.
 
 ## Affected areas (sketch)
 
-| Area                                                           | Change                                                                       |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `src/core/WorkflowExecutor.ts`, `src/core/PromptQueue.ts`      | Prerequisite: locked disk merge before the final-step `queueSizeAfter` check |
-| `src/cli/StepCommandDefinitions.ts`, `src/cli/StepCommands.ts` | `step add`; optional `--workflow`/`--run` via `CTRLYOKE_WORKING_FILE`; stdin |
-| `src/mcp-server.ts` (`append_step` handler)                    | Extract shared validation/flattening so CLI and MCP share one path           |
-| `src/core/orchestration/ScriptProcessRunner.ts`                | `withCtrlyokeBinOnPath`; step-index env for attribution                      |
-| `schemas/workflow-schema.json`                                 | `scriptStep.forEach` (Phase 2); `npm run schema:update`                      |
-| `src/types/CtrlYokeTypes.ts`                                   | `ScriptStep.forEach`                                                         |
-| `src/core/WorkflowExecutor.ts`                                 | Expand `forEach` and append on script-step success                           |
-| `src/core/ParallelGroupPreflight.ts`                           | Reject `forEach` on group members                                            |
-| `ScriptConditionEditor.tsx` (scriptStep variant)               | "For each output line" template editor                                       |
-| `src/templates/workflows/`                                     | A deterministic bug-drain template alongside the AI one                      |
-| Docs                                                           | `step add` CLI reference; generator-step guide; the runaway-loop note        |
+| Area                                                           | Change                                                                             |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/core/WorkflowExecutor.ts`, `src/core/PromptQueue.ts`      | ~~Prerequisite: locked disk merge before the final-step check~~ done (`234708f1e`) |
+| `src/cli/StepCommandDefinitions.ts`, `src/cli/StepCommands.ts` | `step add`; optional `--workflow`/`--run` via `CTRLYOKE_WORKING_FILE`; stdin       |
+| `src/mcp-server.ts` (`append_step` handler)                    | Extract shared validation/flattening so CLI and MCP share one path                 |
+| `src/core/orchestration/ScriptProcessRunner.ts`                | `withCtrlyokeBinOnPath`; step-index env for attribution                            |
+| `schemas/workflow-schema.json`                                 | `scriptStep.forEach` (Phase 2); `npm run schema:update`                            |
+| `src/types/CtrlYokeTypes.ts`                                   | `ScriptStep.forEach`                                                               |
+| `src/core/WorkflowExecutor.ts`                                 | Expand `forEach` and append on script-step success                                 |
+| `src/core/ParallelGroupPreflight.ts`                           | Reject `forEach` on group members                                                  |
+| `ScriptConditionEditor.tsx` (scriptStep variant)               | "For each output line" template editor                                             |
+| `src/templates/workflows/`                                     | A deterministic bug-drain template alongside the AI one                            |
+| Docs                                                           | `step add` CLI reference; generator-step guide; the runaway-loop note              |
 
 ## Tests
 
-- A final step that appends through `RunContinuationService.appendStepsToRun`
-  and returns immediately, with no file watcher: the loop runs the appended step
-  and then runs the final step again (covers the prerequisite bug fix).
+- ~~A final step that appends out of process and returns immediately, with no
+  file watcher: the loop runs the appended step and then the final step again.~~
+  Landed with the prerequisite fix (`src/test/unit/WorkflowExecutor.test.ts`,
+  `234708f1e`).
 - `step add` against a live run: steps appear in the executor's queue at the
   next settle, `definitionRevision` advances, `maxSteps` is enforced.
 - `step add` with no flags inside a script step resolves the calling run; with

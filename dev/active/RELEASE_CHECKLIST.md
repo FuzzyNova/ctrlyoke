@@ -2,10 +2,10 @@
 
 **Created:** June 19, 2026 (as `FlightPath Release Checklist`)
 **Rewritten:** August 25, 2026 — consolidated into the single canonical, ctrlyoke-branded release checklist.
-**Status:** Business/domain cutover is DONE. Pro-licensing vendor accounts (Keygen, Lemon Squeezy) are fully configured — Lemon Squeezy's identity verification cleared September 7, 2026. Extension-side `LicenseService` implementation (Phase 6) is DONE. Attorney sign-off on the EULA also landed September 7, 2026, which unblocked Marketplace publish (Phase 9). Phase 14 (repo visibility flip) cleared every pre-flip gate the same day — entropy-based secret scan clean, Issues/PRs/tags skim clean, all vendor + Microsoft/Azure DevOps accounts MFA-hardened — and is now ready to execute whenever Nathan chooses to trigger the actual toggle. Phase 13's CI/release automation and GitHub public-contribution scaffolding (pre-push hook, full-suite + release workflows, `CONTRIBUTING.md`/`SECURITY.md`/issue+PR templates) were also built September 7, 2026. Phase 7's self-serve Enterprise legal (`DPA.md`, `ENTERPRISE_TERMS.md`, `TRUST_PAGE.md`) cleared attorney review and went live on `ctrlyoke.dev` September 17, 2026, alongside the signed IP Assignment Agreement. The `VSCE_PAT` secret landed September 8, 2026, so `release.yml` can publish. **As of September 23, 2026 the largest remaining release blocker is Phase 8 (screenshots/demo GIF, then final package inspection).** Business-side work (LLC vendor re-association to Fuzzy Nova LLC + the Mercury account/card, trademark filing) is tracked outside this repo in the Fuzzy Nova LLC business Drive (`Formation & Legal/LLC_FORMATION_GUIDE.md`, `Trademark & IP/TRADEMARK_FILING_GUIDE.md`); only its release-gating touchpoints are mirrored here.
+**Status:** Business/domain cutover is DONE. Pro-licensing vendor accounts (Keygen, Lemon Squeezy) are fully configured — Lemon Squeezy's identity verification cleared September 7, 2026. Extension-side `LicenseService` implementation (Phase 6) is DONE. Attorney sign-off on the EULA also landed September 7, 2026, which unblocked Marketplace publish (Phase 9). Phase 14 (repo visibility flip) cleared every pre-flip gate the same day — entropy-based secret scan clean, Issues/PRs/tags skim clean, all vendor + Microsoft/Azure DevOps accounts MFA-hardened — and is now ready to execute whenever Nathan chooses to trigger the actual toggle. Phase 13's CI/release automation and GitHub public-contribution scaffolding (pre-push hook, full-suite + release workflows, `CONTRIBUTING.md`/`SECURITY.md`/issue+PR templates) were also built September 7, 2026. Phase 7's self-serve Enterprise legal (`DPA.md`, `ENTERPRISE_TERMS.md`, `TRUST_PAGE.md`) cleared attorney review and went live on `ctrlyoke.dev` September 17, 2026, alongside the signed IP Assignment Agreement. The `VSCE_PAT` secret landed September 8, 2026, so `release.yml` can publish. **As of September 23, 2026 the largest remaining release blocker is Phase 8 (screenshots/demo GIF, then final package inspection).** Business-side work (LLC vendor re-association to Fuzzy Nova LLC + the Mercury account/card, trademark filing) is tracked outside this repo in the Fuzzy Nova LLC business Drive (`Formation & Legal/LLC_FORMATION_GUIDE.md`, `Trademark & IP/TRADEMARK_FILING_GUIDE.md`); only its release-gating touchpoints are mirrored here. **2026-10-10 audit (repo-verifiable items only):** `package.json` is `0.1.2`. Tags `v0.1.1` (release run failed twice) and `v0.1.2` (release run green, 2026-09-25) exercised `release.yml` end to end: Marketplace publish to the still-private listing, a GitHub Release with the VSIX attached, and npm staging. `npm view ctrlyoke version` returns `0.1.2`. `full-suite.yml` runs under Xvfb but has failed on every weekly schedule since 2026-09-14. The repo is still private (`gh api`). Also fixed: moved-doc links (`CTRLYOKE_REBRAND_CUTOVER.md`, `CLI_DISTRIBUTION_PLAN.md`, and `DEPENDENCY_UPGRADE_PLAN_2026_10.md` are now in `dev/implemented/`), "seven harnesses" changed to six, the stale Phase 6 "in progress" label, the dev-menu visibility check, and the Enterprise PO line.
 **Purpose:** the one place to look for "what's left before `ctrlyoke` ships" — product release, vendor/licensing setup with exact click-by-click steps, legal, and launch verification.
 
-> **This document supersedes [`RELEASE_PLAN.md`](RELEASE_PLAN.md) and [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md).** Both are kept as historical record (their content described real work, most of it now done) but are no longer the place to look for open items — that's here. [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) remains the engineering design doc for `LicenseService`; this checklist is the execution tracker. [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) is left untouched as a FlightPath-era generic how-to-use-`vsce` reference — its mechanics (package/login/publish commands) are still accurate, just still branded FlightPath; Phase 9 below has the ctrlyoke-branded equivalent commands.
+> **This document supersedes [`RELEASE_PLAN.md`](../implemented/RELEASE_PLAN.md) and [`CTRLYOKE_REBRAND_CUTOVER.md`](../implemented/CTRLYOKE_REBRAND_CUTOVER.md).** Both are kept as historical record (their content described real work, most of it now done) but are no longer the place to look for open items — that's here. [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) remains the engineering design doc for `LicenseService`; this checklist is the execution tracker. [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) is left untouched as a FlightPath-era generic how-to-use-`vsce` reference — its mechanics (package/login/publish commands) are still accurate, just still branded FlightPath; Phase 9 below has the ctrlyoke-branded equivalent commands.
 
 ---
 
@@ -13,19 +13,20 @@
 
 1. **Phase 1–3** — extension/site readiness and business cutover. **All done.** Kept brief.
 2. **Phase 4–5** — Pro licensing vendors (Keygen, Lemon Squeezy). **Partially done — exact remaining steps below**, current as of a live walkthrough of both dashboards on August 25, 2026.
-3. **Phase 6** — Pro licensing _implementation_ (the `LicenseService` code in the extension). **In progress** — remaining gate sites and launch verification are still open.
+3. **Phase 6** — Pro licensing _implementation_ (the `LicenseService` code in the extension). **Done** (see Phase 6).
 4. **Phase 7–12** — legal, final packaging, marketplace publish, GitHub release, npm (deferred), launch verification.
+5. **Pre-Release Compatibility Window** (just before the Summary Table) — backlog plans and bugs that are cheap to land now but would need shims, migrations, or changed behavior for existing workflows if done after launch.
 
 ---
 
 ## Phase 1 — Release Foundation ✅ DONE
 
 - [x] Package metadata, extension display name, repository URL, icon, categories, marketplace publisher — all `ctrlyoke` / `fuzzynova` / `FuzzyNova/ctrlyoke` / `ctrlyoke.dev`.
-- [x] Source-available under a custom commercial EULA — decision made, draft exists (`LICENSE_DRAFT.md`), attorney review still open (Phase 7).
-- [x] Seven harnesses, Antigravity CLI swap, `gemini-cli` fully removed.
+- [x] Source-available under a custom commercial EULA — decided; the attorney-approved text is in `LICENSE.md` (Phase 7, signed off September 7, 2026).
+- [x] Six harnesses (`HARNESS_IDS`), Antigravity CLI swap, `gemini-cli` fully removed.
 - [x] Pre-publish security review complete.
 
-Full detail: [`RELEASE_PLAN.md`](RELEASE_PLAN.md) §1, §2.1–2.2, §2.5, §2.10 (kept as historical record of this work).
+Full detail: [`RELEASE_PLAN.md`](../implemented/RELEASE_PLAN.md) §1, §2.1–2.2, §2.5, §2.10 (kept as historical record of this work).
 
 ---
 
@@ -39,7 +40,7 @@ Full detail: [`RELEASE_PLAN.md`](RELEASE_PLAN.md) §1, §2.1–2.2, §2.5, §2.1
 
 ## Phase 3 — ctrlyoke Business & Domain Cutover ✅ DONE
 
-Everything in [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md) §1–5 is complete and verified:
+Everything in [`CTRLYOKE_REBRAND_CUTOVER.md`](../implemented/CTRLYOKE_REBRAND_CUTOVER.md) §1–5 is complete and verified:
 
 - [x] `ctrlyoke.dev` DNS + Netlify primary domain; `flightpath.dev` → `ctrlyoke.dev` 301 redirect live.
 - [x] Google Workspace: `support@`, `billing@`, `security@`, `sales@`, `privacy@`, `licensing@` all on `@ctrlyoke.dev`, SPF/DKIM/DMARC configured.
@@ -332,9 +333,12 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
 
 6. **PO fallback**
    - [ ] `sales@ctrlyoke.dev` already exists (Phase 3) — confirm it's monitored.
-   - [ ] Add one line on the Enterprise pricing card: "Need an invoice or PO?
+   - [x] Add one line on the Enterprise pricing card: "Need an invoice or PO?
          Email sales@ctrlyoke.dev." No automation required; kept deliberately rare
-         by design, not a funnel to build out.
+         by design, not a funnel to build out. _Verified 2026-10-10:_ the
+         Enterprise card in `landing/src/pages/pricing.astro` lists "PO /
+         invoicing available" under a "Contact sales" `mailto:sales@ctrlyoke.dev`
+         button, and the Enterprise FAQ says to email sales@ to request a PO.
 
 7. **Verification** ✅ **purchase + renewal + expiry paths verified September 8,
    2026** (machine-count alerting below is still open — that's item 4, not yet built):
@@ -548,7 +552,7 @@ You can't create the LS webhook without a target URL, and the Netlify function's
      DataRep's renewal questionnaire and renew or upgrade without a coverage gap.
      Revisit the tier earlier when approaching 1,000 relevant people or whenever
      processing changes materially.
-- [ ] Publish the refund policy decided in [`REFUND_POLICY.md`](../backlog/REFUND_POLICY.md): Pro gets a 30-day money-back guarantee, and Enterprise stays non-refundable under the existing terms. Add the pricing FAQ, docs, and LS product copy, fix the partial-refund webhook bug, and add the live-mode webhook events. Lemon Squeezy has no auto-refund setting, so each refund is approved by hand.
+- [ ] Publish the refund policy decided in [`REFUND_POLICY.md`](../backlog/REFUND_POLICY.md): Pro gets a 30-day money-back guarantee, and Enterprise stays non-refundable under the existing terms. Add the pricing FAQ, docs, and LS product copy, fix the partial-refund webhook bug, and add the live-mode webhook events. Lemon Squeezy has no auto-refund setting, so each refund is approved by hand. _Repo-side progress (2026-10-10):_ the pricing FAQ and Pro card carry the 30-day guarantee, `docs/pro/index.md` mentions refunds, and the partial-refund webhook bug is fixed (`87ba0728a`; `dev/bugs/implemented/partial-refund-suspends-license.md`). The LS product copy and the live-mode webhook events cannot be checked from the repo.
 - [ ] Publish `ctrlyoke.dev/terms` plain-language summary (the legal page itself is already live rendering `LICENSE.md` directly).
 - [x] Keep public GitHub Issues for community reports; `support@ctrlyoke.dev` stays private for Pro/Enterprise support (both already exist — verified as the intended steady state, not a pending action).
 
@@ -567,16 +571,16 @@ Confirm:
 
 - [ ] `out/ui/webview-react/` assets included.
 - [ ] `out/mcp-server.js` included.
-- [ ] `out/cli.js` and the `bin/ctrlyoke` / `bin/ctrlyoke.cmd` shims **included** (decided 2026-09-24 — see [`CLI_DISTRIBUTION_PLAN.md`](../backlog/CLI_DISTRIBUTION_PLAN.md)).
+- [ ] `out/cli.js` and the `bin/ctrlyoke` / `bin/ctrlyoke.cmd` shims **included** (decided 2026-09-24 — see [`CLI_DISTRIBUTION_PLAN.md`](../implemented/CLI_DISTRIBUTION_PLAN.md)).
 - [ ] `node_modules/node-pty/` included.
 - [ ] `.ctrlyoke/`, `.agents/`, local logs, prompts, test logs, dev-only files **not** included.
-- [ ] Generated VSIX version matches `package.json` (currently `0.1.0`).
-- [ ] `npm audit` — no new production advisories since the last check (dev-only findings tracked in `dev/backlog/DEPENDENCY_UPGRADE_PLAN_2026_10.md` are fine to carry).
+- [ ] Generated VSIX version matches `package.json` (currently `0.1.2`; `release.yml` enforces tag == version via `scripts/verify-release-tag.mjs`).
+- [ ] `npm audit` — no new production advisories since the last check (dev-only findings tracked in `dev/implemented/DEPENDENCY_UPGRADE_PLAN_2026_10.md` are fine to carry).
 
 **Also still open from the original plan, unrelated to licensing:**
 
 - [ ] **Screenshots + demo GIF** for README/Marketplace — promoted to a release blocker (Nathan, July 4, 2026). Capture last, after Phase 6 UI (license status surface, upsell prompts) is final, since those are now part of the dashboard's first impression.
-- [ ] Confirm dev-only command `ctrlyoke: Developer Tools` stays hidden unless `ctrlyoke.devMode` is set.
+- [x] Confirm dev-only command `ctrlyoke: Developer Tools` stays hidden unless `ctrlyoke.devMode` is set. Verified 2026-10-10: the `ctrlyoke.devMenu` command-palette entry in `package.json` has `"when": "ctrlyoke.devMode"`.
 
 ---
 
@@ -594,6 +598,12 @@ Confirm:
 
 ## Phase 10 — GitHub Release
 
+_2026-10-10:_ `release.yml` automates this phase. GitHub Releases `v0.1.1` (2026-09-17) and
+`v0.1.2` (2026-09-25, "Latest") already exist on the private repo, with the VSIX attached.
+No `v0.1.0` tag was ever cut. The items below apply to whichever version becomes the public launch
+release; its `CHANGELOG.md` entry needs a real date (the `[0.1.0]` entry still says
+2026-05-12).
+
 - [ ] Tag `v0.1.0`.
 - [ ] Create GitHub Release from the `CHANGELOG.md` `[0.1.0]` entry.
 - [ ] Attach the final `ctrlyoke-0.1.0.vsix`.
@@ -603,7 +613,7 @@ Confirm:
 
 ## Phase 11 — CLI Distribution
 
-**Decided September 24, 2026** — see [`CLI_DISTRIBUTION_PLAN.md`](../backlog/CLI_DISTRIBUTION_PLAN.md). The CLI ships through two channels built from one artifact at one version: bundled in the VSIX and put on `PATH` in VS Code terminals and ctrlyoke-spawned harness processes (no system PATH edits), **and** published to npm as a dedicated `ctrlyoke` package (not the root `package.json`) by `release.yml` from the same tag.
+**Decided September 24, 2026** — see [`CLI_DISTRIBUTION_PLAN.md`](../implemented/CLI_DISTRIBUTION_PLAN.md). The CLI ships through two channels built from one artifact at one version: bundled in the VSIX and put on `PATH` in VS Code terminals and ctrlyoke-spawned harness processes (no system PATH edits), **and** published to npm as a dedicated `ctrlyoke` package (not the root `package.json`) by `release.yml` from the same tag.
 
 - [x] Reserve the `ctrlyoke` npm name under a Fuzzy Nova–owned account with 2FA — done September 25, 2026: npm user `fuzzynova` (`admin@fuzzno.com`, passkey 2FA) published a `0.0.1` placeholder that prints "coming soon" and exits `1`. The account uses a passkey, not TOTP, so a manual `npm publish` needs `--auth-type=web` from an interactive terminal.
 - [x] On npmjs.com → `ctrlyoke` → Settings: trusted publisher added (GitHub Actions, `FuzzyNova`/`ctrlyoke`, workflow `release.yml`, **staged publishing only**), and publishing access set to "Require two-factor authentication and disallow tokens" — done September 25, 2026. The `ctrlyoke` npm org also exists, to reserve the `@ctrlyoke` scope.
@@ -732,22 +742,23 @@ ships is what makes the bypassable one safe to have.
 - [x] **Full-suite workflow on `workflow_dispatch`** — ✅ Built September 7,
       2026: `.github/workflows/full-suite.yml`, `workflow_dispatch` plus a
       weekly `schedule` (Monday 13:00 UTC). Runs `npm run test:headless`
-      (already `xvfb-run`-wrapped) on `ubuntu-latest`. **Not yet verified live**
-      — the assumption that GitHub's `ubuntu-latest` image ships Xvfb
-      pre-installed (true for the standard `@vscode/test-electron` CI recipe)
-      should be confirmed on the first real `workflow_dispatch` run.
+      (already `xvfb-run`-wrapped) on `ubuntu-latest`. **Verified live
+      (2026-10-10):** the scheduled runs reach and execute the extension-host
+      tests under `xvfb-run`, so Xvfb is present. However, every scheduled run
+      since 2026-09-14 (four as of 2026-10-05) has ended in **failure**. The CI
+      suite is red and needs triage before it can gate a release.
 - [x] **`release.yml` on `push: tags: ["v*"]`** — ✅ Built September 7, 2026:
       `.github/workflows/release.yml`. Runs the version/tag guard, `npm run
 package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
-      creates the GitHub Release via `softprops/action-gh-release@v2` with the
+      creates the GitHub Release via `softprops/action-gh-release` (now `@v3`; `@v2` broke under the Node 20 deprecation) with the
       matching `CHANGELOG.md` section (from the new
       `scripts/verify-release-tag.mjs`) as the body and the VSIX attached.
       Declares an explicit `permissions: contents: write` block (the two
       existing Netlify workflows don't need one; this one does, to create a
-      Release). **Not yet functional** — needs the `VSCE_PAT` repo secret,
-      which needs the Azure DevOps PAT from Phase 9 (still open below). The
-      workflow is correctly wired but will fail at the publish step until that
-      secret exists.
+      Release). **Functional:** `VSCE_PAT` landed September 8, 2026. The `v0.1.1`
+      tag's runs failed (2026-09-17, 2026-09-23); the `v0.1.2` run succeeded
+      2026-09-25 (Marketplace publish, GitHub Release, npm stage). It now also
+      stages the npm CLI package (Phase 11).
 - [x] **Version/tag guard in that workflow** — ✅ Built September 7, 2026, as
       part of the same script: `scripts/verify-release-tag.mjs` compares the
       pushed tag (minus its leading `v`) against `package.json#version` and
@@ -771,7 +782,7 @@ package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
       `git switch -c release/X.Y <tag>` recipe now lives in `CONTRIBUTING.md`'s
       "Cutting a release" section, alongside the reasoning for why standing
       release branches aren't used otherwise.
-- [x] **Flip the repo to public** — Phase 14's pre-flip gates (EULA, secret
+- [ ] **Flip the repo to public** — Phase 14's pre-flip gates (EULA, secret
       scan, Issues/PRs skim, MFA hardening) all cleared September 7, 2026; the
       actual toggle in 14.5 remains Nathan's call to trigger.
 
@@ -797,15 +808,14 @@ grows).
   commits directly to `main` with CI as the safety net, so protection rules
   need a deliberate decision about what they'd restrict for a solo maintainer
   who pushes directly, not a default-on assumption.
-- `gh` CLI isn't installed in this dev environment yet — recommended follow-up
-  (`winget install --id GitHub.cli`, then `gh auth login` interactively) to
-  make the secret-setting step and future repo administration easier.
+- ~~`gh` CLI isn't installed in this dev environment yet~~ — installed and
+  authenticated as of 2026-10-10 (`gh run list` / `gh release list` work).
 
 ---
 
 ## Phase 14 — Repo Visibility Flip (private → public)
 
-`FuzzyNova/ctrlyoke` is **private today**. Phase 7's public GitHub Issues, the
+`FuzzyNova/ctrlyoke` is **private today** (re-confirmed 2026-10-10 via `gh api repos/FuzzyNova/ctrlyoke`). Phase 7's public GitHub Issues, the
 source-available EULA, and Phase 13's free Actions minutes all assume it becomes
 public, so this is a real launch step — and it has a real prerequisite, because
 **publishing exposes every commit on every branch and tag, not the working
@@ -949,6 +959,90 @@ public**.
 
 ---
 
+## Pre-Release Compatibility Window — plans to consider landing before launch
+
+**Added:** October 10, 2026, from a full audit of `dev/backlog/` and `dev/active/`.
+
+None of these is a launch blocker the way Phase 8 is. Each is something that is cheap to change
+while nobody depends on ctrlyoke's contracts, and expensive afterwards. Doing it after launch would
+mean a compatibility shim, a migration of persisted state, or the same authored workflow behaving
+differently after an upgrade. Plans whose remaining work is purely additive (new optional fields,
+new step types, new settings, new harness IDs) are deliberately left out. Those can ship in any
+later version at no compatibility cost.
+
+> **The window is already partly closed.** `ctrlyoke@0.1.2` is public on npm, so the CLI's JSON
+> result contract (Automation API v1) and the run-state format already have real users. Changes to
+> those surfaces already need the `schemaVersion` coexistence handling. The workflow schema, settings
+> schema, and VS Code extension behavior are still private until the Marketplace listing and repo go
+> public.
+
+### Recommended before launch
+
+- [ ] **Remote-access trial clock starts on dashboard open** — bug
+      [`remote-access-trial-starts-on-dashboard-open.md`](../bugs/backlog/remote-access-trial-starts-on-dashboard-open.md)
+      (gaps plan defect C12). It contradicts `LICENSE.md` §2(d), and every install that opens the
+      dashboard persists a trial start time. After launch, those stored timestamps can't be told
+      apart from real trial starts without a migration, so fix it before the first public install.
+- [ ] **Execution guardrails: uniform `-1` and structured stop reasons** —
+      [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md) remaining Phase 1
+      audits plus Phase 2.
+  - **Cost if late:** limit and timeout settings live in users' `.ctrlyoke/settings.json`. If any
+    of them doesn't treat `-1` as unlimited today, normalizing it later silently changes what
+    existing settings mean. A step-limit stop currently looks like a generic harness failure in run
+    state and in CLI/MCP results. Automation will start keying on that shape, and splitting it into
+    a distinct outcome later is a contract change.
+  - **Minimum before launch:** finish the `-1` audit, and define the stop reason-code enum and its
+    field in the Automation API result and run state. Dashboard copy and dry-run display can follow.
+- [ ] **Script verdict in `$previous`/`$step` output** —
+      [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md) D12a.
+  - **Cost if late:** it appends the script's pass/fail, `expected`, and `actual` to the prior-context
+    rendering of _every_ script step, not only steps inside workflows. Landing it after launch
+    changes the prompt text that existing authored workflows send to the harness after an upgrade.
+    Nothing breaks, but outputs can shift.
+  - **Minimum before launch:** land only `PriorContextItem.scriptVerdict` and its rendering in
+    `buildPriorContextXmlFromItems`, independent of the workflow step type. The rest of the plan is
+    additive. It also claims a new `$summary:` reference prefix. A literal collision in existing
+    prompts is very unlikely, but reserving it in the parser now costs nothing.
+- [ ] **Docs: move content between pages before the URLs are indexed** —
+      [`DOCUMENTATION_GAPS_PLAN.md`](../backlog/DOCUMENTATION_GAPS_PLAN.md).
+  - **Cost if late:** the plan's new pages are new paths, so they're safe any time. But moving
+    sections out of `docs/workflows/yaml-format.md` or `end-conditions.md` breaks `#anchor` deep
+    links once the README, Marketplace listing, and external posts link to them, and the README is
+    frozen into each published VSIX.
+  - **Minimum before launch:** do any section moves between existing pages now, or commit to not
+    doing them. Also settle the `ctrlyoke.dev/docs/<section>/<page>` URL scheme
+    ([`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md)). The README media work
+    itself is already tracked in Phase 8.
+
+### Worth a decision, low cost either way
+
+- [ ] **Template optional variables substitute to empty** —
+      [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md) Phase 2.
+      A blank optional template variable currently leaves a literal `{token}`. Changing that alters
+      what a template generates, but not workflows that were already created, because
+      `_templateMeta` is stripped before validation. Fine to do later; do it now only if it's
+      convenient.
+
+### Reviewed and cleared (additive — no compatibility reason to rush)
+
+`AWAITING_INPUT_NOTIFICATION`, `CLINE_INTEGRATION` (a new harness ID is a new enum value),
+`COLORED_SCRIPT_OUTPUT` (opt-in; persisted output stays plain text), `COMMUNITY_TEMPLATES`
+(optional `_templateMeta.author`/`tags`), `COMPUTED_VARIABLES` (`setVar` is new; `varsConfig` widens
+from string to string-or-object), `CUSTOM_TOOLTIPS`, `HARNESS_SESSION_IMPORT` (provenance goes in
+the run descriptor), `HISTORY_SEARCH_BACKGROUND_SCAN`, `LOCALIZATION` (command IDs and setting keys
+stay the same; dashboard message payloads ship in lockstep with the extension),
+`PROMPT_AUTHORING_SUGGESTIONS`, `QUICK_PICKER_IMPROVEMENTS`, `RUN_EXPORT` (ship _late_ rather than
+early; the bundle format becomes a public contract once it exists), `RUN_VIEW_PAYLOAD_FOLLOWUPS`,
+`SCHEMASTORE_CATALOG` (`$id` URLs are already final and live), `SCRIPT_GENERATED_STEPS` (the
+reserved `item`/`itemIndex` names were narrowed to `forEach` workflows only, so existing workflows
+can't start failing validation), `STANDALONE_THEME_SNAPSHOTS`, `TELEMETRY_FOLLOWUPS` (token counts
+are already covered by `PRIVACY.md` §3.1), `TEST_SUITE_CPU_EFFICIENCY`, `USER_INPUT_STEP` (new step
+type), `VISUAL_STUDIO_EXTENSION`, `VOICE_INPUT_AND_READ_ALOUD`, `VSCODE_LM_API_FEATURES`,
+`VSCODE_LSP_MCP` (optional end-condition `kind`), `WORKFLOW_SCHEDULING` (optional field on the
+already-versioned lineage descriptor).
+
+---
+
 ## Summary Table
 
 | Item                                                                       | Status                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -972,19 +1066,20 @@ public**.
 | EU/EEA + UK Article 27 representatives (DataRep)                           | OPEN — SALES GATE     | Phase 7 — purchase the confirmed dual appointment before EU/EEA/UK sales or monitoring, publish the exact executed contact details in `PRIVACY.md`, and renew annually                                                                                                                                                                                                                                                                                                                                                                            |
 | Screenshots + demo GIF                                                     | OPEN                  | Phase 8 — now unblocked, Phase 6 UI is final                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Final `vsce ls` package inspection                                         | OPEN                  | Phase 8 — run right before publish                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Marketplace publish                                                        | OPEN — unblocked      | Phase 9 — remaining work is Phase 8 packaging/screenshots, not a legal or licensing gate anymore                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| GitHub release                                                             | BLOCKED on Phase 9    | Phase 10                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Marketplace publish                                                        | OPEN — unblocked      | Phase 9 — `v0.1.2` already published by `release.yml` to the listing, which is still private/unpublished; making it public plus the post-publish checks remain, behind Phase 8 packaging/screenshots, not a legal or licensing gate anymore                                                                                                                                                                                                                                                                                                       |
+| GitHub release                                                             | AUTOMATED             | Phase 10 — `release.yml` created `v0.1.1`/`v0.1.2` Releases on the private repo; the public launch release follows the same path                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | CLI distribution (VSIX + npm)                                              | DONE (0.1.2 on npm)   | Phase 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; still needs a live-run verification (a real `workflow_dispatch` of `full-suite.yml`, and the first real `vX.Y.Z` tag push)                                                                                                                                                                                                                                                                                                                      |
+| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; first real tag push done (`v0.1.2` green 2026-09-25); `full-suite.yml` runs weekly but has failed every run since 2026-09-14 and needs triage                                                                                                                                                                                                                                                                                                   |
 | Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here                                                                                                                                                                                                                                                                                                                                                                  |
+| Pre-release compatibility window                                           | OPEN — REVIEW         | Trial-clock bug, guardrail `-1`/reason codes, script verdict in prior context, docs page moves; see the section above                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
 
 ## Related Documents
 
-- [`RELEASE_PLAN.md`](RELEASE_PLAN.md) — superseded; kept as historical record of extension-readiness work.
-- [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md) — superseded for §6–7; kept as historical record of the domain/email/GitHub cutover.
+- [`RELEASE_PLAN.md`](../implemented/RELEASE_PLAN.md) — superseded; kept as historical record of extension-readiness work.
+- [`CTRLYOKE_REBRAND_CUTOVER.md`](../implemented/CTRLYOKE_REBRAND_CUTOVER.md) — superseded for §6–7; kept as historical record of the domain/email/GitHub cutover.
 - [`CTRLYOKE_REBRAND_PLAN.md`](../implemented/CTRLYOKE_REBRAND_PLAN.md) — the code rebrand (done).
 - [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) — engineering design for `LicenseService`, gating philosophy, and the full purchase→license architecture.
 - [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) — generic `vsce` package/publish mechanics (FlightPath-branded, mechanics still accurate).

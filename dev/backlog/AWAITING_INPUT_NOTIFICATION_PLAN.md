@@ -1,5 +1,13 @@
 # "Waiting for Input" Notification Plan
 
+**Status:** Not started.
+
+> **2026-10-10 audit:** Not implemented — no `awaitingInput` setting, constant, or env var exists.
+> The problem statement still matches the code (the per-harness table agrees with the `HookEvent`
+> mapping comment in `DashboardConstants.ts`, and the two "enabled hook events" computations are
+> still duplicated). Refreshed line numbers and pointed the workflow-schema reference at
+> `schemas/workflow-schema.json`.
+
 ## Problem
 
 The notification you actually want from a harness is "it is blocked waiting on me."
@@ -77,8 +85,8 @@ const AWAITING_INPUT_SOURCES: Record<HarnessId, AwaitingInputSource | null> = {
 ```
 
 Then one resolver replaces the two places that currently compute "enabled hook
-events" separately: `CliIntegration.getEnabledHookNotificationEvents()` (line ~1855)
-and `CliExecutionRunner.buildHookEnvVars()` (line ~535), which duplicate each other today.
+events" separately: `CliIntegration.getEnabledHookNotificationEvents()` (line ~1848)
+and `CliExecutionRunner.buildHookEnvVars()` (line ~523), which duplicate each other today.
 
 ```ts
 resolveHookNotificationPlan(harnessId, notificationSettings): {
@@ -120,7 +128,7 @@ The OpenCode plugin (`ctrlyoke-opencode-plugin.ts`) reads the same env var.
   `HookEvent`/`HOOK_EVENT_ORDER`, because those drive the raw-event UI and user-hook
   enums.
 - `CompletionNotificationFactory.buildHookNotificationEvent` gates on
-  `settings.events.hookEvents[artifact.hookEvent]` (line ~351). Branch so that
+  `settings.events.hookEvents[artifact.hookEvent]` (line ~355). Branch so that
   `awaitingInput` gates on the new setting. Title: "ctrlyoke - Waiting for input".
   Body: workflow/prompt name, tool name, and the notification message when there is one.
 
@@ -133,7 +141,7 @@ support it. Update the Hook Events blurb to point to it:
 
 ### 5. (Optional, later) Workflow schema
 
-`userHookConfig.event` in `schemas/workflow-schema.yaml` could accept
+`userHookConfig.event` in `schemas/workflow-schema.json` (`$defs/userHookConfig`) could accept
 `awaitingInput` too, so one user hook script works on every harness without
 per-step overrides. This is lower priority because step overrides already work
 around it. It is a separate change because user hooks go through each provider's
@@ -164,5 +172,5 @@ and the `ctrlyoke-<harness>-hook-debug.log`:
   `ExecutionPlanBuilder.test.ts` (install vs emit), `CompletionNotificationFactory.test.ts`,
   `NotificationSettings.test.ts`, `settingsSchemaUiParity.integration.test.ts`,
   `NotificationsSection.test.tsx`
-- Regenerate docs: `npm run generate-schema-docs`. Also update
+- Regenerate docs: `npm run schema:update` (runs `generate-schema-docs` among others). Also update
   `docs/harnesses/compatibility.md` through its generator if hook support is listed there.

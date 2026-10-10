@@ -10,6 +10,15 @@ cancelled scan poisoning the retained dedupe set — are **fixed**; see
 `.github/instructions/orchestration.instructions.md`. This doc is about the
 remaining behaviour, which is working as designed and still unsatisfying.
 
+> **2026-10-10 audit:** Still not started — no scan session, no
+> `STOP_HISTORY_SEARCH`, and no interim "count all results" control. Every cited
+> symbol was verified against the current code (`HistorySearchIndexService`
+> `scanForMatches`/`getSnapshotKey`/`HistorySearchScanCursor`, router
+> `routeQueue`/`beginHistorySearch`/`getHistorySearchListingKey`,
+> `HISTORY_SEARCH_DEBOUNCE_MS = 600` in `HistorySearchDrawer.tsx`,
+> `historySearchCacheMb` default 320). One correction: partial results are applied in
+> `hooks/useMessageHandler.ts`, which updates the `uiStore` search state.
+
 ## The problem in one sentence
 
 A scan stops the moment the requested page is full, so a query's result count
@@ -39,8 +48,9 @@ rather than as a deliberate lower bound.
 
 That is the right shape. The machinery for the _pushing_ half already exists:
 `HistorySearchIndexService.scanForMatches` takes `onPartialResultsFound`, and
-the router relays it as `SEARCH_HISTORY_PARTIAL_RESULTS`, which `uiStore`
-applies exactly like a page response. What is missing is a scan that keeps
+the router relays it as `SEARCH_HISTORY_PARTIAL_RESULTS`, which
+`useMessageHandler` applies to the `uiStore` search state exactly like a page
+response. What is missing is a scan that keeps
 running when no page request is waiting on it.
 
 ## The blocker: `routeQueue`

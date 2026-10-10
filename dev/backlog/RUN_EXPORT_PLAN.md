@@ -2,15 +2,26 @@
 
 > **Status:** Proposed — not implemented. Written 2026-08-14 against current code.
 >
-> **Problem in one line:** run history is machine-local and about to become
-> user-scoped, so there is no supported way to hand someone a run — and
+> **2026-10-10 audit:** Still not started (no exporter, bundle format, materializer, or
+> `export`/`import` CLI command). Since writing, user-scoped run history
+> (`dev/implemented/USER_SCOPED_RUN_HISTORY_PLAN.md`), workflow-relative asset refs, and
+> secrets/redaction (`dev/implemented/SECRETS_AND_REDACTION_PLAN.md`) have all shipped; references
+> updated accordingly. Corrected: `TIMELINE_EVENT_TYPES` gained
+> `workflowRuntimeTransitionRecorded`; the asset writer is the `writeWorkflowBundle` function;
+> undo-guard/undo-hook line refs; and the redaction step — live outputs are already scrubbed of
+> resolved secrets by `StreamingSecretRedactor` before they reach `events.jsonl`, but a
+> `RunSecretRedactor` only holds values while its run executes, so the exporter has to re-resolve
+> the workflow's declared secrets itself (see §2.1).
+>
+> **Problem in one line:** run history is machine-local and (since the user-scoped history
+> change) lives outside the repo by default, so there is no supported way to hand someone a run — and
 > `USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.1 rules out the obvious workaround of
 > committing the run-storage directory.
 >
-> **Relationship to neighbours.** `USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.2 names
-> this document as the answer it defers to. `HARNESS_SESSION_IMPORT_PLAN.md`
+> **Relationship to neighbours.** `dev/implemented/USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.2 names
+> this document as the answer it defers to. `HARNESS_SESSION_IMPORT_PLAN.md` (still backlog)
 > already specifies the run **materializer** this plan's importer reuses — one
-> materializer, two sources. `WORKFLOW_RELATIVE_ASSET_REFS_PLAN.md` listed
+> materializer, two sources. `dev/implemented/WORKFLOW_RELATIVE_ASSET_REFS_PLAN.md` listed
 > "making live run storage portable" as an explicit non-goal; this is where that
 > gets picked up.
 
@@ -58,14 +69,14 @@ Verified against current code. Every path below is constructed by
 | Referenced attachments / prompt bodies | `<stateRoot>/.ctrlyoke/{attachments,prompts}` | **Yes** — bundled (2.4)                                                 |
 | `.search-index/`, `.usage/`            | derived projections                           | No — rebuilt by the importer's own writes                               |
 
-`WorkflowRunManifest` (`src/types/WorkflowTimelineTypes.ts:89-114`) carries
+`WorkflowRunManifest` (`src/types/WorkflowTimelineTypes.ts:93-118`) carries
 `schemaVersion`, `storageKind`, `workflowId`, `runId`, `startedAt`,
 `completedAt`, `activeExecutionMs`, `executionState`, `definitionRevision`,
 `initialDefinition`, `stepCount`, `eventCount`, `nextSequence`, `lastUpdatedAt`,
 and `tokenTotals`. Everything except the identity triple survives export intact.
 
 `events.jsonl` holds the union in `TIMELINE_EVENT_TYPES`
-(`WorkflowTimelineTypes.ts:32-54`) — `cliOutputRecorded`,
+(`WorkflowTimelineTypes.ts:35-57`) — `workflowRuntimeTransitionRecorded`, `cliOutputRecorded`,
 `cliOutputChunkAppended`, `cliOutputEventsAppended`, `attemptStarted`,
 `attemptTerminated`, `scriptExecutionRecorded`, `retryScheduled`,
 `followUpResponseAppended`, `runTerminated`, `statusMessageRecorded`,
@@ -100,14 +111,27 @@ artifact, not a redacted view over a full one. Ship export with at least the
 resolved-secret scrub, and surface a redaction summary in `run.json` so the
 exporter can see what was removed before sharing.
 
+What already exists: during execution, `StreamingSecretRedactor`
+(`src/utils/SecretRedactionService.ts`, used by `CliTransportCoordinator`,
+`PtyProcessManager`, and `ScriptExecutionReporter`) scrubs resolved secret
+values out of output before it is persisted, so a run's `events.jsonl` should
+already be free of the secrets *that run* resolved. That is not sufficient for
+export: a `RunSecretRedactor` holds values only while its run executes (cleared on
+unregister), heuristics may have been off, and the harness can still print
+secrets it read from the repo that ctrlyoke never resolved. The exporter should
+therefore re-resolve the workflow's declared `${secret:NAME}` values from the
+secret store where available and run `redactPreviewText`
+(`src/types/PreviewRedactor.ts`) with those exact values **plus** heuristics over
+every rewritten payload. Do not write a second matcher.
+
 **Assets.** Attachments and prompt bodies referenced by the run live in
 `<stateRoot>/.ctrlyoke/{attachments,prompts}/`, are gitignored, and stay
 workspace-scoped (`USER_SCOPED_RUN_HISTORY_PLAN.md` §2.3). A bundle without them
 is a bundle of dangling `@` references. **Reuse the Save As machinery** —
 `analyzeWorkflowBundle` / `WorkflowBundleAnalyzer` (`src/utils/WorkflowBundleAnalyzer.ts`)
 already discovers references, plans copies, inlines lone prompt bodies, and
-rewrites refs; `WorkflowBundleWriter` already stages and publishes them
-atomically. Do not write a second asset copier.
+rewrites refs; `writeWorkflowBundle` (`src/utils/WorkflowBundleWriter.ts`) already stages and
+publishes them atomically. Do not write a second asset copier.
 
 ---
 
@@ -182,13 +206,14 @@ extension share it):
 5. **Redact.** Apply the export policy over the rewritten payloads. Count and
    summarize.
 6. **Write atomically.** Stage into a hidden sibling of the destination, fsync,
-   then rename into place — the same discipline `WorkflowBundleWriter` and
+   then rename into place — the same discipline `writeWorkflowBundle` and
    `WorkflowPaths.stagingRunDir` already use. A half-written bundle that someone
    commits is worse than a failed export.
 
 CLI surface, registered alongside the existing run-scoped commands in
 `src/cli/CliRunCommandDefinitions.ts` (which already own `rerun`/`append`/
-`continue` and the `--from <ref|runId>` selector via `resolveCliRunRefAtLineage`):
+`continue` and the `--from <ref|runId>` selector via `resolveCliRunRefAtLineage` in
+`src/cli/CliRunSelector.ts`):
 
 ```
 ctrlyoke export [--from <ref|runId>] --out <dir> [--redact <policy>] [--json]
@@ -196,8 +221,9 @@ ctrlyoke import <bundleDir> [--open]
 ```
 
 Dashboard surface: an **Export run…** action on a run in the history list, and a
-drop target / **Import run bundle…** entry beside the harness-session import
-entry in `WorkflowControls.tsx`.
+drop target / **Import run bundle…** entry in `WorkflowControls.tsx`, beside the
+harness-session import entry once `HARNESS_SESSION_IMPORT_PLAN.md` adds it (it does
+not exist yet).
 
 ---
 
@@ -243,9 +269,9 @@ stranger.
 - **Never restore `workingDirectory` from a bundle.** This is the one that
   matters. `WorkspaceSnapshotService.undoFiles` guards undo writes against
   `workspacePath` plus the named roots
-  (`src/utils/WorkspaceSnapshotService.ts:1016-1051`), and the webview still
+  (`src/utils/WorkspaceSnapshotService.ts`, `undoFiles` ~`:1089`), and the webview still
   derives that `workspacePath` from an output's recorded `workingDirectory`
-  (`useOutputUndoActions.ts:273-275`). A bundle that sets `workingDirectory` to
+  (`useOutputUndoActions.ts`, ~`:220` and `:505`). A bundle that sets `workingDirectory` to
   an attacker-chosen directory therefore chooses where "undo" writes. Recompute
   `workingDirectory` to the importing workspace on materialization, and gate undo
   on the resolved VS Code workspace rather than on anything the bundle said.
@@ -278,7 +304,7 @@ stranger.
 | ----- | --------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | 1     | Bundle format, path-rewrite module, `RunBundleExporter`, `ctrlyoke export`, asset reuse via Save As | Yes — produces shareable artifacts    |
 | 2     | `RunMaterializer` + bundle importer + `ctrlyoke import`, with the ingress guards in 6               | Yes — completes the loop              |
-| 3     | Redaction policy integration (`SECRETS_AND_REDACTION_PLAN.md`)                                      | Gate for recommending export publicly |
+| 3     | Redaction policy integration (reuse `redactPreviewText` / `SecretRedactionService`)                 | Gate for recommending export publicly |
 | 4     | Dashboard export action, import drop target, origin badge                                           | Yes                                   |
 
 Phase 3 is a **release gate on phase 1**, not an enhancement: shipping an export
@@ -294,8 +320,9 @@ without one.
    lineage bundle is a trivial extension of the same format (a directory of run
    bundles plus a shared asset store) once the single-run case is right.
 2. **Redaction default.** Refuse to export when the policy is unset, or export
-   with a blunt scrub and a loud warning? Proposed: blunt scrub plus warning, so
-   the feature is usable before `SECRETS_AND_REDACTION_PLAN.md` lands in full.
+   with a blunt scrub and a loud warning? Proposed: blunt scrub plus warning.
+   (`SECRETS_AND_REDACTION_PLAN.md` has since shipped, so the "blunt scrub" is
+   simply `redactPreviewText` with heuristics on plus any re-resolvable secrets.)
 3. **Chunk events.** Keep `cliOutputChunkAppended` streaming deltas, or collapse
    to the sealed aggregate at export? Proposed: collapse — the deltas are a
    streaming implementation detail and they dominate bundle size.

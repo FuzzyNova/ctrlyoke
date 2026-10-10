@@ -5,6 +5,14 @@
 the evidence, the measurements and the full design notes for each item below.
 Do not re-derive them here.
 
+> **2026-10-10 audit:** All five items remain open. No run-view work has landed
+> since the 1C rollback (`869dd0f19`, `571b160fb`): `RUN_VIEW_LOADED` is still built
+> fresh per delivery in `src/core/orchestration/RunViewPublisher.ts`
+> (`deliverRunView`), with no serialized-snapshot cache or build coalescing
+> (item 2), and structured activity payloads are still shipped (item 3). Recent
+> streamed-redaction fixes (`659d3494d`, `f2a6b5d56`) touch output redaction but
+> not item 5's "redaction at the source" investigation.
+
 ## Where the payload stands
 
 The `bug-backlog` run (`run-2026-09-30T13-41-01-546Z`) serialized to 42.7 MB

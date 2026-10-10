@@ -1,19 +1,42 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
-**Status:** Proposed
+**Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
+
+> **2026-10-10 audit:** Done: #6 (`hero-gif-1350x900.gif`, the landing hero), #1 in a different
+> form (the six `rate-limiter-*-1200x800.png` stills in landing's `HarnessDeck.astro` instead of a
+> layered composite), #3/#7 motion (`ctrlyoke-take-control-1080p.mp4` on landing), and #7's iOS,
+> Android and desktop setup sets, slotted into `docs/pro/mobile-setup.md`. #12 is captured and
+> slotted into `docs/workflows/properties-panel.md`. #10 (explorer and search stills only) and #11
+> (`undo-changes-dialog-1680x1800.png`) are captured but not slotted. The docs copy pipeline exists
+> as `scripts/sync-docs-screenshots.mjs`. Not started: #2, #4, #5, #8, #9, #13 (all walkthrough
+> media; the walkthrough now has six steps, and `.vscodeignore` still has no `images/screenshots`
+> allowlist line) and #14. The `demo-app` project referenced below lives outside the repo.
+> **README.md has no images at all.**
+>
+> **Pre-release: yes, partly.** `RELEASE_CHECKLIST.md` Phase 8 makes "Screenshots + demo GIF for
+> README/Marketplace" a release blocker, and nothing has gone into `README.md` yet. The minimum
+> before publish is the existing hero GIF plus one or two dashboard stills in `README.md`. They
+> need absolute `https://` URLs, either from the published site or from the GitHub repo once it
+> is public. `vsce` rewrites relative image paths to the repo URL, and `.vscodeignore` excludes
+> `images/screenshots/`, so relative paths break while the repo is private. Every published VSIX
+> freezes its README, so a first impression with no images can't be fixed retroactively for that
+> version. Walkthrough media (#13) is also frozen per VSIX, but text-only steps work, so it isn't
+> a blocker. Everything else here (landing and docs polish) can ship any time after release.
 
 ## Goal
 
 Build a real asset library of screenshots and GIFs of the ctrlyoke dashboard, and use it to revamp
-`landing/` (currently all text/icon/code-snippet, zero product imagery) and `docs/` (currently zero
+`landing/` (originally all text/icon/code-snippet; it now has the hero GIF, the harness deck and the
+take-control video) and `docs/` (now only `properties-panel.md` and `pro/mobile-setup.md` have
 screenshots) with actual pictures of the product. Capture what's stable now, ahead of release, so
 this doesn't become a last-minute scramble once [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md)
 reaches Phase 8 ("Screenshots + demo GIF... promoted to a release blocker").
 
 ## Why
 
-The landing page (`landing/src/pages/index.astro`) sells the product entirely on prose, emoji-icons,
-and one hand-authored YAML code block. Nobody sees the dashboard until they install it. Meanwhile
+When this plan was written, the landing page (`landing/src/pages/index.astro`) sold the product
+entirely on prose, emoji-icons, and one hand-authored YAML code block. The hero GIF, harness deck
+and take-control video have since been added; the feature cards are still icon-only. Nobody sees the dashboard until they install it. Meanwhile
 `docs/` walks through settings and panels in text only. The main interface is not expected to change
 materially before release — see `RELEASE_CHECKLIST.md` Phase 8's own framing: capture screenshots
 "after Phase 6 UI (license status surface, upsell prompts) is final," which is the _only_ part of the
@@ -21,15 +44,15 @@ UI still in flux. Everything else is capture-ready today.
 
 ## Non-goals (this pass)
 
-- **Licensing/Pro UI** (license status surface, activation dialogs, upsell prompts) — `LicenseService`
-  (Phase 6 of the release checklist) isn't built yet. Skip these entirely; they get their own pass once
-  that ships. The Pro marketing section on the landing page keeps its current text-only treatment for
+- **Licensing/Pro UI** (license status surface, activation dialogs, upsell prompts) — when this was
+  written, `LicenseService` (Phase 6 of the release checklist) wasn't built yet. It is done now, and
+  the D28 License-tab shot in `DOCUMENTATION_GAPS_PLAN.md` §5.2 covers it. Skip these here. The Pro marketing section on the landing page keeps its current text-only treatment for
   now.
 - **Actually rewriting `landing/src/pages/index.astro` or `docs/**` content\*\* — this doc is the shot
   list and slotting plan only. Executing the swap is separate follow-up work once assets exist.
 - **Video/animated hero** — GIFs only, no produced video.
-- **Writing the Android + iOS PWA install instructions themselves** — a separate, release-blocking
-  content task (currently not tracked in `RELEASE_CHECKLIST.md`; worth adding there). This doc only
+- **Writing the Android + iOS PWA install instructions themselves** — a separate content task, now
+  done (`docs/pro/mobile-setup.md`, ticked in `RELEASE_CHECKLIST.md` Phase 6). This doc only
   covers the supporting visual asset (#7's QR-scan/install/take-control recording, #10's mobile
   screenshots) — not the written step-by-step text.
 
@@ -136,6 +159,8 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** landing hero or the "One interface, six harnesses" feature card
   (`landing/src/pages/index.astro` `features` array, `⚡` entry) — replace/augment the icon-only card.
 - **Dimensions:** category B — see "Target dimensions" above.
+- **Status — done in a different form:** `rate-limiter-{copilot,claude,codex,opencode,qwen,agy}-1200x800.png`
+  (`ab676ee45`), shown on landing as the `HarnessDeck.astro` card deck, not a flattened composite.
 
 ### 2. Composite: one dashboard, multiple VS Code themes
 
@@ -193,6 +218,8 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** landing hero (replace/accompany the static YAML snippet) or a new "watch it work" section;
   `docs/workflows/index.md` and `docs/guide/your-first-workflow.md`.
 - **Dimensions:** category D — see "Target dimensions" above.
+- **Status — done:** `images/screenshots/hero-gif-1350x900.gif` (`6cb508eca`…`0a3be9795`), used as
+  the landing hero. It is not yet in `docs/` or `README.md`.
 
 ### 7. Built-in mobile editor section, plus the QR-scan/PWA-install walkthrough (iOS & Android)
 
@@ -268,7 +295,8 @@ Each item: what to capture, what prep it needs, where it's used.
   The iOS and Android install walkthroughs together are the release-blocking PWA-setup tutorial's
   centerpiece asset — the hard requirement is documented Android + iOS install instructions in
   `docs/pro/`, and these recordings are the visual walkthrough that instructions alone don't convey
-  well. **Status — instructions: drafted** as `docs/pro/mobile-setup.md`: shared desktop and
+  well. **Status — instructions: done** as `docs/pro/mobile-setup.md` (`b32f403fd`; ticked in
+`RELEASE_CHECKLIST.md` Phase 6): shared desktop and
   open-the-link steps, then separate iPhone/iPad and Android sections with each step's stills in a
   row (`.device-shots`, `docs/.vitepress/theme/custom.css`; click opens full size) and the overview
   animation in a collapsed `<details>`. Stills are unannotated; the text names the item to tap.
@@ -361,6 +389,7 @@ Each item: what to capture, what prep it needs, where it's used.
   file list rather than one line.
 - **Use:** landing "One reversible view of every result" feature card (`⬛`, icon-only today);
   `docs/workflows/index.md` or wherever undo/history is documented.
+- **Status:** captured as `undo-changes-dialog-1680x1800.png`, not yet slotted anywhere.
 
 ### 12. `WorkflowPropertiesPanel` — all six drawer tabs, plus key settings pages
 
@@ -387,8 +416,10 @@ Each item: what to capture, what prep it needs, where it's used.
 ### 13. VS Code "Getting Started with ctrlyoke" walkthrough — one media asset per step
 
 The walkthrough (`package.json` → `contributes.walkthroughs`, id `ctrlyoke.gettingStarted`) currently
-uses `markdown` media for all five steps, which is text plus a command link, so the large right-hand
-media pane is mostly empty. Each step needs one picture that matches what its copy
+uses `markdown` media for all six steps (`openPanel`, `verifyHarness`, `createWorkflow`,
+`runWorkflow`, `installCli`, `getHelp`), which is text plus a command link, so the large right-hand
+media pane is mostly empty. The table below predates `installCli`, which has no shot yet. A
+terminal running `ctrlyoke --version` after Install CLI would do. Each step needs one picture that matches what its copy
 (`walkthroughs/getting-started/*.md`) describes.
 
 **Where the logo shows, and why it's missing from the walkthrough page.** The walkthrough `icon`
@@ -430,7 +461,8 @@ every install, unlike landing/docs assets.
 | 13e `getHelp`        | The Agent picker open with `ctrlyoke-tech-support` highlighted, plus the start of an answer to a real question (e.g. "why did my end condition fail?") in the output pane.                                                                                                                                                                                                                                                             | Ask the question once beforehand so the answer is real; crop to picker + first few lines of the answer.                                                                                            |
 
 **Not a screenshot, but in the same pass:** `verifyHarness` and `getHelp` have no
-`completionEvents`, so they never get checked off. Add `onLink:https://ctrlyoke.dev/docs` (or
+`completionEvents`, so they never get checked off (still true 2026-10-10; `featuredFor` is still
+unset too). Add `onLink:https://ctrlyoke.dev/docs` (or
 `stepSelected`) to `getHelp`, and an `onContext:` key that the extension sets when at least one
 harness is detected to `verifyHarness`. Also consider `featuredFor: ["**/*.ctrlyoke.{yaml,yml,json}",
 "**/*.prompt.md"]` so the walkthrough is promoted on the Welcome page in workspaces that already use
@@ -476,7 +508,7 @@ ctrlyoke.
 
 | VS Code surface                                  | Asset(s)  |
 | ------------------------------------------------ | --------- |
-| `ctrlyoke.gettingStarted` walkthrough, steps 1–5 | #13a–#13e |
+| `ctrlyoke.gettingStarted` walkthrough, steps 1–6 | #13a–#13e (+ `installCli`, no shot yet) |
 
 ## Execution order (suggested)
 
@@ -493,4 +525,6 @@ ctrlyoke.
    emulated device).
 7. Produce the styled YAML snippet images (#8) — no app capture needed, can happen anytime.
 8. Only then: touch `landing/` and `docs/` content to slot everything in (separate follow-up, not part
-   of this checklist).
+   of this checklist). In practice, slotting has happened per asset as each one landed (#1, #6, #7,
+   #12). **Add a `README.md` step ahead of the rest:** it is the only surface on the Phase 8
+   release blocker, and it has no media yet.

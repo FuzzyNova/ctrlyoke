@@ -1,7 +1,24 @@
 # Public Docs Gap-Filling Plan
 
-**Status:** Proposed. Written 2026-09-24 from a full audit of `docs/` against `src/`,
+**Status:** Partial. Written 2026-09-24 from a full audit of `docs/` against `src/`,
 `schemas/`, `package.json`, `.github/instructions/`, and every plan in `dev/implemented/`.
+
+> **2026-10-10 audit:** The screenshot pipeline (§5.1) shipped as
+> `scripts/sync-docs-screenshots.mjs`, and `pro/mobile-setup.md`, `cli/ci.md`, `guide/privacy.md`
+> and `workflows/properties-panel.md` (with the #12 tab shots) now exist. Defects C1, C2, C3, C5, C8,
+> C9 and C13 are fixed; C6, C10, C11 and C15 are partly fixed; C4, C12 and C14 are still open. The
+> README was partly cleaned up (§2.2). None of the new P0 guide or workflow pages in §4 exist yet
+> (`guide/dashboard`, `guide/settings`, `guide/remote-dashboard`, `workflows/script-steps`,
+> `variables`, `worktrees`, `secrets`, `error-handling`, `harnesses/files-ctrlyoke-writes`).
+> Status markers below are updated in place.
+>
+> **Pre-release:** the README (Marketplace page) cleanup in §2.2 and the C12 trial-clock defect
+> should land before publish. The README is frozen into every published VSIX version, and C12
+> contradicts `LICENSE.md` §2(d) for every user who opens the dashboard. Public docs URLs are a
+> small risk: every page in §4 is a new path, and §4.7 changes only sidebar grouping, so nothing
+> already linked needs a redirect. The exceptions are the proposals that move sections out of
+> `yaml-format.md` and `end-conditions.md`, which break `#anchor` deep links. Do those moves before
+> launch or not at all.
 
 **Relationship to neighbours**
 
@@ -25,7 +42,8 @@ includes run controls, the output pane, undo, Dry Run, the terminal, history sea
 drawer, the hosted/mobile dashboard, the workspace viewer, commit messages, notifications and
 usage tracking. Several workflow features exist only as schema rows with no how-to: script steps,
 variables, worktrees, secrets, error handling, permissions, MCP servers, hooks and coordination.
-There are no screenshots anywhere in `docs/`.
+There were no screenshots anywhere in `docs/` at the time of the audit. As of 2026-10-10 only
+`workflows/properties-panel.md` and `pro/mobile-setup.md` have any.
 
 ### Already corrected in the audit commit (not repeated below)
 
@@ -70,20 +88,20 @@ probably a bug or a stale description. Fix these, then update the doc text noted
 
 | #   | Defect                                                                                                                                                                                                                                                                                                                         | Where                                                                                                     | Doc follow-up                                                    |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| C1  | The Codex install hint names `@openai/codex-cli`; the npm package is `@openai/codex`, so the dashboard shows a failing command.                                                                                                                                                                                                | `src/core/harness/codex/CodexCliProvider.ts:190`                                                          | none (docs already correct)                                      |
-| C2  | The Antigravity install hint `@google/antigravity-cli` is unverified and may not exist.                                                                                                                                                                                                                                        | `AntigravityCliProvider.ts:133`                                                                           | add install line to `harnesses/antigravity-cli.md` once verified |
-| C3  | The schema offers `toolPermissions.mode: passthrough`, but the code constant is `none` and nothing handles `passthrough`, so each mapper silently falls back to its default. `defaults.toolPermissions.mode` has no `passthrough` at all.                                                                                      | `schemas/workflow-schema.json:710`, `DashboardConstants.ts` `PERMISSION_MODES`                            | document the mode on the permissions page once it works          |
-| C4  | Two conflicting default-model tables. `DEFAULT_MODELS` has codex `gpt-5.4` and opencode `anthropic/claude-sonnet-4-6`; the settings defaults have `gpt-5.5` and `opencode/big-pickle`. `OpenCodeCliProvider.ts:153` also hard-codes a model.                                                                                   | `DashboardConstants.ts:2077`, `CtrlYokeSettings.ts:386-393`                                               | harness pages state defaults                                     |
-| C5  | `ctrlyoke run --timeout`, `--script-timeout` and `--add-dir` are parsed but never reach execution: `CliAdapter.getConfig` keys are unread and the `cli.ts` overlay omits them.                                                                                                                                                 | `src/cli.ts:621-685`, `CliAdapter`                                                                        | `cli/ctrlyoke.md` says "accepted, not applied"; remove that line |
-| C6  | `--model` without `--harness` only sets the Copilot model, yet the run header and `--json` report it as the model used. `--dry-run` keys it to the resolved harness, so it disagrees with a real run.                                                                                                                          | `src/cli.ts:630-634, 399-411, 1446-1452`                                                                  | `cli/ctrlyoke.md` advises passing both                           |
-| C8  | `onFail: retry` with no `retryPrompt` (step or `defaults.endCondition.retryPrompt`) never retries, because `canRetry` needs a prompt. This contradicts the schema text, and the `buildRetryPrompt` fallback is unreachable. Decide code or schema.                                                                             | `PromptQueue.ts:1353`, `EndConditionHandler.ts:271-340`                                                   | `workflows/end-conditions.md` retry section                      |
-| C9  | Script `timeout` unit mismatch. The schema says ms and conditions use ms, but script steps multiply by 1000 (seconds). The completion hint still cites a stale `ctrlyoke.scriptTimeout` setting.                                                                                                                               | `WorkflowExecutor.ts:2502`, `EndConditionEvaluator.ts:282`, `PromptPropertyCompletionProvider.ts:44`      | script-steps page (§4)                                           |
-| C10 | `runtimeMetadata` has `additionalProperties: false`, but the code writes `_runtime.worktree` and `worktreeNotice`. `executionState` lacks `pausing`, and the root lacks `definitionRevision` and `lastModifiedAt`. Run working copies therefore show schema errors in VS Code (`package.json` validates `**/*.ctrlyoke.json`). | `workflow-schema.json` `/definitions/runtimeMetadata`, `WorkingFileManager.ts:649, 734, 1218, 2140, 2223` | regenerate `run-files.md`                                        |
-| C11 | Dead settings with no reader: `server.standalonePort`, `server.theme` and `queue.notifyOnExtension`. Remove them or implement them.                                                                                                                                                                                            | `settings-schema.json`, `ConfigurationUtils.ts:345`                                                       | regenerate `settings.md`                                         |
-| C12 | The Pro remote-access trial clock may start the first time the dashboard opens, not on first use. `getRemoteAccessTrialStartedAt()` records "now" on any call, and the settings sync calls it. That contradicts `LICENSE.md` §2(d) and the License tab copy.                                                                   | `LicenseService.ts:743-760`, `CtrlYokeWebviewProvider.ts:187`                                             | `pro/index.md` trial wording is neutral until fixed              |
-| C13 | `allowDynamicExtension` was removed from the schema but is still offered as a completion.                                                                                                                                                                                                                                      | `src/completions/PromptPropertyCompletionProvider.ts:207`                                                 | none                                                             |
-| C14 | `ctrlyoke.enableServer`, `disableServer` and `regenerateServerToken` are registered but missing from `contributes.commands`, so they aren't in the palette. Decide whether they should be before writing the remote-dashboard page.                                                                                            | `package.json`, `extension.ts`                                                                            | `reference/commands.md`, remote-dashboard page                   |
-| C15 | `compatibility.md` source data: OpenCode `sessionStart` and `permissionRequest` rows are "partial" with no caveat code, and OpenCode version ranges are inconsistent (`>=1.1.48` vs `>=1.18.10`).                                                                                                                              | `OpenCodeNotificationMonitor.ts:70-80` `partialHook()`, `OpenCodeToolPermissionMapper.ts:22`              | regenerate compatibility docs                                    |
+| C1  | **Fixed** (see `dev/bugs/implemented/codex-install-hint-wrong-npm-package.md`; hints now come from `shared/HarnessInstallHint.ts`). The Codex install hint names `@openai/codex-cli`; the npm package is `@openai/codex`, so the dashboard shows a failing command.                                                                                                                                                                                                | `src/core/harness/codex/CodexCliProvider.ts:190`                                                          | none (docs already correct)                                      |
+| C2  | **Fixed:** the hint is now Google's `install.sh`/`install.ps1` installer, and `harnesses/antigravity-cli.md` has an Install section. The Antigravity install hint `@google/antigravity-cli` is unverified and may not exist.                                                                                                                                                                                                                                        | `AntigravityCliProvider.ts:133`                                                                           | add install line to `harnesses/antigravity-cli.md` once verified |
+| C3  | **Fixed:** `passthrough` is gone from `workflow-schema.json`, so there is no passthrough mode to document. The schema offers `toolPermissions.mode: passthrough`, but the code constant is `none` and nothing handles `passthrough`, so each mapper silently falls back to its default. `defaults.toolPermissions.mode` has no `passthrough` at all.                                                                                      | `schemas/workflow-schema.json:710`, `DashboardConstants.ts` `PERMISSION_MODES`                            | document the mode on the permissions page once it works          |
+| C4  | **Still open (2026-10-10):** `DEFAULT_MODELS` still has `gpt-5.4`/`anthropic/claude-sonnet-4-6`, and the settings defaults still have `gpt-5.5`/`opencode/big-pickle`. Two conflicting default-model tables. `DEFAULT_MODELS` has codex `gpt-5.4` and opencode `anthropic/claude-sonnet-4-6`; the settings defaults have `gpt-5.5` and `opencode/big-pickle`. `OpenCodeCliProvider.ts:153` also hard-codes a model.                                                                                   | `DashboardConstants.ts:2077`, `CtrlYokeSettings.ts:386-393`                                               | harness pages state defaults                                     |
+| C5  | **Fixed:** `cli/ctrlyoke.md` now documents `--timeout`/`--script-timeout` as overriding `execution.maxPromptTimeoutSec`/`scriptTimeoutSec`, and the "accepted, not applied" line is gone. `ctrlyoke run --timeout`, `--script-timeout` and `--add-dir` are parsed but never reach execution: `CliAdapter.getConfig` keys are unread and the `cli.ts` overlay omits them.                                                                                                                                                 | `src/cli.ts:621-685`, `CliAdapter`                                                                        | `cli/ctrlyoke.md` says "accepted, not applied"; remove that line |
+| C6  | **Probably fixed, needs verification:** `cli/ctrlyoke.md` now describes `-m, --model` as a workflow-level override with `--force model`. `--model` without `--harness` only sets the Copilot model, yet the run header and `--json` report it as the model used. `--dry-run` keys it to the resolved harness, so it disagrees with a real run.                                                                                                                          | `src/cli.ts:630-634, 399-411, 1446-1452`                                                                  | `cli/ctrlyoke.md` advises passing both                           |
+| C8  | **Fixed:** `PromptQueue.canRetry` now accepts `onFail: retry` without a retry prompt. `onFail: retry` with no `retryPrompt` (step or `defaults.endCondition.retryPrompt`) never retries, because `canRetry` needs a prompt. This contradicts the schema text, and the `buildRetryPrompt` fallback is unreachable. Decide code or schema.                                                                             | `PromptQueue.ts:1353`, `EndConditionHandler.ts:271-340`                                                   | `workflows/end-conditions.md` retry section                      |
+| C9  | **Fixed:** these are now `timeoutSec` and `execution.scriptTimeoutSec`, in seconds everywhere. Script `timeout` unit mismatch. The schema says ms and conditions use ms, but script steps multiply by 1000 (seconds). The completion hint still cites a stale `ctrlyoke.scriptTimeout` setting.                                                                                                                               | `WorkflowExecutor.ts:2502`, `EndConditionEvaluator.ts:282`, `PromptPropertyCompletionProvider.ts:44`      | script-steps page (§4)                                           |
+| C10 | **Partly fixed:** `worktreeNotice` and `definitionRevision` are in the schema now. Still missing: `pausing` (`EXECUTION_STATES.PAUSING`) in the `executionState` enum, and root `lastModifiedAt`. Check whether either is still persisted. `runtimeMetadata` has `additionalProperties: false`, but the code writes `_runtime.worktree` and `worktreeNotice`. `executionState` lacks `pausing`, and the root lacks `definitionRevision` and `lastModifiedAt`. Run working copies therefore show schema errors in VS Code (`package.json` validates `**/*.ctrlyoke.json`). | `workflow-schema.json` `/definitions/runtimeMetadata`, `WorkingFileManager.ts:649, 734, 1218, 2140, 2223` | regenerate `run-files.md`                                        |
+| C11 | **Partly fixed:** `server.standalonePort` is removed. `server.theme` is still in the schema (verify it has a reader), and `queue.notifyOnExtension` remains but its description now says "Currently has no effect". Dead settings with no reader: `server.standalonePort`, `server.theme` and `queue.notifyOnExtension`. Remove them or implement them.                                                                                                                                                                                            | `settings-schema.json`, `ConfigurationUtils.ts:345`                                                       | regenerate `settings.md`                                         |
+| C12 | **Still open (2026-10-10):** `src/license/LicenseService.ts` `getRemoteAccessTrialStartedAt()` still writes "now" on first read, and `DashboardApplication.ts` calls `hasRemoteAccess()`/`getRemoteAccessTrialEndsAt()` to build the dashboard license state. **Fix before release.** The Pro remote-access trial clock may start the first time the dashboard opens, not on first use. `getRemoteAccessTrialStartedAt()` records "now" on any call, and the settings sync calls it. That contradicts `LICENSE.md` §2(d) and the License tab copy.                                                                   | `LicenseService.ts:743-760`, `CtrlYokeWebviewProvider.ts:187`                                             | `pro/index.md` trial wording is neutral until fixed              |
+| C13 | **Fixed:** no `allowDynamicExtension` remains under `src/`. `allowDynamicExtension` was removed from the schema but is still offered as a completion.                                                                                                                                                                                                                                      | `src/completions/PromptPropertyCompletionProvider.ts:207`                                                 | none                                                             |
+| C14 | **Still open (2026-10-10):** the commands are registered in `extension.ts` but are still not in `contributes.commands`. `ctrlyoke.enableServer`, `disableServer` and `regenerateServerToken` are registered but missing from `contributes.commands`, so they aren't in the palette. Decide whether they should be before writing the remote-dashboard page.                                                                                            | `package.json`, `extension.ts`                                                                            | `reference/commands.md`, remote-dashboard page                   |
+| C15 | **Partly fixed:** `compatibility.md` now carries caveat notes for OpenCode Session Start and Permission Request. The version-range inconsistency is unverified. `compatibility.md` source data: OpenCode `sessionStart` and `permissionRequest` rows are "partial" with no caveat code, and OpenCode version ranges are inconsistent (`>=1.1.48` vs `>=1.18.10`).                                                                                                                              | `OpenCodeNotificationMonitor.ts:70-80` `partialHook()`, `OpenCodeToolPermissionMapper.ts:22`              | regenerate compatibility docs                                    |
 | C16 | ~~Step runtime section skipped the composed `executionProperties` fields.~~ **Fixed 2026-09-24:** the generator now renders an "Also includes every field from …" line for any section composed through `allOf`, and the step-runtime semantics moved into the `promptRuntimeMetadata` schema description.                     | `scripts/generate-schema-docs.mjs` `inheritedSectionLines`                                                | none                                                             |
 
 ### 2.1 Schema description fixes (wording only)
@@ -91,8 +109,11 @@ probably a bug or a stale description. Fix these, then update the doc text noted
 These are all in `schemas/settings-schema.json`. Regenerate with `npm run generate-schema-docs`
 afterwards.
 
-- `execution.scriptTimeout`: this timeout also applies to pre-conditions, script steps and
-  worktree setup commands, not only end conditions.
+- ~~`execution.scriptTimeout`~~ **Done.** It is now `execution.scriptTimeoutSec`, and its
+  description names pre-conditions, end conditions and script steps. Worktree setup still isn't
+  mentioned. The items below were still unchanged on 2026-10-10, except that `runs.maxRuns` now
+  says pruning deletes the definition and output (but still not that the limit is per workflow),
+  and `terminal.mobileBarLayout` has a parent-level description of the three groups.
 - `usageTracking.persistObservedUsage`: usage is saved with the project's run history
   (`~/.ctrlyoke/projects/...`), not "in the workspace".
 - `usageTracking.providerRefreshEnabled`: add "Requires `usageTracking.enabled`".
@@ -119,20 +140,26 @@ afterwards.
   - Its "stale runner.json with a dead PID causes false already-running errors" advice is
     outdated. Dead-PID and missed-heartbeat locks are now detected as stale automatically
     (`LockSafetyPrimitives.ts`).
+  (All three items were still present in `.github/copilot-instructions.md` on 2026-10-10.)
 - `README.md` (the Marketplace page):
-  - Its Settings section documents old `ctrlyoke.*` VS Code settings (`ctrlyoke.harness`,
-    `cliExecutionMode`, `copilotCliModel`, `cliToolPermissions`, …) that are not a settings
-    surface.
-  - It says the panel opens in the bottom tab area.
-  - `## Commands` is an empty heading.
-  - Its hooks bullet lists 4 of 8 events.
-  - "Further Reading" links FlightPath-era `dev/implemented/` docs.
+  - ~~Its Settings section documents old `ctrlyoke.*` VS Code settings~~ **Done:** it now points
+    at `.ctrlyoke/settings.json` and the settings reference.
+  - ~~It says the panel opens in the bottom tab area.~~ **Done:** now says the secondary side bar.
+  - ~~`## Commands` is an empty heading.~~ **Done:** it links the commands reference.
+  - **Still open:** its hooks bullet (line 13) lists 4 of 8 events, and the Hooks section lists 5.
+  - **Still open:** "Further Reading" and the Session management section link FlightPath-era
+    `dev/implemented/` docs. These are internal, and they 404 until the Phase 14 visibility flip.
+  - **Still open:** it links docs as repo-relative `docs/reference/*.md` paths, not
+    `https://ctrlyoke.dev/docs/...`. The Marketplace resolves those against the GitHub repo, so
+    they show raw markdown, or a 404 while the repo is private.
+  - **Still open:** no images. See `SCREENSHOTS_AND_MEDIA_PLAN.md` and `RELEASE_CHECKLIST.md`
+    Phase 8.
   - Fix before publishing. `RELEASE_CHECKLIST.md` requires that the README, docs, Marketplace
     page and website agree.
 
 ## 3. Decisions needed before writing
 
-1. **CLI distribution — DECIDED 2026-09-24** in [`CLI_DISTRIBUTION_PLAN.md`](CLI_DISTRIBUTION_PLAN.md):
+1. **CLI distribution — DECIDED 2026-09-24** in [`CLI_DISTRIBUTION_PLAN.md`](../implemented/CLI_DISTRIBUTION_PLAN.md):
    bundled in the VSIX (on PATH in VS Code terminals) **and** `npm install -g ctrlyoke`. Original
    problem statement, kept for context: `package.json` declares `bin` entries
    (`out/cli.js`, `out/mcp-server.js`), but there is no npm publish or documented install path.
@@ -142,10 +169,14 @@ afterwards.
 2. **Remote dashboard page placement.** Localhost hosting is free and remote/LAN access is Pro.
    Recommend `guide/remote-dashboard.md` for everything (with a Pro badge on the LAN/TLS/push
    parts) plus `pro/mobile-setup.md` for PWA install, which the release checklist requires.
+   (`pro/mobile-setup.md` exists now and covers the LAN/TLS/QR/PWA flow. `guide/remote-dashboard.md`
+   is still unwritten. `cli/server.md` covers the standalone server.)
 3. **C14:** should the server commands be palette-visible?
 4. **Public source links in `compatibility.md`.** Every row links
    `github.com/FuzzyNova/ctrlyoke/blob/main/...`. These 404 until the Phase 14 visibility flip.
    Either flip first, or make the generator link only when a `DOCS_LINK_SOURCE` env var is set.
+   **Still open (2026-10-10).** The Permissions and MCP rows also link internal
+   `dev/implemented/*_PLAN.md` docs, which is the same leakage §6.4 wants to lint for.
 5. **Vendor names on `pro/index.md`.** It names Netlify, Lemon Squeezy and Keygen as purchase
    plumbing. Accurate, but more internal than a public page needs. Keep or trim.
 
@@ -165,10 +196,10 @@ Priority key:
 | Pri | Page / section                                         | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Sources                                                                                                                                                                                                                                                                             | Shots                 |
 | --- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | P0  | **new `guide/dashboard.md`**: dashboard tour           | Layout: header, steps panel, prompt editor, output pane, terminal, properties drawer, settings drawer. Run controls in every state (Play/Restart, Continue/Pause, Stop, Queue vs Run), the pause banner, "continuing from step N" and its undo-boundary warning. The Run split-button (Run / Run in Parallel / Run in New Workflow / Send Steer Message). The steps context menu (copy/paste, enable/disable, set start position, rewind, Dry Run). The workflow dropdown (runs, run numbers, favorites, Duplicate for harness comparison, Copy Run Directory Path). The per-step live context-window bar. | `BUTTON_BEHAVIOR_MAP`, `HEADER_STATUS_BANNER_STANDARDIZATION`, `RUN_DISPATCH_MENU`, `RIGHT_CLICK_MENUS`, `RUN_NAVIGATION_UX`, `WORKFLOW_FAVORITES`, `WORKFLOW_VARIANTS`, `LIVE_CONTEXT_WINDOW`; `components/layout/Header.tsx`, `editor/EditorFooter.tsx`, `WorkflowStepsPanel.tsx` | D1, D2, D3, D4, D5    |
-| P0  | `guide/installation.md`: missing-harness preflight     | The first-run panel listing install commands for missing harnesses, and how the harness picker marks unavailable ones.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `HARNESS_PREFLIGHT_PLAN`; `HarnessPreflightPanel.tsx`                                                                                                                                                                                                                               | D6                    |
+| P0  | `guide/installation.md`: missing-harness preflight     | **Partial:** the page now says "If none is detected, the dashboard shows the install command for each." Still missing: what the panel looks like, and how the picker marks unavailable harnesses. The first-run panel listing install commands for missing harnesses, and how the harness picker marks unavailable ones.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `HARNESS_PREFLIGHT_PLAN`; `HarnessPreflightPanel.tsx`                                                                                                                                                                                                                               | D6                    |
 | P0  | **new `guide/settings.md`**: settings files and scopes | User vs workspace files, merge rules (arrays replace except `trustedExternalRoots`), the CLI overlay, user-only settings and what happens when a workspace sets one, `CTRLYOKE_HOME` (moves run history but not settings), the one VS Code setting `ctrlyoke.workspaceDirectory` for multi-root, and the Settings drawer (18 tabs, scope switch, source badge, Reset).                                                                                                                                                                                                                                     | `CtrlYokeConfigService.ts`, `FileConfigBackend.ts`, `WORKSPACE_FORBIDDEN_SETTING_ROOTS`, `GLOBAL_SETTINGS_PLAN`, `MULTI_ROOT_WORKSPACE_PLAN`; `GlobalSettingsDrawer.tsx`                                                                                                            | D7                    |
 | P0  | **new `guide/remote-dashboard.md`** (see §3.2)         | How to enable it (Settings → Server, `server.autoStart`), the tokenized URL and regenerating the token, port fallback, `bindAddress` for LAN and its security implications, TLS with self-signed certs and `/cert` download, the QR code for phones, independent views per browser tab, and the free vs Pro boundary including the 14-day trial.                                                                                                                                                                                                                                                           | `SERVER_SECURITY_PLAN`, `MULTI_CLIENT_ACTIVE_WORKFLOW_PLAN`, `SYMMETRIC_CLIENT_VIEWS_REFACTOR`; `src/server/CtrlYokeHostedServer.ts`, `ServerSection.tsx`                                                                                                                           | #3, D8                |
-| P1  | `guide/installation.md`: onboarding                    | The Initialize overlay, the one-quick-tip dock hint, and the 6-step VS Code walkthrough (the last-but-one step, installing the CLI, is optional).                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `ONBOARDING_TOUR_PLAN`, `STARTUP_LOADING_OVERLAY_PLAN`; `StartupOverlay.tsx`, `package.json` `walkthroughs`                                                                                                                                                                         | D9                    |
+| P1  | `guide/installation.md`: onboarding                    | **Partial:** the Initialize prompt and the Show Getting Started command are documented. The dock hint and the walkthrough steps are not. The Initialize overlay, the one-quick-tip dock hint, and the 6-step VS Code walkthrough (the last-but-one step, installing the CLI, is optional).                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `ONBOARDING_TOUR_PLAN`, `STARTUP_LOADING_OVERLAY_PLAN`; `StartupOverlay.tsx`, `package.json` `walkthroughs`                                                                                                                                                                         | D9                    |
 | P1  | **new `guide/prompt-editor.md`**                       | Triggers `@ # ~ $ ! /` and their completions (fuzzy-ranked, bolded matches), atomic reference chips, Ctrl+Click links, image paste to `@pasted-image-<hash>`, token estimates. The footer quick pickers (Harness, Model, Agent, Skills, Permissions, Execution mode, Context, Color), the properties drawer tabs, the red outline on stale values, the allow/deny list editor, Additional Args completions from harness `--help`, the key/value editor.                                                                                                                                                    | `FOOTER_QUICK_PICKERS`, `MORE_FOOTER_QUICK_PICKERS`, `DRAWER_PAGES_UX`, `IMAGE_PASTE_SUPPORT`, `DROPDOWN_VALIDATION_STYLING`, `HARNESS_HELP_FLAG_COMPLETIONS`, `KEY_VALUE_ROW_EDITOR`; `completions.instructions.md`                                                                | #9, #12, D10          |
 | P1  | **new `guide/output-and-undo.md`**                     | Minimap, find bar, hiding/filtering steps, Copy All / Export Markdown, the MCP tool-call expander, collapsed tool output, file-change diffs (side-by-side at ≥1024px, image diffs), per-file Undo, the "View N changes" dialog and blocked rows, step colour modes (`ui.stepColorMode`). Move the stray output paragraph out of `guide/concepts.md` "Step" into this page.                                                                                                                                                                                                                                 | `OUTPUT_MINIMAP`, `OUTPUT_STEP_FILTER`, `MCP_TOOL_CALL_DISPLAY`, `SIDE_BY_SIDE_DIFF`, `DIFF_VIEW_UNIFICATION`, `VIEW_CHANGES_ENTRY_POINT`, `STEP_IDENTITY_COLOR_MODES`; `components/output/*`                                                                                       | #6, #11, D11          |
 | P1  | **new `guide/dry-run.md`**                             | Every way to open it (header, step menu, Validation tab, right-click or long-press on Run). The Overview, Summary, Command, Payload and Conditions tabs, the mutation timeline, Copy command with the shell toggle, and the CLI `--dry-run` equivalent.                                                                                                                                                                                                                                                                                                                                                    | `DRY_RUN_PREVIEW`, `DRY_RUN_MUTATION_TIMELINE`; `DryRunModal.tsx`                                                                                                                                                                                                                   | D12                   |
@@ -206,7 +237,7 @@ Priority key:
 
 | Pri | Page / section                                                      | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Sources                                                                               | Shots                 |
 | --- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------- |
-| P0  | "Prerequisites" block on every harness page (one template)          | Binary name, install, auth, minimum version, and what the dashboard shows when the CLI is missing. Some pages have parts of this; make it uniform.                                                                                                                                                                                                                                                                                                                                                                                                                                | `*CliProvider.ts` `config.installHint`, `ANTIGRAVITY_MIN_VERSION`, compatibility data | none                  |
+| P0  | "Prerequisites" block on every harness page (one template)          | **Partial:** every harness page now has a `## Install` section with vendor install commands for each OS. Auth, minimum version and the missing-CLI state are still not uniform. Binary name, install, auth, minimum version, and what the dashboard shows when the CLI is missing. Some pages have parts of this; make it uniform.                                                                                                                                                                                                                                                                                                                                                                                                                                | `*CliProvider.ts` `config.installHint`, `ANTIGRAVITY_MIN_VERSION`, compatibility data | none                  |
 | P0  | **new `harnesses/files-ctrlyoke-writes.md`**                        | Per harness, what ctrlyoke writes and where, and how it is restored:<br>• Copilot: per-prompt `.github/hooks/ctrlyoke*.json` plus a temporary `.gitignore`; `--additional-mcp-config`<br>• Claude: temporary `--settings`; statusline in `~/.claude/settings.json`<br>• Codex: inline `-c`, no files<br>• OpenCode: `OPENCODE_CONFIG_CONTENT` plus a plugin sidecar<br>• Qwen: `.qwen/settings.json` plus pre-trust<br>• Antigravity: `.agents/mcp_config.json`, `~/.gemini/...`<br>Also: restore-from-baseline, parallel safety, and why files may briefly show in `git status`. | `harness-cli-providers.instructions.md` `coordinationIdentity`; each provider         | none                  |
 | P0  | Usage and rate limits section on each harness page                  | What each harness reports:<br>• Copilot: monthly quota plus the OTel context window<br>• Claude: quota only while the statusline sidecar is alive<br>• Codex: app-server limits, `>=0.146`<br>• Antigravity: from the statusline<br>• OpenCode and Qwen: observed usage only<br>Link `guide/usage-and-stats.md`.                                                                                                                                                                                                                                                                  | `src/core/harness/shared/usage/providers/*`, `harness-shared.instructions.md`         | D27 (existing assets) |
 | P1  | Model selection on each page                                        | Where each model list comes from:<br>• Copilot: `copilot help config`<br>• Claude: fixed aliases<br>• Codex: fixed list<br>• OpenCode: `opencode models`<br>• Qwen: `modelProviders`<br>• Antigravity: `agy models`<br>Also the `none` sentinel and `defaults.models`. Depends on C4.                                                                                                                                                                                                                                                                                             | `ModelConstants.ts`, `ModelRegistry.ts`                                               | none                  |
@@ -228,7 +259,7 @@ Priority key:
 
 | Pri | Page / section                          | Content                                                                                                                                                                         | Sources                                                | Shots                |
 | --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------- |
-| P0  | **new `pro/mobile-setup.md`**           | PWA install for iOS and Android (release-checklist requirement), the HTTPS/certificate requirement, the Tailscale option, and Web Push. See `SCREENSHOTS_AND_MEDIA_PLAN.md` #7. | `SERVER_SECURITY_PLAN`, `MOBILE_LAYOUT_REDESIGN_PLAN`  | #3, #7, #10 (mobile) |
+| P0  | **new `pro/mobile-setup.md`**           | **Mostly done** (`b32f403fd`, with desktop, iOS and Android screenshots). Still missing: the Tailscale off-LAN option (no docs page mentions Tailscale) and any Web Push setup beyond one sentence. PWA install for iOS and Android (release-checklist requirement), the HTTPS/certificate requirement, the Tailscale option, and Web Push. See `SCREENSHOTS_AND_MEDIA_PLAN.md` #7. | `SERVER_SECURITY_PLAN`, `MOBILE_LAYOUT_REDESIGN_PLAN`  | #3, #7, #10 (mobile) |
 | P2  | `pro/index.md`: License tab walkthrough | The machine list, deactivating a remote machine, the trial end date, and the enterprise support-email path.                                                                     | `PRO_LICENSE_MANAGEMENT_UX_PLAN`; `LicenseSection.tsx` | D28                  |
 
 ### 4.6 Troubleshooting and examples
@@ -250,27 +281,23 @@ Priority key:
   steps, variables, end conditions, error handling), **Context and sessions** (context,
   sessions, agents and skills, templates) and **Integrations** (permissions, secrets, MCP
   servers, hooks, worktrees, dynamic queue, coordination).
-- Add `harnesses/files-ctrlyoke-writes` and `pro/mobile-setup`. (`cli/ci` and `guide/privacy`
-  were added 2026-09-25.)
+- Add `harnesses/files-ctrlyoke-writes`. (`cli/ci` and `guide/privacy` were added 2026-09-25.
+  `pro/mobile-setup`, `cli/server`, `workflows/properties-panel` and
+  `troubleshooting/investigating-a-run` are in the sidebar as of 2026-10-10. `/guide/` has a single
+  "Getting started" group, and `/workflows/` is still one flat "Writing workflows" group.)
 - `docs/index.md`'s "three forms" table should add the hosted browser dashboard as a fourth
   surface.
 
 ## 5. Screenshots
 
-### 5.1 Pipeline (do first; nothing else can ship images without it)
+### 5.1 Pipeline — **Done**
 
-`images/screenshots/` is the only canonical copy (see `.github/copilot-instructions.md`
-"Single sources of truth"). VitePress can't reference files outside its root. So:
-
-1. Add `scripts/generate-docs-screenshots.mjs`. It copies (or, for the `-1600x1000` style
-   names, copies and renames to a stable slug) every image referenced from `docs/**/*.md` out of
-   `images/screenshots/` into `docs/public/screenshots/`. It fails when a page references an
-   image that doesn't exist.
-2. Gitignore `docs/public/screenshots/`. Run the script from `predocs:build` (next to
-   `check:docs`) and before `docs:dev`.
-3. Docs reference images as `/screenshots/<name>.png`, with alt text that describes the UI
-   state.
-4. Both Netlify deploy path filters already include `images/**`.
+Shipped as `scripts/sync-docs-screenshots.mjs` (with `sync-docs-screenshots.test.mjs` in
+`test:packaging`), first used in `872bfec9a`. It runs from `predocs:dev` and `predocs:build`. It
+copies exactly the files referenced from `docs/**/*.md` out of `images/screenshots/` into the
+gitignored `docs/public/screenshots/`, and it fails on a missing file. Files keep their
+`<name>-<w>x<h>` names; there is no slug renaming. Pages reference `/screenshots/<file>`.
+`.github/copilot-instructions.md` "Screenshot assets" documents this.
 
 ### 5.2 Shot list
 
@@ -309,7 +336,9 @@ reused above. New shots:
 | D27 | every harness page                                  | **Existing assets:** `images/screenshots/rate-limiter-{copilot,claude,codex,opencode,qwen,agy}-1200x800.png`. Only the §5.1 pipeline is needed.              | —                                                                                                  |
 | D28 | `pro/index.md`                                      | The License tab: activated machines and trial end date.                                                                                                      | A test license key (`dev/test_keys.md`); blur the key.                                             |
 
-Already-captured assets that can ship as soon as §5.1 lands:
+Already-captured assets that are still not referenced from any docs page (§5.1 has landed, so each
+one only needs slotting in). As of 2026-10-10 only `workflows/properties-panel.md` (#12) and
+`pro/mobile-setup.md` (#7) reference screenshots:
 
 - `workspace-viewer-explorer-1600x1000.png` and `workspace-viewer-search-1600x1000.png` go on
   `guide/workspace-viewer.md`.
@@ -319,7 +348,9 @@ Already-captured assets that can ship as soon as §5.1 lands:
 
 ## 6. Keeping docs accurate (guardrails)
 
-The audit found the same classes of drift again and again. Automate the ones that are cheap:
+The audit found the same classes of drift again and again. Automate the ones that are cheap.
+(None of items 1–6 had been done as of 2026-10-10. `check:docs` still covers only the schema,
+compatibility, UI-description, outline and prompt-markdown generators.)
 
 1. **Generate `reference/commands.md`** from `package.json` `contributes.commands`, `menus` and
    `keybindings`, the same way `generate-schema-docs.mjs` does. Add hand-written partials for the
@@ -347,17 +378,17 @@ The audit found the same classes of drift again and again. Automate the ones tha
 1. §2 defects C1, C3, C5, C8, C9 and C10, since each one changes what the docs have to say. Also
    §2.1 wording and §2.2 (README and instructions).
 2. §3 decisions, especially CLI distribution.
-3. §5.1 screenshot pipeline, then ship the existing assets (D27, workspace viewer, undo dialog,
-   hero GIF).
+3. ~~§5.1 screenshot pipeline~~ (done), then ship the existing assets (D27, workspace viewer,
+   undo dialog, hero GIF).
 4. P0 pages:
    - `guide/dashboard.md`
    - `guide/settings.md`
-   - `guide/remote-dashboard.md` and `pro/mobile-setup.md`
+   - `guide/remote-dashboard.md` (`pro/mobile-setup.md` is done)
    - installation preflight
    - `workflows/script-steps.md`, `variables.md`, `worktrees.md`, `secrets.md` and
      `error-handling.md`
    - harness prerequisites, `harnesses/files-ctrlyoke-writes.md` and usage sections
-   - CLI install and `cli/ci.md`
+   - ~~CLI install and `cli/ci.md`~~ (done 2026-09-25)
 
    Capture D1–D9 and D21–D23 alongside.
 

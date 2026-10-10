@@ -4,6 +4,17 @@
 [`STANDALONE_SERVER_PLAN.md`](../implemented/STANDALONE_SERVER_PLAN.md) Phase 4
 (staging Stage 7b), which bundles only Dark 2026 and Light 2026.
 
+> **2026-10-10 audit:** Still not started — no `ThemeSnapshotStore`,
+> `server.themeLight`/`server.themeDark`, or theme ID on `THEME_VARS_CAPTURED`. The
+> "Current state" section was re-verified and still holds: capture is forwarded
+> only through the single `setThemeVarsCapturedCallback` slot
+> (`WebviewMessageRouter.ts:357`, installed/cleared in `extension.ts` around
+> `:1752`/`:1780`), `sanitizeThemeVars` lives in `CtrlYokeHostedServer.ts`, and
+> `ctrlyoke.dumpCssVars` is still the separate dev implementation. Added that
+> `DashboardApplication.requestThemeCapture()` is a further existing capture trigger,
+> and that the bundled themes are the generated
+> `src/server/themes/vscode-default-{dark,light}.css` (`npm run generate-server-themes`).
+
 ## Goal
 
 Let a VS Code user who moves to `ctrlyoke server` keep using their own VS Code
@@ -113,8 +124,9 @@ vars }`. `kind` comes from `--cy-color-theme-kind`, so high-contrast themes
 - Run `sanitizeThemeVars` on write **and** on load. Snapshot values are
   spliced into server-rendered `<style>` blocks, and a file in the user's home
   can be hand-edited.
-- Write with `writeFileAtomic`. The bundled Dark 2026/Light 2026 themes are
-  not written here; they ship in `src/server/themes/`.
+- Write with `writeFileAtomic` (`src/utils/AtomicFileUtils.ts`). The bundled
+  Dark 2026/Light 2026 themes are not written here; they ship as
+  `src/server/themes/vscode-default-{dark,light}.css`.
 - A settings action to forget a snapshot. No automatic cap: users have few
   themes, and each file is roughly 40 KB.
 

@@ -1,5 +1,19 @@
 # Quick Picker Improvements Plan
 
+**Status:** Partial — title-bar heading and bottom `Show hidden` placement shipped
+(`8e8468375`); the Prompt/Workflow target scope is not started.
+
+> **2026-10-10 audit:** `FooterQuickPicker` already has a `heading` prop rendered as a
+> popup title bar, and every footer picker passes one (Harness, Model, Agent, Skills,
+> Permissions, Context). `CustomSelect` and `SkillsSelect` inline mode already render the
+> hidden-options toggle below the scrollable list. Marked steps 2 (heading part) and 3 done.
+> Still open: `target`/`onTargetChange`/`actions` on the shell, the
+> `useWorkflowPropertyUpdater` extraction (workflow writes still live inline in
+> `WorkflowPropertiesPanel.tsx`, ~10 `UPDATE_WORKFLOW_PROPERTY` posts plus
+> `setUndoWorkflowProperties` near `:774`/`:794`), target-aware pickers, and
+> workflow-override trigger styling. `PermissionsQuickPicker` and `ContextQuickPicker` were
+> added to the footer since this plan was written; they are out of v1 scope per Non-Goals.
+
 ## Goal
 
 Make the editor footer quick pickers useful for the two common property-editing scopes:
@@ -62,7 +76,7 @@ Add title-bar support to `FooterQuickPicker`, not to every picker separately.
 
 The shared shell should support:
 
-- `heading`: display title, for example `Harness`, `Model`, `Agent`, `Skills`.
+- `heading`: display title, for example `Harness`, `Model`, `Agent`, `Skills`. **Done** — already a prop on `FooterQuickPicker` and passed by every footer picker.
 - `target`: current target scope.
 - `onTargetChange`: callback for changing between prompt/workflow.
 - optional `actions`: right-aligned small buttons such as reset-to-global.
@@ -71,9 +85,7 @@ This keeps sizing, border, and layout consistent across quick pickers.
 
 ### Show hidden placement
 
-Move `Show hidden` to the bottom in inline/drop-up `CustomSelect` usage.
-
-The current inline mode forces the hidden-options bar to the top because the footer popup opens upward. That is inconsistent with the non-inline select behavior and visually competes with the new title bar. The popup shell already constrains height, so the preferred structure should be:
+**Done (`8e8468375`).** `Show hidden` renders at the bottom in inline/drop-up `CustomSelect` and `SkillsSelect` usage, giving the structure:
 
 1. title bar
 2. scrollable options
@@ -90,8 +102,8 @@ If a future dropdown opens downward, the placement should still remain at the bo
 | `ModelQuickPicker.tsx`        | Same target behavior; model list depends on the effective harness for that target.            |
 | `AgentQuickPicker.tsx`        | Same target behavior; keep explicit `None`.                                                   |
 | `SkillsQuickPicker.tsx`       | Same target behavior; keep explicit `None`/empty selection semantics.                         |
-| `CustomSelect.tsx`            | Move inline `Show hidden` bar to bottom and avoid special top-bar behavior.                   |
-| `SkillsSelect.tsx`            | Match title/footer popup layout if it has inline hidden controls of its own.                  |
+| `CustomSelect.tsx`            | Done — inline `Show hidden` bar already renders at the bottom.                                |
+| `SkillsSelect.tsx`            | Done — inline hidden toggle already renders at the bottom.                                    |
 | `WorkflowPropertiesPanel.tsx` | Extract reusable workflow-property update helper so quick pickers can preserve undo behavior. |
 
 ## Data and Undo Requirements
@@ -138,12 +150,10 @@ This avoids making inherited workflow configuration look like an accidental prom
    - Update `WorkflowPropertiesPanel` to use it.
 
 2. **Add quick picker title shell**
-   - Extend `FooterQuickPicker` with `heading`, optional target control, and optional title actions.
+   - ~~Extend `FooterQuickPicker` with `heading`~~ (done), then add the optional target control and optional title actions.
    - Keep current props backward-compatible while migrating each picker.
 
-3. **Normalize hidden-option footer placement**
-   - Update `CustomSelect` inline mode so `Show hidden` renders at the bottom.
-   - Remove picker-level workarounds that only exist to compensate for top placement.
+3. ~~**Normalize hidden-option footer placement**~~ — done in `8e8468375`.
 
 4. **Implement target-aware harness picker**
    - Add `Prompt`/`Workflow` target state.
@@ -158,8 +168,7 @@ This avoids making inherited workflow configuration look like an accidental prom
    - Keep explicit `None` semantics for agent and skills.
 
 6. **Add tests**
-   - `CustomSelect` inline mode renders `Show hidden` at the bottom.
-   - `FooterQuickPicker` renders title and target selector.
+   - `FooterQuickPicker` renders the target selector (heading and bottom `Show hidden` are already covered).
    - Each quick picker writes to prompt properties in prompt mode.
    - Each quick picker writes to workflow properties and syncs undo state in workflow mode.
 

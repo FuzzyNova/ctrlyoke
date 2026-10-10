@@ -1,5 +1,21 @@
 # Harness Session Import Plan
 
+> **2026-10-10 audit:** Still not implemented — `segmentSessionTurns`,
+> `isHumanPromptEvent`, `listNativeSessions`, `HarnessSessionImportService`,
+> `RunMaterializer`, and `importedFrom` appear nowhere in `src/` or `schemas/`. Changes
+> made: (1) every parser now implements `classifyUserEvent` (`ILogParser.ts:389`,
+> `UserEventClassification`), so `isHumanPromptEvent` is redefined as a thin wrapper over
+> it rather than a new per-harness method; (2) the "undo must clamp to the open
+> workspace" fix **has shipped** (`2204f7a7d` — `UndoRedoCoordinator` resolves the
+> execution root extension-side and the undo message no longer carries a
+> webview-derived `workspacePath`), so that section is now a verification note, not
+> work; (3) `USER_SCOPED_RUN_HISTORY_PLAN.md` and `ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`
+> moved to `implemented/`; (4) refreshed stale line citations, the
+> `WorkflowControls` dropdown description, the message-type location, and the
+> nonexistent Copilot `resolveLogPath`; (5) noted that `WorkflowVariantService` already
+> materializes a lineage-backed workflow without a workspace file, which step 3 can
+> follow.
+>
 > **Status:** Proposed — not implemented. Grounding re-verified 2026-08-14; the
 > citations below match current code. Two earlier assumptions were wrong and have
 > been corrected in place: the run-storage path (`.ctrlyoke/.history/…` never
@@ -24,9 +40,9 @@ into turns, and materializes:
   session's prompts, responses, tool calls, thinking, and token stats.
 
 Never construct that path by hand: `src/utils/WorkflowPaths.ts` is the only module
-allowed to build it, and `USER_SCOPED_RUN_HISTORY_PLAN.md` relocates `runsRoot()` out of
-the workspace entirely — code that goes through `WorkflowPaths` follows that move for
-free, code that string-joins `.ctrlyoke` does not.
+allowed to build it, and `../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md` relocated
+`runsRoot()` out of the workspace by default (user mode) — code that goes through
+`WorkflowPaths` follows both modes for free, code that string-joins `.ctrlyoke` does not.
 
 The result opens in the dashboard exactly like a workflow ctrlyoke ran itself — same
 `OutputPane` rendering, same minimap, same undo/redo affordances.
@@ -52,19 +68,22 @@ Two sibling plans share this one's machinery:
 | Structured per-event streaming                                           | `ILogParser.extractStructuredEventsFromEvent`                                                                                                                                                                                                                      | ✅ reuse per-turn                                                               |
 | Session-id extraction, completion detection, stats formatting            | `extractSessionId`, `isComplete`, `formatStatistics`                                                                                                                                                                                                               | ✅ reuse                                                                        |
 | Session-log discovery by prompt/sessionId                                | `discoverSessionLog`                                                                                                                                                                                                                                               | ➖ related, but keyed off a known prompt — not an enumerator                    |
-| Parser instance per harness                                              | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:123`)                                                                                                                                                                                | ✅ the harness→parser map already exists                                        |
+| Parser instance per harness                                              | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:146`)                                                                                                                                                                                | ✅ the harness→parser map already exists                                        |
 | Native log dir per harness (private)                                     | e.g. `ClaudeLogParser` `~/.claude/projects/<project>/<session>.jsonl` + `sessions-index.json`; Copilot `~/.copilot/session-state/<session>/events.jsonl`; Codex `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (see `dev/research/CLI_LOG_FILES_INVESTIGATION.md`) | ➖ each parser knows its dir internally; there is no public "list sessions" API |
 | Run-history storage: `manifest.json` + `events.jsonl`                    | `TimelineRecorder`, `OutputHistoryManager`                                                                                                                                                                                                                         | ✅ reuse — write path is already public                                         |
 | History event holding a turn                                             | `TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED` → payload `{ cliOutput: CliOutput }` targeting an `OutputExecutionTarget` (`{ kind: queue, stepIndex }`)                                                                                                                | ✅ this is the import target shape                                              |
 | Workflow-create UI messages                                              | `WorkflowControls.tsx` → `NEW_WORKFLOW` / `LOAD_WORKFLOW` / `SELECT_FILE` / `APPEND_FILE`; standalone `WorkflowFilePickerModal`                                                                                                                                    | ✅ extend with an import flow                                                   |
+| Human-vs-protocol user-event classification                              | `ILogParser.classifyUserEvent` → `UserEventClassification` (`"tool-result" \| "injected-prompt" \| "resume-signal" \| "human-steer" \| "other"`), overridden by all six parsers; `extractUserSteerText` for the prompt text                                        | ✅ reuse as the turn-boundary test (added 2026-10-10)                           |
+| Workflow lineage without a workspace file                                | `WorkflowVariantService` → `WorkflowLineageRepository.createLineage(…, provenance)` + draft `workflow.ctrlyoke.json` (the "Duplicate This Run as New Workflow…" path)                                                                                              | ✅ model for step 3 (added 2026-10-10)                                          |
 
 **The two real gaps:**
 
 1. **Turn segmentation.** Every parser today extracts _one_ response from a log
    (it assumes ctrlyoke sent one prompt). Import needs the log split into an **ordered
-   list of turns**, each a `(userPrompt, assistantResponse)` pair. Today only assistant
-   extraction is first-class; user-prompt parsing exists only incidentally (e.g.
-   `ClaudeLogParser.ts:241,716` filter `type:"user"` blocks to skip tool-results).
+   list of turns**, each a `(userPrompt, assistantResponse)` pair. Assistant extraction
+   is first-class; user-prompt _classification_ now is too (`classifyUserEvent` /
+   `extractUserSteerText` in every parser, e.g. `ClaudeLogParser.ts:617`), but only as a
+   per-event judgement for live steer emission — nothing groups events into turns.
 2. **Session enumeration.** Parsers can _discover_ a log matching a known prompt, but
    nothing _lists_ all sessions in a harness's native directory with display metadata.
 
@@ -94,31 +113,33 @@ interface ILogParser {
    * prompts) MUST NOT open a turn.
    */
   segmentSessionTurns(events: BaseCliEvent[]): SessionTurn[];
-
-  /** True only for a genuine human prompt event (not a tool_result carrier). */
-  isHumanPromptEvent(event: BaseCliEvent): boolean;
 }
 ```
 
-- `BaseLogParser` provides a default `segmentSessionTurns` that walks events, opens a
-  turn on each `isHumanPromptEvent`, and closes it at the next one. `isHumanPromptEvent`
-  is abstract-ish (base returns `false`; each harness overrides).
-- **Claude**: human prompt = `type:"user"` whose `message.content` has a non-empty
-  `text` block (mirror the `isHumanPrompt` guard already sketched in
-  `../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md` §3; reuse the existing `type:"user"` content
-  inspection at `ClaudeLogParser.ts:241`). Tool-result `user` events are excluded.
-- **Copilot**: human prompt = `user.message` events (per
-  `CLI_LOG_FILES_INVESTIGATION.md`), excluding tool-execution traffic.
-- **Codex / Qwen / OpenCode / Antigravity**: analogous, using each format's user-message
-  event. `OpenCodeLogParser.ts:576` already classifies candidate user-steer events and is
-  the natural place for that harness's implementation.
+- **No new per-harness `isHumanPromptEvent`.** (Updated 2026-10-10.) Every parser
+  already overrides `classifyUserEvent(event, ctx)` (Claude `:617`, Copilot `:1016`,
+  Codex `:742`, Qwen `:413`, OpenCode `:263`, Antigravity `:934`). Called with an
+  empty `ctx` (no `dispatchedPromptText`), it cannot tell ctrlyoke-injected prompts
+  from typed ones, so both come back `"human-steer"` — which is exactly the import
+  semantics (see "Injected ctrlyoke prompts" below). A turn boundary is therefore
+  `classifyUserEvent(e, {}) === "human-steer"`, and `promptText` comes from
+  `extractUserSteerText(e)`. If a harness needs a different answer for import, fix it
+  in that classifier, not beside it.
+- `BaseLogParser` provides the default `segmentSessionTurns` that walks events, opens a
+  turn on each human-steer event, and closes it at the next one. Because the base
+  `classifyUserEvent` returns `"other"`, a parser that never overrides it yields a
+  single turn (or none) — acceptable for a hypothetical future harness.
+- Per-harness caveats to verify with fixtures: Copilot system reminders arrive as
+  `user.message` with `source: "system"` and must stay non-human (already handled by
+  its classifier); Claude `queue-operation` / task-notification `user` events are
+  `"resume-signal"`, not turns.
 - Per turn, response content comes from the **existing** `extractResponse(turn.events)`
   — no new extraction logic, just a narrower event slice. Same for
   `extractStructuredEventsFromEvent` if we want per-event granularity, and
   `formatStatistics` for token stats.
 
-This one method is the shared dependency with the terminal-follow-up tracker, which
-needs the same "is this a real new user turn?" boundary detection on a live-growing file.
+The boundary test (`classifyUserEvent`) is shared with the live steer path in
+`CliLogEventPump`; the segmentation itself is import-only.
 
 ---
 
@@ -160,8 +181,9 @@ Implementation notes:
 - **Claude** should prefer `sessions-index.json` (has `firstPrompt`, `messageCount`,
   `created`, `projectPath` per entry — see investigation doc) instead of opening every
   file. Fall back to `readFirstNJsonlEvents` when the index is stale/missing.
-- The harness log directory currently lives in private methods (e.g.
-  `ClaudeLogParser` around line 854). Promote a `protected getLogDirectory()` /
+- The harness log directory currently lives in private methods or inline code (e.g.
+  `ClaudeLogParser.getClaudeProjectDirectory()` ~line 1482; Copilot builds
+  `~/.copilot/session-state` inline inside `discoverSessionLog` ~line 1122). Promote a `protected getLogDirectory()` /
   `resolveLogPath()` so `listNativeSessions` and `discoverSessionLog` share one source
   of the path. (DRY — matches project single-source principle.)
 - Default `projectPath` filter = the current workspace folder, so the picker shows
@@ -188,9 +210,19 @@ A small backend service — `HarnessSessionImportService` (in `src/core/orchestr
    watcher picks it up like any other workflow. Mark provenance in a workflow-level
    field (e.g. `importedFrom: { harnessId, sessionId, logPath, importedAtMs }`) — add to
    the schema and `CtrlYokeTypes`.
+   _Alternative (2026-10-10):_ skip the workspace file entirely and create a
+   lineage-only workflow the way `WorkflowVariantService` does for "Duplicate This Run
+   as New Workflow…" — `WorkflowLineageRepository.createLineage(…, provenance)` plus a
+   draft `workflow.ctrlyoke.json` written through `WorkingFileManager`. Provenance then
+   lives in the lineage descriptor (`workflow.json` / `WorkflowLineageDescriptor`,
+   which already carries optional variant provenance — `sourceWorkflowKey`,
+   `sourceRunRef`, … — so an optional `importedFrom` sits naturally beside it) rather
+   than in the authored-workflow schema, and importing
+   doesn't litter the user's repo with generated files. Prefer this unless there's a
+   reason the import must be an editable file in the workspace.
 4. **Materialize one run.** Via `OutputHistoryManager`. Note the run **directory** is
    allocated first and history is seeded into it — `initializeRunAt` does not create the
-   run, it populates one (`OutputHistoryManager.ts:243-289`):
+   run, it populates one (`OutputHistoryManager.ts:331`):
    - Allocate the lineage and run through the normal path
      (`WorkflowLineageRepository.allocateRun` via `WorkingFileManager.promoteToNewRun`),
      yielding `{ workflowKey, runRef, runDir, runId }`.
@@ -212,8 +244,10 @@ summary.projectPath`, `runIndex: 0`, `attemptIndex: 0`). Reuse the **same**
    The `runRef` must be derived from the same timestamp or the directory name and the
    manifest disagree.
 6. **Close the run.** `finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED,
-turns.length)` (`OutputHistoryManager.ts:751-756`); pass `activeExecutionMs` when the
-   log gives enough information to compute it.
+turns.length)` (`OutputHistoryManager.ts:1007`); pass `activeExecutionMs` when the
+   log gives enough information to compute it. Note `finalizeRun` stamps
+   `completedAt = Date.now()` internally, so a faithful session end time needs a
+   `completedAt` override parameter (small, additive).
 
 No new storage format: an imported run is byte-compatible with a ctrlyoke-run one, so
 `OutputPane`, the minimap, search indexing, and undo/redo work with zero UI changes.
@@ -229,23 +263,23 @@ Earlier drafts assumed imports can't support undo because they lack a
 `workspaceSnapshot`. That's only half true. ctrlyoke's undo has **two tiers**, and only
 one of them needs a snapshot:
 
-| Undo tier                                                                              | Data source                                                                                       | Works for imports?         |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Per-file / per-event** (`buildUndoDialogInputForSpecificEvent`, `promptUndo.ts:403`) | The structured CLI event itself                                                                   | ✅ mostly — see below      |
-| **Prompt-level "undo all changes"** (`buildUndoCandidatesForOutputs:213`)              | `instruction = snapEntry ? resolveSnapshotUndoInstruction(snapEntry) : null` — **snapshot-gated** | ❌ null without a snapshot |
+| Undo tier                                                                                 | Data source                                                                                       | Works for imports?         |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Per-file / per-event** (`buildUndoDialogInputForSpecificEvent`, `promptUndo.ts:1053`)   | The structured CLI event itself                                                                   | ✅ mostly — see below      |
+| **Prompt-level "undo all changes"** (`buildUndoCandidatesForOutputs:295`, gate at `:383`) | `instruction = snapEntry ? resolveSnapshotUndoInstruction(snapEntry) : null` — **snapshot-gated** | ❌ null without a snapshot |
 
 Per-event undo derives its instruction directly from the event:
 
 - `FILE_EDIT` → `REVERSE_PATCH` built from `editData.structuredPatch`
-  (`promptUndo.ts:403-419`) — **no snapshot needed**. The extension reads the current
-  file and reverse-applies the patch (`WorkspaceSnapshotService.ts:853`).
+  (`promptUndo.ts:~1096-1112`) — **no snapshot needed**. The extension reads the current
+  file and reverse-applies the patch (`WorkspaceSnapshotService.ts:~1189`).
 - `FILE_WRITE` → `DELETE` the created file (`resolveEventUndoInstruction`,
-  `promptUndo.ts:55`) — **no snapshot needed**.
+  `promptUndo.ts:128`) — **no snapshot needed**.
 - `FILE_DELETE` → needs `contentToRestore`, which only a snapshot carries today
-  (`promptUndo.ts:60-72`) — **degrades** unless the source log recorded the deleted
+  (`promptUndo.ts:~139-155`) — **degrades** unless the source log recorded the deleted
   file's prior content.
 - **Redo** works regardless: `redoInstructions` are captured at undo-apply time by
-  reading current content just before overwriting (`WorkspaceSnapshotService.ts:816`),
+  reading current content just before overwriting (`WorkspaceSnapshotService.undoFiles`, `:1089`),
   so redo is generated live, not at import time.
 
 Because import reuses the **same** `extractResponse` / structured events as the live run,
@@ -265,31 +299,36 @@ diffs. Do NOT globally disable undo.** Two follow-on decisions:
 2. **`FILE_DELETE` restore** stays unavailable unless we extend the per-harness parsers
    to capture the pre-delete content where the log exposes it.
 
-### Undo target must clamp to the _open_ workspace (security)
+### Undo target must clamp to the _open_ workspace (security) — already enforced
 
 The apply-undo guard is `WorkspaceSnapshotService.undoFiles(files, workspacePath,
-namedRoots?)` (`WorkspaceSnapshotService.ts:1016-1058`). It resolves each instruction with
+namedRoots?)` (`WorkspaceSnapshotService.ts:1089`). It resolves each instruction with
 `resolveNamedRelativePath` and rejects anything not inside its trusted-root set —
 `workspacePath` plus every named root — as "Path traversal detected — skipping", using
 the shared `isPathWithinDirectory` helper (`src/utils/PathSecurity.ts`).
 
-The hazard is **where `workspacePath` comes from**: the webview still derives it from an
-output's recorded `workingDirectory` (`useOutputUndoActions.ts:273-275`). So the guard is
-only as trustworthy as that recorded value. If we stamp imported outputs with the
-session's **original** absolute `workingDirectory`, the guard would happily write undo
-edits into that _foreign_ directory, because those paths are genuinely "inside" the
-declared root. That silently escapes the open workspace.
+The hazard this section originally flagged — `workspacePath` being derived in the webview
+from an output's recorded `workingDirectory` — **is fixed** (2026-10-10 audit; landed in
+`2204f7a7d` "guard undo against mismatched worktrees"). `UndoPromptChangesMessage` no
+longer carries a workspace path; `UndoRedoCoordinator.applySnapshotEntries` resolves the
+root extension-side via `resolveUndoExecutionWorkspace()`, which uses the currently open
+workspace roots unless the run's `_runtime.worktree` names a validated managed worktree.
+So an imported foreign-project output can no longer steer undo writes outside the open
+workspace — its absolute paths simply fail the guard.
 
-**Fix:** the undo-apply path must verify the resolved target against the **currently open
-workspace** — `getVsCodeWorkspaceRoot()` and its named roots, resolved extension-side —
-not against a root derived from recorded output. Files outside it render their diff
-read-only with the apply button disabled (or route through the existing
-`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` mechanism if the user opts in).
+Remaining import-specific work is small:
+
+- **Never set `_runtime.worktree`** on an imported run's working file; that is the one
+  recorded value the coordinator still honours (after validation).
+- **UX, not security:** today a foreign path only fails at apply time. Pre-disabling the
+  apply button for files outside the open workspace (diff stays visible), or routing
+  through `permissions.trustedExternalRoots` (`../implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`)
+  when the user opts in, is the friendlier behaviour.
 
 `RUN_EXPORT_PLAN.md` §6 raises the same issue one severity higher: for an imported run
-bundle, `workingDirectory` is not merely foreign but attacker-chosen, so that plan
-requires recomputing it on materialization rather than trusting it. Doing that here too
-makes the guard's input trustworthy for both sources.
+bundle, `workingDirectory` is attacker-chosen, so that plan recomputes it on
+materialization. The extension-side root resolution above already protects both sources;
+recomputing `workingDirectory` remains worthwhile for display correctness.
 
 ---
 
@@ -297,7 +336,9 @@ makes the guard's input trustworthy for both sources.
 
 ### WorkflowControls entry
 
-Add a fourth dropdown option in `WorkflowControls.tsx` (`dropdownOptions`):
+Add a dropdown option in `WorkflowControls.tsx` (`dropdownOptions`, which today holds
+"New From Template…", "Load from File…", "Queue from File…"/"Append and Continue from
+File…", and "Duplicate Workflow…"/"Duplicate This Run as New Workflow…"):
 
 ```ts
 {
@@ -330,7 +371,9 @@ timestamp, project). Model it on `WorkflowFilePickerModal`.
 
 ## Message plumbing
 
-Add to `src/ui/webview-react/types/messages.ts` and the extension-side router:
+Add the constants to `MESSAGE_TYPES` (`src/types/DashboardConstants.ts`) and the payload
+interfaces to `src/types/WebviewMessageTypes.ts` (`src/ui/webview-react/types/messages.ts`
+only re-exports them), then handle them in the extension-side router:
 
 - `LIST_HARNESS_SESSIONS` (webview→ext) / response payload `HarnessSessionSummary[]`.
 - `IMPORT_HARNESS_SESSION` (webview→ext) with `{ summary }`; on success, reuse the
@@ -352,19 +395,19 @@ prompt monitor resolves, and `CliLogMonitor` holds completion while
 background-task identities and a resumed-turn latch. It detects _"is this prompt really
 finished?"_, not _"where does each human turn begin?"_
 
-Verified 2026-08-14: `segmentSessionTurns`, `isHumanPromptEvent`, `SessionTurn`, and
-`listNativeSessions` appear nowhere in `src/`. **Both primitives are still unbuilt, and
-this plan is now their only consumer.** Two consequences:
+Verified 2026-08-14 (and again 2026-10-10): `segmentSessionTurns`, `isHumanPromptEvent`,
+`SessionTurn`, and `listNativeSessions` appear nowhere in `src/`. **Both primitives are
+still unbuilt, and this plan is now their only consumer.** Two consequences:
 
 - The old "build it once, and doing import first de-risks the live tracker" framing is
   obsolete. There is no second consumer waiting; phase 1 is justified by import alone.
 - The nearest existing work is **user-steer classification**, which the shipped pump
-  already owns (`CliLogEventPump.ts:31` — "user-steer classification/emission";
-  `SessionActivityWatcher.ts:12` forwards user-steer events; `OpenCodeLogParser.ts:576`
-  classifies candidates). `isHumanPromptEvent` is the same judgement — "is this user-role
-  event a real human turn, or protocol traffic?" — asked at a different moment. Implement
-  it by **reconciling with that classifier rather than beside it**; two disagreeing
-  answers to one question is the failure mode.
+  already owns (`CliLogEventPump.ts:32` — "user-steer classification/emission";
+  `SessionActivityWatcher.ts:12` forwards user-steer events). That classifier is now a
+  first-class `ILogParser.classifyUserEvent` overridden by all six parsers, so the
+  "is this user-role event a real human turn?" judgement is **reused directly** (see
+  the segmentation section) rather than reimplemented — two disagreeing answers to one
+  question was the failure mode.
 
 |           | Session Import (this plan)                | Terminal Follow-up Tracking (shipped)        |
 | --------- | ----------------------------------------- | -------------------------------------------- |
@@ -388,9 +431,11 @@ ctrlyoke-dispatched ones. Design that badge once, for three origins.
 - **Huge sessions.** Some logs are large. Read incrementally; cap imported turns
   (configurable) and warn. `events.jsonl` append is streaming, so memory is bounded by
   the largest single turn's `extractResponse`.
-- **Copilot format split** (flat file vs `session-id/events.jsonl`, v0.0.384+). Already
-  handled by `resolveLogPath` in the Copilot parser — enumeration must call the same
-  resolver, not assume a layout.
+- **Copilot format split** (flat file vs `session-id/events.jsonl`, v0.0.384+). Handled
+  inline in `CopilotLogParser.discoverSessionLog` (there is no `resolveLogPath`
+  helper) — extract that layout probe into a shared method and have enumeration call it,
+  not assume a layout. Check `versionPolicy.minimum` first: if every supported Copilot
+  writes the directory format, drop the flat-file branch instead of extending it.
 - **Missing model/tokens.** Older logs may lack usage; map to `undefined` and let
   `formatStatistics` omit them (it already guards on non-zero usage).
 - **Duplicate imports.** Key the generated workflow name on `sessionId`; if a workflow
@@ -416,21 +461,22 @@ ctrlyoke-dispatched ones. Design that badge once, for three origins.
 
 ## Phasing
 
-1. **Parser primitives.** `isHumanPromptEvent` + `segmentSessionTurns` (+ tests in
+1. **Parser primitives.** `segmentSessionTurns` on top of the existing
+   `classifyUserEvent`/`extractUserSteerText` (+ tests in
    `src/test/suite/harness/LogParsers.test.ts` against fixture logs for each harness).
-   Promote `getLogDirectory`/`resolveLogPath` to shared/protected.
+   Promote a `getLogDirectory`/layout-resolution helper to shared/protected.
 2. **Enumeration.** `listNativeSessions` per parser + `HarnessSessionImportService`
    fan-out. Unit tests over fixture directories.
 3. **Import pipeline.** `importSession` → workflow file + run history via the shared
    `RunMaterializer` over `OutputHistoryManager`. Single-source the
-   `UniversalCliOutput → CliOutput` mapping. Add `importedFrom` to schema +
-   `CtrlYokeTypes`.
+   `UniversalCliOutput → CliOutput` mapping. Add `importedFrom` to the lineage
+   descriptor (preferred) or to schema + `CtrlYokeTypes`.
 4. **UI.** WorkflowControls entry, `HarnessSessionPickerModal`, message plumbing, load
    imported workflow on success.
 5. **Undo wiring + provenance.** Per-file undo/redo works for imports out of the box via
-   the shared event-based path — the real work here is (a) clamping undo writes to the
-   open workspace (`WorkspaceSnapshotService` + `useOutputUndoActions` workspace check),
-   (b) optionally synthesizing event-based prompt-level undo instructions when no snapshot
+   the shared event-based path, and writes are already clamped to the open workspace
+   extension-side (`2204f7a7d`). The remaining work is (a) pre-disabling apply for
+   out-of-workspace files in the UI, (b) optionally synthesizing event-based prompt-level undo instructions when no snapshot
    exists, and (c) an "imported" / "observed" badge in `OutputPane` (shared with the
    follow-up tracker) that also signals which turns support undo.
 

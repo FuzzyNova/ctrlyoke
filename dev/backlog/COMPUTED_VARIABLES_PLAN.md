@@ -7,6 +7,14 @@ changes; see the audit below before scheduling this. What remains uncovered is
 narrow but real: inline substitution, composability into other syntax, and
 names that survive step reordering.
 
+> **2026-10-10 audit:** Not started; nothing from either phase exists in the schema or code.
+> Refreshed stale line references (RunOutputResolver, HarnessIntegration,
+> ScriptProcessRunner, ParallelGroupPreflight, WorkflowExecutor var read sites), noted that the
+> `^\w+$` name rule is now enforced at parse time (`getVariableKeyErrors`), corrected the
+> guardrail setting to the existing `execution.scriptTimeoutSec`, and corrected the precedence
+> constraint: CLI `--var` values are merged _into_ `workflow.vars` before execution
+> (`mergeCliVarsIntoWorkflow`), so the overlay must keep CLI keys separate to let them win.
+
 **Related:** `dev/implemented/KEY_VALUE_ROW_EDITOR_PLAN.md` (the authoring
 surface this lands in, now built), `USER_INPUT_STEP_PLAN.md` (the same "script produces a value the workflow
 consumes" shape, for a human instead of a script),
@@ -26,11 +34,14 @@ Today `vars` are static: authored in the workflow file or supplied by
 `--var key=value` on the CLI. There is no way for a script to produce one.
 
 > **Naming note, since it bites immediately.** The original phrasing of this
-> ask used `{{latest-log}}`. That can never work: `VarSubstitutor`'s
-> `PLACEHOLDER_RE` is `/\{\{(\w+)\}\}/g`, so a hyphen ends the match and the
-> token stays literal in the dispatched prompt with only an after-the-fact
-> advisory. Variable names must be `^\w+$` — `latest_log`, not `latest-log`.
-> Catching that at authoring time is `KEY_VALUE_ROW_EDITOR_PLAN.md`'s job.
+> ask used `{{latest-log}}`. That can never work: the placeholder pattern
+> (`PLACEHOLDER_SOURCE` in `src/utils/VariablePlaceholders.ts`, built from
+> `VARIABLE_NAME_PATTERN_SOURCE = "\\w+"` in `src/utils/KeyValueKeyKinds.ts`)
+> stops at a hyphen, so the token stays literal in the dispatched prompt.
+> Variable names must be `^\w+$` — `latest_log`, not `latest-log`. Since
+> `KEY_VALUE_ROW_EDITOR_PLAN.md` landed, a `vars` key or `--var` name that breaks
+> the rule is rejected up front by `getVariableKeyErrors`; a `setVar` name must
+> go through the same check.
 
 ## What already works today (and where it runs out)
 
@@ -47,12 +58,12 @@ no new code**:
     script: node scripts/latest-log.mjs
 ```
 
-`CliPromptPreparer.planPrompt` (`src/core/harness/shared/CliPromptPreparer.ts:135`)
-calls `substituteConditionOutputRefs` against
+`CliPromptPreparer.planPrompt` (`src/core/harness/shared/CliPromptPreparer.ts:136`)
+calls `substituteConditionOutputRefs` (`src/core/ConditionOutputRefs.ts`) against
 `workflowContext.preConditionResult` before the prompt is assembled, so the
 step's own pre-condition stdout is substituted into the prompt text that gets
-dispatched. A pre-condition with no `returns` passes on exit code 0
-(`EndConditionEvaluator.ts:188`, `:951`), so a script that just prints a value
+dispatched. A pre-condition with no `expected`/`returns` passes on exit code 0
+(`EndConditionEvaluator.evaluateCondition`), so a script that just prints a value
 and exits cleanly always passes the gate. Available fields are
 `RETRY_PROMPT_PLACEHOLDERS`: `stdout`, `stderr`, `expected`, `actual`,
 `exitCode`, `compareSource`.
@@ -83,9 +94,9 @@ be reinventing named variables inside a gate.
 ### 2. `$previous` / `$step:N` — script output **is** included; works today for the common case
 
 Prior context is not AI-responses-only. `RunOutputResolver.resolvePriorContextItems`
-has an explicit `isScriptStep(step)` branch (`:850-865`) that builds the item's
+has an explicit `isScriptStep(step)` branch (`:997-1011`) that builds the item's
 text from the script's `stdout`/`stderr`/`exitCode`, and
-`buildPriorContextXmlFromItems` (`src/core/HarnessIntegration.ts:127-139`)
+`buildPriorContextXmlFromItems` (`src/core/HarnessIntegration.ts:111`)
 emits a dedicated block for it:
 
 ```xml
@@ -99,7 +110,7 @@ emits a dedicated block for it:
 ```
 
 `$previous` has no type filter either — it takes the last resolved queue item
-among the candidates (`:874-879`), so when the previous step is a script step,
+among the candidates (`resolvedQueueItems.slice(-previousCount)`, `:1021-1025`), so when the previous step is a script step,
 `$previous` resolves to that script's output.
 
 **So this pattern works today, with no code changes:** put a script step at
@@ -129,7 +140,7 @@ limitations above are exactly what named variables exist to fix.
 
 ### 3. `CTRLYOKE_VAR_*` — one-directional
 
-`ScriptProcessRunner.ts:79-81` exports every var into every script/condition
+`ScriptProcessRunner.ts:112` exports every var into every script/condition
 process as `CTRLYOKE_VAR_<KEY>`. Scripts can **read** variables; nothing writes
 back. That asymmetry is the whole feature request.
 
@@ -141,7 +152,10 @@ back. That asymmetry is the whole feature request.
 plus `$step:N` covers "let the model see a computed value" completely, and
 `$preCondition:stdout` covers a single inline value on a single step. Neither
 is discoverable today — that is a docs gap, not an engine gap, and it is the
-highest-value thing on this page.
+highest-value thing on this page. (As of 2026-10-10, `docs/workflows/context-files.md`
+lists `$preCondition:<field>` and the `ctrlyoke-syntax` skill shows
+`$preCondition:stdout`, but no guide page presents either mechanism as the
+"computed value" recipe.)
 
 If the remaining limitations are actually felt — inline substitution,
 composability into `@path`/`model`/hook commands, and stable names — ship the
@@ -193,7 +207,7 @@ vars:
   latest_log:
     script: node scripts/latest-log.mjs
     scope: step # step (default) | run
-    timeout: 5000
+    timeoutSec: 5 # same name and unit as scriptStep.timeoutSec
     onError: literal # literal (default) | empty | fail
 ```
 
@@ -219,9 +233,10 @@ which is why it is second and conditional.
 ## Constraints found while scoping (read before implementing either phase)
 
 **Parallel groups freeze variables at preflight.**
-`ParallelGroupPreflight.ts:136` does `Object.freeze({ ...(workflow.vars ?? {}) })`
+`ParallelGroupPreflight.ts:163` does `Object.freeze({ ...(workflow.vars ?? {}) })`
 once per group and hands each member that frozen snapshot;
-`WorkflowExecutor.ts:1350-1352` then deliberately skips the ordinary
+`WorkflowExecutor.ts` (`:1976-1983` for pre-conditions, `:2137-2145` for the
+step) then deliberately skips the ordinary
 `VarSubstitutor.applyToResolvedProperties` call for preflight members because
 substitution already happened against that snapshot. So:
 
@@ -238,12 +253,18 @@ substitution already happened against that snapshot. So:
   race.
 
 **The var map is currently read-only and read from the prompt file.** Every
-read site takes `workflowFile.vars` directly (`WorkflowExecutor.ts:1350`,
-`:1602`, `:3876`; `WorktreeManager.ts:2597`; `cli.ts:681`). Phase 1 needs one
-run-scoped mutable overlay layered over it, resolved in the same precedence
-order the docs already state (CLI `--var` > file `vars`), with captured values
-slotting between them: **CLI `--var` > captured/computed > file `vars`** so an
-explicit `--var` still wins, which is what "override" means today.
+read site takes `workflowFile.vars` directly (`WorkflowExecutor.ts:1978`,
+`:2139`, `:2544`, `:2684`, `:2730`, `:4435`, `:4936`;
+`ParallelGroupPreflight.ts:163`; worktree setup receives it as `options.vars`
+via `WorkflowInstance.ts:4249`). Phase 1 needs one run-scoped mutable overlay
+layered over it, with captured values slotting between the two existing
+layers: **CLI `--var` > captured/computed > file `vars`** so an explicit
+`--var` still wins, which is what "override" means today. Note that the CLI
+does not keep `--var` as a separate layer at run time: `mergeCliVarsIntoWorkflow`
+(`cli.ts:1536-1548`) spreads the overrides into `workflow.vars` before
+execution. The overlay therefore has to record which keys came from the CLI
+(or keep the overrides separately) and refuse to shadow them; a naive
+`{ ...workflow.vars, ...captured }` would silently let a script beat `--var`.
 
 **Persistence.** A captured value belongs in the run's `_runtime` state, not
 written back into the workflow definition — the definition is the authored
@@ -255,9 +276,10 @@ already run from workflows via script steps, conditions, hooks, and worktree
 setup, and both phases reuse `ScriptProcessRunner` (VS Code env scrubbing,
 timeout, shell resolution, secret redaction). Phase 2 does introduce a new
 _trigger_ — a script running as a side effect of a prompt referencing a name —
-which is worth an explicit note in docs and worth checking against
-`EXECUTION_GUARDRAILS_PLAN.md`'s `execution.scriptTimeout` budget before
-implementing.
+which is worth an explicit note in docs and is bounded by the existing
+`execution.scriptTimeoutSec` setting (default 3600 s, overridden by a script's
+own `timeoutSec`); that default is far too long for a lazily evaluated value,
+so Phase 2 should default to a much shorter per-var timeout.
 
 ## Affected areas (sketch, Phase 1)
 

@@ -2,7 +2,18 @@
 
 **Status:** Proposed  
 **Priority:** P2 — prompt-authoring differentiation  
-**Supersedes:** `INLINE_SUGGESTIONS_PLAN.md`
+**Supersedes:** `INLINE_SUGGESTIONS_PLAN.md` (since deleted; only in git history)
+
+> **2026-10-10 audit:** Not started — no `vscode.lm` usage, `PromptSuggestion*`
+> code, or `promptSuggestions.*` settings exist. Updated the files table to match
+> current conventions: CodeMirror extensions live under
+> `src/ui/webview-react/utils/` (e.g. `codemirrorWorkflowVariables.ts`,
+> `promptCompletion/`), not under `components/editor/`, and
+> `src/ui/PromptEditorSupportService.ts` is the existing precedent for a focused
+> prompt-editor message handler. Note that the `copilot-chat` removal
+> (`dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`) names the public VS Code
+> Language Model API as the acceptable direction; this plan stays within it
+> (no Copilot Chat commands or private storage).
 
 ## Product fit
 
@@ -224,8 +235,9 @@ Manual invocation does not require automatic mode to be enabled, but the first
 use must clearly disclose that prompt draft text is sent to the selected model
 provider.
 
-Do not add a second settings source in `package.json` if the dashboard settings
-schema is the current source of truth.
+Do not add anything to `package.json`'s `contributes.configuration`: it is not a
+settings surface. `schemas/settings-schema.json` + `CtrlYokeSettings.ts`, read
+through `CtrlYokeConfigService`, are the only source of truth.
 
 ## Privacy and usage
 
@@ -244,15 +256,15 @@ schema is the current source of truth.
 Exact names should follow the current area conventions, but responsibilities
 should remain separated:
 
-| Area                                                         | Responsibility                                        |
-| ------------------------------------------------------------ | ----------------------------------------------------- |
-| `src/ui/prompt-suggestions/`                                 | Service and VS Code LM provider adapter               |
-| `src/types/`                                                 | Shared request/result/message contracts and constants |
-| `src/ui/WebviewMessageRouter.ts` or focused handler          | Route capability/request/cancel messages              |
-| `src/ui/webview-react/hooks/`                                | Webview request state and settings controller         |
-| `src/ui/webview-react/components/editor/prompt-suggestions/` | CodeMirror state, decoration, and commands            |
-| `CodeMirrorEditor.tsx`                                       | Thin integration only                                 |
-| Settings schema/defaults/UI                                  | Opt-in automatic mode and provider status             |
+| Area                                                                                     | Responsibility                                        |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `src/ui/prompt-suggestions/`                                                             | Service and VS Code LM provider adapter               |
+| `src/types/`                                                                             | Shared request/result/message contracts and constants |
+| `src/ui/WebviewMessageRouter.ts` or a focused handler (cf. `PromptEditorSupportService`) | Route capability/request/cancel messages              |
+| `src/ui/webview-react/hooks/`                                                            | Webview request state and settings controller         |
+| `src/ui/webview-react/utils/promptSuggestions/`                                          | CodeMirror state, decoration, and commands            |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                            | Thin integration only                                 |
+| `schemas/settings-schema.json` + `src/types/CtrlYokeSettings.ts`, defaults, settings UI  | Opt-in automatic mode and provider status             |
 
 ## Testing strategy
 
