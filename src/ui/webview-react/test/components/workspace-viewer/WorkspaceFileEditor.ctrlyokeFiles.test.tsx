@@ -17,7 +17,10 @@ import { ensureSyntaxTree, forceParsing } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceFileEditor } from "@components/workspace-viewer/WorkspaceFileEditor";
-import { PROMPT_MARKDOWN_DECORATION_CLASSES } from "@utils/codemirrorLanguage";
+import {
+  createPromptMarkdownLanguage,
+  PROMPT_MARKDOWN_DECORATION_CLASSES,
+} from "@utils/codemirrorLanguage";
 import { createCtrlYokeHighlightStyle } from "@utils/syntaxPalette";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { loadWorkflowFileSupport } from "@utils/workflowFileSupport/loadWorkflowFileSupport";
@@ -259,12 +262,33 @@ describe("WorkspaceFileEditor ctrlyoke file support", () => {
     ).toBe(false);
   });
 
-  it("keeps large YAML prompt edits within the editor parse budget", async () => {
+  it("does not re-parse a large YAML prompt when an edit leaves it unchanged", async () => {
+    // The typing-latency budget for large workflows rests on the per-span
+    // Markdown parse cache, so assert the cache rather than wall-clock time.
+    // A timed bound flaked under `npm test` load (282ms for a ~10ms edit) and
+    // could not catch a lost cache anyway (~40ms uncached, idle).
     const content = `steps:\n  - prompt: |\n${"      # heading and plain text\n".repeat(3000)}  - prompt: done\n`;
     const { view } = await renderEditor("large.ctrlyoke.yaml", content);
-    const startedAt = performance.now();
-    view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
-    expect(performance.now() - startedAt).toBeLessThan(250);
+    const parse = vi.spyOn(
+      Object.getPrototypeOf(createPromptMarkdownLanguage().language.parser),
+      "parse"
+    );
+    const largePromptParses = () =>
+      parse.mock.calls.filter(([input]) =>
+        String(input).includes("heading and plain text")
+      ).length;
+    try {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+      expect(largePromptParses()).toBe(0);
+
+      // Control: an edit inside the prompt does parse it, so the zero above is
+      // the cache at work and not a spy that never sees the plugin's parser.
+      const insideEdit = view.state.doc.toString().indexOf("# heading");
+      view.dispatch({ changes: { from: insideEdit, insert: "x" } });
+      expect(largePromptParses()).toBe(1);
+    } finally {
+      parse.mockRestore();
+    }
   });
 
   it("keeps plain YAML highlighting when read-only rebuilds the view", async () => {
