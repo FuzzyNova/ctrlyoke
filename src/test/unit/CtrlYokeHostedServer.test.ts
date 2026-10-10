@@ -63,6 +63,15 @@ function createHostedServer(options: Partial<HostedServerOptions> = {}) {
   });
 }
 
+suite("CtrlYokeHostedServer authentication", () => {
+  test("rejects an empty access token", () => {
+    assert.throws(
+      () => createHostedServer({ token: "" }),
+      /Hosted server access token must not be empty/
+    );
+  });
+});
+
 function sendJsonRequest(
   port: number,
   requestPath: string,

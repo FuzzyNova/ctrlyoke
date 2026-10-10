@@ -35,3 +35,20 @@ export async function resolvePromptTextWithVariables(
     ? VarSubstitutor.applyToPromptText(resolvedText, { ...variables })
     : resolvedText;
 }
+
+/** Resolve a retry prompt whose authored text has already had variables expanded. */
+export async function resolvePromptFileTextWithVariables(
+  promptText: string,
+  variables: Readonly<Record<string, string>>,
+  resolver: PromptTextFileResolver = PASSTHROUGH_PROMPT_FILE_RESOLVER,
+  sourceDefinitionPath?: string
+): Promise<string> {
+  if (!resolver.looksLikePromptFilePath(promptText)) {
+    return promptText;
+  }
+  const resolvedText = await resolver.resolvePromptValue(
+    promptText,
+    sourceDefinitionPath
+  );
+  return VarSubstitutor.applyToPromptText(resolvedText, { ...variables });
+}

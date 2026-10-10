@@ -133,6 +133,18 @@ suite("ServerTokenStore", () => {
     assert.strictEqual(await resolveServerToken(store, undefined), "created");
   });
 
+  test("empty and whitespace-only environment tokens fall back to the persisted token", async () => {
+    const secrets = new InMemorySecretStore();
+    await secrets.store(SERVER_TOKEN_SECRET_KEY, "persisted-token");
+    const store = new ServerTokenStore(secrets, WORKSPACE_ROOT);
+
+    assert.strictEqual(await resolveServerToken(store, ""), "persisted-token");
+    assert.strictEqual(
+      await resolveServerToken(store, "   "),
+      "persisted-token"
+    );
+  });
+
   test("regenerate rotates the persisted token even under an environment token", async () => {
     const secrets = new InMemorySecretStore();
     await secrets.store(SERVER_TOKEN_SECRET_KEY, "old-token");

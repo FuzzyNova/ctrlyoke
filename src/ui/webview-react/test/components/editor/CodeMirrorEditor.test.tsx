@@ -1207,6 +1207,21 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
     });
   });
 
+  it("recognizes astral Unicode letters as filename-legal before the cursor", () => {
+    const text = "𐐀";
+    const result = buildPromptReferenceInsertion(
+      text,
+      {
+        requestId: "insert-unicode-boundary",
+        references: ["@src/app.ts"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+      { from: text.length, to: text.length }
+    );
+
+    expect(result.text).toBe(" @src/app.ts ");
+  });
+
   it("appends a trailing space unless whitespace already follows the cursor", () => {
     const beforeText = buildPromptReferenceInsertion(
       "See here",

@@ -20,6 +20,7 @@ import {
   readWorkflowLockInspection,
 } from "../utils/WorkflowLockInspector";
 import type { WorkflowLockInspection } from "../utils/WorkflowLockInspector";
+import { globalStatusProgressLabel } from "../utils/ctrlyokeToolViews/globalStatusModel";
 import {
   isProcessAlive,
   type ProcessLivenessCheck,
@@ -197,7 +198,7 @@ function formatStatusTable(workflows: readonly CliStatusWorkflow[]): string {
     workflow.workflowKey,
     workflow.runRef ?? "—",
     workflow.executionState,
-    `${workflow.currentStep}/${workflow.totalSteps}`,
+    globalStatusProgressLabel(workflow),
     workflow.harness ?? "—",
     workflow.model ?? "—",
     workflow.startedAt === null

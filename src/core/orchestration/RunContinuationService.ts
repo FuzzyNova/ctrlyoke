@@ -40,6 +40,7 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { assertDefinitionRevision } from "./RevisionPrecondition";
 import {
   appendParallelGroupMembers,
+  assertNoParallelSiblingReferences,
   deleteParallelGroupSteps,
   insertParallelGroupTopology,
   normalizeParallelGroupTopology,
@@ -441,6 +442,10 @@ export class RunContinuationService {
           nextTopology.steps,
           source.finalStep
         );
+        assertNoParallelSiblingReferences(
+          { steps: renumbered.steps, parallelGroups: nextTopology.parallelGroups },
+          source
+        );
         const incomingGroupIds = new Set(
           sanitizedIncomingTopology.parallelGroups.map((group) => group.id)
         );
@@ -656,6 +661,10 @@ export class RunContinuationService {
           nextTopology.steps,
           source.finalStep
         );
+        assertNoParallelSiblingReferences(
+          { steps: renumbered.steps, parallelGroups: nextTopology.parallelGroups },
+          source
+        );
 
         const joinedGroup = nextTopology.parallelGroups.find(
           (group) => group.id === joinedGroupId
@@ -845,6 +854,7 @@ export class RunContinuationService {
           index,
           mergedStep
         );
+        assertNoParallelSiblingReferences(nextTopology, source);
         assertStartedStepPositionsPreserved(
           topology.steps,
           nextTopology.steps,

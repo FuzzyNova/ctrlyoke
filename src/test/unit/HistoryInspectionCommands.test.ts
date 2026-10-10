@@ -733,12 +733,16 @@ suite("CLI history inspection command handlers", () => {
             _runtime: {
               harness: "claude-cli",
               model: "opus",
-              terminalStatus: "completed",
             },
           },
           _runtime: {
             executionState: EXECUTION_STATES.PAUSED,
             currentIndex: 1,
+            finalStep: {
+              phase: FINAL_STEP_PHASES.FINAL_STEP,
+              loopCount: 2,
+              status: "completed",
+            },
           },
         })
       );
@@ -1025,6 +1029,39 @@ suite("CLI history inspection command handlers", () => {
       );
       assert.match(runningPassTextIo.output[2], /^final +review +running /);
       assert.doesNotMatch(runningPassTextIo.output[2], /\(next\)/);
+
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [{ prompt: "Queue" }],
+          finalStep: { name: "review", prompt: "Review" },
+          _runtime: {
+            executionState: EXECUTION_STATES.COMPLETED,
+            finalStep: {
+              phase: FINAL_STEP_PHASES.FINAL_STEP,
+              loopCount: 1,
+              status: "completed",
+            },
+          },
+        })
+      );
+      const rootRuntimeIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        rootRuntimeIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([], []),
+          undefined,
+          workspaceRoot
+        )
+      );
+      const rootRuntimeValue = JSON.parse(rootRuntimeIo.output[0]) as {
+        finalStep: { state: string; passes: unknown[] };
+      };
+      assert.strictEqual(rootRuntimeValue.finalStep.state, "completed");
+      assert.deepStrictEqual(rootRuntimeValue.finalStep.passes, []);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

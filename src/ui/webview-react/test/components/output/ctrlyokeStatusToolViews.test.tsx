@@ -83,6 +83,7 @@ const global = {
       harness: "claude-cli",
       model: null,
       currentStep: 3,
+      finalStepPass: null,
       totalSteps: 8,
       completedSteps: 2,
     },
@@ -304,6 +305,29 @@ describe("status and output ctrlyoke tool views", () => {
     const mark = container.querySelector("mark");
     expect(mark?.textContent).toBe("Build docs");
     expect(mark).toHaveAttribute(OUTPUT_FIND_ACTIVE_ATTRIBUTE, "true");
+  });
+
+  it("labels a running final-step pass in global_status search text", () => {
+    const finalStep = {
+      ...global,
+      workflows: [
+        {
+          ...global.workflows[0],
+          currentStep: null,
+          finalStepPass: 2,
+        },
+      ],
+    };
+    expect(
+      parseGlobalStatusResultText(JSON.stringify(finalStep))
+    ).toBeDefined();
+    expect(globalStatusSearchText(undefined, finalStep)[1]).toContain("Pass 2");
+    render(
+      <GlobalStatusBody {...props(MCP_GLOBAL_STATUS_TOOL_NAME, finalStep)} />
+    );
+    const row = screen.getByText("Build docs").parentElement?.textContent;
+    expect(row).toContain("Pass 2");
+    expect(row).not.toContain("/8");
   });
 
   it("validates and renders read_output collapsed with store-managed expansion", () => {

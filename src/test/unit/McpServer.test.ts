@@ -174,6 +174,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       parallelGroups?: WorkingFile["parallelGroups"];
       draftOnly?: boolean;
       executionState?: ExecutionState;
+      finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
       maxSteps?: number;
     } = {}
   ): Promise<RunFixture> {
@@ -221,6 +222,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           ? { currentIndex: options.currentIndex }
           : {}),
         executionState,
+        ...(options.finalStep ? { finalStep: options.finalStep } : {}),
         ...(options.worktree ? { worktree: options.worktree } : {}),
       },
     };
@@ -1425,6 +1427,23 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
   });
 
+  test("global_status reports the running final-step pass without a queue position", async () => {
+    const server = await setup();
+    const run = await createRun("final-step-status", "2026-01-07T00-00-00-000Z", {
+      stepCount: 2,
+      currentIndex: 2,
+      executionState: EXECUTION_STATES.RUNNING,
+      finalStep: { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 1 },
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(await server.invokeTool("global_status", {}));
+    const row = result.workflows[0];
+    assert.strictEqual(row.currentStep, null);
+    assert.strictEqual(row.finalStepPass, 2);
+    assert.strictEqual(row.totalSteps, 2);
+  });
+
   test("allows global_status without an attached run", async () => {
     const server = await setup();
     const run = await createRun("unattached", "2026-01-01T00-00-00-000Z");
@@ -1627,6 +1646,44 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         await fs.readFile(run.runFilePath, "utf8")
       ) as WorkingFile;
       assert.deepStrictEqual(cleared.steps?.[2], { prompt: "updated prompt" });
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("rejects editing a parallel member to target its sibling", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-sibling-reference");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = [
+      { prompt: "before group" },
+      { prompt: "completed", _runtime: { completedAt: 2 } },
+      { prompt: "in flight", _runtime: { startedAt: 3 } },
+      { prompt: "member-a" },
+      { prompt: "member-b" },
+    ];
+    workingFile.parallelGroups = [
+      { id: "edit-sibling-group", startIndex: 3, endIndex: 4, failFast: true },
+    ];
+    workingFile._runtime = {
+      currentIndex: 2,
+      executionState: EXECUTION_STATES.RUNNING,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const before = await fs.readFile(run.runFilePath, "utf8");
+
+    try {
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 4,
+          updates: { resumeSession: true, sessionId: 4 },
+        }),
+        /Numeric sessionId reference 4 cannot target a sibling in parallel group \(steps 4, 5\)/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
@@ -2388,6 +2445,46 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("rejects an appended parallel sibling reference without writing the run", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("sibling-append");
+    const before = await fs.readFile(run.runFilePath, "utf8");
+    try {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              parallel: [
+                { prompt: "member-a" },
+                { prompt: "member-b", resumeSession: true, sessionId: 5 },
+              ],
+            },
+          ],
+        }),
+        /Numeric sessionId reference 5 cannot target a sibling in parallel group \(steps 5, 6\)/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+      const valid = responseJson(
+        await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              parallel: [
+                { prompt: "valid-a" },
+                { prompt: "valid-b", resumeSession: true, sessionId: 1 },
+              ],
+            },
+          ],
+        })
+      );
+      assert.strictEqual(valid.stepsAdded, 2);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("inserts a 'next' step after the running step without displacing completed work", async () => {
     const server = await setup();
     const run = await createRun("next-append", "2026-01-01T00-00-00-000Z");
@@ -2563,6 +2660,41 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       assert.deepStrictEqual(persisted.parallelGroups, [
         { id: "active-group", startIndex: 1, endIndex: 4, failFast: true },
       ]);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("rejects joining a live group with a reference to an existing member", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("sibling-live-join");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.parallelGroups = [
+      { id: "active-sibling-group", startIndex: 1, endIndex: 2, failFast: true },
+    ];
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      currentIndex: workingFile._runtime?.currentIndex ?? 1,
+      executionState:
+        workingFile._runtime?.executionState ?? EXECUTION_STATES.RUNNING,
+      activeParallelGroup: {
+        groupId: "active-sibling-group",
+        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+      },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    const before = await fs.readFile(run.runFilePath, "utf8");
+    try {
+      await assert.rejects(
+        invokeAppendHandler(server, {
+          position: "parallelWithCurrent",
+          steps: [{ prompt: "joined member", resumeSession: true, sessionId: 3 }],
+        }),
+        /Numeric sessionId reference 3 cannot target a sibling in parallel group \(steps 2, 3, 4\)/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
     } finally {
       await releaseActiveRun(run, ownerToken);
     }

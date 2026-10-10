@@ -94,7 +94,7 @@ import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
 import { findVariablePlaceholders } from "@root/utils/VariablePlaceholders";
 import { createWorkflowVariableExtension } from "@utils/codemirrorWorkflowVariables";
-import { REFERENCE_BOUNDARY_CHAR_RE } from "@root/utils/ReferenceBoundary";
+import { isReferenceBoundaryBefore } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 import {
   buildReferenceChipMenuItems,
@@ -247,8 +247,7 @@ export function buildPromptReferenceInsertion(
   // reject it as mid-word and the reference would silently fail to parse —
   // insert a leading space to keep it a real trigger.
   if (!shouldSurroundWithNewlines && selection.from > 0) {
-    const charBefore = docText[selection.from - 1];
-    if (REFERENCE_BOUNDARY_CHAR_RE.test(charBefore)) {
+    if (isReferenceBoundaryBefore(docText, selection.from)) {
       text = ` ${text}`;
     }
   }
@@ -1772,7 +1771,7 @@ function getCompletionRanges(
 
   for (const pattern of patterns) {
     let match;
-    const regex = new RegExp(pattern.source, "g");
+    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
       ranges.push({
         from: match.index,

@@ -20,6 +20,9 @@ function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
     getAll: () => data,
     set: async (settingPath, value) => {
+      const before = JSON.parse(
+        JSON.stringify(data)
+      ) as PartialCtrlYokeSettings;
       const parts = settingPath.split(".");
       let current = data as Record<string, unknown>;
       for (const part of parts.slice(0, -1)) {
@@ -35,6 +38,7 @@ function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
       } else {
         current[leaf] = value;
       }
+      return before;
     },
   };
 }

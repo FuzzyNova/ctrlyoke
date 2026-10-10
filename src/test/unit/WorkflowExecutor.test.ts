@@ -2438,6 +2438,87 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("filters missing grants before prompt integration and condition evaluation", async () => {
+    const secretName = "CTRLYOKE_TEST_WARN_MISSING_CONDITION_SECRET";
+    const previousValue = process.env[secretName];
+    delete process.env[secretName];
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: `Use !${secretName}`,
+          endCondition: {
+            script: `node -e "console.log('condition-ok')"`,
+            compareSource: "stdout",
+            expected: "condition-ok",
+          },
+        },
+      ],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    let integrationSecrets: string[] | undefined;
+    const context = makeContext(integration);
+    context.getIntegrationForPrompt = (_prompt, properties) => {
+      integrationSecrets = properties.secrets;
+      return integration;
+    };
+    configService.setCliOverlay({
+      execution: {
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+      },
+    });
+    try {
+      await makeExecutor(queue).execute(integration, context);
+      assert.deepStrictEqual(integration.sentPrompts, [`Use !${secretName}`]);
+      assert.deepStrictEqual(integrationSecrets, []);
+      assert.strictEqual(
+        queue.getState().results[0].endCondition?.passed,
+        true
+      );
+    } finally {
+      configService.setCliOverlay({});
+      if (previousValue === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = previousValue;
+      }
+    }
+  });
+
+  test("filters missing grants before script-step environment resolution", async () => {
+    const secretName = "CTRLYOKE_TEST_WARN_MISSING_SCRIPT_SECRET";
+    const previousValue = process.env[secretName];
+    delete process.env[secretName];
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      steps: [
+        {
+          type: "script",
+          script: `node -e "process.exit(0)"`,
+          secrets: [secretName],
+        },
+      ],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    configService.setCliOverlay({
+      execution: {
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+      },
+    });
+    try {
+      await makeExecutor(queue).execute(integration, makeContext(integration));
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, []);
+    } finally {
+      configService.setCliOverlay({});
+      if (previousValue === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = previousValue;
+      }
+    }
+  });
+
   test("an unapproved grant with no value takes the missing-secret path instead of the trust check", async () => {
     const promptText = "Use !UNAPPROVED_MISSING_TEST_SECRET for auth";
     const untrusted = { getDecision: () => undefined };
@@ -3378,6 +3459,62 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.getState().results[1].status,
       STEP_STATUS.COMPLETED
     );
+  });
+
+  test("substitutes retry variables once for fallback and explicit retry prompts", async () => {
+    const scenarios: Array<{
+      endCondition: PromptStep["endCondition"];
+      results: EvaluationResult[];
+      expectedRetry: string;
+    }> = [
+      {
+        endCondition: {
+          script: "check-result",
+          onPass: CONDITION_ACTIONS.RETRY,
+          maxRetries: 1,
+        },
+        results: [shellEvaluationResult(true), shellEvaluationResult(true)],
+        expectedRetry: "Task: Write {{name}} literally",
+      },
+      {
+        endCondition: {
+          script: "check-result",
+          onFail: CONDITION_ACTIONS.RETRY,
+          maxRetries: 1,
+          retryPrompt: "Task: {{snippet}}",
+        },
+        results: [shellEvaluationResult(false), shellEvaluationResult(true)],
+        expectedRetry: "Task: Write {{name}} literally",
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const evaluator = new RecordingShellEvaluator(
+        new MockPlatform(),
+        scenario.results
+      );
+      queue.loadPrompts({
+        vars: { snippet: "Write {{name}} literally", name: "Bob" },
+        steps: [
+          {
+            prompt: "Task: {{snippet}}",
+            endCondition: scenario.endCondition,
+          },
+        ],
+      });
+
+      await makeExecutor(queue, evaluator).execute(
+        integration,
+        makeContext(integration)
+      );
+
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "Task: Write {{name}} literally",
+        scenario.expectedRetry,
+      ]);
+    }
   });
 
   test("skips disabled queue steps without sending them to the harness", async () => {

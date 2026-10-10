@@ -31,8 +31,6 @@ import {
   PROMPT_TERMINAL_STATUS,
   PARALLEL_GROUP_ADMISSION,
   STEP_CLAIM_OUTCOMES,
-  CONDITION_ACTIONS,
-  DEFAULT_ERROR_BEHAVIOR_RETRIES,
   type ParallelGroupAdmission,
   type PromptTerminalStatus,
   STEP_STATUS,
@@ -53,6 +51,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   PARALLEL_GROUP_INSERT_POSITIONS,
+  assertNoParallelSiblingReferences,
   appendParallelGroupMember,
   deleteParallelGroupSteps,
   insertParallelGroupTopology,
@@ -68,6 +67,7 @@ import {
 } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { resolveRetryBudget } from "./RetryBudget";
 
 export interface SequentialStepSettlement {
   readonly promotedGroup?: ParallelGroupDefinition;
@@ -119,55 +119,12 @@ export interface ResolvedRuntimeOutputCacheEntry {
   scriptOutput?: ScriptRuntimeOutput;
 }
 
-/** Effective retry settings resolved from an end condition, including smart defaults. */
-interface RetrySettings {
-  maxRetries: number;
-  retryPrompt: string | undefined;
-  passRetryPrompt: string | undefined;
-}
-
-/**
- * Resolve effective maxRetries/retryPrompt from an end condition, applying
- * smart defaults when only one of the two is specified.
- */
-function resolveRetrySettings(
-  endCondition?: PromptStep["endCondition"]
-): RetrySettings {
-  if (!endCondition) {
-    return {
-      maxRetries: 0,
-      retryPrompt: undefined,
-      passRetryPrompt: undefined,
-    };
-  }
-
-  const hasRetryPrompt = !!endCondition.retryPrompt;
-  const hasMaxRetries = endCondition.maxRetries !== undefined;
-  const hasNonZeroMaxRetries = hasMaxRetries && endCondition.maxRetries !== 0;
-  const hasRetryAction =
-    endCondition.onFail === CONDITION_ACTIONS.RETRY ||
-    endCondition.onPass === CONDITION_ACTIONS.RETRY;
-
-  const maxRetries = hasMaxRetries
-    ? endCondition.maxRetries!
-    : hasRetryAction
-      ? DEFAULT_ERROR_BEHAVIOR_RETRIES
-      : hasRetryPrompt
-        ? ConfigurationUtils.getDefaultMaxRetries()
-        : 0;
-
-  const retryPrompt = hasRetryPrompt
-    ? endCondition.retryPrompt
-    : hasNonZeroMaxRetries
-      ? ConfigurationUtils.getDefaultRetryPrompt() || undefined
-      : undefined;
-
-  const passRetryPrompt =
-    (endCondition.passRetryPrompt ??
-      ConfigurationUtils.getDefaultPassRetryPrompt()) ||
-    undefined;
-
-  return { maxRetries, retryPrompt, passRetryPrompt };
+function resolvePromptRetryBudget(endCondition?: PromptStep["endCondition"]) {
+  return resolveRetryBudget(endCondition, {
+    maxRetries: ConfigurationUtils.getDefaultMaxRetries(),
+    retryPrompt: ConfigurationUtils.getDefaultRetryPrompt(),
+    passRetryPrompt: ConfigurationUtils.getDefaultPassRetryPrompt(),
+  });
 }
 
 export class PromptQueue implements WorkflowWorkingFilePersistence {
@@ -1306,13 +1263,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     prompt: PromptStep,
     target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
   ): boolean {
-    const { maxRetries, retryPrompt } = resolveRetrySettings(
+    const { maxRetries, canRetry } = resolvePromptRetryBudget(
       prompt.endCondition
     );
-    if (
-      !retryPrompt &&
-      prompt.endCondition?.onFail !== CONDITION_ACTIONS.RETRY
-    ) {
+    if (!canRetry) {
       return false;
     }
 
@@ -1333,7 +1287,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     prompt: PromptStep,
     target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
   ): boolean {
-    const { maxRetries } = resolveRetrySettings(prompt.endCondition);
+    const { maxRetries } = resolvePromptRetryBudget(prompt.endCondition);
 
     // -1 means unlimited retries
     if (isUnlimited(maxRetries)) {
@@ -1347,21 +1301,26 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * Get effective maxRetries for current prompt (including defaults)
    */
   getEffectiveMaxRetries(prompt: PromptStep): number {
-    return resolveRetrySettings(prompt.endCondition).maxRetries;
+    return resolvePromptRetryBudget(prompt.endCondition).maxRetries;
+  }
+
+  /** Return retries that can actually run after an end-condition failure. */
+  getEffectiveFailureRetryBudget(prompt: PromptStep): number {
+    return resolvePromptRetryBudget(prompt.endCondition).permittedRetries;
   }
 
   /**
    * Get effective retry prompt for current prompt (including defaults)
    */
   getEffectiveRetryPrompt(prompt: PromptStep): string | undefined {
-    return resolveRetrySettings(prompt.endCondition).retryPrompt;
+    return resolvePromptRetryBudget(prompt.endCondition).retryPrompt;
   }
 
   /**
    * Get effective pass-retry prompt for current prompt (including settings defaults)
    */
   getEffectivePassRetryPrompt(prompt: PromptStep): string | undefined {
-    return resolveRetrySettings(prompt.endCondition).passRetryPrompt;
+    return resolvePromptRetryBudget(prompt.endCondition).passRetryPrompt;
   }
 
   /**
@@ -2081,6 +2040,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         identifiedTopology.steps,
         this.workflowFile?.finalStep
       );
+      assertNoParallelSiblingReferences(
+        {
+          steps: renumbered.steps,
+          parallelGroups: identifiedTopology.parallelGroups,
+        },
+        this.workflowFile
+      );
       assertStartedStepPositionsPreserved(
         previousSteps,
         identifiedTopology.steps,
@@ -2212,6 +2178,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         previousSteps,
         nextTopology.steps,
         this.workflowFile?.finalStep
+      );
+      assertNoParallelSiblingReferences(
+        { steps: renumbered.steps, parallelGroups: nextTopology.parallelGroups },
+        this.workflowFile
       );
       assertStartedStepPositionsPreserved(
         previousSteps,
@@ -2925,6 +2895,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           clearProperties
         );
       }
+      assertNoParallelSiblingReferences(
+        { steps: nextSteps, parallelGroups: this.state.parallelGroups },
+        this.workflowFile
+      );
       this.state.steps = nextSteps;
       this.workflowFile = this.workflowFile
         ? { ...this.workflowFile, steps: [...nextSteps] }
@@ -2965,6 +2939,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         index,
         replacement
       );
+      assertNoParallelSiblingReferences(nextTopology, this.workflowFile);
       assertStartedStepPositionsPreserved(
         this.state.steps,
         nextTopology.steps,

@@ -29,10 +29,14 @@ lists every category.
 **To turn it off**, set VS Code's `telemetry.telemetryLevel` to `off`. ctrlyoke follows that
 setting; there is no separate ctrlyoke switch.
 
-The **`ctrlyoke` CLI and `ctrlyoke-mcp` send no telemetry** and make no network requests of their
-own, so there is nothing to opt out of in CI or other headless use.
+The **headless `ctrlyoke` commands other than `ctrlyoke server`, and
+`ctrlyoke-mcp`, send no telemetry and make no network requests of their own**.
+`ctrlyoke server` checks the Pro license for remote access, including LAN HTTPS,
+and may contact Keygen to refresh a cached online Pro license. When push
+notifications are enabled, it also sends notifications to browser push
+services. See [Other network requests](#other-network-requests).
 
-## Other network requests from the extension
+## Other network requests
 
 | When                                                     | Contacts                           | What is sent                                                        |
 | -------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |

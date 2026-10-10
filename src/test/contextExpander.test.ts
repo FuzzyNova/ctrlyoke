@@ -674,6 +674,53 @@ suite("ContextExpander.expandContextSplit", () => {
       );
     });
 
+    test("skips line zero, reversed, and past-the-end ranges", async () => {
+      const root = freshWorkspace();
+      fs.writeFileSync(path.join(root, "range.ts"), "one\ntwo\nthree\nfour");
+
+      for (const reference of [
+        "#selection:range.ts:0-2",
+        "#selection:range.ts:4-2",
+        "#selection:range.ts:5-6",
+        "#sym:range.ts:item:0-2",
+        "#sym:range.ts:item:4-2",
+        "#sym:range.ts:item:5-6",
+      ]) {
+        const result = await new ContextExpander({
+          workspaceRoot: root,
+        }).expandContextSplit(reference);
+
+        assert.deepStrictEqual(result.directFileRefs, [], reference);
+        assert.strictEqual(result.excerptBlocks, "", reference);
+        assert.strictEqual(result.skippedReferences.length, 1, reference);
+        assert.match(
+          result.skippedReferences[0].reason,
+          /Invalid line range/,
+          reference
+        );
+      }
+    });
+
+    test("valid ranges still attach exactly the requested lines", async () => {
+      const root = freshWorkspace();
+      fs.writeFileSync(path.join(root, "range.ts"), "one\ntwo\nthree\nfour");
+
+      for (const reference of [
+        "#selection:range.ts:2-3",
+        "#sym:range.ts:item:2-3",
+      ]) {
+        const result = await new ContextExpander({
+          workspaceRoot: root,
+        }).expandContextSplit(reference);
+
+        assert.strictEqual(result.skippedReferences.length, 0, reference);
+        assert.ok(result.excerptBlocks.includes("    2→two"), reference);
+        assert.ok(result.excerptBlocks.includes("    3→three"), reference);
+        assert.ok(!result.excerptBlocks.includes("    1→one"), reference);
+        assert.ok(!result.excerptBlocks.includes("    4→four"), reference);
+      }
+    });
+
     test("excerpt does not include line 1 reference when range starts at line 5", async () => {
       const root = freshWorkspace();
       const filePath = path.join(root, "offset.ts");
@@ -1277,11 +1324,11 @@ suite("ContextExpander.expandContextSplit", () => {
             trustedExternalRoots: [freshTemporaryRoot("inherited")],
           },
         }),
-        set: async () => {},
+        set: async () => ({}),
       });
       configService.setWorkspaceBackend({
         getAll: () => ({}),
-        set: async () => {},
+        set: async () => ({}),
       });
 
       try {
@@ -1325,11 +1372,11 @@ suite("ContextExpander.expandContextSplit", () => {
       } finally {
         configService.setUserBackend({
           getAll: () => ({}),
-          set: async () => {},
+          set: async () => ({}),
         });
         configService.setWorkspaceBackend({
           getAll: () => ({}),
-          set: async () => {},
+          set: async () => ({}),
         });
       }
     });
@@ -1714,6 +1761,25 @@ suite("ContextExpander.sanitizeReferences", () => {
     const text = "See #selection:a.ts:1-2 and #sym:a.ts:foo:1-2 here.";
 
     assert.strictEqual(await expander.sanitizeReferences(text), text);
+  });
+
+  test("never rewrites #selection or #sym ranges into full-file @ refs", async () => {
+    const root = freshWorkspace();
+    fs.writeFileSync(path.join(root, "a.ts"), "line1\nline2\n");
+
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: true,
+    });
+    const text = "#selection:a.ts:0-2 and #sym:a.ts:foo:0-1";
+    const result = await expander.sanitizeReferences(text);
+
+    assert.ok(result.includes("#selection:"));
+    assert.ok(result.includes("#sym:"));
+    assert.ok(!result.includes("@a.ts"));
+    assert.strictEqual(parseSelectionReferences(result).length, 1);
+    assert.strictEqual(parseSymbolReferences(result).length, 1);
   });
 
   test("applies a custom formatFileRef (e.g. Codex dropping the @) even in single-root", async () => {

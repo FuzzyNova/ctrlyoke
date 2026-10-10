@@ -9,7 +9,7 @@ ctrlyoke status [--workflow <key-or-name>] [--run <ref>] [--cwd <path>] [--json]
 ctrlyoke rerun --workflow <key-or-name> [--from <ref|runId>] [options]
 ctrlyoke append [file] --workflow <key-or-name> --run <ref|runId> [--prompt <text>] [options]
 ctrlyoke continue --workflow <key-or-name> --run <ref|runId> [options]
-ctrlyoke validate <file> [--harness <id> | --all-installed-harnesses] [--strict <policy>] [--json]
+ctrlyoke validate <file> [--harness <id> | --all-installed-harnesses] [--strict [policy]] [--json]
 ctrlyoke commit [--model <model>] [--hint <text>] [--print-only] [--all] [--yes] [--cwd <path>]
 ctrlyoke about [--json]
 ctrlyoke trust-external-roots [--yes] [--cwd <path>]
@@ -96,8 +96,8 @@ ctrlyoke status --workflow release
 ctrlyoke status --workflow release --run run-2026-10-03T12-00-00-000Z --json
 ```
 
-Text output shows the workflow, run, execution state, current and total steps,
-harness, model, start time, the runner lock's PID and heartbeat age, and
+Text output shows the workflow, run, execution state, current and total steps
+(or `Pass N` while the final step runs), harness, model, start time, the runner lock's PID and heartbeat age, and
 liveness. It says `No workflows are executing.` when nothing is, and prints the
 same notes and omitted-row count as the JSON. JSON returns the same workflow
 fields as MCP `global_status`, plus a `liveness` object for each row:
@@ -140,7 +140,7 @@ Pass either a file or `--prompt`, not both.
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-H, --harness <harness>`    | Harness override: `antigravity-cli`, `claude-cli`, `codex-cli`, `copilot-cli`, `opencode-cli`, or `qwen-cli`. Default: the workflow's `harness`, then the `defaults.harness` setting, then the first installed harness in alphabetical order. Workflow level; add `--force harness` to apply to every step |
 | `-m, --model <model>`        | Model override at workflow level; step-level `model` values still take precedence. Add `--force model` to apply to every step                                                                                                                                                                              |
-| `--force <flags>`            | Repeatable, comma-separated flag names (or `all`); apply the named passed flags to every step                                                                                                                                                                                                              |
+| `--force <flags>`            | Repeatable, comma-separated flag names (including `script-timeout`) or `all`; apply the named passed flags to every step                                                                                                                                                                                   |
 | `-p, --prompt <text>`        | Run an inline prompt instead of a file                                                                                                                                                                                                                                                                     |
 | `--var <key=value>`          | Set a workflow variable (repeatable). CLI values override the workflow's own `vars`                                                                                                                                                                                                                        |
 | `--session-id <id>`          | Resume this harness session by default (implies `--resume-session`); workflow level, add `--force session-id` to apply to every step                                                                                                                                                                       |
@@ -154,7 +154,7 @@ Pass either a file or `--prompt`, not both.
 | `--deny-tool <pattern>`      | Set workflow denied tool patterns (repeatable); add `--force deny-tool` to apply to every step                                                                                                                                                                                                             |
 | `-d, --cwd <path>`           | Workspace directory (default: current directory)                                                                                                                                                                                                                                                           |
 | `-t, --timeout <seconds>`    | Override the `execution.maxPromptTimeoutSec` setting for this run (`-1` = unlimited)                                                                                                                                                                                                                       |
-| `--script-timeout <seconds>` | Override the `execution.scriptTimeoutSec` setting with a positive whole number of seconds; a condition's own `timeoutSec` still wins                                                                                                                                                                       |
+| `--script-timeout <seconds>` | Override the `execution.scriptTimeoutSec` setting with a positive whole number of seconds; add `--force script-timeout` to override step and condition `timeoutSec` values                                                                                                                                 |
 | `--json`                     | Print one JSON result object on stdout when the run ends                                                                                                                                                                                                                                                   |
 | `-q, --quiet`                | Suppress all output except errors                                                                                                                                                                                                                                                                          |
 | `--verbose`                  | Print debug information (execution mode, workspace root, harness, model, vars)                                                                                                                                                                                                                             |

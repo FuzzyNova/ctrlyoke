@@ -9,6 +9,8 @@ import type {
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  WORKFLOW_LOCK_LIVENESS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -16,6 +18,7 @@ import {
   stripLegacyWorkingFileLineageMetadata,
   getLineageLastModifiedAt,
 } from "../../utils/WorkingFileMetadata";
+import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 export const MAX_GLOBAL_STATUS_RESULTS = 100;
@@ -33,8 +36,10 @@ export interface GlobalWorkflowStatusRow {
   executionState: ExecutionState;
   harness: string | null;
   model: string | null;
-  /** 1-based position of the step being executed. */
-  currentStep: number;
+  /** 1-based position of the step being executed, or null while finalStep runs. */
+  currentStep: number | null;
+  /** 1-based final-step pass when finalStep is running; otherwise null. */
+  finalStepPass: number | null;
   totalSteps: number;
   completedSteps: number;
   startedAt: number | null;
@@ -124,6 +129,27 @@ export class GlobalWorkflowStatusService {
               workflowKey
             );
             runRef = descriptor.latestRunRef ?? null;
+            const lockInspection = await readWorkflowLockInspection(
+              this.workspaceRoot,
+              workflowKey
+            );
+            if (
+              lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ABSENT &&
+              lockInspection.lock.workflowKey === workflowKey
+            ) {
+              try {
+                WorkflowPaths.assertValidRunRef(lockInspection.lock.runRef);
+                const lockedRunPath = WorkflowPaths.runFilePath(
+                  this.workspaceRoot,
+                  workflowKey,
+                  lockInspection.lock.runRef
+                );
+                await fs.access(lockedRunPath);
+                runRef = lockInspection.lock.runRef;
+              } catch {
+                // An invalid or orphaned lock must not hide the latest run.
+              }
+            }
             filePath = runRef
               ? WorkflowPaths.runFilePath(
                   this.workspaceRoot,
@@ -165,6 +191,9 @@ export class GlobalWorkflowStatusService {
           const completedCount = allSteps.filter(
             (step) => step._runtime?.completedAt !== undefined
           ).length;
+          const finalStepRunning =
+            runtime.finalStep?.phase === FINAL_STEP_PHASES.FINAL_STEP;
+          const totalSteps = allSteps.length;
           const row: GlobalWorkflowStatusRow = {
             workflowKey,
             runRef,
@@ -172,8 +201,13 @@ export class GlobalWorkflowStatusService {
             executionState: runtime.executionState,
             harness: data.harness ?? null,
             model: data.model ?? null,
-            currentStep: runtime.currentIndex + 1,
-            totalSteps: allSteps.length,
+            currentStep: finalStepRunning
+              ? null
+              : Math.min(runtime.currentIndex + 1, totalSteps),
+            finalStepPass: finalStepRunning
+              ? (runtime.finalStep?.loopCount ?? 0) + 1
+              : null,
+            totalSteps,
             completedSteps: completedCount,
             startedAt: data.startedAt ?? null,
             lastModifiedAt: await getLineageLastModifiedAt(

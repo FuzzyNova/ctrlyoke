@@ -30,7 +30,7 @@ Temporary config files live under `.ctrlyoke/temp/`. ctrlyoke pre-approves the s
 
 ## Using it from an external MCP client
 
-The server serves exactly one workflow run, identified only by `CTRLYOKE_WORKING_FILE`. Started without it — for example from your own MCP client config — the workflow tools refuse to run. Only `global_status` and the coordination tools (`post_note`, `read_notes`, `claim_paths`, `release_paths`) work, and on the coordination board the client appears as an unattested external participant, labeled `unattested external session` (allowed unless `coordination.allowExternalParticipants` is `false`; `CTRLYOKE_PARTICIPANT_LABEL` sets its display name).
+The server serves exactly one workflow run, identified only by `CTRLYOKE_WORKING_FILE`. Started without it — for example from your own MCP client config — the workflow tools refuse to run. Only `global_status`, `submit_commit_message`, and the coordination tools (`post_note`, `read_notes`, `claim_paths`, `release_paths`) work, and on the coordination board the client appears as an unattested external participant, labeled `unattested external session` (allowed unless `coordination.allowExternalParticipants` is `false`; `CTRLYOKE_PARTICIPANT_LABEL` sets its display name).
 
 To drive ctrlyoke from outside a workflow — start, append to, or continue runs — use the [`ctrlyoke` CLI](/cli/ctrlyoke) instead (`ctrlyoke run`, `ctrlyoke append`, `ctrlyoke step`).
 

@@ -109,7 +109,10 @@ import {
   type SecretGrantsTrustStore,
 } from "../config/SecretGrantsTrustStore";
 import { PromptFileResolver } from "./PromptFileResolver";
-import { resolvePromptTextWithVariables } from "./PromptTextResolver";
+import {
+  resolvePromptFileTextWithVariables,
+  resolvePromptTextWithVariables,
+} from "./PromptTextResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -2006,12 +2009,16 @@ export class WorkflowExecutor {
         preResolvedProperties.secrets,
         getProcessMapSecretNames(preResolvedProperties)
       );
-      await this.registerResolvedSecrets(preSecretNames, context, target);
+      const resolvedPreSecretNames = await this.registerResolvedSecrets(
+        preSecretNames,
+        context,
+        target
+      );
       await this.promptQueue.persistRuntimeMetadata(
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? target.stepIndex
           : this.promptQueue.getState().steps.length,
-        { secrets: preSecretNames }
+        { secrets: resolvedPreSecretNames }
       );
 
       if (
@@ -2046,7 +2053,7 @@ export class WorkflowExecutor {
             ConfigurationUtils.secondsToMs(resolvedPreCondition.timeoutSec) ??
             ConfigurationUtils.getScriptTimeoutMs(),
           vars: workflowFileForPre.vars,
-          secretNames: preSecretNames,
+          secretNames: resolvedPreSecretNames,
           emitStatus: false,
           actionForErrored: this.getErrorConditionAction(preErrorBehavior),
         });
@@ -2182,16 +2189,16 @@ export class WorkflowExecutor {
         resolvedProperties.secrets,
         getProcessMapSecretNames(resolvedProperties)
       );
-      const resolvedSecretValues = await this.resolveGrantedSecretValues(
+      const resolvedSecrets = await this.resolveGrantedSecretValues(
         secretNames,
         context,
         target,
         mcpNormalization.trustedUserScopeSecretNames
       );
-      context.secretRedactor?.addResolvedValues(resolvedSecretValues);
+      context.secretRedactor?.addResolvedValues(resolvedSecrets.values);
       resolvedProperties = {
         ...resolvedProperties,
-        secrets: secretNames,
+        secrets: resolvedSecrets.resolvedNames,
         hooks:
           resolvedProperties.hooks === null
             ? null
@@ -2199,7 +2206,7 @@ export class WorkflowExecutor {
                 ...hook,
                 env: expandSecretInterpolations(
                   hook.env,
-                  resolvedSecretValues,
+                  resolvedSecrets.values,
                   secretNames
                 ),
               })),
@@ -2314,7 +2321,7 @@ export class WorkflowExecutor {
                 },
               }
             : {}),
-          secretEnvironment: resolvedSecretValues,
+          secretEnvironment: resolvedSecrets.values,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             string | undefined,
         },
@@ -2563,11 +2570,17 @@ export class WorkflowExecutor {
       step
     );
     const runIndex = this.getRunIndexForTarget(context, target);
-    const secretNames = getDeclaredSecretGrants(
+    const declaredSecretNames = getDeclaredSecretGrants(
       step,
       this.promptQueue.getWorkflowFile()
     );
-    await this.registerResolvedSecrets(secretNames, context, target);
+    const resolvedSecrets = await this.resolveGrantedSecretValues(
+      declaredSecretNames,
+      context,
+      target
+    );
+    context.secretRedactor?.addResolvedValues(resolvedSecrets.values);
+    const secretNames = resolvedSecrets.resolvedNames;
     Log.info(`[WorkflowExecutor] Executing script step: ${stepLabel}`);
 
     // Mark step as running in the dashboard
@@ -3467,16 +3480,17 @@ export class WorkflowExecutor {
     names: readonly string[],
     context: WorkflowExecutionContext,
     target: ExecutionTarget
-  ): Promise<void> {
+  ): Promise<string[]> {
     if (names.length === 0) {
-      return;
+      return [];
     }
-    const values = await this.resolveGrantedSecretValues(
+    const resolved = await this.resolveGrantedSecretValues(
       names,
       context,
       target
     );
-    context.secretRedactor?.addResolvedValues(values);
+    context.secretRedactor?.addResolvedValues(resolved.values);
+    return resolved.resolvedNames;
   }
 
   /**
@@ -3503,9 +3517,9 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     trustedNames: readonly string[] = []
-  ): Promise<Record<string, string>> {
+  ): Promise<{ values: Record<string, string>; resolvedNames: string[] }> {
     if (names.length === 0) {
-      return {};
+      return { values: {}, resolvedNames: [] };
     }
     const workspaceRoot = this.platform.getWorkspaceRoot();
     const resolutionContext = {
@@ -3552,7 +3566,10 @@ export class WorkflowExecutor {
         STATUS_MESSAGE_SEVERITY.WARNING
       );
     }
-    return resolveSecretEnvironment(resolvable, resolutionContext);
+    return {
+      values: await resolveSecretEnvironment(resolvable, resolutionContext),
+      resolvedNames: resolvable,
+    };
   }
 
   /**
@@ -4423,7 +4440,8 @@ export class WorkflowExecutor {
     return async (
       retryPromptStep: PromptStep,
       currentIndex: number,
-      retryAttemptIndex: number
+      retryAttemptIndex: number,
+      promptAlreadyResolved = false
     ): Promise<{ responseText: string; attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
@@ -4441,11 +4459,13 @@ export class WorkflowExecutor {
       }
       const effectiveRetryPrompt: PromptStep = {
         ...retryPromptStep,
-        prompt: await this.resolveEffectivePrompt(
-          retryPromptStep.prompt,
-          context,
-          workflowFile.vars
-        ),
+        prompt: promptAlreadyResolved
+          ? retryPromptStep.prompt
+          : await this.resolveRetryPromptFile(
+              retryPromptStep.prompt,
+              context,
+              workflowFile.vars
+            ),
       };
       if (!effectiveRetryPrompt.prompt.trim()) {
         throw new Error(
@@ -4483,16 +4503,16 @@ export class WorkflowExecutor {
         resolvedProperties.secrets,
         getProcessMapSecretNames(resolvedProperties)
       );
-      const retrySecretValues = await this.resolveGrantedSecretValues(
+      const retrySecrets = await this.resolveGrantedSecretValues(
         retrySecretNames,
         context,
         target,
         mcpNormalization.trustedUserScopeSecretNames
       );
-      context.secretRedactor?.addResolvedValues(retrySecretValues);
+      context.secretRedactor?.addResolvedValues(retrySecrets.values);
       resolvedProperties = {
         ...resolvedProperties,
-        secrets: retrySecretNames,
+        secrets: retrySecrets.resolvedNames,
         hooks:
           resolvedProperties.hooks === null
             ? null
@@ -4500,7 +4520,7 @@ export class WorkflowExecutor {
                 ...hook,
                 env: expandSecretInterpolations(
                   hook.env,
-                  retrySecretValues,
+                  retrySecrets.values,
                   retrySecretNames
                 ),
               })),
@@ -4577,7 +4597,7 @@ export class WorkflowExecutor {
                   ),
                 }
               : {}),
-            secretEnvironment: retrySecretValues,
+            secretEnvironment: retrySecrets.values,
             finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
               string | undefined,
           },
@@ -4805,6 +4825,21 @@ export class WorkflowExecutor {
     const { promptFileResolver, sourceDefinitionPath } =
       this.getPromptFileResolutionOptions(context);
     return resolvePromptTextWithVariables(
+      promptText,
+      variables ?? {},
+      promptFileResolver,
+      sourceDefinitionPath
+    );
+  }
+
+  private async resolveRetryPromptFile(
+    promptText: string,
+    context: WorkflowExecutionContext,
+    variables: Record<string, string> | undefined
+  ): Promise<string> {
+    const { promptFileResolver, sourceDefinitionPath } =
+      this.getPromptFileResolutionOptions(context);
+    return resolvePromptFileTextWithVariables(
       promptText,
       variables ?? {},
       promptFileResolver,

@@ -32,7 +32,7 @@ export function parseSecretReferences(text: string): SecretReference[] {
   const maskedText = maskCodeRanges(text);
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}!([A-Z0-9_]*)${NOT_BEFORE_BOUNDARY}`,
-    "g"
+    "gu"
   );
 
   let match: RegExpExecArray | null;

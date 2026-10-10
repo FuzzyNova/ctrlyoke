@@ -1,8 +1,8 @@
 /**
  * Single source of truth for the prompt-reference word boundary.
  *
- * Every ctrlyoke reference trigger (`@`, `#`, `~`, `$`, `!`) is only a trigger
- * at a word start. "Word" here means *filename*, not identifier: the boundary
+ * Every ctrlyoke reference trigger (`@`, `#`, `~`, `$`, `!`, `/`) is only a
+ * trigger at a word start. "Word" here means *filename*, not identifier: the boundary
  * class below is the set of characters that are legal inside a filename, so
  * `(@file.ts` and `"@file.ts` still match (punctuation is not a filename
  * character) while an email address (`nathan@gmail.com`) or a filename
@@ -18,11 +18,12 @@
  */
 
 /** Characters that are legal inside a filename, as a character-class body. */
-export const REFERENCE_BOUNDARY_CHARS = "A-Za-z0-9_+=@#$%^&!~-";
+export const REFERENCE_BOUNDARY_CHARS = "\\p{L}\\p{N}_+=@#$%^&!~-";
 
 /** Matches exactly one boundary character. */
 export const REFERENCE_BOUNDARY_CHAR_RE = new RegExp(
-  `[${REFERENCE_BOUNDARY_CHARS}]`
+  `[${REFERENCE_BOUNDARY_CHARS}]`,
+  "u"
 );
 
 /**
@@ -33,6 +34,23 @@ export const NOT_AFTER_BOUNDARY = `(?<![${REFERENCE_BOUNDARY_CHARS}])`;
 
 /** Lookahead asserting a reference is not followed by a filename character. */
 export const NOT_BEFORE_BOUNDARY = `(?![${REFERENCE_BOUNDARY_CHARS}])`;
+
+/** Whether the Unicode code point immediately before `index` is a boundary. */
+export function isReferenceBoundaryBefore(
+  text: string,
+  index: number
+): boolean {
+  if (index <= 0) return false;
+  const lastCodeUnit = text.charCodeAt(index - 1);
+  const isLowSurrogate = lastCodeUnit >= 0xdc00 && lastCodeUnit <= 0xdfff;
+  const codePointIndex = isLowSurrogate ? index - 2 : index - 1;
+  if (codePointIndex < 0) return false;
+  const codePoint = text.codePointAt(codePointIndex);
+  return (
+    codePoint !== undefined &&
+    REFERENCE_BOUNDARY_CHAR_RE.test(String.fromCodePoint(codePoint))
+  );
+}
 
 /**
  * Find the rightmost occurrence of `triggerChar` in `text` that starts a word.
@@ -51,7 +69,7 @@ export function findWordStartTriggerIndex(
   triggerChar: string
 ): number {
   let index = text.lastIndexOf(triggerChar);
-  while (index > 0 && REFERENCE_BOUNDARY_CHAR_RE.test(text[index - 1])) {
+  while (isReferenceBoundaryBefore(text, index)) {
     index = text.lastIndexOf(triggerChar, index - 1);
   }
   return index;

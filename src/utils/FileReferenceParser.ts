@@ -78,7 +78,11 @@ export function findCodeRanges(
   const lines: Array<{ text: string; start: number }> = [];
   let lineStart = 0;
   for (const line of text.split("\n")) {
-    lines.push({ text: line, start: lineStart });
+    // `split("\n")` leaves the CR from CRLF line endings on each line. Keep
+    // offsets based on the original line, but exclude that terminator from
+    // Markdown fence detection (including the opener's end-anchored match).
+    const lineText = line.endsWith("\r") ? line.slice(0, -1) : line;
+    lines.push({ text: lineText, start: lineStart });
     lineStart += line.length + 1;
   }
 
@@ -707,7 +711,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // src/myimage@512x512.png parses as one reference, not split at the inner @.
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH}))`,
-    "g"
+    "gu"
   );
   let match;
 
@@ -777,7 +781,7 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
   // characters immediately before #, not just alphanumerics.
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}#selection:(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
-    "g"
+    "gu"
   );
   let match;
 
@@ -831,7 +835,7 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
   // characters immediately before #, not just alphanumerics.
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}#sym(?:\\.([a-z-]+))?:(?:"([^"]+)"|([^\\s:"]+)):(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
-    "g"
+    "gu"
   );
   let match;
 

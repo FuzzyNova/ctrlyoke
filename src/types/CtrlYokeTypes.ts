@@ -1270,6 +1270,8 @@ export interface WorkflowSummary {
   worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
   /** Present when the workflow definition has an enabled final step. */
   hasFinalStep?: boolean;
+  /** Current execution phase of the final step, when one is configured. */
+  finalStepPhase?: FinalStepPhase;
   /** Set only while the final step is the attempt actually executing right now. */
   finalStepRunning?: boolean;
   /** Run-navigation metadata for this lineage's list row. Not yet populated for running workflows. */
@@ -1284,9 +1286,13 @@ export interface WorkflowSummary {
 export function deriveWorkflowFinalStepSummary(
   finalStep: PromptFile["finalStep"],
   finalStepRuntime: FinalStepRuntimeState | undefined
-): Pick<WorkflowSummary, "hasFinalStep" | "finalStepRunning"> {
+): Pick<
+  WorkflowSummary,
+  "hasFinalStep" | "finalStepPhase" | "finalStepRunning"
+> {
   return {
     hasFinalStep: !!finalStep && finalStep.enabled !== false,
+    ...(finalStepRuntime ? { finalStepPhase: finalStepRuntime.phase } : {}),
     finalStepRunning:
       finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepRuntime.status === STEP_STATUS.RUNNING,

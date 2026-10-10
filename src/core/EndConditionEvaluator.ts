@@ -48,6 +48,12 @@ import {
   buildSecretProcessEnvironment,
   resolveSecretEnvironment,
 } from "../utils/SecretResolver";
+import {
+  escapeCmdArgument,
+  escapePosixArgument,
+  escapePowerShellArgument,
+} from "../types/CommandDisplayFormatter";
+import { buildCmdExeVerbatimArgs } from "./harness/shared/WindowsCmdEscaping";
 
 const pythonExecutables = new Map<string, string>();
 const powerShellExecutables = new Map<string, string>();
@@ -234,7 +240,10 @@ export class EndConditionEvaluator {
       ) {
         // A plain file command can use direct argv dispatch. If its arguments
         // include shell syntax, the command below must retain shell semantics.
-        const fileCommand = this.getScriptCommand(resolvedScriptPath);
+        const fileCommand = this.getScriptCommand(
+          resolvedScriptPath,
+          additionalArgs
+        );
         if (!fileCommand) {
           return {
             passed: false,
@@ -247,8 +256,11 @@ export class EndConditionEvaluator {
             duration: Date.now() - startTime,
           };
         }
-        // Append additional arguments from the script command
-        fileCommand.args = [...fileCommand.args, ...additionalArgs];
+        // CMD owns its complete verbatim command payload. Other interpreters
+        // accept ordinary argv entries and can receive the extra args here.
+        if (!fileCommand.windowsVerbatimArguments) {
+          fileCommand.args = [...fileCommand.args, ...additionalArgs];
+        }
         command = fileCommand;
       } else {
         // File not found - treat as direct shell command. Run the untouched
@@ -266,12 +278,23 @@ export class EndConditionEvaluator {
         Log.info(
           `[EndConditionEvaluator] Using shell for command: ${condition.script}`
         );
-        const shellInvocation = resolveShellInvocation(
+        const initialShellInvocation = resolveShellInvocation(
           condition.script,
           condition.shell
         );
+        const shellScript = resolvedScriptPath
+          ? this.buildResolvedScriptShellCommand(
+              condition.script,
+              resolvedScriptPath,
+              initialShellInvocation.shellKind
+            )
+          : condition.script;
+        const shellInvocation = resolveShellInvocation(
+          shellScript,
+          condition.shell
+        );
         const shellError = getShellInvocationError(
-          condition.script,
+          shellScript,
           shellInvocation.shellKind
         );
         if (shellError) {
@@ -628,8 +651,13 @@ export class EndConditionEvaluator {
    * Get command and arguments for script execution
    */
   protected getScriptCommand(
-    scriptPath: string
-  ): { executable: string; args: string[] } | null {
+    scriptPath: string,
+    additionalArgs: string[] = []
+  ): {
+    executable: string;
+    args: string[];
+    windowsVerbatimArguments?: boolean;
+  } | null {
     const ext = path.extname(scriptPath).toLowerCase();
 
     const interpreter = this.isScriptFileExtension(ext)
@@ -674,7 +702,8 @@ export class EndConditionEvaluator {
       }),
       [SCRIPT_FILE_INTERPRETER_KINDS.CMD]: () => ({
         executable: "cmd",
-        args: ["/c", scriptPath],
+        args: buildCmdExeVerbatimArgs(scriptPath, additionalArgs),
+        windowsVerbatimArguments: true,
       }),
       [SCRIPT_FILE_INTERPRETER_KINDS.POWERSHELL]: () => ({
         executable: this.resolvePowerShellExecutable(),
@@ -683,6 +712,69 @@ export class EndConditionEvaluator {
     };
 
     return commandByInterpreter[interpreter]();
+  }
+
+  /**
+   * Replace a resolved file token with its extension-selected interpreter
+   * command while leaving the original shell expression after that token
+   * untouched (for example, `&& echo SECOND`).
+   */
+  private buildResolvedScriptShellCommand(
+    originalScript: string,
+    resolvedScriptPath: string,
+    shellKind: ReturnType<typeof resolveShellInvocation>["shellKind"]
+  ): string {
+    const fileCommand = this.getScriptCommand(resolvedScriptPath);
+    if (!fileCommand) {
+      throw new Error(
+        `Unsupported script type: ${path.extname(resolvedScriptPath)}`
+      );
+    }
+
+    // The arguments stay in the original text after the file token, where the
+    // shell expands them; adding them here as well would pass them twice.
+    const invocationArgs = fileCommand.args;
+    const quote =
+      shellKind === SHELL_KINDS.CMD
+        ? (value: string) => escapeCmdArgument(value, false)
+        : shellKind === SHELL_KINDS.PWSH || shellKind === SHELL_KINDS.POWERSHELL
+          ? escapePowerShellArgument
+          : escapePosixArgument;
+    const renderedInvocation = [fileCommand.executable, ...invocationArgs]
+      .map(quote)
+      .join(" ");
+    let callableInvocation: string;
+    if (fileCommand.windowsVerbatimArguments && shellKind === SHELL_KINDS.CMD) {
+      callableInvocation = `call "${resolvedScriptPath}"`;
+    } else if (
+      shellKind === SHELL_KINDS.PWSH ||
+      shellKind === SHELL_KINDS.POWERSHELL
+    ) {
+      callableInvocation = `& ${renderedInvocation}`;
+    } else {
+      callableInvocation = renderedInvocation;
+    }
+
+    const tokenStart = originalScript.search(/\S/);
+    if (tokenStart < 0) return callableInvocation;
+    let tokenEnd = tokenStart;
+    let quoteChar = "";
+    while (tokenEnd < originalScript.length) {
+      const char = originalScript[tokenEnd];
+      if (quoteChar) {
+        if (char === quoteChar) quoteChar = "";
+      } else if (char === "'" || char === '"') {
+        quoteChar = char;
+      } else if (/\s/.test(char)) {
+        break;
+      }
+      tokenEnd++;
+    }
+    return (
+      originalScript.slice(0, tokenStart) +
+      callableInvocation +
+      originalScript.slice(tokenEnd)
+    );
   }
 
   /**

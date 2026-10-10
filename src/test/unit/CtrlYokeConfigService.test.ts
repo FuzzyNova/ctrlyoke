@@ -20,7 +20,7 @@ import { FakeWorkspaceSettingsTrust } from "../helpers/fakeWorkspaceSettingsTrus
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
     getAll: () => data,
-    set: async (_path: string, _value: unknown) => {},
+    set: async (_path: string, _value: unknown) => data,
   };
 }
 
@@ -242,7 +242,7 @@ suite("CtrlYokeConfigService", () => {
     service.setUserBackend(makeBackend({}));
     service.setWorkspaceBackend({
       getAll: () => ({ defaults: { toolPermissions: null } }),
-      set: async () => {},
+      set: async () => ({}),
     });
     assert.strictEqual(service.get("defaults").toolPermissions, null);
   });
@@ -268,7 +268,7 @@ suite("CtrlYokeConfigService", () => {
           diagnostics: "invalid",
           defaults: { toolPermissions: [] },
         }) as unknown as PartialCtrlYokeSettings,
-      set: async () => {},
+      set: async () => ({}),
     });
 
     assert.strictEqual(service.get("diagnostics").verboseLogging, false);
@@ -447,6 +447,7 @@ suite("CtrlYokeConfigService", () => {
       getAll: () => ({}),
       set: async () => {
         wrote = true;
+        return {};
       },
     });
 
@@ -463,6 +464,7 @@ suite("CtrlYokeConfigService", () => {
       getAll: () => ({}),
       set: async () => {
         wrote = true;
+        return {};
       },
     });
 
@@ -479,6 +481,7 @@ suite("CtrlYokeConfigService", () => {
       getAll: () => ({}),
       set: async () => {
         wrote = true;
+        return {};
       },
     });
 
@@ -514,7 +517,7 @@ suite("CtrlYokeConfigService", () => {
     service.setWorkspaceBackend({
       filePath: "C:\\workspace\\.ctrlyoke\\settings.json",
       getAll: () => ({ storage: { runHistoryLocation: "workspace" } }),
-      set: async () => {},
+      set: async () => ({}),
     });
 
     assert.strictEqual(service.get("storage").runHistoryLocation, "user");
@@ -557,7 +560,7 @@ suite("CtrlYokeConfigService", () => {
           providerRefreshEnabled: true,
         },
       }),
-      set: async () => {},
+      set: async () => ({}),
     });
 
     assert.strictEqual(
@@ -741,6 +744,37 @@ suite("CtrlYokeConfigService workspace sensitive settings", () => {
       ["./mine.sh"]
     );
   });
+
+  test("does not approve an external sensitive value during an unrelated workspace write", async () => {
+    const settingsFile = path.join(tempDir, ".ctrlyoke", "settings.json");
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    fs.writeFileSync(
+      settingsFile,
+      JSON.stringify({ ui: { stepColorMode: "none" } })
+    );
+    service.setWorkspaceBackend(new FileConfigBackend(settingsFile, tempDir));
+
+    // Prime the backend cache before another process changes the file.
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+    fs.writeFileSync(
+      settingsFile,
+      JSON.stringify({
+        ui: { stepColorMode: "none" },
+        terminal: { shellExecutable: "C:/evil/payload.exe" },
+      })
+    );
+
+    await service.set("ui.stepColorMode", "harness", "workspace");
+
+    const shellRequest = service
+      .getWorkspaceSensitiveSettingStates()
+      .find(
+        (state) => state.request.settingPath === "terminal.shellExecutable"
+      );
+    assert.ok(shellRequest);
+    assert.strictEqual(shellRequest.decision, undefined);
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -840,7 +874,7 @@ suite("FileConfigBackend", () => {
           diagnostics: null,
           defaults: { toolPermissions: 7 },
         }) as unknown as PartialCtrlYokeSettings,
-      set: async () => {},
+      set: async () => ({}),
     });
 
     assert.strictEqual(service.get("diagnostics").verboseLogging, false);

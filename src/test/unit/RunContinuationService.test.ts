@@ -407,6 +407,61 @@ suite("RunContinuationService topology append transaction", () => {
     assert.ok(appended.workingFile.steps?.[4]._runtime?.stepId);
   });
 
+  test("rejects sibling references in appended groups but permits earlier steps", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-sibling-append-")
+    );
+    await seedRun([{ prompt: "earlier" }, { prompt: "existing" }]);
+    const filePath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const before = await fs.readFile(filePath, "utf8");
+
+    await assert.rejects(
+      RunContinuationService.appendStepsToRun(
+        workspace,
+        workflowKey,
+        runRef,
+        {
+          steps: [
+            { prompt: "member-a" },
+            {
+              prompt: "member-b",
+              resumeSession: true,
+              sessionId: 3,
+              priorContext: [3],
+            },
+          ],
+          parallelGroups: [
+            { id: "sibling-target", startIndex: 0, endIndex: 1, failFast: true },
+          ],
+        },
+        1,
+        100,
+        new WorkflowLineageRepository()
+      ),
+      /Numeric priorContext reference 3 cannot target a sibling in parallel group \(steps 3, 4\); Step 4: Numeric sessionId reference 3 cannot target a sibling in parallel group \(steps 3, 4\)/
+    );
+    assert.strictEqual(await fs.readFile(filePath, "utf8"), before);
+
+    const valid = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      {
+        steps: [
+          { prompt: "valid-member-a" },
+          { prompt: "valid-member-b", priorContext: [1] },
+        ],
+        parallelGroups: [
+          { id: "earlier-target", startIndex: 0, endIndex: 1, failFast: true },
+        ],
+      },
+      1,
+      100,
+      new WorkflowLineageRepository()
+    );
+    assert.strictEqual(valid.workingFile.steps?.length, 4);
+  });
+
   test("enforces capacity using flattened members inside the transaction", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-capacity-")
@@ -586,7 +641,7 @@ suite("RunContinuationService topology append transaction", () => {
     ) as WorkingFile;
     source.steps![3] = {
       ...source.steps![3],
-      sessionId: 5,
+      sessionId: 3,
     } as WorkflowStep;
     source.finalStep = {
       prompt: "final",
@@ -629,7 +684,7 @@ suite("RunContinuationService topology append transaction", () => {
     ]);
     assert.strictEqual(
       (joined.workingFile.steps?.[5] as PromptStep).sessionId,
-      7
+      3
     );
     assert.strictEqual(
       (joined.workingFile.finalStep as PromptStep).sessionId,
@@ -714,6 +769,49 @@ suite("RunContinuationService topology append transaction", () => {
       groupId: joined.joinedParallelGroup.id,
       admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
     });
+  });
+
+  test("rejects a live-group join that references an existing sibling", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-live-sibling-reference-")
+    );
+    await seedRun(
+      [
+        { prompt: "completed", _runtime: { completedAt: 1 } },
+        { prompt: "running", _runtime: { startedAt: 2 } },
+        { prompt: "existing member" },
+      ],
+      [{ id: "active-group", startIndex: 1, endIndex: 2, failFast: true }]
+    );
+    const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    source._runtime = {
+      ...source._runtime,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+      activeParallelGroup: {
+        groupId: "active-group",
+        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+      },
+    };
+    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+    const before = await fs.readFile(runPath, "utf8");
+
+    await assert.rejects(
+      RunContinuationService.appendStepsToActiveParallelGroup(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "joined", resumeSession: true, sessionId: 3 }],
+        1,
+        100,
+        new WorkflowLineageRepository(),
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        6
+      ),
+      /Numeric sessionId reference 3 cannot target a sibling in parallel group \(steps 2, 3, 4\)/
+    );
+    assert.strictEqual(await fs.readFile(runPath, "utf8"), before);
   });
 });
 
@@ -839,6 +937,38 @@ suite("RunContinuationService addressed step mutations", () => {
       ),
       /Definition revision conflict/
     );
+  });
+
+  test("rejects editing a parallel member to target its sibling", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-edit-sibling-reference-")
+    );
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "before group" },
+      { prompt: "member-a" },
+      { prompt: "member-b" },
+    ]);
+    const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    source.parallelGroups = [
+      { id: "edit-group", startIndex: 1, endIndex: 2, failFast: true },
+    ];
+    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+    const before = await fs.readFile(runPath, "utf8");
+
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        2,
+        { updates: { resumeSession: true, sessionId: 2 } },
+        1,
+        new WorkflowLineageRepository()
+      ),
+      /Numeric sessionId reference 2 cannot target a sibling in parallel group \(steps 2, 3\)/
+    );
+    assert.strictEqual(await fs.readFile(runPath, "utf8"), before);
   });
 
   test("refuses to clear internal step properties through clearProperties", async () => {

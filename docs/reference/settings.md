@@ -21,8 +21,9 @@ combines the roots from both files. When you run the `ctrlyoke` CLI, the
 flags you pass override both files for that run.
 
 Some settings are machine-specific and are read only from user scope:
-`worktrees`, `storage`, `statusLine`, and
-`usageTracking.enabled`. ctrlyoke ignores these settings in a workspace file.
+`worktrees`, `storage`, `statusLine`, `usageTracking.enabled`,
+`languageServers.idleShutdownMinutes`, `languageServers.maxRunning`, and
+`languageServers.startOnLaunch`. ctrlyoke ignores these settings in a workspace file.
 
 ### Settings that run programs
 

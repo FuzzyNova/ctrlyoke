@@ -80,6 +80,7 @@ export interface RunViewLoadRollback {
     baseDefinitionRevision: number;
   } | null;
   isViewingHistory: boolean;
+  viewedLineageIsSystemGenerated: boolean;
 }
 
 export interface ToastItem {
@@ -2226,6 +2227,8 @@ export const useUiStore = create<UiState & UiActions>()(
           displayedDescriptorRevision: previous.displayedDescriptorRevision,
           pendingRewind: previous.pendingRewind,
           isViewingHistory: previous.isViewingHistory,
+          viewedLineageIsSystemGenerated:
+            previous.viewedLineageIsSystemGenerated,
         };
         get().setDisplayedRunView(
           address,

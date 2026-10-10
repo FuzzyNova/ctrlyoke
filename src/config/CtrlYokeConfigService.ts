@@ -34,7 +34,8 @@ export interface ResolvedSetting<T> {
 
 export interface ConfigBackend {
   getAll(): PartialCtrlYokeSettings;
-  set<T>(path: string, value: T): Promise<void>;
+  /** Write a setting and return the backend content read before applying it. */
+  set<T>(path: string, value: T): Promise<PartialCtrlYokeSettings>;
   /** Backing file path used in diagnostics when available. */
   readonly filePath?: string;
   readonly isReadOnly?: boolean;
@@ -476,13 +477,11 @@ export class CtrlYokeConfigService {
     if (!backend) {
       throw new Error(`No ${scope} backend configured`);
     }
-    const sensitiveBefore =
-      scope === SETTING_SCOPES.WORKSPACE
-        ? this.getWorkspaceSensitiveSettingRequests()
-        : undefined;
-    await backend.set(path, value);
-    if (sensitiveBefore) {
-      await this.approveNewWorkspaceSensitiveValues(sensitiveBefore);
+    const before = await backend.set(path, value);
+    if (scope === SETTING_SCOPES.WORKSPACE) {
+      const sensitiveBefore =
+        this.getWorkspaceSensitiveSettingRequestsFrom(before);
+      await this.approveNewWorkspaceSensitiveValues(sensitiveBefore, path);
     }
     this.notify();
   }
@@ -495,7 +494,8 @@ export class CtrlYokeConfigService {
    * same setting.
    */
   private async approveNewWorkspaceSensitiveValues(
-    before: readonly WorkspaceSensitiveSettingRequest[]
+    before: readonly WorkspaceSensitiveSettingRequest[],
+    writtenPath: string
   ): Promise<void> {
     const identity = this.getWorkspaceTrustIdentity();
     if (!identity) return;
@@ -504,7 +504,9 @@ export class CtrlYokeConfigService {
     );
     const added = this.getWorkspaceSensitiveSettingRequests().filter(
       (request) =>
-        !previousKeys.has(workspaceSensitiveSettingRequestKey(request))
+        !previousKeys.has(workspaceSensitiveSettingRequestKey(request)) &&
+        (request.settingPath === writtenPath ||
+          request.settingPath.startsWith(`${writtenPath}.`))
     );
     await this.workspaceSettingsTrust.setDecisions(
       identity,
@@ -580,12 +582,20 @@ export class CtrlYokeConfigService {
     if (memo?.workspace === workspace && memo.user === user) {
       return memo.requests;
     }
-    const requests = collectWorkspaceSensitiveSettingRequests(
-      this.getForbiddenFilteredWorkspaceSettings(),
-      user ?? {}
-    );
+    const requests = this.getWorkspaceSensitiveSettingRequestsFrom(workspace);
     this.sensitiveRequestsMemo = { workspace, user, requests };
     return requests;
+  }
+
+  private getWorkspaceSensitiveSettingRequestsFrom(
+    settings: PartialCtrlYokeSettings
+  ): WorkspaceSensitiveSettingRequest[] {
+    return collectWorkspaceSensitiveSettingRequests(
+      filterWorkspaceSettings(
+        settings as Record<string, unknown>
+      ) as PartialCtrlYokeSettings,
+      this.userBackend?.getAll() ?? {}
+    );
   }
 
   /**

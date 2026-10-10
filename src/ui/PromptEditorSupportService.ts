@@ -42,6 +42,8 @@ import {
   buildPromptFileReferenceValue,
 } from "../completions/ContextReferenceBuilder";
 import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
+import { isValidLineRange } from "../utils/LineRangeUtils";
+import { splitLines } from "../utils/TextLines";
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { type FileOpenTarget } from "./ExternalFileTrustPrompt";
 import { confirmExternalFileTrust } from "./ExternalRootsApproval";
@@ -1081,10 +1083,7 @@ export class PromptEditorSupportService {
         !reference.symbolName;
       if (
         missingSymbolName ||
-        !Number.isInteger(startLine) ||
-        !Number.isInteger(endLine) ||
-        startLine < 1 ||
-        endLine < startLine
+        !isValidLineRange(startLine, endLine, Number.MAX_SAFE_INTEGER)
       ) {
         return {
           exists: false,
@@ -1100,8 +1099,8 @@ export class PromptEditorSupportService {
           pathValidation.resolvedPath,
           "utf8"
         );
-        const lineCount = documentText.split(/\r\n|\r|\n/).length;
-        if (endLine > lineCount) {
+        const lineCount = splitLines(documentText).length;
+        if (!isValidLineRange(startLine, endLine, lineCount)) {
           return {
             exists: false,
             message:

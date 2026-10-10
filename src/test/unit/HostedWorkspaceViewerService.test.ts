@@ -2584,6 +2584,47 @@ suite("HostedWorkspaceViewerService", function () {
   });
 
   suite("getGitRefDiff trusted roots", () => {
+    test("does not expose working-tree content reached through an outside link", async () => {
+      const root = createWorkspace();
+      const outside = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.mkdirSync(path.join(root, "linked"));
+      fs.writeFileSync(path.join(root, "linked", "secret.txt"), "tracked\n");
+      commitFile(root, "ordinary.txt", "before\n", "base");
+      runGit(root, "add", "linked/secret.txt");
+      runGit(root, "commit", "-m", "Track linked file");
+
+      fs.writeFileSync(
+        path.join(outside, "secret.txt"),
+        "OUTSIDE-SECRET-CONTENT\n"
+      );
+      fs.rmSync(path.join(root, "linked"), { recursive: true });
+      fs.symlinkSync(
+        outside,
+        path.join(root, "linked"),
+        process.platform === "win32" ? "junction" : "dir"
+      );
+      fs.writeFileSync(path.join(root, "ordinary.txt"), "after\n");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const [page, unified] = await Promise.all([
+        svc.getGitRefDiffPage("~diff"),
+        svc.getGitRefDiff("~diff"),
+      ]);
+
+      assert.ok(
+        !JSON.stringify(page).includes("OUTSIDE-SECRET-CONTENT"),
+        "paged diff must not include content from outside the workspace"
+      );
+      assert.ok(
+        !unified.unifiedDiff?.includes("OUTSIDE-SECRET-CONTENT"),
+        "unified diff must not include content from outside the workspace"
+      );
+      assert.ok(page.entries.some((entry) => entry.path === "ordinary.txt"));
+      assert.ok(unified.unifiedDiff?.includes("+after"));
+    });
+
     test("scopes working tree, staged, stash, and commit diffs for nested roots", async () => {
       const root = createWorkspace();
       runGit(root, "init");

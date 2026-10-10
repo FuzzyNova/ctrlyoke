@@ -2728,7 +2728,9 @@ export class HostedWorkspaceViewerService {
     changeType: DiffChangeType
   ): Promise<Buffer | null | typeof DIFF_SIDE_TOO_LARGE> {
     if (changeType === DIFF_CHANGE_TYPES.DELETED) return null;
-    return this.readWorkingTreeFileDiffBytes(path.join(repoRoot, gitPath));
+    const resolvedPath = this.safeResolve(path.join(repoRoot, gitPath));
+    if (!resolvedPath) return null;
+    return this.readWorkingTreeFileDiffBytes(resolvedPath);
   }
 
   private async readWorkingTreeFileDiffBytes(
@@ -3017,12 +3019,27 @@ export class HostedWorkspaceViewerService {
     const unifiedDiffForNoVisibleRoots = pathspecs?.length === 0;
 
     if (resolution.kind === "workingTree") {
-      const [unifiedDiff, changedFiles] = await Promise.all([
-        unifiedDiffForNoVisibleRoots
-          ? Promise.resolve("")
-          : getWorkingTreeDiff(repoRoot, diffPathspecs),
-        getChangedFilesWithBinaryStatus(repoRoot, resolution.changedFilesArgs),
-      ]);
+      const changedFiles = await getChangedFilesWithBinaryStatus(
+        repoRoot,
+        resolution.changedFilesArgs
+      );
+      const unsafeWorkingTreePathspecs = changedFiles
+        .filter(
+          (file) =>
+            this.diffChangeType(file.status) !== DIFF_CHANGE_TYPES.DELETED &&
+            !this.safeResolve(path.resolve(repoRoot, file.path))
+        )
+        .map((file) => `:(exclude,literal)${toGitPath(file.path)}`);
+      const workingTreePathspecs = [
+        ...(diffPathspecs ?? []),
+        ...unsafeWorkingTreePathspecs,
+      ];
+      const unifiedDiff = unifiedDiffForNoVisibleRoots
+        ? ""
+        : await getWorkingTreeDiff(
+            repoRoot,
+            workingTreePathspecs.length ? workingTreePathspecs : undefined
+          );
       return {
         unifiedDiff,
         nonTextEntries: await this.buildNonTextDiffEntries(

@@ -3,6 +3,7 @@ import { RawToolCallSection } from "./RawToolCallSection";
 import { highlightText } from "@utils/outputFind";
 import {
   globalStatusHarnessLabel,
+  globalStatusProgressLabel,
   globalStatusSearchText,
   type GlobalStatusParams,
   type GlobalStatusResult,
@@ -54,8 +55,9 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
                   )
                 )}{" "}
                 <span className="text-muted-foreground">
-                  · {workflow.workflowKey} · {workflow.currentStep}/
-                  {workflow.totalSteps} · {globalStatusHarnessLabel(workflow)}
+                  · {workflow.workflowKey} ·{" "}
+                  {globalStatusProgressLabel(workflow)} ·{" "}
+                  {globalStatusHarnessLabel(workflow)}
                 </span>
               </span>
             </li>

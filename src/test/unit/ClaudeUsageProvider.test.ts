@@ -17,7 +17,7 @@ import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { HARNESS_USAGE_WINDOW_KINDS } from "../../types/DashboardConstants";
 
 function backend(data: PartialCtrlYokeSettings): ConfigBackend {
-  return { getAll: () => data, set: async () => {} };
+  return { getAll: () => data, set: async () => data };
 }
 
 suite("ClaudeUsageProvider", () => {

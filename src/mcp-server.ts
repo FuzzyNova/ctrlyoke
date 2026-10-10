@@ -1023,7 +1023,9 @@ export class CtrlYokeMCPServer {
     const stepStatuses = deriveStepStatusesFromRuntime(
       allSteps,
       runtime.currentIndex,
-      runtime.executionState
+      runtime.executionState,
+      undefined,
+      runtime.finalStep?.phase
     );
     let schemaWarnings: WorkflowValidationWarning[] = [];
     const workflowDescriptor = await lineageRepository.readDescriptor(
@@ -1583,7 +1585,9 @@ export class CtrlYokeMCPServer {
     const stepStatuses = deriveStepStatusesFromRuntime(
       allSteps,
       runtime.currentIndex,
-      runtime.executionState
+      runtime.executionState,
+      undefined,
+      runtime.finalStep?.phase
     );
 
     const defaultIndices =

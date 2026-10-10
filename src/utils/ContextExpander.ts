@@ -39,6 +39,8 @@ import {
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
+import { splitLines } from "./TextLines";
+import { hasLineRange, isValidLineRange } from "./LineRangeUtils";
 
 const CONTEXT_REFERENCE_BASES = {
   WORKFLOW: "workflow",
@@ -407,7 +409,7 @@ export class ContextExpander {
           if (xml) {
             excerptParts.push(xml);
           }
-        } else if (ref.startLine && ref.endLine) {
+        } else if (hasLineRange(ref)) {
           // Line ranges (selection/symbol) → excerpt with numbered lines
           const xml = await this.buildAttachmentXml(
             ref.path,
@@ -631,7 +633,7 @@ export class ContextExpander {
     const quotedPath = displayPath.includes(" ")
       ? `"${displayPath}"`
       : displayPath;
-    const isExcerptRef = !!ref.symbolName || (!!ref.startLine && !!ref.endLine);
+    const isExcerptRef = !!ref.symbolName || hasLineRange(ref);
 
     // The source-only full-file ref will be copied to the execution checkout
     // by the preparation pass. Preserve its workspace-relative token so the
@@ -841,7 +843,7 @@ export class ContextExpander {
     if (ref.isDirectory) {
       return `directory:${ref.path}`;
     }
-    if (ref.startLine && ref.endLine) {
+    if (hasLineRange(ref)) {
       return `${ref.path}:${ref.startLine}-${ref.endLine}`;
     }
     return ref.path;
@@ -883,13 +885,13 @@ export class ContextExpander {
 
     const resolvedPath = this.resolveReference(ref.path).absolutePath;
 
-    if (ref.symbolName && ref.startLine && ref.endLine) {
+    if (ref.symbolName && hasLineRange(ref)) {
       // Symbol with line range - use path + lines for uniqueness
       // (same symbol can appear in multiple files or multiple times in same file)
       return `symbol:${resolvedPath}:${ref.startLine}-${ref.endLine}`;
     }
 
-    if (ref.startLine && ref.endLine) {
+    if (hasLineRange(ref)) {
       // Line range
       return `file:${resolvedPath}:${ref.startLine}-${ref.endLine}`;
     }
@@ -980,7 +982,8 @@ export class ContextExpander {
         : filePath;
 
     // If no line range, attach entire file
-    if (!startLine || !endLine) {
+    const lineRange = { startLine, endLine };
+    if (!hasLineRange(lineRange)) {
       const attachmentId = `file:${filePath}`;
       const description = symbolName
         ? `Symbol: ${symbolName} in ${displayPath}`
@@ -993,30 +996,37 @@ ${rawContent}
 \`\`\`
 </attachment>`;
     }
+    const rangeStartLine = lineRange.startLine;
+    const rangeEndLine = lineRange.endLine;
 
     // Extract line range (0-indexed slice)
-    const lines = rawContent.split("\n");
-    const slicedLines = lines.slice(startLine - 1, endLine);
+    const lines = splitLines(rawContent);
+    if (!isValidLineRange(rangeStartLine, rangeEndLine, lines.length)) {
+      throw new Error(
+        `Invalid line range ${rangeStartLine}-${rangeEndLine} for file with ${lines.length} lines`
+      );
+    }
+    const slicedLines = lines.slice(rangeStartLine - 1, rangeEndLine);
 
     Log.trace(
-      `[ContextExpander] Sliced ${filePath} lines ${startLine}-${endLine} (${slicedLines.length} lines of ${lines.length})`
+      `[ContextExpander] Sliced ${filePath} lines ${rangeStartLine}-${rangeEndLine} (${slicedLines.length} lines of ${lines.length})`
     );
 
     // Prefix each line with its 1-based source line number: "    N→content"
     // This matches Claude Code's own output format and prevents line-number confusion
     // when harnesses try to edit based on embedded excerpt content.
     const numberedLines = slicedLines.map(
-      (line, i) => `    ${startLine + i}→${line}`
+      (line, i) => `    ${rangeStartLine + i}→${line}`
     );
     const content = numberedLines.join("\n");
 
     // Build attachment with symbol-aware ID and description
     const attachmentId = symbolName
-      ? `symbol:${filePath}:${startLine}-${endLine}`
-      : `selection:${filePath}:${startLine}-${endLine}`;
+      ? `symbol:${filePath}:${rangeStartLine}-${rangeEndLine}`
+      : `selection:${filePath}:${rangeStartLine}-${rangeEndLine}`;
     const description = symbolName
-      ? `Symbol: ${symbolName} in ${displayPath}, lines ${startLine} to ${endLine}`
-      : `Excerpt from ${displayPath}, lines ${startLine} to ${endLine}`;
+      ? `Symbol: ${symbolName} in ${displayPath}, lines ${rangeStartLine} to ${rangeEndLine}`
+      : `Excerpt from ${displayPath}, lines ${rangeStartLine} to ${rangeEndLine}`;
 
     return `<attachment id="${attachmentId}">
 ${description}:

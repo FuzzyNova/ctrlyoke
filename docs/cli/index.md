@@ -72,11 +72,16 @@ never mixes versions of the CLI and its MCP server.
 The CLI and MCP server are covered by the same [ctrlyoke Commercial License](https://ctrlyoke.dev/terms)
 as the extension and are part of the Free Tier. The free-use eligibility terms
 apply to the CLI exactly as they do to the extension, including
-for automated, scripted and CI use. The CLI does not check a license.
+for automated, scripted and CI use. Headless CLI commands other than
+`ctrlyoke server` do not check a license. `ctrlyoke server` checks the Pro
+license for remote access, including LAN HTTPS, and may refresh a cached online
+Pro license with Keygen.
 
-The CLI and MCP server send no telemetry and make no network requests of their
-own. Your harness CLIs talk to their providers as usual. See
-[Privacy](/guide/privacy).
+Headless CLI commands other than `ctrlyoke server`, and `ctrlyoke-mcp`, send no
+telemetry and make no network requests of their own. Your harness CLIs talk to
+their providers as usual. `ctrlyoke server` can also send browser push
+notifications when they are enabled. See [Other network requests in the
+privacy guide](/guide/privacy#other-network-requests).
 
 ## What the CLI shares with the extension
 

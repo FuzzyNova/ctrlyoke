@@ -12,8 +12,10 @@ export function useLocalValue<T>(
 ) {
   const [value, setValue] = useState(externalValue);
   const editing = useRef(false);
+  const externalValueRef = useRef(externalValue);
 
   useEffect(() => {
+    externalValueRef.current = externalValue;
     if (!editing.current) {
       setValue(externalValue);
     }
@@ -31,6 +33,7 @@ export function useLocalValue<T>(
     onBlur: () => {
       editing.current = false;
       onCommit(value);
+      setValue(externalValueRef.current);
     },
   };
 }

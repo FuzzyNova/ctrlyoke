@@ -65,6 +65,7 @@ import {
 import {
   CLI_USAGE_EXIT_CODE,
   getExitCode as getTypedExitCode,
+  handleCliError,
 } from "./cli/CliExitCode";
 import {
   buildCliJsonResult,
@@ -551,7 +552,9 @@ program
     await commitCommand(options);
   });
 
-program.parse();
+void program.parseAsync().catch((error: unknown) => {
+  handleCliError(error, (message) => console.error(chalk.red(message)));
+});
 
 // ---- Types ----
 

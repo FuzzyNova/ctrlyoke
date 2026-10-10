@@ -48,8 +48,13 @@ phone while continuing to edit files and run harness CLIs on a laptop:
    laptop.
 
 Non-loopback binds are protected by the ctrlyoke Pro remote-access gate. A
-LAN address does not bypass that gate. Do not expose the server to an
-untrusted network or forward its port to the public internet.
+LAN address does not bypass that gate. The server checks the Pro license for
+remote access, including when generating a certificate for LAN HTTPS, and may
+contact Keygen to refresh a cached online Pro license. When push notifications
+are enabled, notifications go through browser push services. See the [privacy
+guide's network request table](/guide/privacy#other-network-requests). Do not
+expose the server to an untrusted network or forward its port to the public
+internet.
 
 ## HTTPS and certificates
 

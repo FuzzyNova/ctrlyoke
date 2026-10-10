@@ -117,7 +117,9 @@ collision check and it does not act as a lock.
 
 It lists only workflows that are currently executing (including the caller's own),
 up to 100. Each entry has `workflowKey`, `runRef`, `workflowName`, `executionState`,
-`harness`, `model`, `currentStep` (1-based), `totalSteps`, `completedSteps`,
+`harness`, `model`, `currentStep` (1-based, or `null` while the final step runs),
+`finalStepPass` (1-based pass number while the final step runs, otherwise `null`),
+`totalSteps`, `completedSteps`,
 `startedAt`, `lastModifiedAt`, `workingFile`, `runDirectory`, and `worktree` details
 when the run uses one. The response also carries `workspaceRoot`, `workflowCount`,
 `truncated`, and `omittedCount`.

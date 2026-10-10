@@ -5,6 +5,8 @@ import {
   createInlinePriorContextReferencePattern,
   createReferencePatterns,
 } from "../../utils/ReferencePatterns";
+import { findContextReferenceMatches } from "../../utils/PromptReferenceScanner";
+import { findWordStartTriggerIndex } from "../../utils/ReferenceBoundary";
 
 /** Collect capture group 1 for every match of `pattern` in `text`. */
 function paths(pattern: RegExp, text: string): string[] {
@@ -65,9 +67,11 @@ suite("ReferencePatterns", () => {
       assert.deepStrictEqual(matches, []);
     });
 
-    test("declines an extensionless path under a dotted directory", () => {
+    test("matches an extensionless path under a dotted directory as a file", () => {
       const { fullFile } = createReferencePatterns();
-      assert.deepStrictEqual(paths(fullFile, "@node_modules/.bin/tsc"), []);
+      assert.deepStrictEqual(paths(fullFile, "@node_modules/.bin/tsc"), [
+        "node_modules/.bin/tsc",
+      ]);
     });
 
     test("declines a one-character extension with a trailing slash", () => {
@@ -92,6 +96,17 @@ suite("ReferencePatterns", () => {
       assert.deepStrictEqual(paths(fullFile, "see @docs/résumé.日本語 now"), [
         "docs/résumé.日本語",
       ]);
+    });
+
+    test("decorates extensionless paths as complete file references", () => {
+      const { fullFile } = createReferencePatterns();
+      assert.deepStrictEqual(
+        paths(
+          fullFile,
+          "@scripts/build @.github/CODEOWNERS @src/bin/ctrlyoke."
+        ),
+        ["scripts/build", ".github/CODEOWNERS", "src/bin/ctrlyoke"]
+      );
     });
   });
 
@@ -160,12 +175,37 @@ suite("ReferencePatterns", () => {
       ]);
     });
 
-    test("claims an extensionless nested path", () => {
+    test("does not claim an extensionless nested file as a directory", () => {
       const { directory } = createReferencePatterns();
-      assert.deepStrictEqual(paths(directory, "@node_modules/.bin/tsc"), [
-        "node_modules/.bin/",
+      assert.deepStrictEqual(paths(directory, "@node_modules/.bin/tsc"), []);
+    });
+
+    test("matches only a path that ends at its slash before prose punctuation", () => {
+      const { directory } = createReferencePatterns();
+      assert.deepStrictEqual(paths(directory, "@src/ @src/. @src/.."), [
+        "src/",
+        "src/",
+        "src/",
       ]);
     });
+
+    test("scanner reports extensionless file refs as files, not parent directories", () => {
+      const matches = findContextReferenceMatches("Run @scripts/build now");
+      assert.deepStrictEqual(matches, [
+        {
+          from: 4,
+          to: 18,
+          type: "file",
+          path: "scripts/build",
+        },
+      ]);
+    });
+  });
+
+  test("rejects reference triggers immediately after Unicode letters", () => {
+    assert.deepStrictEqual(findContextReferenceMatches("café@src/a.ts"), []);
+    assert.deepStrictEqual(findWordStartTriggerIndex("café@", "@"), -1);
+    assert.deepStrictEqual(findWordStartTriggerIndex("東京/skill", "/"), -1);
   });
 
   suite("quoted variants", () => {
@@ -183,7 +223,7 @@ suite("ReferencePatterns", () => {
   suite("lineRange", () => {
     test("captures a bare path in group 2 and the range in 3-4", () => {
       const { lineRange } = createReferencePatterns();
-      const match = new RegExp(lineRange.source).exec(
+      const match = new RegExp(lineRange.source, lineRange.flags).exec(
         "#selection:src/foo.ts:10-20"
       );
       assert.ok(match);
@@ -195,7 +235,7 @@ suite("ReferencePatterns", () => {
 
     test("captures a quoted path in group 1", () => {
       const { lineRange } = createReferencePatterns();
-      const match = new RegExp(lineRange.source).exec(
+      const match = new RegExp(lineRange.source, lineRange.flags).exec(
         '#selection:"my repo/a.ts":1-5'
       );
       assert.ok(match);
@@ -209,7 +249,7 @@ suite("ReferencePatterns", () => {
   suite("symbol", () => {
     test("captures kind, path, name, and range", () => {
       const { symbol } = createReferencePatterns();
-      const match = new RegExp(symbol.source).exec(
+      const match = new RegExp(symbol.source, symbol.flags).exec(
         "#sym.function:src/extension.ts:activate:14-36"
       );
       assert.ok(match);
@@ -222,7 +262,7 @@ suite("ReferencePatterns", () => {
 
     test("captures quoted path and name without a kind", () => {
       const { symbol } = createReferencePatterns();
-      const match = new RegExp(symbol.source).exec(
+      const match = new RegExp(symbol.source, symbol.flags).exec(
         '#sym:"C:/dev/my repo/a.ts":"get value":14-36'
       );
       assert.ok(match);
