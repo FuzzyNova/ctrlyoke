@@ -91,6 +91,52 @@ This will:
 - Format files with Prettier on save
 - Auto-fix ESLint issues on save
 
+## Testing the CLI Locally
+
+`npx` has no notion of dev builds. Use `npm link` for fast iteration, or a packed tarball to test the real npm package.
+
+### Fast iteration: `npm link`
+
+```powershell
+npm run compile:extension   # rebuilds out/cli.js
+npm link                    # one time
+```
+
+The root `package.json` declares `"bin": { "ctrlyoke": "./out/cli.js" }`, so `npm link` puts a global `ctrlyoke` command on your PATH that points at this checkout. Run it from any directory:
+
+```powershell
+cd C:\some\other\project
+ctrlyoke run my-workflow.ctrlyoke.yaml
+```
+
+After that, each `npm run compile:extension` is picked up immediately. Remove the link with `npm unlink -g ctrlyoke`.
+
+Caveats:
+
+- This is the extension-layout build with the repo's root `package.json`, not the exact package users install.
+- It shadows any published `ctrlyoke` installed globally until you unlink.
+
+### Pre-publish check: pack the real npm package
+
+`scripts/build-npm-package.mjs` assembles the publishable package in `dist/npm/` with its own generated `package.json` (the root one is never published).
+
+```powershell
+npm run build:extension                # production build (IS_DEV_MODE=false)
+node scripts/build-npm-package.mjs     # assembles dist/npm/
+cd dist\npm
+npm pack                               # creates ctrlyoke-<version>.tgz
+```
+
+Install the tarball elsewhere:
+
+```powershell
+npm install -g C:\dev\ctrlyoke\dist\npm\ctrlyoke-<version>.tgz
+# or without installing:
+npx --package C:\dev\ctrlyoke\dist\npm\ctrlyoke-<version>.tgz ctrlyoke run ...
+```
+
+This exercises the package's file list, the runtime assets under `out/`, and the shims, so a missing asset shows up here and not in the linked build. `scripts/build-npm-package.test.mjs` automates the same pack, install, `--version` and `validate` sequence.
+
 ## Developer Chores
 
 Regular maintenance tasks are documented in **[CHORES.md](./CHORES.md)**:
