@@ -86,7 +86,30 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   retries, `finalStep`, pause/resume, and dynamically extended queues. Continue
   enforcing it only at safe boundaries; do not kill a harness while it may be
   writing files.
-- `-1` means unlimited everywhere, read through `LimitUtils`.
+- `-1` means unlimited for every setting whose schema accepts it
+  (`execution.maxPromptTimeoutSec`, `queue.maxSteps`,
+  `queue.maxWorkflowExecutionTimeSec`, retry caps), read through `LimitUtils`.
+  `execution.scriptTimeoutSec` is **deliberately finite**: its schema has
+  `exclusiveMinimum: 0` and `ConfigurationUtils.getScriptTimeoutMs()` falls back
+  to the default for any non-positive value. Keep it that way (scripts run
+  unattended and must stay bounded). Document it in the setting description;
+  do not give `-1` a meaning there.
+
+**Orchestrator findings (2026-10-10 planning pass)** — starting points for the
+audits, verify before relying on them:
+
+- Prompt timeout is read in exactly two places:
+  `CliTransportCoordinator` (headless spawn `timeout`) and `CliLogMonitor`
+  (log-monitor timer). Harness-specific transports that bypass both (e.g. the
+  Codex app-server client, the opencode server, PTY/interactive completion
+  paths) must be checked for whether they honour the setting at all. A timeout
+  already maps to `FAILURE_KINDS.TIMEOUT` at the step level.
+- Workflow time is checked by `WorkflowExecutor.checkExecutionTimeLimit` only
+  before each queue step/parallel group and before each `finalStep` pass, using
+  `context.dynamicQueueConfig` captured at run start. It is not checked between
+  error/end-condition retries of a single step, and a mid-run settings change
+  is not observed. Active time comes from
+  `WorkflowStateMachine.getActiveExecutionTime()` (pauses excluded).
 
 ### Phase 2 — Observable outcomes
 
@@ -97,9 +120,30 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 - Include the effective global guardrails in dry-run output
   (`dev/implemented/DRY_RUN_PREVIEW_PLAN.md` has shipped;
   `ExecutionPreviewService` already resolves the effective `maxSteps`).
-- Today a step-limit stop is a `notifyUserFeedback` warning plus a generic
-  runtime `fail()`, which is indistinguishable from a harness failure in run
-  state — this is the gap the reason codes close.
+- Today a step-limit stop **and** a workflow-time stop are each a
+  `notifyUserFeedback` warning plus a generic runtime `fail()`
+  (`WorkflowStateMachine.fail()` takes no reason), which is indistinguishable
+  from a harness failure in run state — this is the gap the reason codes close.
+  Attempt-level failures already carry a free-text `failureReason` and a
+  step-level `FailureKind`; the run level has nothing.
+- Design: one `const` code set in `DashboardConstants.ts` (queue-size limit,
+  workflow-time limit, prompt timeout), one structured run-level stop reason
+  `{ code, threshold, observed, message }` carried by the runtime state machine
+  and persisted with the run, and one builder module for the messages (absorbing
+  `buildStepLimitError` and the workflow-time message) so every surface renders
+  the same text. A prompt timeout stays a step failure (`FailureKind.TIMEOUT`)
+  but the run-level stop it causes carries the prompt-timeout code.
+
+### Staging (queued by the orchestrator)
+
+1. Prompt-timeout audit and fixes across transports/harnesses.
+2. Workflow-time audit and fixes; `PromptFileParser`/editor validation against
+   the effective global `queue.maxSteps`; queue counting consistency.
+3. Structured stop-reason contract in core (constants, state machine,
+   persistence, executor call sites, message builder).
+4. CLI, MCP, and dry-run surfaces for stop reasons and effective guardrails.
+5. Dashboard and notification surfaces; settings copy; close out the plan and
+   release-checklist item.
 - Keep configuration in the existing Execution and Queue settings sections; do
   not add workflow or prompt property controls.
 
