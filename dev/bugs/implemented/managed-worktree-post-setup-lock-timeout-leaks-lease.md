@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (code review of ~87c4065e4, confirmed with a scratch unit test)
 - **Area:** `src/core/orchestration/WorktreeManager.ts` (`completeManagedInfo`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

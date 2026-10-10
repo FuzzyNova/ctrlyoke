@@ -191,6 +191,8 @@ interface AcquiredManagedInfo {
   shouldRunSetup: boolean;
 }
 
+const POST_SETUP_RECORD_LOCK_TIMEOUT_MS = 60_000;
+
 function getManagedWorktreeWatermark(
   record: ManagedWorktreeOwnershipRecord
 ): string {
@@ -3054,16 +3056,17 @@ export class WorktreeManager {
     const { args, executionWorkspace, lease, runtimeTrust, shouldRunSetup } =
       acquired;
     let setupOutcome: WorktreeInfo["setupOutcome"];
-    if (shouldRunSetup) {
-      setupOutcome = "pending";
-      await this.persistRuntime({
-        lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
-        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-        branchState: WORKTREE_BRANCH_STATES.PRESENT,
-        setupOutcome,
-        updatedAt: this.now(),
-      });
-      try {
+    let completed = false;
+    try {
+      if (shouldRunSetup) {
+        setupOutcome = "pending";
+        await this.persistRuntime({
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
+          setupOutcome,
+          updatedAt: this.now(),
+        });
         setupOutcome = "running";
         await this.persistRuntime({
           lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
@@ -3072,113 +3075,166 @@ export class WorktreeManager {
           setupOutcome,
           updatedAt: this.now(),
         });
-        // Recreated managed directories omit ignored dependencies and caches,
-        // so setup must remain idempotent as append continuations re-provision.
-        await this.runSetup(
-          args.record.worktreePath,
-          args.options.setup!,
-          args.options.vars,
-          args.options.setupAttemptIndex ?? 0,
-          args.options.worktreeSetupRunner,
-          args.options.reportUnresolvedVariables
-        );
-        setupOutcome = "succeeded";
-      } catch (error) {
-        setupOutcome = "failed";
-        await withWorktreeMutationLock(args.commonDirectory, async () => {
-          await this.writeRecord(args.recordPath, {
-            ...args.record,
-            lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
-            directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-            branchState: WORKTREE_BRANCH_STATES.PRESENT,
-            setupOutcome: WORKTREE_SETUP_OUTCOMES.FAILED,
-          });
-        });
-        await this.persistRuntime({
-          lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
-          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-          branchState: WORKTREE_BRANCH_STATES.PRESENT,
-          setupOutcome,
-          dirty: await hasUncommittedChanges(args.record.worktreePath).catch(
-            () => undefined
-          ),
-          updatedAt: this.now(),
-        });
-        runtimeTrust.release();
-        await lease.release();
-        throw new WorktreeSetupError(args.record.worktreePath, error);
+        try {
+          // Recreated managed directories omit ignored dependencies and caches,
+          // so setup must remain idempotent as append continuations re-provision.
+          await this.runSetup(
+            args.record.worktreePath,
+            args.options.setup!,
+            args.options.vars,
+            args.options.setupAttemptIndex ?? 0,
+            args.options.worktreeSetupRunner,
+            args.options.reportUnresolvedVariables
+          );
+          setupOutcome = "succeeded";
+        } catch (error) {
+          setupOutcome = "failed";
+          const setupError = new WorktreeSetupError(
+            args.record.worktreePath,
+            error
+          );
+          try {
+            await withWorktreeMutationLock(
+              args.commonDirectory,
+              async () => {
+                await this.writeRecord(args.recordPath, {
+                  ...args.record,
+                  lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
+                  directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+                  branchState: WORKTREE_BRANCH_STATES.PRESENT,
+                  setupOutcome: WORKTREE_SETUP_OUTCOMES.FAILED,
+                });
+              },
+              { timeoutMs: POST_SETUP_RECORD_LOCK_TIMEOUT_MS }
+            );
+          } catch (recordError) {
+            Log.error(
+              `Failed to persist failed setup record for ${args.record.worktreePath}`,
+              recordError
+            );
+          }
+          let dirty: boolean | undefined;
+          try {
+            dirty = await hasUncommittedChanges(args.record.worktreePath);
+          } catch (dirtyError) {
+            Log.error(
+              `Failed to inspect worktree after setup failure at ${args.record.worktreePath}`,
+              dirtyError
+            );
+          }
+          try {
+            await this.persistRuntime({
+              lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
+              directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+              branchState: WORKTREE_BRANCH_STATES.PRESENT,
+              setupOutcome,
+              dirty,
+              updatedAt: this.now(),
+            });
+          } catch (runtimeError) {
+            Log.error(
+              `Failed to persist setup failure runtime state for ${args.record.worktreePath}`,
+              runtimeError
+            );
+          }
+          throw setupError;
+        }
+      }
+      const readyRecord: ManagedWorktreeOwnershipRecord = {
+        ...args.record,
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
+      };
+      if (
+        setupOutcome === WORKTREE_SETUP_OUTCOMES.SUCCEEDED ||
+        setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
+      ) {
+        readyRecord.setupOutcome = setupOutcome;
+      } else {
+        delete readyRecord.setupOutcome;
+      }
+      await withWorktreeMutationLock(
+        args.commonDirectory,
+        async () => {
+          await this.writeRecord(args.recordPath, readyRecord);
+        },
+        { timeoutMs: POST_SETUP_RECORD_LOCK_TIMEOUT_MS }
+      );
+      const dirty = await hasUncommittedChanges(args.record.worktreePath);
+      const info: ActiveWorktreeInfo = {
+        mode: WORKTREE_MODES.MANAGED,
+        origin: args.origin,
+        lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
+        branchName: args.record.branchName,
+        worktreePath: args.record.worktreePath,
+        sourceCheckoutRoot: args.record.sourceCheckoutRoot,
+        baseCommit: args.record.baseCommit,
+        ...(args.sourceCheckoutDirty !== undefined
+          ? { sourceCheckoutDirty: args.sourceCheckoutDirty }
+          : {}),
+        targetBranch: args.record.targetBranch,
+        workflowKey: args.record.workflowKey,
+        runRef: args.record.runRef,
+        ...(args.options.workflowName
+          ? { workflowName: args.options.workflowName }
+          : {}),
+        createdAt: args.record.createdAt,
+        executionWorkspace,
+        dirty,
+        lease,
+        runtimeTrust,
+        ...(setupOutcome ? { setupOutcome } : {}),
+        ...(args.record.recoveryOutcome
+          ? { recoveryOutcome: args.record.recoveryOutcome }
+          : {}),
+      };
+      await this.persistRuntime({
+        schemaVersion: 1,
+        mode: WORKTREE_MODES.MANAGED,
+        origin: args.origin,
+        branchName: args.record.branchName,
+        worktreePath: args.record.worktreePath,
+        executionRoot: executionWorkspace.executionRoot,
+        executionCheckoutRoot: args.record.worktreePath,
+        sourceCheckoutRoot: args.record.sourceCheckoutRoot,
+        namedWorkspaceRoots: [...executionWorkspace.namedWorkspaceRoots],
+        baseCommit: args.record.baseCommit,
+        ...(args.sourceCheckoutDirty !== undefined
+          ? { sourceCheckoutDirty: args.sourceCheckoutDirty }
+          : {}),
+        ...(args.record.targetBranch
+          ? { targetBranch: args.record.targetBranch }
+          : {}),
+        lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
+        dirty,
+        ...(setupOutcome ? { setupOutcome } : {}),
+      });
+      completed = true;
+      return info;
+    } finally {
+      if (!completed) {
+        try {
+          runtimeTrust.release();
+        } catch (error) {
+          Log.error(
+            `Failed to release runtime trust after managed worktree setup at ${args.record.worktreePath}`,
+            error
+          );
+        }
+        try {
+          await lease.release();
+        } catch (error) {
+          Log.error(
+            `Failed to release execution lease after managed worktree setup at ${args.record.worktreePath}`,
+            error
+          );
+        }
       }
     }
-    const readyRecord: ManagedWorktreeOwnershipRecord = {
-      ...args.record,
-      lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
-      directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-      branchState: WORKTREE_BRANCH_STATES.PRESENT,
-    };
-    if (
-      setupOutcome === WORKTREE_SETUP_OUTCOMES.SUCCEEDED ||
-      setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
-    ) {
-      readyRecord.setupOutcome = setupOutcome;
-    } else {
-      delete readyRecord.setupOutcome;
-    }
-    await withWorktreeMutationLock(args.commonDirectory, async () => {
-      await this.writeRecord(args.recordPath, readyRecord);
-    });
-    const dirty = await hasUncommittedChanges(args.record.worktreePath);
-    const info: ActiveWorktreeInfo = {
-      mode: WORKTREE_MODES.MANAGED,
-      origin: args.origin,
-      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
-      branchName: args.record.branchName,
-      worktreePath: args.record.worktreePath,
-      sourceCheckoutRoot: args.record.sourceCheckoutRoot,
-      baseCommit: args.record.baseCommit,
-      ...(args.sourceCheckoutDirty !== undefined
-        ? { sourceCheckoutDirty: args.sourceCheckoutDirty }
-        : {}),
-      targetBranch: args.record.targetBranch,
-      workflowKey: args.record.workflowKey,
-      runRef: args.record.runRef,
-      ...(args.options.workflowName
-        ? { workflowName: args.options.workflowName }
-        : {}),
-      createdAt: args.record.createdAt,
-      executionWorkspace,
-      dirty,
-      lease,
-      runtimeTrust,
-      ...(setupOutcome ? { setupOutcome } : {}),
-      ...(args.record.recoveryOutcome
-        ? { recoveryOutcome: args.record.recoveryOutcome }
-        : {}),
-    };
-    await this.persistRuntime({
-      schemaVersion: 1,
-      mode: WORKTREE_MODES.MANAGED,
-      origin: args.origin,
-      branchName: args.record.branchName,
-      worktreePath: args.record.worktreePath,
-      executionRoot: executionWorkspace.executionRoot,
-      executionCheckoutRoot: args.record.worktreePath,
-      sourceCheckoutRoot: args.record.sourceCheckoutRoot,
-      namedWorkspaceRoots: [...executionWorkspace.namedWorkspaceRoots],
-      baseCommit: args.record.baseCommit,
-      ...(args.sourceCheckoutDirty !== undefined
-        ? { sourceCheckoutDirty: args.sourceCheckoutDirty }
-        : {}),
-      ...(args.record.targetBranch
-        ? { targetBranch: args.record.targetBranch }
-        : {}),
-      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
-      lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
-      directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-      branchState: WORKTREE_BRANCH_STATES.PRESENT,
-      dirty,
-      ...(setupOutcome ? { setupOutcome } : {}),
-    });
-    return info;
   }
 
   private buildExecutionWorkspace(

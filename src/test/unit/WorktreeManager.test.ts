@@ -17,6 +17,7 @@ import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { listWorktrees } from "../../utils/GitUtils";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
+  WORKTREE_LIFECYCLE_STATES,
   WORKTREE_SETUP_OUTCOMES,
 } from "../../types/DashboardConstants";
 
@@ -682,6 +683,117 @@ suite("WorktreeManager", function () {
     );
     assert.strictEqual(record?.lifecycleState, "blocked");
     assert.strictEqual(record?.setupOutcome, WORKTREE_SETUP_OUTCOMES.FAILED);
+  });
+
+  test("records contended setup failure, releases its lease, and retries setup", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-contended-setup-failure"
+    );
+    const commonDirectory = path.resolve(
+      repository,
+      execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
+        encoding: "utf8",
+      }).trim()
+    );
+    const mutationLock = path.join(
+      commonDirectory,
+      "ctrlyoke-worktree-mutation.lock"
+    );
+    let setupCalls = 0;
+    const runner: WorktreeSetupRunner = {
+      async run() {
+        setupCalls += 1;
+        if (setupCalls === 1) {
+          await fs.writeFile(mutationLock, "held by another process");
+          setTimeout(() => void fs.rm(mutationLock, { force: true }), 150);
+          return {
+            success: false,
+            result: "setup failed",
+            error: "original setup failure",
+            stdout: "",
+            stderr: "original setup failure",
+            exitCode: 1,
+          };
+        }
+        return {
+          success: true,
+          result: "",
+          stdout: "",
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+    const options = { setup: "npm ci" };
+
+    await assert.rejects(
+      ensureManaged(instance, repository, options),
+      (error: unknown) => {
+        assert.ok(error instanceof WorktreeSetupError);
+        assert.match(error.message, /original setup failure/);
+        return true;
+      }
+    );
+    const worktree = (await listWorktrees(repository)).find((entry) =>
+      entry.branchName?.includes("managed-test-workflow")
+    );
+    assert.ok(worktree);
+    assert.deepStrictEqual(
+      await ExecutionRootLeaseManager.inspectLeases(worktree!.worktreePath),
+      []
+    );
+    const failedRecord = await instance.readManagedWorktreeRecord(
+      repository,
+      worktree!.branchName!
+    );
+    assert.strictEqual(failedRecord?.lifecycleState, "blocked");
+    assert.strictEqual(
+      failedRecord?.setupOutcome,
+      WORKTREE_SETUP_OUTCOMES.FAILED
+    );
+
+    const retry = await ensureManaged(instance, repository, options);
+    assert.strictEqual(setupCalls, 2);
+    assert.strictEqual(retry.setupOutcome, "succeeded");
+    await retry.lease.release();
+  });
+
+  test("releases the managed lease when final runtime persistence fails", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-final-runtime-write-failure"
+    );
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: new RecordingWorktreeSetupRunner({
+        success: true,
+        result: "",
+        stdout: "",
+        stderr: "",
+        exitCode: 0,
+      }),
+      updateWorktreeRuntime: async (patch) => {
+        if (patch.lifecycleState === WORKTREE_LIFECYCLE_STATES.READY) {
+          throw new Error("runtime persistence failed");
+        }
+      },
+    });
+
+    await assert.rejects(
+      ensureManaged(instance, repository, { setup: "npm ci" }),
+      /runtime persistence failed/
+    );
+    const worktree = (await listWorktrees(repository)).find((entry) =>
+      entry.branchName?.includes("managed-test-workflow")
+    );
+    assert.ok(worktree);
+    assert.deepStrictEqual(
+      await ExecutionRootLeaseManager.inspectLeases(worktree!.worktreePath),
+      []
+    );
   });
 
   test("summarizes setup errors instead of duplicating the raw output", async () => {

@@ -437,13 +437,15 @@ export async function assertWorkspaceEligibility(
 /** Run one short Git-admin mutation under the repository's common-directory lock. */
 export async function withWorktreeMutationLock<T>(
   commonDirectory: string,
-  action: () => Promise<T>
+  action: () => Promise<T>,
+  options?: { timeoutMs?: number }
 ): Promise<T> {
   const resolvedCommonDirectory =
     await resolveThroughNearestExistingAncestor(commonDirectory);
   return withFileLock(
     path.join(resolvedCommonDirectory, "ctrlyoke-worktree-mutation"),
-    action
+    action,
+    options
   );
 }
 
