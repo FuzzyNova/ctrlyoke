@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` call to `EndConditionEvaluator.evaluateCondition`)
 - **Area:** `src/core/WorkflowExecutor.ts` (callers of `resolveGrantedSecretValues`), `src/core/EndConditionEvaluator.ts`, `src/core/harness/shared/CliTransportCoordinator.ts`, `src/utils/SecretResolver.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
