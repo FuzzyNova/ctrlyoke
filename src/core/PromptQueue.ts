@@ -3132,6 +3132,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         previousSteps,
         nextTopology.steps
       );
+      assertNoParallelSiblingReferences(
+        {
+          steps: renumbered.steps,
+          parallelGroups: nextTopology.parallelGroups,
+        },
+        this.workflowFile
+      );
       const newPending = nextTopology.steps.slice(currentIndex);
       const newPendingResults = newPending.map((step) => {
         const sourceIndex = pendingPrompts.indexOf(step);

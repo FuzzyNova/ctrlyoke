@@ -608,6 +608,59 @@ suite("EndConditionEvaluator Tests", () => {
       assert.strictEqual(result.errored, false);
     });
 
+    test("runs a resolved .cmd file and following shell syntax in Git Bash", async function () {
+      if (process.platform !== "win32") return this.skip();
+
+      let gitBashPath: string | undefined;
+      try {
+        const gitPaths = childProcess
+          .execFileSync("where.exe", ["git"], { encoding: "utf8" })
+          .split(/\r?\n/)
+          .filter(Boolean);
+        gitBashPath = gitPaths
+          .map((gitPath) =>
+            path.resolve(path.dirname(gitPath), "..", "bin", "bash.exe")
+          )
+          .find((candidate) => fs.existsSync(candidate));
+      } catch {
+        // Git Bash is optional on Windows test hosts.
+      }
+      if (!gitBashPath) return this.skip();
+
+      const originalPath = process.env.PATH;
+      process.env.PATH = `${path.dirname(gitBashPath)}${path.delimiter}${
+        originalPath ?? ""
+      }`;
+      fs.writeFileSync(
+        path.join(workspaceRoot, "c.cmd"),
+        "@echo off\r\necho FIRST\r\n",
+        "utf8"
+      );
+
+      try {
+        const result = await evaluator.evaluateCondition(
+          {
+            script: "c.cmd q && echo SECOND",
+            shell: "bash",
+            compareSource: "stdout",
+            operator: "contains",
+            expected: "SECOND",
+            timeoutSec: 10,
+          },
+          workspaceRoot
+        );
+
+        assert.strictEqual(result.passed, true, result.error ?? result.actual);
+        assert.match(result.actual, /FIRST[\s\S]*SECOND/);
+      } finally {
+        if (originalPath === undefined) {
+          delete process.env.PATH;
+        } else {
+          process.env.PATH = originalPath;
+        }
+      }
+    });
+
     test("uses an inline shell override for a direct command", async () => {
       const originalGetTerminalSettings =
         ConfigurationUtils.getTerminalSettings;

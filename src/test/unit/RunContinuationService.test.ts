@@ -1252,6 +1252,44 @@ suite("RunContinuationService addressed step mutations", () => {
     ]);
   });
 
+  test("reorder_steps rejects creating a group with a sibling reference", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-reorder-sibling-reference-")
+    );
+    const repository = new WorkflowLineageRepository();
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+
+    for (const reference of [
+      { resumeSession: true, sessionId: 2 },
+      { priorContext: [2] },
+    ]) {
+      await seedRun(EXECUTION_STATES.IDLE, 0, [
+        { prompt: "first" },
+        { prompt: "group sibling" },
+        { prompt: "dragged", ...reference },
+      ]);
+      const before = await fs.readFile(runFilePath, "utf8");
+
+      await assert.rejects(
+        RunContinuationService.reorderStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [0, 1, 2],
+          1,
+          repository,
+          [{ start: 1, end: 2, failFast: false }]
+        ),
+        /cannot target a sibling in parallel group/i
+      );
+      assert.strictEqual(await fs.readFile(runFilePath, "utf8"), before);
+    }
+  });
+
   test("explains that a run with no pending steps cannot be reordered", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-step-reorder-empty-")

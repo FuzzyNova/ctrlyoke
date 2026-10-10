@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (review of ~6e1cd5461)
 - **Area:** `src/core/PromptQueue.ts` (`reorderPendingPrompts`), `src/core/orchestration/RunContinuationService.ts` (`reorderStepsWithOrder`), `src/core/WorkingFileManager.ts` (reorder with `pendingGroups`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
