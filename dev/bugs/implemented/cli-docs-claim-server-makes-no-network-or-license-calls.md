@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (docs vs. code audit)
 - **Area:** `docs/guide/privacy.md`, `docs/cli/index.md`, `docs/cli/ctrlyoke.md`, `docs/cli/ctrlyoke-mcp.md`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
