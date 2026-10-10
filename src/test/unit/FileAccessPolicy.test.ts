@@ -139,43 +139,36 @@ suite("FileAccessPolicy", () => {
   });
 
   suite("Windows case-insensitive matching", () => {
-    const originalPlatform = process.platform;
-
-    function setPlatform(platform: NodeJS.Platform): void {
-      Object.defineProperty(process, "platform", { value: platform });
-    }
-
-    teardown(() => {
-      setPlatform(originalPlatform);
-    });
-
     test("matches a differently-cased candidate against a trusted root on win32", () => {
-      setPlatform("win32");
       const decision = evaluateFileAccess("C:\\Dev\\Project\\src\\a.ts", {
         workspaceRoots: ["c:\\dev\\project"],
         approvedExternalRoots: [],
+        pathImplementation: path.win32,
+        platform: "win32",
       });
       assert.strictEqual(decision.allowed, true);
       assert.strictEqual(decision.reason, "workspace");
     });
 
     test("still rejects a sibling-prefix path on win32 regardless of casing", () => {
-      setPlatform("win32");
       const decision = evaluateFileAccess(
         "C:\\Dev\\Project-Evil\\payload.ps1",
         {
           workspaceRoots: ["c:\\dev\\project"],
           approvedExternalRoots: [],
+          pathImplementation: path.win32,
+          platform: "win32",
         }
       );
       assert.strictEqual(decision.allowed, false);
     });
 
     test("is case-sensitive on non-Windows platforms", () => {
-      setPlatform("linux");
       const decision = evaluateFileAccess("/Dev/Project/src/a.ts", {
         workspaceRoots: ["/dev/project"],
         approvedExternalRoots: [],
+        pathImplementation: path.posix,
+        platform: "linux",
       });
       assert.strictEqual(decision.allowed, false);
     });

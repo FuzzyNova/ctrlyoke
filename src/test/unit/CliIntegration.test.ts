@@ -7,6 +7,7 @@ import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { suite, test, setup, teardown } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
+import { quoteReferenceField } from "../../completions/ContextReferenceBuilder";
 import { HarnessStatus } from "../../core/HarnessIntegration";
 import {
   CLI_EVENT_TYPES,
@@ -2186,7 +2187,7 @@ suite("CliIntegration", () => {
       // separator, so the rewritten path must be quoted to stay parseable.
       assert.strictEqual(
         sections.userPromptText,
-        `When #sym:"${secondFile}":foo:1-1 runs, log the result.`
+        `When #sym:${quoteReferenceField(secondFile)}:foo:1-1 runs, log the result.`
       );
     });
 

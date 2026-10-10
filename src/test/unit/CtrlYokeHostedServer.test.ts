@@ -315,7 +315,8 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
     });
   });
 
-  test("static fallback blocks NTFS aliases for protected files without a token", async () => {
+  test("static fallback blocks NTFS aliases for protected files without a token", async function () {
+    if (process.platform !== "win32") this.skip();
     await withServer(async (_root, port) => {
       for (const requestPath of [
         "/index.html::$DATA",

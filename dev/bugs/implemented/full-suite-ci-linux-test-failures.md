@@ -2,7 +2,8 @@
 
 - **Found:** 2026-10-10 by backlog audit (run `37373416030`, 2026-10-05; every scheduled run since 2026-09-14 has failed)
 - **Area:** `.github/workflows/full-suite.yml`, `src/test/unit/**`, `src/core/ContextExpander.ts`, `src/utils/FileAccessPolicy.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit. Linux verification unavailable: WSL Ubuntu has no
+  Node.js installation.
 
 ## Symptom
 
@@ -38,15 +39,22 @@ fall into four groups:
 1. `gh run view 37373416030 --log-failed`, or trigger `full-suite.yml` manually.
 2. Read the `11 failing` block at the end of the extension-host shard.
 
-## Root Cause
+## Root Cause and Fix
 
-Not yet triaged per group; see the hypotheses above. Groups 3 and 4 look like test-only platform
-assumptions. Group 1 may be a real behavior difference between Windows and POSIX in reference
-serialization and should be decided before the reference syntax is public.
+1. **Absolute-path quoting:** the assertions encoded Windows drive-colon quoting. On POSIX, an
+   absolute path has no colon or whitespace, so it is intentionally emitted unquoted. The `@`,
+   `#selection:`, and `#sym:` parsers round-trip that form; the tests now derive expected strings
+   with the shared reference-field serializer, and a parser test covers all three forms.
+2. **Concurrent config writes:** backends shared a write queue keyed by `path.resolve()`, but file
+   reads and atomic writes still used each backend's original path. A `nested/../settings.json`
+   alias fails on POSIX when `nested` does not exist. File I/O now uses the resolved path too.
+3. **NTFS aliases:** the alias status assertion applies only on Windows, where NTFS short names and
+   alternate data streams exist. The test is skipped on other platforms and retains its Windows
+   assertions.
+4. **Windows path comparison:** the test changed `process.platform`, but the comparator still used
+   the host's `path.sep`. The comparison now accepts injected path and platform semantics; the
+   test uses `path.win32` on every host while normal production calls keep the real host defaults.
 
-## Suggested Fix
-
-Triage each group on Linux (WSL or a Linux container is enough). Fix the code wherever the
-POSIX behavior is wrong. Make tests platform-aware wherever they encode Windows-only behavior.
-Then make sure `full-suite.yml` is green before relying on it for releases (RELEASE_CHECKLIST
-Phase 13).
+`npm run typecheck`, `npm run lint`, and `npm test` pass on Windows. Linux execution could not be
+verified because the available WSL Ubuntu installation does not have Node.js; the recorded GitHub
+Actions failure log was used to confirm the original Linux failures.

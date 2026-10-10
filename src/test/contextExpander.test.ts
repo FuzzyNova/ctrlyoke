@@ -10,6 +10,10 @@ import {
   parseSymbolReferences,
 } from "../utils/FileReferenceParser";
 import {
+  buildSelectionReferenceText,
+  quoteReferenceField,
+} from "../completions/ContextReferenceBuilder";
+import {
   MAX_CONTENT_SIZE,
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
 } from "../types/DashboardConstants";
@@ -361,7 +365,10 @@ suite("ContextExpander.expandContextSplit", () => {
           `Excerpt from ${sourcePath}, lines 1 to 1`
         )
       );
-      assert.strictEqual(sanitized, `#selection:"${sourcePath}":1-1`);
+      assert.strictEqual(
+        sanitized,
+        buildSelectionReferenceText(sourcePath, 1, 1)
+      );
       assert.ok(
         expanded.excerptBlocks.includes(sourcePath),
         "the excerpt must name the same absolute source path as sanitizeReferences"
@@ -1631,7 +1638,7 @@ suite("ContextExpander.sanitizeReferences", () => {
     // the field separator — bare, the rewritten token parses back as nothing.
     assert.strictEqual(
       result,
-      `When #sym:"${secondFile}":foo:1-1 runs, log the result.`
+      `When #sym:${quoteReferenceField(secondFile)}:foo:1-1 runs, log the result.`
     );
     assert.deepStrictEqual(
       parseSymbolReferences(result).map((ref) => [ref.path, ref.symbolName]),
@@ -1661,7 +1668,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
     assert.strictEqual(
       result,
-      `When #sym.class:"${secondFile}":Foo:1-1 runs, log the result.`
+      `When #sym.class:${quoteReferenceField(secondFile)}:Foo:1-1 runs, log the result.`
     );
     assert.deepStrictEqual(
       parseSymbolReferences(result).map((ref) => [
@@ -1706,7 +1713,10 @@ suite("ContextExpander.sanitizeReferences", () => {
       "Review #sym.class:runtime/source.ts:Foo:1-1."
     );
 
-    assert.strictEqual(result, `Review #sym.class:"${sourcePath}":Foo:1-1.`);
+    assert.strictEqual(
+      result,
+      `Review #sym.class:${quoteReferenceField(sourcePath)}:Foo:1-1.`
+    );
     assert.deepStrictEqual(
       parseSymbolReferences(result).map((ref) => [
         ref.path,
@@ -1740,7 +1750,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
     assert.strictEqual(
       result,
-      `See #selection:"${secondFile}":1-2 for context.`
+      `See ${buildSelectionReferenceText(secondFile, 1, 2)} for context.`
     );
     assert.deepStrictEqual(
       parseSelectionReferences(result).map((ref) => ref.path),

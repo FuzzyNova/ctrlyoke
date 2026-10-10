@@ -49,6 +49,7 @@ export class FileConfigBackend implements ConfigBackend {
   // calls; without this queue, the second call's load() can run before the
   // first call's save() lands, so the second write clobbers the first.
   private readonly state: FileConfigBackendState;
+  private readonly resolvedConfigPath: string;
   private newerSchemaVersion?: number;
   private hasInvalidContent = false;
 
@@ -57,6 +58,10 @@ export class FileConfigBackend implements ConfigBackend {
     /** Set for a workspace-scope backend; see `ConfigBackend.workspaceRoot`. */
     readonly workspaceRoot?: string
   ) {
+    // Use the same canonical path for reads and atomic writes. A path such as
+    // `parent/../settings.json` can resolve to this file while still failing
+    // when `parent` does not exist on POSIX.
+    this.resolvedConfigPath = path.resolve(configPath);
     this.state = getBackendState(configPath);
   }
 
@@ -117,7 +122,7 @@ export class FileConfigBackend implements ConfigBackend {
     this.hasInvalidContent = false;
     let content: string;
     try {
-      content = fs.readFileSync(this.configPath, "utf-8");
+      content = fs.readFileSync(this.resolvedConfigPath, "utf-8");
     } catch {
       // File doesn't exist — return empty settings (expected on first use)
       return {};
@@ -174,7 +179,7 @@ export class FileConfigBackend implements ConfigBackend {
     // extension's bundled `jsonValidation` association, so a remote URL would
     // break offline validation and pin dev builds to the published schema.
     data.schemaVersion = CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS];
-    const dir = path.dirname(this.configPath);
+    const dir = path.dirname(this.resolvedConfigPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -182,13 +187,13 @@ export class FileConfigBackend implements ConfigBackend {
     // This prevents an interrupted write from leaving the settings file
     // empty/corrupt (which would cause the next set() call to silently
     // wipe all settings).
-    const tmpPath = uniqueAtomicTempPath(this.configPath);
+    const tmpPath = uniqueAtomicTempPath(this.resolvedConfigPath);
     await fs.promises.writeFile(
       tmpPath,
       JSON.stringify(data, null, 2),
       "utf-8"
     );
-    await fs.promises.rename(tmpPath, this.configPath);
+    await fs.promises.rename(tmpPath, this.resolvedConfigPath);
   }
 
   private setNestedValue(

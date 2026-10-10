@@ -27,8 +27,8 @@ import * as path from "node:path";
  * and anything else that must stay `vscode`-free.
  */
 
-function isWindows(): boolean {
-  return process.platform === "win32";
+function isWindows(platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "win32";
 }
 
 /**
@@ -39,8 +39,11 @@ function isWindows(): boolean {
  * that will be shown to a user or handed to another process, because the folded
  * form loses the original casing.
  */
-export function foldPathForCompare(value: string): string {
-  return isWindows() ? value.toLowerCase() : value;
+export function foldPathForCompare(
+  value: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  return isWindows(platform) ? value.toLowerCase() : value;
 }
 
 /** Hash a resolved path using the filesystem's path comparison semantics. */

@@ -26,6 +26,9 @@ export interface FileAccessPolicyOptions {
   ownStateRoots?: readonly string[];
   /** External roots currently authorized for this workspace (see `ConfigurationUtils.getEffectiveApprovedExternalFileRoots`). */
   approvedExternalRoots: readonly string[];
+  /** Path semantics for cross-platform callers and platform-specific tests. */
+  pathImplementation?: Pick<typeof path, "resolve" | "sep">;
+  platform?: NodeJS.Platform;
 }
 
 /**
@@ -46,9 +49,18 @@ export function evaluateFileAccess(
   candidatePath: string,
   options: FileAccessPolicyOptions
 ): FileAccessDecision {
+  const pathImplementation = options.pathImplementation ?? path;
+  const platform = options.platform ?? process.platform;
   for (const root of options.workspaceRoots) {
-    const normalizedRoot = path.resolve(root);
-    if (isPathWithinDirectory(candidatePath, normalizedRoot)) {
+    const normalizedRoot = pathImplementation.resolve(root);
+    if (
+      isPathWithinDirectory(
+        candidatePath,
+        normalizedRoot,
+        pathImplementation,
+        platform
+      )
+    ) {
       return {
         allowed: true,
         reason: "workspace",
@@ -59,8 +71,15 @@ export function evaluateFileAccess(
   }
 
   for (const root of options.ownStateRoots ?? []) {
-    const normalizedRoot = path.resolve(root);
-    if (isPathWithinDirectory(candidatePath, normalizedRoot)) {
+    const normalizedRoot = pathImplementation.resolve(root);
+    if (
+      isPathWithinDirectory(
+        candidatePath,
+        normalizedRoot,
+        pathImplementation,
+        platform
+      )
+    ) {
       return {
         allowed: true,
         reason: "ownStateRoot",
@@ -71,8 +90,15 @@ export function evaluateFileAccess(
   }
 
   for (const root of options.approvedExternalRoots) {
-    const normalizedRoot = path.resolve(root);
-    if (isPathWithinDirectory(candidatePath, normalizedRoot)) {
+    const normalizedRoot = pathImplementation.resolve(root);
+    if (
+      isPathWithinDirectory(
+        candidatePath,
+        normalizedRoot,
+        pathImplementation,
+        platform
+      )
+    ) {
       return {
         allowed: true,
         reason: "trustedExternalRoot",
