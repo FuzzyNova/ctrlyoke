@@ -3180,9 +3180,6 @@ export class WorktreeManager {
         lease,
         runtimeTrust,
         ...(setupOutcome ? { setupOutcome } : {}),
-        ...(readyRecord.recoveryOutcome
-          ? { recoveryOutcome: readyRecord.recoveryOutcome }
-          : {}),
       };
       await this.persistRuntime({
         schemaVersion: 1,
