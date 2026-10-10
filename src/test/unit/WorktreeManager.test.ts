@@ -1620,6 +1620,39 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("lands a changed append after a kept no-change turn", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-kept-no-change-append"
+    );
+    const instance = manager(parent);
+    const firstInfo = await ensureManaged(instance, repository);
+
+    const firstResult = await instance.completeManagedRun(firstInfo, {
+      keep: true,
+    });
+
+    assert.strictEqual(firstResult.landingOutcome, "no-changes");
+    assert.strictEqual(firstResult.directoryOutcome, "kept");
+
+    const appendInfo = await ensureManaged(instance, repository);
+    await fs.writeFile(
+      path.join(appendInfo.worktreePath, "second-turn.txt"),
+      "second\n"
+    );
+
+    const appendResult = await instance.completeManagedRun(appendInfo, {});
+    const record = await instance.readManagedWorktreeRecord(
+      repository,
+      appendInfo.branchName
+    );
+
+    assert.strictEqual(appendResult.landingOutcome, "landed");
+    assert.strictEqual(localBranchExists(repository, appendInfo.branchName), true);
+    assert.ok(!appendResult.message?.includes("Managed no-change branch"));
+    assert.ok(record);
+    assert.strictEqual(record.recoveryOutcome, undefined);
+  });
+
   test("counts only the files changed by a landed append", async () => {
     const { parent, repository } = await makeRepository(
       "managed-landed-append-count"

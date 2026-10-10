@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` script against the real `WorktreeManager`)
 - **Area:** `src/core/orchestration/WorktreeManager.ts` (`completeManagedNoChange`, landed path of `completeManagedRun`, `removeAfterLanding`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
