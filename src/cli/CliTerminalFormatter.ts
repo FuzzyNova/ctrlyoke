@@ -41,6 +41,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
+  type WorkflowStopReason,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
 import type { CliOutput, TokenStats } from "../types/WebviewMessageTypes";
@@ -56,6 +57,7 @@ import type {
   WorktreeRunProjection,
 } from "../types/CtrlYokeTypes";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
+import { formatLimitValue } from "../utils/LimitUtils";
 import {
   formatTokenBreakdown,
   formatCostLabel,
@@ -642,6 +644,22 @@ export class CliTerminalFormatter {
     );
     writeLine("");
 
+    const limits = preview.steps[0]?.resolvedProperties.limits;
+    if (limits) {
+      writeLine(chalk.bold("Execution guardrails"));
+      writeLine(
+        `  Queue steps: ${CliTerminalFormatter.formatPreviewLimit(limits.maxQueueSteps)}`
+      );
+      writeLine(
+        `  Workflow duration: ${CliTerminalFormatter.formatPreviewLimit(limits.maxExecutionSeconds)} seconds`
+      );
+      writeLine(
+        `  Prompt timeout: ${CliTerminalFormatter.formatPreviewLimit(limits.maxPromptTimeoutSeconds)} seconds`
+      );
+      writeLine(`  Script timeout: ${limits.scriptTimeoutSeconds ?? "—"} seconds`);
+      writeLine("");
+    }
+
     if (preview.diagnostics.length > 0) {
       writeLine(chalk.bold("Diagnostics"));
       for (const diagnostic of preview.diagnostics) {
@@ -753,6 +771,18 @@ export class CliTerminalFormatter {
       }
       writeLine("");
     }
+  }
+
+  private static formatPreviewLimit(limit: number | undefined): string {
+    return limit === undefined ? "—" : formatLimitValue(limit);
+  }
+
+  /** Print the shared run-level reason when execution stopped on a guardrail. */
+  static renderGuardrailStopReason(
+    stopReason: WorkflowStopReason,
+    writeLine: (line: string) => void = (line) => console.log(line)
+  ): void {
+    writeLine(chalk.yellow(stopReason.message));
   }
 
   /**

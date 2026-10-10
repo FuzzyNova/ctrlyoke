@@ -1095,10 +1095,11 @@ export class CtrlYokeMCPServer {
         totalSteps: allSteps.length,
         completedSteps: completedCount,
         executionState: runtime.executionState,
-        maxSteps: isUnlimited(maxSteps) ? "unlimited" : maxSteps,
+        maxSteps,
         remainingSteps: isUnlimited(maxSteps)
-          ? "unlimited"
+          ? -1
           : maxSteps - allSteps.length,
+        stopReason: runtime.stopReason ?? null,
         workingFile,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,

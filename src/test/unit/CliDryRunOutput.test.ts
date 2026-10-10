@@ -53,7 +53,14 @@ function previewFixture(): WorkflowExecutionPreview {
           mcpServerIds: ["private"],
           hooks: [],
           permissions: { allowedRules: [], deniedRules: [] },
-          limits: { violations: [], maxStepsSource: "setting queue.maxSteps" },
+          limits: {
+            maxQueueSteps: -1,
+            maxExecutionSeconds: 900,
+            maxPromptTimeoutSeconds: -1,
+            scriptTimeoutSeconds: 3600,
+            violations: [],
+            maxStepsSource: "setting queue.maxSteps",
+          },
           conditions: { pre: [], end: [], retry: { maxAttempts: 1 } },
           propertySources: {},
         },
@@ -297,6 +304,28 @@ CliTerminalFormatter.renderEvents([
 
     assert.strictEqual((output.match(/\$ echo hello/g) ?? []).length, 1);
     assert.ok(!output.includes("…"));
+  });
+
+  test("renders execution guardrails with one unlimited label and shared stop messages", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderExecutionPreview(${JSON.stringify(previewFixture())});
+`);
+    assert.ok(output.includes("Execution guardrails"));
+    assert.ok(output.includes("Queue steps: unlimited"));
+    assert.ok(output.includes("Workflow duration: 900 seconds"));
+    assert.ok(output.includes("Prompt timeout: unlimited seconds"));
+    assert.ok(output.includes("Script timeout: 3600 seconds"));
+  });
+
+  test("prints the shared message for every guardrail stop code", () => {
+    const output = runFormatterScript(`
+for (const code of ["queue-size-limit", "workflow-time-limit", "prompt-timeout"]) {
+  CliTerminalFormatter.renderGuardrailStopReason({ code, threshold: 10, observed: 11, unit: code === "queue-size-limit" ? "steps" : "seconds", message: code + " shared message" });
+}
+`);
+    for (const code of ["queue-size-limit", "workflow-time-limit", "prompt-timeout"]) {
+      assert.ok(output.includes(`${code} shared message`));
+    }
   });
 
   test("renders a superseded Bash completion as the initiated slot body", () => {

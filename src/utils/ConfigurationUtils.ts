@@ -433,6 +433,14 @@ export const ConfigurationUtils = {
     )!;
   },
 
+  /** Get the effective script timeout in seconds for previews. */
+  getScriptTimeoutSeconds(): number {
+    const timeoutSec = configService.get(CONFIG_KEYS.EXECUTION).scriptTimeoutSec;
+    return Number.isFinite(timeoutSec) && timeoutSec > 0
+      ? timeoutSec
+      : CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeoutSec;
+  },
+
   /**
    * Get the default end condition for new workflows (null/undefined = disabled)
    */
@@ -887,6 +895,11 @@ export const ConfigurationUtils = {
     return isUnlimited(timeoutSeconds)
       ? undefined
       : secondsToMs(timeoutSeconds);
+  },
+
+  /** Get the configured prompt timeout in seconds, preserving -1 as unlimited. */
+  getPromptTimeoutSeconds(): number {
+    return configService.get(CONFIG_KEYS.EXECUTION).maxPromptTimeoutSec;
   },
 
   // ============================================================

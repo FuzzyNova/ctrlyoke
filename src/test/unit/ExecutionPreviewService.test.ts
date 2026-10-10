@@ -309,6 +309,9 @@ suite("ExecutionPreviewService", () => {
 
     assert.deepStrictEqual(preview.steps[0]?.resolvedProperties.limits, {
       maxQueueSteps: 3,
+      maxExecutionSeconds: -1,
+      maxPromptTimeoutSeconds: -1,
+      scriptTimeoutSeconds: 3600,
       maxStepsSource: "workflow maxSteps",
       violations: [],
     });

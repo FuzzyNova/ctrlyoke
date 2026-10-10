@@ -322,6 +322,11 @@ export async function runsHistoryCommand(
 
   io.writeOut(`Workflow: ${workflowName} (${workflowKey})`);
   renderRunSummaries(summaries, io);
+  for (const summary of summaries) {
+    if (summary.stopReason) {
+      io.writeOut(`Run ${summary.runRef}: ${summary.stopReason.message}`);
+    }
+  }
 }
 
 /**

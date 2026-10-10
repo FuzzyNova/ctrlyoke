@@ -8,8 +8,9 @@
 > resolves the limit through `src/utils/QueueLimitUtils.ts` (`resolveEffectiveMaxSteps`,
 > `buildStepLimitError`) plus `exceedsLimit` from `LimitUtils` (append paths in `1661a4231`), and
 > `WorkflowExecutor.checkStepLimit` already fails an oversized run at execution start before the first
-> step and again after out-of-process appends. The timeout audits are complete; Phase 2 (structured
-> stop reason codes). Setting names corrected to `execution.maxPromptTimeoutSec` /
+> step and again after out-of-process appends. The timeout audits are complete;
+> Phase 2 core contract and CLI/MCP/dry-run surfaces are shipped. Setting names
+> corrected to `execution.maxPromptTimeoutSec` /
 > `execution.scriptTimeoutSec`. Parallel steps shipped with `queue.maxParallelSteps`, and the related
 > plans now live in `dev/implemented/`.
 
@@ -97,8 +98,8 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   `ConfigurationUtils.getDynamicQueueConfig()` on every check, so mid-run
   setting changes take effect. Active time remains sourced from
   `WorkflowStateMachine.getActiveExecutionTime()`, which excludes pauses;
-  queue growth is reflected by the current `steps[]` length. Stops still use
-  the generic `fail()` plus warning until Phase 2 adds reason codes.
+  queue growth is reflected by the current `steps[]` length. Phase 2 now
+  attaches the structured reason; dashboard/log/notification rendering remains.
 - ~~Flag workflows that exceed effective `queue.maxSteps` in parser/editor
   validation~~ — **done**: `PromptFileParser` resolves authored `maxSteps`
   against a caller-supplied global limit; diagnostics, dashboard editor, and
@@ -129,24 +130,24 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 
 - Use stable structured reason codes for queue-size, prompt-timeout, and
   workflow-time stops across dashboard status/output, CLI results, MCP results,
-  logs, and notifications.
-- State the configured threshold and observed value in each stop message.
-- Include the effective global guardrails in dry-run output
-  (`dev/implemented/DRY_RUN_PREVIEW_PLAN.md` has shipped;
-  `ExecutionPreviewService` already resolves the effective `maxSteps`).
-- Today a step-limit stop **and** a workflow-time stop are each a
-  `notifyUserFeedback` warning plus a generic runtime `fail()`
-  (`WorkflowStateMachine.fail()` takes no reason), which is indistinguishable
-  from a harness failure in run state — this is the gap the reason codes close.
-  Attempt-level failures already carry a free-text `failureReason` and a
-  step-level `FailureKind`; the run level has nothing.
+  logs, and notifications. **CLI/MCP done:** CLI JSON exposes `stopReason`, text
+  prints its shared message, and `workflow_status` includes the persisted
+  reason. Dashboard, logs, and notifications remain for the next stage.
+- State the configured threshold and observed value in each stop message —
+  **done** in the shared stop-message builder and surfaced by CLI/MCP.
+- Include the effective global guardrails in dry-run output — **done** for CLI
+  text and JSON: queue steps, workflow duration, prompt timeout, and script
+  timeout. Unlimited JSON values are `-1`; CLI text uses `unlimited`.
+- CLI guardrail stops use exit code `6`, distinct from workflow and harness
+  failures; exit-code documentation is updated.
 - Design: one `const` code set in `DashboardConstants.ts` (queue-size limit,
   workflow-time limit, prompt timeout), one structured run-level stop reason
-  `{ code, threshold, observed, message }` carried by the runtime state machine
-  and persisted with the run, and one builder module for the messages (absorbing
-  `buildStepLimitError` and the workflow-time message) so every surface renders
-  the same text. A prompt timeout stays a step failure (`FailureKind.TIMEOUT`)
-  but the run-level stop it causes carries the prompt-timeout code.
+  `{ code, threshold, observed, unit, message }` carried by the runtime state
+  machine and persisted with the run, and one builder module for the messages
+  (absorbing `buildStepLimitError` and the workflow-time message) so every
+  surface renders the same text. A prompt timeout stays a step failure
+  (`FailureKind.TIMEOUT`) but the run-level stop it causes carries the
+  prompt-timeout code.
 
 - **Core contract implemented:** `GUARDRAIL_STOP_CODES` / `GuardrailStopCode`
   define `queue-size-limit`, `workflow-time-limit`, and `prompt-timeout`.
@@ -158,7 +159,8 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   as `stopReason`, and in the run summary/history metadata. Resume/restart clears
   the reason; user cancellation and ordinary harness failures leave it absent.
   The workflow runtime schema and generated references include the optional
-  field. CLI, MCP result, and dashboard rendering remain in later stages.
+  field. CLI and MCP surfaces are now complete; dashboard/log/notification
+  rendering remains in the next stage.
 
 ### Staging (queued by the orchestrator)
 
@@ -168,7 +170,9 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 3. ~~Structured stop-reason contract in core (constants, state machine,
    persistence, executor call sites, message builder).~~ — done; see the
    contract and persistence fields above.
-4. CLI, MCP, and dry-run surfaces for stop reasons and effective guardrails.
+4. ~~CLI, MCP, and dry-run surfaces for stop reasons and effective guardrails.~~ —
+   **done**: CLI JSON/text/history, MCP `workflow_status`, and CLI dry-run
+   text/JSON; MCP has no dry-run/preview tool.
 5. Dashboard and notification surfaces; settings copy; close out the plan and
    release-checklist item.
 - Keep configuration in the existing Execution and Queue settings sections; do

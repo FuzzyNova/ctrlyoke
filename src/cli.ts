@@ -1413,6 +1413,8 @@ async function runCommand(
       console.log(chalk.dim("━".repeat(52)));
       if (completed) {
         console.log(chalk.green("✓ Workflow completed successfully"));
+      } else if (state.stopReason) {
+        CliTerminalFormatter.renderGuardrailStopReason(state.stopReason);
       } else {
         console.log(chalk.red("✗ Workflow ended: " + state.status));
       }

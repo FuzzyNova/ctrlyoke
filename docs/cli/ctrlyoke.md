@@ -120,8 +120,9 @@ Use `--run` with `--workflow` to inspect a specific run.
 | `1`  | The workflow failed (a step or end condition failed), or a validation check failed                                           |
 | `2`  | Usage, parse, or unexpected error; also unapproved external roots or secret grants, or run state written by a newer ctrlyoke |
 | `3`  | A harness failed because its CLI could not be found (not installed, not on `PATH`)                                           |
-| `4`  | A step failed with a timeout                                                                                                 |
+| `4`  | A step failed with a timeout that is not a configured execution guardrail                                                     |
 | `5`  | Interrupted with Ctrl+C or `SIGTERM`; the run is stopped and its runner lock released                                        |
+| `6`  | The run stopped after reaching a configured execution guardrail                                                             |
 
 ## `ctrlyoke run`
 

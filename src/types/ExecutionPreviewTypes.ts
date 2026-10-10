@@ -138,6 +138,8 @@ export interface ExecutionLimitsPreview {
   maxQueueSteps?: number;
   maxStepsSource?: "workflow maxSteps" | "setting queue.maxSteps";
   maxExecutionSeconds?: number;
+  maxPromptTimeoutSeconds?: number;
+  scriptTimeoutSeconds?: number;
   maxTokens?: number;
   violations: string[];
 }

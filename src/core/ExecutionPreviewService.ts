@@ -1362,7 +1362,8 @@ export class ExecutionPreviewService {
     stepCount: number,
     workflow: PromptFile
   ): ExecutionLimitsPreview {
-    const config = this.options.dynamicQueueConfig;
+    const config = this.options.dynamicQueueConfig ??
+      ConfigurationUtils.getDynamicQueueConfig();
     const violations: string[] = [];
     const workflowMaxSteps = workflow.maxSteps;
     const effectiveMaxSteps = resolveEffectiveMaxSteps(
@@ -1375,12 +1376,10 @@ export class ExecutionPreviewService {
       );
     }
     return {
-      ...(!isUnlimited(effectiveMaxSteps)
-        ? { maxQueueSteps: effectiveMaxSteps }
-        : {}),
-      ...(config && !isUnlimited(config.maxWorkflowExecutionTime)
-        ? { maxExecutionSeconds: config.maxWorkflowExecutionTime }
-        : {}),
+      maxQueueSteps: effectiveMaxSteps,
+      maxExecutionSeconds: config.maxWorkflowExecutionTime,
+      maxPromptTimeoutSeconds: ConfigurationUtils.getPromptTimeoutSeconds(),
+      scriptTimeoutSeconds: ConfigurationUtils.getScriptTimeoutSeconds(),
       violations,
       maxStepsSource: getEffectiveMaxStepsSource(workflowMaxSteps),
     };
