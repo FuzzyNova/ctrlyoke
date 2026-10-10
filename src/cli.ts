@@ -2257,6 +2257,7 @@ async function validateCommand(
       finalStep: result.finalStep,
       parallelGroups: result.parallelGroups,
       workflowProperties: result,
+      globalMaxSteps: ConfigurationUtils.getGlobalMaxSteps(),
     });
     const warnings = [...result.warnings, ...stepValidation.warnings];
 

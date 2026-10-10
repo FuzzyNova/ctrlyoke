@@ -3887,10 +3887,73 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     context.dynamicQueueConfig.maxWorkflowExecutionTime = 1;
     queue.getRuntimeStateMachine().getActiveExecutionTime = () => 2_000;
     queue.loadPrompts({ steps: [{ prompt: "must-not-run" }] });
-
-    await executor.execute(integration, context);
+    configService.setCliOverlay({
+      queue: { maxWorkflowExecutionTimeSec: 1 },
+    });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
 
     assert.deepStrictEqual(integration.sentPrompts, []);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("reads the workflow time limit from live settings", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    context.dynamicQueueConfig.maxWorkflowExecutionTime = 3_600;
+    queue.getRuntimeStateMachine().getActiveExecutionTime = () => 1_000;
+    queue.loadPrompts({ steps: [{ prompt: "must-not-run" }] });
+    configService.setCliOverlay({
+      queue: { maxWorkflowExecutionTimeSec: 1 },
+    });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("checks the workflow time limit between retries of a step", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    let activeTimeMs = 0;
+    queue.getRuntimeStateMachine().getActiveExecutionTime = () => activeTimeMs;
+    integration.onSend = async () => {
+      activeTimeMs = 1_000;
+      integration.processExitFailure = true;
+      return { success: false };
+    };
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "retry-me",
+          errorBehavior: {
+            onError: CONDITION_ACTIONS.RETRY,
+            maxRetries: 3,
+          },
+        },
+      ],
+    });
+    configService.setCliOverlay({
+      queue: { maxWorkflowExecutionTimeSec: 1 },
+    });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.deepStrictEqual(integration.sentPrompts, ["retry-me"]);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
   });
 

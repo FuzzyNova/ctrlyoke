@@ -41,7 +41,8 @@ export type PromptDiagnosticsRefreshTrigger = (
 
 export type WorkflowTextValidator = (
   text: string,
-  kind: CtrlYokeFileKind
+  kind: CtrlYokeFileKind,
+  globalMaxSteps?: number
 ) => WorkflowTextValidationResult;
 
 export interface PromptDiagnosticsProviderOptions {
@@ -53,6 +54,8 @@ export interface PromptDiagnosticsProviderOptions {
   validateWorkflowText?: WorkflowTextValidator;
   /** Settings-level pre-condition used by the runtime property resolver. */
   getSettingsPreCondition?: () => unknown;
+  /** Current settings-level queue cap used by parser validation. */
+  getGlobalMaxSteps?: () => number;
 }
 
 // A function, not a module-level table: the bundle is loaded against a stub
@@ -158,7 +161,11 @@ export class PromptDiagnosticsProvider implements vscode.Disposable {
         !this.options.isYamlSchemaValidationSuppressed?.()
           ? this.toSchemaDiagnostics(
               document,
-              this.options.validateWorkflowText(document.getText(), kind).issues
+              this.options.validateWorkflowText(
+                document.getText(),
+                kind,
+                this.options.getGlobalMaxSteps?.()
+              ).issues
             )
           : [];
       // The text moved on while references resolved; the newer pass owns the result.

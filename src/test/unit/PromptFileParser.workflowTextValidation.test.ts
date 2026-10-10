@@ -44,6 +44,34 @@ suite("PromptFileParser.validateWorkflowText", () => {
     );
   });
 
+  test("flags queue entries over the supplied global limit, including disabled and parallel steps", () => {
+    const result = parser.validateWorkflowText(
+      "steps:\n  - prompt: first\n    enabled: false\n  - parallel:\n      - prompt: second\n      - prompt: third\n",
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+      2
+    );
+    const limitIssue = result.issues.find((issue) =>
+      issue.message.includes("Step limit reached")
+    );
+    assert.ok(limitIssue);
+    assert.strictEqual(limitIssue.severity, "warning");
+    assert.strictEqual(limitIssue.instancePath, "/steps");
+    assert.match(limitIssue.message, /3\/2 steps/);
+  });
+
+  test("uses an authored maxSteps override instead of the supplied global limit", () => {
+    const result = parser.validateWorkflowText(
+      "maxSteps: 4\nsteps:\n  - prompt: first\n  - prompt: second\n",
+      CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
+      1
+    );
+    assert.ok(
+      result.issues.some((issue) =>
+        issue.message.includes("Step limit reached")
+      ) === false
+    );
+  });
+
   test("reports YAML syntax errors with a source position and no feedback", () => {
     const notifications: unknown[] = [];
     const feedbackParser = new PromptFileParser(undefined, {

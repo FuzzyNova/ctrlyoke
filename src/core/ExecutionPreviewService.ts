@@ -413,7 +413,9 @@ export class ExecutionPreviewService {
       );
     }
 
-    const limits = this.buildLimits(steps.length, workflow);
+    // Queue limits count the persisted queue definition, including disabled
+    // steps and members omitted from a scoped preview.
+    const limits = this.buildLimits(workflow.steps?.length ?? 0, workflow);
     const diagnostics = [
       ...compatibilityDiagnostics,
       ...steps.flatMap((step) => step.diagnostics),
@@ -864,7 +866,7 @@ export class ExecutionPreviewService {
         allowedRules: [...(permission?.allowedTools ?? [])],
         deniedRules: [...(permission?.deniedTools ?? [])],
       },
-      limits: this.buildLimits(0, workflow),
+      limits: this.buildLimits(workflow.steps?.length ?? 0, workflow),
       conditions,
       propertySources: Object.fromEntries(
         Object.entries(target.sources).map(([key, source]) => [

@@ -260,7 +260,7 @@ export class PromptEditorSupportService {
     position?: { line: number; column: number };
   }> {
     return this.workflowTextValidator
-      .validateWorkflowText(text, kind)
+      .validateWorkflowText(text, kind, ConfigurationUtils.getGlobalMaxSteps())
       .issues.map(({ instancePath, message, severity, position }) => ({
         path: instancePath,
         message,

@@ -4,11 +4,11 @@
 >
 > **Priority:** P2 — complete with or before unattended scheduling
 
-> **2026-10-10 audit:** Partially done. The `queue.maxSteps` single-sourcing landed: every path
+> **2026-10-10 audit:** Phase 1 complete. The `queue.maxSteps` single-sourcing landed: every path
 > resolves the limit through `src/utils/QueueLimitUtils.ts` (`resolveEffectiveMaxSteps`,
 > `buildStepLimitError`) plus `exceedsLimit` from `LimitUtils` (append paths in `1661a4231`), and
 > `WorkflowExecutor.checkStepLimit` already fails an oversized run at execution start before the first
-> step and again after out-of-process appends. Still open: the timeout audits and Phase 2 (structured
+> step and again after out-of-process appends. The timeout audits are complete; Phase 2 (structured
 > stop reason codes). Setting names corrected to `execution.maxPromptTimeoutSec` /
 > `execution.scriptTimeoutSec`. Parallel steps shipped with `queue.maxParallelSteps`, and the related
 > plans now live in `dev/implemented/`.
@@ -73,12 +73,14 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 - ~~Reject an oversized initial workflow before its first step starts~~ —
   **done**: `WorkflowExecutor` calls `checkStepLimit` right after the run starts
   and before the first step, and again after merging out-of-process appends.
-  Remaining gap: `PromptFileParser` validation only *warns*
-  (`STEP_LIMIT_EXCEEDED`) and only against an authored workflow `maxSteps`, not
-  the global setting, so the editor/dry-run cannot flag a run that will fail on
-  `queue.maxSteps`.
-- Count enabled and disabled queue entries consistently with the existing queue
-  definition; do not create a second “billable step” count.
+  `PromptFileParser` and editor validation also warn (`STEP_LIMIT_EXCEEDED`)
+  against the effective authored/global limit.
+- ~~Count enabled and disabled queue entries consistently with the existing
+  queue definition; do not create a second “billable step” count~~ — **done**:
+  append, topology, MCP, continuation, executor, and parser paths count the
+  flattened `steps[]` entries regardless of `enabled`. Preview limits now use
+  the definition's full `steps[]` length rather than its enabled/scoped preview
+  targets; parallel members count individually.
 - ~~Audit `execution.maxPromptTimeoutSec` across interactive/headless transports
   and completion monitors so `-1` and finite values have the same meaning for
   every CLI harness~~ — **done**: all six harnesses use the shared headless
@@ -86,34 +88,41 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   sessions). Headless process expiry now becomes a step-level `TIMEOUT`
   failure; Codex app-server timeouts are usage probes, and OpenCode server
   transport is MCP configuration rather than prompt execution. Added finite
-  and unlimited coverage for both shared enforcement paths.
-- Audit `queue.maxWorkflowExecutionTimeSec` across normal steps, script steps,
-  retries, `finalStep`, pause/resume, and dynamically extended queues. Continue
-  enforcing it only at safe boundaries; do not kill a harness while it may be
-  writing files.
-- `-1` means unlimited for every setting whose schema accepts it
+  and unlimited coverage for both shared enforcement paths (`5e3f876b8`).
+- ~~Audit `queue.maxWorkflowExecutionTimeSec` across normal steps, script steps,
+  retries, `finalStep`, pause/resume, and dynamically extended queues~~ —
+  **done**: checks remain at queue/group and `finalStep` boundaries and now also
+  run before a same-step retry (after prompt, script, pre-condition, or end-
+  condition work has returned). They read the current setting from
+  `ConfigurationUtils.getDynamicQueueConfig()` on every check, so mid-run
+  setting changes take effect. Active time remains sourced from
+  `WorkflowStateMachine.getActiveExecutionTime()`, which excludes pauses;
+  queue growth is reflected by the current `steps[]` length. Stops still use
+  the generic `fail()` plus warning until Phase 2 adds reason codes.
+- ~~Flag workflows that exceed effective `queue.maxSteps` in parser/editor
+  validation~~ — **done**: `PromptFileParser` resolves authored `maxSteps`
+  against a caller-supplied global limit; diagnostics, dashboard editor, and
+  CLI validation pass the current setting. Execution preview uses the same
+  effective limit and counts all queue entries even for scoped previews.
+- ~~`-1` means unlimited for every setting whose schema accepts it
   (`execution.maxPromptTimeoutSec`, `queue.maxSteps`,
-  `queue.maxWorkflowExecutionTimeSec`, retry caps), read through `LimitUtils`.
-  `execution.scriptTimeoutSec` is **deliberately finite**: its schema has
-  `exclusiveMinimum: 0` and `ConfigurationUtils.getScriptTimeoutMs()` falls back
-  to the default for any non-positive value. Keep it that way (scripts run
-  unattended and must stay bounded). Document it in the setting description;
-  do not give `-1` a meaning there.
+  `queue.maxWorkflowExecutionTimeSec`, retry caps), read through `LimitUtils`~~ —
+  **done**: workflow time uses `LimitUtils.isUnlimited`; prompt timeout uses
+  the same shared limit semantics. `execution.scriptTimeoutSec` remains
+  deliberately finite: its schema has `exclusiveMinimum: 0` and
+  `ConfigurationUtils.getScriptTimeoutMs()` falls back to the default for
+  non-positive values. Keep that setting bounded for unattended scripts.
 
-**Orchestrator findings (2026-10-10 planning pass)** — starting points for the
-audits, verify before relying on them:
+**Orchestrator findings (2026-10-10 audit):**
 
-- Prompt timeout is read in exactly two places:
-  `CliTransportCoordinator` (headless spawn `timeout`) and `CliLogMonitor`
-  (log-monitor timer). Harness-specific transports that bypass both (e.g. the
-  Codex app-server client, the opencode server, PTY/interactive completion
-  paths) must be checked for whether they honour the setting at all. A timeout
-  already maps to `FAILURE_KINDS.TIMEOUT` at the step level.
-- Workflow time is checked by `WorkflowExecutor.checkExecutionTimeLimit` only
-  before each queue step/parallel group and before each `finalStep` pass, using
-  `context.dynamicQueueConfig` captured at run start. It is not checked between
-  error/end-condition retries of a single step, and a mid-run settings change
-  is not observed. Active time comes from
+- All six CLI harnesses use the shared headless spawn or interactive
+  `CliLogMonitor` enforcement path, including PTY and inherited-stdio sessions.
+  Headless process expiry maps to a step-level `FAILURE_KINDS.TIMEOUT`; Codex
+  app-server timeout values are usage probes, while OpenCode server transport
+  configures MCP rather than prompt execution.
+- Workflow time is checked before each queue step/parallel group, before each
+  `finalStep` pass, and between retry attempts. Every check reads the live queue
+  setting. Active time comes from
   `WorkflowStateMachine.getActiveExecutionTime()` (pauses excluded).
 
 ### Phase 2 — Observable outcomes
@@ -141,9 +150,9 @@ audits, verify before relying on them:
 
 ### Staging (queued by the orchestrator)
 
-1. Prompt-timeout audit and fixes across transports/harnesses.
-2. Workflow-time audit and fixes; `PromptFileParser`/editor validation against
-   the effective global `queue.maxSteps`; queue counting consistency.
+1. ~~Prompt-timeout audit and fixes across transports/harnesses.~~
+2. ~~Workflow-time audit and fixes; `PromptFileParser`/editor validation against
+   the effective global `queue.maxSteps`; queue counting consistency.~~
 3. Structured stop-reason contract in core (constants, state machine,
    persistence, executor call sites, message builder).
 4. CLI, MCP, and dry-run surfaces for stop reasons and effective guardrails.

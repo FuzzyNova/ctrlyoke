@@ -627,8 +627,6 @@ export class WorkflowExecutor {
             const state = this.promptQueue.getState();
             if (
               await this.checkExecutionTimeLimit(
-                context.dynamicQueueConfig,
-                state.currentIndex,
                 this.promptQueue.getProgress().total
               )
             ) {
@@ -727,8 +725,6 @@ export class WorkflowExecutor {
         }
         if (
           await this.checkExecutionTimeLimit(
-            context.dynamicQueueConfig,
-            this.promptQueue.getState().currentIndex,
             this.promptQueue.getProgress().total
           )
         ) {
@@ -2084,6 +2080,9 @@ export class WorkflowExecutor {
             preConditionErrorRetryCount
           );
           if (preDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+            if (await this.checkExecutionTimeLimitBeforeRetry()) {
+              return false;
+            }
             attemptIndex = preDisposition.nextAttemptIndex ?? attemptIndex + 1;
             preConditionErrorRetryCount =
               preDisposition.nextErrorRetryCount ??
@@ -2348,6 +2347,9 @@ export class WorkflowExecutor {
         );
 
         if (failureDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+          if (await this.checkExecutionTimeLimitBeforeRetry()) {
+            return false;
+          }
           attemptIndex++;
           promptErrorRetryCounter.count =
             failureDisposition.nextErrorRetryCount ??
@@ -2416,6 +2418,9 @@ export class WorkflowExecutor {
         );
 
         if (endDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+          if (await this.checkExecutionTimeLimitBeforeRetry()) {
+            return false;
+          }
           attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
           endConditionErrorRetryCount =
             endDisposition.nextErrorRetryCount ??
@@ -2790,6 +2795,9 @@ export class WorkflowExecutor {
           false
         );
         if (errorDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+          if (await this.checkExecutionTimeLimitBeforeRetry()) {
+            return false;
+          }
           attemptIndex = errorDisposition.nextAttemptIndex ?? attemptIndex + 1;
           errorRetryCount =
             errorDisposition.nextErrorRetryCount ?? errorRetryCount + 1;
@@ -5001,11 +5009,10 @@ export class WorkflowExecutor {
   }
 
   private async checkExecutionTimeLimit(
-    dynamicConfig: DynamicQueueConfig,
-    currentIndex: number,
     totalSteps: number
   ): Promise<boolean> {
-    const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
+    const maxTimeSec =
+      ConfigurationUtils.getDynamicQueueConfig().maxWorkflowExecutionTime;
     if (isUnlimited(maxTimeSec)) {
       return false;
     }
@@ -5015,9 +5022,18 @@ export class WorkflowExecutor {
 
     if (elapsedSec >= maxTimeSec) {
       const completedCount = this.promptQueue.getCompletedCount();
-      const remainingCount = totalSteps - currentIndex;
+      const remainingCount = Math.max(
+        0,
+        totalSteps - this.promptQueue.getTerminalCount()
+      );
 
-      const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalSteps} steps. ${remainingCount} steps remaining in queue.`;
+      const message = this.buildWorkflowTimeLimitMessage(
+        elapsedSec,
+        maxTimeSec,
+        completedCount,
+        totalSteps,
+        remainingCount
+      );
 
       notifyUserFeedback(this.userFeedbackSink, "warning", message);
       Log.trace(`[WorkflowExecutor] ${message}`);
@@ -5028,6 +5044,22 @@ export class WorkflowExecutor {
     }
 
     return false;
+  }
+
+  private buildWorkflowTimeLimitMessage(
+    elapsedSec: number,
+    maxTimeSec: number,
+    completedCount: number,
+    totalSteps: number,
+    remainingCount: number
+  ): string {
+    return `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalSteps} steps. ${remainingCount} steps remaining in queue.`;
+  }
+
+  private async checkExecutionTimeLimitBeforeRetry(): Promise<boolean> {
+    return this.checkExecutionTimeLimit(
+      this.promptQueue.getState().steps.length
+    );
   }
 
   private async checkStepLimit(
