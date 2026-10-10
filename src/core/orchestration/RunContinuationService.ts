@@ -192,13 +192,19 @@ export class RunContinuationService {
         ? lockInspection.lock
         : undefined;
     const lockNamesTarget = activeLock?.runRef === runRef;
+    // The executing step of a live run may still shape its own queue. Pause
+    // means "let the current step finish, then pause", and queuing follow-up
+    // work can be part of that step, so PAUSING keeps the exception: appended
+    // steps are merged when the step ends and run on Resume. CANCELLING does
+    // not — Stop discards the step's outcome.
     const activeTargetOperation =
       allowActiveTargetOperation &&
       (action === RUN_CONTINUATION_ACTIONS.APPEND ||
         action === RUN_CONTINUATION_ACTIONS.EDIT) &&
       activeLock !== undefined &&
       lockNamesTarget &&
-      executionState === EXECUTION_STATES.RUNNING;
+      (executionState === EXECUTION_STATES.RUNNING ||
+        executionState === EXECUTION_STATES.PAUSING);
 
     // A self-owned lock without the resident execution object is an invariant
     // failure, not an orphan. Treating it as external or adoptable would let a
@@ -240,6 +246,11 @@ export class RunContinuationService {
       // orchestrator before it ever reaches this validator, so reaching here with
       // the lock on this run means a non-resident (e.g. CLI) owner.
       if (action !== RUN_CONTINUATION_ACTIONS.EDIT || lockNamesTarget) {
+        if (lockNamesTarget) {
+          throw new Error(
+            `Cannot ${action} while this run is executing (state ${executionState})`
+          );
+        }
         if (
           lockInspection.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE
         ) {
@@ -261,7 +272,7 @@ export class RunContinuationService {
     }
 
     if (
-      executionState === EXECUTION_STATES.PAUSING ||
+      (executionState === EXECUTION_STATES.PAUSING && !activeTargetOperation) ||
       executionState === EXECUTION_STATES.CANCELLING
     ) {
       throw new Error(
@@ -443,7 +454,10 @@ export class RunContinuationService {
           source.finalStep
         );
         assertNoParallelSiblingReferences(
-          { steps: renumbered.steps, parallelGroups: nextTopology.parallelGroups },
+          {
+            steps: renumbered.steps,
+            parallelGroups: nextTopology.parallelGroups,
+          },
           source
         );
         const incomingGroupIds = new Set(
@@ -662,7 +676,10 @@ export class RunContinuationService {
           source.finalStep
         );
         assertNoParallelSiblingReferences(
-          { steps: renumbered.steps, parallelGroups: nextTopology.parallelGroups },
+          {
+            steps: renumbered.steps,
+            parallelGroups: nextTopology.parallelGroups,
+          },
           source
         );
 

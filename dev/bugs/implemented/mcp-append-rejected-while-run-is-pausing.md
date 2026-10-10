@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (hit live: the user pressed Pause while this final step was running; every `append_step` call then failed)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`validateContinuationTarget`), MCP `append_step`/`edit_step`/`remove_step`/`reorder_steps`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

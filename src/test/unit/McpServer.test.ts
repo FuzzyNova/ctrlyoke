@@ -1429,12 +1429,16 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("global_status reports the running final-step pass without a queue position", async () => {
     const server = await setup();
-    const run = await createRun("final-step-status", "2026-01-07T00-00-00-000Z", {
-      stepCount: 2,
-      currentIndex: 2,
-      executionState: EXECUTION_STATES.RUNNING,
-      finalStep: { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 1 },
-    });
+    const run = await createRun(
+      "final-step-status",
+      "2026-01-07T00-00-00-000Z",
+      {
+        stepCount: 2,
+        currentIndex: 2,
+        executionState: EXECUTION_STATES.RUNNING,
+        finalStep: { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 1 },
+      }
+    );
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(await server.invokeTool("global_status", {}));
@@ -1653,7 +1657,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("rejects editing a parallel member to target its sibling", async () => {
     const server = await setup();
-    const { run, ownerToken } = await prepareActiveRun("edit-sibling-reference");
+    const { run, ownerToken } = await prepareActiveRun(
+      "edit-sibling-reference"
+    );
     const workingFile = JSON.parse(
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
@@ -2672,7 +2678,12 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     workingFile.parallelGroups = [
-      { id: "active-sibling-group", startIndex: 1, endIndex: 2, failFast: true },
+      {
+        id: "active-sibling-group",
+        startIndex: 1,
+        endIndex: 2,
+        failFast: true,
+      },
     ];
     workingFile._runtime = {
       ...workingFile._runtime,
@@ -2690,7 +2701,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await assert.rejects(
         invokeAppendHandler(server, {
           position: "parallelWithCurrent",
-          steps: [{ prompt: "joined member", resumeSession: true, sessionId: 3 }],
+          steps: [
+            { prompt: "joined member", resumeSession: true, sessionId: 3 },
+          ],
         }),
         /Numeric sessionId reference 3 cannot target a sibling in parallel group \(steps 2, 3, 4\)/
       );
@@ -2946,6 +2959,52 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       ["prompt-next-clamp", "also completed", "steered", "pending"]
     );
   });
+
+  // Pause lets the current step finish, so a step that queues follow-up work
+  // (an orchestrator or final step) must still be able to; Stop must not.
+  for (const [state, accepted] of [
+    [EXECUTION_STATES.PAUSING, true],
+    [EXECUTION_STATES.CANCELLING, false],
+  ] as const) {
+    test(`${accepted ? "accepts" : "rejects"} an append from the executing step while the run is ${state}`, async () => {
+      const server = await setup();
+      const { run, ownerToken } = await prepareActiveRun(`append-${state}`);
+      try {
+        const file = JSON.parse(
+          await fs.readFile(run.runFilePath, "utf8")
+        ) as WorkingFile;
+        file._runtime = { ...file._runtime!, executionState: state };
+        await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+
+        const append = server.invokeTool("append_step", {
+          position: "end",
+          steps: [{ prompt: "follow-up" }],
+        });
+        if (!accepted) {
+          await assert.rejects(append, (error: Error) => {
+            assert.match(error.message, new RegExp(state));
+            assert.doesNotMatch(error.message, /Another run/);
+            return true;
+          });
+          return;
+        }
+        assert.strictEqual(responseJson(await append).success, true);
+        const persisted = JSON.parse(
+          await fs.readFile(run.runFilePath, "utf8")
+        ) as WorkingFile;
+        assert.deepStrictEqual(
+          persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+          ["completed", "in flight", "pending-a", "pending-b", "follow-up"]
+        );
+        assert.strictEqual(
+          persisted._runtime?.executionState,
+          EXECUTION_STATES.PAUSING
+        );
+      } finally {
+        await releaseActiveRun(run, ownerToken);
+      }
+    });
+  }
 
   test("rejects an append while another run in the lineage holds the lock", async () => {
     const server = await setup();

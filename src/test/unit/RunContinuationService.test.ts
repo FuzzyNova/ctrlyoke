@@ -218,6 +218,59 @@ suite(
       }
     });
 
+    test("allows the executing target's own append/edit while pausing, not while cancelling", async () => {
+      const ws = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-edit-lock-pausing-")
+      );
+      try {
+        const repo = new WorkflowLineageRepository();
+        await seedLineage(ws, EXECUTION_STATES.PAUSING);
+        await liveLock(ws, targetRun);
+        for (const action of ["append", "edit"] as const) {
+          const target =
+            await RunContinuationService.validateContinuationTarget(
+              ws,
+              workflowKey,
+              targetRun,
+              repo,
+              action,
+              true
+            );
+          assert.strictEqual(target.allowInterruptedRun, true);
+        }
+        // Without the active-target opt-in a pausing run stays locked, and the
+        // error names this run's state rather than a phantom sibling run.
+        await assert.rejects(
+          RunContinuationService.validateContinuationTarget(
+            ws,
+            workflowKey,
+            targetRun,
+            repo,
+            "continue"
+          ),
+          (error: Error) =>
+            /pausing/.test(error.message) && !/Another run/.test(error.message)
+        );
+
+        await seedLineage(ws, EXECUTION_STATES.CANCELLING);
+        await assert.rejects(
+          RunContinuationService.validateContinuationTarget(
+            ws,
+            workflowKey,
+            targetRun,
+            repo,
+            "append",
+            true
+          ),
+          (error: Error) =>
+            /cancelling/.test(error.message) &&
+            !/Another run/.test(error.message)
+        );
+      } finally {
+        await fs.rm(ws, { recursive: true, force: true });
+      }
+    });
+
     test("reports a self-owned but untracked continuation as an invariant failure", async () => {
       const ws = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-edit-lock-self-untracked-")
@@ -431,7 +484,12 @@ suite("RunContinuationService topology append transaction", () => {
             },
           ],
           parallelGroups: [
-            { id: "sibling-target", startIndex: 0, endIndex: 1, failFast: true },
+            {
+              id: "sibling-target",
+              startIndex: 0,
+              endIndex: 1,
+              failFast: true,
+            },
           ],
         },
         1,
@@ -784,7 +842,9 @@ suite("RunContinuationService topology append transaction", () => {
       [{ id: "active-group", startIndex: 1, endIndex: 2, failFast: true }]
     );
     const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
-    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    const source = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
     source._runtime = {
       ...source._runtime,
       currentIndex: 1,
@@ -949,7 +1009,9 @@ suite("RunContinuationService addressed step mutations", () => {
       { prompt: "member-b" },
     ]);
     const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
-    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    const source = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
     source.parallelGroups = [
       { id: "edit-group", startIndex: 1, endIndex: 2, failFast: true },
     ];
