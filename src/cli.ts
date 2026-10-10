@@ -99,7 +99,10 @@ import {
 } from "./config/ExternalRootsTrustStore";
 import { secretGrantsTrustStore } from "./config/SecretGrantsTrustStore";
 import { WorkingFileManager } from "./core/WorkingFileManager";
-import { RunContinuationService } from "./core/orchestration/RunContinuationService";
+import {
+  RUN_CONTINUATION_ACTIONS,
+  RunContinuationService,
+} from "./core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
 import { createPriorContextResolver } from "./core/orchestration/AddressedPriorContextResolver";
@@ -1931,7 +1934,10 @@ async function executeAddressedCliOperation(
     workspaceRoot,
     workflowKey,
     runRef,
-    lineageRepository
+    lineageRepository,
+    operation.kind === CLI_RUN_OPERATION_KINDS.APPEND
+      ? RUN_CONTINUATION_ACTIONS.APPEND
+      : RUN_CONTINUATION_ACTIONS.CONTINUE
   );
 
   if (operation.kind === CLI_RUN_OPERATION_KINDS.APPEND) {
@@ -2081,7 +2087,10 @@ async function validateCliContinuationTarget(
   workspaceRoot: string,
   workflowKey: WorkflowKey,
   runRef: RunRef,
-  lineageRepository: WorkflowLineageRepository
+  lineageRepository: WorkflowLineageRepository,
+  action:
+    | typeof RUN_CONTINUATION_ACTIONS.APPEND
+    | typeof RUN_CONTINUATION_ACTIONS.CONTINUE
 ): Promise<{
   definitionRevision: number;
   descriptorRevision: number;
@@ -2092,7 +2101,7 @@ async function validateCliContinuationTarget(
     workflowKey,
     runRef,
     lineageRepository,
-    "continue",
+    action,
     false,
     cliRunnerHostIdentity
   );

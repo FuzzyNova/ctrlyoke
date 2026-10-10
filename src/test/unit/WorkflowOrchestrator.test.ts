@@ -4828,6 +4828,9 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     );
     try {
       const run = await createRun(workspace);
+      const file = JSON.parse(await fs.readFile(run.workingFilePath, "utf8"));
+      file._runtime.executionState = EXECUTION_STATES.ERROR;
+      await fs.writeFile(run.workingFilePath, JSON.stringify(file), "utf8");
       await fs.writeFile(
         WorkflowLockManager.getLockPath(workspace, run.workflowKey),
         JSON.stringify({
@@ -4912,6 +4915,43 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         PANEL_CLIENT_ID
       );
       assert.strictEqual(called, true);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses to continue a completed run that has no pending rewind", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-completed-continue-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const file = JSON.parse(await fs.readFile(run.workingFilePath, "utf8"));
+      file._runtime.executionState = EXECUTION_STATES.COMPLETED;
+      await fs.writeFile(run.workingFilePath, JSON.stringify(file), "utf8");
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let called = false;
+      internal.buildWorkflowInstance = () => ({
+        executeContinuationAtRun: async () => {
+          called = true;
+        },
+      });
+
+      await assert.rejects(
+        () =>
+          orchestrator.continueAtRun(
+            { workflowKey: run.workflowKey, runRef: run.runRef },
+            1,
+            2,
+            PANEL_CLIENT_ID
+          ),
+        /completed and has no pending work to continue/
+      );
+      assert.strictEqual(called, false);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

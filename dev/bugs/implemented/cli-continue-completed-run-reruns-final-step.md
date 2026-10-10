@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with the built CLI on a script-only workflow)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`validateContinuationTarget`)
-- **Severity:** low (low confidence on intended behaviour; needs a design decision)
+- **Resolution:** fixed in this commit — `continue` on a completed run (no pending rewind) is refused with a usage error (exit 2) pointing at `append`, in both the CLI/MCP and dashboard paths; `append` remains allowed
 
 ## Symptom
 

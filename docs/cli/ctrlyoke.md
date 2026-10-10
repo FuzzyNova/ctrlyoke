@@ -277,8 +277,10 @@ ctrlyoke continue --workflow release --run 7
 
 A run left `running` or `paused` by a process that no longer holds its runner
 lock can be adopted this way. `continue` refuses while the lineage has an
-unsaved draft or pending edit, while any run in the lineage is executing, or
-while the target run is pausing or cancelling. `--headless`, `--interactive`,
+unsaved draft or pending edit, while any run in the lineage is executing,
+while the target run is pausing or cancelling, or when the target run has
+completed — a completed run has no pending work, so use `append` to add steps
+or `rerun` to start a new run. `--headless`, `--interactive`,
 and the tool permission flags set workflow defaults for pending work; they do
 not rewrite completed step properties. `continue` does not accept `--force`.
 

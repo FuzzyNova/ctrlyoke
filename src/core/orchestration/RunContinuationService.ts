@@ -73,7 +73,7 @@ import {
 import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
 import { assertStepIndex } from "./StepIndexValidation";
 
-const RUN_CONTINUATION_ACTIONS = {
+export const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
   CONTINUE: "continue",
   EDIT: "edit",
@@ -81,6 +81,27 @@ const RUN_CONTINUATION_ACTIONS = {
 
 type RunContinuationAction =
   (typeof RUN_CONTINUATION_ACTIONS)[keyof typeof RUN_CONTINUATION_ACTIONS];
+
+/**
+ * A completed run has no pending work, so continuing it would only start
+ * another final-step pass. Refuse it unless a pending rewind has reopened the
+ * run's suffix. Shared by the CLI/MCP and dashboard continuation paths; the
+ * dashboard never offers Continue for a completed run either. Appending is the
+ * way to add work to a completed run, so this guards `continue` only.
+ */
+export function assertRunHasWorkToContinue(
+  executionState: ExecutionState,
+  pendingRewindOnThisRun: boolean
+): void {
+  if (
+    executionState === EXECUTION_STATES.COMPLETED &&
+    !pendingRewindOnThisRun
+  ) {
+    throw new Error(
+      "This run has completed and has no pending work to continue; append steps to add work, or re-run the workflow to start a new run"
+    );
+  }
+}
 
 export type RunStepChange =
   | { updates: Partial<WorkflowStep>; clearProperties?: string[] }
@@ -269,6 +290,9 @@ export class RunContinuationService {
       !(action === RUN_CONTINUATION_ACTIONS.EDIT && pendingRewindOnThisRun)
     ) {
       throw new Error("This workflow has a draft or pending continuation");
+    }
+    if (action === RUN_CONTINUATION_ACTIONS.CONTINUE) {
+      assertRunHasWorkToContinue(executionState, pendingRewindOnThisRun);
     }
 
     if (

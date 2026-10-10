@@ -1,6 +1,9 @@
 import * as fs from "fs/promises";
 import { WorkingFileManager } from "../WorkingFileManager";
-import { RunContinuationService } from "./RunContinuationService";
+import {
+  assertRunHasWorkToContinue,
+  RunContinuationService,
+} from "./RunContinuationService";
 import { OutputHistoryManager } from "./OutputHistoryManager";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
@@ -23,6 +26,7 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  type ExecutionState,
   HISTORY_TRASH_ENTRY_KINDS,
   type HarnessId,
   USER_FEEDBACK_SEVERITY,
@@ -183,6 +187,7 @@ export interface ExplicitContinuationValidation {
   activeInstance: RunLifecycleInstancePort | undefined;
   allowInterruptedRun: boolean;
   pendingRewindOnThisRun: boolean;
+  targetState: ExecutionState;
 }
 
 /** Owns addressed run identity decisions and run lifecycle actions. */
@@ -803,13 +808,18 @@ export class RunLifecycleService {
     clientId: string = this.host.panelClientId
   ): Promise<void> {
     await this.host.assertNoPendingWorkflowExternalRoots(clientId);
-    const { workspaceRoot, activeInstance, pendingRewindOnThisRun } =
-      await this.validateExplicitContinuationTarget(
-        address,
-        expectedDefinitionRevision,
-        expectedDescriptorRevision,
-        clientId
-      );
+    const {
+      workspaceRoot,
+      activeInstance,
+      pendingRewindOnThisRun,
+      targetState,
+    } = await this.validateExplicitContinuationTarget(
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      clientId
+    );
+    assertRunHasWorkToContinue(targetState, pendingRewindOnThisRun);
     await this.settlePendingRewindForContinuation(
       workspaceRoot,
       address,
@@ -995,6 +1005,7 @@ export class RunLifecycleService {
       activeInstance,
       allowInterruptedRun: interruptedRun,
       pendingRewindOnThisRun,
+      targetState,
     };
   }
 

@@ -271,6 +271,58 @@ suite(
       }
     });
 
+    test("refuses to continue a completed run but still allows appending to it", async () => {
+      const ws = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-continue-completed-")
+      );
+      try {
+        await seedLineage(ws, EXECUTION_STATES.COMPLETED);
+        const repo = new WorkflowLineageRepository();
+
+        // A completed run has no pending work; continuing it would only start
+        // another final-step pass.
+        await assert.rejects(
+          RunContinuationService.validateContinuationTarget(
+            ws,
+            workflowKey,
+            targetRun,
+            repo,
+            "continue"
+          ),
+          /completed and has no pending work to continue; append steps/
+        );
+        const appendTarget =
+          await RunContinuationService.validateContinuationTarget(
+            ws,
+            workflowKey,
+            targetRun,
+            repo,
+            "append"
+          );
+        assert.strictEqual(appendTarget.definitionRevision, 1);
+
+        for (const state of [
+          EXECUTION_STATES.STOPPED,
+          EXECUTION_STATES.ERROR,
+          EXECUTION_STATES.IDLE,
+        ]) {
+          await seedLineage(ws, state);
+          await assert.doesNotReject(
+            RunContinuationService.validateContinuationTarget(
+              ws,
+              workflowKey,
+              targetRun,
+              repo,
+              "continue"
+            ),
+            `continue should be allowed from ${state}`
+          );
+        }
+      } finally {
+        await fs.rm(ws, { recursive: true, force: true });
+      }
+    });
+
     test("reports a self-owned but untracked continuation as an invariant failure", async () => {
       const ws = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-edit-lock-self-untracked-")
