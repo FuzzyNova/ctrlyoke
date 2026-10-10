@@ -3461,6 +3461,62 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("substitutes retry variables once for fallback and explicit retry prompts", async () => {
+    const scenarios: Array<{
+      endCondition: PromptStep["endCondition"];
+      results: EvaluationResult[];
+      expectedRetry: string;
+    }> = [
+      {
+        endCondition: {
+          script: "check-result",
+          onPass: CONDITION_ACTIONS.RETRY,
+          maxRetries: 1,
+        },
+        results: [shellEvaluationResult(true), shellEvaluationResult(true)],
+        expectedRetry: "Task: Write {{name}} literally",
+      },
+      {
+        endCondition: {
+          script: "check-result",
+          onFail: CONDITION_ACTIONS.RETRY,
+          maxRetries: 1,
+          retryPrompt: "Task: {{snippet}}",
+        },
+        results: [shellEvaluationResult(false), shellEvaluationResult(true)],
+        expectedRetry: "Task: Write {{name}} literally",
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const evaluator = new RecordingShellEvaluator(
+        new MockPlatform(),
+        scenario.results
+      );
+      queue.loadPrompts({
+        vars: { snippet: "Write {{name}} literally", name: "Bob" },
+        steps: [
+          {
+            prompt: "Task: {{snippet}}",
+            endCondition: scenario.endCondition,
+          },
+        ],
+      });
+
+      await makeExecutor(queue, evaluator).execute(
+        integration,
+        makeContext(integration)
+      );
+
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "Task: Write {{name}} literally",
+        scenario.expectedRetry,
+      ]);
+    }
+  });
+
   test("skips disabled queue steps without sending them to the harness", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

@@ -982,6 +982,50 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(preview.steps[0].conditions.retry.maxAttempts, 2);
   });
 
+  test("matches runtime failure-retry eligibility and defaults", async () => {
+    const originalMaxRetries = ConfigurationUtils.getDefaultMaxRetries;
+    const originalRetryPrompt = ConfigurationUtils.getDefaultRetryPrompt;
+    const originalPassRetryPrompt =
+      ConfigurationUtils.getDefaultPassRetryPrompt;
+    ConfigurationUtils.getDefaultMaxRetries = () => 3;
+    ConfigurationUtils.getDefaultRetryPrompt = () => "";
+    ConfigurationUtils.getDefaultPassRetryPrompt = () => "";
+    try {
+      const cases: Array<{ endCondition: PromptStep["endCondition"]; expected: number }> = [
+        { endCondition: { script: "check", maxRetries: 3 }, expected: 1 },
+        {
+          endCondition: {
+            script: "check",
+            maxRetries: 3,
+            onFail: "continue",
+          },
+          expected: 1,
+        },
+        {
+          endCondition: { script: "check", onFail: "retry" },
+          expected: 2,
+        },
+        {
+          endCondition: {
+            script: "check",
+            retryPrompt: "try again",
+          },
+          expected: 4,
+        },
+      ];
+      for (const { endCondition, expected } of cases) {
+        const preview = await createService().build({
+          workflow: { steps: [{ prompt: "retry preview", endCondition }] },
+        });
+        assert.strictEqual(preview.steps[0].conditions.retry.maxAttempts, expected);
+      }
+    } finally {
+      ConfigurationUtils.getDefaultMaxRetries = originalMaxRetries;
+      ConfigurationUtils.getDefaultRetryPrompt = originalRetryPrompt;
+      ConfigurationUtils.getDefaultPassRetryPrompt = originalPassRetryPrompt;
+    }
+  });
+
   test("classifies mutation scope, warnings, and owned keys", async () => {
     const workspaceRoot = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-preview-workspace-")

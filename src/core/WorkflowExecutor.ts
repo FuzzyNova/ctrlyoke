@@ -109,7 +109,10 @@ import {
   type SecretGrantsTrustStore,
 } from "../config/SecretGrantsTrustStore";
 import { PromptFileResolver } from "./PromptFileResolver";
-import { resolvePromptTextWithVariables } from "./PromptTextResolver";
+import {
+  resolvePromptFileTextWithVariables,
+  resolvePromptTextWithVariables,
+} from "./PromptTextResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -4437,7 +4440,8 @@ export class WorkflowExecutor {
     return async (
       retryPromptStep: PromptStep,
       currentIndex: number,
-      retryAttemptIndex: number
+      retryAttemptIndex: number,
+      promptAlreadyResolved = false
     ): Promise<{ responseText: string; attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
@@ -4455,11 +4459,13 @@ export class WorkflowExecutor {
       }
       const effectiveRetryPrompt: PromptStep = {
         ...retryPromptStep,
-        prompt: await this.resolveEffectivePrompt(
-          retryPromptStep.prompt,
-          context,
-          workflowFile.vars
-        ),
+        prompt: promptAlreadyResolved
+          ? retryPromptStep.prompt
+          : await this.resolveRetryPromptFile(
+              retryPromptStep.prompt,
+              context,
+              workflowFile.vars
+            ),
       };
       if (!effectiveRetryPrompt.prompt.trim()) {
         throw new Error(
@@ -4819,6 +4825,21 @@ export class WorkflowExecutor {
     const { promptFileResolver, sourceDefinitionPath } =
       this.getPromptFileResolutionOptions(context);
     return resolvePromptTextWithVariables(
+      promptText,
+      variables ?? {},
+      promptFileResolver,
+      sourceDefinitionPath
+    );
+  }
+
+  private async resolveRetryPromptFile(
+    promptText: string,
+    context: WorkflowExecutionContext,
+    variables: Record<string, string> | undefined
+  ): Promise<string> {
+    const { promptFileResolver, sourceDefinitionPath } =
+      this.getPromptFileResolutionOptions(context);
+    return resolvePromptFileTextWithVariables(
       promptText,
       variables ?? {},
       promptFileResolver,

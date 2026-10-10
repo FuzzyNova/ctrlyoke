@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch `npx tsx` script calling both code paths)
 - **Area:** `src/core/ExecutionPreviewService.ts` (`buildConditions`), `src/core/PromptQueue.ts` (`resolveRetrySettings`, `canRetry`), `src/core/EndConditionHandler.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -540,6 +540,44 @@ suite("EndConditionHandler", () => {
     assert.strictEqual(queue.getState().results[0].endConditionResult, false);
   });
 
+  test("does not claim failed retries when the end condition could not retry", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(3, "continue", {
+      onFail: "stopWorkflow",
+      retryPrompt: undefined,
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform, [validationFailure("red")]),
+      queue,
+      createReporter()
+    );
+    queue.loadPrompts({ steps: [prompt] });
+
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      validationFailure("red"),
+      {
+        integration,
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+        attemptIndex: 0,
+      },
+      async (_retryPrompt, _currentIndex, attemptIndex) => ({
+        responseText: "unexpected retry",
+        attemptIndex,
+      })
+    );
+
+    assert.match(result.failureReason ?? "", /End condition validation failed/);
+    assert.doesNotMatch(result.failureReason ?? "", /after 0 retries/);
+  });
+
   test("failure message names the comparison that ran and the compared value, not stdout", async () => {
     const runtime = new WorkflowStateMachine();
     const queue = new PromptQueue(runtime);

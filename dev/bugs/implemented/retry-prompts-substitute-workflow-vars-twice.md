@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch `npx tsx` script)
 - **Area:** `src/core/WorkflowExecutor.ts` (`createSendRetryPromptCallback`), `src/utils/VarSubstitutor.ts`, `src/core/EndConditionHandler.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

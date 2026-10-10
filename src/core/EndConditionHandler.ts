@@ -84,7 +84,8 @@ export interface RetryContext {
 export type SendRetryPromptCallback = (
   retryPromptStep: PromptStep,
   currentIndex: number,
-  attemptIndex: number
+  attemptIndex: number,
+  promptAlreadyResolved?: boolean
 ) => Promise<{ responseText: string; attemptIndex: number } | null>;
 
 /**
@@ -280,7 +281,8 @@ export class EndConditionHandler {
       }
 
       if (!this.promptQueue.canRetry(prompt, retryContext.attemptTarget)) {
-        const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
+        const maxRetries =
+          this.promptQueue.getEffectiveFailureRetryBudget(prompt);
         const retryCount = this.promptQueue.getCurrentRetryCount(
           retryContext.attemptTarget
         );
@@ -289,7 +291,7 @@ export class EndConditionHandler {
           evaluationResult
         );
         const headline =
-          maxRetries > 0
+          maxRetries > 0 || retryCount > 0
             ? `End condition failed after ${retryCount} retries.`
             : "End condition validation failed.";
         const comparisonReason = evaluationResult.comparisonReason
@@ -365,6 +367,9 @@ export class EndConditionHandler {
       retryKind === RETRY_KINDS.PASS
         ? this.buildPassRetryPrompt(prompt)
         : this.buildRetryPrompt(prompt, evaluationResult);
+    const promptAlreadyResolved =
+      retryKind === RETRY_KINDS.PASS &&
+      !this.promptQueue.getEffectivePassRetryPrompt(prompt);
     const retryDenominator = formatRetryDenominator(maxRetries);
 
     retryContext.runtime.scheduleRetry(
@@ -418,7 +423,8 @@ export class EndConditionHandler {
     const retrySendResult = await sendRetryPrompt(
       retryPromptStep,
       currentIndex,
-      nextAttemptIndex
+      nextAttemptIndex,
+      promptAlreadyResolved
     );
 
     if (retrySendResult === null) {

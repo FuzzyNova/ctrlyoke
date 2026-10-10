@@ -99,6 +99,7 @@ import {
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { PromptFileResolver } from "./PromptFileResolver";
 import { resolvePromptTextWithVariables } from "./PromptTextResolver";
+import { resolveRetryBudget } from "./RetryBudget";
 import { resolveWorktreeSelection } from "../utils/WorktreeResolution";
 import {
   evaluateWorkspaceEligibility,
@@ -1264,12 +1265,11 @@ export class ExecutionPreviewService {
     end: EndCondition | undefined,
     errorBehavior: ErrorBehavior | undefined
   ): ConditionPreview {
-    const retries =
-      end?.maxRetries ??
-      (end?.onPass === CONDITION_ACTIONS.RETRY ||
-      end?.onFail === CONDITION_ACTIONS.RETRY
-        ? 1
-        : 0);
+    const retries = resolveRetryBudget(end, {
+      maxRetries: ConfigurationUtils.getDefaultMaxRetries(),
+      retryPrompt: ConfigurationUtils.getDefaultRetryPrompt(),
+      passRetryPrompt: ConfigurationUtils.getDefaultPassRetryPrompt(),
+    }).permittedRetries;
     const retry: RetryPreview = {
       maxAttempts: isUnlimited(retries) ? -1 : retries + 1,
       ...(end?.timeoutSec !== undefined ? { backoffSeconds: 0 } : {}),
