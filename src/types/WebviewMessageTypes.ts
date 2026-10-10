@@ -87,6 +87,7 @@ import type {
   StepDisplayProperties,
   CoordinationScopeSnapshot,
   WorkflowValidationWarning,
+  WorkflowStopReason,
   ExecutionProperties,
   PromptResult,
   FinalStepRuntimeState,
@@ -526,6 +527,7 @@ export interface InitMessageData {
   workflowName: string;
   steps: WorkflowStep[];
   executionState: ExecutionState;
+  stopReason?: WorkflowStopReason;
   currentIndex: number;
   results: any[];
   finalStep?: WorkflowStep | null;
@@ -696,6 +698,7 @@ export interface SessionRestoredMessage {
   parallelGroups?: ParallelGroupDefinition[];
   results: any[];
   executionState: ExecutionState;
+  stopReason?: WorkflowStopReason;
   currentIndex: number;
   workflowName?: string;
   workingFilePath?: string | null;
@@ -746,6 +749,8 @@ export interface ExecutionStartedMessage {
 export interface ExecutionStateChangedMessage {
   type: typeof MESSAGE_TYPES.EXECUTION_STATE_CHANGED;
   state: ExecutionState;
+  /** Structured reason when the run stopped because a guardrail fired. */
+  stopReason?: WorkflowStopReason | null;
   /** Queue step indices with an active attempt. */
   activeStepIndices?: number[];
 }

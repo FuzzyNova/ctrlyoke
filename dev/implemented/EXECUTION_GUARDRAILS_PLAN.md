@@ -1,6 +1,6 @@
 # Global Execution Guardrail Hardening Plan
 
-> **Status:** Revised — reduced scope
+> **Status:** Implemented (2026-10-10)
 >
 > **Priority:** P2 — complete with or before unattended scheduling
 
@@ -98,8 +98,8 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   `ConfigurationUtils.getDynamicQueueConfig()` on every check, so mid-run
   setting changes take effect. Active time remains sourced from
   `WorkflowStateMachine.getActiveExecutionTime()`, which excludes pauses;
-  queue growth is reflected by the current `steps[]` length. Phase 2 now
-  attaches the structured reason; dashboard/log/notification rendering remains.
+  queue growth is reflected by the current `steps[]` length. Phase 2 attaches
+  and displays the structured reason on every surface.
 - ~~Flag workflows that exceed effective `queue.maxSteps` in parser/editor
   validation~~ — **done**: `PromptFileParser` resolves authored `maxSteps`
   against a caller-supplied global limit; diagnostics, dashboard editor, and
@@ -130,9 +130,10 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 
 - Use stable structured reason codes for queue-size, prompt-timeout, and
   workflow-time stops across dashboard status/output, CLI results, MCP results,
-  logs, and notifications. **CLI/MCP done:** CLI JSON exposes `stopReason`, text
-  prints its shared message, and `workflow_status` includes the persisted
-  reason. Dashboard, logs, and notifications remain for the next stage.
+  logs, and notifications. **Done:** CLI JSON/text/history and MCP
+  `workflow_status` expose the persisted reason; dashboard run status/output
+  displays the same structured reason and shared message; notifications use
+  the shared builder message.
 - State the configured threshold and observed value in each stop message —
   **done** in the shared stop-message builder and surfaced by CLI/MCP.
 - Include the effective global guardrails in dry-run output — **done** for CLI
@@ -159,8 +160,8 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   as `stopReason`, and in the run summary/history metadata. Resume/restart clears
   the reason; user cancellation and ordinary harness failures leave it absent.
   The workflow runtime schema and generated references include the optional
-  field. CLI and MCP surfaces are now complete; dashboard/log/notification
-  rendering remains in the next stage.
+  field. CLI, MCP, dashboard, hosted dashboard, and notification surfaces are
+  complete.
 
 ### Staging (queued by the orchestrator)
 
@@ -173,8 +174,8 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 4. ~~CLI, MCP, and dry-run surfaces for stop reasons and effective guardrails.~~ —
    **done**: CLI JSON/text/history, MCP `workflow_status`, and CLI dry-run
    text/JSON; MCP has no dry-run/preview tool.
-5. Dashboard and notification surfaces; settings copy; close out the plan and
-   release-checklist item.
+5. ~~Dashboard and notification surfaces; settings copy; close out the plan and
+   release-checklist item.~~ — done.
 - Keep configuration in the existing Execution and Queue settings sections; do
   not add workflow or prompt property controls.
 

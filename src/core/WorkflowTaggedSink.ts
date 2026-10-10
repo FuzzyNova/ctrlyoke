@@ -166,12 +166,14 @@ export class WorkflowTaggedSink implements IDashboardSink {
   updateExecutionState(
     state: string,
     workflowIdOrActive?: string | number[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    stopReason?: import("../types/CtrlYokeTypes").WorkflowStopReason
   ): void {
     this.inner.updateExecutionState(
       state,
       this.workflowId,
-      Array.isArray(workflowIdOrActive) ? workflowIdOrActive : activeStepIndices
+      Array.isArray(workflowIdOrActive) ? workflowIdOrActive : activeStepIndices,
+      stopReason
     );
   }
 

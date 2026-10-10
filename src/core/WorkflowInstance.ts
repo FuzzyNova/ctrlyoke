@@ -1082,7 +1082,8 @@ export class WorkflowInstance
       state.parallelGroups,
       this.getActiveStepIndices(),
       options?.asReplacement ? undefined : state.definitionRevision,
-      this.promptFileLoader.getLastSchemaWarnings()
+      this.promptFileLoader.getLastSchemaWarnings(),
+      state.stopReason
     );
     this.outputCaptureBuffer.replayTo(
       sink,
@@ -5228,7 +5229,8 @@ export class WorkflowInstance
       this.dashboardSink.updateExecutionState(
         executionState,
         undefined,
-        this.getActiveStepIndices()
+        this.getActiveStepIndices(),
+        transition.current.stopReason
       );
       if (transition.command === WORKFLOW_RUNTIME_COMMANDS.COMPLETE) {
         this.dashboardSink.updateExecutionCompleted?.();

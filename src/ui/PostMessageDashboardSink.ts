@@ -18,6 +18,7 @@ import type {
   WorktreeRunProjection,
   ParallelGroupDefinition,
   WorkflowValidationWarning,
+  WorkflowStopReason,
 } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
@@ -111,7 +112,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
     definitionRevision?: number,
-    schemaWarnings?: WorkflowValidationWarning[]
+    schemaWarnings?: WorkflowValidationWarning[],
+    stopReason?: WorkflowStopReason
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -131,6 +133,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
       ...(schemaWarnings !== undefined ? { schemaWarnings } : {}),
+      ...(stopReason !== undefined ? { stopReason } : {}),
     });
   }
 
@@ -166,13 +169,15 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateExecutionState(
     state: string,
     workflowId?: string,
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    stopReason?: WorkflowStopReason
   ): void {
     this.send({
       type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED,
       state,
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
+      stopReason: stopReason ?? null,
     });
   }
 

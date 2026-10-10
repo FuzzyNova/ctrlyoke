@@ -973,6 +973,7 @@ export class WebviewSettingsSync {
         workflowName: workflowName || "",
         steps: queueState.steps || [],
         executionState: queueState.status || EXECUTION_STATES.IDLE,
+        stopReason: queueState.stopReason,
         currentIndex: queueState.currentIndex || 0,
         results: queueState.results || [],
         finalStep: finalStep,

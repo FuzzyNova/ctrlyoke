@@ -504,7 +504,7 @@
               "minimum": 1
             }
           ],
-          "description": "Maximum time in seconds to wait for a prompt to complete. `-1` means unlimited.",
+          "description": "Maximum time in seconds for one harness prompt to complete. A finite value stops the prompt when its execution budget expires; `-1` disables the prompt timeout.",
           "default": -1
         },
         "scriptTimeoutSec": {
@@ -528,7 +528,7 @@
       "properties": {
         "maxSteps": {
           "$ref": "workflow.json#/$defs/maxStepsValue",
-          "description": "Maximum number of entries allowed in the run's steps array. `-1` means unlimited.",
+          "description": "Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. `-1` disables the queue-size limit.",
           "default": 100
         },
         "maxParallelSteps": {
@@ -552,7 +552,7 @@
               "minimum": 1
             }
           ],
-          "description": "Maximum total execution time in seconds for a workflow. `-1` means unlimited.",
+          "description": "Maximum active execution time in seconds for a workflow. Checked at safe step, parallel-group, final-step, and retry boundaries; paused time is excluded. `-1` disables the workflow-time limit.",
           "default": -1
         }
       }

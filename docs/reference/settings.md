@@ -729,7 +729,7 @@ How to handle a declared reference that fails to resolve: a missing/invalid secr
 - **Type:** `-1` or `integer`
 - **Default:** `-1`
 
-Maximum time in seconds to wait for a prompt to complete. `-1` means unlimited.
+Maximum time in seconds for one harness prompt to complete. A finite value stops the prompt when its execution budget expires; `-1` disables the prompt timeout.
 
 ### `execution.scriptTimeoutSec` {#execution-scripttimeoutsec}
 
@@ -761,7 +761,7 @@ not isolate members from each other or merge their work.
 - **Type:** `-1` or `integer`
 - **Default:** `100`
 
-Maximum number of entries allowed in the run's steps array. `-1` means unlimited.
+Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. `-1` disables the queue-size limit.
 
 ### `queue.maxParallelSteps` {#queue-maxparallelsteps}
 
@@ -783,7 +783,7 @@ Currently has no effect; queue extension notifications are not implemented.
 - **Type:** `-1` or `integer`
 - **Default:** `-1`
 
-Maximum total execution time in seconds for a workflow. `-1` means unlimited.
+Maximum active execution time in seconds for a workflow. Checked at safe step, parallel-group, final-step, and retry boundaries; paused time is excluded. `-1` disables the workflow-time limit.
 
 ## `runs` {#runs}
 

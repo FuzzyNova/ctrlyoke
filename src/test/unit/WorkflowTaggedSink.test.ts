@@ -48,4 +48,29 @@ suite("WorkflowTaggedSink", () => {
       workflowId: "wf-a",
     } satisfies StepUndoDataUpdatedMessage);
   });
+
+  test("updateExecutionState forwards structured guardrail stop reasons", () => {
+    const messages: unknown[] = [];
+    const sink = new WorkflowTaggedSink(
+      new PostMessageDashboardSink((message) => messages.push(message)),
+      "wf-a"
+    );
+    const stopReason = {
+      code: "queue-size-limit",
+      threshold: 10,
+      observed: 11,
+      unit: "steps",
+      message: "Queue size limit: 10 steps configured, 11 observed.",
+    } as const;
+
+    sink.updateExecutionState("error", undefined, [], stopReason);
+
+    assert.deepStrictEqual(messages[0], {
+      type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED,
+      state: "error",
+      workflowId: "wf-a",
+      activeStepIndices: [],
+      stopReason,
+    });
+  });
 });

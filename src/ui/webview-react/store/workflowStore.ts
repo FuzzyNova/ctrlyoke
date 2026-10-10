@@ -27,6 +27,7 @@ import { appendResponseText } from "@root/utils/ResponseTextJoin";
 import type {
   WorktreeRunProjection,
   CoordinationScopeSnapshot,
+  WorkflowStopReason,
 } from "@root/types/CtrlYokeTypes";
 import type {
   ParallelGroupDefinition,
@@ -276,6 +277,7 @@ interface WorkflowState {
   steps: WorkflowStep[];
   parallelGroups: ParallelGroupDefinition[];
   executionState: ExecutionState;
+  stopReason?: WorkflowStopReason;
   currentStep: number;
   activeStepIndices: number[];
   totalSteps: number;
@@ -351,6 +353,7 @@ interface WorkflowActions {
   ) => void;
   updatePrompt: (index: number, updates: Partial<PromptStep>) => void;
   setExecutionState: (state: ExecutionState) => void;
+  setStopReason: (reason?: WorkflowStopReason) => void;
   setCurrentStep: (step: number) => void;
   setActiveStepIndices: (stepIndices: number[]) => void;
   setTotalSteps: (total: number) => void;
@@ -446,6 +449,7 @@ interface WorkflowActions {
     steps: WorkflowStep[];
     parallelGroups?: ParallelGroupDefinition[];
     executionState?: ExecutionState;
+    stopReason?: WorkflowStopReason;
     currentStep?: number;
     activeStepIndices?: number[];
     results?: Array<{ status?: StepStatus }>;
@@ -544,6 +548,7 @@ const initialState: WorkflowState = {
   steps: [],
   parallelGroups: [],
   executionState: EXECUTION_STATES.IDLE,
+  stopReason: undefined,
   currentStep: 0,
   activeStepIndices: [],
   totalSteps: 0,
@@ -1101,6 +1106,8 @@ export const useWorkflowStore = create<
         }
         withUndoPause(() => set({ executionState }));
       },
+      setStopReason: (stopReason) =>
+        withUndoPause(() => set({ stopReason })),
 
       setCurrentStep: (currentStep) => {
         const prevCurrentStep = get().currentStep;
@@ -1452,6 +1459,7 @@ export const useWorkflowStore = create<
         steps,
         parallelGroups = [],
         executionState = EXECUTION_STATES.IDLE,
+        stopReason,
         currentStep = 0,
         activeStepIndices = [],
         results = [],
@@ -1501,6 +1509,7 @@ export const useWorkflowStore = create<
               parallelGroups
             ),
             executionState,
+            stopReason,
             currentStep,
             activeStepIndices: [...activeStepIndices],
             totalSteps: steps.length,

@@ -237,12 +237,13 @@ wrong, the correction is stated.
   transport decision (VS Code PTY vs `stdio: "inherit"`) is made in
   `CliExecutionRunner.executeInTerminal()` via `isVsCodeContext()`, **not** in
   `CliExecutionMode.ts`.
-- Settings: the `queue` namespace already exists (`maxSize`, `maxWorkflowExecutionTime`,
-  `unlimitedMode`, `notifyOnExtension`) and is plumbed schema →
-  `CtrlYokeGlobalSettings.queue` → `ConfigurationUtils.getDynamicQueueConfig()` →
-  `context.dynamicQueueConfig`. `EXECUTION_GUARDRAILS_PLAN.md` explicitly leaves the
-  concurrency cap to this plan and wants it in the queue section. There is no feature-flag
-  or `experimental.*` mechanism anywhere in the codebase.
+- Settings: parallel groups use `queue.maxParallelSteps` for concurrency and
+  inherit `queue.maxSteps`, `queue.maxWorkflowExecutionTimeSec`,
+  `execution.maxPromptTimeoutSec`, and `execution.scriptTimeoutSec`. These are
+  resolved through the existing settings/configuration path; parallel groups
+  add no second limit hierarchy. The implemented
+  `EXECUTION_GUARDRAILS_PLAN.md` records the shared enforcement contract. There
+  is no feature-flag or `experimental.*` mechanism anywhere in the codebase.
 - Dry run: `ExecutionPreviewService` produces `WorkflowExecutionPreview` with one
   `StepExecutionPreview` per flat step (it already has an optional `stepId`, unused by the
   step model) and resolves sessions/MCP/harness per step. `DryRunModal.tsx` and the CLI's

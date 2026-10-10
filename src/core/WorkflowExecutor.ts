@@ -5054,10 +5054,8 @@ export class WorkflowExecutor {
         maxTimeSec,
         { completedCount, totalSteps, remainingCount }
       );
-      const message = stopReason.message;
-
-      notifyUserFeedback(this.userFeedbackSink, "warning", message);
-      Log.trace(`[WorkflowExecutor] ${message}`);
+      notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
+      Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
 
       this.promptQueue.getRuntimeStateMachine().fail(stopReason);
       await this.promptQueue.commitRuntimeTransition();
@@ -5090,9 +5088,8 @@ export class WorkflowExecutor {
       effectiveMaxSteps,
       getEffectiveMaxStepsSource(workflowMaxSteps)
     );
-    const message = stopReason.message;
-    notifyUserFeedback(this.userFeedbackSink, "warning", message);
-    Log.trace(`[WorkflowExecutor] ${message}`);
+    notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
+    Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
     this.promptQueue.getRuntimeStateMachine().fail(stopReason);
     await this.promptQueue.commitRuntimeTransition();
     return true;
@@ -5518,6 +5515,7 @@ export class WorkflowExecutor {
         stopReason
       );
       notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
+      Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
     }
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {

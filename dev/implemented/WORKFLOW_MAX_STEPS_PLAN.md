@@ -2,7 +2,7 @@
 
 **Status:** Implemented (2026-09-28) — all five steps and acceptance criteria are complete; see [Implementation staging](#implementation-staging).
 
-**Amends:** `dev/backlog/EXECUTION_GUARDRAILS_PLAN.md`. That plan's "Explicitly Rejected Scope"
+**Amends:** `dev/implemented/EXECUTION_GUARDRAILS_PLAN.md`. That plan's "Explicitly Rejected Scope"
 lists "`maxSteps`; it duplicates `queue.maxSize`", and its Product Decision says a workflow should
 not override the queue size. This plan reverses that one bullet, for the reasons in [Why](#why).
 Its other rejections still stand: no generic `limits` object, no per-step limits, no
@@ -328,7 +328,7 @@ All phases land together, so the Unlimited picker reaches every limit at once.
    `npm run generate-schema`, and `npm run generate-schema-ui-descriptions` (the `SchemaDescriptions.ts` generator), then mirror the result
    into `schemas/archive/v1/`.
 5. `WorkflowDefaultsSchemaCoverage.test.ts`: `RESHAPED_DEFAULTS.maxSteps = "queue.maxSteps"`.
-6. Edit `EXECUTION_GUARDRAILS_PLAN.md`:
+6. Edit `EXECUTION_GUARDRAILS_PLAN.md` (now in `dev/implemented/`):
    - Update its settings table: drop the `unlimitedMode` row, rename `maxSize`, and correct the
      stale `maxWorkflowExecutionTime` to `…TimeSec`.
    - Replace the rejected `maxSteps` bullet with a pointer to this plan.

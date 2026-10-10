@@ -476,7 +476,8 @@ export class CtrlYokeWebviewProvider
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
     definitionRevision?: number,
-    schemaWarnings?: import("../types/CtrlYokeTypes").WorkflowValidationWarning[]
+    schemaWarnings?: import("../types/CtrlYokeTypes").WorkflowValidationWarning[],
+    stopReason?: import("../types/CtrlYokeTypes").WorkflowStopReason
   ): Promise<void> {
     await this.sink.updateSessionRestored(
       fileName,
@@ -492,7 +493,8 @@ export class CtrlYokeWebviewProvider
       parallelGroups,
       activeStepIndices,
       definitionRevision,
-      schemaWarnings
+      schemaWarnings,
+      stopReason
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,
@@ -529,9 +531,15 @@ export class CtrlYokeWebviewProvider
   public updateExecutionState(
     state: string,
     workflowId?: string,
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    stopReason?: import("../types/CtrlYokeTypes").WorkflowStopReason
   ): void {
-    this.sink.updateExecutionState(state, workflowId, activeStepIndices);
+    this.sink.updateExecutionState(
+      state,
+      workflowId,
+      activeStepIndices,
+      stopReason
+    );
   }
   public updateActiveStepIndices(
     activeStepIndices: number[],

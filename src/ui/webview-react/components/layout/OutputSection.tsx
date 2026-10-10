@@ -140,6 +140,7 @@ const OutputSectionInner: React.FC = () => {
   // a re-render of this component.
   const fileName = useWorkflowStore((s) => s.fileName);
   const executionState = useWorkflowStore((s) => s.executionState);
+  const stopReason = useWorkflowStore((s) => s.stopReason);
   const currentStep = useWorkflowStore((s) => s.currentStep);
   const activeStepIndices = useWorkflowStore((s) => s.activeStepIndices);
   const totalSteps = useWorkflowStore((s) => s.totalSteps);
@@ -259,6 +260,8 @@ const OutputSectionInner: React.FC = () => {
         executionState:
           matchingHistoryMetadata?.executionState ??
           displayedRunSummary.executionState,
+        stopReason:
+          matchingHistoryMetadata?.stopReason ?? displayedRunSummary.stopReason,
         tokenTotals: displayedRunSummary.tokenTotals,
         worktree:
           displayedRunSummary.worktree ?? matchingHistoryMetadata?.worktree,
@@ -270,6 +273,7 @@ const OutputSectionInner: React.FC = () => {
       startedAt:
         liveWorkflowSummary?.startedAt ?? displayedRunSummary.startedAt,
       executionState: liveWorkflowSummary?.executionState ?? executionState,
+      stopReason: stopReason ?? displayedRunSummary.stopReason,
       tokenTotals:
         liveWorkflowSummary?.tokenTotals ?? displayedRunSummary.tokenTotals,
       // Keep this run-owned: the bound live instance may not be the run shown
@@ -280,6 +284,7 @@ const OutputSectionInner: React.FC = () => {
     displayedRunSummary,
     executionRunRef,
     executionState,
+    stopReason,
     historyRunMetadata,
     liveWorkflowSummary,
     displayedAddress,
