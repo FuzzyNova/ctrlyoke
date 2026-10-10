@@ -174,6 +174,23 @@ describe("LicenseSection", () => {
     });
   });
 
+  it("shows that the remote-access trial is available before first use", () => {
+    useSettingsStore.setState({
+      licenseAccess: {
+        isPro: false,
+        hasRemoteAccess: true,
+        trialEndsAt: null,
+        source: null,
+        expiresAt: null,
+      },
+    });
+    render(<LicenseSection />);
+
+    expect(
+      screen.getByText(LICENSE_UI.REMOTE_ACCESS_TRIAL_AVAILABLE)
+    ).toBeInTheDocument();
+  });
+
   it("hides self-service machine management for Enterprise and points to support", () => {
     useSettingsStore.setState({
       licenseAccess: {

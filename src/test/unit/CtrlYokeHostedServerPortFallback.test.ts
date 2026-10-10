@@ -70,7 +70,8 @@ interface HostedServerListenInternals {
   token: string;
   workspaceRoot: string;
   availableIps: string[];
-  getRemoteAccess?: () => Promise<boolean>;
+  canUseRemoteAccess?: () => Promise<boolean>;
+  beginRemoteAccess?: () => Promise<boolean>;
   onRemoteAccessBlocked?: () => void;
   remoteAccessUpsellShown: boolean;
   listen(): Promise<string>;
@@ -139,7 +140,11 @@ function createHostedServer(
     workspaceRoot,
     namedWorkspaceRoots: [],
     token,
-    remoteAccess: { isAllowed: async () => false, onBlocked: () => undefined },
+    remoteAccess: {
+      canUse: async () => false,
+      begin: async () => false,
+      onBlocked: () => undefined,
+    },
     onSiblingServerDetected,
     hostKind: HOST_KINDS.VSCODE,
     themeDefaults: { dark: ":root {}", light: ":root {}" },
@@ -258,7 +263,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     const server = createListenHarness(4747, fakeHttpServer);
     server.bindAddress = "0.0.0.0";
     let blocked = 0;
-    server.getRemoteAccess = async () => false;
+    server.canUseRemoteAccess = async () => false;
     server.onRemoteAccessBlocked = () => {
       blocked += 1;
     };
@@ -274,6 +279,23 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     // is never rewritten when the in-memory listener is coerced.
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747]);
     assert.strictEqual(blocked, 1);
+  });
+
+  test("allows an unused trial to bind remotely without starting it", async () => {
+    const fakeHttpServer = new FakeHttpServer(null, 4747);
+    const server = createListenHarness(4747, fakeHttpServer);
+    server.bindAddress = "0.0.0.0";
+    let beginCalls = 0;
+    server.canUseRemoteAccess = async () => true;
+    server.beginRemoteAccess = async () => {
+      beginCalls++;
+      return true;
+    };
+
+    await server.listen();
+
+    assert.strictEqual(server.bindAddress, "0.0.0.0");
+    assert.strictEqual(beginCalls, 0);
   });
 
   test("falls back to an OS-assigned port when occupied by a sibling ctrlyoke server, and reports it", async () => {

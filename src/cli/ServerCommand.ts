@@ -159,7 +159,7 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     const licenseStore = await import("../platform/OsCredentialStore.js");
     const { LicenseService } = await import("../license/LicenseService.js");
     const service = new LicenseService(new licenseStore.OsCredentialStore());
-    const allowed = await service.hasRemoteAccess();
+    const allowed = await service.canUseRemoteAccess();
     service.dispose();
     if (!allowed && !isLoopbackBindAddress(initial.bindAddress)) {
       console.warn(

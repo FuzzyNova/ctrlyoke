@@ -355,6 +355,8 @@ export const LICENSE_UI = {
   SUPPORT_EMAIL: "support@ctrlyoke.dev",
   REMOTE_ACCESS_UPSELL:
     "Remote access is a Pro feature. Your localhost dashboard remains free; start a 14-day trial or view Pro pricing.",
+  REMOTE_ACCESS_TRIAL_AVAILABLE:
+    "Your 14-day remote-access trial starts the first time you enable it.",
   CUSTOM_ICON_UPSELL:
     "Custom icon colors are a Pro thank-you perk. View Pro pricing to unlock them.",
 } as const;

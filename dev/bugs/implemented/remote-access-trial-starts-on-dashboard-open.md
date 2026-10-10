@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by backlog audit (DOCUMENTATION_GAPS_PLAN.md defect C12)
 - **Area:** `src/license/LicenseService.ts`, `src/ui/DashboardApplication.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

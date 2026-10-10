@@ -52,7 +52,11 @@ function createHostedServer(options: Partial<HostedServerOptions> = {}) {
     workspaceRoot: process.cwd(),
     namedWorkspaceRoots: [],
     token: "test-token",
-    remoteAccess: { isAllowed: async () => false, onBlocked: () => undefined },
+    remoteAccess: {
+      canUse: async () => false,
+      begin: async () => false,
+      onBlocked: () => undefined,
+    },
     hostKind: HOST_KINDS.VSCODE,
     themeDefaults: {
       dark: ":root { --theme-default: dark; }",
@@ -63,12 +67,60 @@ function createHostedServer(options: Partial<HostedServerOptions> = {}) {
   });
 }
 
+class TestableHostedServer extends CtrlYokeHostedServer {
+  allowClient(remoteAddress: string | undefined): Promise<boolean> {
+    return this.isClientAllowed(remoteAddress);
+  }
+}
+
 suite("CtrlYokeHostedServer authentication", () => {
   test("rejects an empty access token", () => {
     assert.throws(
       () => createHostedServer({ token: "" }),
       /Hosted server access token must not be empty/
     );
+  });
+});
+
+suite("CtrlYokeHostedServer remote access trial", () => {
+  test("local dashboard access leaves the trial unused; the first remote client starts it", async () => {
+    let trialStarted = false;
+    let beginCalls = 0;
+    const canUse = async () => true;
+    const server = new TestableHostedServer({
+      hub: new DashboardBroadcastHub(),
+      endpoint: {} as never,
+      getOrchestrator: (() => ({})) as never,
+      port: 0,
+      fallbackPorts: [],
+      bindAddress: "0.0.0.0",
+      workspaceRoot: process.cwd(),
+      namedWorkspaceRoots: [],
+      token: "test-token",
+      remoteAccess: {
+        canUse,
+        begin: async () => {
+          beginCalls++;
+          trialStarted = true;
+          return true;
+        },
+        onBlocked: () => undefined,
+      },
+      hostKind: HOST_KINDS.VSCODE,
+      themeDefaults: {
+        dark: ":root { --theme-default: dark; }",
+        light: ":root { --theme-default: light; }",
+      },
+      fileWatcherFactory: new NoopFileWatcherFactory(),
+    });
+
+    assert.strictEqual(await canUse(), true);
+    assert.strictEqual(trialStarted, false);
+    assert.strictEqual(await server.allowClient("127.0.0.1"), true);
+    assert.strictEqual(trialStarted, false);
+    assert.strictEqual(await server.allowClient("192.0.2.1"), true);
+    assert.strictEqual(trialStarted, true);
+    assert.strictEqual(beginCalls, 1);
   });
 });
 

@@ -75,12 +75,14 @@ class RejectingSecretStore extends InMemorySecretStore {
 
 class InMemoryTrialState implements LicenseTrialStateStore {
   private readonly values = new Map<string, unknown>();
+  updates = 0;
 
   get<T>(key: string): T | undefined {
     return this.values.get(key) as T | undefined;
   }
 
   update(key: string, value: unknown): Thenable<void> {
+    this.updates++;
     this.values.set(key, value);
     return Promise.resolve();
   }
@@ -154,16 +156,32 @@ suite("LicenseService", () => {
     assert.strictEqual(await service.isPro(), true);
   });
 
-  test("starts the 14-day remote-access trial on its first check", async () => {
+  test("trial-state reads never persist a start time", async () => {
     const secrets = new InMemorySecretStore();
     const trialState = new InMemoryTrialState();
     const service = createService(secrets, { trialState });
 
-    assert.strictEqual(await service.hasRemoteAccess(), true);
+    assert.strictEqual(await service.canUseRemoteAccess(), true);
+    assert.strictEqual(await service.getRemoteAccessTrialEndsAt(), null);
+    assert.strictEqual(
+      trialState.get<number>(REMOTE_ACCESS_TRIAL_START_KEY),
+      undefined
+    );
+    assert.strictEqual(trialState.updates, 0);
+  });
+
+  test("beginRemoteAccess starts the trial once", async () => {
+    const secrets = new InMemorySecretStore();
+    const trialState = new InMemoryTrialState();
+    const service = createService(secrets, { trialState });
+
+    assert.strictEqual(await service.beginRemoteAccess(), true);
+    assert.strictEqual(await service.beginRemoteAccess(), true);
     assert.strictEqual(
       trialState.get<number>(REMOTE_ACCESS_TRIAL_START_KEY),
       NOW
     );
+    assert.strictEqual(trialState.updates, 1);
   });
 
   test("expires remote access after the trial while preserving the free tier", async () => {
@@ -172,7 +190,8 @@ suite("LicenseService", () => {
     await trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, NOW - 14 * DAY);
     const service = createService(secrets, { trialState });
 
-    assert.strictEqual(await service.hasRemoteAccess(), false);
+    assert.strictEqual(await service.canUseRemoteAccess(), false);
+    assert.strictEqual(await service.beginRemoteAccess(), false);
     assert.strictEqual((await service.getEntitlement()).tier, "free");
   });
 
@@ -183,7 +202,7 @@ suite("LicenseService", () => {
     await trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, startedAt);
     const service = createService(secrets, { trialState });
 
-    assert.strictEqual(await service.hasRemoteAccess(), true);
+    assert.strictEqual(await service.canUseRemoteAccess(), true);
     assert.strictEqual(
       await service.getRemoteAccessTrialEndsAt(),
       startedAt + 14 * DAY
@@ -197,7 +216,7 @@ suite("LicenseService", () => {
     await cache(secrets, await createLicenseFile());
     const service = createService(secrets, { trialState });
 
-    assert.strictEqual(await service.hasRemoteAccess(), true);
+    assert.strictEqual(await service.canUseRemoteAccess(), true);
     assert.strictEqual(await service.isPro(), true);
   });
 

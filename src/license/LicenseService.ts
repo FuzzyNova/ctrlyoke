@@ -64,7 +64,7 @@ export const LICENSE_REFRESH_RETRY_BASE_MS = 15 * 60 * 1000;
 /**
  * getEntitlement()'s in-memory cache window. Some backing SecretStores (e.g.
  * OsCredentialStore) shell out to a platform CLI per call, and getEntitlement
- * is on hot-ish paths (hasRemoteAccess is checked per hosted-server
+ * is on hot-ish paths (canUseRemoteAccess is checked per hosted-server
  * connection) — without this, every check would spawn a process. A short TTL
  * bounds how stale a locally-expired/deactivated entitlement can read; any
  * mutation (activate/import/refresh/deactivate) refreshes the cache immediately.
@@ -106,8 +106,12 @@ export interface LicenseService {
   /** Verify the cached signed license file offline. Never throws; failures return free. */
   getEntitlement(): Promise<Entitlement>;
   isPro(): Promise<boolean>;
-  /** Pro or the first-use 14-day remote-access trial. */
-  hasRemoteAccess(): Promise<boolean>;
+  /** Pro, an active trial, or an unused trial available to start. Read-only. */
+  canUseRemoteAccess(): Promise<boolean>;
+  /** Starts the trial if needed, then reports whether remote access is allowed. */
+  beginRemoteAccess(): Promise<boolean>;
+  /** Starts the one-time trial, returning its timestamp or null on failure. */
+  startRemoteAccessTrial(): Promise<number | null>;
   getRemoteAccessTrialEndsAt(): Promise<number | null>;
   /** Read the cached online key for license-scoped management operations. */
   getStoredLicenseKey(): Promise<string | undefined>;
@@ -307,14 +311,37 @@ export class LicenseService implements LicenseService {
     return (await this.getEntitlement()).tier === LICENSE_TIERS.PRO;
   }
 
-  async hasRemoteAccess(): Promise<boolean> {
+  async canUseRemoteAccess(): Promise<boolean> {
     if (await this.isPro()) {
       return true;
     }
     const startedAt = await this.getRemoteAccessTrialStartedAt();
     return (
+      startedAt === null || this.now() < startedAt + REMOTE_ACCESS_TRIAL_MS
+    );
+  }
+
+  async beginRemoteAccess(): Promise<boolean> {
+    if (await this.isPro()) return true;
+    if ((await this.getRemoteAccessTrialStartedAt()) === null) {
+      if ((await this.startRemoteAccessTrial()) === null) return false;
+    }
+    const startedAt = await this.getRemoteAccessTrialStartedAt();
+    return (
       startedAt !== null && this.now() < startedAt + REMOTE_ACCESS_TRIAL_MS
     );
+  }
+
+  private trialStartPromise: Promise<number | null> | undefined;
+
+  async startRemoteAccessTrial(): Promise<number | null> {
+    if (this.trialStartPromise) return this.trialStartPromise;
+    this.trialStartPromise = this.writeRemoteAccessTrialStartedAt();
+    try {
+      return await this.trialStartPromise;
+    } finally {
+      this.trialStartPromise = undefined;
+    }
   }
 
   async getRemoteAccessTrialEndsAt(): Promise<number | null> {
@@ -826,19 +853,33 @@ export class LicenseService implements LicenseService {
     }
 
     try {
-      const now = this.now();
       const stored = this.trialState.get<unknown>(
         REMOTE_ACCESS_TRIAL_START_KEY
       );
-      const startedAt =
-        typeof stored === "number" && Number.isFinite(stored) ? stored : now;
-      if (stored !== startedAt) {
-        await this.trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, startedAt);
-      }
-      return startedAt;
+      return typeof stored === "number" && Number.isFinite(stored)
+        ? stored
+        : null;
     } catch {
       // A trial-state failure must not crash the extension. Fail closed for
       // remote reach while the free localhost product remains available.
+      return null;
+    }
+  }
+
+  private async writeRemoteAccessTrialStartedAt(): Promise<number | null> {
+    if (!this.trialState) return null;
+    try {
+      const stored = this.trialState.get<unknown>(
+        REMOTE_ACCESS_TRIAL_START_KEY
+      );
+      if (typeof stored === "number" && Number.isFinite(stored)) {
+        return stored;
+      }
+      const startedAt = this.now();
+      await this.trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, startedAt);
+      return startedAt;
+    } catch {
+      // A trial-state failure must not crash the extension or grant remote reach.
       return null;
     }
   }
