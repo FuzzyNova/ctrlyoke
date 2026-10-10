@@ -286,7 +286,6 @@ export class EndConditionEvaluator {
           ? this.buildResolvedScriptShellCommand(
               condition.script,
               resolvedScriptPath,
-              additionalArgs,
               initialShellInvocation.shellKind
             )
           : condition.script;
@@ -723,7 +722,6 @@ export class EndConditionEvaluator {
   private buildResolvedScriptShellCommand(
     originalScript: string,
     resolvedScriptPath: string,
-    additionalArgs: string[],
     shellKind: ReturnType<typeof resolveShellInvocation>["shellKind"]
   ): string {
     const fileCommand = this.getScriptCommand(resolvedScriptPath);
@@ -733,24 +731,20 @@ export class EndConditionEvaluator {
       );
     }
 
-    const invocationArgs = fileCommand.windowsVerbatimArguments
-      ? fileCommand.args
-      : [...fileCommand.args, ...additionalArgs];
+    // The arguments stay in the original text after the file token, where the
+    // shell expands them; adding them here as well would pass them twice.
+    const invocationArgs = fileCommand.args;
     const quote =
       shellKind === SHELL_KINDS.CMD
         ? (value: string) => escapeCmdArgument(value, false)
-        : shellKind === SHELL_KINDS.PWSH ||
-            shellKind === SHELL_KINDS.POWERSHELL
+        : shellKind === SHELL_KINDS.PWSH || shellKind === SHELL_KINDS.POWERSHELL
           ? escapePowerShellArgument
           : escapePosixArgument;
     const renderedInvocation = [fileCommand.executable, ...invocationArgs]
       .map(quote)
       .join(" ");
     let callableInvocation: string;
-    if (
-      fileCommand.windowsVerbatimArguments &&
-      shellKind === SHELL_KINDS.CMD
-    ) {
+    if (fileCommand.windowsVerbatimArguments && shellKind === SHELL_KINDS.CMD) {
       callableInvocation = `call "${resolvedScriptPath}"`;
     } else if (
       shellKind === SHELL_KINDS.PWSH ||

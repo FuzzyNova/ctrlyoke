@@ -17,9 +17,7 @@ import { buildCmdExeVerbatimArgs } from "../core/harness/shared/WindowsCmdEscapi
 const childProcess = require("child_process") as typeof import("child_process");
 
 class TestableEndConditionEvaluator extends EndConditionEvaluator {
-  commandFor(
-    scriptPath: string
-  ): {
+  commandFor(scriptPath: string): {
     executable: string;
     args: string[];
     windowsVerbatimArguments?: boolean;
@@ -998,15 +996,30 @@ suite("EndConditionEvaluator Tests", () => {
       assert.strictEqual(result.passed, true, result.stderr || result.stdout);
     });
 
+    test("resolved scripts with shell operators receive each argument once", async () => {
+      const ctrlyokeDirectory = path.join(workspaceRoot, ".ctrlyoke");
+      fs.mkdirSync(ctrlyokeDirectory, { recursive: true });
+      fs.writeFileSync(
+        path.join(ctrlyokeDirectory, "argv-gate.js"),
+        'process.stdout.write(JSON.stringify(process.argv.slice(2)) + "\\n")',
+        "utf8"
+      );
+
+      const result = await evaluate({
+        script: "argv-gate.js a b && echo SECOND",
+        shell: process.platform === "win32" ? "pwsh" : "sh",
+        compareSource: "stdout",
+        expected: '["a","b"]\nSECOND',
+      });
+
+      assert.strictEqual(result.passed, true, result.stderr || result.stdout);
+    });
+
     test("dispatches .cmd files with quoted args from spaced paths on Windows", async () => {
       if (process.platform !== "win32") return;
       const scriptPath = path.join(workspaceRoot, "sub dir", "chk.cmd");
       fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
-      fs.writeFileSync(
-        scriptPath,
-        "@echo off\r\necho %~1,%~2\r\n",
-        "utf8"
-      );
+      fs.writeFileSync(scriptPath, "@echo off\r\necho %~1,%~2\r\n", "utf8");
 
       const result = await evaluate({
         script: '"sub dir/chk.cmd" "hello world" two',
