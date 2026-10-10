@@ -17,10 +17,11 @@ export function serverTokenSecretKey(workspaceRoot: string): string {
 }
 
 /**
- * The token a server should use: `CTRLYOKE_SERVER_TOKEN` wins, and while it is
- * set the persisted token is never read or created, so scripted and test
- * launches leave no credential behind. `regenerate` still rotates the
- * persisted token even when the env value is what this launch uses.
+ * The token a server should use: a non-empty `CTRLYOKE_SERVER_TOKEN` wins, and
+ * while it is set the persisted token is never read or created, so scripted
+ * and test launches leave no credential behind. An empty or whitespace-only
+ * value is treated as unset. `regenerate` still rotates the persisted token
+ * even when the env value is what this launch uses.
  */
 export async function resolveServerToken(
   store: ServerTokenStore,
@@ -28,7 +29,8 @@ export async function resolveServerToken(
   regenerate = false
 ): Promise<string> {
   const regenerated = regenerate ? await store.regenerate() : undefined;
-  return envToken ?? regenerated ?? (await store.getOrCreate());
+  const configuredToken = envToken?.trim() ? envToken : undefined;
+  return configuredToken ?? regenerated ?? (await store.getOrCreate());
 }
 
 export class ServerTokenStore {

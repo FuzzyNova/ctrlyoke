@@ -352,6 +352,9 @@ export class CtrlYokeHostedServer
       fileWatcherFactory,
       languageIntelligenceHost,
     } = options;
+    if (token.length === 0) {
+      throw new Error("Hosted server access token must not be empty.");
+    }
     this.hub = hub;
     this.dashboardClient = endpoint;
     this.getOrchestrator = getOrchestrator;

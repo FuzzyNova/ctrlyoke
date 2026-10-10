@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` script against `createNodeHostedServer`)
 - **Area:** `src/platform/ServerTokenStore.ts` (`resolveServerToken`), `src/server/CtrlYokeHostedServer.ts` (`timingSafeStringEqual`)
-- **Severity:** high (security: unauthenticated access to file read/write, git and workflow execution)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
