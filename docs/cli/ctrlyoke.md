@@ -96,8 +96,8 @@ ctrlyoke status --workflow release
 ctrlyoke status --workflow release --run run-2026-10-03T12-00-00-000Z --json
 ```
 
-Text output shows the workflow, run, execution state, current and total steps,
-harness, model, start time, the runner lock's PID and heartbeat age, and
+Text output shows the workflow, run, execution state, current and total steps
+(or `Pass N` while the final step runs), harness, model, start time, the runner lock's PID and heartbeat age, and
 liveness. It says `No workflows are executing.` when nothing is, and prints the
 same notes and omitted-row count as the JSON. JSON returns the same workflow
 fields as MCP `global_status`, plus a `liveness` object for each row:

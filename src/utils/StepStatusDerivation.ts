@@ -146,7 +146,10 @@ export function deriveStepStatusesFromRuntime(
     if (
       stepRuntime?.startedAt !== undefined ||
       (index === currentIndex &&
-        hasInFlightStep(executionState as ExecutionState | undefined, finalStepPhase))
+        hasInFlightStep(
+          executionState as ExecutionState | undefined,
+          finalStepPhase
+        ))
     ) {
       return inFlightStatus;
     }

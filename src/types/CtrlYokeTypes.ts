@@ -1286,7 +1286,10 @@ export interface WorkflowSummary {
 export function deriveWorkflowFinalStepSummary(
   finalStep: PromptFile["finalStep"],
   finalStepRuntime: FinalStepRuntimeState | undefined
-): Pick<WorkflowSummary, "hasFinalStep" | "finalStepPhase" | "finalStepRunning"> {
+): Pick<
+  WorkflowSummary,
+  "hasFinalStep" | "finalStepPhase" | "finalStepRunning"
+> {
   return {
     hasFinalStep: !!finalStep && finalStep.enabled !== false,
     ...(finalStepRuntime ? { finalStepPhase: finalStepRuntime.phase } : {}),

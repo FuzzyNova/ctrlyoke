@@ -106,13 +106,25 @@ export function globalStatusHarnessLabel(
     : "workflow harness";
 }
 
+/** Position label: `current/total` for a queue step, the pass badge while the final step runs. */
+export function globalStatusProgressLabel(
+  workflow: Pick<
+    GlobalStatusWorkflow,
+    "currentStep" | "finalStepPass" | "totalSteps"
+  >
+): string {
+  return workflow.finalStepPass === null
+    ? `${workflow.currentStep}/${workflow.totalSteps}`
+    : formatFinalPassBadge(workflow.finalStepPass);
+}
+
 export function globalStatusSearchText(
   params: GlobalStatusParams | undefined,
   result: GlobalStatusResult
 ): string[] {
   const lines = result.workflows.map(
     (w) =>
-      `${w.executionState} · ${w.workflowName} · ${w.workflowKey} · ${w.finalStepPass === null ? `${w.currentStep}/${w.totalSteps}` : formatFinalPassBadge(w.finalStepPass)} · ${globalStatusHarnessLabel(w)}`
+      `${w.executionState} · ${w.workflowName} · ${w.workflowKey} · ${globalStatusProgressLabel(w)} · ${globalStatusHarnessLabel(w)}`
   );
   if (result.truncated)
     lines.push(`Truncated · ${result.omittedCount} omitted`);

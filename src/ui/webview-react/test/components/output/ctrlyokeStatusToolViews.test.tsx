@@ -318,8 +318,16 @@ describe("status and output ctrlyoke tool views", () => {
         },
       ],
     };
-    expect(parseGlobalStatusResultText(JSON.stringify(finalStep))).toBeDefined();
+    expect(
+      parseGlobalStatusResultText(JSON.stringify(finalStep))
+    ).toBeDefined();
     expect(globalStatusSearchText(undefined, finalStep)[1]).toContain("Pass 2");
+    render(
+      <GlobalStatusBody {...props(MCP_GLOBAL_STATUS_TOOL_NAME, finalStep)} />
+    );
+    const row = screen.getByText("Build docs").parentElement?.textContent;
+    expect(row).toContain("Pass 2");
+    expect(row).not.toContain("/8");
   });
 
   it("validates and renders read_output collapsed with store-managed expansion", () => {
