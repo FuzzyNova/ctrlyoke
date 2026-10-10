@@ -736,7 +736,7 @@ Maximum time in seconds to wait for a prompt to complete. `-1` means unlimited.
 - **Type:** `number`
 - **Default:** `3600`
 
-Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.
+Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. This setting must be greater than zero and has no unlimited value. A script's own `timeoutSec` (in seconds) overrides it.
 
 ### `execution.ctrlyokeMcpMode` {#execution-ctrlyokemcpmode}
 

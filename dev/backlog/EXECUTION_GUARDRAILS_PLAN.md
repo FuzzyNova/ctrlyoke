@@ -79,9 +79,14 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   `queue.maxSteps`.
 - Count enabled and disabled queue entries consistently with the existing queue
   definition; do not create a second “billable step” count.
-- Audit `execution.maxPromptTimeoutSec` across interactive/headless transports and
-  completion monitors so `-1` and finite values have the same meaning for every
-  CLI harness.
+- ~~Audit `execution.maxPromptTimeoutSec` across interactive/headless transports
+  and completion monitors so `-1` and finite values have the same meaning for
+  every CLI harness~~ — **done**: all six harnesses use the shared headless
+  spawn or interactive `CliLogMonitor` path (including PTY and inherited-stdio
+  sessions). Headless process expiry now becomes a step-level `TIMEOUT`
+  failure; Codex app-server timeouts are usage probes, and OpenCode server
+  transport is MCP configuration rather than prompt execution. Added finite
+  and unlimited coverage for both shared enforcement paths.
 - Audit `queue.maxWorkflowExecutionTimeSec` across normal steps, script steps,
   retries, `finalStep`, pause/resume, and dynamically extended queues. Continue
   enforcing it only at safe boundaries; do not kill a harness while it may be

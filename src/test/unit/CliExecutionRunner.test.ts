@@ -13,6 +13,7 @@ import {
   type InteractiveInjectContext,
 } from "../../core/harness/shared/CliExecutionRunner";
 import { CliFailureTracker } from "../../core/harness/shared/CliFailureTracker";
+import { CliTransportError } from "../../core/harness/shared/CliTransportError";
 import { CliInteractiveStartupCoordinator } from "../../core/harness/shared/CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import type { InteractiveExitResult } from "../../utils/CliProcessManager";
@@ -103,6 +104,7 @@ function createRunner(options?: {
     error?: string;
     sessionId?: string;
   };
+  headlessError?: Error;
 }) {
   const failureTracker = new CliFailureTracker();
   let failureReason: string | undefined;
@@ -143,6 +145,9 @@ function createRunner(options?: {
       },
       executeHeadless: async (_args, _prompt, _tempFiles, callback, env) => {
         observedHeadlessEnv = env;
+        if (options?.headlessError) {
+          throw options.headlessError;
+        }
         return callback({
           stdout: "",
           stderr: options?.collectedHeadlessResponse?.error ?? "",
@@ -421,6 +426,26 @@ suite("CliExecutionRunner", () => {
     assert.strictEqual(
       failureTracker.getLastFailureKind(),
       FAILURE_KINDS.PROCESS_EXIT
+    );
+  });
+
+  test("records a headless prompt timeout as a step-level TIMEOUT failure", async () => {
+    const { runner, failureTracker, getFailureReason } = createRunner({
+      headlessError: new CliTransportError(
+        "Prompt execution timed out after 25ms",
+        FAILURE_KINDS.TIMEOUT
+      ),
+    });
+    const session = new CliExecutionSession({
+      prompt: { prompt: "just say hi" },
+    });
+
+    assert.strictEqual(await runner.executeHeadless(session, []), false);
+    assert.strictEqual(session.failureKind, FAILURE_KINDS.TIMEOUT);
+    assert.strictEqual(failureTracker.wasLastFailureTimeout(), true);
+    assert.strictEqual(
+      getFailureReason(),
+      "Prompt execution timed out after 25ms"
     );
   });
 
