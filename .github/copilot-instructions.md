@@ -163,6 +163,22 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
 - **Use the shell when it is genuinely the better tool** — find-and-replace across
   many lines or files, mechanical codemods, and of course builds, tests, `git`, and
   searching. No need to ask or apologize; just pick the right tool for the edit.
+- **Never pass code that contains string literals or escapes through a shell string.**
+  `node -e "…"`, `python -c`, a `sed`/`perl` replacement, or a heredoc that generates
+  a script which then rewrites a file all push the same text through two or three
+  quoting layers (shell → interpreter literal → generated source literal). A `\n`, a
+  quote, `$` or a backtick then reliably comes out wrong. Bash and PowerShell both do
+  this, so switching shells does not help. The rules:
+  - Temporary edits are still edits. Probes, instrumentation, and "revert it after"
+    hacks go through the edit tool too, then come out with `git checkout -- <file>`.
+  - When you genuinely need a script (a codemod or a multi-file rewrite), create it as
+    a file with your file-writing tool in a scratch directory and run `node <file>`.
+    Pass data in as arguments or files, never by splicing it into the script's source.
+  - For commit messages, use a quoted heredoc (`git commit -F - <<'EOF'`) in a POSIX
+    shell, or `git commit -F <file>` with a file you wrote. In PowerShell, use a
+    single-quoted here-string `@'…'@` with the closing `'@` at column 0.
+  - After the first escaping failure, stop. Do not retry with another layer of
+    backslashes; switch to the edit tool or a script file.
 
 </fileEditing>
 
