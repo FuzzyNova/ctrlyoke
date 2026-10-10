@@ -45,6 +45,15 @@ suite("SecretReferenceParser", () => {
     );
   });
 
+  test("does not parse secret references immediately after Unicode letters", () => {
+    assert.deepStrictEqual(parseSecretReferences("café!API_TOKEN"), []);
+    assert.deepStrictEqual(parseSecretReferences("東京!API_TOKEN"), []);
+    assert.deepStrictEqual(
+      parseSecretReferences("cafe !API_TOKEN").map(({ name }) => name),
+      ["API_TOKEN"]
+    );
+  });
+
   test("does not parse !NAME inside triple-backtick fenced blocks", () => {
     const text = "Log excerpt:\n```log\n<!DOCTYPE>\n```\nUse !REAL_NAME too.";
 

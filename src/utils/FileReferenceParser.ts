@@ -711,7 +711,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // src/myimage@512x512.png parses as one reference, not split at the inner @.
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH}))`,
-    "g"
+    "gu"
   );
   let match;
 
@@ -781,7 +781,7 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
   // characters immediately before #, not just alphanumerics.
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}#selection:(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
-    "g"
+    "gu"
   );
   let match;
 
@@ -835,7 +835,7 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
   // characters immediately before #, not just alphanumerics.
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}#sym(?:\\.([a-z-]+))?:(?:"([^"]+)"|([^\\s:"]+)):(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
-    "g"
+    "gu"
   );
   let match;
 

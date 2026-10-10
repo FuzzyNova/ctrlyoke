@@ -276,6 +276,23 @@ suite("FileReferenceParser", () => {
 
   // ──────────────────────────────────────────────────────────────────────────
   suite("parseAtReferences", () => {
+    test("does not parse an @ reference immediately after a Unicode letter", () => {
+      assert.deepStrictEqual(parseAtReferences("café@src/a.ts"), []);
+      assert.deepStrictEqual(parseAtReferences("東京@src/a.ts"), []);
+    });
+
+    test("keeps extensionless files and directories distinct after punctuation stripping", () => {
+      assert.deepStrictEqual(
+        parseAtReferences("@scripts/build, @src/.").map(
+          ({ path, isDirectory }) => ({ path, isDirectory })
+        ),
+        [
+          { path: "scripts/build", isDirectory: false },
+          { path: "src/", isDirectory: true },
+        ]
+      );
+    });
+
     test("returns empty array for prompt with no references", () => {
       const refs = parseAtReferences("just some text without references");
       assert.deepStrictEqual(refs, []);
@@ -402,6 +419,20 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "src/index.js");
     });
+  });
+
+  test("does not recognize any reference trigger immediately after a Unicode letter", () => {
+    assert.deepStrictEqual(parseInlinePriorContextRefs("café$previous"), []);
+    assert.deepStrictEqual(parseAtReferences("café@src/a.ts"), []);
+    assert.deepStrictEqual(parseSecretReferences("café!API_TOKEN"), []);
+    assert.deepStrictEqual(parseGitChangeReferences("café~diff"), []);
+    assert.deepStrictEqual(scanCtrlYokeSlashTokens("café/skill:commit"), []);
+
+    assert.strictEqual(parseInlinePriorContextRefs("cafe $previous").length, 1);
+    assert.strictEqual(parseAtReferences("cafe @src/a.ts").length, 1);
+    assert.strictEqual(parseSecretReferences("cafe !API_TOKEN").length, 1);
+    assert.strictEqual(parseGitChangeReferences("cafe ~diff").length, 1);
+    assert.strictEqual(scanCtrlYokeSlashTokens("cafe /skill:commit").length, 1);
   });
 
   // ──────────────────────────────────────────────────────────────────────────

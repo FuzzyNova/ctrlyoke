@@ -524,14 +524,20 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     };
 
     // Match quoted directory paths first (@"path with spaces/dir/")
-    const quotedPattern = new RegExp(this.patterns.directoryQuoted.source, "g");
+    const quotedPattern = new RegExp(
+      this.patterns.directoryQuoted.source,
+      this.patterns.directoryQuoted.flags
+    );
     let match: RegExpExecArray | null;
     while ((match = quotedPattern.exec(text)) !== null) {
       addDirLink(match);
     }
 
     // Match plain unquoted directory paths (@dir/)
-    const plainPattern = new RegExp(this.patterns.directory.source, "g");
+    const plainPattern = new RegExp(
+      this.patterns.directory.source,
+      this.patterns.directory.flags
+    );
     while ((match = plainPattern.exec(text)) !== null) {
       addDirLink(match);
     }
@@ -600,7 +606,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       links.push(link);
     };
 
-    const pattern = new RegExp(this.patterns.lineRange.source, "g");
+    const pattern = new RegExp(
+      this.patterns.lineRange.source,
+      this.patterns.lineRange.flags
+    );
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
       addLineRangeLink(match);
@@ -716,7 +725,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       links.push(link);
     };
 
-    const pattern = new RegExp(this.patterns.symbol.source, "g");
+    const pattern = new RegExp(
+      this.patterns.symbol.source,
+      this.patterns.symbol.flags
+    );
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
       addSymbolLink(match);

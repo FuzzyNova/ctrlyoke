@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` script against the real parsers)
 - **Area:** `src/utils/ReferenceBoundary.ts` (`REFERENCE_BOUNDARY_CHARS`, `NOT_AFTER_BOUNDARY`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` script comparing `parseAtReferences` and `findContextReferenceMatches`)
 - **Area:** `src/utils/ReferencePatterns.ts` (`directory` pattern), `src/utils/PromptReferenceScanner.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
