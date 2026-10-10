@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch `npx tsx` script calling `CtrlYokeMCPServer.invokeTool`)
 - **Area:** `src/core/PromptFileParser.ts` (`getParallelReferenceErrors`), `src/mcp-server.ts` (`handleAppendStep`, `edit_step`), `src/core/orchestration/RunContinuationService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

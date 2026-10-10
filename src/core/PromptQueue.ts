@@ -53,6 +53,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   PARALLEL_GROUP_INSERT_POSITIONS,
+  assertNoParallelSiblingReferences,
   appendParallelGroupMember,
   deleteParallelGroupSteps,
   insertParallelGroupTopology,
@@ -2081,6 +2082,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         identifiedTopology.steps,
         this.workflowFile?.finalStep
       );
+      assertNoParallelSiblingReferences(
+        {
+          steps: renumbered.steps,
+          parallelGroups: identifiedTopology.parallelGroups,
+        },
+        this.workflowFile
+      );
       assertStartedStepPositionsPreserved(
         previousSteps,
         identifiedTopology.steps,
@@ -2212,6 +2220,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         previousSteps,
         nextTopology.steps,
         this.workflowFile?.finalStep
+      );
+      assertNoParallelSiblingReferences(
+        { steps: renumbered.steps, parallelGroups: nextTopology.parallelGroups },
+        this.workflowFile
       );
       assertStartedStepPositionsPreserved(
         previousSteps,
@@ -2925,6 +2937,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           clearProperties
         );
       }
+      assertNoParallelSiblingReferences(
+        { steps: nextSteps, parallelGroups: this.state.parallelGroups },
+        this.workflowFile
+      );
       this.state.steps = nextSteps;
       this.workflowFile = this.workflowFile
         ? { ...this.workflowFile, steps: [...nextSteps] }
@@ -2965,6 +2981,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         index,
         replacement
       );
+      assertNoParallelSiblingReferences(nextTopology, this.workflowFile);
       assertStartedStepPositionsPreserved(
         this.state.steps,
         nextTopology.steps,

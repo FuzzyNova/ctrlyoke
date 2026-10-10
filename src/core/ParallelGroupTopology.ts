@@ -1,8 +1,10 @@
 import { randomUUID } from "crypto";
 import type {
   ParallelGroupDefinition,
+  PromptFile,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
+import { isScriptStep } from "../types/CtrlYokeTypes";
 import { assertStartedStepPositionsPreserved } from "./StepIdentity";
 import { hasStarted } from "../utils/StepStatusDerivation";
 import {
@@ -14,6 +16,100 @@ import {
 export interface ParallelGroupTopology {
   steps: WorkflowStep[];
   parallelGroups: ParallelGroupDefinition[];
+}
+
+type ParallelReferenceDefaults = Pick<PromptFile, "priorContext" | "sessionId">;
+
+/**
+ * Reports numeric session and prior-context references that point at another
+ * member of the same parallel group. References inherited from workflow-level
+ * properties are checked alongside step-level values.
+ */
+export function getParallelSiblingReferenceErrors(
+  steps: WorkflowStep[],
+  parallelGroups: ParallelGroupDefinition[],
+  workflowDefaults?: ParallelReferenceDefaults
+): string[] {
+  const errors: string[] = [];
+
+  for (const group of parallelGroups) {
+    if (
+      !group ||
+      !Number.isInteger(group.startIndex) ||
+      !Number.isInteger(group.endIndex) ||
+      group.startIndex < 0 ||
+      group.endIndex >= steps.length ||
+      group.startIndex > group.endIndex
+    ) {
+      continue;
+    }
+
+    const memberNumbers = Array.from(
+      { length: group.endIndex - group.startIndex + 1 },
+      (_, offset) => group.startIndex + offset + 1
+    );
+    const memberNumberText = memberNumbers.join(", ");
+
+    for (let stepIndex = group.startIndex; stepIndex <= group.endIndex; stepIndex++) {
+      const step = steps[stepIndex];
+      if (isScriptStep(step)) {
+        continue;
+      }
+
+      const priorContext =
+        step.priorContext !== undefined
+          ? step.priorContext
+          : workflowDefaults?.priorContext;
+      const sessionId =
+        step.sessionId !== undefined
+          ? step.sessionId
+          : workflowDefaults?.sessionId;
+
+      for (const reference of getNumericReferences(priorContext)) {
+        if (memberNumbers.includes(reference) && reference !== stepIndex + 1) {
+          errors.push(
+            `Step ${stepIndex + 1}: Numeric priorContext reference ${reference} cannot target a sibling in parallel group (steps ${memberNumberText})`
+          );
+        }
+      }
+
+      for (const reference of getNumericReferences(sessionId)) {
+        if (memberNumbers.includes(reference) && reference !== stepIndex + 1) {
+          errors.push(
+            `Step ${stepIndex + 1}: Numeric sessionId reference ${reference} cannot target a sibling in parallel group (steps ${memberNumberText})`
+          );
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+function getNumericReferences(value: unknown): number[] {
+  if (typeof value === "number") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.filter(
+      (reference): reference is number => typeof reference === "number"
+    );
+  }
+  return [];
+}
+
+export function assertNoParallelSiblingReferences(
+  topology: ParallelGroupTopology,
+  workflowDefaults?: ParallelReferenceDefaults
+): void {
+  const errors = getParallelSiblingReferenceErrors(
+    topology.steps,
+    topology.parallelGroups,
+    workflowDefaults
+  );
+  if (errors.length > 0) {
+    throw new Error(errors.join("; "));
+  }
 }
 
 type ParallelGroupDefinitionInput = Omit<

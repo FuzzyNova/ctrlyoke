@@ -69,6 +69,7 @@ import {
   refuseNewerSchema,
 } from "../utils/PersistedSchemaGuard";
 import {
+  assertNoParallelSiblingReferences,
   deleteParallelGroupSteps,
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
@@ -1472,6 +1473,7 @@ export class WorkingFileManager {
             "replace" in change ? change.clearProperties : undefined
           )
         );
+        assertNoParallelSiblingReferences(nextTopology, source);
         return {
           workingFile: {
             ...source,
@@ -1542,6 +1544,10 @@ export class WorkingFileManager {
             clearProperties
           );
         }
+        assertNoParallelSiblingReferences(
+          { steps: nextSteps, parallelGroups: source.parallelGroups ?? [] },
+          source
+        );
         return {
           workingFile: { ...source, steps: nextSteps },
           result: undefined,

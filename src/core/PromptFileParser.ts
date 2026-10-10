@@ -56,6 +56,7 @@ import { buildStepLimitError } from "../utils/QueueLimitUtils";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
   flattenParallelItems,
+  getParallelSiblingReferenceErrors,
   normalizeParallelGroupTopology,
   type ResolvedParallelItem,
 } from "./ParallelGroupTopology";
@@ -1193,86 +1194,11 @@ export class PromptFileParser {
     parallelGroups: ParallelGroupDefinition[],
     workflowProperties?: ParallelValidationProperties
   ): string[] {
-    const errors: string[] = [];
-
-    for (const group of parallelGroups) {
-      if (!group || typeof group !== "object") {
-        continue;
-      }
-      if (
-        !Number.isInteger(group.startIndex) ||
-        !Number.isInteger(group.endIndex) ||
-        group.startIndex < 0 ||
-        group.endIndex >= items.length ||
-        group.startIndex > group.endIndex
-      ) {
-        continue;
-      }
-
-      const groupStepNumbers = Array.from(
-        { length: group.endIndex - group.startIndex + 1 },
-        (_, offset) => group.startIndex + offset + 1
-      );
-      const groupStepNumberText = groupStepNumbers.join(", ");
-
-      for (
-        let stepIndex = group.startIndex;
-        stepIndex <= group.endIndex;
-        stepIndex++
-      ) {
-        const step = items[stepIndex];
-        if (isScriptStep(step)) {
-          continue;
-        }
-
-        const priorContext =
-          step.priorContext !== undefined
-            ? step.priorContext
-            : workflowProperties?.priorContext;
-        const sessionId =
-          step.sessionId !== undefined
-            ? step.sessionId
-            : workflowProperties?.sessionId;
-
-        const numericPriorContext = this.getNumericReferences(priorContext);
-        for (const reference of numericPriorContext) {
-          if (
-            groupStepNumbers.includes(reference) &&
-            reference !== stepIndex + 1
-          ) {
-            errors.push(
-              `Step ${stepIndex + 1}: Numeric priorContext reference ${reference} cannot target a sibling in parallel group (steps ${groupStepNumberText})`
-            );
-          }
-        }
-
-        const numericSessionId = this.getNumericReferences(sessionId);
-        for (const reference of numericSessionId) {
-          if (
-            groupStepNumbers.includes(reference) &&
-            reference !== stepIndex + 1
-          ) {
-            errors.push(
-              `Step ${stepIndex + 1}: Numeric sessionId reference ${reference} cannot target a sibling in parallel group (steps ${groupStepNumberText})`
-            );
-          }
-        }
-      }
-    }
-
-    return errors;
-  }
-
-  private getNumericReferences(value: unknown): number[] {
-    if (typeof value === "number") {
-      return [value];
-    }
-    if (Array.isArray(value)) {
-      return value.filter(
-        (reference): reference is number => typeof reference === "number"
-      );
-    }
-    return [];
+    return getParallelSiblingReferenceErrors(
+      items,
+      parallelGroups,
+      workflowProperties
+    );
   }
 
   private throwOnParallelReferenceErrors(
