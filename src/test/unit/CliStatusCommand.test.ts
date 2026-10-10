@@ -126,7 +126,10 @@ suite("CliStatusCommand", () => {
         startedAt: 1_000,
         harness: "codex-cli",
         steps: [{ prompt: "fixture" }],
-        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.COMPLETED },
+        _runtime: {
+          currentIndex: 0,
+          executionState: EXECUTION_STATES.COMPLETED,
+        },
       })
     );
 

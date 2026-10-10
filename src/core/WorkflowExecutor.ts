@@ -4591,7 +4591,7 @@ export class WorkflowExecutor {
                   ),
                 }
               : {}),
-          secretEnvironment: retrySecrets.values,
+            secretEnvironment: retrySecrets.values,
             finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
               string | undefined,
           },
