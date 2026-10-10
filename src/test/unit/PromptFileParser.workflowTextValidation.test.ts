@@ -73,6 +73,18 @@ suite("PromptFileParser.validateWorkflowText", () => {
     assert.deepStrictEqual(nonStringDescription, { issues: [] });
   });
 
+  test("accepts empty and comment-only prompt markdown frontmatter", () => {
+    for (const frontmatter of ["", "   \n", "# metadata intentionally omitted\n"]) {
+      assert.deepStrictEqual(
+        parser.validateWorkflowText(
+          `---\n${frontmatter}---\nBody\n`,
+          CTRLYOKE_FILE_KINDS.PROMPT_MARKDOWN
+        ),
+        { issues: [] }
+      );
+    }
+  });
+
   test("uses the same pre-normalization checks as workflow loading", async () => {
     const invalidVars = "steps:\n  - prompt: hi\nvars:\n  bad-key: value\n";
     assert.ok(

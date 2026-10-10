@@ -1,9 +1,9 @@
 import * as path from "path";
 import * as fs from "fs";
-import * as jsYaml from "js-yaml";
 import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import { splitMarkdownFrontmatter } from "./MarkdownFrontmatter";
+import { loadYamlDocument } from "../core/WorkflowYamlSchema";
 import {
   getHarnessAgentDirs,
   getCtrlYokeAgentDir,
@@ -72,7 +72,7 @@ export function parseAgentFrontmatter(content: string): AgentFrontmatter {
   }
 
   try {
-    const parsed = jsYaml.load(split.frontmatter);
+    const parsed = loadYamlDocument(split.frontmatter);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }

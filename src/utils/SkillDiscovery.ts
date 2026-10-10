@@ -1,10 +1,10 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import * as yaml from "js-yaml";
 import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import { splitMarkdownFrontmatter } from "./MarkdownFrontmatter";
+import { loadYamlDocument } from "../core/WorkflowYamlSchema";
 import {
   getHarnessSkillDirs,
   getCtrlYokeSkillDir,
@@ -328,7 +328,7 @@ export class SkillDiscovery {
         return "";
       }
 
-      const frontmatter = yaml.load(split.frontmatter) as Record<
+      const frontmatter = loadYamlDocument(split.frontmatter) as Record<
         string,
         unknown
       >;

@@ -886,6 +886,43 @@ suite("PromptFileParser Tests", () => {
       }
     });
 
+    test("parses comment-only frontmatter as an absent YAML document", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-comment-frontmatter-")
+      );
+      const filePath = path.join(tempDir, "comment.prompt.md");
+      try {
+        await fs.writeFile(
+          filePath,
+          "---\n# Metadata intentionally omitted\n---\nPrompt body",
+          "utf8"
+        );
+        const result = await parser.parsePromptFile(filePath);
+        assertValidResult(result);
+        assert.strictEqual(
+          (result.steps[0] as PromptStep).prompt,
+          "Prompt body"
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("keeps the friendly error for an empty workflow YAML file", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-empty-workflow-yaml-")
+      );
+      const filePath = path.join(tempDir, "empty.ctrlyoke.yaml");
+      try {
+        await fs.writeFile(filePath, "# no workflow yet\n", "utf8");
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+        assert.ok(parser.lastParseError);
+        assert.ok(!parser.lastParseError.message.includes("expected a document"));
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("should parse .prompt.md file as single prompt", async () => {
       const filePath = path.join(fixturesPath, "simple.prompt.md");
       const result = await parser.parsePromptFile(filePath);
