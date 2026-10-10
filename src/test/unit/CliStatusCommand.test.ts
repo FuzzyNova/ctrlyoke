@@ -105,6 +105,47 @@ suite("CliStatusCommand", () => {
     assert.strictEqual(result.workflows[0].currentStep, 1);
   });
 
+  test("reports the locked older run as alive when a newer run is latest", async () => {
+    const workspace = await createWorkspace(true);
+    const workflowKey = "status-workflow-2026-01-01T00-00-00" as WorkflowKey;
+    const olderRun = "run-2026-01-01T00-00-00-000Z" as RunRef;
+    const latestRun = "run-2026-01-02T00-00-00-000Z" as RunRef;
+    const descriptorPath = WorkflowPaths.descriptorPath(root, workflowKey);
+    const descriptor = JSON.parse(await fs.readFile(descriptorPath, "utf8"));
+    descriptor.latestRunRef = latestRun;
+    await fs.writeFile(descriptorPath, JSON.stringify(descriptor));
+    const latestRunPath = WorkflowPaths.runFilePath(
+      root,
+      workflowKey,
+      latestRun
+    );
+    await fs.mkdir(path.dirname(latestRunPath), { recursive: true });
+    await fs.writeFile(
+      latestRunPath,
+      JSON.stringify({
+        startedAt: 1_000,
+        harness: "codex-cli",
+        steps: [{ prompt: "fixture" }],
+        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.COMPLETED },
+      })
+    );
+
+    const output: string[] = [];
+    await statusCommand(
+      { json: true },
+      { writeOut: (message) => output.push(message) },
+      {
+        bootstrapCliWorkspace: async () => workspace,
+        now: () => 10_000,
+      }
+    );
+    const result = JSON.parse(output[0]);
+    assert.strictEqual(result.workflowCount, 1);
+    assert.strictEqual(result.workflows[0].runRef, olderRun);
+    assert.strictEqual(result.workflows[0].liveness.state, "alive");
+    assert.strictEqual(result.workflows[0].liveness.reason, "active");
+  });
+
   test("reports a running workflow as stale when its runner lock is absent", async () => {
     const workspace = await createWorkspace(false);
     const output: string[] = [];

@@ -9,6 +9,7 @@ import type {
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  WORKFLOW_LOCK_LIVENESS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -16,6 +17,7 @@ import {
   stripLegacyWorkingFileLineageMetadata,
   getLineageLastModifiedAt,
 } from "../../utils/WorkingFileMetadata";
+import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 export const MAX_GLOBAL_STATUS_RESULTS = 100;
@@ -124,6 +126,27 @@ export class GlobalWorkflowStatusService {
               workflowKey
             );
             runRef = descriptor.latestRunRef ?? null;
+            const lockInspection = await readWorkflowLockInspection(
+              this.workspaceRoot,
+              workflowKey
+            );
+            if (
+              lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ABSENT &&
+              lockInspection.lock.workflowKey === workflowKey
+            ) {
+              try {
+                WorkflowPaths.assertValidRunRef(lockInspection.lock.runRef);
+                const lockedRunPath = WorkflowPaths.runFilePath(
+                  this.workspaceRoot,
+                  workflowKey,
+                  lockInspection.lock.runRef
+                );
+                await fs.access(lockedRunPath);
+                runRef = lockInspection.lock.runRef;
+              } catch {
+                // An invalid or orphaned lock must not hide the latest run.
+              }
+            }
             filePath = runRef
               ? WorkflowPaths.runFilePath(
                   this.workspaceRoot,

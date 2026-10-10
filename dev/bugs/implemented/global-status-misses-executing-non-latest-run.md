@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` script against `GlobalWorkflowStatusService`)
 - **Area:** `src/core/orchestration/GlobalWorkflowStatusService.ts` (`getStatus`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
