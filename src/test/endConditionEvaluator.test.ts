@@ -12,13 +12,18 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { makeTempDir, removeTempDir } from "./helpers/tempWorkspace";
+import { buildCmdExeVerbatimArgs } from "../core/harness/shared/WindowsCmdEscaping";
 
 const childProcess = require("child_process") as typeof import("child_process");
 
 class TestableEndConditionEvaluator extends EndConditionEvaluator {
   commandFor(
     scriptPath: string
-  ): { executable: string; args: string[] } | null {
+  ): {
+    executable: string;
+    args: string[];
+    windowsVerbatimArguments?: boolean;
+  } | null {
     return this.getScriptCommand(scriptPath);
   }
 
@@ -310,10 +315,11 @@ suite("EndConditionEvaluator Tests", () => {
             if (platform === "win32") {
               assert.ok(command);
               assert.strictEqual(command.executable, "cmd");
-              assert.deepStrictEqual(command.args, [
-                "/c",
-                `${scriptPath}${extension}`,
-              ]);
+              assert.deepStrictEqual(
+                command.args,
+                buildCmdExeVerbatimArgs(`${scriptPath}${extension}`, [])
+              );
+              assert.strictEqual(command.windowsVerbatimArguments, true);
             } else {
               assert.strictEqual(command, null);
             }
@@ -971,6 +977,59 @@ suite("EndConditionEvaluator Tests", () => {
         expected: "CHECK",
       });
       assert.strictEqual(piped.passed, true, piped.stderr || piped.stdout);
+    });
+
+    test("resolved .ctrlyoke scripts retain lookup with shell operators", async () => {
+      const ctrlyokeDirectory = path.join(workspaceRoot, ".ctrlyoke");
+      fs.mkdirSync(ctrlyokeDirectory, { recursive: true });
+      fs.writeFileSync(
+        path.join(ctrlyokeDirectory, "gate.js"),
+        'process.stdout.write("GATE-RAN\\n")',
+        "utf8"
+      );
+
+      const result = await evaluate({
+        script: "gate.js && echo SECOND",
+        shell: process.platform === "win32" ? "pwsh" : "sh",
+        compareSource: "stdout",
+        expected: "GATE-RAN\nSECOND",
+      });
+
+      assert.strictEqual(result.passed, true, result.stderr || result.stdout);
+    });
+
+    test("dispatches .cmd files with quoted args from spaced paths on Windows", async () => {
+      if (process.platform !== "win32") return;
+      const scriptPath = path.join(workspaceRoot, "sub dir", "chk.cmd");
+      fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+      fs.writeFileSync(
+        scriptPath,
+        "@echo off\r\necho %~1,%~2\r\n",
+        "utf8"
+      );
+
+      const result = await evaluate({
+        script: '"sub dir/chk.cmd" "hello world" two',
+        compareSource: "stdout",
+        expected: "hello world,two",
+      });
+
+      assert.strictEqual(result.passed, true, result.stderr || result.stdout);
+    });
+
+    test("dispatches .cmd files from paths containing ampersands on Windows", async () => {
+      if (process.platform !== "win32") return;
+      const scriptPath = path.join(workspaceRoot, "r&d", "chk.cmd");
+      fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+      fs.writeFileSync(scriptPath, "@echo off\r\necho METACHAR\r\n", "utf8");
+
+      const result = await evaluate({
+        script: '"r&d/chk.cmd"',
+        compareSource: "stdout",
+        expected: "METACHAR",
+      });
+
+      assert.strictEqual(result.passed, true, result.stderr || result.stdout);
     });
 
     test("plain workspace script arguments stay on direct argv dispatch", async () => {

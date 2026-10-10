@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced on Windows with `ctrlyoke run` on a script-only workflow)
 - **Area:** `src/core/EndConditionEvaluator.ts` (`getScriptCommand`, CMD interpreter; file-dispatch branch of the evaluator)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

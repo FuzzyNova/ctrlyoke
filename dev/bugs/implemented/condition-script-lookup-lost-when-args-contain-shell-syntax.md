@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with `ctrlyoke run` on a script-only workflow)
 - **Area:** `src/core/EndConditionEvaluator.ts` (shell-fallback branch, ~232-275)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
