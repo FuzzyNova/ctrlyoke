@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch vitest test against `useUIStore`)
 - **Area:** `src/ui/webview-react/store/uiStore.ts` (`RunViewLoadRollback`, `requestRunViewLoad`, `rollbackRunViewLoad`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

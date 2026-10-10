@@ -1021,6 +1021,33 @@ describe("requestRunViewLoad", () => {
     expect(store().executionRunRef).toBeNull();
   });
 
+  it("restores the system-generated lock when a workflow switch rolls back", () => {
+    const originalAddress = {
+      workflowKey: "wf-1" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    };
+    store().setDisplayedRunView(
+      originalAddress,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true
+    );
+
+    store().requestRunViewLoad(
+      { workflowKey: "wf-2" as never, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      []
+    );
+    expect(store().viewedLineageIsSystemGenerated).toBe(false);
+
+    store().rollbackRunViewLoad();
+
+    expect(store().displayedViewAddress).toEqual(originalAddress);
+    expect(store().viewedLineageIsSystemGenerated).toBe(true);
+  });
+
   it("records a pending switch for cross-lineage requests only", () => {
     store().setDisplayedRunView(
       {
