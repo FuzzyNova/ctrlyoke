@@ -2779,6 +2779,87 @@ suite("CopilotLogParser", () => {
       );
     });
 
+    test("maps apply_patch add, delete, and update kinds for initiated and completed events", () => {
+      const patch = [
+        "*** Begin Patch",
+        "*** Add File: src/added.ts",
+        "@@",
+        "+added",
+        "*** Delete File: src/deleted.ts",
+        "@@",
+        "-deleted",
+        "*** Update File: src/updated.ts",
+        "@@",
+        "-before",
+        "+after",
+        "*** End Patch",
+      ].join("\n");
+      const gitDiff = [
+        "diff --git a/src/added.ts b/src/added.ts",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/src/added.ts",
+        "@@ -0,0 +1,1 @@",
+        "+added",
+        "diff --git a/src/deleted.ts b/src/deleted.ts",
+        "deleted file mode 100644",
+        "--- a/src/deleted.ts",
+        "+++ /dev/null",
+        "@@ -1,1 +0,0 @@",
+        "-deleted",
+        "diff --git a/src/updated.ts b/src/updated.ts",
+        "--- a/src/updated.ts",
+        "+++ b/src/updated.ts",
+        "@@ -1,1 +1,1 @@",
+        "-before",
+        "+after",
+      ].join("\n");
+      const events = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "apply-kinds",
+            toolName: "apply_patch",
+            arguments: patch,
+          },
+          timestamp: "2026-01-17T10:00:01Z",
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "apply-kinds",
+            success: true,
+            result: { detailedContent: gitDiff },
+          },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const fileEventTypes = new Set<string>([
+        CLI_EVENT_TYPES.FILE_WRITE,
+        CLI_EVENT_TYPES.FILE_DELETE,
+        CLI_EVENT_TYPES.FILE_EDIT,
+      ]);
+      const fileEvents = response.events.filter((event) =>
+        fileEventTypes.has(event.type)
+      );
+
+      assert.deepStrictEqual(
+        fileEvents.map((event) => [event.type, (event.data as any).path]),
+        [
+          [CLI_EVENT_TYPES.FILE_WRITE, "src/added.ts"],
+          [CLI_EVENT_TYPES.FILE_DELETE, "src/deleted.ts"],
+          [CLI_EVENT_TYPES.FILE_EDIT, "src/updated.ts"],
+          [CLI_EVENT_TYPES.FILE_WRITE, "src/added.ts"],
+          [CLI_EVENT_TYPES.FILE_DELETE, "src/deleted.ts"],
+          [CLI_EVENT_TYPES.FILE_EDIT, "src/updated.ts"],
+        ]
+      );
+    });
+
     test("keeps a parallel shell call running when a sibling call completes", () => {
       // Real Copilot shape: two shell calls start together, only one
       // completes, and each completion is followed by a TOOL_RESULT. The

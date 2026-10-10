@@ -14,13 +14,13 @@ import {
   McpToolCallData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
-import {
-  APPLY_PATCH_FILE_EDIT_KINDS,
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
+import {
+  buildApplyPatchFallbackEvent,
+  buildApplyPatchFileEvent,
+} from "../shared/ApplyPatchEventMapper";
 import { Log } from "../../../utils/Log";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import {
@@ -132,23 +132,13 @@ export class CodexToolBuilder {
         Log.debug(
           `[CodexToolBuilder] apply_patch initiated - files=${fileEdits.length}`
         );
-        return fileEdits.map((fileEdit) => ({
-          type:
-            fileEdit.kind === APPLY_PATCH_FILE_EDIT_KINDS.ADD
-              ? CLI_EVENT_TYPES.FILE_WRITE
-              : fileEdit.kind === APPLY_PATCH_FILE_EDIT_KINDS.DELETE
-                ? CLI_EVENT_TYPES.FILE_DELETE
-                : CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: fileEdit.path,
-            structuredPatch: fileEdit.structuredPatch,
-            ...(fileEdit.kind === APPLY_PATCH_FILE_EDIT_KINDS.ADD && {
-              content: "",
-            }),
-            status: OPERATION_STATUS.INITIATED,
-          } as FileEditData | FileWriteData | FileDeleteData,
-        }));
+        return fileEdits.map((fileEdit) =>
+          buildApplyPatchFileEvent(
+            fileEdit,
+            timestamp,
+            OPERATION_STATUS.INITIATED
+          )
+        );
       }
 
       let extractedPath = "unknown";
@@ -159,15 +149,12 @@ export class CodexToolBuilder {
         `[CodexToolBuilder] apply_patch initiated - file=${extractedPath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
       );
       return [
-        {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
+        buildApplyPatchFallbackEvent(
+          extractedPath,
+          structuredPatch,
           timestamp,
-          data: {
-            path: extractedPath,
-            structuredPatch,
-            status: OPERATION_STATUS.INITIATED,
-          } as FileEditData,
-        },
+          OPERATION_STATUS.INITIATED
+        ),
       ];
     }
 

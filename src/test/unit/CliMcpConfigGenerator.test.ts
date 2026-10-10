@@ -373,6 +373,15 @@ suite("CliMcpConfigGenerator", () => {
       assert.ok(toml.startsWith("mcp_servers.myserver="));
     });
 
+    test("sanitizes Codex key segments containing dots and unsupported characters", () => {
+      const toml = CliMcpConfigGenerator.generateInlineTomlStdioServerConfig(
+        "io.github.upstash/context7",
+        "npx"
+      );
+
+      assert.ok(toml.startsWith("mcp_servers.io_github_upstash_context7="));
+    });
+
     test("includes additional env variables", () => {
       const toml = CliMcpConfigGenerator.generateInlineTomlConfig(
         "ctrlyoke",

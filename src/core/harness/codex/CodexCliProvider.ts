@@ -16,7 +16,10 @@ import { CODEX_STDOUT_EVENT_TYPES } from "./CodexProtocolConstants";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
-import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
+import {
+  CliMcpConfigGenerator,
+  sanitizeCodexConfigKeySegment,
+} from "../shared/CliMcpConfigGenerator";
 import { quoteTomlBasicString } from "../shared/InlineToml";
 import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import {
@@ -178,10 +181,19 @@ export class CodexCliProvider implements ICliProvider {
       return [];
     }
 
-    return server.autoApprove.flatMap((toolName) => [
-      "-c",
-      `mcp_servers.${server.id}.tools.${toolName}.approval_mode='approve'`,
-    ]);
+    const serverKey = sanitizeCodexConfigKeySegment(server.id);
+    return server.autoApprove.flatMap((toolName) => {
+      if (toolName.includes(".")) {
+        Log.warn(
+          `[CodexCliProvider] Codex MCP server "${server.id}" tool "${toolName}" contains a dot and cannot be auto-approved. Skipping override.`
+        );
+        return [];
+      }
+      return [
+        "-c",
+        `mcp_servers.${serverKey}.tools.${sanitizeCodexConfigKeySegment(toolName)}.approval_mode='approve'`,
+      ];
+    });
   }
 
   readonly config: HarnessConfig = {
@@ -805,7 +817,13 @@ export class CodexCliProvider implements ICliProvider {
         );
       }
 
+      const usedServerKeys = new Set<string>(
+        mcpServerPath
+          ? [sanitizeCodexConfigKeySegment(MCP_SERVER_IDS.CTRLYOKE)]
+          : []
+      );
       for (const server of userServers ?? []) {
+        const serverKey = sanitizeCodexConfigKeySegment(server.id);
         if (server.url && server.transport === MCP_TRANSPORTS.SSE) {
           Log.warn(
             `[CodexCliProvider] Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
@@ -819,6 +837,14 @@ export class CodexCliProvider implements ICliProvider {
           );
           continue;
         }
+
+        if (usedServerKeys.has(serverKey)) {
+          Log.warn(
+            `[CodexCliProvider] Codex MCP server ID "${server.id}" collides after key sanitization as "${serverKey}". Skipping server.`
+          );
+          continue;
+        }
+        usedServerKeys.add(serverKey);
 
         if (server.url) {
           const headers = splitCodexHeaders(server.headers);

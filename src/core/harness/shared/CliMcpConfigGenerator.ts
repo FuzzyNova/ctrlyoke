@@ -142,6 +142,11 @@ export interface InlineTomlMcpServerOptions {
   bearerTokenEnvVar?: string;
 }
 
+/** Codex's `-c` parser treats dots as key-path separators even in quoted keys. */
+export function sanitizeCodexConfigKeySegment(segment: string): string {
+  return segment.replace(/[^A-Za-z0-9_-]/gu, "_");
+}
+
 /**
  * Shared MCP server configuration utilities (harness-agnostic)
  *
@@ -248,7 +253,7 @@ export class CliMcpConfigGenerator {
       );
     }
 
-    return `mcp_servers.${serverName}={${parts.join(",")}}`;
+    return `mcp_servers.${sanitizeCodexConfigKeySegment(serverName)}={${parts.join(",")}}`;
   }
 
   /**
@@ -305,7 +310,7 @@ export class CliMcpConfigGenerator {
       );
     }
 
-    return `mcp_servers.${serverName}={${parts.join(",")}}`;
+    return `mcp_servers.${sanitizeCodexConfigKeySegment(serverName)}={${parts.join(",")}}`;
   }
 
   /**

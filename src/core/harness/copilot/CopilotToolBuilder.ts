@@ -20,6 +20,10 @@ import {
 import { CliEventMapper } from "../shared/CliEventMapper";
 import type { McpToolHint } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
+import {
+  buildApplyPatchFallbackEvent,
+  buildApplyPatchFileEvent,
+} from "../shared/ApplyPatchEventMapper";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import {
   BaseToolBuilder,
@@ -283,29 +287,24 @@ export class CopilotToolBuilder {
     ) {
       const fileEdits = ApplyPatchParser.parseFileEdits(args);
       if (fileEdits.length > 0) {
-        return fileEdits.map((fileEdit) => ({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: fileEdit.path,
-            structuredPatch: fileEdit.structuredPatch,
-            status: OPERATION_STATUS.INITIATED,
-            toolCallId,
-          } as FileEditData,
-        }));
+        return fileEdits.map((fileEdit) =>
+          buildApplyPatchFileEvent(
+            fileEdit,
+            timestamp,
+            OPERATION_STATUS.INITIATED,
+            { toolCallId }
+          )
+        );
       }
 
       return [
-        {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
+        buildApplyPatchFallbackEvent(
+          ApplyPatchParser.extractFirstPath(args) ?? "unknown",
+          ApplyPatchParser.parse(args),
           timestamp,
-          data: {
-            path: ApplyPatchParser.extractFirstPath(args) ?? "unknown",
-            structuredPatch: ApplyPatchParser.parse(args),
-            status: OPERATION_STATUS.INITIATED,
-            toolCallId,
-          } as FileEditData,
-        },
+          OPERATION_STATUS.INITIATED,
+          { toolCallId }
+        ),
       ];
     }
 
@@ -368,20 +367,14 @@ export class CopilotToolBuilder {
         ? this.parseGitDiffFileEdits(detailedContent)
         : [];
       if (gitDiffEdits.length > 0) {
-        return gitDiffEdits.map((fileEdit) => ({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp: Date.now(),
-          data: {
-            path: fileEdit.path,
-            structuredPatch: fileEdit.structuredPatch,
-            status: success
-              ? OPERATION_STATUS.COMPLETED
-              : OPERATION_STATUS.FAILED,
-            success,
-            error: errorMsg,
-            toolCallId: completionData.toolCallId,
-          } as FileEditData,
-        }));
+        return gitDiffEdits.map((fileEdit) =>
+          buildApplyPatchFileEvent(
+            fileEdit,
+            Date.now(),
+            success ? OPERATION_STATUS.COMPLETED : OPERATION_STATUS.FAILED,
+            { success, error: errorMsg, toolCallId: completionData.toolCallId }
+          )
+        );
       }
 
       const patchText =
@@ -392,20 +385,14 @@ export class CopilotToolBuilder {
         ? ApplyPatchParser.parseFileEdits(patchText)
         : [];
       if (fileEdits.length > 0) {
-        return fileEdits.map((fileEdit) => ({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp: Date.now(),
-          data: {
-            path: fileEdit.path,
-            structuredPatch: fileEdit.structuredPatch,
-            status: success
-              ? OPERATION_STATUS.COMPLETED
-              : OPERATION_STATUS.FAILED,
-            success,
-            error: errorMsg,
-            toolCallId: completionData.toolCallId,
-          } as FileEditData,
-        }));
+        return fileEdits.map((fileEdit) =>
+          buildApplyPatchFileEvent(
+            fileEdit,
+            Date.now(),
+            success ? OPERATION_STATUS.COMPLETED : OPERATION_STATUS.FAILED,
+            { success, error: errorMsg, toolCallId: completionData.toolCallId }
+          )
+        );
       }
 
       const fallbackPatch =
@@ -415,20 +402,13 @@ export class CopilotToolBuilder {
           ? ApplyPatchParser.extractFirstPath(args)
           : undefined;
       return [
-        {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp: Date.now(),
-          data: {
-            path: fallbackPath || "unknown",
-            structuredPatch: fallbackPatch,
-            status: success
-              ? OPERATION_STATUS.COMPLETED
-              : OPERATION_STATUS.FAILED,
-            success,
-            error: errorMsg,
-            toolCallId: completionData.toolCallId,
-          } as FileEditData,
-        },
+        buildApplyPatchFallbackEvent(
+          fallbackPath || "unknown",
+          fallbackPatch,
+          Date.now(),
+          success ? OPERATION_STATUS.COMPLETED : OPERATION_STATUS.FAILED,
+          { success, error: errorMsg, toolCallId: completionData.toolCallId }
+        ),
       ];
     }
 
@@ -606,15 +586,30 @@ export class CopilotToolBuilder {
    */
   private static parseGitDiffFileEdits(
     diffText: string
-  ): { path: string; structuredPatch: UnifiedDiffHunk[] }[] {
+  ): {
+    path: string;
+    kind: "add" | "update" | "delete";
+    structuredPatch: UnifiedDiffHunk[];
+  }[] {
     const sections = diffText
       .split(/(?=^diff --git )/m)
       .filter((section) => section.trim().length > 0);
 
-    const edits: { path: string; structuredPatch: UnifiedDiffHunk[] }[] = [];
+    const edits: {
+      path: string;
+      kind: "add" | "update" | "delete";
+      structuredPatch: UnifiedDiffHunk[];
+    }[] = [];
     for (const section of sections) {
       const plusMatch = section.match(/^\+\+\+ (?:b\/)?(.+)$/m);
       const minusMatch = section.match(/^--- (?:a\/)?(.+)$/m);
+      const kind =
+        /^new file mode /m.test(section) || minusMatch?.[1] === "/dev/null"
+          ? "add"
+          : /^deleted file mode /m.test(section) ||
+              plusMatch?.[1] === "/dev/null"
+            ? "delete"
+            : "update";
       const path =
         plusMatch && plusMatch[1] !== "/dev/null"
           ? plusMatch[1].trim()
@@ -627,7 +622,7 @@ export class CopilotToolBuilder {
 
       const structuredPatch = CliParseUtils.parseUnifiedDiff(section);
       if (structuredPatch?.length) {
-        edits.push({ path, structuredPatch });
+        edits.push({ path, kind, structuredPatch });
       }
     }
 
