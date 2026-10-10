@@ -22,6 +22,8 @@ seen by a user already on the Server tab. Consider either:
 Low priority — the Server tab is the primary place non-Pro users hit gating
 today, so the current placement already covers the main path.
 
+Decided 10/10/2026: the current placement is good enough, moving to implemented.
+
 ## 2. Deferred non-goals from the original plan
 
 Carried forward as still-future work, not started:
