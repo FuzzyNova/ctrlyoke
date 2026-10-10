@@ -47,6 +47,9 @@ suite("StatuslineManager", () => {
     configService.setUserBackend({
       getAll: () => userSettings,
       set: async (settingPath, value) => {
+        const before = JSON.parse(
+          JSON.stringify(userSettings)
+        ) as PartialCtrlYokeSettings;
         if (settingPath === "statusLine.byHarness.qwen-cli") {
           userSettings = {
             statusLine: {
@@ -54,6 +57,7 @@ suite("StatuslineManager", () => {
             },
           };
         }
+        return before;
       },
     });
     configService.setCliOverlay({});

@@ -1277,11 +1277,11 @@ suite("ContextExpander.expandContextSplit", () => {
             trustedExternalRoots: [freshTemporaryRoot("inherited")],
           },
         }),
-        set: async () => {},
+        set: async () => ({}),
       });
       configService.setWorkspaceBackend({
         getAll: () => ({}),
-        set: async () => {},
+        set: async () => ({}),
       });
 
       try {
@@ -1325,11 +1325,11 @@ suite("ContextExpander.expandContextSplit", () => {
       } finally {
         configService.setUserBackend({
           getAll: () => ({}),
-          set: async () => {},
+          set: async () => ({}),
         });
         configService.setWorkspaceBackend({
           getAll: () => ({}),
-          set: async () => {},
+          set: async () => ({}),
         });
       }
     });

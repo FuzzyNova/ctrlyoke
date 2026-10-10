@@ -24,7 +24,16 @@ function backend(
   data: PartialCtrlYokeSettings,
   onSet?: (path: string, value: unknown) => void
 ): ConfigBackend {
-  return { getAll: () => data, set: async (key, value) => onSet?.(key, value) };
+  return {
+    getAll: () => data,
+    set: async (key, value) => {
+      const before = JSON.parse(
+        JSON.stringify(data)
+      ) as PartialCtrlYokeSettings;
+      onSet?.(key, value);
+      return before;
+    },
+  };
 }
 
 suite("LanguageServerManagerService", () => {

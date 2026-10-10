@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (confirmed with a scratch `npx tsx` script against the real `CtrlYokeConfigService` + `FileConfigBackend`)
 - **Area:** `src/config/CtrlYokeConfigService.ts` (`set`, `approveNewWorkspaceSensitiveValues`), `src/config/FileConfigBackend.ts` (`getAll` cache)
-- **Severity:** high (security: bypasses the workspace sensitive-settings approval prompt)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

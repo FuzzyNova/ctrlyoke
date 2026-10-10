@@ -22,7 +22,7 @@ import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermis
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
     getAll: () => data,
-    set: async () => {},
+    set: async () => data,
   };
 }
 

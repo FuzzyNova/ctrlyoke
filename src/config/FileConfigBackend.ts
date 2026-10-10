@@ -79,7 +79,7 @@ export class FileConfigBackend implements ConfigBackend {
   }
 
   /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
-  set(settingPath: string, value: unknown): Promise<void> {
+  set(settingPath: string, value: unknown): Promise<PartialCtrlYokeSettings> {
     const pathParts = settingPath.split(".");
     const forbiddenSegment = pathParts.find((part) =>
       FORBIDDEN_SETTING_PATH_SEGMENTS.has(part)
@@ -103,9 +103,13 @@ export class FileConfigBackend implements ConfigBackend {
           `Cannot update settings file because it contains invalid JSON: ${this.configPath}`
         );
       }
+      const before = JSON.parse(
+        JSON.stringify(current)
+      ) as PartialCtrlYokeSettings;
       this.setNestedValue(current as Record<string, unknown>, pathParts, value);
       await this.save(current);
       this.state.cache = undefined;
+      return before;
     });
   }
 

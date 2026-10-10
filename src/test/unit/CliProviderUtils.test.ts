@@ -30,7 +30,10 @@ suite("CliProviderUtils", () => {
 
   teardown(() => {
     configService.setCliOverlay({});
-    configService.setUserBackend({ getAll: () => ({}), set: async () => {} });
+    configService.setUserBackend({
+      getAll: () => ({}),
+      set: async () => ({}),
+    });
   });
 
   test("includes every workspace-folder root exactly once for --add-dir", () => {
@@ -62,7 +65,7 @@ suite("CliProviderUtils", () => {
       getAll: () => ({
         permissions: { trustedExternalRoots: [externalRoot] },
       }),
-      set: async () => {},
+      set: async () => ({}),
     });
 
     const result = CliProviderUtils.getWorkspaceDirs(primaryRoot, []);
