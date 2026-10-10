@@ -3207,6 +3207,16 @@ export class WorkflowOrchestrator {
       // rename undoable.
       "properties"
     );
+    // The static branch has no instance to broadcast WORKFLOW_NAME_UPDATED,
+    // and the name lives on the descriptor, so the properties push above
+    // cannot carry it either — without this the header stays stale until
+    // the view is reloaded.
+    if (latest) {
+      this.runViewPublisher.notifyLineageWorkflowName(
+        runAddress.workflowKey,
+        workflowName
+      );
+    }
     return latest;
   }
 

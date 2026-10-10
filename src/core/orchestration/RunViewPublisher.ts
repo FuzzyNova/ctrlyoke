@@ -640,6 +640,22 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     }
   }
 
+  /** Pushes a lineage's new name to every client viewing any of its addresses. */
+  notifyLineageWorkflowName(
+    workflowKey: WorkflowKey,
+    workflowName: string
+  ): void {
+    for (const [clientId, address] of this.host.registry
+      .getViewAddressRegistry()
+      .entries()) {
+      if (address?.workflowKey !== workflowKey) continue;
+      this.host.registry.getViewMessageSinks().get(clientId)?.({
+        type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
+        workflowName,
+      });
+    }
+  }
+
   async invalidateRunViewStepColor(
     workflowKey: WorkflowKey,
     runRef: RunRef,

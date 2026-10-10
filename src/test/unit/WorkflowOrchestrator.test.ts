@@ -5126,6 +5126,57 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     }
   });
 
+  test("run-addressed rename without a resident instance pushes the new name to lineage viewers", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-rename-static-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      const received: any[] = [];
+      internal.viewMessageSinks = new Map([
+        [PANEL_CLIENT_ID, (message: unknown) => received.push(message)],
+      ]);
+      const before = await internal.lineageRepository.readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+
+      await orchestrator.updateWorkflowName(
+        {
+          address: {
+            workflowKey: run.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: run.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: before.revision,
+        },
+        "renamed",
+        PANEL_CLIENT_ID
+      );
+
+      // The name lives on the descriptor, so the properties push cannot carry
+      // it — the header only updates if the viewer is told explicitly.
+      const namePushes = received.filter(
+        (message) => message.type === MESSAGE_TYPES.WORKFLOW_NAME_UPDATED
+      );
+      assert.strictEqual(namePushes.length, 1);
+      assert.strictEqual(namePushes[0].workflowName, "renamed");
+      const descriptor = await internal.lineageRepository.readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+      assert.strictEqual(descriptor.workflowName, "renamed");
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   async function createTwoStepRun(workspace: string): Promise<{
     workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
     runRef: import("../../types/CtrlYokeTypes").RunRef;
