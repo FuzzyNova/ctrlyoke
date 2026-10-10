@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (each claim checked against the code)
 - **Area:** `docs/troubleshooting/`, `docs/reference/_partials/settings/intro.md`, `docs/reference/commands.md`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

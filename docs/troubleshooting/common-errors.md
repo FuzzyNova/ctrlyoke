@@ -17,13 +17,15 @@ standalone CLI exits with code `3` in this case.
 ## A step never completes
 
 ctrlyoke detects that a harness finished a turn through that harness's hook or notification
-integration. These debug logs are written only when `diagnostics.verboseLogging` is `true`. Enable
-it and reproduce the issue before checking `.ctrlyoke/logs/ctrlyoke-<harness>-hook-debug.log`
-(Codex CLI: `ctrlyoke-codex-notify-debug.log`; OpenCode: `ctrlyoke-opencode-plugin-debug.log`).
-After enabling verbose logging, no entries means the hook never ran; entries with a different
-session ID than the one in the session log mean the completion was attributed elsewhere. Also
-check whether the step runs in interactive or headless mode: in interactive mode you end the
-session.
+integration. These debug logs and the extension session log are written only when
+`diagnostics.verboseLogging` is `true` (the session log is always written in dev builds). Enable
+verbose logging before reproducing the issue. Then check
+`.ctrlyoke/logs/ctrlyoke-<harness>-hook-debug.log` (Codex CLI:
+`ctrlyoke-codex-notify-debug.log`; OpenCode: `ctrlyoke-opencode-plugin-debug.log`) and
+`.ctrlyoke/logs/ctrlyoke-<timestamp>.log`. No hook-log entries means the hook never ran; entries
+with a different session ID than the one in the session log mean the completion was attributed
+elsewhere. Also check whether the step runs in interactive or headless mode: in interactive mode
+you end the session.
 
 ## "Another run in this workflow lineage is executing"
 

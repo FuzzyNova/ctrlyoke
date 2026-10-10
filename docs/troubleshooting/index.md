@@ -22,7 +22,7 @@ Logs are written to `.ctrlyoke/logs/` in the workspace:
 
 | File                                 | Contents                                                                                                                                                                   |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ctrlyoke-<timestamp>.log`           | Extension session log: state transitions, orchestration, session IDs. Start here                                                                                           |
+| `ctrlyoke-<timestamp>.log`           | Extension session log: state transitions, orchestration, session IDs; written only when `diagnostics.verboseLogging` is on (always in dev builds). Start here              |
 | `ctrlyoke-cli-<timestamp>.log`       | One per `ctrlyoke` CLI invocation. `--verbose` adds debug detail                                                                                                           |
 | `ctrlyoke-<harness>-hook-debug.log`  | Every hook invocation for Copilot CLI, Claude Code, Qwen Code, and Antigravity; written only when `diagnostics.verboseLogging` is on. Check it when a step never completes |
 | `ctrlyoke-codex-notify-debug.log`    | The Codex CLI equivalent of the hook log; written only when `diagnostics.verboseLogging` is on                                                                             |

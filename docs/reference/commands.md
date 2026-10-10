@@ -96,14 +96,15 @@ These menu items insert a reference into the dashboard's prompt editor. They are
 
 ## Workspace, worktrees, and usage
 
-| Command                                         | What it does                                                                            |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `ctrlyoke: Initialize Workspace`                | Create or repair `.ctrlyoke/` and its generated `.gitignore`                            |
-| `ctrlyoke: Show Getting Started`                | Reopen the Getting Started walkthrough                                                  |
-| `ctrlyoke: Install CLI for Use Outside VS Code` | Open a terminal with the matching `npm install -g ctrlyoke@<version>` typed in, not run |
-| `ctrlyoke: Manage Worktrees`                    | Open the dashboard to manage ctrlyoke worktrees                                         |
-| `ctrlyoke: Refresh Harness Usage`               | Refresh harness usage and quota information                                             |
-| `ctrlyoke: Refresh Workspace Statistics`        | Recompute the workspace statistics shown in the dashboard                               |
+| Command                                                 | What it does                                                                            |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `ctrlyoke: Initialize Workspace`                        | Create or repair `.ctrlyoke/` and its generated `.gitignore`                            |
+| `ctrlyoke: Show Getting Started`                        | Reopen the Getting Started walkthrough                                                  |
+| `ctrlyoke: Review Workspace Settings That Run Programs` | Review which workspace settings that run programs are trusted on this machine           |
+| `ctrlyoke: Install CLI for Use Outside VS Code`         | Open a terminal with the matching `npm install -g ctrlyoke@<version>` typed in, not run |
+| `ctrlyoke: Manage Worktrees`                            | Open the dashboard to manage ctrlyoke worktrees                                         |
+| `ctrlyoke: Refresh Harness Usage`                       | Refresh harness usage and quota information                                             |
+| `ctrlyoke: Refresh Workspace Statistics`                | Recompute the workspace statistics shown in the dashboard                               |
 
 ## License
 
