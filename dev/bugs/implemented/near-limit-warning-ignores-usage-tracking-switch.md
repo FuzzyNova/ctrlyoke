@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude while writing `docs/guide/usage-and-stats.md`
 - **Area:** `src/core/orchestration/WorkflowStartupPipeline.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

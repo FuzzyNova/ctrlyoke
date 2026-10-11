@@ -31,6 +31,8 @@ import {
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { UserFeedbackSink } from "../../core/UserFeedbackSink";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { WorkspaceWorktreeResolution } from "../../utils/WorktreeResolution";
 import type { WorktreeInfo } from "../../core/orchestration/WorktreeManager";
 import type { ExecutionLeaseHandle } from "../../core/orchestration/ExecutionRootLeaseManager";
@@ -38,6 +40,14 @@ import type { DefinitionRevisionContext } from "../../core/orchestration/OutputH
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { WorkflowEventTarget } from "../../core/orchestration/StatusMessageReporter";
 import { RecordedTargetFailureError } from "../../core/RecordedTargetFailureError";
+import {
+  HARNESS_IDS,
+  HARNESS_QUOTA_SOURCES,
+  HARNESS_USAGE_CONFIDENCE,
+  HARNESS_USAGE_UNITS,
+  HARNESS_USAGE_WINDOW_KINDS,
+} from "../../types/DashboardConstants";
+import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
 
 class TestStatus implements WorkflowStartupStatusPort {
   resetCalls = 0;
@@ -193,7 +203,12 @@ class TestPort implements WorkflowStartupPipelinePort {
   readonly platform = new MockPlatform();
   readonly workspaceFolderPath = process.cwd();
   readonly dashboardSink: IDashboardSink | undefined = undefined;
-  readonly userFeedbackSink: UserFeedbackSink | undefined = undefined;
+  readonly feedback: Array<{ severity: string; message: string }> = [];
+  readonly userFeedbackSink: UserFeedbackSink = {
+    notify: ({ severity, message }) => this.feedback.push({ severity, message }),
+  };
+  usageSnapshots: readonly HarnessUsageSnapshot[] = [];
+  readonly getHarnessUsageSnapshots = () => this.usageSnapshots;
   readonly queue: WorkflowStartupQueuePort;
   readonly history: WorkflowStartupHistoryPort;
   readonly execution = new TestExecution();
@@ -239,6 +254,83 @@ function createPipeline(): {
 }
 
 suite("WorkflowStartupPipeline", () => {
+  function freshHighUsageSnapshot(): HarnessUsageSnapshot {
+    const now = Date.now();
+    return {
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      updatedAt: now,
+      quota: {
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        source: HARNESS_QUOTA_SOURCES.PROVIDER_LIVE,
+        fetchedAt: now,
+        staleAfterMs: 60_000,
+        windows: [
+          {
+            id: "five-hour",
+            kind: HARNESS_USAGE_WINDOW_KINDS.ROLLING,
+            label: "5h",
+            percentUsed: 95,
+            resetAt: now + 60_000,
+            windowMinutes: 300,
+            unit: HARNESS_USAGE_UNITS.PERCENT,
+            confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
+          },
+        ],
+      },
+      observed: {},
+    };
+  }
+
+  function configureUsageTracking(enabled: boolean): () => void {
+    const original = ConfigurationUtils.getHarnessUsageSettings;
+    ConfigurationUtils.getHarnessUsageSettings = () => ({
+      ...CTRLYOKE_SETTINGS_DEFAULTS.usageTracking,
+      enabled,
+    });
+    return () => {
+      ConfigurationUtils.getHarnessUsageSettings = original;
+    };
+  }
+
+  test("suppresses a fresh near-limit warning when usage tracking is disabled", () => {
+    const restoreSettings = configureUsageTracking(false);
+    try {
+      const { pipeline, port } = createPipeline();
+      port.usageSnapshots = [freshHighUsageSnapshot()];
+
+      pipeline.warnBeforeWorkflowStart(
+        port.queue.getState(),
+        { harness: HARNESS_IDS.CLAUDE_CLI, steps: [{ prompt: "one" }] },
+        undefined,
+        false
+      );
+
+      assert.deepStrictEqual(port.feedback, []);
+    } finally {
+      restoreSettings();
+    }
+  });
+
+  test("warns about a fresh near-limit snapshot when usage tracking is enabled", () => {
+    const restoreSettings = configureUsageTracking(true);
+    try {
+      const { pipeline, port } = createPipeline();
+      port.usageSnapshots = [freshHighUsageSnapshot()];
+
+      pipeline.warnBeforeWorkflowStart(
+        port.queue.getState(),
+        { harness: HARNESS_IDS.CLAUDE_CLI, steps: [{ prompt: "one" }] },
+        undefined,
+        false
+      );
+
+      assert.strictEqual(port.feedback.length, 1);
+      assert.match(port.feedback[0].message, /Quota warning/);
+    } finally {
+      restoreSettings();
+    }
+  });
+
   test("classifies a fresh start", () => {
     const { pipeline } = createPipeline();
     const result = pipeline.classifyContinuation(false, {

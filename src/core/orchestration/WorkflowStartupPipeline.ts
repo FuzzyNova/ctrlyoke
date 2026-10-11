@@ -1042,8 +1042,9 @@ export class WorkflowStartupPipeline {
     modeOverride: HarnessId | undefined,
     restartFromBeginning: boolean
   ): void {
+    const settings = ConfigurationUtils.getHarnessUsageSettings();
     if (
-      !ConfigurationUtils.shouldTrackHarnessUsage() ||
+      !settings.enabled ||
       !this.port.getHarnessUsageSnapshots
     ) {
       return;
@@ -1088,8 +1089,8 @@ export class WorkflowStartupPipeline {
         ),
       });
     }
-    const settings = ConfigurationUtils.getHarnessUsageSettings();
     const warning = buildUsageSelectionWarning({
+      usageTrackingEnabled: settings.enabled,
       queuedAttempts,
       snapshots: this.port.getHarnessUsageSnapshots(),
       warningPercentUsed: settings.warningPercentUsed,

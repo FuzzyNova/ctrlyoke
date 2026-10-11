@@ -21,12 +21,6 @@ const OPTIONAL_RATE_FIELDS: readonly PricingField[] = [
   "cacheWritePerMTok",
   "reasoningPerMTok",
 ];
-const UNKNOWN_TOKEN_SEMANTICS_HARNESSES = new Set<HarnessId>([
-  HARNESS_IDS.QWEN_CLI,
-  HARNESS_IDS.OPENCODE_CLI,
-  HARNESS_IDS.ANTIGRAVITY_CLI,
-]);
-
 const RATE_FIELDS: readonly {
   key: PricingField;
   label: string;
@@ -273,21 +267,6 @@ export const ModelPricingEditor: React.FC<{
                 </Button>
               </div>
             </div>
-
-            {UNKNOWN_TOKEN_SEMANTICS_HARNESSES.has(harnessId) &&
-              Object.keys(models).length > 0 && (
-                <p
-                  className="flex items-start gap-1 text-xs text-warning-fg"
-                  role="note"
-                >
-                  <Icon name="warning" className="mt-px" />
-                  <span>
-                    Cost estimates remain unavailable for this harness until its
-                    token semantics are verified, even when these rates are
-                    overridden.
-                  </span>
-                </p>
-              )}
 
             {Object.entries(models).map(([modelId, override]) => (
               <div

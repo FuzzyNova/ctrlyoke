@@ -65,6 +65,38 @@ describe("ModelPricingEditor", () => {
     expect(screen.queryByText(/prices the model at \$0/)).toBeNull();
   });
 
+  it("does not show the obsolete token-semantics warning for Qwen, OpenCode, or Antigravity", () => {
+    const { rerender } = render(
+      <ModelPricingEditor
+        value={{
+          [HARNESS_IDS.QWEN_CLI]: {
+            model: { inputPerMTok: 1, outputPerMTok: 2 },
+          },
+        }}
+        onChange={vi.fn()}
+      />
+    );
+
+    for (const harnessId of [
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+    ]) {
+      rerender(
+        <ModelPricingEditor
+          value={{
+            [harnessId]: { model: { inputPerMTok: 1, outputPerMTok: 2 } },
+          }}
+          onChange={vi.fn()}
+        />
+      );
+
+      expect(
+        screen.queryByText(/Cost estimates remain unavailable/)
+      ).toBeNull();
+    }
+  });
+
   it("adds a harness and a freeform model", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
