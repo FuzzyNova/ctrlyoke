@@ -9,7 +9,7 @@ time they open that template in **New Workflow** the field is already filled wit
 
 The motivating case is the two bug templates being made built-in (`bug-hunt-loop`,
 `bug-drain-loop`). Every user who runs them has a fixed answer for `bugBacklogDir`,
-`bugImplementedDir`, `testCommand`, and the harness pair, and today they retype those answers on
+`bugImplementedDir`, `testCommand`, and the two harness and model pairs, and today they retype those answers on
 every run because the template's authored defaults (`bugs/backlog`, `claude-cli`/`codex-cli`) are
 almost never right for them.
 
@@ -68,7 +68,8 @@ New settings root `templates`, in `schemas/settings-schema.json` + `CtrlYokeSett
       "bug-hunt-loop": {
         "bugBacklogDir": "dev/bugs/backlog",
         "bugImplementedDir": "dev/bugs/implemented",
-        "hunterHarness": "claude-cli"
+        "hunterHarness": "claude-cli",
+        "hunterModel": "opus"
       },
       "custom:user:yoke-driven-loop": { "specFile": "docs/spec.md" }
     }
@@ -79,7 +80,8 @@ New settings root `templates`, in `schemas/settings-schema.json` + `CtrlYokeSett
 - Values are strings, the same type as `TemplateVariable.default`.
 - Allowed at both user and workspace scope. Workspace beats user **per variable**, not per
   template: a workspace that saves only `bugBacklogDir` still inherits the user's
-  `hunterHarness`.
+  `hunterHarness`. The one exception is a harness and its linked models, which resolve from a
+  single scope together (see "Harness and model pairs").
 - **Do not rely on the generic merge.** `deepMerge` in `CtrlYokeConfigService.ts` only recurses
   into keys whose schema default is a plain object. `variableDefaults` defaults to `{}`, but the
   per-template objects under it have no default, so a workspace entry for `bug-hunt-loop` would
@@ -130,6 +132,41 @@ cleanup (Phase 2) is how users prune.
 
 An override for a template id that no longer exists is likewise ignored.
 
+### Harness and model pairs
+
+A `model` variable is linked to a `harness` variable through its `harness` field (see
+`docs/workflows/templates.md` and `TemplateManager.mergeVariablesWithMeta`). A model name only
+means something on its own harness, so a harness and its linked models are saved, resolved, and
+cleared as one unit, never one variable at a time:
+
+- **Saving.** Pinning either control of a pair saves the harness and every model linked to it,
+  at the toggle's scope, in one write. Saving a harness alone would leave the model on the
+  template's authored default, which usually belongs to a different harness. Saving a model alone
+  would break as soon as the harness changed.
+- **The authored-default rule applies to the whole pair.** The pin clears the pair's overrides
+  only when the harness and every linked model all equal their authored defaults. If any of them
+  differs, it stores all of them, so a later change to the built-in's default harness can't
+  leave a saved model paired with a harness it was never chosen for.
+- **Resolution.** A linked model takes its value from the same scope as its harness, not from
+  its own per-variable precedence. If the workspace saves `hunterHarness`, `hunterModel` comes
+  from the workspace too, or from the authored default if the workspace entry has no model. It
+  never comes from the user scope underneath. Pins always write the whole pair, so this only
+  matters for hand-edited settings, but it means a resolved pair always comes from a single
+  choice.
+- **Stale overrides.** When a harness override is dropped (the value is no longer in
+  `HARNESS_IDS`), drop its linked models' overrides from the same scope too. Do not check model
+  names against a list in the extension: model lists are discovered per harness in the
+  dashboard and may still be loading or offline. The modal's existing model warning
+  (`modelWarning`) already flags a saved model the harness doesn't offer.
+- **Reset** on either control clears the whole pair at the scope it came from.
+- **One marker per pair.** The pair shares a row in the modal, so it gets one "Saved (…)"
+  marker and one pin/reset action rather than one per control.
+- **Re-seeding must not trigger the harness-change reset.** `TemplateModal.handleVariableChange`
+  clears a pair's models when its harness changes, so the effect can pick the new harness's
+  default model. When a save re-sends the template list and the modal re-seeds the changed
+  values, it must set the harness and model together directly, not through
+  `handleVariableChange`. Otherwise the saved model would be replaced by the harness default.
+
 ## Phase 1 — store, resolve, and save from the modal
 
 ### UX
@@ -169,9 +206,10 @@ template has a multiline value worth saving.
 
 ### Messages
 
-- New `SET_TEMPLATE_VARIABLE_DEFAULT` (webview → extension): `{ templateId, variable, value:
-string | null, scope: SettingWriteScope }`. `null` clears the entry. Remove the template's
-  key entirely when its last variable is cleared.
+- New `SET_TEMPLATE_VARIABLE_DEFAULTS` (webview → extension): `{ templateId, values:
+Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clears that entry.
+  It carries several variables so a harness and its linked models save in one write. Remove the
+  template's key entirely when its last variable is cleared.
 - The handler writes through `CtrlYokeConfigService.set` at the given scope, then re-sends the
   template list through the same `toWireTemplates` path `handleNewWorkflow` uses, so the modal
   re-renders with the new `defaultSource` and doesn't need an optimistic copy of the resolution
@@ -204,7 +242,9 @@ directly, so the unit tests can supply overrides without a config backend.
   beats user per variable while other user values still apply; `authoredDefault`/`defaultSource`
   are set correctly; stale variable, invalid harness, and out-of-options select overrides are
   dropped; `createWorkflow` substitutes an override when the caller omits the variable; overlay
-  on a `custom:` id.
+  on a `custom:` id. Pairs: a workspace harness with no workspace model resolves the model to
+  its authored default, not the user's model; dropping an invalid harness override also drops
+  its linked models' overrides.
 - Config: writing then clearing the last variable removes the template key.
 - `src/ui/webview-react/test/components/workflow/TemplateModal.test.tsx` (new, or shared with
   the required-variables plan, whichever lands first): pin shown only when value differs; pin
@@ -212,7 +252,11 @@ directly, so the unit tests can supply overrides without a config backend.
   save, and flipping it without saving doesn't change that; Workspace disabled with no
   workspace; saving the authored default sends a clear; saved marker and reset; reset falls
   back to the user value underneath a workspace value; re-sent template list does not wipe
-  other typed fields.
+  other typed fields. Pairs: pinning a harness sends its linked models in the same message;
+  saving a harness that equals its authored default with a changed model stores both; one marker
+  and one reset per pair; re-seeding after a save keeps the saved model rather than resetting it
+  to the harness default. These belong in `TemplateModelVariables.test.tsx` if the new modal test
+  file doesn't exist yet.
 
 ## Phase 2 — see and clear saved values in Settings
 
@@ -240,7 +284,7 @@ overlay on the source; the user may still use the built-in.
   ask for it.
 - **Overrides on anything other than declared variables** (e.g. forcing `executionMode` on a
   built-in). Templates that want a knob should declare a variable; the bug templates already do
-  for harnesses.
+  for harnesses and models.
 - **CLI/MCP instantiation.** Neither binary creates workflows from templates today
   (`WorkflowSerializer.handleCreateWorkflow` is the only `createWorkflow` caller). The overlay
   lives in `TemplateManager`, so a future CLI `new --template` picks it up for free.
@@ -251,6 +295,8 @@ overlay on the source; the user may still use the built-in.
 - **Scope is chosen with a modal-level toggle, not a per-pin menu.** It defaults to Workspace
   on first save, then to the last-saved scope, for every variable type.
 - **Saving a value equal to the authored default clears the override.** Nothing is stored.
+- **A harness and its linked models are one unit.** They are saved, resolved from one scope,
+  and cleared together. See "Harness and model pairs".
 
 ## Verification
 
@@ -258,6 +304,8 @@ overlay on the source; the user may still use the built-in.
 Do **not** run `npm run test:harness`.
 
 Manual: open **New Workflow** → Bug Hunt Loop. Confirm the toggle starts on Workspace, then pin
-`bugBacklogDir`. Switch to User and pin `hunterHarness`. Close and reopen the modal: the toggle
-should now start on User, and both fields should be pre-filled with the right markers. Open a
-different workspace and confirm only the harness carries over.
+`bugBacklogDir`. Switch to User, change `hunterHarness` to Codex CLI and `hunterModel` to a
+non-default Codex model, and pin the pair. Close and reopen the modal: the toggle should now
+start on User, both fields and the pair should be pre-filled with the right markers, and the
+model should still be the one you picked, not Codex's default. Open a different workspace and
+confirm only the harness and model carry over.
