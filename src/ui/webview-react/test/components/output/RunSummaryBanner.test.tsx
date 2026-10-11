@@ -13,7 +13,10 @@ import type {
   WorkflowKey,
   WorkflowTokenTotals,
 } from "@root/types/CtrlYokeTypes";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  GUARDRAIL_STOP_CODES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
 
 const tokenTotals: WorkflowTokenTotals = {
@@ -74,6 +77,32 @@ describe("RunSummaryBanner", () => {
     expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
       "410k · ≈$0.41"
     );
+  });
+
+  it.each([
+    [GUARDRAIL_STOP_CODES.QUEUE_SIZE_LIMIT, 20, 21, "steps"],
+    [GUARDRAIL_STOP_CODES.WORKFLOW_TIME_LIMIT, 600, 601, "seconds"],
+    [GUARDRAIL_STOP_CODES.PROMPT_TIMEOUT, 120, 121, "seconds"],
+  ] as const)(
+    "renders %s as a limit stop with its shared message",
+    (code, threshold, observed, unit) => {
+      const message = `Guardrail ${code}: threshold ${threshold} ${unit}, observed ${observed} ${unit}.`;
+      renderBanner({
+        executionState: EXECUTION_STATES.ERROR,
+        stopReason: { code, threshold, observed, unit, message },
+      });
+
+      expect(screen.getByText("Limit stop")).toBeInTheDocument();
+      expect(screen.getByTestId("run-stop-reason")).toHaveTextContent(message);
+      expect(screen.queryByText("error")).not.toBeInTheDocument();
+    }
+  );
+
+  it("keeps an ordinary execution error labeled error", () => {
+    renderBanner({ executionState: EXECUTION_STATES.ERROR });
+
+    expect(screen.getByText("error")).toBeInTheDocument();
+    expect(screen.queryByText("Limit stop")).not.toBeInTheDocument();
   });
 
   it("renders nothing for token usage when there is no usable total", () => {

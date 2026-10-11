@@ -1320,6 +1320,34 @@
           "type": "number",
           "description": "Wall-clock timestamp when workflow execution reached a terminal state"
         },
+        "stopReason": {
+          "type": "object",
+          "description": "Structured reason when a run ended because an execution guardrail fired.",
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": ["queue-size-limit", "workflow-time-limit", "prompt-timeout"]
+            },
+            "threshold": {
+              "type": "number",
+              "description": "Configured guardrail threshold in the unit named by `unit`."
+            },
+            "observed": {
+              "type": "number",
+              "description": "Observed value in the unit named by `unit`."
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["steps", "seconds"]
+            },
+            "message": {
+              "type": "string",
+              "description": "Canonical human-readable message for the stop."
+            }
+          },
+          "required": ["code", "threshold", "observed", "unit", "message"],
+          "additionalProperties": false
+        },
         "activeParallelGroup": {
           "type": "object",
           "description": "Durable admission state for the currently executing parallel group",

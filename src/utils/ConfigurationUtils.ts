@@ -423,14 +423,20 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getScriptTimeoutMs(): number {
+    return secondsToMs(ConfigurationUtils.getScriptTimeoutSeconds())!;
+  },
+
+  /**
+   * Get the effective script timeout in seconds. The setting is deliberately
+   * finite: any non-positive or non-finite value falls back to the default.
+   */
+  getScriptTimeoutSeconds(): number {
     const timeoutSec = configService.get(
       CONFIG_KEYS.EXECUTION
     ).scriptTimeoutSec;
-    return secondsToMs(
-      Number.isFinite(timeoutSec) && timeoutSec > 0
-        ? timeoutSec
-        : CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeoutSec
-    )!;
+    return Number.isFinite(timeoutSec) && timeoutSec > 0
+      ? timeoutSec
+      : CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeoutSec;
   },
 
   /**
@@ -887,6 +893,11 @@ export const ConfigurationUtils = {
     return isUnlimited(timeoutSeconds)
       ? undefined
       : secondsToMs(timeoutSeconds);
+  },
+
+  /** Get the configured prompt timeout in seconds, preserving -1 as unlimited. */
+  getPromptTimeoutSeconds(): number {
+    return configService.get(CONFIG_KEYS.EXECUTION).maxPromptTimeoutSec;
   },
 
   // ============================================================

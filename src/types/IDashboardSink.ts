@@ -5,6 +5,7 @@ import type {
   WorktreeRunProjection,
   ParallelGroupDefinition,
   WorkflowValidationWarning,
+  WorkflowStopReason,
 } from "./CtrlYokeTypes";
 import type {
   FinalStepPhase,
@@ -63,7 +64,8 @@ export interface IDashboardSink {
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
     definitionRevision?: number,
-    schemaWarnings?: WorkflowValidationWarning[]
+    schemaWarnings?: WorkflowValidationWarning[],
+    stopReason?: WorkflowStopReason
   ): Promise<void>;
 
   updateExecutionStarted(
@@ -81,7 +83,8 @@ export interface IDashboardSink {
   updateExecutionState(
     state: string,
     workflowId?: string,
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    stopReason?: WorkflowStopReason
   ): void;
 
   updateActiveStepIndices?(

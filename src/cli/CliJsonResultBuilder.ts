@@ -25,6 +25,7 @@ import type {
   RunRef,
   WorkflowKey,
   WorkflowStep,
+  WorkflowStopReason,
   WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import {
@@ -233,6 +234,7 @@ export interface CliJsonResult {
   harness: HarnessId | null;
   model: string | null;
   status: ExecutionState;
+  stopReason: WorkflowStopReason | null;
   startedAt: string | null;
   completedAt: string | null;
   durationMs: number | null;
@@ -278,6 +280,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
       ...base,
       success: false,
       status: EXECUTION_STATES.ERROR,
+      stopReason: null,
       startedAt: null,
       completedAt: null,
       durationMs: null,
@@ -310,6 +313,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     ...base,
     success: state.status === EXECUTION_STATES.COMPLETED,
     status: state.status,
+    stopReason: state.stopReason ?? null,
     startedAt,
     completedAt,
     durationMs: getDuration(state.startTime, state.executionEndTime),

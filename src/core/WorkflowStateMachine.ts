@@ -14,6 +14,7 @@ import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
   WorkflowRuntimeTransition,
+  WorkflowStopReason,
 } from "../types/CtrlYokeTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 
@@ -43,6 +44,7 @@ export class WorkflowStateMachine {
   private _pausedTime: number | undefined = undefined;
   private _totalPausedDuration: number = 0;
   private _executionEndTime: number | undefined = undefined;
+  private _stopReason: WorkflowStopReason | undefined = undefined;
   private readonly onTransitionEmitter =
     new TypedEmitter<WorkflowRuntimeTransition>();
   private readonly onAttemptTransitionEmitter =
@@ -84,6 +86,7 @@ export class WorkflowStateMachine {
       pausedTime: this._pausedTime,
       totalPausedDuration: this._totalPausedDuration,
       executionEndTime: this._executionEndTime,
+      stopReason: this._stopReason,
     };
   }
 
@@ -433,6 +436,7 @@ export class WorkflowStateMachine {
     this.absorbDormantDuration();
 
     const previous = this.getSnapshot();
+    this._stopReason = undefined;
     this._status = EXECUTION_STATES.RUNNING;
     this._stopped = false;
     this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.START_EXECUTION, previous);
@@ -502,6 +506,7 @@ export class WorkflowStateMachine {
     this.absorbDormantDuration();
 
     const previous = this.getSnapshot();
+    this._stopReason = undefined;
     this._stopped = false;
     this._status = EXECUTION_STATES.RUNNING;
     this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.RESUME, previous);
@@ -566,14 +571,21 @@ export class WorkflowStateMachine {
   /**
    * Mark the run as errored: → ERROR.
    */
-  fail(): boolean {
-    if (this._status === EXECUTION_STATES.ERROR && !this._stopped) {
+  fail(stopReason?: WorkflowStopReason): boolean {
+    // A later reasonless fail() (e.g. the failed step unwinding after a
+    // guardrail already stopped the run) must not erase the recorded reason.
+    if (
+      this._status === EXECUTION_STATES.ERROR &&
+      !this._stopped &&
+      (stopReason === undefined || this._stopReason === stopReason)
+    ) {
       return false;
     }
 
     const previous = this.getSnapshot();
     this.finishExecutionTimer();
     this._stopped = false;
+    this._stopReason = stopReason;
     this._status = EXECUTION_STATES.ERROR;
     this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.FAIL, previous);
     return true;
@@ -599,6 +611,7 @@ export class WorkflowStateMachine {
     this._pausedTime = undefined;
     this._totalPausedDuration = 0;
     this._executionEndTime = undefined;
+    this._stopReason = undefined;
     this.attempts.clear();
     this.activeAttemptKeys.clear();
     return changed;
@@ -678,6 +691,7 @@ export class WorkflowStateMachine {
     this._pausedTime = snapshot.pausedTime;
     this._totalPausedDuration = snapshot.totalPausedDuration;
     this._executionEndTime = snapshot.executionEndTime;
+    this._stopReason = snapshot.stopReason;
     this.attempts.clear();
     this.activeAttemptKeys.clear();
   }

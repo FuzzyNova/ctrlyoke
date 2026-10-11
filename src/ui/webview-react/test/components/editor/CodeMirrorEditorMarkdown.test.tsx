@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { EditorState, Prec, type Extension } from "@codemirror/state";
-import { ensureSyntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, forceParsing } from "@codemirror/language";
 import { insertNewlineAndIndent } from "@codemirror/commands";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
 import { highlightTree, tags } from "@lezer/highlight";
@@ -360,6 +360,9 @@ describe("ctrlyoke decorations over markdown highlighting", () => {
         Prec.highest(createLinkDecorationExtension())
       )
     );
+    // The initial parse is time-sliced; under full-suite load it can stop
+    // before the fenced block, leaving it unhighlighted when we assert.
+    forceParsing(view, view.state.doc.length, 10_000);
     expect(view.dom.querySelector(".cm-link")).toBeNull();
     expect(view.dom.querySelector(".cm-code-range-inline")).not.toBeNull();
     expect(view.dom.querySelector(".cm-code-range-fenced")).not.toBeNull();

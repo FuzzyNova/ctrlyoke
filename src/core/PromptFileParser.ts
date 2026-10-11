@@ -52,7 +52,11 @@ import {
   isComparisonIncomplete,
 } from "../utils/ScriptComparison";
 import { exceedsLimit } from "../utils/LimitUtils";
-import { buildStepLimitError } from "../utils/QueueLimitUtils";
+import {
+  getEffectiveMaxStepsSource,
+  resolveEffectiveMaxSteps,
+} from "../utils/QueueLimitUtils";
+import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
   flattenParallelItems,
@@ -308,7 +312,8 @@ export class PromptFileParser {
    */
   validateWorkflowText(
     text: string,
-    kind: CtrlYokeFileKind
+    kind: CtrlYokeFileKind,
+    globalMaxSteps?: number
   ): WorkflowTextValidationResult {
     let sourceLineOffset = 0;
     try {
@@ -351,15 +356,48 @@ export class PromptFileParser {
         parsed = yaml.load(text, { schema: WORKFLOW_YAML_SCHEMA });
       }
 
-      return {
-        issues: this.validateWorkflowBeforeNormalization(
-          structuredClone(parsed),
-          kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
-            ? "workflow.ctrlyoke.json"
-            : "workflow.ctrlyoke.yaml",
-          kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON ? "JSON" : "YAML"
-        ).issues,
-      };
+      const validation = this.validateWorkflowBeforeNormalization(
+        structuredClone(parsed),
+        kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+          ? "workflow.ctrlyoke.json"
+          : "workflow.ctrlyoke.yaml",
+        kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON ? "JSON" : "YAML"
+      );
+      const issues = [...validation.issues];
+      if (
+        validation.issues.every(
+          (issue) =>
+            issue.severity !== COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+        ) &&
+        isObject(validation.parsed) &&
+        Array.isArray(validation.parsed.steps)
+      ) {
+        const stepCount = (validation.parsed.steps as unknown[]).reduce<number>(
+          (count, entry) =>
+            count +
+            (isObject(entry) && Array.isArray(entry.parallel)
+              ? entry.parallel.length
+              : 1),
+          0
+        );
+        const workflowMaxSteps =
+          typeof validation.parsed.maxSteps === "number"
+            ? validation.parsed.maxSteps
+            : undefined;
+        const warning = this.getStepLimitWarning(
+          stepCount,
+          workflowMaxSteps,
+          globalMaxSteps
+        );
+        if (warning) {
+          issues.push({
+            instancePath: warning.propertyPointer,
+            message: warning.message,
+            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          });
+        }
+      }
+      return { issues };
     } catch (error) {
       const issue: WorkflowTextValidationIssue = {
         instancePath:
@@ -1370,6 +1408,7 @@ export class PromptFileParser {
       finalStep?: WorkflowStep | null;
       parallelGroups?: ParallelGroupDefinition[];
       workflowProperties?: ParallelValidationProperties;
+      globalMaxSteps?: number;
     }
   ): WorkflowValidationResult {
     const errors: string[] = [];
@@ -1379,21 +1418,12 @@ export class PromptFileParser {
       errors.push("No steps found");
     }
 
-    const authoredMaxSteps = options?.workflowProperties?.maxSteps;
-    if (
-      authoredMaxSteps !== undefined &&
-      exceedsLimit(items.length, authoredMaxSteps)
-    ) {
-      warnings.push({
-        code: WORKFLOW_VALIDATION_WARNING_CODES.STEP_LIMIT_EXCEEDED,
-        message: buildStepLimitError(
-          items.length,
-          authoredMaxSteps,
-          "workflow maxSteps"
-        ),
-        propertyPointer: "/maxSteps",
-      });
-    }
+    const stepLimitWarning = this.getStepLimitWarning(
+      items.length,
+      options?.workflowProperties?.maxSteps,
+      options?.globalMaxSteps
+    );
+    if (stepLimitWarning) warnings.push(stepLimitWarning);
 
     if (options?.parallelGroups !== undefined) {
       try {
@@ -1463,6 +1493,30 @@ export class PromptFileParser {
       valid: errors.length === 0,
       errors,
       warnings,
+    };
+  }
+
+  private getStepLimitWarning(
+    stepCount: number,
+    workflowMaxSteps: number | undefined,
+    globalMaxSteps: number | undefined
+  ): WorkflowValidationWarning | undefined {
+    if (workflowMaxSteps === undefined && globalMaxSteps === undefined) {
+      return undefined;
+    }
+    const effectiveMaxSteps = resolveEffectiveMaxSteps(
+      workflowMaxSteps,
+      globalMaxSteps ?? workflowMaxSteps!
+    );
+    if (!exceedsLimit(stepCount, effectiveMaxSteps)) return undefined;
+    return {
+      code: WORKFLOW_VALIDATION_WARNING_CODES.STEP_LIMIT_EXCEEDED,
+      message: buildQueueSizeLimitStopReason(
+        stepCount,
+        effectiveMaxSteps,
+        getEffectiveMaxStepsSource(workflowMaxSteps)
+      ).message,
+      propertyPointer: workflowMaxSteps === undefined ? "/steps" : "/maxSteps",
     };
   }
 }

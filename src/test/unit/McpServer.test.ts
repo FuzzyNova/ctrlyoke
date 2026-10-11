@@ -2303,8 +2303,34 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     assert.strictEqual(result.stepsAdded, 1);
     assert.strictEqual(persisted.steps?.length, 2);
-    assert.strictEqual(status.metadata.maxSteps, "unlimited");
-    assert.strictEqual(status.metadata.remainingSteps, "unlimited");
+    assert.strictEqual(status.metadata.maxSteps, -1);
+    assert.strictEqual(status.metadata.remainingSteps, -1);
+  });
+
+  test("includes a persisted guardrail stop reason in workflow_status", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "guardrail-status",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.ERROR }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const stopReason = {
+      code: "workflow-time-limit" as const,
+      threshold: 600,
+      observed: 601,
+      unit: "seconds" as const,
+      message:
+        "Workflow stopped - Maximum execution time reached (601s / 600s).",
+    };
+    workingFile._runtime!.stopReason = stopReason;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.deepStrictEqual(status.metadata.stopReason, stopReason);
   });
 
   test("reports unapproved secret grants in appended steps", async () => {

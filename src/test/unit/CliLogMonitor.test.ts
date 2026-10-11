@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import type {
   BaseCliEvent,
   ILogParser,
@@ -68,6 +69,74 @@ async function withZeroDrainDeadline(body: () => Promise<void>): Promise<void> {
 }
 
 suite("CliLogMonitor", () => {
+  test("does not time out an unlimited prompt", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => undefined;
+    const monitor = new CliLogMonitor({
+      logParser: createParser({
+        isComplete: () => true,
+        readNewLines: async () => [{ type: "complete" } as BaseCliEvent],
+      }),
+      runtimeState: {
+        getWorkspaceRoot: () => undefined,
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onStreamingEvents: () => undefined,
+        onResponseComplete: () => undefined,
+        logResponse: () => undefined,
+      },
+    });
+
+    try {
+      const result = await monitor.monitor(
+        "session.jsonl",
+        null,
+        new Date(0),
+        "test-model"
+      );
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.failureKind, undefined);
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
+  test("fails a finite prompt timeout with the TIMEOUT failure kind", async () => {
+    await withZeroDrainDeadline(async () => {
+      const originalTimeoutReader =
+        ConfigurationUtils.getMaxPromptExecutionTimeMs;
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = () => 10;
+      const monitor = new CliLogMonitor({
+        logParser: createParser(),
+        runtimeState: {
+          getWorkspaceRoot: () => undefined,
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onStreamingEvents: () => undefined,
+          onResponseComplete: () => undefined,
+          logResponse: () => undefined,
+        },
+      });
+
+      try {
+        const result = await monitor.monitor(
+          "session.jsonl",
+          null,
+          new Date(0),
+          "test-model"
+        );
+        assert.strictEqual(result.success, false);
+        assert.strictEqual(result.failureKind, FAILURE_KINDS.TIMEOUT);
+        assert.strictEqual(result.timedOut, true);
+      } finally {
+        ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+      }
+    });
+  });
+
   test("persists streamed user steers in chronological final output", async () => {
     const rawEvents: BaseCliEvent[] = [
       {

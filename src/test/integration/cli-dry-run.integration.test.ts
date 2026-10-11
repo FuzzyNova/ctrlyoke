@@ -445,7 +445,24 @@ suite("CLI run process harness reporting", () => {
       { CTRLYOKE_HOME: stateHome }
     );
 
-    assert.strictEqual(result.code, 1, result.stderr);
+    assert.strictEqual(result.code, 6, result.stderr);
+    const jsonResult = JSON.parse(result.stdout) as {
+      stopReason: {
+        code: string;
+        threshold: number;
+        observed: number;
+        unit: string;
+        message: string;
+      };
+    };
+    assert.deepStrictEqual(jsonResult.stopReason, {
+      code: "queue-size-limit",
+      threshold: 2,
+      observed: 3,
+      unit: "steps",
+      message:
+        "Step limit reached: this run has 3/2 steps (workflow maxSteps: 2).",
+    });
     assert.match(
       `${result.stdout}\n${result.stderr}`,
       /Step limit reached: this run has 3\/2 steps/u

@@ -983,16 +983,11 @@ later version at no compatibility cost.
       (gaps plan defect C12). It contradicts `LICENSE.md` §2(d), and every install that opens the
       dashboard persists a trial start time. After launch, those stored timestamps can't be told
       apart from real trial starts without a migration, so fix it before the first public install.
-- [ ] **Execution guardrails: uniform `-1` and structured stop reasons** —
-      [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md) remaining Phase 1
-      audits plus Phase 2.
-  - **Cost if late:** limit and timeout settings live in users' `.ctrlyoke/settings.json`. If any
-    of them doesn't treat `-1` as unlimited today, normalizing it later silently changes what
-    existing settings mean. A step-limit stop currently looks like a generic harness failure in run
-    state and in CLI/MCP results. Automation will start keying on that shape, and splitting it into
-    a distinct outcome later is a contract change.
-  - **Minimum before launch:** finish the `-1` audit, and define the stop reason-code enum and its
-    field in the Automation API result and run state. Dashboard copy and dry-run display can follow.
+- [x] **Execution guardrails: uniform `-1` and structured stop reasons** —
+      [`EXECUTION_GUARDRAILS_PLAN.md`](../implemented/EXECUTION_GUARDRAILS_PLAN.md).
+  - `-1` behavior and timeout boundaries are documented; structured reasons now reach the
+    persisted run state and dashboard, CLI, MCP, logs, and notifications. Dry-run output includes
+    the effective global guardrails.
 - [ ] **Script verdict in `$previous`/`$step` output** —
       [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md) D12a.
   - **Cost if late:** it appends the script's pass/fail, `expected`, and `actual` to the prior-context

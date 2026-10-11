@@ -14,6 +14,16 @@ import {
 } from "../utils/ModelConstants";
 import type { DashboardHostActions } from "../core/HostPorts";
 
+/** Stable run-level codes for execution guardrail stops. */
+export const GUARDRAIL_STOP_CODES = {
+  QUEUE_SIZE_LIMIT: "queue-size-limit",
+  WORKFLOW_TIME_LIMIT: "workflow-time-limit",
+  PROMPT_TIMEOUT: "prompt-timeout",
+} as const;
+
+export type GuardrailStopCode =
+  (typeof GUARDRAIL_STOP_CODES)[keyof typeof GUARDRAIL_STOP_CODES];
+
 /** Host capability describing where interactive harness terminals are shown. */
 export const INTERACTIVE_TERMINAL_MODES = {
   EMBEDDED_PTY: "embedded-pty",

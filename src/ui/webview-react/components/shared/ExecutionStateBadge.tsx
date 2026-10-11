@@ -20,6 +20,10 @@ interface ExecutionStateBadgeProps {
    * pill — any other state already says more than "not started" would.
    */
   unstarted?: boolean;
+  /** Optional label for a specialized terminal outcome while retaining its state styling. */
+  labelOverride?: string;
+  /** Optional detail shown to assistive technology and on narrow layouts. */
+  titleOverride?: string;
   className?: string;
 }
 
@@ -36,14 +40,17 @@ export const ExecutionStateBadge: React.FC<ExecutionStateBadgeProps> = ({
   state,
   isNarrow = false,
   unstarted = false,
+  labelOverride,
+  titleOverride,
   className = "",
 }) => {
   const label =
-    unstarted && state === EXECUTION_STATES.IDLE ? UNSTARTED_LABEL : state;
+    labelOverride ??
+    (unstarted && state === EXECUTION_STATES.IDLE ? UNSTARTED_LABEL : state);
   return (
     <span
       className={`inline-flex items-center rounded-sm px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(state)} ${className}`}
-      title={isNarrow ? label : undefined}
+      title={titleOverride ?? (isNarrow ? label : undefined)}
       role="status"
     >
       {isNarrow ? <Icon name={getExecutionStateBadgeIcon(state)} /> : label}

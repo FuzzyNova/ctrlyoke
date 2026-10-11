@@ -45,6 +45,9 @@ export function selectTerminalFailure(
 /** Exit code for CLI usage, parsing, and unexpected errors. */
 export const CLI_USAGE_EXIT_CODE = 2;
 
+/** Guardrail stops have a dedicated non-zero code for automation callers. */
+export const CLI_GUARDRAIL_STOP_EXIT_CODE = 6;
+
 /** Report an unexpected CLI error and exit with the documented usage code. */
 export function handleCliError(
   error: unknown,
@@ -59,11 +62,15 @@ export function handleCliError(
 
 /** Determine the CLI process exit code from the final workflow state. */
 export function getExitCode(
-  state: Pick<QueueState, "status" | "results">,
+  state: Pick<QueueState, "status" | "results" | "stopReason">,
   finalStepRuntime?: FinalStepRuntimeState
 ): number {
   if (state.status === EXECUTION_STATES.COMPLETED) {
     return 0;
+  }
+
+  if (state.stopReason) {
+    return CLI_GUARDRAIL_STOP_EXIT_CODE;
   }
 
   if (state.status === EXECUTION_STATES.ERROR) {

@@ -211,10 +211,16 @@ export class DashboardBroadcastHub
   updateExecutionState(
     state: string,
     workflowId?: string,
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    stopReason?: import("../types/CtrlYokeTypes").WorkflowStopReason
   ): void {
     for (const client of this.clients) {
-      client.updateExecutionState?.(state, workflowId, activeStepIndices);
+      client.updateExecutionState?.(
+        state,
+        workflowId,
+        activeStepIndices,
+        stopReason
+      );
     }
   }
 

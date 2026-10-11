@@ -309,9 +309,44 @@ suite("ExecutionPreviewService", () => {
 
     assert.deepStrictEqual(preview.steps[0]?.resolvedProperties.limits, {
       maxQueueSteps: 3,
+      maxExecutionSeconds: -1,
+      maxPromptTimeoutSeconds: -1,
+      scriptTimeoutSeconds: 3600,
       maxStepsSource: "workflow maxSteps",
       violations: [],
     });
+  });
+
+  test("counts disabled queue entries against the limit in a scoped preview", async () => {
+    const harness = createHarness();
+    const service = new ExecutionPreviewService({
+      defaults: createDefaults(),
+      capabilities: createCapabilities(),
+      getHarness: () => harness,
+      extensionPath: "extension",
+      hostCanProvidePty: false,
+      dynamicQueueConfig: {
+        maxSteps: 1,
+        maxParallelSteps: 6,
+        maxWorkflowExecutionTime: -1,
+        notifyOnExtension: false,
+      },
+    });
+    const preview = await service.build({
+      workflow: {
+        steps: [
+          { prompt: "included", enabled: false },
+          { prompt: "outside scope" },
+        ],
+      },
+      scope: { kind: PREVIEW_SCOPES.STEP, stepIndex: 1 },
+    });
+
+    assert.strictEqual(preview.steps.length, 1);
+    assert.deepStrictEqual(
+      preview.steps[0]?.resolvedProperties.limits.violations,
+      ["Step count 2 exceeds limit 1"]
+    );
   });
 
   test("allows different-harness auto-resume sessions at a shared boundary", async () => {

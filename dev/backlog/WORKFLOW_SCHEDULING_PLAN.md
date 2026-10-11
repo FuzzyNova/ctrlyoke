@@ -43,6 +43,11 @@
   `EXECUTE_DRAFT` for a lineage that only has a draft, otherwise `SEED_NEW_RUN`
   (re-run), which allocates a fresh `run-<timestamp>/` from the latest run's
   definition and starts from step 0.
+- **Execution policy:** scheduled runs use the existing global controls:
+  `queue.maxSteps`, `queue.maxWorkflowExecutionTimeSec`,
+  `execution.maxPromptTimeoutSec`, and `execution.scriptTimeoutSec`, including
+  their existing `-1` semantics where allowed. Scheduling adds no per-schedule
+  or workflow-authored limits hierarchy.
 - **UX:** schedule is a per-workflow property, authored from a compact drawer on
   the workflow row (the brief's option A), surfaced back as a **"Scheduled"
   section** in the same dropdown for management — _not_ a whole separate page,

@@ -628,6 +628,7 @@ export function createMessageHandlers(
         workflowName: data.workflowName,
         steps: data.steps,
         executionState: data.executionState as ExecutionState,
+        stopReason: data.stopReason ?? undefined,
         currentStep: data.currentIndex || 0,
         activeStepIndices: data.activeStepIndices ?? [],
         results: data.results || [],
@@ -1007,6 +1008,7 @@ export function createMessageHandlers(
       steps: message.steps || [],
       parallelGroups: message.parallelGroups || [],
       executionState: message.executionState as ExecutionState,
+      stopReason: message.stopReason ?? undefined,
       currentStep: message.currentIndex || 0,
       activeStepIndices: message.activeStepIndices ?? [],
       results: message.results || [],
@@ -1373,6 +1375,7 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.EXECUTION_STATE_CHANGED] = (message) => {
     if (isForInactiveWorkflow(message)) return;
     applyExecutionState(message.state as ExecutionState);
+    useWorkflowStore.getState().setStopReason(message.stopReason ?? undefined);
     if (message.activeStepIndices !== undefined) {
       useWorkflowStore
         .getState()

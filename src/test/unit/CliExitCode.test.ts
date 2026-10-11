@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { getExitCode } from "../../cli/CliExitCode";
+import {
+  CLI_GUARDRAIL_STOP_EXIT_CODE,
+  getExitCode,
+} from "../../cli/CliExitCode";
 import {
   EXECUTION_STATES,
   FAILURE_KINDS,
@@ -56,6 +59,22 @@ suite("CliExitCode", () => {
     };
 
     assert.strictEqual(getExitCode(state), 4);
+  });
+
+  test("returns the dedicated exit code for a guardrail stop", () => {
+    const state: Pick<QueueState, "status" | "results" | "stopReason"> = {
+      status: EXECUTION_STATES.ERROR,
+      results: [],
+      stopReason: {
+        code: "workflow-time-limit",
+        threshold: 600,
+        observed: 601,
+        unit: "seconds",
+        message:
+          "Workflow stopped - Maximum execution time reached (601s / 600s).",
+      },
+    };
+    assert.strictEqual(getExitCode(state), CLI_GUARDRAIL_STOP_EXIT_CODE);
   });
 
   test("uses the last failed result when later failure stopped the run", () => {

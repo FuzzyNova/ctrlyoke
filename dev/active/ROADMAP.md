@@ -284,10 +284,10 @@ Start these after real launch feedback and the P1 safety contracts exist.
    ([plan](../implemented/WORKFLOW_VARIANTS_PLAN.md))
 3. **Global execution-limit hardening** — consolidate and test the existing
    settings-level prompt, script, queue-size, and workflow-time enforcement.
-   Do not add workflow or per-step limit properties. Partial: `queue.maxSteps`
-   is single-sourced, while the timeout audits and structured stop reason codes
-   remain open.
-   ([plan](../backlog/EXECUTION_GUARDRAILS_PLAN.md))
+   Do not add workflow or per-step limit properties. Implemented: the existing
+   controls are single-sourced, audited, and surfaced with structured stop
+   reasons across the dashboard, CLI, MCP, logs, and notifications.
+   ([plan](../implemented/EXECUTION_GUARDRAILS_PLAN.md))
 4. **Standalone server** — reuse the shipped hosted dashboard without requiring
    VS Code. **Implemented 2026-10-07** (`ctrlyoke server`). Phone, second-OS,
    and certificate-install checks remain open in the plan's verification
@@ -535,7 +535,7 @@ criteria matter more than speculative dates.
 
 | Plan                                                                                                              | Priority                                                            |
 | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                                         | P2 (reduced scope; partially done)                                  |
+| [`EXECUTION_GUARDRAILS_PLAN.md`](../implemented/EXECUTION_GUARDRAILS_PLAN.md)                                     | Implemented                                                         |
 | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)           | P0/P1 compatibility phases complete; retained as the closure record |
 | [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                                 | P0 — shipped                                                        |
 | [`USER_SCOPED_RUN_HISTORY_PLAN.md`](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md)                               | **P0** (one-way door) — shipped 2026-08-15                          |

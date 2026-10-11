@@ -106,10 +106,10 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { exceedsLimit } from "../utils/LimitUtils";
 import {
-  buildStepLimitError,
   getEffectiveMaxStepsSource,
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
+import { buildQueueSizeLimitStopReason } from "../utils/GuardrailStopMessages";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import {
   resolveWorktreeForWorkspace,
@@ -1082,7 +1082,8 @@ export class WorkflowInstance
       state.parallelGroups,
       this.getActiveStepIndices(),
       options?.asReplacement ? undefined : state.definitionRevision,
-      this.promptFileLoader.getLastSchemaWarnings()
+      this.promptFileLoader.getLastSchemaWarnings(),
+      state.stopReason
     );
     this.outputCaptureBuffer.replayTo(
       sink,
@@ -1291,6 +1292,7 @@ export class WorkflowInstance
     const state = this.promptQueue.getState();
     return {
       executionState: this.getAuthoritativeExecutionState(),
+      stopReason: state.stopReason,
       currentIndex: state.currentIndex,
       steps: state.steps,
       results: state.results,
@@ -1329,6 +1331,7 @@ export class WorkflowInstance
       filePath: this.filePath,
       workingFilePath: state.workingFilePath || undefined,
       executionState: this.getAuthoritativeExecutionState(),
+      stopReason: state.stopReason,
       currentStep: state.currentIndex,
       totalSteps: state.steps.length,
       startedAt: this.startedAt || undefined,
@@ -2606,11 +2609,11 @@ export class WorkflowInstance
         notifyUserFeedback(
           this.userFeedbackSink,
           "warning",
-          buildStepLimitError(
+          buildQueueSizeLimitStopReason(
             currentSize,
             maxSteps,
             getEffectiveMaxStepsSource(workflowMaxSteps)
-          )
+          ).message
         );
         return;
       }
@@ -3460,11 +3463,11 @@ export class WorkflowInstance
     const currentCount = this.promptQueue.getState().steps.length;
     const resultingCount = currentCount + additionalSteps;
     return exceedsLimit(resultingCount, maxSteps)
-      ? buildStepLimitError(
+      ? buildQueueSizeLimitStopReason(
           currentCount,
           maxSteps,
           getEffectiveMaxStepsSource(workflowMaxSteps)
-        )
+        ).message
       : undefined;
   }
 
@@ -5226,7 +5229,8 @@ export class WorkflowInstance
       this.dashboardSink.updateExecutionState(
         executionState,
         undefined,
-        this.getActiveStepIndices()
+        this.getActiveStepIndices(),
+        transition.current.stopReason
       );
       if (transition.command === WORKFLOW_RUNTIME_COMMANDS.COMPLETE) {
         this.dashboardSink.updateExecutionCompleted?.();

@@ -14,6 +14,7 @@ import type {
   InteractiveExitResult,
   SpawnResult,
 } from "../../../utils/CliProcessManager";
+import { CliProcessTimeoutError } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
@@ -715,6 +716,13 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         env,
       });
     } catch (error) {
+      if (error instanceof CliProcessTimeoutError) {
+        throw new CliTransportError(
+          `Prompt execution timed out after ${error.timeoutMs}ms`,
+          FAILURE_KINDS.TIMEOUT,
+          { cause: error }
+        );
+      }
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         throw new CliTransportError(
           `Harness CLI could not be started: ${getErrorMessage(error)}`,

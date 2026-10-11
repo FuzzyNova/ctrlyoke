@@ -732,8 +732,13 @@ export async function activate(context: vscode.ExtensionContext) {
           isYamlSchemaValidationSuppressed: () =>
             vscode.extensions.getExtension(VSCODE_YAML_EXTENSION_ID) !==
             undefined,
-          validateWorkflowText: (text, kind) =>
-            workflowTextValidator.validateWorkflowText(text, kind),
+          validateWorkflowText: (text, kind, globalMaxSteps) =>
+            workflowTextValidator.validateWorkflowText(
+              text,
+              kind,
+              globalMaxSteps
+            ),
+          getGlobalMaxSteps: () => ConfigurationUtils.getGlobalMaxSteps(),
           getSettingsPreCondition: () =>
             ConfigurationUtils.getDefaultPreCondition(),
         }

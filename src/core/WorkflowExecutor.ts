@@ -19,6 +19,7 @@ import {
   type ParallelGroupOutcome,
   type ParallelGroupDefinition,
   type ScriptProperties,
+  type WorkflowStopReason,
 } from "../types/CtrlYokeTypes";
 import {
   WorkflowContext,
@@ -84,10 +85,14 @@ import {
   isUnlimited,
 } from "../utils/LimitUtils";
 import {
-  buildStepLimitError,
   getEffectiveMaxStepsSource,
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
+import {
+  buildPromptTimeoutStopReason,
+  buildQueueSizeLimitStopReason,
+  buildWorkflowTimeLimitStopReason,
+} from "../utils/GuardrailStopMessages";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
@@ -476,6 +481,7 @@ function getAttemptStartReason(
 export class WorkflowExecutor {
   private readonly waitingResponseTargets = new Set<string>();
   private readonly targetExecutionErrors = new Map<string, unknown>();
+  private readonly targetRunStopReasons = new Map<string, WorkflowStopReason>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
   private activeParallelGroupRun:
     ParallelGroupRun<WorkflowExecutionContext> | undefined;
@@ -563,6 +569,15 @@ export class WorkflowExecutor {
     return this.promptQueue.getRuntimeStateMachine();
   }
 
+  private takeTargetRunStopReason(
+    target: ExecutionTarget
+  ): WorkflowStopReason | undefined {
+    const key = getExecutionTargetRunKey(target);
+    const reason = this.targetRunStopReasons.get(key);
+    this.targetRunStopReasons.delete(key);
+    return reason;
+  }
+
   /**
    * Execute the workflow. Supports resume from a paused or previously-stopped
    * run — the queue's `currentIndex` and `finalStepRuntime` phase are both
@@ -627,8 +642,6 @@ export class WorkflowExecutor {
             const state = this.promptQueue.getState();
             if (
               await this.checkExecutionTimeLimit(
-                context.dynamicQueueConfig,
-                state.currentIndex,
                 this.promptQueue.getProgress().total
               )
             ) {
@@ -727,8 +740,6 @@ export class WorkflowExecutor {
         }
         if (
           await this.checkExecutionTimeLimit(
-            context.dynamicQueueConfig,
-            this.promptQueue.getState().currentIndex,
             this.promptQueue.getProgress().total
           )
         ) {
@@ -770,7 +781,7 @@ export class WorkflowExecutor {
 
         if (!shouldContinue) {
           if (finalOutcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
-            runtime.fail();
+            runtime.fail(this.takeTargetRunStopReason(finalOutcome.target));
             await this.promptQueue.commitRuntimeTransition();
           } else if (
             finalOutcome.status === PROMPT_TERMINAL_STATUS.CANCELLED &&
@@ -1299,8 +1310,12 @@ export class WorkflowExecutor {
         ) {
           await this.promptQueue.commitRuntimeTransition();
         }
+        // Drain every member's reason so a non-terminal failure leaves none behind.
+        const stopReason = groupOutcome.outcomes
+          .map((outcome) => this.takeTargetRunStopReason(outcome.target))
+          .find((reason) => reason !== undefined);
         if (groupOutcome.terminalFailure && !groupOutcome.stopped) {
-          this.getRuntime().fail();
+          this.getRuntime().fail(stopReason);
           await this.promptQueue.commitRuntimeTransition();
         }
       }
@@ -1779,8 +1794,10 @@ export class WorkflowExecutor {
     }
 
     if (outcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
+      // Always drain so an `onError: continue` failure leaves no stale reason.
+      const stopReason = this.takeTargetRunStopReason(outcome.target);
       if (outcome.terminalFailure !== false) {
-        this.getRuntime().fail();
+        this.getRuntime().fail(stopReason);
         await this.promptQueue.commitRuntimeTransition();
         const targetKey = getExecutionTargetRunKey(outcome.target);
         const executionError = this.targetExecutionErrors.get(targetKey);
@@ -2084,6 +2101,9 @@ export class WorkflowExecutor {
             preConditionErrorRetryCount
           );
           if (preDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+            if (await this.checkExecutionTimeLimitBeforeRetry()) {
+              return false;
+            }
             attemptIndex = preDisposition.nextAttemptIndex ?? attemptIndex + 1;
             preConditionErrorRetryCount =
               preDisposition.nextErrorRetryCount ??
@@ -2348,6 +2368,9 @@ export class WorkflowExecutor {
         );
 
         if (failureDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+          if (await this.checkExecutionTimeLimitBeforeRetry()) {
+            return false;
+          }
           attemptIndex++;
           promptErrorRetryCounter.count =
             failureDisposition.nextErrorRetryCount ??
@@ -2416,6 +2439,9 @@ export class WorkflowExecutor {
         );
 
         if (endDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+          if (await this.checkExecutionTimeLimitBeforeRetry()) {
+            return false;
+          }
           attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
           endConditionErrorRetryCount =
             endDisposition.nextErrorRetryCount ??
@@ -2790,6 +2816,9 @@ export class WorkflowExecutor {
           false
         );
         if (errorDisposition.outcome === CONDITION_ACTIONS.RETRY) {
+          if (await this.checkExecutionTimeLimitBeforeRetry()) {
+            return false;
+          }
           attemptIndex = errorDisposition.nextAttemptIndex ?? attemptIndex + 1;
           errorRetryCount =
             errorDisposition.nextErrorRetryCount ?? errorRetryCount + 1;
@@ -5000,12 +5029,9 @@ export class WorkflowExecutor {
     }
   }
 
-  private async checkExecutionTimeLimit(
-    dynamicConfig: DynamicQueueConfig,
-    currentIndex: number,
-    totalSteps: number
-  ): Promise<boolean> {
-    const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
+  private async checkExecutionTimeLimit(totalSteps: number): Promise<boolean> {
+    const maxTimeSec =
+      ConfigurationUtils.getDynamicQueueConfig().maxWorkflowExecutionTime;
     if (isUnlimited(maxTimeSec)) {
       return false;
     }
@@ -5015,19 +5041,31 @@ export class WorkflowExecutor {
 
     if (elapsedSec >= maxTimeSec) {
       const completedCount = this.promptQueue.getCompletedCount();
-      const remainingCount = totalSteps - currentIndex;
+      const remainingCount = Math.max(
+        0,
+        totalSteps - this.promptQueue.getTerminalCount()
+      );
 
-      const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalSteps} steps. ${remainingCount} steps remaining in queue.`;
+      const stopReason = buildWorkflowTimeLimitStopReason(
+        elapsedSec,
+        maxTimeSec,
+        { completedCount, totalSteps, remainingCount }
+      );
+      notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
+      Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
 
-      notifyUserFeedback(this.userFeedbackSink, "warning", message);
-      Log.trace(`[WorkflowExecutor] ${message}`);
-
-      this.promptQueue.getRuntimeStateMachine().fail();
+      this.promptQueue.getRuntimeStateMachine().fail(stopReason);
       await this.promptQueue.commitRuntimeTransition();
       return true;
     }
 
     return false;
+  }
+
+  private async checkExecutionTimeLimitBeforeRetry(): Promise<boolean> {
+    return this.checkExecutionTimeLimit(
+      this.promptQueue.getState().steps.length
+    );
   }
 
   private async checkStepLimit(
@@ -5042,14 +5080,14 @@ export class WorkflowExecutor {
       return false;
     }
 
-    const message = buildStepLimitError(
+    const stopReason = buildQueueSizeLimitStopReason(
       totalSteps,
       effectiveMaxSteps,
       getEffectiveMaxStepsSource(workflowMaxSteps)
     );
-    notifyUserFeedback(this.userFeedbackSink, "warning", message);
-    Log.trace(`[WorkflowExecutor] ${message}`);
-    this.promptQueue.getRuntimeStateMachine().fail();
+    notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
+    Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
+    this.promptQueue.getRuntimeStateMachine().fail(stopReason);
     await this.promptQueue.commitRuntimeTransition();
     return true;
   }
@@ -5318,6 +5356,7 @@ export class WorkflowExecutor {
     const failureOutput = integration.getLastFailureOutput?.();
     const attemptTimestampMs =
       this.getPromptPhaseStartedAt(target) ?? Date.now();
+    const failureObservedAtMs = Date.now();
     const statusTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
     const errorBehavior = resolvedProperties?.errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -5454,6 +5493,31 @@ export class WorkflowExecutor {
     );
 
     await persistFailureOutput();
+
+    // Only a finite `execution.maxPromptTimeoutSec` is a guardrail; a timeout
+    // reported while it is unlimited came from elsewhere and gets no code.
+    const promptTimeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
+    if (
+      failureKind === FAILURE_KINDS.TIMEOUT &&
+      promptTimeoutMs !== undefined
+    ) {
+      const thresholdSeconds = Math.ceil(promptTimeoutMs / 1000);
+      const startedAt = this.getPromptPhaseStartedAt(target);
+      const observedSeconds =
+        startedAt === undefined
+          ? thresholdSeconds
+          : Math.floor(Math.max(0, failureObservedAtMs - startedAt) / 1000);
+      const stopReason = buildPromptTimeoutStopReason(
+        observedSeconds,
+        thresholdSeconds
+      );
+      this.targetRunStopReasons.set(
+        getExecutionTargetRunKey(target),
+        stopReason
+      );
+      notifyUserFeedback(this.userFeedbackSink, "warning", stopReason.message);
+      Log.trace("[WorkflowExecutor] Guardrail stop", stopReason);
+    }
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       await this.promptQueue.failStep(

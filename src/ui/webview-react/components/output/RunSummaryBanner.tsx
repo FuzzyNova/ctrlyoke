@@ -18,6 +18,7 @@ import type {
   WorktreeRunProjection,
   WorkflowViewAddress,
   WorkflowTokenTotals,
+  WorkflowStopReason,
   WorkspaceWorktreeOwnership,
 } from "@root/types/CtrlYokeTypes";
 import {
@@ -48,6 +49,7 @@ export interface RunBannerData {
   runId: number;
   startedAt: number;
   executionState: ExecutionState;
+  stopReason?: WorkflowStopReason;
   tokenTotals?: WorkflowTokenTotals;
   /** Persisted projection from the displayed run's `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
@@ -115,6 +117,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   runId,
   startedAt,
   executionState,
+  stopReason,
   tokenTotals,
   worktree,
   address,
@@ -191,7 +194,11 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
           <span className="truncate min-w-0" data-testid="run-id-banner">
             Run {runId} &middot; {new Date(startedAt).toLocaleString()}
           </span>
-          <ExecutionStateBadge state={executionState} />
+          <ExecutionStateBadge
+            state={executionState}
+            labelOverride={stopReason ? "Limit stop" : undefined}
+            titleOverride={stopReason?.message}
+          />
         </span>
         <span className="flex items-center gap-2 shrink-0">
           {hasWorkflowTokenUsage(tokenTotals) && (
@@ -221,6 +228,15 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
           </button>
         </span>
       </div>
+      {stopReason && (
+        <div
+          className="text-warning-fg"
+          data-testid="run-stop-reason"
+          role="status"
+        >
+          {stopReason.message}
+        </div>
+      )}
       {worktree && (
         <div className="flex min-w-0 flex-col gap-1 rounded-sm border border-widget-border px-2 py-1.5">
           {/* Worktree identity + merge/landing outcome — outcome wraps to its

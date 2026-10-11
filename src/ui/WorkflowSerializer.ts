@@ -1404,6 +1404,7 @@ export class WorkflowSerializer {
               runDirectory,
               workflowName: descriptor.workflowName || workflowKey,
               executionState,
+              stopReason: workingFile._runtime?.stopReason,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
               isFavorite: descriptor.isFavorite,

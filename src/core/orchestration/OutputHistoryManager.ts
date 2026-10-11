@@ -878,6 +878,7 @@ export class OutputHistoryManager {
         (manifest) => ({
           ...manifest,
           executionState: transition.current.status,
+          stopReason: transition.current.stopReason,
           lastUpdatedAt: transition.timestampMs,
         })
       );
@@ -1129,12 +1130,14 @@ export class OutputHistoryManager {
         _runtime?: {
           worktree?: import("../../types/CtrlYokeTypes").WorkingFileWorktreeRuntime;
           worktreeNotice?: string;
+          stopReason?: import("../../types/CtrlYokeTypes").WorkflowStopReason;
         };
       };
       enriched.worktree = projectWorktreeRuntime(
         workingFile._runtime?.worktree
       );
       enriched.worktreeNotice = workingFile._runtime?.worktreeNotice;
+      enriched.stopReason = workingFile._runtime?.stopReason;
     } catch {
       // Older or partially recovered runs may not have a working file. The
       // timeline remains renderable without a worktree projection.
@@ -1371,6 +1374,7 @@ export class OutputHistoryManager {
         tokenTotals,
         worktree,
         worktreeNotice,
+        stopReason,
       } = await this.readRunFileSummaryFields(runFilePath);
 
       const record: RunSummaryRecord = {
@@ -1406,6 +1410,7 @@ export class OutputHistoryManager {
           tokenTotals: tokenTotals ?? manifest.tokenTotals,
           worktree,
           worktreeNotice,
+          stopReason: stopReason ?? manifest.stopReason,
         },
       };
 
@@ -1442,6 +1447,7 @@ export class OutputHistoryManager {
     tokenTotals?: WorkflowTokenTotals;
     worktree?: WorktreeRunProjection;
     worktreeNotice?: string;
+    stopReason?: import("../../types/CtrlYokeTypes").WorkflowStopReason;
     primaryHarness?: string;
     primaryModel?: string;
     hasMixedHarnesses: boolean;
@@ -1463,6 +1469,7 @@ export class OutputHistoryManager {
           tokenTotals?: WorkflowTokenTotals;
           worktree?: import("../../types/CtrlYokeTypes").WorkingFileWorktreeRuntime;
           worktreeNotice?: string;
+          stopReason?: import("../../types/CtrlYokeTypes").WorkflowStopReason;
         };
         steps?: Array<{
           type?: string;
@@ -1503,6 +1510,7 @@ export class OutputHistoryManager {
         tokenTotals: workingFile._runtime?.tokenTotals,
         worktree: projectWorktreeRuntime(workingFile._runtime?.worktree),
         worktreeNotice: workingFile._runtime?.worktreeNotice,
+        stopReason: workingFile._runtime?.stopReason,
         primaryHarness: mostUsedValue(harnesses),
         primaryModel: mostUsedValue(models),
         hasMixedHarnesses: harnesses.size > 1,

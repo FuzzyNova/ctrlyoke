@@ -16,6 +16,7 @@ import type {
   WorkflowTokenTotals,
   WorktreeConfig,
   WorktreeRunProjection,
+  WorkflowStopReason,
 } from "./CtrlYokeTypes";
 import type {
   OutputExecutionTarget,
@@ -100,6 +101,8 @@ export interface WorkflowRunManifest {
   /** Pause-aware active execution time; absent on runs created before this field. */
   activeExecutionMs?: number;
   executionState: ExecutionState;
+  /** Structured reason when a run ended because an execution guardrail fired. */
+  stopReason?: WorkflowStopReason;
   /** Definition revision most recently committed for this run (see `DEFINITION_REVISION_COMMITTED`). */
   definitionRevision: number;
   /**
@@ -130,6 +133,8 @@ export interface RunSummary {
   startedAt: number;
   completedAt?: number;
   executionState: ExecutionState;
+  /** Structured reason when a run ended because an execution guardrail fired. */
+  stopReason?: WorkflowStopReason;
   definitionRevision: number;
   stepCount: number;
   /** Step count from the persisted working file, which is current during a run. */

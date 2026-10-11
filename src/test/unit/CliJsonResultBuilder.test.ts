@@ -15,6 +15,7 @@ import {
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_VALIDATION_WARNING_CODES,
+  GUARDRAIL_STOP_CODES,
 } from "../../types/DashboardConstants";
 import type {
   ConditionEvaluationSummary,
@@ -507,6 +508,27 @@ suite("CliJsonResultBuilder", () => {
       assert.strictEqual(stdout.slice(0, -1).includes("\n"), false);
       assert.deepStrictEqual(JSON.parse(stdout), result);
       assert.strictEqual(result.status, expectedStatus);
+    }
+  });
+
+  test("serializes each guardrail stop reason at the run level", () => {
+    const reasons = [
+      [GUARDRAIL_STOP_CODES.QUEUE_SIZE_LIMIT, "steps"],
+      [GUARDRAIL_STOP_CODES.WORKFLOW_TIME_LIMIT, "seconds"],
+      [GUARDRAIL_STOP_CODES.PROMPT_TIMEOUT, "seconds"],
+    ] as const;
+    for (const [code, unit] of reasons) {
+      const state = makeState([], [], EXECUTION_STATES.ERROR, 1_000, 2_000);
+      state.stopReason = {
+        code,
+        threshold: 10,
+        observed: 11,
+        unit,
+        message: `${code} stop`,
+      };
+      const output = buildCliJsonResult({ state, workspaceRoot });
+      assert.deepStrictEqual(output.stopReason, state.stopReason);
+      assert.strictEqual(output.success, false);
     }
   });
 });

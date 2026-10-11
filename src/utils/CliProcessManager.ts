@@ -54,6 +54,14 @@ export interface SpawnResult {
   terminatedByManager: boolean;
 }
 
+/** A spawned CLI exceeded its configured prompt execution time. */
+export class CliProcessTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Process timeout after ${timeoutMs}ms`);
+    this.name = "CliProcessTimeoutError";
+  }
+}
+
 /** How an interactive (stdio-inherited) process ended. */
 export interface InteractiveExitResult {
   /** Exit code, or `null` when a signal ended the process. */
@@ -232,7 +240,8 @@ export class CliProcessManager {
 
       // Handle timeout
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      if (options.timeout) {
+      const timeoutMs = options.timeout;
+      if (timeoutMs) {
         timeoutId = setTimeout(() => {
           if (!settled && this.currentProcess === child) {
             settled = true;
@@ -240,9 +249,9 @@ export class CliProcessManager {
               "⏱️ Process timeout - sending SIGTERM, will escalate to SIGKILL if needed"
             );
             this.killGracefully(child);
-            reject(new Error(`Process timeout after ${options.timeout}ms`));
+            reject(new CliProcessTimeoutError(timeoutMs));
           }
-        }, options.timeout);
+        }, timeoutMs);
       }
     });
   }

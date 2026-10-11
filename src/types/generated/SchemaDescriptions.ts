@@ -100,6 +100,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.startTime": "Wall-clock timestamp when active workflow execution timing began",
   "_runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
   "_runtime.stepId": "Stable internal identity for this queue step within its run",
+  "_runtime.stopReason": "Structured reason when a run ended because an execution guardrail fired.",
+  "_runtime.stopReason.message": "Canonical human-readable message for the stop.",
+  "_runtime.stopReason.observed": "Observed value in the unit named by `unit`.",
+  "_runtime.stopReason.threshold": "Configured guardrail threshold in the unit named by `unit`.",
   "_runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
   "_runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload.",
   "_runtime.tokenTotals": "Latest run-scoped token aggregate projected from timeline history (working files only, written automatically during execution)",
@@ -252,8 +256,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "execution.contextResolutionFailure": "How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference.",
   "execution.ctrlyokeMcpMode": "Whether ctrlyoke's own MCP server is attached natively or replaced with the built-in MCP tools skill. Only affects ctrlyoke's server, not other MCP servers configured in a workflow.",
   "execution.injectMode": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug.",
-  "execution.maxPromptTimeoutSec": "Maximum time in seconds to wait for a prompt to complete. `-1` means unlimited.",
-  "execution.scriptTimeoutSec": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.",
+  "execution.maxPromptTimeoutSec": "Maximum time in seconds for one harness prompt to complete. A finite value stops the prompt when its execution budget expires; `-1` disables the prompt timeout.",
+  "execution.scriptTimeoutSec": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. This setting must be greater than zero and has no unlimited value. A script's own `timeoutSec` (in seconds) overrides it.",
   "executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "finalStep": "A step that always runs after all queued prompts complete. Can be an AI prompt or a script step. If mcpServers includes \"ctrlyoke\" and the finalStep appends prompts, those prompts run before finalStep executes again. Working files store resolved harness/model/session metadata on finalStep._runtime; workflow phase/status remains in the root _runtime.finalStep block.",
@@ -512,8 +516,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
   "queue": "Queue management settings.",
   "queue.maxParallelSteps": "Maximum number of active members in a parallel step group.",
-  "queue.maxSteps": "Maximum number of entries allowed in the run's steps array. `-1` means unlimited.",
-  "queue.maxWorkflowExecutionTimeSec": "Maximum total execution time in seconds for a workflow. `-1` means unlimited.",
+  "queue.maxSteps": "Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. `-1` disables the queue-size limit.",
+  "queue.maxWorkflowExecutionTimeSec": "Maximum active execution time in seconds for a workflow. Checked at safe step, parallel-group, final-step, and retry boundaries; paused time is excluded. `-1` disables the workflow-time limit.",
   "queue.notifyOnExtension": "Currently has no effect; queue extension notifications are not implemented.",
   "resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
@@ -1137,6 +1141,15 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "none",
     "finalStepAll",
     "finalStepPrevious"
+  ],
+  "_runtime.stopReason.code": [
+    "queue-size-limit",
+    "workflow-time-limit",
+    "prompt-timeout"
+  ],
+  "_runtime.stopReason.unit": [
+    "steps",
+    "seconds"
   ],
   "_runtime.terminalStatus": [
     "completed",

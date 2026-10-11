@@ -40,6 +40,7 @@ import {
   CONDITION_ACTIONS,
   TOKEN_TOTAL_CONFIDENCE,
   FAILURE_KINDS,
+  GUARDRAIL_STOP_CODES,
   WORKFLOW_ATTEMPT_STATUS,
 } from "../../types/DashboardConstants";
 import {
@@ -3887,11 +3888,135 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     context.dynamicQueueConfig.maxWorkflowExecutionTime = 1;
     queue.getRuntimeStateMachine().getActiveExecutionTime = () => 2_000;
     queue.loadPrompts({ steps: [{ prompt: "must-not-run" }] });
-
-    await executor.execute(integration, context);
+    configService.setCliOverlay({
+      queue: { maxWorkflowExecutionTimeSec: 1 },
+    });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
 
     assert.deepStrictEqual(integration.sentPrompts, []);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("reads the workflow time limit from live settings", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    context.dynamicQueueConfig.maxWorkflowExecutionTime = 3_600;
+    queue.getRuntimeStateMachine().getActiveExecutionTime = () => 1_000;
+    queue.loadPrompts({ steps: [{ prompt: "must-not-run" }] });
+    configService.setCliOverlay({
+      queue: { maxWorkflowExecutionTimeSec: 1 },
+    });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("checks the workflow time limit between retries of a step", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    let activeTimeMs = 0;
+    queue.getRuntimeStateMachine().getActiveExecutionTime = () => activeTimeMs;
+    integration.onSend = async () => {
+      activeTimeMs = 1_000;
+      integration.processExitFailure = true;
+      return { success: false };
+    };
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "retry-me",
+          errorBehavior: {
+            onError: CONDITION_ACTIONS.RETRY,
+            maxRetries: 3,
+          },
+        },
+      ],
+    });
+    configService.setCliOverlay({
+      queue: { maxWorkflowExecutionTimeSec: 1 },
+    });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.deepStrictEqual(integration.sentPrompts, ["retry-me"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+    assert.strictEqual(
+      queue.getState().stopReason?.code,
+      GUARDRAIL_STOP_CODES.WORKFLOW_TIME_LIMIT
+    );
+  });
+
+  test("records a queue-size stop reason for an oversized run", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    queue.loadPrompts({ steps: [{ prompt: "one" }, { prompt: "two" }] });
+    configService.setCliOverlay({ queue: { maxSteps: 1 } });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    const stopReason = queue.getState().stopReason;
+    assert.strictEqual(stopReason?.code, GUARDRAIL_STOP_CODES.QUEUE_SIZE_LIMIT);
+    assert.strictEqual(stopReason?.threshold, 1);
+    assert.strictEqual(stopReason?.observed, 2);
+  });
+
+  const runTimedOutStep = async (maxPromptTimeoutSec: number) => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    integration.onSend = async () => {
+      integration.timeoutFailure = true;
+      return { success: false };
+    };
+    queue.loadPrompts({ steps: [{ prompt: "slow" }, { prompt: "next" }] });
+    configService.setCliOverlay({ execution: { maxPromptTimeoutSec } });
+    try {
+      await executor.execute(integration, context);
+    } finally {
+      configService.setCliOverlay({});
+    }
+    return queue.getState();
+  };
+
+  test("records a prompt-timeout stop reason for a finite prompt timeout", async () => {
+    const state = await runTimedOutStep(5);
+
+    assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
+    assert.strictEqual(
+      state.stopReason?.code,
+      GUARDRAIL_STOP_CODES.PROMPT_TIMEOUT
+    );
+    assert.strictEqual(state.stopReason?.threshold, 5);
+  });
+
+  test("records no guardrail code for a timeout while the prompt timeout is unlimited", async () => {
+    const state = await runTimedOutStep(-1);
+
+    assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
+    assert.strictEqual(state.stopReason, undefined);
   });
 
   test("does not loop when queue does not grow", async () => {

@@ -29,10 +29,10 @@ import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { runStateWriteOptions } from "../../utils/RunStateWrites";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import {
-  buildStepLimitError,
   getEffectiveMaxStepsSource,
   resolveEffectiveMaxSteps,
 } from "../../utils/QueueLimitUtils";
+import { buildQueueSizeLimitAgentMessage } from "../../utils/GuardrailStopMessages";
 import { exceedsLimit } from "../../utils/LimitUtils";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -411,7 +411,7 @@ export class RunContinuationService {
         );
         if (exceedsLimit(currentQueueSize + stepsToAdd, effectiveMaxSteps)) {
           throw new Error(
-            buildStepLimitError(
+            buildQueueSizeLimitAgentMessage(
               currentQueueSize,
               effectiveMaxSteps,
               getEffectiveMaxStepsSource(workflowMaxSteps)
@@ -643,7 +643,7 @@ export class RunContinuationService {
         );
         if (exceedsLimit(currentQueueSize + steps.length, effectiveMaxSteps)) {
           throw new Error(
-            buildStepLimitError(
+            buildQueueSizeLimitAgentMessage(
               currentQueueSize,
               effectiveMaxSteps,
               getEffectiveMaxStepsSource(workflowMaxSteps)

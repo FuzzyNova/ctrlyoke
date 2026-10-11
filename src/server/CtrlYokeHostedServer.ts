@@ -807,9 +807,15 @@ export class CtrlYokeHostedServer
   public updateExecutionState(
     state: string,
     workflowId?: string,
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    stopReason?: import("../types/CtrlYokeTypes").WorkflowStopReason
   ): void {
-    this.sink.updateExecutionState(state, workflowId, activeStepIndices);
+    this.sink.updateExecutionState(
+      state,
+      workflowId,
+      activeStepIndices,
+      stopReason
+    );
   }
   public updateActiveStepIndices(
     activeStepIndices: number[],

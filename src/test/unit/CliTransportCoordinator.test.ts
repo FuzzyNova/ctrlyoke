@@ -18,6 +18,7 @@ import {
   type TerminalEndReason,
 } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { CliProcessTimeoutError } from "../../utils/CliProcessManager";
 import {
   REDACTION_MARKER,
   RunSecretRedactor,
@@ -167,6 +168,79 @@ const stdoutProviderFactories: ReadonlyArray<{
 ];
 
 suite("CliTransportCoordinator", () => {
+  test("passes the configured prompt limit to headless spawn", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    const timeoutValues: Array<number | undefined> = [];
+    const passedTimeouts: Array<number | undefined> = [];
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () =>
+      timeoutValues.shift();
+    const coordinator = new CliTransportCoordinator({
+      provider: createHeadlessProvider(),
+      processManager: {
+        spawn: async (
+          _command: string,
+          _args: string[],
+          options: { timeout?: number }
+        ) => {
+          passedTimeouts.push(options.timeout);
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    try {
+      timeoutValues.push(undefined, 2500);
+      await coordinator.executeHeadless([], "unlimited", [], async () => true);
+      await coordinator.executeHeadless([], "finite", [], async () => true);
+      assert.deepStrictEqual(passedTimeouts, [undefined, 2500]);
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
+  test("classifies headless prompt expiry as a timeout transport failure", async () => {
+    const originalTimeoutReader =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs;
+    ConfigurationUtils.getMaxPromptExecutionTimeMs = () => 25;
+    const coordinator = new CliTransportCoordinator({
+      provider: createHeadlessProvider(),
+      processManager: {
+        spawn: async () => {
+          throw new CliProcessTimeoutError(25);
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    try {
+      await assert.rejects(
+        coordinator.executeHeadless([], "prompt", [], async () => true),
+        (error: unknown) => {
+          assert.ok(error instanceof CliTransportError);
+          assert.strictEqual(error.failureKind, FAILURE_KINDS.TIMEOUT);
+          assert.match(error.message, /timed out after 25ms/);
+          return true;
+        }
+      );
+    } finally {
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+    }
+  });
+
   test("streams split secrets redacted to terminal messages and replay buffer", async () => {
     let dataHandler: ((chunk: string) => void) | undefined;
     let exitHandler: ((event: { exitCode: number }) => void) | undefined;
