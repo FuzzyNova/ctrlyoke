@@ -370,6 +370,12 @@ export const PRO_FEATURES = {
 
 export type ProFeature = (typeof PRO_FEATURES)[keyof typeof PRO_FEATURES];
 
+/** Public documentation site URLs (`docs/`, deployed at ctrlyoke.dev/docs). */
+export const DOCS_URLS = {
+  ROOT: "https://ctrlyoke.dev/docs",
+  CLI_REFERENCE: "https://ctrlyoke.dev/docs/cli/ctrlyoke",
+} as const;
+
 /** User-facing licensing command actions and destinations. */
 export const LICENSE_UI = {
   OPEN_PRICING: "Open pricing",

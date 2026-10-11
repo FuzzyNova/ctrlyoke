@@ -14,19 +14,23 @@
 > not hand-maintained (§9), and `check:docs` fails on drift (§12). Phases 1 and 2 are done. In
 > Phase 3, `docs/pro/` (both pages), harness pages, the examples page and schema hover
 > descriptions are done. Still open: the README rewrite and README hero GIF (3.1/3.2; see
-> `DOCUMENTATION_GAPS_PLAN.md` §2.2 and `SCREENSHOTS_AND_MEDIA_PLAN.md`), a `Documentation:`
-> docs link at the end of CLI `--help` (§10; no `ctrlyoke.dev/docs` URL in `src/cli*`), and the
-> optional Algolia DocSearch. Phase 3 item 6 (`package.json` `markdownDescription`) is
+> `DOCUMENTATION_GAPS_PLAN.md` §2.2 and `SCREENSHOTS_AND_MEDIA_PLAN.md`). The CLI `--help`
+> `Documentation:` line (§10) landed 2026-10-10: root and subcommand help end with
+> `DOCS_URLS.CLI_REFERENCE` (`DashboardConstants.ts`), which is also the only place code names a
+> docs URL. Algolia DocSearch is deferred to after launch; the built-in local search is enough
+> until the site has traffic, and DocSearch needs a public, indexable site anyway. Phase 3 item 6 (`package.json` `markdownDescription`) is
 > **obsolete**: `package.json` is not a settings surface (see `.github/copilot-instructions.md`).
 > Sections 1–10 are kept as the original research record. Where they name "Gemini", seven
 > harnesses, `docs.yoursite.com`, an MIT license or the `--resume`/`--allow-all-tools` flags, they
 > are stale. The harnesses are the six in `HARNESS_IDS` (Antigravity, not Gemini), the license is
 > the ctrlyoke Commercial License, and the real CLI surface is in `docs/cli/ctrlyoke.md`.
 >
-> **Pre-release:** the docs URL scheme (`ctrlyoke.dev/docs/<section>/<page>`, no `.html`) is
-> effectively locked once the Marketplace README and the extension link to it. A later move to a
-> `docs.` subdomain, or renaming sections, would need Netlify redirects, so don't change it after
-> launch. The README rewrite is the only item here that blocks release (see the gaps plan). Public-facing documentation for the ctrlyoke VS Code extension, companion CLI binaries (`ctrlyoke-mcp`, `ctrlyoke`), and YAML/JSON workflow file format.
+> **URL scheme locked 2026-10-10:** `ctrlyoke.dev/docs/<section>/<page>` (no `.html`). There
+> will be no `docs.` subdomain. Renaming or removing a page needs a Netlify redirect, and a
+> section moved between pages leaves a stub heading with an explicit `{#id}` behind (see
+> `.github/copilot-instructions.md`, "Docs URLs are permanent"). Until launch the docs carry
+> `noindex`, driven by `LAUNCHED` in `landing/src/config.ts`. The README rewrite is the only item
+> here that blocks release (see the gaps plan). Public-facing documentation for the ctrlyoke VS Code extension, companion CLI binaries (`ctrlyoke-mcp`, `ctrlyoke`), and YAML/JSON workflow file format.
 
 ---
 

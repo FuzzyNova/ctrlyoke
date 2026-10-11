@@ -53,8 +53,7 @@ a full refund, and the license is deactivated when the refund is processed.
 
 Lemon Squeezy is the checkout and Merchant of Record. Keygen is the licensing
 backend that issues and validates ctrlyoke license keys and signed license
-files. After checkout, the Netlify purchase webhook creates the Keygen license
-and the key is delivered in a separate email.
+files. After checkout, your license key arrives in a separate email.
 
 ## Activate online
 

@@ -6,7 +6,11 @@ import React, {
   useState,
 } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  DOCS_URLS,
+  KEYBOARD_KEYS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
@@ -1955,12 +1959,12 @@ const WorkflowStepsPanelInner: React.FC<{
               help getting started.
             </p>
             <a
-              href="https://ctrlyoke.dev/docs"
+              href={DOCS_URLS.ROOT}
               target="_blank"
               rel="noreferrer"
               className="text-xxs text-link-fg hover:underline"
             >
-              ctrlyoke.dev/docs
+              {DOCS_URLS.ROOT.replace(/^https:\/\//, "")}
             </a>
           </div>
         ) : (

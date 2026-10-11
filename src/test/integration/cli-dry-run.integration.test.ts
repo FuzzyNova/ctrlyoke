@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
 import { runCli } from "./helpers/cliProcess";
+import { DOCS_URLS } from "../../types/DashboardConstants";
 import { projectKey } from "../../utils/ProjectStatePaths";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WORKING_FILE_NAME } from "../../utils/WorkflowPaths";
@@ -342,6 +343,15 @@ suite("CLI Commander exit codes", () => {
     const result = await runCli(["--help"], root);
     assert.strictEqual(result.code, 0, result.stderr);
     assert.match(result.stdout, /Usage: ctrlyoke/);
+    assert.ok(
+      result.stdout.includes(`Documentation: ${DOCS_URLS.CLI_REFERENCE}`)
+    );
+
+    const subcommand = await runCli(["run", "--help"], root);
+    assert.strictEqual(subcommand.code, 0, subcommand.stderr);
+    assert.ok(
+      subcommand.stdout.includes(`Documentation: ${DOCS_URLS.CLI_REFERENCE}`)
+    );
   });
 });
 

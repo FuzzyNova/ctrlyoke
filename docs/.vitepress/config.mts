@@ -1,4 +1,5 @@
 import { defineConfig } from "vitepress";
+import { LAUNCHED } from "../../landing/src/config.ts";
 
 const base = process.env.DOCS_BASE ?? "/docs/";
 
@@ -11,6 +12,8 @@ export default defineConfig({
   // the generated reference pages; they are not pages of their own.
   srcExclude: ["reference/_partials/**"],
   lastUpdated: true,
+  // Same pre-launch switch as the landing pages, which the docs are merged into.
+  head: LAUNCHED ? [] : [["meta", { name: "robots", content: "noindex" }]],
   themeConfig: {
     logo: "/ctrlyoke-icon.svg",
     nav: [
@@ -56,7 +59,7 @@ export default defineConfig({
       ],
       "/workflows/": [
         {
-          text: "Writing workflows",
+          text: "Formats",
           items: [
             { text: "Overview", link: "/workflows/" },
             {
@@ -69,6 +72,19 @@ export default defineConfig({
               text: "Prompt Markdown format",
               link: "/workflows/prompt-md-format",
             },
+          ],
+        },
+        {
+          text: "Steps",
+          items: [
+            { text: "Script steps", link: "/workflows/script-steps" },
+            { text: "Parallel steps", link: "/workflows/parallel-steps" },
+            { text: "End conditions", link: "/workflows/end-conditions" },
+          ],
+        },
+        {
+          text: "Context and sessions",
+          items: [
             {
               text: "Session management",
               link: "/workflows/session-management",
@@ -76,9 +92,11 @@ export default defineConfig({
             { text: "Context references", link: "/workflows/context-files" },
             { text: "Agents and skills", link: "/workflows/agents-and-skills" },
             { text: "Templates", link: "/workflows/templates" },
-            { text: "End conditions", link: "/workflows/end-conditions" },
-            { text: "Dynamic queue", link: "/workflows/dynamic-queue" },
           ],
+        },
+        {
+          text: "Integrations",
+          items: [{ text: "Dynamic queue", link: "/workflows/dynamic-queue" }],
         },
       ],
       "/reference/": [

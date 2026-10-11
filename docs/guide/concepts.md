@@ -68,7 +68,7 @@ A workflow `steps` array can contain two kinds of step:
 | Prompt step | Sends a prompt to a harness                     |
 | Script step | Runs a shell command without any AI interaction |
 
-Prompt steps default to type `prompt`, so the `type` field is optional unless you want to be explicit.
+See [Script steps](/workflows/script-steps) for how scripts run and pass. Prompt steps default to type `prompt`, so the `type` field is optional unless you want to be explicit.
 
 **Hiding steps in the Output pane.** Use the Output pane's minimap eye controls or a step context menu to hide output from individual steps while keeping their status and progress visible. The header shows how many steps are hidden; use the pill's show-all action, the step controls, or the context menu to restore output. Copy All follows the filter, while Markdown export starts with the visible steps selected and lets you widen the range before exporting.
 
@@ -81,7 +81,7 @@ Members are for independent work and share one workspace, one run timeline,
 and one managed or named worktree per run. There is no per-member isolation or
 automatic merge in v1. Terminal controller arbitration is per workflow, not
 per session. Use the following step after the join to synthesize the members'
-settled output.
+settled output. See [Parallel steps](/workflows/parallel-steps).
 
 ## Final step
 

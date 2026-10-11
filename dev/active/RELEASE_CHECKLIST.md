@@ -998,8 +998,16 @@ later version at no compatibility cost.
     `buildPriorContextXmlFromItems`, independent of the workflow step type. The rest of the plan is
     additive. It also claims a new `$summary:` reference prefix. A literal collision in existing
     prompts is very unlikely, but reserving it in the parser now costs nothing.
-- [ ] **Docs: move content between pages before the URLs are indexed** —
+- [x] **Docs: move content between pages before the URLs are indexed** —
       [`DOCUMENTATION_GAPS_PLAN.md`](../backlog/DOCUMENTATION_GAPS_PLAN.md).
+  - **Done 2026-10-10.** Script steps, comparisons and script resolution moved to
+    `workflows/script-steps.md`, and parallel groups to `workflows/parallel-steps.md`. The old
+    headings stay behind as stubs with explicit IDs (`{#script-steps}`, `{#parallel-steps}`,
+    `{#comparing-output}`, `{#how-scripts-run}`), so every existing anchor still resolves. Future
+    moves follow the same convention (`.github/copilot-instructions.md`, "Docs URLs are
+    permanent"), which removes the launch deadline for the remaining moves. The URL scheme
+    `ctrlyoke.dev/docs/<section>/<page>` is locked. The docs pages were also missing the pre-launch
+    `noindex` the landing pages had; they now share the `LAUNCHED` switch.
   - **Cost if late:** the plan's new pages are new paths, so they're safe any time. But moving
     sections out of `docs/workflows/yaml-format.md` or `end-conditions.md` breaks `#anchor` deep
     links once the README, Marketplace listing, and external posts link to them, and the README is

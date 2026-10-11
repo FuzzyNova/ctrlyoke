@@ -40,6 +40,8 @@ Read the format-specific pages next:
 - [YAML format](/workflows/yaml-format)
 - [JSON format](/workflows/json-format)
 - [Prompt Markdown format](/workflows/prompt-md-format)
+- [Script steps](/workflows/script-steps)
+- [Parallel steps](/workflows/parallel-steps)
 - [Context references](/workflows/context-files)
 - [Agents and skills](/workflows/agents-and-skills)
 - [Templates](/workflows/templates)

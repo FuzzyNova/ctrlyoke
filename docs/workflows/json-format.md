@@ -68,5 +68,5 @@ worktree for the run. They are intended for independent work; v1 has no
 per-member isolation or automatic merge. `queue.maxParallelSteps` bounds the
 group width, while `1` preserves sequential execution. Group members may enable
 the built-in `ctrlyoke` dynamic-queue MCP server. See
-[YAML format](/workflows/yaml-format#parallel-steps) for the full list of group
+[Parallel steps](/workflows/parallel-steps#rules) for the full list of group
 rules.

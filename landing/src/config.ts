@@ -3,7 +3,8 @@
  *
  * While `LAUNCHED` is `false`:
  *  - Install / Buy CTAs render as disabled "Coming soon" controls (see components/Cta.astro)
- *  - a pre-launch banner is shown and the site is set to `noindex` (see layouts/Layout.astro)
+ *  - a pre-launch banner is shown and the site is set to `noindex` (see layouts/Layout.astro;
+ *    the VitePress docs merged in at /docs/ read this too, in docs/.vitepress/config.mts)
  *
  * At launch, flip this to `true` (one change) to restore all CTAs, drop the banner,
  * and allow search indexing.

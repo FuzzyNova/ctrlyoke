@@ -90,49 +90,22 @@ recipe: keep working while the condition passes, and advance once it fails.
 in the `defaults` settings) and are inherited by every prompt step. Set either to
 `null` on a step to switch an inherited condition off.
 
-## Comparing output
+## Comparing output {#comparing-output}
 
 A condition with no `compareSource`/`operator`/`expected` **passes when the script
-exits 0**. That covers most checkpoints — `npm test`, `npm run lint`, `tsc` — and
-is why the examples above carry no comparison fields at all. There is no boolean
-form: `true` and `false` are not accepted as exit-code values, because exit 0
-means "no error", not "true".
-
-To compare output instead, state all three parts. They read as a sentence, and
-the dashboard shows the same sentence under the controls:
+exits 0**. To compare stdout, stderr or the exit code against an expected value
+instead, state all three parts:
 
 ```yaml
 endCondition:
   script: npm test
-  compareSource: stdout # which output: exitCode (default), stdout, stderr
-  operator: contains # how to compare: eq (default), contains, gte, matches, …
-  expected: "0 failing" # what to compare against
+  compareSource: stdout
+  operator: contains
+  expected: "0 failing"
 ```
 
-| Operator                    | Compares                                                                           |
-| --------------------------- | ---------------------------------------------------------------------------------- |
-| `eq` (default) / `ne`       | The **whole** trimmed value, literally. No characters are special.                 |
-| `contains` / `notContains`  | Whether the value contains `expected` as a substring.                              |
-| `gte` / `gt` / `lte` / `lt` | Numbers. **Both sides must parse as a number**, or the condition fails.            |
-| `matches`                   | `expected` as a regular expression, **unanchored** — add `^`/`$` for a full match. |
-| `isEmpty` / `isNotEmpty`    | Whether the value is empty. Takes no `expected`.                                   |
-
-Three things worth knowing:
-
-- **The operator is never inferred.** The comparison you write is the comparison
-  that runs, whatever the script happens to print.
-- **Text comparisons ignore the exit code**, and `exitCode` comparisons ignore the
-  text. If you need both, that is two conditions, not one.
-- **Text is trimmed and case-sensitive.** Add `ignoreCase: true` for a
-  case-insensitive `eq`/`ne`/`contains`/`notContains`.
-- **Script output is sanitized before comparison.** ANSI control sequences are
-  removed and CRLF line endings become LF, consistently for headless and
-  interactive script execution. The sanitized stdout/stderr are also used by
-  `$endCondition:*` and `$preCondition:*` output references.
-
-Operators are word tokens (`gte`, not `>=`). Both `operator: >=` and
-`operator: !=` are YAML parse errors. The dashboard still shows you `>=` and
-`!=`.
+Every operator and comparison rule is described in
+[Script steps and condition scripts: Comparing output](/workflows/script-steps#comparing-output).
 
 ## Pre-condition
 
@@ -152,36 +125,14 @@ preCondition:
 `onFail: continue` makes the pre-condition advisory: the prompt runs anyway, and
 its output is still available through `$preCondition:*` references.
 
-## How scripts run
+## How scripts run {#how-scripts-run}
 
-`script` is either a path to a script file or an inline command.
-
-A path is looked up relative to the execution directory (the worktree, when the
-run uses one), then the workspace root, then `.ctrlyoke/`, then
-`~/.ctrlyoke/scripts/`. A resolved file must stay inside the workspace or
-`~/.ctrlyoke/scripts/`. The interpreter follows the file extension:
-
-| Extension             | Runs with                                    |
-| --------------------- | -------------------------------------------- |
-| `.py`                 | `python3`, falling back to `python`          |
-| `.js`, `.mjs`, `.cjs` | `node`                                       |
-| `.ts`                 | `node` with a local `tsx` or `ts-node`       |
-| `.sh`                 | `sh` (`bash` on Windows)                     |
-| `.ps1`                | PowerShell (`-ExecutionPolicy Bypass -File`) |
-| `.bat`, `.cmd`        | `cmd /c` (Windows only)                      |
-
-Files without one of these extensions run directly when executable, or through
-the interpreter named in their shebang line.
-
-Anything that does not resolve to a file runs as a shell command — pin that
-shell with `shell`, otherwise the `terminal.shellExecutable` setting or the
-platform default is used. Scripts run in the execution directory, and workflow
-variables are exported to them as `CTRLYOKE_VAR_<KEY>` environment variables.
-
-A script that cannot be run at all — for example an unsupported file type or a
-spawn failure — is an internal error, not a failed validation. It is handled by
-the step's `errorBehavior` policy (`stopWorkflow`, `retry`, or `continue`) rather than by
-`onFail`.
+Condition scripts are resolved and run exactly like script steps: a file path is
+looked up in the execution directory, the workspace root, `.ctrlyoke/` and
+`~/.ctrlyoke/scripts/`, and anything else runs as a shell command. Condition
+scripts always run headless. A script that cannot be run at all is an internal
+error handled by `errorBehavior`, not a failed validation. See
+[Script steps and condition scripts: How scripts run](/workflows/script-steps#how-scripts-run).
 
 ## Condition output references
 

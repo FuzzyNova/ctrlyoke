@@ -61,7 +61,7 @@ import {
   installTwoStageShutdown,
 } from "./cli/SignalShutdown";
 import { inheritedTerminalOwnership } from "./utils/InheritedTerminalOwnership";
-import { PROCESS_SIGNALS } from "./types/DashboardConstants";
+import { DOCS_URLS, PROCESS_SIGNALS } from "./types/DashboardConstants";
 import { CliAttemptTally } from "./cli/CliAttemptTally";
 import {
   CliTerminalFormatter,
@@ -271,7 +271,8 @@ program
   .description(
     "Execute AI-powered workflow automation from the command line. `run` works with env passthrough even when no credential backend is available."
   )
-  .version(version);
+  .version(version)
+  .addHelpText("afterAll", `\nDocumentation: ${DOCS_URLS.CLI_REFERENCE}`);
 
 // Tell the user once when a newer VS Code extension shares this machine's
 // state (dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.4 rule 2).
