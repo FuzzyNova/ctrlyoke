@@ -125,6 +125,10 @@ describe("syntax palette", () => {
         color: inherit;
       }
 
+      .diff .token.table {
+        display: inline;
+      }
+
       .cy-syntax .token.keyword,
       .cy-syntax .token.atrule,
       .cy-syntax .token.important,
