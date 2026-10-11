@@ -1,6 +1,6 @@
 # Template Variable Defaults Plan
 
-**Status:** Proposed (not started)
+**Status:** Ready to implement (not started)
 
 ## Goal
 
@@ -22,7 +22,12 @@ This is the first piece of a broader "make templates easier to edit" theme. Stru
 pre-selects, set by the modal's **Set as Default** link (`TemplateModal.handleSetDefault` →
 `SET_DEFAULT_TEMPLATE`). This plan is about **variable defaults**: the pre-filled value of one
 input of one template. Code, settings, and UI copy must say "variable default" / "saved value",
-never "template default", to keep the two apart.
+never "template default", to keep the two apart. The two features do share one control, the
+modal's scope toggle (see "Set as Default uses the same toggle").
+
+Scopes are named **User** and **Workspace** everywhere in UI copy and in this plan, exactly as
+the Settings drawer names them (`GlobalSettingsDrawer.tsx`). Never "all workspaces", "global",
+or "this project".
 
 ## Decision: overlay, not copy
 
@@ -100,11 +105,11 @@ effective = workspace override ?? user override ?? authored _templateMeta defaul
 
 `TemplateVariable` (and its mirror in `uiStore.ts`, which must stay identical) gains:
 
-| Field             | Meaning                                                                   |
-| ----------------- | ------------------------------------------------------------------------- |
-| `default`         | Now the **effective** default. Existing consumers keep working unchanged. |
-| `authoredDefault` | The template's own `_templateMeta` default, if any (for "Reset").         |
-| `defaultSource`   | `TEMPLATE_VARIABLE_DEFAULT_SOURCES.{TEMPLATE,USER,WORKSPACE}`             |
+| Field             | Meaning                                                                                |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `default`         | Now the **effective** default. Existing consumers keep working unchanged.              |
+| `authoredDefault` | The template's own `_templateMeta` default, if any (the clear baseline at User scope). |
+| `defaultSource`   | `TEMPLATE_VARIABLE_DEFAULT_SOURCES.{TEMPLATE,USER,WORKSPACE}`                          |
 
 `defaultSource` values go in `DashboardConstants.ts` (flow-control strings rule).
 
@@ -143,10 +148,11 @@ cleared as one unit, never one variable at a time:
   at the toggle's scope, in one write. Saving a harness alone would leave the model on the
   template's authored default, which usually belongs to a different harness. Saving a model alone
   would break as soon as the harness changed.
-- **The authored-default rule applies to the whole pair.** The pin clears the pair's overrides
-  only when the harness and every linked model all equal their authored defaults. If any of them
-  differs, it stores all of them, so a later change to the built-in's default harness can't
-  leave a saved model paired with a harness it was never chosen for.
+- **The clear-instead-of-store rule applies to the whole pair.** The pin clears the pair's
+  overrides at the toggle's scope only when the harness and every linked model all equal what
+  the pair resolves to without that scope (see "Saving a value that's already inherited"). If
+  any of them differs, it stores all of them, so a later change to the built-in's default
+  harness can't leave a saved model paired with a harness it was never chosen for.
 - **Resolution.** A linked model takes its value from the same scope as its harness, not from
   its own per-variable precedence. If the workspace saves `hunterHarness`, `hunterModel` comes
   from the workspace too, or from the authored default if the workspace entry has no model. It
@@ -158,9 +164,9 @@ cleared as one unit, never one variable at a time:
   names against a list in the extension: model lists are discovered per harness in the
   dashboard and may still be loading or offline. The modal's existing model warning
   (`modelWarning`) already flags a saved model the harness doesn't offer.
-- **Reset** on either control clears the whole pair at the scope it came from.
+- **Clear saved value** on either control clears the whole pair at the scope it came from.
 - **One marker per pair.** The pair shares a row in the modal, so it gets one "Saved (…)"
-  marker and one pin/reset action rather than one per control.
+  marker and one pin/clear action rather than one per control.
 - **Re-seeding must not trigger the harness-change reset.** `TemplateModal.handleVariableChange`
   clears a pair's models when its harness changes, so the effect can pick the new harness's
   default model. When a save re-sends the template list and the modal re-seeds the changed
@@ -171,9 +177,16 @@ cleared as one unit, never one variable at a time:
 
 ### UX
 
-The modal header gets a **User / Workspace** scope toggle, the same `ScopeToggle` component and
-labels the Settings drawer uses (`GlobalSettingsDrawer.tsx`). It decides where a pin saves, so
-saving is one click with no follow-up menu, and the current target is always visible.
+The modal's title bar gets a **User / Workspace** scope toggle, the same `ScopeToggle` control
+the Settings drawer puts in its title bar. It decides where both a pin and **Set as Default**
+save, so saving is one click with no follow-up menu, and the current target is always visible.
+
+- **Single-source the options.** The drawer builds its User/Workspace options inline. Move them
+  to a shared `SETTING_SCOPE_OPTIONS` beside `ScopeToggle` and use it in both places. Do **not**
+  reuse `TEMPLATE_SCOPE_OPTIONS` (`templateScope.ts`): its tooltips describe template file
+  locations (`.ctrlyoke/templates`), which is what the **New template…** form's **Location**
+  toggle means, not where a setting is written. The title-bar toggle's `ariaLabel` should be
+  "Save defaults to" so it isn't confused with that **Location** toggle further down the modal.
 
 - **Toggle starting value:** **Workspace** until the user has saved a value at least once;
   after that, whichever scope they saved to last. The last-saved scope is a persisted `uiStore`
@@ -184,14 +197,52 @@ saving is one click with no follow-up menu, and the current target is always vis
   and **Workspace** is disabled.
 - **Save as default** (pin icon) on each variable input, shown when the field's current value
   differs from its effective default. Saves the value at the toggle's scope.
-- **Saving the authored default clears instead.** If the value being saved equals the
-  template's own `_templateMeta` default, the handler removes the override at that scope rather
-  than storing a copy, so a later change to the built-in's default still reaches the user.
+- **Saving a value that's already inherited clears instead** (see the next section).
 - When a field's effective default comes from an override, its label shows a subtle
-  "Saved (workspace)" / "Saved (user)" marker naming where the value actually comes from. That
-  may differ from the toggle. The action then becomes **Reset to template default**, which
-  clears the override at the scope it came from. If a user override is still underneath a
-  cleared workspace one, the field falls back to it and the marker updates.
+  "Saved (Workspace)" / "Saved (User)" marker naming where the value actually comes from. That
+  may differ from the toggle. The action then becomes **Clear saved value** (tooltip names the
+  scope), which clears the override at the scope it came from. It is deliberately not called
+  "Reset to template default": if a User override is still underneath a cleared Workspace one,
+  the field falls back to the User value, not the template's, and the marker updates.
+
+### Saving a value that's already inherited
+
+When a pin's value equals what the field would resolve to **without the toggle's scope**, the
+handler removes the override at that scope instead of storing a duplicate:
+
+- Saving at **User**: compare against the template's authored default.
+- Saving at **Workspace**: compare against the User override if there is one, else the
+  authored default.
+
+Comparing against the authored default alone would be wrong. With `hunterHarness` saved as
+`codex-cli` at User, pinning `claude-cli` (the authored default) at Workspace must store it.
+Clearing would leave the field resolving to the User value, `codex-cli`, the opposite of what
+the user just picked.
+
+The cost: a value that matched the layer below at save time follows that layer if it changes
+later. That is accepted. It's the same reason the rule exists at all: a later change to the
+built-in's default still reaches a user who never actually chose something different.
+
+### Set as Default uses the same toggle
+
+**Set as Default** (`handleSetDefault`) currently writes `general.defaultTemplate` at User scope
+unconditionally (`ConfigurationUtils.setDefaultWorkflowTemplate`). It now writes at the
+toggle's scope, with the same behaviour as a variable pin:
+
+- **Same scope rules.** It writes to the toggle's scope, and a successful write updates the
+  persisted last-saved scope. A pin and **Set as Default** share that one preference.
+- **Same clear rule.** If the selected template equals what `general.defaultTemplate` resolves
+  to without the toggle's scope (the User value, or the schema default `blank`), clear the
+  setting at that scope instead of storing it.
+- **Source marker.** The "Default template" label becomes "Default template (Workspace)" /
+  "Default template (User)" when the value comes from a saved setting, and stays plain when it
+  is the schema default. Visibility is unchanged: **Set as Default** shows when the selected
+  template is not the effective default.
+- **Reading is unchanged.** `getDefaultWorkflowTemplate` reads the merged value, so a Workspace
+  setting already beats User. `general.defaultTemplate` is a scalar, so the generic merge is
+  correct here and needs no per-scope helper.
+- **Where it lives.** `general.defaultTemplate` stays where it is. Moving it under `templates`
+  would churn the General settings section and catalogue for no behavioural gain.
 
 Why explicit, per field, instead of auto-remembering the last values used:
 
@@ -214,23 +265,33 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
   template list through the same `toWireTemplates` path `handleNewWorkflow` uses, so the modal
   re-renders with the new `defaultSource` and doesn't need an optimistic copy of the resolution
   logic. Changing a saved value must **not** reset the other fields the user has already typed:
-  re-seed only the variable that changed.
+  re-seed only the variables in the saved message.
+- The clear-instead-of-store comparison runs in the **extension** handler, against the resolver,
+  not in the webview. The webview just sends what the user pinned.
 - `toWireTemplates` passes `variables` through untouched, so the new fields need no wire change
   beyond the shared types.
+- `SET_DEFAULT_TEMPLATE` gains `scope: SettingWriteScope`. `OPEN_NEW_WORKFLOW_MODAL` and
+  `DEFAULT_TEMPLATE_SET` gain `defaultTemplateSource` (the same
+  `TEMPLATE_VARIABLE_DEFAULT_SOURCES` values, where `TEMPLATE` means the schema default). The
+  handler computes it with `getScoped("general", scope)`. The modal's current optimistic update
+  sets the id only. It should wait for `DEFAULT_TEMPLATE_SET` before showing the source, since a
+  clear can land on a different effective template than the one selected.
 
 ### Touchpoints
 
-| File                                                             | Change                                                                             |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `schemas/settings-schema.json`, `src/types/CtrlYokeSettings.ts`  | `templates.variableDefaults` (record of record of string), default `{}`            |
-| `src/core/TemplateManager.ts`                                    | `TemplateVariable` fields; per-variable resolver; apply in `getAvailableTemplates` |
-| `src/types/DashboardConstants.ts`                                | `TEMPLATE_VARIABLE_DEFAULT_SOURCES`, new message type                              |
-| `src/types/WebviewMessageTypes.ts`                               | Message payload                                                                    |
-| `src/ui/WebviewMessageRouter.ts`, `src/ui/WorkflowSerializer.ts` | Route + handler beside `handleSetDefaultTemplate`                                  |
-| `src/ui/webview-react/store/uiStore.ts`                          | Mirror `TemplateVariable` fields; persisted last-saved scope                       |
-| `src/ui/webview-react/components/workflow/TemplateModal.tsx`     | `ScopeToggle` in header, pin / reset action, saved marker                          |
-| `docs/workflows/templates.md`                                    | "Defaults and blank fields": saved values and precedence                           |
-| `docs/reference/settings.md`                                     | Regenerated by `npm run schema:update`, never hand-edited                          |
+| File                                                             | Change                                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `schemas/settings-schema.json`, `src/types/CtrlYokeSettings.ts`  | `templates.variableDefaults` (record of record of string), default `{}`               |
+| `src/core/TemplateManager.ts`                                    | `TemplateVariable` fields; per-variable resolver; apply in `getAvailableTemplates`    |
+| `src/types/DashboardConstants.ts`                                | `TEMPLATE_VARIABLE_DEFAULT_SOURCES`, new message type                                 |
+| `src/types/WebviewMessageTypes.ts`                               | Message payload                                                                       |
+| `src/ui/WebviewMessageRouter.ts`, `src/ui/WorkflowSerializer.ts` | New route + handler; `handleSetDefaultTemplate` takes a scope and returns the source  |
+| `src/utils/ConfigurationUtils.ts`                                | `setDefaultWorkflowTemplate(templateId, scope)`, plus clearing; source lookup         |
+| `src/ui/webview-react/store/uiStore.ts`                          | Mirror `TemplateVariable` fields; persisted last-saved scope; default-template source |
+| `src/ui/webview-react/components/shared/` (beside `ScopeToggle`) | Shared `SETTING_SCOPE_OPTIONS`; `GlobalSettingsDrawer.tsx` switches to it             |
+| `src/ui/webview-react/components/workflow/TemplateModal.tsx`     | Title-bar `ScopeToggle`, pin / clear action, saved markers, scoped Set as Default     |
+| `docs/workflows/templates.md`                                    | "Defaults and blank fields": saved values and precedence                              |
+| `docs/reference/settings.md`                                     | Regenerated by `npm run schema:update`, never hand-edited                             |
 
 `TemplateManager` currently takes only a `workspaceRootResolver`. Inject a narrow
 "read variable defaults per scope" accessor rather than reaching for `ConfigurationUtils`
@@ -245,16 +306,21 @@ directly, so the unit tests can supply overrides without a config backend.
   on a `custom:` id. Pairs: a workspace harness with no workspace model resolves the model to
   its authored default, not the user's model; dropping an invalid harness override also drops
   its linked models' overrides.
-- Config: writing then clearing the last variable removes the template key.
+- Serializer handler (`src/test/unit/WorkflowSerializer.test.ts`): saving
+  the authored default at User clears; saving the authored default at Workspace **stores** it
+  when a different User value exists; writing then clearing the last variable removes the
+  template key; `handleSetDefaultTemplate` writes at the given scope, clears when the template
+  equals the inherited value, and reports the right source.
 - `src/ui/webview-react/test/components/workflow/TemplateModal.test.tsx` (new, or shared with
   the required-variables plan, whichever lands first): pin shown only when value differs; pin
   saves to the toggle's scope; toggle starts on Workspace, then on the last-saved scope after a
   save, and flipping it without saving doesn't change that; Workspace disabled with no
-  workspace; saving the authored default sends a clear; saved marker and reset; reset falls
-  back to the user value underneath a workspace value; re-sent template list does not wipe
-  other typed fields. Pairs: pinning a harness sends its linked models in the same message;
+  workspace; saved marker and clear; clearing falls back to the User value underneath a
+  Workspace value; re-sent template list does not wipe other typed fields. Set as Default
+  sends the toggle's scope, updates the last-saved scope, and shows "Default template
+  (Workspace)" / "(User)" from the reply. Pairs: pinning a harness sends its linked models in the same message;
   saving a harness that equals its authored default with a changed model stores both; one marker
-  and one reset per pair; re-seeding after a save keeps the saved model rather than resetting it
+  and one clear action per pair; re-seeding after a save keeps the saved model rather than resetting it
   to the harness default. These belong in `TemplateModelVariables.test.tsx` if the new modal test
   file doesn't exist yet.
 
@@ -262,12 +328,11 @@ directly, so the unit tests can supply overrides without a config backend.
 
 Without a list, the only way to find a stale override is to open each template. Add a
 **Templates** group to the Settings view (`GeneralSection.tsx` neighbourhood, catalogued in
-`settingsCatalog.ts`), with one row per template that has saved values. Each row shows its
-variables, values, and scope, with a clear button per value and per template. Show templates
-that no longer exist as "(template not found)" so they can be removed.
-
-Consider moving `general.defaultTemplate` to `templates.defaultTemplate` at the same time so
-both template preferences live in one place. Pre-release, so no migration is needed.
+`settingsCatalog.ts`), with one row per template that has saved values. Like every other drawer
+section, it shows and edits the drawer's active scope (User or Workspace), not a merged view.
+Each row shows its variables and values, with a clear button per value and per template. Show
+templates that no longer exist as "(template not found)" so they can be removed. Clearing a
+harness or model clears its whole pair, as in the modal.
 
 ## Phase 3 — carry saved values into a copied template
 
@@ -292,9 +357,12 @@ overlay on the source; the user may still use the built-in.
 ## Decisions
 
 - **Overlay, not copy.** See above.
-- **Scope is chosen with a modal-level toggle, not a per-pin menu.** It defaults to Workspace
-  on first save, then to the last-saved scope, for every variable type.
-- **Saving a value equal to the authored default clears the override.** Nothing is stored.
+- **Scope is chosen with a modal-level User/Workspace toggle, not a per-pin menu.** It starts on
+  Workspace until the first save, then on the last-saved scope, for every variable type. The
+  same toggle and preference drive **Set as Default**.
+- **Saving a value that's already inherited clears the override at that scope.** The comparison
+  is against the layer below the target scope, not just the authored default.
+- **`general.defaultTemplate` stays under `general`.** It becomes writable at either scope.
 - **A harness and its linked models are one unit.** They are saved, resolved from one scope,
   and cleared together. See "Harness and model pairs".
 
@@ -308,4 +376,6 @@ Manual: open **New Workflow** → Bug Hunt Loop. Confirm the toggle starts on Wo
 non-default Codex model, and pin the pair. Close and reopen the modal: the toggle should now
 start on User, both fields and the pair should be pre-filled with the right markers, and the
 model should still be the one you picked, not Codex's default. Open a different workspace and
-confirm only the harness and model carry over.
+confirm only the harness and model carry over. Back in the first workspace, switch the toggle to
+Workspace and click **Set as Default** on Bug Hunt Loop. The footer should read "Default
+template (Workspace)", and the other workspace should still open on its own default.
