@@ -116,8 +116,13 @@ effective = workspace override ?? user override ?? authored _templateMeta defaul
 
 `defaultSource` values go in `DashboardConstants.ts` (flow-control strings rule).
 
-Apply the overlay after `mergeVariablesWithMeta` in `getAvailableTemplates`. Because `default`
-is already effective by then:
+Apply the overlay right after `mergeVariablesWithMeta` at **every** call site. There are three:
+the built-in loop in `getAvailableTemplates`, `discoverTemplatesInDir` (custom templates), and
+`createWorkflow`, which re-parses the template content and calls `mergeVariablesWithMeta` itself
+rather than going through `getAvailableTemplates`. Fold "merge with meta, then apply the overlay
+for this template id" into one private helper that all three use, so `createWorkflow` cannot
+silently skip the overlay. (`discoverTemplatesInDir` passes the bare file name as the log label;
+the overlay needs the full `custom:<scope>:<name>` id.) Because `default` is then effective:
 
 - `TemplateModal.seedVariableDefaults` pre-fills the saved value with no change.
 - `createWorkflow`'s `withDefaults` loop substitutes the saved value when a caller omits the
@@ -310,15 +315,17 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
 
 `TemplateManager` currently takes only a `workspaceRootResolver`. Inject a narrow
 "read variable defaults per scope" accessor rather than reaching for `ConfigurationUtils`
-directly, so the unit tests can supply overrides without a config backend.
+directly, so the unit tests can supply overrides without a config backend. It is constructed in
+two places, `src/extension.ts` and `src/platform/NodeHostServices.ts` (hosted server); wire the
+accessor in both.
 
 ### Tests
 
 - `src/test/unit/TemplateManager.test.ts`: user override replaces the authored default; workspace
   beats user per variable while other user values still apply; `authoredDefault`/`defaultSource`
   are set correctly; stale variable, invalid harness, and out-of-options select overrides are
-  dropped; `createWorkflow` substitutes an override when the caller omits the variable; overlay
-  on a `custom:` id. Pairs: a workspace harness with no workspace model resolves the model to
+  dropped; `createWorkflow` substitutes an override when the caller omits the variable (it has
+  its own merge path, so this needs a direct test); overlay on a `custom:` id. Pairs: a workspace harness with no workspace model resolves the model to
   its authored default, not the user's model; dropping an invalid harness override also drops
   its linked models' overrides.
 - Serializer handler (`src/test/unit/WorkflowSerializer.test.ts`): saving
