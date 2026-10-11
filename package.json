@@ -83,6 +83,16 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.enableServer",
+        "title": "Start Hosted Dashboard Server",
+        "category": "ctrlyoke"
+      },
+      {
+        "command": "ctrlyoke.disableServer",
+        "title": "Stop Hosted Dashboard Server",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.manageWorktrees",
         "title": "Manage Worktrees",
         "category": "ctrlyoke",

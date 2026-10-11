@@ -106,6 +106,15 @@ These menu items insert a reference into the dashboard's prompt editor. They are
 | `ctrlyoke: Refresh Harness Usage`                       | Refresh harness usage and quota information                                             |
 | `ctrlyoke: Refresh Workspace Statistics`                | Recompute the workspace statistics shown in the dashboard                               |
 
+## Hosted dashboard server
+
+| Command                                   | What it does                                                                                                                             |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `ctrlyoke: Start Hosted Dashboard Server` | Start the browser dashboard server, the same as the toggle in the dashboard's Server settings. The URL and access token are shown there. |
+| `ctrlyoke: Stop Hosted Dashboard Server`  | Stop the server and disconnect every browser                                                                                             |
+
+Regenerating the access token is available only from the Server settings tab.
+
 ## License
 
 | Command                                           | What it does                                          |
