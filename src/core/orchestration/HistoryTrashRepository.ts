@@ -627,6 +627,13 @@ export class HistoryTrashRepository {
       );
       try {
         const stats = await fs.promises.stat(pendingDir);
+        if (await this.readEntry(parsed.entryId)) {
+          // The copy-based publisher writes this marker after copying every
+          // payload file, so the pending copy is a leftover even while its
+          // owner lives (a watcher handle can make its own cleanup fail).
+          await fs.promises.rm(pendingDir, { recursive: true, force: true });
+          continue;
+        }
         const ownerPath = path.join(pendingDir, OWNER_FILE_NAME);
         if (await pathExists(ownerPath)) {
           let owner: { pid?: unknown; host?: unknown };
@@ -651,12 +658,6 @@ export class HistoryTrashRepository {
           parsed.entryId
         );
         if (await pathExists(publishedDir)) {
-          if (await this.readEntry(parsed.entryId)) {
-            // The copy-based publisher writes this marker after copying every
-            // payload file. A crash before pending cleanup leaves both copies.
-            await fs.promises.rm(pendingDir, { recursive: true, force: true });
-            continue;
-          }
           // An interrupted payload copy has no marker and was never visible.
           // Reached only after proving the pending publisher is gone.
           await fs.promises.rm(publishedDir, { recursive: true, force: true });
@@ -787,6 +788,14 @@ export class HistoryTrashRepository {
       );
       if (item.wholeLineage && !(await pathExists(lineageDir))) {
         await movePath(source, lineageDir);
+        // Deleting a lineage's last run cleared its `latestRunRef` before the
+        // lineage was trashed; recompute it so a draftless lineage is listable.
+        await this.lineageRepository.restoreRuns(
+          this.stateRoot,
+          item.workflowKey,
+          item.workflowName,
+          async () => []
+        );
         result.restoredLineages += 1;
         result.restoredRuns += item.runRefs.length;
         result.restoredWorkflowKeys.push(item.workflowKey);

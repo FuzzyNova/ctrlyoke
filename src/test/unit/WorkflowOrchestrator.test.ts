@@ -138,9 +138,18 @@ suite("WorkflowOrchestrator running workflow count", () => {
     const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     internal.instances = new Map([
-      ["running", { getSummary: () => ({ executionState: EXECUTION_STATES.RUNNING }) }],
-      ["pausing", { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSING }) }],
-      ["paused", { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSED }) }],
+      [
+        "running",
+        { getSummary: () => ({ executionState: EXECUTION_STATES.RUNNING }) },
+      ],
+      [
+        "pausing",
+        { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSING }) },
+      ],
+      [
+        "paused",
+        { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSED }) },
+      ],
     ]);
 
     // External watched runs are exposed in getWorkflowSummaries(), not this
@@ -1920,14 +1929,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         orchestrator.getViewAddress("browser:delete"),
         fallback
       );
-      assert.deepStrictEqual(
-        orchestrator.getViewAddress("browser:older"),
-        {
-          workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: older.runRef,
-        }
-      );
+      assert.deepStrictEqual(orchestrator.getViewAddress("browser:older"), {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: older.runRef,
+      });
       assert.deepStrictEqual(
         refreshed.map(({ clientId }) => clientId).sort(),
         [PANEL_CLIENT_ID, "browser:delete", "browser:older"].sort()
@@ -2264,7 +2270,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       ]);
       const viewerMessages: unknown[] = [];
       internal.viewMessageSinks = new Map([
-        ["browser:delete-last", (message: unknown) => viewerMessages.push(message)],
+        [
+          "browser:delete-last",
+          (message: unknown) => viewerMessages.push(message),
+        ],
       ]);
 
       const sent: Array<{ type?: string; entryId?: string }> = [];
@@ -2300,7 +2309,13 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       assert.deepStrictEqual(await history.getRunsForWorkflow(workflowKey), [
         run.runRef,
       ]);
-      await fs.access(WorkflowPaths.descriptorPath(workspace, workflowKey));
+      const descriptor = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.descriptorPath(workspace, workflowKey),
+          "utf8"
+        )
+      ) as { latestRunRef?: string };
+      assert.strictEqual(descriptor.latestRunRef, run.runRef);
     } finally {
       await history?.flushPendingIndexRefresh();
       await fs.rm(workspace, { recursive: true, force: true });
@@ -2364,11 +2379,14 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       internal.externalRunWatchCoordinator =
         createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
-        [PANEL_CLIENT_ID, {
-          workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: run.runRef,
-        }],
+        [
+          PANEL_CLIENT_ID,
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: run.runRef,
+          },
+        ],
       ]);
       const refreshed: unknown[] = [];
       internal.loadRunViewForClient = async (address: unknown) => {
