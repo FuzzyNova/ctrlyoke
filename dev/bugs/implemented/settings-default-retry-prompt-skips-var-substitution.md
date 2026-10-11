@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (review of ~b24cb32ab)
 - **Area:** `src/core/WorkflowExecutor.ts` (`createSendRetryPromptCallback`, `resolveRetryPromptFile`), `src/core/EndConditionHandler.ts`, `src/core/ExecutionPreviewService.ts` (`buildConditions`), `src/core/RetryBudget.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

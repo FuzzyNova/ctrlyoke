@@ -37,12 +37,16 @@ export function LocalNumberInput({
   allowEmpty = false,
   ...props
 }: LocalNumberInputProps) {
+  const normalize = (raw: string) => {
+    if (parse) return parse(raw);
+    if (allowEmpty && raw.trim() === "") return undefined;
+    return Number(raw);
+  };
   const local = useLocalInput(
     allowEmpty ? String(value ?? "") : String(value),
-    (v) =>
-      onCommit(
-        parse ? parse(v) : allowEmpty && v.trim() === "" ? undefined : Number(v)
-      )
+    (raw) => onCommit(normalize(raw)),
+    undefined,
+    (raw) => String(normalize(raw) ?? (allowEmpty ? "" : undefined))
   );
   return <input type="number" {...props} {...local} />;
 }

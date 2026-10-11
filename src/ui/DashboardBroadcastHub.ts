@@ -340,6 +340,17 @@ export class DashboardBroadcastHub
     }
   }
 
+  updateFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    for (const client of this.clients) {
+      client.updateFinalStepContextWindow?.(loopIndex, used, size, workflowId);
+    }
+  }
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

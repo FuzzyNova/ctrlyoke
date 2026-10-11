@@ -2447,6 +2447,32 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("reorderPendingPrompts", () => {
+    test("rejects dragging a sibling reference into a parallel group", async () => {
+      for (const reference of [
+        { resumeSession: true, sessionId: 2 },
+        { priorContext: [2] },
+      ]) {
+        queue.loadPrompts(
+          createPromptFile([
+            { prompt: "first" },
+            { prompt: "group sibling" },
+            { prompt: "dragged", ...reference },
+          ])
+        );
+        const originalSteps = queue.getState().steps;
+
+        await assert.rejects(
+          queue.reorderPendingPrompts(
+            [0, 1, 2],
+            [{ start: 1, end: 2, failFast: false }]
+          ),
+          /cannot target a sibling in parallel group/i
+        );
+        assert.deepStrictEqual(queue.getState().steps, originalSteps);
+        assert.deepStrictEqual(queue.getState().parallelGroups, []);
+      }
+    });
+
     test("renumbers numeric step references when a referenced step is reordered", async () => {
       queue.loadPrompts(
         createPromptFile([

@@ -118,7 +118,10 @@ import {
   registerMemoryContext,
 } from "../utils/MemoryDiagnostics";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
-import { isLoopbackBindAddress } from "../utils/NetworkUtils";
+import {
+  isLoopbackBindAddress,
+  isLoopbackClientAddress,
+} from "../utils/NetworkUtils";
 import type { HarnessAvailabilityReport } from "../types/WebviewMessageTypes";
 import { LanguageIntelligenceHost } from "./lsp/LanguageIntelligenceHost";
 import { EmptyLanguageServerBackend } from "./lsp/LanguageServerBackend";
@@ -244,7 +247,8 @@ export interface HostedServerOptions {
   namedWorkspaceRoots: ResolverWorkspaceFolder[];
   token: string;
   remoteAccess: {
-    isAllowed: () => Promise<boolean>;
+    canUse: () => Promise<boolean>;
+    begin: () => Promise<boolean>;
     onBlocked: () => void;
   };
   runnerHostIdentity?: RunnerHostIdentity;
@@ -314,7 +318,8 @@ export class CtrlYokeHostedServer
     { watcher: FileWatcher; clients: Set<string> }
   >();
   private readonly watchedFilesByClient = new Map<string, string>();
-  private readonly getRemoteAccess: (() => Promise<boolean>) | undefined;
+  private readonly canUseRemoteAccess: (() => Promise<boolean>) | undefined;
+  private readonly beginRemoteAccess: (() => Promise<boolean>) | undefined;
   private readonly onRemoteAccessBlocked: (() => void) | undefined;
   private remoteAccessUpsellShown = false;
   private readonly hub: DashboardBroadcastHub;
@@ -377,11 +382,12 @@ export class CtrlYokeHostedServer
         namedWorkspaceRoots,
         isWorkspaceTrusted: () => true,
       });
-    this.getRemoteAccess = remoteAccess.isAllowed;
+    this.canUseRemoteAccess = remoteAccess.canUse;
+    this.beginRemoteAccess = remoteAccess.begin;
     this.onRemoteAccessBlocked = remoteAccess.onBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.webPushService = new WebPushService(undefined, {
-      hasRemoteAccess: () => this.resolveRemoteAccess(),
+      canUseRemoteAccess: () => this.resolveRemoteAccess(),
       onAccessBlocked: () => this.notifyRemoteAccessBlocked(),
     });
     this.viewerService = new HostedWorkspaceViewerService(
@@ -413,31 +419,48 @@ export class CtrlYokeHostedServer
       maxPayload: 1024 * 1024,
     });
     this.httpServer.on("upgrade", (req, socket, head) => {
-      const url = new URL(req.url ?? "", "http://localhost");
-      if (url.pathname !== "/ws" && url.pathname !== "/ws/lsp") {
-        socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-      if (!timingSafeStringEqual(url.searchParams.get("token"), this.token)) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-      if (url.pathname === "/ws/lsp") {
-        const serverId = url.searchParams.get("server");
-        if (!serverId) {
-          socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+      const handleUpgrade = async (): Promise<void> => {
+        const url = new URL(req.url ?? "", "http://localhost");
+        if (url.pathname !== "/ws" && url.pathname !== "/ws/lsp") {
+          socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
           socket.destroy();
           return;
         }
-        this.lspWss.handleUpgrade(req, socket, head, (ws) => {
-          this.lspWss.emit("connection", ws, req, serverId);
+        if (!timingSafeStringEqual(url.searchParams.get("token"), this.token)) {
+          socket.write(
+            "HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n"
+          );
+          socket.destroy();
+          return;
+        }
+        if (!(await this.isClientAllowed(req.socket.remoteAddress))) {
+          socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+        if (url.pathname === "/ws/lsp") {
+          const serverId = url.searchParams.get("server");
+          if (!serverId) {
+            socket.write(
+              "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"
+            );
+            socket.destroy();
+            return;
+          }
+          this.lspWss.handleUpgrade(req, socket, head, (ws) => {
+            this.lspWss.emit("connection", ws, req, serverId);
+          });
+          return;
+        }
+        this.wss.handleUpgrade(req, socket, head, (ws) => {
+          this.wss.emit("connection", ws, req);
         });
-        return;
-      }
-      this.wss.handleUpgrade(req, socket, head, (ws) => {
-        this.wss.emit("connection", ws, req);
+      };
+      void handleUpgrade().catch((error: unknown) => {
+        Log.warn(
+          `[CtrlYokeHostedServer] WebSocket admission failed: ${String(error)}`
+        );
+        socket.destroy();
       });
     });
     // ws server errors are handled to prevent unhandled error crashes.
@@ -934,6 +957,14 @@ export class CtrlYokeHostedServer
     workflowId?: string
   ): void {
     this.sink.updateContextWindow(stepIndex, used, size, workflowId);
+  }
+  updateFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    this.sink.updateFinalStepContextWindow(loopIndex, used, size, workflowId);
   }
   updateStatusMessage(
     stepIndex: number,
@@ -3037,9 +3068,23 @@ export class CtrlYokeHostedServer
     // wired, consistent with LicenseService's fail-open-to-free contract
     // (PRO_LICENSE_PLAN.md §1.4/§1.8) — a caller that omits the callback
     // must never be granted remote reach or push access by default.
-    if (!this.getRemoteAccess) return false;
+    if (!this.canUseRemoteAccess) return false;
     try {
-      return await this.getRemoteAccess();
+      return await this.canUseRemoteAccess();
+    } catch {
+      return false;
+    }
+  }
+
+  protected async isClientAllowed(
+    remoteAddress: string | undefined
+  ): Promise<boolean> {
+    if (isLoopbackClientAddress(remoteAddress)) return true;
+    if (!this.beginRemoteAccess) return false;
+    try {
+      const allowed = await this.beginRemoteAccess();
+      if (!allowed) this.notifyRemoteAccessBlocked();
+      return allowed;
     } catch {
       return false;
     }

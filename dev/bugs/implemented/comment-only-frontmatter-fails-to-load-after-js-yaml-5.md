@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with the built CLI and `out/core/PromptFileParser.js`)
 - **Area:** `src/core/PromptFileParser.ts` (`parseMarkdownPromptFile`, `validateWorkflowText`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -79,7 +79,7 @@ export interface PushSubscriptionListResult {
 }
 
 export interface WebPushServiceOptions {
-  hasRemoteAccess?: () => Promise<boolean>;
+  canUseRemoteAccess?: () => Promise<boolean>;
   onAccessBlocked?: () => void;
 }
 
@@ -88,14 +88,14 @@ export class WebPushService {
   private readonly vapidKeysPath: string;
   private readonly subscriptionsPath: string;
   private operationQueue: Promise<unknown> = Promise.resolve();
-  private readonly hasRemoteAccess: () => Promise<boolean>;
+  private readonly canUseRemoteAccess: () => Promise<boolean>;
   private readonly onAccessBlocked: (() => void) | undefined;
 
   constructor(
     private readonly vapidSubject: string = "mailto:ctrlyoke@example.com", //TODO: update this with a valid support email when we get one
     options: WebPushServiceOptions = {}
   ) {
-    this.hasRemoteAccess = options.hasRemoteAccess ?? (async () => true);
+    this.canUseRemoteAccess = options.canUseRemoteAccess ?? (async () => true);
     this.onAccessBlocked = options.onAccessBlocked;
     this.notificationsDir = path.join(
       ctrlyokeStateHome(),
@@ -358,7 +358,7 @@ export class WebPushService {
   private async assertRemoteAccess(): Promise<void> {
     let allowed = false;
     try {
-      allowed = await this.hasRemoteAccess();
+      allowed = await this.canUseRemoteAccess();
     } catch {
       allowed = false;
     }

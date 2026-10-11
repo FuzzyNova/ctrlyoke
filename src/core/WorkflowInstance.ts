@@ -1115,6 +1115,27 @@ export class WorkflowInstance
   }
 
   /** Release file-system watchers and child processes owned by this instance */
+  async disposeAsync(): Promise<void> {
+    const integrations = new Set<HarnessIntegration>([
+      ...this.executionIntegrations.values(),
+      ...this.unkeyedExecutionIntegrations,
+      ...this.targetExecutionIntegrations.values(),
+      ...this.liveInjectIntegrations.values(),
+      ...this.lastRunIntegrations,
+      ...[...this.activeTargetResources.values()]
+        .map((resource) => resource.integration)
+        .filter((integration): integration is HarnessIntegration => !!integration),
+    ]);
+    const processRunners = new Set(this.targetScriptProcessRunners.values());
+    this.dispose();
+    await Promise.all([
+      ...[...integrations].map((integration) =>
+        integration.waitForProcessShutdown()
+      ),
+      ...[...processRunners].map((runner) => runner.waitForProcessShutdown()),
+    ]);
+  }
+
   dispose(): void {
     // Clear heartbeat interval (the finally block in startWorkflowExecution handles
     // releaseLock for normal termination; crash path is covered by staleness detection).
@@ -1838,6 +1859,7 @@ export class WorkflowInstance
     | "captureChunk"
     | "captureEvents"
     | "captureContextWindow"
+    | "captureFinalStepContextWindow"
     | "getBufferedOutput"
     | "captureCompletedOutput"
     | "captureFinalStepOutputInit"
@@ -1887,6 +1909,13 @@ export class WorkflowInstance
       },
       captureContextWindow: (stepIndex, used, size) => {
         this.outputCaptureBuffer.captureContextWindow(stepIndex, used, size);
+      },
+      captureFinalStepContextWindow: (loopIndex, used, size) => {
+        this.outputCaptureBuffer.captureFinalStepContextWindow(
+          loopIndex,
+          used,
+          size
+        );
       },
       getBufferedOutput: (stepIndex) => {
         return this.outputCaptureBuffer.getBufferedOutput(stepIndex);

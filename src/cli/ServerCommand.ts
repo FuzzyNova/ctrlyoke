@@ -17,6 +17,14 @@ import { createNodeHostedServer } from "../platform/NodeHostServices";
 import { ServerCertificateService } from "../server/ServerCertificateService";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
+import { PROCESS_SIGNALS } from "../types/DashboardConstants";
+import {
+  defaultShutdownTimers,
+  installTwoStageShutdown,
+  type ShutdownSignal,
+  type ShutdownSignalSource,
+  type ShutdownTimers,
+} from "./SignalShutdown";
 import {
   registerServerCommand as registerDefinition,
   type ServerOptions,
@@ -78,6 +86,7 @@ export function formatServerBanner(
   lines.push(qr);
   if (https)
     lines.push("Install the HTTPS certificate on your phone from /cert.");
+  lines.push("Press Ctrl+C to stop the server.");
   return lines.join("\n");
 }
 
@@ -111,29 +120,61 @@ async function openUrl(url: string): Promise<void> {
   child.unref();
 }
 
-export interface ServerSignalSource {
-  on(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
-  off(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+export type ServerSignalSource = ShutdownSignalSource;
+
+export interface ServerShutdownDependencies {
+  signals?: ServerSignalSource;
+  exit?: (code: number) => void;
+  timers?: ShutdownTimers;
+  isInteractive?: boolean;
+  countRunningWorkflows?: () => number;
+  signalNames?: readonly ShutdownSignal[];
+  deadlineMs?: number;
+  onMessage?: (message: string) => void;
 }
 
 export function installServerShutdown(
   runtime: { dispose(): void | Promise<void> },
-  signals: ServerSignalSource = process,
-  exit: (code: number) => void = process.exit
+  dependencies: ServerShutdownDependencies = {}
 ): void {
-  let shutdownStarted = false;
-  const shutdown = (): void => {
-    if (shutdownStarted) {
-      exit(0);
-      return;
-    }
-    shutdownStarted = true;
-    void Promise.resolve()
-      .then(() => runtime.dispose())
-      .finally(() => exit(0));
-  };
-  signals.on("SIGINT", shutdown);
-  signals.on("SIGTERM", shutdown);
+  const platform = process.platform;
+  const signalNames = dependencies.signalNames ?? [
+    PROCESS_SIGNALS.INTERRUPT,
+    PROCESS_SIGNALS.TERMINATE,
+    PROCESS_SIGNALS.HANGUP,
+    ...(platform === "win32" ? ([PROCESS_SIGNALS.BREAK] as const) : []),
+  ];
+  installTwoStageShutdown({
+    signals: dependencies.signals ?? process,
+    signalNames,
+    exit: dependencies.exit ?? process.exit,
+    timers: dependencies.timers ?? defaultShutdownTimers,
+    isInteractive:
+      dependencies.isInteractive ??
+      Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    countRunningWorkflows: dependencies.countRunningWorkflows ?? (() => 0),
+    dispose: () => runtime.dispose(),
+    deadlineMs: dependencies.deadlineMs ?? 5000,
+    confirmationMessage: (count) =>
+      `${count} workflow${count === 1 ? " is" : "s are"} still running. Press Ctrl+C again within 3s to stop them and shut down the server.`,
+    shutdownMessage: (count) =>
+      `Stopping ${count} workflow(s) and shutting down… (press Ctrl+C again to force quit)`,
+    forceMessage: "Force quitting.",
+    timeoutMessage: () =>
+      "Shutdown timed out; runtime.dispose() is still pending, so workflow state, terminals, or child processes may remain.",
+    onMessage: dependencies.onMessage ?? ((message) => console.error(message)),
+    exitCodeForSignal: (signal) =>
+      signal === PROCESS_SIGNALS.INTERRUPT
+        ? 130
+        : 128 +
+          (signal === PROCESS_SIGNALS.TERMINATE
+            ? 15
+            : signal === PROCESS_SIGNALS.HANGUP
+              ? 1
+              : 21),
+    successExitCode: 0,
+    timeoutExitCode: 1,
+  });
 }
 
 export async function serverCommand(options: ServerOptions): Promise<void> {
@@ -159,7 +200,7 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     const licenseStore = await import("../platform/OsCredentialStore.js");
     const { LicenseService } = await import("../license/LicenseService.js");
     const service = new LicenseService(new licenseStore.OsCredentialStore());
-    const allowed = await service.hasRemoteAccess();
+    const allowed = await service.canUseRemoteAccess();
     service.dispose();
     if (!allowed && !isLoopbackBindAddress(initial.bindAddress)) {
       console.warn(
@@ -188,7 +229,9 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     regenerateToken: options.regenerateToken,
     strictPort: options.strictPort,
   });
-  installServerShutdown(runtime);
+  installServerShutdown(runtime, {
+    countRunningWorkflows: () => runtime.orchestrator.countRunningWorkflows(),
+  });
 
   const lanIps = runtime.server.getAvailableIps();
   const qr = await QRCode.toString(runtime.url, {

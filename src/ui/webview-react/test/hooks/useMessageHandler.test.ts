@@ -3770,6 +3770,50 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
     expect(store.steps[1]._runtime?.contextWindowUsed).toBe(152797);
     expect(store.steps[1]._runtime?.contextWindowSize).toBe(200000);
   });
+
+  it("stores live context for the active final-step pass and ignores terminal updates", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0")],
+        finalStep: makePrompt("Final step"),
+      });
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+      dispatch(MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED, {
+        status: STEP_STATUS.RUNNING,
+        loopCount: 0,
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+      });
+      dispatch(MESSAGE_TYPES.FINAL_STEP_CONTEXT_WINDOW_UPDATE, {
+        loopIndex: 0,
+        used: 90000,
+        size: 200000,
+      });
+    });
+
+    expect(
+      useWorkflowStore.getState().liveFinalStepContextWindow[0]
+    ).toEqual({ used: 90000, size: 200000 });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED, {
+        status: STEP_STATUS.COMPLETED,
+        loopCount: 0,
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+      });
+      dispatch(MESSAGE_TYPES.FINAL_STEP_CONTEXT_WINDOW_UPDATE, {
+        loopIndex: 0,
+        used: 110000,
+        size: 200000,
+      });
+    });
+
+    expect(
+      useWorkflowStore.getState().liveFinalStepContextWindow[0]
+    ).toEqual({ used: 90000, size: 200000 });
+  });
 });
 
 // ---------------------------------------------------------------------------

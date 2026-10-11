@@ -1,6 +1,5 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import * as yaml from "js-yaml";
 import {
   PROMPT_PROPERTIES,
   MCP_CONFIG_KEYS,
@@ -25,7 +24,7 @@ import {
 import { collectSecretInterpolationNames } from "../utils/SecretResolver";
 import { parseSecretReferences } from "../utils/SecretReferenceParser";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
-import { WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
+import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
 import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
 
 export interface SecretRegistryWorkflowReference {
@@ -162,7 +161,7 @@ async function readWorkflowReference(
     } else {
       const parsed = filePath.endsWith(".json")
         ? JSON.parse(content)
-        : yaml.load(content, { schema: WORKFLOW_YAML_SCHEMA });
+        : loadYamlDocument(content, { schema: WORKFLOW_YAML_SCHEMA });
       collectWorkflowNames(parsed, names, mcpServers);
     }
 

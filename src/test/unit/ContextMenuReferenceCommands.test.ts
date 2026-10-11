@@ -7,6 +7,12 @@ import {
   ContextMenuPromptEditorInsertSink,
   ContextMenuReferenceCommands,
 } from "../../completions/ContextMenuReferenceCommands";
+import {
+  buildDirectoryReference,
+  buildFileReference,
+  buildSelectionReference,
+  buildSymbolReference,
+} from "../../completions/ContextReferenceBuilder";
 import type { PromptEditorInsertRequest } from "../../types/WebviewMessageTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { EXTERNAL_FILE_TRUST_SCOPES } from "../../types/DashboardConstants";
@@ -214,10 +220,16 @@ suite("ContextMenuReferenceCommands", () => {
       assert.deepStrictEqual(
         sink.requests.map((request) => request.references[0]),
         [
-          `@"${normalizedFilePath}"`,
-          `@"${normalizedDirectoryPath}"`,
-          `#selection:"${normalizedFilePath}":1-1`,
-          `#sym.function:"${normalizedFilePath}":externalSymbol:1-1`,
+          buildFileReference(normalizedFilePath),
+          buildDirectoryReference(normalizedDirectoryPath),
+          buildSelectionReference(normalizedFilePath, 1, 1),
+          buildSymbolReference(
+            normalizedFilePath,
+            "externalSymbol",
+            1,
+            1,
+            "function"
+          ),
         ]
       );
       assert.deepStrictEqual(trustedParentFolders, [
@@ -311,7 +323,9 @@ suite("ContextMenuReferenceCommands", () => {
       );
 
       assert.deepStrictEqual(sink.requests[0].references, [
-        `@"${vscode.Uri.file(externalFilePath).fsPath.replace(/\\/g, "/")}"`,
+        buildFileReference(
+          vscode.Uri.file(externalFilePath).fsPath.replace(/\\/g, "/")
+        ),
       ]);
     } finally {
       Object.defineProperty(vscode.window, "showWarningMessage", {

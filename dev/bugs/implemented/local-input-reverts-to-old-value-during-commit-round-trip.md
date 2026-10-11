@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (review of ~0bc578438)
 - **Area:** `src/ui/webview-react/hooks/useLocalInput.ts` (`useLocalValue`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

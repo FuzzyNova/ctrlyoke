@@ -148,6 +148,13 @@ export interface IDashboardSink {
     workflowId?: string
   ): void;
 
+  updateFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void;
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

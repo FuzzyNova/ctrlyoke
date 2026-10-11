@@ -45,6 +45,64 @@ suite("CodexCliProvider", () => {
     assert.deepStrictEqual({ ...parsed.mcp_servers["user-server"].env }, env);
   });
 
+  test("sanitizes MCP server IDs consistently in config and approval overrides", async () => {
+    const preparation = await new CodexCliProvider().planMcpConfigArgs(
+      undefined,
+      "/workspace",
+      undefined,
+      undefined,
+      [
+        {
+          id: "io.github.upstash/context7",
+          command: "npx",
+          autoApprove: ["list-tools", "files/read", "tool.with.dot"],
+        },
+      ]
+    );
+    const args = preparation.cliArgs;
+
+    assert.ok(
+      args.some((arg) =>
+        arg.includes("mcp_servers.io_github_upstash_context7=")
+      )
+    );
+    assert.ok(
+      args.some((arg) =>
+        arg.includes(
+          "mcp_servers.io_github_upstash_context7.tools.list-tools.approval_mode"
+        )
+      )
+    );
+    // Tool names are server-defined, so they are never renamed.
+    assert.ok(
+      args.some((arg) =>
+        arg.includes(
+          "mcp_servers.io_github_upstash_context7.tools.files/read.approval_mode"
+        )
+      )
+    );
+    assert.ok(!args.some((arg) => arg.includes("tool.with.dot")));
+  });
+
+  test("skips MCP server IDs that collide after Codex key sanitization", async () => {
+    const preparation = await new CodexCliProvider().planMcpConfigArgs(
+      undefined,
+      "/workspace",
+      undefined,
+      undefined,
+      [
+        { id: "my.server", command: "first" },
+        { id: "my_server", command: "second" },
+      ]
+    );
+    const serverConfigs = preparation.cliArgs.filter(
+      (arg) => arg.startsWith("mcp_servers.") && arg.includes("={")
+    );
+
+    assert.strictEqual(serverConfigs.length, 1);
+    assert.ok(serverConfigs[0].includes('command="first"'));
+  });
+
   suite("MCP capability declaration", () => {
     test("declares native per-server filtering for server-owned denials", () => {
       const filtering = new CodexCliProvider().capabilities.mcp

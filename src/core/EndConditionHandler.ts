@@ -20,6 +20,7 @@ import {
 } from "./EndConditionEvaluator";
 import { createConditionEvaluationSummary } from "./orchestration/ScriptExecutionReporter";
 import { PromptQueue } from "./PromptQueue";
+import type { RetryPromptSource } from "./RetryBudget";
 import { HarnessIntegration } from "./HarnessIntegration";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
@@ -85,7 +86,7 @@ export type SendRetryPromptCallback = (
   retryPromptStep: PromptStep,
   currentIndex: number,
   attemptIndex: number,
-  promptAlreadyResolved?: boolean
+  promptSource: RetryPromptSource
 ) => Promise<{ responseText: string; attemptIndex: number } | null>;
 
 /**
@@ -367,9 +368,10 @@ export class EndConditionHandler {
       retryKind === RETRY_KINDS.PASS
         ? this.buildPassRetryPrompt(prompt)
         : this.buildRetryPrompt(prompt, evaluationResult);
-    const promptAlreadyResolved =
-      retryKind === RETRY_KINDS.PASS &&
-      !this.promptQueue.getEffectivePassRetryPrompt(prompt);
+    const promptSource =
+      retryKind === RETRY_KINDS.PASS
+        ? this.promptQueue.getEffectivePassRetryPromptSource(prompt)
+        : this.promptQueue.getEffectiveRetryPromptSource(prompt);
     const retryDenominator = formatRetryDenominator(maxRetries);
 
     retryContext.runtime.scheduleRetry(
@@ -424,7 +426,7 @@ export class EndConditionHandler {
       retryPromptStep,
       currentIndex,
       nextAttemptIndex,
-      promptAlreadyResolved
+      promptSource
     );
 
     if (retrySendResult === null) {

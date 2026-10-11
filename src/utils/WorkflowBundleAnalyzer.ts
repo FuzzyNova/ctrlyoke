@@ -765,7 +765,7 @@ async function finalizeCopyPlan(
       copy.contentHash,
       usedNames,
       existingNames,
-      new Set([...manifest.files].map(foldPathForCompare))
+      new Set([...manifest.files].map((file) => foldPathForCompare(file)))
     );
     usedNames.add(foldPathForCompare(name));
     const destination = path.join(assetsDirectory, name);

@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe("useLocalInput", () => {
-  it("resets normalized number input text when commit keeps the external value", () => {
+  it("shows the normalized value when the commit keeps the external value", () => {
     const onCommit = vi.fn<(value: number | undefined) => void>();
     renderInput(1, onCommit);
     const input = screen.getByRole("spinbutton", {
@@ -36,7 +36,7 @@ describe("useLocalInput", () => {
     expect(input).toHaveValue(1);
   });
 
-  it("shows the committed value after a normal commit updates the external value", () => {
+  it("keeps the committed value visible until the external value updates", () => {
     const onCommit = vi.fn<(value: number | undefined) => void>();
     const view = renderInput(1, onCommit);
     const input = screen.getByRole("spinbutton", {
@@ -46,6 +46,10 @@ describe("useLocalInput", () => {
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "2" } });
     fireEvent.blur(input);
+
+    expect(onCommit).toHaveBeenCalledWith(2);
+    expect(input).toHaveValue(2);
+
     view.rerender(
       <LocalNumberInput
         aria-label="Maximum parallel steps"
@@ -55,7 +59,26 @@ describe("useLocalInput", () => {
       />
     );
 
-    expect(onCommit).toHaveBeenCalledWith(2);
+    expect(input).toHaveValue(2);
+  });
+
+  it("keeps the committed value when refocused before the external echo", () => {
+    const onCommit = vi.fn<(value: number | undefined) => void>();
+    renderInput(1, onCommit);
+    const input = screen.getByRole("spinbutton", {
+      name: "Maximum parallel steps",
+    });
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "2" } });
+    fireEvent.blur(input);
+    expect(input).toHaveValue(2);
+
+    fireEvent.focus(input);
+    expect(input).toHaveValue(2);
+    fireEvent.blur(input);
+
+    expect(onCommit.mock.calls).toEqual([[2], [2]]);
     expect(input).toHaveValue(2);
   });
 

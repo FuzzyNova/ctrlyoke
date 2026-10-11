@@ -67,7 +67,10 @@ import {
 } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { resolveRetryBudget } from "./RetryBudget";
+import {
+  resolveRetryBudget,
+  type RetryPromptSource,
+} from "./RetryBudget";
 
 export interface SequentialStepSettlement {
   readonly promotedGroup?: ParallelGroupDefinition;
@@ -1317,11 +1320,19 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     return resolvePromptRetryBudget(prompt.endCondition).retryPrompt;
   }
 
+  getEffectiveRetryPromptSource(prompt: PromptStep): RetryPromptSource {
+    return resolvePromptRetryBudget(prompt.endCondition).retryPromptSource;
+  }
+
   /**
    * Get effective pass-retry prompt for current prompt (including settings defaults)
    */
   getEffectivePassRetryPrompt(prompt: PromptStep): string | undefined {
     return resolvePromptRetryBudget(prompt.endCondition).passRetryPrompt;
+  }
+
+  getEffectivePassRetryPromptSource(prompt: PromptStep): RetryPromptSource {
+    return resolvePromptRetryBudget(prompt.endCondition).passRetryPromptSource;
   }
 
   /**
@@ -3133,6 +3144,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const renumbered = renumberStepReferences(
         previousSteps,
         nextTopology.steps
+      );
+      assertNoParallelSiblingReferences(
+        {
+          steps: renumbered.steps,
+          parallelGroups: nextTopology.parallelGroups,
+        },
+        this.workflowFile
       );
       const newPending = nextTopology.steps.slice(currentIndex);
       const newPendingResults = newPending.map((step) => {

@@ -1764,6 +1764,13 @@ export class WorkingFileManager {
           nextTopology.steps,
           source.finalStep
         );
+        assertNoParallelSiblingReferences(
+          {
+            steps: renumbered.steps,
+            parallelGroups: nextTopology.parallelGroups,
+          },
+          source
+        );
         return {
           workingFile: {
             ...source,

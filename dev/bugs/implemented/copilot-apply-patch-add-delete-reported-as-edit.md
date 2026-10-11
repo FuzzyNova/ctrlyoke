@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch `npx tsx` script running the real builder and `WorkspaceSnapshotService.undoFiles`)
 - **Area:** `src/core/harness/copilot/CopilotToolBuilder.ts` (`buildInitiatedEvents`, `buildCompletedEvents`, `parseGitDiffFileEdits`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

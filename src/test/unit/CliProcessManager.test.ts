@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { CliProcessManager } from "../../utils/CliProcessManager";
+import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
@@ -87,6 +88,35 @@ suite("CliProcessManager working directory", () => {
 });
 
 suite("CliProcessManager teardown", () => {
+  test("disposeAsync waits for SIGTERM to escalate and the child to close", async () => {
+    const signals: NodeJS.Signals[] = [];
+    const manager = new CliProcessManager(
+      process.cwd(),
+      undefined,
+      (pid, signal, callback) => {
+        signals.push(signal as NodeJS.Signals);
+        if (signal === PROCESS_SIGNALS.KILL) {
+          try {
+            process.kill(pid, PROCESS_SIGNALS.KILL);
+          } catch {
+            // The child may have exited between the escalation check and kill.
+          }
+        }
+        callback?.();
+      }
+    );
+    const resultPromise = manager.spawn(process.execPath, [
+      "-e",
+      "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)",
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    await manager.disposeAsync();
+    const result = await resultPromise;
+    assert.deepStrictEqual(signals, [PROCESS_SIGNALS.TERMINATE, PROCESS_SIGNALS.KILL]);
+    assert.strictEqual(result.terminationSignal, PROCESS_SIGNALS.KILL);
+  });
+
   test("disposeProcess sends SIGTERM first", async () => {
     const signals: NodeJS.Signals[] = [];
     const manager = new CliProcessManager(
@@ -111,9 +141,9 @@ suite("CliProcessManager teardown", () => {
     manager.disposeProcess();
     const result = await resultPromise;
 
-    assert.deepStrictEqual(signals, ["SIGTERM"]);
+    assert.deepStrictEqual(signals, [PROCESS_SIGNALS.TERMINATE]);
     assert.strictEqual(result.terminatedByManager, true);
-    assert.strictEqual(result.terminationSignal, "SIGTERM");
+    assert.strictEqual(result.terminationSignal, PROCESS_SIGNALS.TERMINATE);
   });
 
   test("escalates a timed-out child after another child becomes current", async () => {
@@ -123,9 +153,9 @@ suite("CliProcessManager teardown", () => {
       undefined,
       (pid, signal, callback) => {
         killCalls.push({ pid, signal: signal ?? "" });
-        if (signal === "SIGKILL") {
+        if (signal === PROCESS_SIGNALS.KILL) {
           try {
-            process.kill(pid, "SIGKILL");
+            process.kill(pid, PROCESS_SIGNALS.KILL);
           } catch {
             // The child may have exited between the manager's check and kill.
           }
@@ -151,11 +181,11 @@ suite("CliProcessManager teardown", () => {
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 3500));
-      const firstPid = killCalls.find((call) => call.signal === "SIGTERM")?.pid;
+      const firstPid = killCalls.find((call) => call.signal === PROCESS_SIGNALS.TERMINATE)?.pid;
       assert.ok(firstPid, "timed-out child should have received SIGTERM");
       assert.ok(
         killCalls.some(
-          (call) => call.pid === firstPid && call.signal === "SIGKILL"
+          (call) => call.pid === firstPid && call.signal === PROCESS_SIGNALS.KILL
         ),
         "timed-out child should receive SIGKILL after the escalation delay"
       );
@@ -172,9 +202,9 @@ suite("CliProcessManager teardown", () => {
       undefined,
       (pid, signal, callback) => {
         killCalls.push({ pid, signal: signal ?? "" });
-        if (signal === "SIGKILL") {
+        if (signal === PROCESS_SIGNALS.KILL) {
           try {
-            process.kill(pid, "SIGKILL");
+            process.kill(pid, PROCESS_SIGNALS.KILL);
           } catch {
             // The child may have exited between the manager's check and kill.
           }
@@ -204,10 +234,10 @@ suite("CliProcessManager teardown", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 3500));
     const termPids = killCalls
-      .filter((call) => call.signal === "SIGTERM")
+      .filter((call) => call.signal === PROCESS_SIGNALS.TERMINATE)
       .map((call) => call.pid);
     const killPids = killCalls
-      .filter((call) => call.signal === "SIGKILL")
+      .filter((call) => call.signal === PROCESS_SIGNALS.KILL)
       .map((call) => call.pid);
 
     assert.strictEqual(

@@ -54,7 +54,8 @@ export function createHostedServerOptions(
     namedWorkspaceRoots: overrides.namedWorkspaceRoots,
     token: overrides.token,
     remoteAccess: {
-      isAllowed: () => overrides.licenseService.hasRemoteAccess(),
+      canUse: () => overrides.licenseService.canUseRemoteAccess(),
+      begin: () => overrides.licenseService.beginRemoteAccess(),
       onBlocked:
         overrides.onRemoteAccessBlocked ??
         (() => notifyRemoteAccessBlocked(overrides.getUserFeedbackSink())),

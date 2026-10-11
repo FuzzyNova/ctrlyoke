@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (generated args run through installed codex-cli 0.162.0 with `codex -c '<arg>' mcp list`, no model call)
 - **Area:** `src/core/harness/shared/CliMcpConfigGenerator.ts`, `src/core/harness/codex/CodexCliProvider.ts` (`buildToolApprovalOverrideArgs`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

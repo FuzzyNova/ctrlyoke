@@ -747,6 +747,14 @@ export class EndConditionEvaluator {
     if (fileCommand.windowsVerbatimArguments && shellKind === SHELL_KINDS.CMD) {
       callableInvocation = `call "${resolvedScriptPath}"`;
     } else if (
+      fileCommand.windowsVerbatimArguments &&
+      shellKind !== SHELL_KINDS.PWSH &&
+      shellKind !== SHELL_KINDS.POWERSHELL
+    ) {
+      // Git Bash runs .cmd files through cmd itself. Passing cmd's /d /s /c
+      // flags as separate argv entries lets MSYS rewrite them as drive paths.
+      callableInvocation = escapePosixArgument(resolvedScriptPath);
+    } else if (
       shellKind === SHELL_KINDS.PWSH ||
       shellKind === SHELL_KINDS.POWERSHELL
     ) {
@@ -1226,5 +1234,11 @@ export class EndConditionEvaluator {
   dispose(): void {
     this.killAllProcesses();
     Log.trace("[EndConditionEvaluator] disposed");
+  }
+
+  async disposeAsync(): Promise<void> {
+    const runners = [...this.processRunners];
+    this.dispose();
+    await Promise.all(runners.map((runner) => runner.waitForProcessShutdown()));
   }
 }

@@ -7,7 +7,12 @@ import {
   resolveServerSettings,
   type ServerSignalSource,
 } from "../../cli/ServerCommand";
+import type {
+  ShutdownSignal,
+  ShutdownTimers,
+} from "../../cli/SignalShutdown";
 import { handleCliError } from "../../cli/CliExitCode";
+import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
 
 const settings = {
   autoStart: false,
@@ -18,6 +23,67 @@ const settings = {
   tls: { enabled: false, certPath: "saved-cert", keyPath: "saved-key" },
   iconBgColor: "#000000",
   iconFgColor: "#ffffff",
+};
+
+class FakeSignals implements ServerSignalSource {
+  private readonly handlers = new Map<
+    ShutdownSignal,
+    Set<() => void>
+  >();
+
+  once(signal: ShutdownSignal, listener: () => void): void {
+    const listeners = this.handlers.get(signal) ?? new Set<() => void>();
+    listeners.add(listener);
+    this.handlers.set(signal, listeners);
+  }
+
+  off(signal: ShutdownSignal, listener: () => void): void {
+    this.handlers.get(signal)?.delete(listener);
+  }
+
+  emit(signal: ShutdownSignal): void {
+    const listeners = [...(this.handlers.get(signal) ?? [])];
+    for (const listener of listeners) {
+      this.handlers.get(signal)?.delete(listener);
+      listener();
+    }
+  }
+}
+
+class FakeTimers implements ShutdownTimers {
+  private now = 0;
+  private nextId = 0;
+  private readonly pending = new Map<
+    number,
+    { at: number; callback: () => void }
+  >();
+
+  setTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout> {
+    const id = ++this.nextId;
+    this.pending.set(id, { at: this.now + delayMs, callback });
+    return id as unknown as ReturnType<typeof setTimeout>;
+  }
+
+  clearTimeout(timer: ReturnType<typeof setTimeout>): void {
+    this.pending.delete(timer as unknown as number);
+  }
+
+  advance(delayMs: number): void {
+    this.now += delayMs;
+    while (true) {
+      const next = [...this.pending.entries()]
+        .filter(([, timer]) => timer.at <= this.now)
+        .sort((left, right) => left[1].at - right[1].at)[0];
+      if (!next) return;
+      this.pending.delete(next[0]);
+      next[1].callback();
+    }
+  }
+}
+
+const flushPromises = async (): Promise<void> => {
+  await Promise.resolve();
+  await Promise.resolve();
 };
 
 suite("ServerCommand", () => {
@@ -70,7 +136,7 @@ suite("ServerCommand", () => {
     assert.deepStrictEqual(exitCodes, [2]);
   });
 
-  test("formats a plain redirected banner and a TTY hyperlink", () => {
+  test("prints the stop hint last in the banner", () => {
     const plain = formatServerBanner(
       "http://localhost:4747/?token=secret",
       [],
@@ -78,6 +144,7 @@ suite("ServerCommand", () => {
       "QR",
       false
     );
+    assert.ok(plain.endsWith("Press Ctrl+C to stop the server."));
     assert.ok(plain.includes("http://localhost:4747/?token=secret"));
     assert.ok(!plain.includes("\u001b]8;"));
     const tty = formatServerBanner(
@@ -92,6 +159,7 @@ suite("ServerCommand", () => {
     );
     assert.ok(tty.includes("https://192.168.1.4:4747/?token=secret"));
     assert.ok(tty.includes("/cert"));
+    assert.ok(tty.endsWith("Press Ctrl+C to stop the server."));
   });
 
   test("selects the platform URL handler without shell interpolation", () => {
@@ -110,28 +178,226 @@ suite("ServerCommand", () => {
     });
   });
 
-  test("disposes on the first signal and forces exit on a second signal", async () => {
-    const handlers = new Map<string, () => void>();
-    const signals: ServerSignalSource = {
-      on: (signal, listener) => handlers.set(signal, listener),
-      off: (signal) => handlers.delete(signal),
-    };
-    let disposed = 0;
+  test("one Ctrl+C with no running workflows starts graceful shutdown", async () => {
+    const signals = new FakeSignals();
+    const timers = new FakeTimers();
+    const exits: number[] = [];
+    const messages: string[] = [];
+    let disposeCount = 0;
+    installServerShutdown(
+      { dispose: () => { disposeCount += 1; } },
+      {
+        signals,
+        timers,
+        exit: (code) => exits.push(code),
+        isInteractive: true,
+        countRunningWorkflows: () => 0,
+        onMessage: (message) => messages.push(message),
+      }
+    );
+
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    await flushPromises();
+    assert.strictEqual(disposeCount, 1);
+    assert.deepStrictEqual(exits, [0]);
+    assert.deepStrictEqual(messages, [
+      "Stopping 0 workflow(s) and shutting down… (press Ctrl+C again to force quit)",
+    ]);
+  });
+
+  test("running workflows require a second Ctrl+C within the confirmation window", async () => {
+    const signals = new FakeSignals();
+    const timers = new FakeTimers();
+    const messages: string[] = [];
+    let disposeCount = 0;
+    installServerShutdown(
+      { dispose: () => { disposeCount += 1; } },
+      {
+        signals,
+        timers,
+        exit: () => undefined,
+        isInteractive: true,
+        countRunningWorkflows: () => 2,
+        onMessage: (message) => messages.push(message),
+      }
+    );
+
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    assert.strictEqual(disposeCount, 0);
+    assert.deepStrictEqual(messages, [
+      "2 workflows are still running. Press Ctrl+C again within 3s to stop them and shut down the server.",
+    ]);
+    timers.advance(2999);
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    await flushPromises();
+    assert.strictEqual(disposeCount, 1);
+    assert.ok(messages[1].startsWith("Stopping 2 workflow(s)"));
+  });
+
+  test("confirmation expires and a later Ctrl+C warns again", () => {
+    const signals = new FakeSignals();
+    const timers = new FakeTimers();
+    const messages: string[] = [];
+    let disposeCount = 0;
+    installServerShutdown(
+      { dispose: () => { disposeCount += 1; } },
+      {
+        signals,
+        timers,
+        exit: () => undefined,
+        isInteractive: true,
+        countRunningWorkflows: () => 1,
+        onMessage: (message) => messages.push(message),
+      }
+    );
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    timers.advance(3000);
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    assert.strictEqual(disposeCount, 0);
+    assert.strictEqual(messages.length, 2);
+    assert.ok(messages.every((message) => message.includes("Press Ctrl+C again within 3s")));
+  });
+
+  test("recounts workflows on the confirming press", async () => {
+    const signals = new FakeSignals();
+    const timers = new FakeTimers();
+    const messages: string[] = [];
+    const exits: number[] = [];
+    let count = 1;
+    let disposeCount = 0;
+    installServerShutdown(
+      { dispose: () => { disposeCount += 1; } },
+      {
+        signals,
+        timers,
+        exit: (code) => exits.push(code),
+        isInteractive: true,
+        countRunningWorkflows: () => count,
+        onMessage: (message) => messages.push(message),
+      }
+    );
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    count = 0;
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    await flushPromises();
+    assert.strictEqual(disposeCount, 1);
+    assert.ok(messages[1].startsWith("Stopping 0 workflow(s)"));
+    assert.deepStrictEqual(exits, [0]);
+  });
+
+  test("termination signals and non-interactive Ctrl+C skip the confirmation gate", async () => {
+    for (const signal of [
+      PROCESS_SIGNALS.TERMINATE,
+      PROCESS_SIGNALS.HANGUP,
+      PROCESS_SIGNALS.BREAK,
+    ] as const) {
+      const signals = new FakeSignals();
+      const exits: number[] = [];
+      let disposeCount = 0;
+      installServerShutdown(
+        { dispose: () => { disposeCount += 1; } },
+        {
+          signals,
+          timers: new FakeTimers(),
+          signalNames: [
+            PROCESS_SIGNALS.INTERRUPT,
+            PROCESS_SIGNALS.TERMINATE,
+            PROCESS_SIGNALS.HANGUP,
+            PROCESS_SIGNALS.BREAK,
+          ],
+          exit: (code) => exits.push(code),
+          isInteractive: true,
+          countRunningWorkflows: () => 1,
+          onMessage: () => undefined,
+        }
+      );
+      signals.emit(signal);
+      await flushPromises();
+      assert.strictEqual(disposeCount, 1, `${signal} should dispose immediately`);
+      assert.deepStrictEqual(exits, [0]);
+    }
+
+    const signals = new FakeSignals();
+    let disposeCount = 0;
+    installServerShutdown(
+      { dispose: () => { disposeCount += 1; } },
+      {
+        signals,
+        timers: new FakeTimers(),
+        exit: () => undefined,
+        isInteractive: false,
+        countRunningWorkflows: () => 1,
+        onMessage: () => undefined,
+      }
+    );
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    await flushPromises();
+    assert.strictEqual(disposeCount, 1);
+  });
+
+  test("a signal during shutdown force exits with the signal's conventional code", async () => {
+    const signals = new FakeSignals();
+    const messages: string[] = [];
     const exits: number[] = [];
     installServerShutdown(
+      { dispose: () => new Promise<void>(() => undefined) },
       {
-        dispose: async () => {
-          disposed += 1;
-        },
-      },
-      signals,
-      (code) => exits.push(code)
+        signals,
+        timers: new FakeTimers(),
+        exit: (code) => exits.push(code),
+        isInteractive: true,
+        countRunningWorkflows: () => 0,
+        onMessage: (message) => messages.push(message),
+      }
     );
-    handlers.get("SIGINT")?.();
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    assert.strictEqual(disposed, 1);
-    assert.deepStrictEqual(exits, [0]);
-    handlers.get("SIGINT")?.();
-    assert.deepStrictEqual(exits, [0, 0]);
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    await flushPromises();
+    signals.emit(PROCESS_SIGNALS.INTERRUPT);
+    assert.deepStrictEqual(exits, [130]);
+    assert.strictEqual(messages.at(-1), "Force quitting.");
+
+    const terminateSignals = new FakeSignals();
+    const terminateExits: number[] = [];
+    const terminateMessages: string[] = [];
+    installServerShutdown(
+      { dispose: () => new Promise<void>(() => undefined) },
+      {
+        signals: terminateSignals,
+        timers: new FakeTimers(),
+        exit: (code) => terminateExits.push(code),
+        isInteractive: false,
+        countRunningWorkflows: () => 0,
+        onMessage: (message) => terminateMessages.push(message),
+      }
+    );
+    terminateSignals.emit(PROCESS_SIGNALS.TERMINATE);
+    await flushPromises();
+    terminateSignals.emit(PROCESS_SIGNALS.TERMINATE);
+    assert.deepStrictEqual(terminateExits, [143]);
+    assert.strictEqual(terminateMessages.at(-1), "Force quitting.");
+  });
+
+  test("the overall deadline reports pending shutdown and exits non-zero", async () => {
+    const signals = new FakeSignals();
+    const timers = new FakeTimers();
+    const messages: string[] = [];
+    const exits: number[] = [];
+    installServerShutdown(
+      { dispose: () => new Promise<void>(() => undefined) },
+      {
+        signals,
+        timers,
+        exit: (code) => exits.push(code),
+        isInteractive: false,
+        countRunningWorkflows: () => 1,
+        onMessage: (message) => messages.push(message),
+      }
+    );
+    signals.emit(PROCESS_SIGNALS.TERMINATE);
+    await flushPromises();
+    timers.advance(5000);
+    assert.deepStrictEqual(exits, [1]);
+    assert.ok(messages.at(-1)?.includes("timed out"));
+    assert.ok(messages.at(-1)?.includes("pending"));
   });
 });

@@ -134,6 +134,34 @@ describe("FinalStepFooter", () => {
     expect(screen.getByText("75%")).toBeInTheDocument();
   });
 
+  it("shows live context while running, then the completed value", () => {
+    const props = {
+      ...buildProps(),
+      isExpanded: true,
+      status: "running" as const,
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      liveContextWindow: { used: 80_000, size: 200_000 },
+    };
+    const { rerender } = render(<FinalStepFooter {...props} />);
+
+    expect(screen.getByText("40%")).toBeInTheDocument();
+
+    rerender(
+      <FinalStepFooter
+        {...props}
+        status="completed"
+        liveContextWindow={undefined}
+        latestOutput={
+          {
+            tokens: { contextWindowUsed: 150_000, contextWindowSize: 200_000 },
+          } as CliOutput
+        }
+      />
+    );
+
+    expect(screen.getByText("75%")).toBeInTheDocument();
+  });
+
   it("omits the context window bar without context data", () => {
     const { container } = render(
       <FinalStepFooter {...buildProps()} isExpanded />

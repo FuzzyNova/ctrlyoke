@@ -240,7 +240,7 @@ export function LicenseSection() {
         )}
         {!licenseAccess.isPro && licenseAccess.trialEndsAt === null && (
           <p className="mt-3 text-xs text-description-fg">
-            Your 14-day remote-access trial starts the first time you enable it.
+            {LICENSE_UI.REMOTE_ACCESS_TRIAL_AVAILABLE}
           </p>
         )}
       </section>

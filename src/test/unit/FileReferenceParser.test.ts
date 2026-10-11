@@ -704,6 +704,19 @@ suite("FileReferenceParser", () => {
 
   // ──────────────────────────────────────────────────────────────────────────
   suite("parseDirectoryReferences", () => {
+    test("round-trips unquoted POSIX absolute paths", () => {
+      const path = "/tmp/project/src/a.ts";
+      const references = [
+        ...parseAtReferences(buildFileReference(path)),
+        ...parseSelectionReferences(buildSelectionReference(path, 1, 2)),
+        ...parseSymbolReferences(buildSymbolReference(path, "Thing", 1, 2)),
+      ];
+      assert.deepStrictEqual(
+        references.map((reference) => reference.path),
+        [path, path, path]
+      );
+    });
+
     test("returns only directory references", () => {
       const refs = parseDirectoryReferences(
         "See @src/utils/ and @src/helpers.ts"

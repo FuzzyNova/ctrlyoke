@@ -4,6 +4,7 @@ import { canonicalizeDriveLetter } from "./PathCasing";
 import { withWorkingDirectoryEnv } from "./SpawnEnvironment";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
 import { inheritedTerminalOwnership } from "./InheritedTerminalOwnership";
+import { PROCESS_SIGNALS } from "../types/DashboardConstants";
 
 /**
  * Options for spawning a CLI process
@@ -281,9 +282,9 @@ export class CliProcessManager {
 
     this.clearKillTimeout(child);
 
-    this.requestedKills.set(child, "SIGKILL");
+    this.requestedKills.set(child, PROCESS_SIGNALS.KILL);
     this.logger?.("📤 Sending SIGKILL to process tree (immediate termination)");
-    this.killProcessTree(child.pid, "SIGKILL", (err) => {
+    this.killProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
       if (err) {
         this.logger?.(`⚠️ SIGKILL failed: ${err.message}`);
       }
@@ -388,6 +389,18 @@ export class CliProcessManager {
     this.disposeProcess();
   }
 
+  /** Start graceful teardown and resolve only after the child closes. */
+  async disposeAsync(): Promise<void> {
+    const child = this.currentProcess;
+    if (!child) return;
+    this.disposeProcess();
+    await new Promise<void>((resolve) => {
+      child.once("close", () => resolve());
+      child.once("error", () => resolve());
+      if (this.currentProcess !== child) resolve();
+    });
+  }
+
   /**
    * Gracefully kill a process: SIGTERM first, escalate to SIGKILL after 3 seconds.
    * Uses tree-kill for cross-platform process tree handling.
@@ -400,11 +413,11 @@ export class CliProcessManager {
 
     this.clearKillTimeout(child);
 
-    this.requestedKills.set(child, "SIGTERM");
+    this.requestedKills.set(child, PROCESS_SIGNALS.TERMINATE);
     this.logger?.(
       "📤 Sending SIGTERM to process tree (graceful shutdown requested)"
     );
-    this.killProcessTree(child.pid, "SIGTERM", (err) => {
+    this.killProcessTree(child.pid, PROCESS_SIGNALS.TERMINATE, (err) => {
       if (err) {
         this.logger?.(`⚠️ SIGTERM failed: ${err.message}`);
       }
@@ -414,11 +427,11 @@ export class CliProcessManager {
     const killTimeout = setTimeout(() => {
       this.killTimeouts.delete(child);
       if (child.exitCode === null && child.signalCode === null && child.pid) {
-        this.requestedKills.set(child, "SIGKILL");
+        this.requestedKills.set(child, PROCESS_SIGNALS.KILL);
         this.logger?.(
           "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL"
         );
-        this.killProcessTree(child.pid, "SIGKILL", (err) => {
+        this.killProcessTree(child.pid, PROCESS_SIGNALS.KILL, (err) => {
           if (err) {
             this.logger?.(`❌ SIGKILL failed: ${err.message}`);
           }

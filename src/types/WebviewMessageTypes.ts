@@ -843,6 +843,14 @@ export interface ContextWindowUpdateMessage {
   size: number;
 }
 
+/** Live context window usage for an in-flight final-step pass. */
+export interface FinalStepContextWindowUpdateMessage {
+  type: typeof MESSAGE_TYPES.FINAL_STEP_CONTEXT_WINDOW_UPDATE;
+  loopIndex: number;
+  used: number;
+  size: number;
+}
+
 /**
  * PTY session metadata (extension -> webview).
  *
@@ -3103,6 +3111,7 @@ export type IncomingMessage =
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
   | ContextWindowUpdateMessage
+  | FinalStepContextWindowUpdateMessage
   | StatusMessageMessage
   | UpdateFinalStepMessage
   | FinalStepStatusChangedMessage

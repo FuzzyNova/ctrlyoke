@@ -499,6 +499,72 @@ suite("HistoryTrashRepository", () => {
     );
   });
 
+  test("keeps an in-progress published copy while its owner is alive", async () => {
+    const entryId = "2026-01-01T00-00-00-000Z-livecopy";
+    const pendingDir = WorkflowPaths.pendingTrashEntryDir(workspace, entryId);
+    const publishedDir = WorkflowPaths.trashEntryDir(workspace, entryId);
+    await fs.mkdir(path.join(pendingDir, "payload"), { recursive: true });
+    await fs.writeFile(
+      path.join(pendingDir, "owner.json"),
+      JSON.stringify({ pid: process.pid, host: os.hostname() })
+    );
+    await fs.mkdir(path.join(publishedDir, "payload"), { recursive: true });
+    const longAgo = new Date(Date.now() - DAY_MS);
+    await fs.utimes(pendingDir, longAgo, longAgo);
+
+    await trash.recoverPendingEntries();
+
+    assert.strictEqual(await exists(pendingDir), true);
+    assert.strictEqual(await exists(publishedDir), true);
+    assert.strictEqual(
+      await exists(path.join(publishedDir, "entry.json")),
+      false
+    );
+  });
+
+  test("removes a leftover pending copy once its entry is published, even while its owner lives", async () => {
+    const entryId = "2026-01-01T00-00-00-000Z-donecopy";
+    const pendingDir = WorkflowPaths.pendingTrashEntryDir(workspace, entryId);
+    const publishedDir = WorkflowPaths.trashEntryDir(workspace, entryId);
+    await fs.mkdir(path.join(pendingDir, "payload"), { recursive: true });
+    await fs.writeFile(
+      path.join(pendingDir, "owner.json"),
+      JSON.stringify({ pid: process.pid, host: os.hostname() })
+    );
+    await fs.mkdir(path.join(publishedDir, "payload"), { recursive: true });
+    await fs.writeFile(
+      path.join(publishedDir, "entry.json"),
+      JSON.stringify({ id: entryId, items: [] })
+    );
+
+    await trash.recoverPendingEntries();
+
+    assert.strictEqual(await exists(pendingDir), false);
+    assert.strictEqual(
+      await exists(path.join(publishedDir, "entry.json")),
+      true
+    );
+  });
+
+  test("cleans an unpublished copy after its owner is dead", async () => {
+    const entryId = "2026-01-01T00-00-00-000Z-deadcopy";
+    const pendingDir = WorkflowPaths.pendingTrashEntryDir(workspace, entryId);
+    const publishedDir = WorkflowPaths.trashEntryDir(workspace, entryId);
+    await fs.mkdir(path.join(pendingDir, "payload"), { recursive: true });
+    await fs.writeFile(
+      path.join(pendingDir, "owner.json"),
+      JSON.stringify({ pid: 2_147_483_647, host: os.hostname() })
+    );
+    await fs.mkdir(path.join(publishedDir, "payload"), { recursive: true });
+    const longAgo = new Date(Date.now() - DAY_MS);
+    await fs.utimes(pendingDir, longAgo, longAgo);
+
+    await trash.recoverPendingEntries();
+
+    assert.strictEqual(await exists(publishedDir), false);
+    assert.strictEqual(await exists(pendingDir), false);
+  });
+
   test("publishes under a fresh id when the requested entry directory exists", async () => {
     const workflowKey = await createLineage("publish-collision");
     const batch = trash.begin(HISTORY_TRASH_ENTRY_KINDS.LINEAGE, REQUESTER);

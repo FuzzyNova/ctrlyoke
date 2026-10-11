@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by Nathan (manual observation), confirmed in code by claude-cli
 - **Area:** `src/cli/ServerCommand.ts` (`formatServerBanner`, `installServerShutdown`), `src/platform/NodeHostServices.ts` (`createNodeHostedServer().dispose`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -131,3 +131,18 @@ TTY, skip the gate; a Ctrl+C during dispose force-exits with 130; and the
 deadline exits non-zero when dispose never resolves. `installServerShutdown`
 already accepts injected `signals`/`exit`, so none of these need a real
 process.
+
+## Resolution note
+
+Shutdown now uses one injected two-stage signal helper for the server and
+`run`/`continue`, with an expiring interactive confirmation when server-owned
+workflows are running, graceful-shutdown feedback, force-exit handling, and an
+overall deadline. Hosted server disposal waits for CLI children to close after
+SIGTERM and any SIGKILL escalation.
+
+The Windows console note is verified as a possibility: [Microsoft documents
+that Ctrl+C is delivered by default to console-attached
+processes](https://learn.microsoft.com/en-us/windows/console/ctrl-c-and-ctrl-break-signals),
+and these CLI children are not detached. A child harness may therefore receive
+Ctrl+C directly. The implementation does not attempt to isolate children from
+that console event; interrupted run state is recovered on the next start.

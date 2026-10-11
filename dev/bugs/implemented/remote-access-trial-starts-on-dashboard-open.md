@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by backlog audit (DOCUMENTATION_GAPS_PLAN.md defect C12)
 - **Area:** `src/license/LicenseService.ts`, `src/ui/DashboardApplication.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -33,6 +33,18 @@ Split reading from starting. Make `getRemoteAccessTrialStartedAt()` read-only, r
 when there's no stored value. Add an explicit `startRemoteAccessTrial()` and call it only where
 remote reach is actually first used (the hosted server binding a non-loopback address or accepting
 its first non-localhost client). `getRemoteAccessTrialEndsAt()` should return `null`, meaning "not
-started", until then, and the dashboard should show "14-day trial available". Fix this before
+started", until then, and the dashboard should show "14-day trial available".
+
+Watch the gates: `hasRemoteAccess()` is the allow-check for remote reach
+(`HostedServerOptionsFactory.ts` `remoteAccess.isAllowed` →
+`CtrlYokeHostedServer`, `ServerCommand.ts` LAN-cert generation, `WebPushService`).
+If a read-only start makes "not started" return `false`, remote access is blocked
+forever, because nothing ever gets to start the trial. "Not started" must count as
+eligible. The remote-reach gate in `CtrlYokeHostedServer` (first non-loopback client
+admitted, or a non-loopback bind) is the place that calls `startRemoteAccessTrial()`.
+Read-only callers, such as the dashboard license state and the `ServerCommand` cert
+pre-check, must never start it. Consider splitting `hasRemoteAccess()` into a read-only
+`canUseRemoteAccess()` and a `beginRemoteAccess()` that starts the trial and is used
+at the gate. Fix this before
 public launch: after launch, existing installs will already have a stored start time from a
 dashboard open, and only a migration could tell those apart from real trial starts.

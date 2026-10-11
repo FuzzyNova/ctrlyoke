@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (review of ~d3a822cfb, reproduced on Windows with a scratch `npx tsx` script)
 - **Area:** `src/core/EndConditionEvaluator.ts` (`buildResolvedScriptShellCommand`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

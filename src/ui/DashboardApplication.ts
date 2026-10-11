@@ -131,7 +131,7 @@ export class DashboardApplication
             const entitlement = await licenseService.getEntitlement();
             return {
               isPro: await licenseService.isPro(),
-              hasRemoteAccess: await licenseService.hasRemoteAccess(),
+              hasRemoteAccess: await licenseService.canUseRemoteAccess(),
               trialEndsAt: await licenseService.getRemoteAccessTrialEndsAt(),
               source: entitlement.source ?? null,
               expiresAt: entitlement.expiresAt,

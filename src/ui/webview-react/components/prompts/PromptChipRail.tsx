@@ -52,7 +52,10 @@ import {
   isWorkflowRunning,
 } from "../../utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
-import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
+import {
+  calcContextPct,
+  resolveEffectiveContextWindow,
+} from "@utils/tokenUtils";
 import { buildStepHoverTooltip } from "@root/utils/TokenFormatting";
 import type { StepHarnessModel } from "./WorkflowStepRow";
 import {
@@ -259,6 +262,7 @@ type FinalStepChipProps = {
   stepColor?: string;
   hasFinalStep: boolean;
   isDisabled: boolean;
+  contextPct?: number;
   showPauseBoundaryBefore: boolean;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
@@ -269,6 +273,7 @@ function FinalStepChip({
   stepColor,
   hasFinalStep,
   isDisabled,
+  contextPct,
   showPauseBoundaryBefore,
   onChipClick,
   onOpenContextMenu,
@@ -312,6 +317,21 @@ function FinalStepChip({
           className="text-base"
         />
       </div>
+      {contextPct !== undefined && (
+        <div className="absolute right-0 top-0 bottom-0 w-[2px] overflow-hidden">
+          <div
+            key={contextPct}
+            className={`absolute bottom-0 left-0 right-0 animate-ctx-update ${
+              contextPct >= 85
+                ? "bg-error-fg opacity-90"
+                : contextPct >= 70
+                  ? "bg-warning-fg opacity-70"
+                  : "bg-description-fg opacity-50"
+            }`}
+            style={{ height: `${contextPct}%` }}
+          />
+        </div>
+      )}
     </button>
   );
 }
@@ -350,8 +370,10 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     executionState,
     finalStep,
     finalStepStatus,
+    finalStepLoopCount,
     finalStepPhase,
     liveContextWindow,
+    liveFinalStepContextWindow,
   } = useWorkflowStore();
   const { setFinalStepFooterExpanded } = useUiStore();
   const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
@@ -651,6 +673,18 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   }, [isExternallyManaged, isLineageReadOnly, finalStep]);
 
   const finalStepLatestOutput = useFinalStepLatestOutput();
+  const finalStepContextWindow = resolveEffectiveContextWindow({
+    isCurrent:
+      isRunning &&
+      finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
+      finalStepStatus === STEP_STATUS.RUNNING,
+    liveContextWindow: liveFinalStepContextWindow[finalStepLoopCount],
+    latestOutputTokens: finalStepLatestOutput?.tokens,
+    runtimeContextWindow:
+      finalStep && !isScriptWorkflowStep(finalStep)
+        ? finalStep._runtime
+        : undefined,
+  });
   const finalStepOutputText = finalStepLatestOutput?.response as
     string | undefined;
 
@@ -735,6 +769,10 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
         stepColor={finalStepColor}
         hasFinalStep={hasFinalStep}
         isDisabled={finalStep?.enabled === false}
+        contextPct={calcContextPct(
+          finalStepContextWindow?.used,
+          finalStepContextWindow?.size
+        )}
         showPauseBoundaryBefore={
           isPaused &&
           currentStep === prompts.length &&

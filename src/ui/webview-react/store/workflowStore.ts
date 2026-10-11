@@ -312,6 +312,8 @@ interface WorkflowState {
   runtimeUndoGeneration: number;
   /** Live context window usage per step index, updated during prompt execution */
   liveContextWindow: Record<number, { used: number; size: number }>;
+  /** Live context window usage per final-step pass. */
+  liveFinalStepContextWindow: Record<number, { used: number; size: number }>;
   coordinationScope: CoordinationScopeSnapshot | null;
 }
 
@@ -495,6 +497,11 @@ interface WorkflowActions {
     size: number
   ) => void;
   clearLiveContextWindow: (stepIndex: number) => void;
+  updateLiveFinalStepContextWindow: (
+    loopIndex: number,
+    used: number,
+    size: number
+  ) => void;
   setCoordinationScope: (scope: CoordinationScopeSnapshot | null) => void;
 }
 
@@ -559,6 +566,7 @@ const initialState: WorkflowState = {
   undoWorkflowProperties: {},
   runtimeUndoGeneration: 0,
   liveContextWindow: {},
+  liveFinalStepContextWindow: {},
   coordinationScope: null,
 };
 
@@ -1122,6 +1130,7 @@ export const useWorkflowStore = create<
                 finalStepLoopCount: 0,
                 finalStepPhase: null,
                 finalStepStreamingChunks: {},
+                liveFinalStepContextWindow: {},
                 liveOrderedEntries: state.liveOrderedEntries.filter(
                   (e) =>
                     "target" in e &&
@@ -1133,11 +1142,14 @@ export const useWorkflowStore = create<
 
       setFinalStepStatus: (status, loopCount, phase) =>
         withUndoPause(() =>
-          set({
+          set((state) => ({
             finalStepStatus: status,
             finalStepLoopCount: loopCount,
             finalStepPhase: phase,
-          })
+            ...(state.finalStepLoopCount !== loopCount
+              ? { liveFinalStepContextWindow: {} }
+              : {}),
+          }))
         ),
 
       // ============================================================================
@@ -1533,6 +1545,10 @@ export const useWorkflowStore = create<
                     state.liveContextWindow,
                     {}
                   ),
+                  liveFinalStepContextWindow: preserveReferences(
+                    state.liveFinalStepContextWindow,
+                    {}
+                  ),
                   workspaceSnapshots: preserveReferences(
                     state.workspaceSnapshots,
                     {}
@@ -1698,6 +1714,7 @@ export const useWorkflowStore = create<
               finalStepStatus: null,
               finalStepLoopCount: 0,
               finalStepPhase: null,
+              liveFinalStepContextWindow: {},
             };
           })
         ),
@@ -1769,6 +1786,7 @@ export const useWorkflowStore = create<
             finalStepStatus: null,
             finalStepLoopCount: 0,
             finalStepPhase: null,
+            liveFinalStepContextWindow: {},
             activeStepIndices: [],
             workspaceSnapshots: {},
             finalStepWorkspaceSnapshots: {},
@@ -1875,6 +1893,16 @@ export const useWorkflowStore = create<
             delete next[stepIndex];
             return { liveContextWindow: next };
           })
+        ),
+
+      updateLiveFinalStepContextWindow: (loopIndex, used, size) =>
+        withUndoPause(() =>
+          set((state) => ({
+            liveFinalStepContextWindow: {
+              ...state.liveFinalStepContextWindow,
+              [loopIndex]: { used, size },
+            },
+          }))
         ),
 
       // ============================================================================

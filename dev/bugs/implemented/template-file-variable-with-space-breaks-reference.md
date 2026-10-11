@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by claude-cli bug-hunt final step (reproduced with a scratch `npx tsx` script through `TemplateManager.createWorkflow` and `parseAtReferences`)
 - **Area:** `src/core/TemplateManager.ts` (`replaceVariables`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

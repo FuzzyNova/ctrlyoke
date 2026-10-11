@@ -41,6 +41,16 @@ export function isLoopbackBindAddress(bindAddress: string): boolean {
   );
 }
 
+/** Returns whether a socket peer address is the current machine. */
+export function isLoopbackClientAddress(
+  remoteAddress: string | undefined
+): boolean {
+  if (!remoteAddress) return false;
+  const normalized = remoteAddress.trim().toLowerCase();
+  const mappedIpv4 = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  return isLoopbackBindAddress(mappedIpv4?.[1] ?? normalized);
+}
+
 function expandIpv6Groups(address: string): number[] | undefined {
   const halves = address.split("::");
   if (halves.length > 2) return undefined;

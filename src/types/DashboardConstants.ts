@@ -41,6 +41,18 @@ export const HOST_KINDS = {
 
 export type HostKind = (typeof HOST_KINDS)[keyof typeof HOST_KINDS];
 
+/** OS process signals used by CLI and harness shutdown paths. */
+export const PROCESS_SIGNALS = {
+  INTERRUPT: "SIGINT",
+  TERMINATE: "SIGTERM",
+  HANGUP: "SIGHUP",
+  BREAK: "SIGBREAK",
+  KILL: "SIGKILL",
+} as const;
+
+export type ProcessSignal =
+  (typeof PROCESS_SIGNALS)[keyof typeof PROCESS_SIGNALS];
+
 /** Outcomes returned by host actions invoked from shared workflow code. */
 export const DASHBOARD_ACTION_RESULT_STATUSES = {
   OPENED: "opened",
@@ -365,6 +377,8 @@ export const LICENSE_UI = {
   SUPPORT_EMAIL: "support@ctrlyoke.dev",
   REMOTE_ACCESS_UPSELL:
     "Remote access is a Pro feature. Your localhost dashboard remains free; start a 14-day trial or view Pro pricing.",
+  REMOTE_ACCESS_TRIAL_AVAILABLE:
+    "Your 14-day remote-access trial starts the first time you enable it.",
   CUSTOM_ICON_UPSELL:
     "Custom icon colors are a Pro thank-you perk. View Pro pricing to unlock them.",
 } as const;
@@ -393,6 +407,7 @@ export const MESSAGE_TYPES = {
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
   CLI_STREAMING_EVENTS: "cliStreamingEvents", // Structured events for Claude/Codex CLI
   CONTEXT_WINDOW_UPDATE: "contextWindowUpdate", // Live context window usage update (extension -> webview)
+  FINAL_STEP_CONTEXT_WINDOW_UPDATE: "finalStepContextWindowUpdate", // Live final-step context-window usage update
   STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
   STEPS_EXTENDED: "stepsExtended", // Send updated steps list after queue extension

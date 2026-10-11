@@ -273,7 +273,7 @@ suite("WebPushService", () => {
   test("blocks push setup when remote access is not entitled", async () => {
     let blocked = 0;
     const service = new WebPushService(undefined, {
-      hasRemoteAccess: async () => false,
+      canUseRemoteAccess: async () => false,
       onAccessBlocked: () => {
         blocked += 1;
       },

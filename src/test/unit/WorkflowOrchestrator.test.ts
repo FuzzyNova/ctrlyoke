@@ -22,6 +22,7 @@ import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { HistoryTrashRepository } from "../../core/orchestration/HistoryTrashRepository";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -129,6 +130,35 @@ suite("WorkflowOrchestrator unseen failed runs", () => {
       internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
       currentAddress
     );
+  });
+});
+
+suite("WorkflowOrchestrator running workflow count", () => {
+  test("counts only locally running or pausing workflows", () => {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    internal.instances = new Map([
+      [
+        "running",
+        { getSummary: () => ({ executionState: EXECUTION_STATES.RUNNING }) },
+      ],
+      [
+        "pausing",
+        { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSING }) },
+      ],
+      [
+        "paused",
+        { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSED }) },
+      ],
+    ]);
+
+    // External watched runs are exposed in getWorkflowSummaries(), not this
+    // process-owned instance registry.
+    internal.externalRunWatchCoordinator.getSummaries = () => [
+      { executionState: EXECUTION_STATES.RUNNING },
+    ];
+
+    assert.strictEqual(orchestrator.countRunningWorkflows(), 2);
   });
 });
 
@@ -1802,6 +1832,23 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         EXECUTION_STATES.COMPLETED,
         1
       );
+      const newest = await WorkingFileManager.seedNewRun(
+        workspace,
+        workflowKey,
+        newer.runRef
+      );
+      await history.initializeRunAt(
+        workflowKey,
+        newest.runRef,
+        newest.runDir,
+        newest.runId,
+        newest.startedAt
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, newest.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
 
       const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
@@ -1866,13 +1913,13 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       assert.strictEqual(feedbackCalls[0].severity, "info");
       assert.strictEqual(
         feedbackCalls[0].message,
-        `Run ${newer.runId} was deleted — you're now viewing Run ${older.runId}.`
+        `Run ${newer.runId} was deleted — you're now viewing Run ${newest.runId}.`
       );
 
       const fallback = {
         workflowKey,
         kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-        runRef: older.runRef,
+        runRef: newest.runRef,
       };
       assert.deepStrictEqual(
         orchestrator.getViewAddress(PANEL_CLIENT_ID),
@@ -1882,10 +1929,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         orchestrator.getViewAddress("browser:delete"),
         fallback
       );
-      assert.deepStrictEqual(
-        orchestrator.getViewAddress("browser:older"),
-        fallback
-      );
+      assert.deepStrictEqual(orchestrator.getViewAddress("browser:older"), {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: older.runRef,
+      });
       assert.deepStrictEqual(
         refreshed.map(({ clientId }) => clientId).sort(),
         [PANEL_CLIENT_ID, "browser:delete", "browser:older"].sort()
@@ -2155,6 +2203,207 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           },
         },
       ]);
+    } finally {
+      await history?.flushPendingIndexRefresh();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("deleting the last run trashes the empty lineage and unloads its viewers", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-delete-last-run-")
+    );
+    let history: OutputHistoryManager | undefined;
+    try {
+      const fileManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "one" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Delete last run",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await fileManager.createWorkingFile(
+        "delete-last-run",
+        [{ prompt: "one" }],
+        workspace,
+        "Delete last run"
+      );
+      const run = await fileManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now() - 2_000
+      );
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
+        workflowKey,
+        run.runRef,
+        run.runDir,
+        run.runId,
+        Date.now() - 2_000
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, run.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
+
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.instances = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
+      const address = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: run.runRef,
+      };
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, address],
+        ["browser:delete-last", address],
+      ]);
+      const viewerMessages: unknown[] = [];
+      internal.viewMessageSinks = new Map([
+        [
+          "browser:delete-last",
+          (message: unknown) => viewerMessages.push(message),
+        ],
+      ]);
+
+      const sent: Array<{ type?: string; entryId?: string }> = [];
+      await orchestrator.deleteRunAtAddress(
+        { workflowKey, runRef: run.runRef },
+        (message) => sent.push(message as { type?: string; entryId?: string }),
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(await history.getRunsForWorkflow(workflowKey), []);
+      assert.deepStrictEqual(
+        sent.map((message) => message.type),
+        [MESSAGE_TYPES.HISTORY_TRASHED, MESSAGE_TYPES.WORKFLOW_UNLOADED]
+      );
+      assert.deepStrictEqual(viewerMessages, [
+        { type: MESSAGE_TYPES.WORKFLOW_UNLOADED },
+      ]);
+      assert.strictEqual(
+        internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
+        null
+      );
+
+      const [entry] = await new HistoryTrashRepository(workspace).list(30);
+      assert.ok(entry);
+      assert.strictEqual(entry.items.length, 1);
+      assert.strictEqual(entry.items[0].wholeLineage, true);
+      assert.deepStrictEqual(entry.items[0].runRefs, [run.runRef]);
+
+      const restored = await new HistoryTrashRepository(workspace).restore(
+        entry.id
+      );
+      assert.deepStrictEqual(restored.restoredWorkflowKeys, [workflowKey]);
+      assert.deepStrictEqual(await history.getRunsForWorkflow(workflowKey), [
+        run.runRef,
+      ]);
+      const descriptor = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.descriptorPath(workspace, workflowKey),
+          "utf8"
+        )
+      ) as { latestRunRef?: string };
+      assert.strictEqual(descriptor.latestRunRef, run.runRef);
+    } finally {
+      await history?.flushPendingIndexRefresh();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("deleting the last run falls back to a draft that still exists", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-delete-run-draft-fallback-")
+    );
+    let history: OutputHistoryManager | undefined;
+    try {
+      const fileManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "one" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Draft fallback",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await fileManager.createWorkingFile(
+        "draft-fallback",
+        [{ prompt: "one" }],
+        workspace,
+        "Draft fallback"
+      );
+      const run = await fileManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now() - 2_000
+      );
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
+        workflowKey,
+        run.runRef,
+        run.runDir,
+        run.runId,
+        Date.now() - 2_000
+      );
+      await history.finalizeRun(
+        history.getHistoryFilePath(workflowKey, run.runRef),
+        EXECUTION_STATES.COMPLETED,
+        1
+      );
+      const draftPath = WorkflowPaths.draftFilePath(workspace, workflowKey);
+      await fs.mkdir(path.dirname(draftPath), { recursive: true });
+      await fs.copyFile(
+        WorkflowPaths.runFilePath(workspace, workflowKey, run.runRef),
+        draftPath
+      );
+
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.instances = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
+      internal.viewAddressRegistry = new Map([
+        [
+          PANEL_CLIENT_ID,
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: run.runRef,
+          },
+        ],
+      ]);
+      const refreshed: unknown[] = [];
+      internal.loadRunViewForClient = async (address: unknown) => {
+        refreshed.push(address);
+      };
+
+      await orchestrator.deleteRunAtAddress(
+        { workflowKey, runRef: run.runRef },
+        () => undefined,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(refreshed, [
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      ]);
+      assert.deepStrictEqual(await history.getRunsForWorkflow(workflowKey), []);
+      await fs.access(draftPath);
     } finally {
       await history?.flushPendingIndexRefresh();
       await fs.rm(workspace, { recursive: true, force: true });

@@ -2,7 +2,6 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
 import addFormats from "ajv-formats";
-import * as yaml from "js-yaml";
 import type { ErrorObject, ValidateFunction } from "ajv";
 import {
   ExecutionProperties,
@@ -74,7 +73,7 @@ import {
   type NewerSchemaError,
 } from "../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../utils/FormatMigrations";
-import { WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
+import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
 
 type ParallelValidationProperties = Pick<
   PromptFile,
@@ -221,7 +220,7 @@ export class PromptFileParser {
       if (ext === ".yaml" || ext === ".yml") {
         // Parse YAML
         try {
-          parsed = yaml.load(content, {
+          parsed = loadYamlDocument(content, {
             filename: filePath,
             schema: WORKFLOW_YAML_SCHEMA,
             json: false, // Use YAML semantics, not JSON compatibility mode
@@ -324,7 +323,7 @@ export class PromptFileParser {
         sourceLineOffset =
           text.slice(0, text.indexOf(located.frontmatter)).split("\n").length -
           1;
-        const frontmatter = yaml.load(located.frontmatter, {
+        const frontmatter = loadYamlDocument(located.frontmatter, {
           schema: WORKFLOW_YAML_SCHEMA,
         });
         if (
@@ -353,7 +352,7 @@ export class PromptFileParser {
       } else if (kind === CTRLYOKE_FILE_KINDS.WORKFLOW_JSON) {
         parsed = JSON.parse(text);
       } else {
-        parsed = yaml.load(text, { schema: WORKFLOW_YAML_SCHEMA });
+        parsed = loadYamlDocument(text, { schema: WORKFLOW_YAML_SCHEMA });
       }
 
       const validation = this.validateWorkflowBeforeNormalization(
@@ -844,12 +843,10 @@ export class PromptFileParser {
       let description: unknown;
       if (frontmatterSplit) {
         const frontmatterText = frontmatterSplit.frontmatter;
-        const frontmatter = frontmatterText.trim()
-          ? yaml.load(frontmatterText, {
-              filename: filePath,
-              schema: WORKFLOW_YAML_SCHEMA,
-            })
-          : {};
+        const frontmatter = loadYamlDocument(frontmatterText, {
+          filename: filePath,
+          schema: WORKFLOW_YAML_SCHEMA,
+        });
         if (
           frontmatter !== null &&
           frontmatter !== undefined &&

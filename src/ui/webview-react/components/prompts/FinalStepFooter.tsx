@@ -7,6 +7,7 @@ import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import type { PromptOverride } from "./PromptStepDetails";
 import {
   FINAL_STEP_PHASES,
+  STEP_STATUS,
   type HarnessId,
   type StepStatus,
   type FinalStepPhase,
@@ -55,6 +56,8 @@ interface FinalStepFooterProps {
   modelIsDefault?: boolean;
   /** Latest CLI output of the final step's most recent pass */
   latestOutput?: CliOutput | null;
+  /** Live context usage for the current final-step pass. */
+  liveContextWindow?: { used: number; size: number };
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
   /** Right-click context menu handler */
@@ -90,6 +93,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   modelLabel,
   modelIsDefault,
   latestOutput,
+  liveContextWindow,
   overrides,
   onContextMenu,
 }) => {
@@ -98,11 +102,10 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     ? (status ?? "pending")
     : "pending";
   const longPressHandlers = useLongPress(onContextMenu);
-  // Live context telemetry is keyed by queue step index only, so the final
-  // step's bar comes from its latest CLI output, falling back to the
-  // persisted runtime metadata.
   const contextWindow = resolveEffectiveContextWindow({
-    isCurrent: false,
+    isCurrent:
+      isWorkflowRunningForFinalStep(status, phase),
+    liveContextWindow,
     latestOutputTokens: latestOutput?.tokens,
     runtimeContextWindow: finalStep?._runtime,
   });
@@ -320,3 +323,10 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     </div>
   );
 };
+
+function isWorkflowRunningForFinalStep(
+  status: StepStatus | null,
+  phase: FinalStepPhase | null
+): boolean {
+  return status === STEP_STATUS.RUNNING && phase === FINAL_STEP_PHASES.FINAL_STEP;
+}

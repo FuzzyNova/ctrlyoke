@@ -7,6 +7,7 @@ import { TemplateManager } from "../../core/TemplateManager";
 import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
 import { MockPlatform } from "../helpers/mockHarness";
 import { EXECUTION_PROPERTY_KEYS } from "../../types/CtrlYokeTypes";
+import { parseAtReferences } from "../../utils/FileReferenceParser";
 import {
   makeTempDir as createTempDir,
   removeTempDir,
@@ -257,6 +258,27 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(
         tm.replaceVariables("Use {{a}} and {b}", { a: "one", b: "two" }),
         "Use {{a}} and two"
+      );
+    });
+
+    test("quotes file and directory values used as @ references", async () => {
+      const tm = makeManager();
+      tm.getWorkspaceRoot = () => process.cwd();
+      tm.getTemplateContent = async () =>
+        [
+          "steps:",
+          '  - prompt: "Read @{file:specFile} and inspect @{dir}"',
+          "",
+        ].join("\n");
+
+      const workflow = await tm.createWorkflow("custom:test", {
+        specFile: "docs/my spec.md",
+        dir: "docs/my dir/",
+      });
+      const prompt = (workflow.steps[0] as { prompt: string }).prompt;
+      assert.deepStrictEqual(
+        parseAtReferences(prompt).map((reference) => reference.path),
+        ["docs/my spec.md", "docs/my dir/"]
       );
     });
   });

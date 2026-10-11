@@ -630,6 +630,14 @@ export class CtrlYokeWebviewProvider
   ): void {
     this.sink.updateContextWindow(stepIndex, used, size, workflowId);
   }
+  public updateFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    this.sink.updateFinalStepContextWindow(loopIndex, used, size, workflowId);
+  }
   public updateStatusMessage(
     stepIndex: number,
     message: string,

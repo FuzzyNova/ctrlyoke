@@ -119,6 +119,10 @@ import {
   resolvePromptTextWithVariables,
 } from "./PromptTextResolver";
 import {
+  RETRY_PROMPT_SOURCES,
+  type RetryPromptSource,
+} from "./RetryBudget";
+import {
   CliOutputFormatter,
   DashboardOutput,
 } from "./harness/shared/CliOutputFormatter";
@@ -312,6 +316,12 @@ export interface WorkflowExecutionContext {
    */
   captureContextWindow?: (
     stepIndex: number,
+    used: number,
+    size: number
+  ) => void;
+  /** Always-on live context-window buffer for final-step passes. */
+  captureFinalStepContextWindow?: (
+    loopIndex: number,
     used: number,
     size: number
   ) => void;
@@ -4415,6 +4425,13 @@ export class WorkflowExecutor {
             used,
             size
           );
+        } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+          context.captureFinalStepContextWindow?.(target.loopIndex, used, size);
+          context.dashboardProvider?.updateFinalStepContextWindow(
+            target.loopIndex,
+            used,
+            size
+          );
         }
       }
     );
@@ -4470,7 +4487,7 @@ export class WorkflowExecutor {
       retryPromptStep: PromptStep,
       currentIndex: number,
       retryAttemptIndex: number,
-      promptAlreadyResolved = false
+      promptSource: RetryPromptSource
     ): Promise<{ responseText: string; attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
@@ -4488,13 +4505,20 @@ export class WorkflowExecutor {
       }
       const effectiveRetryPrompt: PromptStep = {
         ...retryPromptStep,
-        prompt: promptAlreadyResolved
-          ? retryPromptStep.prompt
-          : await this.resolveRetryPromptFile(
-              retryPromptStep.prompt,
-              context,
-              workflowFile.vars
-            ),
+        prompt:
+          promptSource === RETRY_PROMPT_SOURCES.AUTHORED_TEMPLATE
+            ? await this.resolveRetryPromptFile(
+                retryPromptStep.prompt,
+                context,
+                workflowFile.vars
+              )
+            : promptSource === RETRY_PROMPT_SOURCES.SETTINGS_DEFAULT
+              ? await this.resolveEffectivePrompt(
+                  retryPromptStep.prompt,
+                  context,
+                  workflowFile.vars
+                )
+              : retryPromptStep.prompt,
       };
       if (!effectiveRetryPrompt.prompt.trim()) {
         throw new Error(

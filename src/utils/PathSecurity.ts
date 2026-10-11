@@ -18,13 +18,15 @@ import { foldPathForCompare } from "./PathCasing";
  */
 export function isPathWithinDirectory(
   candidate: string,
-  directory: string
+  directory: string,
+  pathImplementation: Pick<typeof path, "sep"> = path,
+  platform: NodeJS.Platform = process.platform
 ): boolean {
-  const foldedCandidate = foldPathForCompare(candidate);
-  const foldedDirectory = foldPathForCompare(directory);
-  const directoryPrefix = foldedDirectory.endsWith(path.sep)
+  const foldedCandidate = foldPathForCompare(candidate, platform);
+  const foldedDirectory = foldPathForCompare(directory, platform);
+  const directoryPrefix = foldedDirectory.endsWith(pathImplementation.sep)
     ? foldedDirectory
-    : foldedDirectory + path.sep;
+    : foldedDirectory + pathImplementation.sep;
   return (
     foldedCandidate === foldedDirectory ||
     foldedCandidate.startsWith(directoryPrefix)

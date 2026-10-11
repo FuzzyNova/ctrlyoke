@@ -56,6 +56,7 @@ import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ScriptProcessRunner } from "../../core/orchestration/ScriptProcessRunner";
 import { calculateAttemptCost } from "../../utils/ModelPricing";
 import {
@@ -3518,6 +3519,76 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("substitutes variables in settings-default retry prompts once", async () => {
+    const originalRetryPrompt = ConfigurationUtils.getDefaultRetryPrompt;
+    const originalPassRetryPrompt =
+      ConfigurationUtils.getDefaultPassRetryPrompt;
+    ConfigurationUtils.getDefaultRetryPrompt = () => "Fix {{target}}";
+    ConfigurationUtils.getDefaultPassRetryPrompt = () =>
+      "Review {{target}} again";
+    try {
+      const failureQueue = new PromptQueue();
+      const failureIntegration = new MockHarnessIntegration(undefined, false);
+      const failureEvaluator = new RecordingShellEvaluator(
+        new MockPlatform(),
+        [shellEvaluationResult(false), shellEvaluationResult(true)]
+      );
+      failureQueue.loadPrompts({
+        vars: { target: "src/foo.ts" },
+        steps: [
+          {
+            prompt: "Check the result",
+            endCondition: {
+              script: "check-result",
+              onFail: CONDITION_ACTIONS.RETRY,
+              maxRetries: 1,
+            },
+          },
+        ],
+      });
+      await makeExecutor(failureQueue, failureEvaluator).execute(
+        failureIntegration,
+        makeContext(failureIntegration)
+      );
+      assert.deepStrictEqual(failureIntegration.sentPrompts, [
+        "Check the result",
+        "Fix src/foo.ts",
+      ]);
+
+      const passQueue = new PromptQueue();
+      const passIntegration = new MockHarnessIntegration(undefined, false);
+      const passEvaluator = new RecordingShellEvaluator(new MockPlatform(), [
+        shellEvaluationResult(true),
+        shellEvaluationResult(false),
+      ]);
+      passQueue.loadPrompts({
+        vars: { target: "src/foo.ts" },
+        steps: [
+          {
+            prompt: "Check the result",
+            endCondition: {
+              script: "check-result",
+              onPass: CONDITION_ACTIONS.RETRY,
+              onFail: CONDITION_ACTIONS.CONTINUE,
+              maxRetries: 1,
+            },
+          },
+        ],
+      });
+      await makeExecutor(passQueue, passEvaluator).execute(
+        passIntegration,
+        makeContext(passIntegration)
+      );
+      assert.deepStrictEqual(passIntegration.sentPrompts, [
+        "Check the result",
+        "Review src/foo.ts again",
+      ]);
+    } finally {
+      ConfigurationUtils.getDefaultRetryPrompt = originalRetryPrompt;
+      ConfigurationUtils.getDefaultPassRetryPrompt = originalPassRetryPrompt;
+    }
+  });
+
   test("skips disabled queue steps without sending them to the harness", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
@@ -4514,6 +4585,53 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(completedCalls[0].loopIndex, 0);
     assert.strictEqual(completedCalls[0].output.prompt, "final-capture");
     assert.strictEqual(completedCalls[0].output.isStreaming, false);
+  });
+
+  test("forwards finalStep context-window updates through its dedicated target", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const captured: Array<[number, number, number]> = [];
+    const forwarded: Array<[number, number, number]> = [];
+
+    integration.onSend = async (prompt) => {
+      if (prompt.prompt === "final-context") {
+        (integration as any).contextWindowUpdateEmitter.fire({
+          used: 75000,
+          size: 200000,
+        });
+      }
+      return { success: true, responseText: "done" };
+    };
+
+    const context = makeContext(integration);
+    context.captureFinalStepContextWindow = (loopIndex, used, size) => {
+      captured.push([loopIndex, used, size]);
+    };
+    context.dashboardProvider = new Proxy(
+      {
+        updateFinalStepContextWindow: (
+          loopIndex: number,
+          used: number,
+          size: number
+        ) => {
+          forwarded.push([loopIndex, used, size]);
+        },
+      } as any,
+      {
+        get: (target, property) =>
+          target[property] ?? (() => {}),
+      }
+    );
+    queue.loadPrompts({
+      steps: [{ prompt: "queue" }],
+      finalStep: { prompt: "final-context" },
+    });
+
+    await executor.execute(integration, context);
+
+    assert.deepStrictEqual(captured, [[0, 75000, 200000]]);
+    assert.deepStrictEqual(forwarded, [[0, 75000, 200000]]);
   });
 
   test("fails the step on process exit by default and persists warning plus PTY tail", async () => {

@@ -8,7 +8,8 @@ import type React from "react";
  */
 export function useLocalValue<T>(
   externalValue: T,
-  onCommit: (value: T) => void
+  onCommit: (value: T) => void,
+  getNormalizedValue?: (value: T) => T
 ) {
   const [value, setValue] = useState(externalValue);
   const editing = useRef(false);
@@ -33,7 +34,13 @@ export function useLocalValue<T>(
     onBlur: () => {
       editing.current = false;
       onCommit(value);
-      setValue(externalValueRef.current);
+      const normalizedValue = getNormalizedValue?.(value);
+      setValue(
+        normalizedValue !== undefined &&
+          Object.is(normalizedValue, externalValueRef.current)
+          ? externalValueRef.current
+          : value
+      );
     },
   };
 }
@@ -41,9 +48,10 @@ export function useLocalValue<T>(
 export function useLocalInput(
   externalValue: string,
   onCommit: (value: string) => void,
-  onValueChange?: (value: string) => void
+  onValueChange?: (value: string) => void,
+  getNormalizedValue?: (value: string) => string
 ) {
-  const local = useLocalValue(externalValue, onCommit);
+  const local = useLocalValue(externalValue, onCommit, getNormalizedValue);
 
   return {
     value: local.value,

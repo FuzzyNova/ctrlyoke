@@ -56,16 +56,19 @@ export interface ScriptProcessResult {
   cancelled?: boolean;
 }
 
+type ScriptProcessManager = Pick<
+  CliProcessManager,
+  "spawn" | "cancel" | "dispose"
+> &
+  Partial<Pick<CliProcessManager, "disposeAsync">>;
+
 /** Shared headless process transport for conditions and worktree setup. */
 export class ScriptProcessRunner {
-  private readonly processManager: Pick<
-    CliProcessManager,
-    "spawn" | "cancel" | "dispose"
-  >;
+  private readonly processManager: ScriptProcessManager;
 
   constructor(
     processManagerRoot: string,
-    processManager?: Pick<CliProcessManager, "spawn" | "cancel" | "dispose">
+    processManager?: ScriptProcessManager
   ) {
     this.processManager =
       processManager ??
@@ -163,6 +166,10 @@ export class ScriptProcessRunner {
 
   dispose(): void {
     this.processManager.dispose();
+  }
+
+  async waitForProcessShutdown(): Promise<void> {
+    await this.processManager.disposeAsync?.();
   }
 
   async cancel(): Promise<void> {
