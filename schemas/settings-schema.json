@@ -81,7 +81,7 @@
             },
             "codex-cli": {
               "type": "string",
-              "default": "gpt-5.5"
+              "default": "gpt-6-luna"
             },
             "opencode-cli": {
               "type": "string",
@@ -536,11 +536,6 @@
           "minimum": 1,
           "default": 6,
           "description": "Maximum number of active members in a parallel step group."
-        },
-        "notifyOnExtension": {
-          "type": "boolean",
-          "description": "Currently has no effect; queue extension notifications are not implemented.",
-          "default": true
         },
         "maxWorkflowExecutionTimeSec": {
           "oneOf": [

@@ -6,7 +6,6 @@ import type {
 import { LocalNumberInput } from "../shared/LocalInputs";
 import { LimitSelect } from "../shared/LimitSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
-import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { settingLabel } from "./settingsCatalog";
 
 interface Props {
@@ -74,12 +73,6 @@ export function QueueSection({
           customFallback={3600}
         />
       </SettingInputRow>
-      <SettingToggleRow
-        settingKey="queue.notifyOnExtension"
-        checked={queue.notifyOnExtension}
-        onChange={(v) => onUpdate("queue.notifyOnExtension", v)}
-        {...rowProps}
-      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { installHintFor } from "../shared/HarnessInstallHint";
 import {
+  DEFAULT_MODELS,
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
 } from "../../../types/DashboardConstants";
@@ -162,7 +163,8 @@ export class OpenCodeCliProvider implements ICliProvider {
   };
 
   /** The fully-qualified model ID used for the most-recently started execution (e.g. "anthropic/claude-sonnet-4-6"). */
-  private resolvedCurrentModel: string = "anthropic/claude-sonnet-4-6";
+  private resolvedCurrentModel: string =
+    DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI];
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
@@ -887,7 +889,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       return configuredDefault;
     }
 
-    return "anthropic/claude-sonnet-4-6";
+    return DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI];
   }
 
   private serializeUserHooks(userHooks?: UserHookConfig[]): string | undefined {

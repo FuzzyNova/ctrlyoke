@@ -166,7 +166,7 @@ The default model to use for each harness for new workflows.
 {
   "copilot-cli": "claude-sonnet-4.6",
   "claude-cli": "sonnet",
-  "codex-cli": "gpt-5.5",
+  "codex-cli": "gpt-6-luna",
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
   "antigravity-cli": "gemini-3.6-flash-medium"
@@ -770,13 +770,6 @@ Maximum number of entries in the run's steps array, including disabled steps and
 - **Constraints:** minimum 1
 
 Maximum number of active members in a parallel step group.
-
-### `queue.notifyOnExtension` {#queue-notifyonextension}
-
-- **Type:** `boolean`
-- **Default:** `true`
-
-Currently has no effect; queue extension notifications are not implemented.
 
 ### `queue.maxWorkflowExecutionTimeSec` {#queue-maxworkflowexecutiontimesec}
 

@@ -4,6 +4,7 @@ import {
   CODEX_APPROVAL_POLICIES,
   CODEX_SANDBOX_MODES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
+  DEFAULT_MODELS,
   NOTIFICATION_EVENT_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
@@ -239,7 +240,6 @@ export interface CtrlYokeGlobalSettings {
     maxSteps: number;
     maxParallelSteps: number;
     maxWorkflowExecutionTimeSec: number; // seconds; -1 = unlimited
-    notifyOnExtension: boolean;
   };
 
   // Runs (always-on execution history)
@@ -430,14 +430,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   defaults: {
     harness: AUTO_DETECT_HARNESS,
-    models: {
-      "copilot-cli": "claude-sonnet-4.6",
-      "claude-cli": "sonnet",
-      "codex-cli": "gpt-5.5",
-      "opencode-cli": "opencode/big-pickle",
-      "qwen-cli": "qwen3.5-plus",
-      "antigravity-cli": "gemini-3.6-flash-medium",
-    },
+    models: { ...DEFAULT_MODELS },
     additionalArgs: {},
     agent: "",
     skills: [],
@@ -566,7 +559,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     maxSteps: DEFAULT_MAX_STEPS,
     maxParallelSteps: 6,
     maxWorkflowExecutionTimeSec: -1,
-    notifyOnExtension: true,
   },
   runs: {
     maxRuns: -1,

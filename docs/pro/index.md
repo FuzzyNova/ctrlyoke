@@ -38,8 +38,9 @@ harnesses are included, with no workflow-step or workflow-count cap.
 
 ## Try remote access free
 
-Each new installation includes a one-time 14-day remote-access trial. No credit
-card or account is required. After the trial, the local and `localhost` dashboard keeps
+Each new installation includes a one-time 14-day remote-access trial. The 14 days
+start when a browser or phone first connects from another device, not when you
+install ctrlyoke or open the dashboard. No credit card or account is required. After the trial, the local and `localhost` dashboard keeps
 working for free; only remote reach requires Pro.
 
 ## Buy Pro

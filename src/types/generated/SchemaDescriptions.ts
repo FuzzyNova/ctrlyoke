@@ -518,7 +518,6 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "queue.maxParallelSteps": "Maximum number of active members in a parallel step group.",
   "queue.maxSteps": "Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. `-1` disables the queue-size limit.",
   "queue.maxWorkflowExecutionTimeSec": "Maximum active execution time in seconds for a workflow. Checked at safe step, parallel-group, final-step, and retry boundaries; paused time is excluded. `-1` disables the workflow-time limit.",
-  "queue.notifyOnExtension": "Currently has no effect; queue extension notifications are not implemented.",
   "resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
   "runs": "Execution run retention settings. History is always on.",
@@ -1009,6 +1008,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "_runtime.executionState": [
     "idle",
     "running",
+    "pausing",
     "paused",
     "stopped",
     "cancelling",

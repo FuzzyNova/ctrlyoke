@@ -330,7 +330,6 @@ suite("ExecutionPreviewService", () => {
         maxSteps: 1,
         maxParallelSteps: 6,
         maxWorkflowExecutionTime: -1,
-        notifyOnExtension: false,
       },
     });
     const preview = await service.build({

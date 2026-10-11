@@ -2614,19 +2614,22 @@ export const WORKTREE_KEEP_HELP_TEXT =
   "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch — ignored files such as `node_modules` are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run.";
 
 // ============================================================================
-// DEFAULT MODELS - Default model per harness
+// DEFAULT MODELS - Default model per harness. `CTRLYOKE_SETTINGS_DEFAULTS`
+// derives `defaults.models` from this, and a test pins the settings schema's
+// defaults to those, so change a default here and run `npm run schema:update`.
 // ============================================================================
 export const DEFAULT_MODELS = {
   [HARNESS_IDS.COPILOT_CLI]: "claude-sonnet-4.6",
   [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
-  [HARNESS_IDS.CODEX_CLI]: "gpt-5.4",
-  [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
+  [HARNESS_IDS.CODEX_CLI]: "gpt-6-luna",
+  // OpenCode's free model, so a default run costs nothing.
+  [HARNESS_IDS.OPENCODE_CLI]: "opencode/big-pickle",
   [HARNESS_IDS.QWEN_CLI]: "qwen3.5-plus",
   // Gemini Flash, not agy's own Claude Sonnet default: the Sonnet tier has a
   // small individual quota that a single run can exhaust for ~28h, which would
   // block unrelated work for anyone who never picks a model explicitly.
   [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3.6-flash-medium",
-} as const;
+} as const satisfies Record<HarnessId, string>;
 
 // ============================================================================
 // MODEL OPTION VALUES - Sentinels used by model option lists

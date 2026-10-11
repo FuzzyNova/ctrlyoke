@@ -7,6 +7,7 @@ import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { formatRunRef } from "../../utils/WorkflowPaths";
 import {
+  EXECUTION_STATES,
   HARNESS_IDS,
   PERMISSION_MODES,
   STATUS_LINE_HARNESS_IDS,
@@ -544,6 +545,13 @@ suite("Workflow template schema", () => {
     }
 
     assert.deepStrictEqual(schema.$defs.harnessId.enum, expectedHarnessIds);
+  });
+
+  test("accepts every execution state the run file can persist", () => {
+    assert.deepStrictEqual(
+      schema.$defs.runtimeMetadata.properties.executionState.enum,
+      Object.values(EXECUTION_STATES)
+    );
   });
 
   test("accepts toolPermissions mode none and rejects passthrough", () => {

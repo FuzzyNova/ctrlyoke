@@ -115,8 +115,7 @@
   "queue": {
     "maxSteps": 100,
     "maxParallelSteps": 6,
-    "maxWorkflowExecutionTimeSec": -1,
-    "notifyOnExtension": true
+    "maxWorkflowExecutionTimeSec": -1
   },
   "runs": {
     "maxRuns": -1,

@@ -1153,7 +1153,6 @@ export interface DynamicQueueConfig {
   maxSteps: number; // -1 or positive integer (default: 100)
   maxParallelSteps: number; // Active members per parallel group (default: 6)
   maxWorkflowExecutionTime: number; // In seconds (-1 or 3600-604800, default: 86400)
-  notifyOnExtension: boolean;
 }
 
 export interface PromptResult {

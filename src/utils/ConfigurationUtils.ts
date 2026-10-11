@@ -393,7 +393,6 @@ export const ConfigurationUtils = {
       maxSteps: queue.maxSteps,
       maxParallelSteps: queue.maxParallelSteps,
       maxWorkflowExecutionTime: queue.maxWorkflowExecutionTimeSec,
-      notifyOnExtension: queue.notifyOnExtension,
     };
   },
 

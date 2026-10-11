@@ -101,7 +101,7 @@ Index of currently executing prompt (0-based)
 
 ### `executionState` {#workflow-runtime-executionstate}
 
-- **Type:** `"idle" | "running" | "paused" | "stopped" | "cancelling" | "completed" | "error"`
+- **Type:** `"idle" | "running" | "pausing" | "paused" | "stopped" | "cancelling" | "completed" | "error"`
 - **Required:** yes
 
 Current execution state

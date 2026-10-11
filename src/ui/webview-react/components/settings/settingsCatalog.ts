@@ -295,14 +295,6 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.QUEUE,
     label: "Max workflow execution time (seconds)",
   },
-  "queue.notifyOnExtension": {
-    id: "queue.notifyOnExtension",
-    path: "queue.notifyOnExtension",
-    tab: GLOBAL_SETTINGS_TABS.QUEUE,
-    label: "Notify on queue extension",
-    description:
-      "Currently has no effect; queue extension notifications are not implemented.",
-  },
   "execution.contextResolutionFailure": {
     id: "execution.contextResolutionFailure",
     path: "execution.contextResolutionFailure",

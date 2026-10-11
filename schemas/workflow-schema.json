@@ -1296,6 +1296,7 @@
           "enum": [
             "idle",
             "running",
+            "pausing",
             "paused",
             "stopped",
             "cancelling",

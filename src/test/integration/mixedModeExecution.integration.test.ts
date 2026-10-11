@@ -82,7 +82,6 @@ function createExecutionContext(
       maxSteps: 100,
       maxParallelSteps: 6,
       maxWorkflowExecutionTime: 3600,
-      notifyOnExtension: false,
     },
     getIntegrationForPrompt: () => integration,
     historyFilePath: "",

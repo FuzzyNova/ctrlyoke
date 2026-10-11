@@ -112,7 +112,6 @@ function createContext(
       maxSteps: 100,
       maxParallelSteps: 6,
       maxWorkflowExecutionTime: 3600,
-      notifyOnExtension: false,
     },
     parallelGroupFanOutEnabled: true,
     getIntegrationForPrompt: (_step, _harness, target) => {
