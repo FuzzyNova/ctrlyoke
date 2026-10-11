@@ -99,3 +99,26 @@ export function workspaceSecretMetadataKeyForRoot(
 ): string {
   return workspaceSecretMetadataKey(workspaceSecretHash(workspaceRoot), name);
 }
+
+/** Return whether a SecretStore key belongs to a managed secret or its metadata. */
+export function isManagedSecretStorageKey(key: string): boolean {
+  const parts = key.split(".");
+  if (parts[0] !== "ctrlyoke" || parts[1] !== "secret") return false;
+
+  if (parts[2] === "user" && parts.length === 4) {
+    return isValidSecretName(parts[3]);
+  }
+  if (parts[2] === "ws" && parts.length === 5) {
+    return /^[0-9a-f]{12}$/i.test(parts[3]) && isValidSecretName(parts[4]);
+  }
+  if (parts[2] !== "meta") return false;
+  if (parts[3] === "user" && parts.length === 5) {
+    return isValidSecretName(parts[4]);
+  }
+  return (
+    parts[3] === "ws" &&
+    parts.length === 6 &&
+    /^[0-9a-f]{12}$/i.test(parts[4]) &&
+    isValidSecretName(parts[5])
+  );
+}

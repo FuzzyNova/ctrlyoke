@@ -21,6 +21,11 @@ export class FallbackSecretStore implements SecretStore {
     private readonly onFallback?: (error: SecretStoreUnavailableError) => void
   ) {}
 
+  /** True after this instance has selected its fallback for this lifetime. */
+  get isUsingFallback(): boolean {
+    return this.resolvedStore !== undefined && this.fallbackNotified;
+  }
+
   async get(key: string): Promise<string | undefined> {
     return this.run((store) => store.get(key));
   }

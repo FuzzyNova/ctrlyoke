@@ -1,5 +1,9 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
+**Recapture needed:** `images/screenshots/secrets-tab-828x440.png` — the action
+buttons now stay on one line and the Actions column has a minimum width. Re-capture
+at 828×440 from the hosted dashboard when Playwright is available.
+
 **Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
 
 > **2026-10-10 audit:** Done: #6 (the landing hero, now `hero-{av1,h264}-1350x900.mp4`), #1 in a different

@@ -30,17 +30,13 @@ A name resolves from the first of these that has it:
 2. **A managed secret at workspace scope**, for this workspace only.
 3. **A managed secret at user scope**, for every workspace.
 
-Managed secrets live in an encrypted credential store and are never written to a
-plaintext file:
-
-- In VS Code (the dashboard panel and the browser dashboard it serves), they are
-  kept in VS Code's secret storage for your VS Code profile.
-- The `ctrlyoke` CLI uses the operating system's credential store directly: Windows Credential Manager, the macOS keychain, or
-  `secret-tool` (libsecret) on Linux.
-
-The two stores are separate. A value set in the dashboard is not visible to
-`ctrlyoke run` in a terminal, and the reverse. For a secret both need, export it
-as an environment variable or set it in both places.
+Managed secrets live in encrypted storage and are never written to a plaintext
+file. The dashboard, `ctrlyoke` CLI, and `ctrlyoke server` share the operating
+system credential store on this machine: Windows Credential Manager, the macOS
+keychain, or `secret-tool` (libsecret) on Linux. VS Code falls back to its
+per-profile secret storage when the OS credential store is unavailable. Existing
+managed secrets in that profile storage are moved to the shared store on
+activation when it is available.
 
 ### The Secrets tab
 

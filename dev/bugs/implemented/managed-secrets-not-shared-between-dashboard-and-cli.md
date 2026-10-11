@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 while writing `docs/workflows/secrets.md` (docs Wave 3)
 - **Area:** `src/extension.ts`, `src/platform/VsCodeAdapter.ts`, `src/platform/OsCredentialStore.ts`, `src/ui/webview-react/components/settings/SecretsSection.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

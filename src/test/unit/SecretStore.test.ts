@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   isValidSecretName,
+  isManagedSecretStorageKey,
   userSecretKey,
   validateSecretName,
   workspaceSecretHash,
@@ -22,6 +23,27 @@ suite("SecretStore", () => {
     assert.strictEqual(
       workspaceSecretKeyForRoot("C:/work/example", "API_KEY"),
       `ctrlyoke.secret.ws.${workspaceSecretHash("C:/work/example")}.API_KEY`
+    );
+  });
+
+  test("recognizes only managed secret and metadata keys for migration", () => {
+    assert.strictEqual(isManagedSecretStorageKey(userSecretKey("API_KEY")), true);
+    assert.strictEqual(
+      isManagedSecretStorageKey("ctrlyoke.secret.ws.0123456789ab.API_KEY"),
+      true
+    );
+    assert.strictEqual(
+      isManagedSecretStorageKey("ctrlyoke.secret.meta.user.API_KEY"),
+      true
+    );
+    assert.strictEqual(isManagedSecretStorageKey("ctrlyoke.license"), false);
+    assert.strictEqual(
+      isManagedSecretStorageKey("ctrlyoke.server.token.0123456789ab"),
+      false
+    );
+    assert.strictEqual(
+      isManagedSecretStorageKey("ctrlyoke.secret.user.api_key"),
+      false
     );
   });
 

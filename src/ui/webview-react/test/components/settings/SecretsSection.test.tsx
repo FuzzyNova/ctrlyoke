@@ -108,6 +108,15 @@ describe("SecretsSection", () => {
     expect(
       missing.getByRole("button", { name: "Remove declaration" })
     ).toBeInTheDocument();
+    expect(missing.getByRole("button", { name: "Set value" })).toHaveClass(
+      "whitespace-nowrap"
+    );
+    expect(
+      missing.getByRole("button", { name: "Remove declaration" })
+    ).toHaveClass("whitespace-nowrap");
+    expect(screen.getByTestId("secret-row-STRIPE_KEY")).toHaveClass(
+      "md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_minmax(9rem,auto)]"
+    );
   });
 
   it("shows MCP and workflow usage without showing a value", async () => {
@@ -129,6 +138,13 @@ describe("SecretsSection", () => {
     expect(screen.getByText("deploy.ctrlyoke.yaml")).toBeInTheDocument();
     expect(screen.getByText("Deployment credential")).toBeInTheDocument();
     expect(screen.queryByText("secret-value")).not.toBeInTheDocument();
+  });
+
+  it("explains that managed secrets are shared with the CLI on this machine", () => {
+    renderSecretsSection();
+    expect(
+      screen.getByText(/shared with the CLI on this machine/)
+    ).toBeInTheDocument();
   });
 
   it("validates secret names and disables the name field on Replace", async () => {

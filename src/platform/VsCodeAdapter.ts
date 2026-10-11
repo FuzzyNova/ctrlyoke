@@ -21,8 +21,11 @@ export class VsCodeAdapter implements PlatformAdapter {
   readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   private readonly secretStore: SecretStore;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
-    this.secretStore = new VsCodeSecretStore(context.secrets);
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    secretStore?: SecretStore
+  ) {
+    this.secretStore = secretStore ?? new VsCodeSecretStore(context.secrets);
   }
 
   getSecretStore(): SecretStore {

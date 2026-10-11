@@ -448,9 +448,11 @@ defaults to `user`. `secret rm <NAME>` asks for confirmation unless you pass
 `--yes`.
 
 Managed secrets use the host OS credential store and are never written to a
-plaintext fallback file. The CI-friendly path does not require a credential
-backend: export the declared names in the environment and run the workflow as
-usual. For example:
+plaintext fallback file. On this machine, the dashboard, CLI, and hosted server
+share those secrets. The extension falls back to VS Code profile storage when
+the OS credential store is unavailable. The CI-friendly path does not require a
+credential backend: export the declared names in the environment and run the
+workflow as usual. For example:
 
 ```bash
 export DEPLOY_TOKEN="..."
