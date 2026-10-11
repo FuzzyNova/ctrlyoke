@@ -347,6 +347,7 @@ suite("WorkflowSerializer", () => {
             templateId: "user-template",
             defaultTemplateId: "user-template",
             defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER,
+            scope: SETTING_SCOPES.WORKSPACE,
           },
         ]);
 
@@ -369,6 +370,7 @@ suite("WorkflowSerializer", () => {
             templateId: "workspace-template",
             defaultTemplateId: "workspace-template",
             defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE,
+            scope: SETTING_SCOPES.WORKSPACE,
           },
         ]);
       } finally {
@@ -414,6 +416,7 @@ suite("WorkflowSerializer", () => {
           templateId: "blank",
           defaultTemplateId: "blank",
           defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE,
+          scope: SETTING_SCOPES.USER,
         });
       } finally {
         configService.set = originalSet;
@@ -586,6 +589,7 @@ suite("WorkflowSerializer", () => {
           MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET
         );
         assert.deepStrictEqual(messages[0].variableNames, ["harness", "model"]);
+        assert.strictEqual(messages[0].scope, SETTING_SCOPES.USER);
       } finally {
         configService.set = originalSet;
         configService.getScoped = originalGetScoped;

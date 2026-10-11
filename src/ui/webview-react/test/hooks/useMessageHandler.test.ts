@@ -774,6 +774,7 @@ describe("DEFAULT_TEMPLATE_SET", () => {
         templateId: "selected-template",
         defaultTemplateId: "inherited-template",
         defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER,
+        scope: "workspace",
       });
     });
 
@@ -781,6 +782,52 @@ describe("DEFAULT_TEMPLATE_SET", () => {
     expect(useUiStore.getState().defaultTemplateSource).toBe(
       TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
     );
+    expect(useUiStore.getState().defaultTemplateConfirmedId).toBe(
+      "inherited-template"
+    );
+    expect(useUiStore.getState().lastSavedTemplateScope).toBe("workspace");
+  });
+});
+
+describe("TEMPLATE_VARIABLE_DEFAULTS_SET", () => {
+  it("replaces the template catalog and records the successful save scope", () => {
+    renderHook(() => useMessageHandler());
+    const refreshedTemplate = {
+      id: "saved-template",
+      name: "Saved template",
+      description: "",
+      isBuiltIn: true,
+      variables: [
+        {
+          name: "path",
+          type: "text" as const,
+          default: "saved-value",
+          defaultSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE,
+        },
+      ],
+    };
+    useUiStore.setState({
+      templates: [{ ...refreshedTemplate, variables: [] }],
+      currentTemplate: { ...refreshedTemplate, variables: [] },
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET, {
+        templates: [refreshedTemplate],
+        templateId: "saved-template",
+        variableNames: ["path"],
+        scope: "workspace",
+      });
+    });
+
+    expect(useUiStore.getState().templates).toEqual([refreshedTemplate]);
+    expect(useUiStore.getState().currentTemplate).toEqual(refreshedTemplate);
+    expect(useUiStore.getState().templateVariableDefaultsSaved).toEqual({
+      templateId: "saved-template",
+      variableNames: ["path"],
+      scope: "workspace",
+    });
+    expect(useUiStore.getState().lastSavedTemplateScope).toBe("workspace");
   });
 });
 

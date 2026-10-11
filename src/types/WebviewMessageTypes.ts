@@ -1137,6 +1137,7 @@ export interface TemplateVariableDefaultsSetMessage {
   templateId: string;
   /** Only these fields may be re-seeded; preserve the user's other edits. */
   variableNames: string[];
+  scope: SettingWriteScope;
 }
 
 /** Webview → Extension: clone the selected base into a custom template. */
@@ -3168,6 +3169,7 @@ export type IncomingMessage =
       templateId: string;
       defaultTemplateId: string;
       defaultTemplateSource: TemplateVariableDefaultSource;
+      scope: SettingWriteScope;
     }
   | TemplateVariableDefaultsSetMessage
   | { type: typeof MESSAGE_TYPES.WORKFLOW_CREATED; filePath: string }

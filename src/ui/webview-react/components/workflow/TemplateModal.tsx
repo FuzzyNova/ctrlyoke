@@ -6,6 +6,7 @@ import {
   WORKSPACE_ENTRY_KINDS,
   DASHBOARD_HOST_CAPABILITIES,
   SETTING_SCOPES,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
 } from "@root/types/DashboardConstants";
 import React, {
   useState,
@@ -19,6 +20,7 @@ import {
   Button,
   AnimatedSection,
   ScopeToggle,
+  SETTING_SCOPE_OPTIONS,
   HarnessDropdown,
   CustomSelect,
 } from "../shared";
@@ -32,6 +34,7 @@ import {
   WORKFLOW_FILE_FORMATS,
   type HarnessId,
   type WorkflowFileFormat,
+  type SettingWriteScope,
 } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
@@ -126,6 +129,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const templates = useUiStore((s) => s.templates);
   const openCreateTemplateForm = useUiStore((s) => s.openCreateTemplateForm);
   const defaultTemplateId = useUiStore((s) => s.defaultTemplateId);
+  const defaultTemplateSource = useUiStore((s) => s.defaultTemplateSource);
+  const defaultTemplateConfirmedId = useUiStore(
+    (s) => s.defaultTemplateConfirmedId
+  );
+  const lastSavedTemplateScope = useUiStore((s) => s.lastSavedTemplateScope);
   const templateVariableDefaultsSaved = useUiStore(
     (s) => s.templateVariableDefaultsSaved
   );
@@ -154,13 +162,26 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const harnessDefaultModels = useSettingsStore(
     (s) => s.globalSettings.harnessDefaultModels
   );
+  const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
+  const hasWorkspace = Boolean(workspaceRoot?.trim());
 
   // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [filename, setFilename] = useState("");
   const [filenameError, setFilenameError] = useState<string | null>(null);
-  const [defaultConfirmation, setDefaultConfirmation] = useState(false);
+  const [selectedScope, setSelectedScope] = useState<SettingWriteScope>(
+    lastSavedTemplateScope
+  );
+  const saveScope = hasWorkspace ? selectedScope : SETTING_SCOPES.USER;
+  const scopeOptions = useMemo(
+    () =>
+      [
+        SETTING_SCOPE_OPTIONS[0],
+        { ...SETTING_SCOPE_OPTIONS[1], disabled: !hasWorkspace },
+      ] as const,
+    [hasWorkspace]
+  );
 
   // "New template..." inline accordion state
   const [showCreateTemplateForm, setShowCreateTemplateForm] = useState(false);
@@ -188,7 +209,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setSelectedTemplateId(initId);
       setFilename("");
       setFilenameError(null);
-      setDefaultConfirmation(false);
+      setSelectedScope(lastSavedTemplateScope);
       setShowCreateTemplateForm(openCreateTemplateForm);
       setNewTemplateName("");
       setNewTemplateNameError(null);
@@ -202,7 +223,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
     prevIsOpenRef.current = isOpen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, openCreateTemplateForm]);
+  }, [isOpen, openCreateTemplateForm, lastSavedTemplateScope]);
+
+  useEffect(() => {
+    setSelectedScope(lastSavedTemplateScope);
+  }, [lastSavedTemplateScope]);
 
   // A save refreshes the template catalog. Re-seed only the fields included in
   // that save so unrelated values the user has typed remain untouched.
@@ -449,14 +474,47 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     vscode.postMessage({
       type: MESSAGE_TYPES.SET_DEFAULT_TEMPLATE,
       templateId: selectedTemplateId,
-      scope: SETTING_SCOPES.USER,
+      scope: saveScope,
     });
 
     // Optimistic update
     setDefaultTemplateId(selectedTemplateId);
-    setDefaultConfirmation(true);
-    setTimeout(() => setDefaultConfirmation(false), 2000);
-  }, [vscode, selectedTemplateId, setDefaultTemplateId]);
+  }, [vscode, selectedTemplateId, saveScope, setDefaultTemplateId]);
+
+  const handleSaveVariableDefaults = useCallback(
+    (group: TemplateVariable[]) => {
+      if (!selectedTemplateId || selectedTemplateId === "__create_new__")
+        return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS,
+        templateId: selectedTemplateId,
+        scope: saveScope,
+        values: Object.fromEntries(
+          group.map((variable) => [
+            variable.name,
+            variables[variable.name] ?? "",
+          ])
+        ),
+      });
+    },
+    [selectedTemplateId, vscode, saveScope, variables]
+  );
+
+  const handleClearSavedVariableDefaults = useCallback(
+    (group: TemplateVariable[], scope: SettingWriteScope) => {
+      if (!selectedTemplateId || selectedTemplateId === "__create_new__")
+        return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS,
+        templateId: selectedTemplateId,
+        scope,
+        values: Object.fromEntries(
+          group.map((variable) => [variable.name, null])
+        ),
+      });
+    },
+    [selectedTemplateId, vscode]
+  );
 
   // Submit workflow creation
   const handleSubmit = useCallback(
@@ -537,12 +595,67 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     );
   };
 
+  const renderVariableDefaultControls = (
+    group: TemplateVariable[],
+    isMultiline: boolean
+  ) => {
+    if (isMultiline) return null;
+    const source = group.find(
+      (variable) =>
+        variable.defaultSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER ||
+        variable.defaultSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
+    )?.defaultSource;
+    const savedScope =
+      source === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
+        ? SETTING_SCOPES.WORKSPACE
+        : source === TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
+          ? SETTING_SCOPES.USER
+          : null;
+    const differsFromDefault = group.some(
+      (variable) => variables[variable.name] !== variable.default
+    );
+    if (!savedScope && !differsFromDefault) return null;
+    const scopeLabel =
+      savedScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
+    return (
+      <div className="mt-1 flex items-center gap-2 text-xs">
+        {savedScope && (
+          <span className="text-description-fg">Saved ({scopeLabel})</span>
+        )}
+        <button
+          type="button"
+          onClick={() =>
+            savedScope
+              ? handleClearSavedVariableDefaults(group, savedScope)
+              : handleSaveVariableDefaults(group)
+          }
+          className="text-link-fg hover:underline cursor-pointer bg-transparent border-0 p-0 font-inherit"
+          title={
+            savedScope
+              ? `Clear saved value from ${scopeLabel} settings`
+              : `Save ${group.length > 1 ? "these values" : "this value"} as the variable default in ${saveScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"} settings`
+          }
+        >
+          {savedScope ? "Clear saved value" : "Save as default"}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <Modal
       isOpen={isOpen && !fileBrowserState}
       onClose={onClose}
       title="Create Workflow from Template"
       size="lg"
+      headerActions={
+        <ScopeToggle
+          ariaLabel="Save defaults to"
+          value={saveScope}
+          onChange={setSelectedScope}
+          options={scopeOptions}
+        />
+      }
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
@@ -560,14 +673,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             ) : selectedTemplateId === defaultTemplateId &&
               selectedTemplateId !== "__create_new__" ? (
               <span className="text-sm text-description-fg">
-                Default template
+                {defaultTemplateSource ===
+                TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE
+                  ? "Default template"
+                  : defaultTemplateConfirmedId === selectedTemplateId
+                    ? `Default template (${defaultTemplateSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE ? "Workspace" : "User"})`
+                    : "Default template"}
               </span>
             ) : null}
-            {defaultConfirmation && (
-              <span className="text-xs text-notification-info-fg animate-pulse">
-                ✓ Default set
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={onClose}>
@@ -864,6 +977,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                       {variable.description}
                     </p>
                   )}
+                  {(!isHarness || !pairedModels.get(variable.name)?.length) &&
+                    renderVariableDefaultControls([variable], isMultiline)}
                 </div>
               );
               const models = isHarness
@@ -871,14 +986,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 : undefined;
               if (!models?.length) return field;
               return (
-                <div
-                  key={variable.name}
-                  className="grid grid-cols-2 gap-3 items-start"
-                >
-                  {field}
-                  {models.map((model) =>
-                    renderModelField(model, variables[variable.name])
-                  )}
+                <div key={variable.name}>
+                  <div className="grid grid-cols-2 gap-3 items-start">
+                    {field}
+                    {models.map((model) =>
+                      renderModelField(model, variables[variable.name])
+                    )}
+                  </div>
+                  {renderVariableDefaultControls([variable, ...models], false)}
                 </div>
               );
             })}

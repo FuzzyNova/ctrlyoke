@@ -991,6 +991,7 @@ export class WorkflowSerializer {
         templateId,
         defaultTemplateId,
         defaultTemplateSource,
+        scope,
       });
     } catch (error) {
       Log.error("[WorkflowSerializer] Failed to set default template:", error);
@@ -1063,6 +1064,7 @@ export class WorkflowSerializer {
         templates: this.toWireTemplates(templates),
         templateId,
         variableNames: Object.keys(values),
+        scope,
       });
     } catch (error) {
       Log.error(

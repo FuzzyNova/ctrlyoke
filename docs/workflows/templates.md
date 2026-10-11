@@ -114,6 +114,12 @@ A key under `_templateMeta.variables` only takes effect if a matching `{token}` 
 
 If a variable declares a `default`, that value is pre-filled in the UI and used when the field is left empty. A `select` variable without a default starts on its first option. A text, file, or directory variable with **no** default that is never filled in stays in the output as a literal `{token}` — so give optional inputs a sensible default, and treat description/required inputs as fields the user must fill.
 
+You can save a field's current value as a **variable default** from the template picker. The User/Workspace toggle in the title bar selects where **Save as default** writes; it also selects where **Set as Default** writes the default template setting. The toggle starts on Workspace until a save succeeds, then remembers the scope of the last successful save. With no workspace open, it stays on User.
+
+Saved values override the value declared in the template. Workspace values take precedence over User values, which take precedence over the template's authored value. This is resolved per variable, so a template can use some values saved in Workspace and others saved in User. A **Saved (User)** or **Saved (Workspace)** marker shows the source, and **Clear saved value** removes the value from that scope so the next value in the precedence order applies. Saving the value already inherited at the selected scope clears that scope's override instead of keeping a redundant saved value.
+
+A harness and its linked model fields are one unit: they are saved, marked, and cleared together, and resolve from the same scope. Multiline text fields cannot be saved as variable defaults.
+
 ## Custom templates
 
 Custom templates are `*.ctrlyoke.yaml`, `*.ctrlyoke.yml`, or `*.ctrlyoke.json` files in `.ctrlyoke/templates/` (workspace) or `~/.ctrlyoke/templates/` (user). They use the same `_templateMeta` schema as the built-ins. A file name must be unique within its location, regardless of format.

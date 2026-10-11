@@ -1,6 +1,6 @@
 # Template Variable Defaults Plan
 
-**Status:** Phase 1 contract and extension-side persistence plumbing landed: scoped variable-default settings, pure resolution and classification, TemplateManager overlays, and scoped save/default messages are implemented. Modal scope toggle and pin/clear UI remain in Phase 1.
+**Status:** Phase 1 complete. The contract, extension-side persistence plumbing, modal scope toggle, saved-value pin/clear controls, paired harness/model handling, documentation, and UI coverage are implemented. No deviations.
 
 ## Goal
 

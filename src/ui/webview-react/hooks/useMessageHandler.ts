@@ -1919,7 +1919,9 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.DEFAULT_TEMPLATE_SET] = (message) => {
     const uiStore = useUiStore.getState();
     uiStore.setDefaultTemplateId(message.defaultTemplateId);
+    uiStore.setDefaultTemplateConfirmedId(message.defaultTemplateId);
     uiStore.setDefaultTemplateSource(message.defaultTemplateSource);
+    uiStore.setLastSavedTemplateScope(message.scope);
   };
 
   handlers[MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET] = (message) => {
@@ -1934,7 +1936,9 @@ export function createMessageHandlers(
     uiStore.setTemplateVariableDefaultsSaved({
       templateId: message.templateId,
       variableNames: message.variableNames,
+      scope: message.scope,
     });
+    uiStore.setLastSavedTemplateScope(message.scope);
   };
 
   // --------------------------------------------------------------------------

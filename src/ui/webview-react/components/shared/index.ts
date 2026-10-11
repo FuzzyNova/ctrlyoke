@@ -120,7 +120,11 @@ export { DropdownPortal } from "./DropdownPortal";
 export { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 export { ExpandCollapseAllDiffsButton } from "./ExpandCollapseAllDiffsButton";
 export { AutoResumeStatusRow } from "./AutoResumeStatusRow";
-export { ScopeToggle, type ScopeToggleOption } from "./ScopeToggle";
+export {
+  ScopeToggle,
+  SETTING_SCOPE_OPTIONS,
+  type ScopeToggleOption,
+} from "./ScopeToggle";
 export {
   filterExplicitSecretGrants,
   useSecretGrantOptions,

@@ -44,7 +44,7 @@ import {
   StatusLineSection,
 } from "../settings";
 import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
-import { ExitButton, ScopeToggle } from "../shared";
+import { ExitButton, ScopeToggle, SETTING_SCOPE_OPTIONS } from "../shared";
 import { IconToggleButton } from "../shared/IconToggleButton";
 import { Icon } from "../shared/Icon";
 import { DRAWER_PAGES, type DrawerPage } from "@/types/drawerPages";
@@ -310,20 +310,7 @@ export function GlobalSettingsDrawer() {
             value={activeScope}
             onChange={setActiveScope}
             iconOnly={isNarrow}
-            options={[
-              {
-                value: SETTING_SCOPES.USER,
-                label: "User",
-                icon: "codicon-person",
-                title: "Edit user-scoped settings",
-              },
-              {
-                value: SETTING_SCOPES.WORKSPACE,
-                label: "Workspace",
-                icon: "codicon-project",
-                title: "Edit workspace-scoped settings",
-              },
-            ]}
+            options={SETTING_SCOPE_OPTIONS}
           />
         </div>
 
