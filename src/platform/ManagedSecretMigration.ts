@@ -112,7 +112,9 @@ export async function migrateManagedSecrets(
       if (targetValue === undefined && sourceValue !== undefined) {
         await writeAndConfirm(target, valueKey, sourceValue);
       }
-      if (sourceMetadata !== undefined) {
+      // Profile metadata without its value is orphaned; never let it replace
+      // the metadata paired with a value already in the shared store.
+      if (sourceValue !== undefined && sourceMetadata !== undefined) {
         await writeAndConfirm(target, metadataKey, sourceMetadata);
       }
       if (target.isUsingFallback) {

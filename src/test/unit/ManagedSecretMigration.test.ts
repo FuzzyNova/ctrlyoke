@@ -6,10 +6,7 @@ import {
   SecretStoreUnavailableError,
   type SecretStore,
 } from "../../platform/SecretStore";
-import {
-  userSecretKey,
-  userSecretMetadataKey,
-} from "../../platform/SecretKey";
+import { userSecretKey, userSecretMetadataKey } from "../../platform/SecretKey";
 import { CliAdapter } from "../../platform/CliAdapter";
 import { OsCredentialStore } from "../../platform/OsCredentialStore";
 import { VsCodeAdapter } from "../../platform/VsCodeAdapter";
@@ -202,6 +199,32 @@ suite("ManagedSecretMigration", () => {
     assert.strictEqual(
       await osStore.get(metadataKey),
       '{"description":"new","lastUpdated":20}'
+    );
+  });
+
+  test("drops orphaned profile metadata without replacing OS metadata", async () => {
+    const profile = new MemorySecretStore();
+    const osStore = new MemorySecretStore();
+    const key = userSecretKey("API_KEY");
+    const metadataKey = userSecretMetadataKey("API_KEY");
+    await profile.store(
+      metadataKey,
+      '{"description":"stale","lastUpdated":30}'
+    );
+    await osStore.store(key, "os-value");
+    await osStore.store(metadataKey, '{"description":"os","lastUpdated":20}');
+
+    const result = await migrateManagedSecrets(
+      profile,
+      new FallbackSecretStore(osStore, new MemorySecretStore())
+    );
+
+    assert.strictEqual(result.migrated, 0);
+    assert.strictEqual(await profile.get(metadataKey), undefined);
+    assert.strictEqual(await osStore.get(key), "os-value");
+    assert.strictEqual(
+      await osStore.get(metadataKey),
+      '{"description":"os","lastUpdated":20}'
     );
   });
 
