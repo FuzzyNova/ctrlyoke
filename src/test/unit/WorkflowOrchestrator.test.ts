@@ -5426,6 +5426,62 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     }
   });
 
+  test("run-addressed rename on a resident instance persists the name to the lineage descriptor", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-rename-resident-")
+    );
+    try {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      const liveRenames: string[] = [];
+      // A just-finished run stays resident (retired but still viewed), which
+      // routes the rename through the live branch.
+      const resident = {
+        id: "retired-run-owner",
+        getQueueState: () => ({
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+        }),
+        updateWorkflowName: async (name: string) => {
+          liveRenames.push(name);
+        },
+      };
+      internal.retiredInstances.set(resident.id, resident);
+      const before = await internal.lineageRepository.readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+
+      await orchestrator.updateWorkflowName(
+        {
+          address: {
+            workflowKey: run.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: run.runRef,
+          },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: before.revision,
+        },
+        "renamed",
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(liveRenames, ["renamed"]);
+      const descriptor = await internal.lineageRepository.readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+      assert.strictEqual(descriptor.workflowName, "renamed");
+      assert.strictEqual(descriptor.revision, before.revision + 1);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   async function createTwoStepRun(workspace: string): Promise<{
     workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
     runRef: import("../../types/CtrlYokeTypes").RunRef;

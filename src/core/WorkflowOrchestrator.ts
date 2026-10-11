@@ -3171,14 +3171,9 @@ export class WorkflowOrchestrator {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       const instance = this.getInstanceForClient(clientId);
       await instance.updateWorkflowName(workflowName);
-      const state = instance.promptQueue.getState();
-      const workspaceRoot = this.currentWorkspaceFolderPath;
-      if (state.workflowKey && workspaceRoot) {
-        await this.lineageRepository.updateDescriptor(
-          workspaceRoot,
-          state.workflowKey,
-          (descriptor) => ({ ...descriptor, workflowName })
-        );
+      const { workflowKey } = instance.promptQueue.getState();
+      if (workflowKey) {
+        await this.persistLineageWorkflowName(workflowKey, workflowName);
       }
       return undefined;
     }
@@ -3189,7 +3184,15 @@ export class WorkflowOrchestrator {
       runAddress,
       clientId,
       mutation.expectedDefinitionRevision,
-      (instance) => instance.updateWorkflowName(workflowName),
+      // The name lives on the lineage descriptor, never in the run file, so
+      // the instance's in-memory rename alone is lost on the next reload.
+      async (instance) => {
+        await instance.updateWorkflowName(workflowName);
+        await this.persistLineageWorkflowName(
+          runAddress.workflowKey,
+          workflowName
+        );
+      },
       async (workspaceRoot) => {
         const written = await WorkingFileManager.updateWorkflowNameAtRun(
           workspaceRoot,
@@ -3229,6 +3232,19 @@ export class WorkflowOrchestrator {
       );
     }
     return latest;
+  }
+
+  private async persistLineageWorkflowName(
+    workflowKey: WorkflowKey,
+    workflowName: string
+  ): Promise<void> {
+    const workspaceRoot = this.currentWorkspaceFolderPath;
+    if (!workspaceRoot) return;
+    await this.lineageRepository.updateDescriptor(
+      workspaceRoot,
+      workflowKey,
+      (descriptor) => ({ ...descriptor, workflowName })
+    );
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
