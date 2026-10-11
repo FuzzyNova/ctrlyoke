@@ -2396,7 +2396,7 @@ export class CtrlYokeHostedServer
           statusCode: 401,
           message: "You need a valid ctrlyoke access token to view this page.",
           hints: [
-            "Did you recently regenerate your ctrlyoke token? Old links stop working as soon as the token changes.",
+            "Did you recently regenerate your ctrlyoke token? Old links stop working once the server restarts with the new token.",
           ],
           themeBodyClass: this.resolveThemeBodyClass(themeOverride),
           themeStyleBlock: this.buildThemeStyleBlock(themeOverride),
