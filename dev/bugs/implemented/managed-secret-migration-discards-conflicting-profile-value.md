@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude (bug-drain review of 77906c992)
 - **Area:** `src/platform/ManagedSecretMigration.ts`, `src/platform/OsCredentialStore.ts`, `src/extension.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

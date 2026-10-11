@@ -187,6 +187,7 @@ export class OsCredentialStore implements SecretStore {
   private readonly platform: NodeJS.Platform;
   private readonly runCommand: CommandRunner;
   private readonly backend: CredentialBackend;
+  private indexMutationChain: Promise<void> = Promise.resolve();
 
   constructor(options: OsCredentialStoreOptions = {}) {
     this.platform = options.platform ?? process.platform;
@@ -201,14 +202,14 @@ export class OsCredentialStore implements SecretStore {
   async store(key: string, value: string): Promise<void> {
     await this.withAvailability(async () => {
       await this.backend.store(key, value);
-      await this.addKeyToIndex(key);
+      await this.enqueueIndexMutation(() => this.addKeyToIndex(key));
     });
   }
 
   async delete(key: string): Promise<void> {
     await this.withAvailability(async () => {
       await this.backend.delete(key);
-      await this.removeKeyFromIndex(key);
+      await this.enqueueIndexMutation(() => this.removeKeyFromIndex(key));
     });
   }
 
@@ -265,6 +266,12 @@ export class OsCredentialStore implements SecretStore {
       CREDENTIAL_INDEX_KEY,
       JSON.stringify([...keys].sort())
     );
+  }
+
+  private enqueueIndexMutation(mutation: () => Promise<void>): Promise<void> {
+    const operation = this.indexMutationChain.then(mutation);
+    this.indexMutationChain = operation.catch(() => {});
+    return operation;
   }
 
   private async withAvailability<T>(operation: () => Promise<T>): Promise<T> {

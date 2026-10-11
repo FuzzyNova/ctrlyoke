@@ -124,3 +124,24 @@ export function isManagedSecretStorageKey(key: string): boolean {
   }
   return false;
 }
+
+/** Return the value and metadata keys for a managed storage key. */
+export function getManagedSecretStorageKeyPair(
+  key: string
+): { valueKey: string; metadataKey: string } | undefined {
+  if (!isManagedSecretStorageKey(key)) return undefined;
+  for (const [valuePrefix, metadataPrefix] of [
+    [USER_SECRET_PREFIX, USER_SECRET_METADATA_PREFIX],
+    [WORKSPACE_SECRET_PREFIX, WORKSPACE_SECRET_METADATA_PREFIX],
+  ] as const) {
+    if (key.startsWith(`${valuePrefix}.`)) {
+      const suffix = key.slice(valuePrefix.length + 1);
+      return { valueKey: key, metadataKey: `${metadataPrefix}.${suffix}` };
+    }
+    if (key.startsWith(`${metadataPrefix}.`)) {
+      const suffix = key.slice(metadataPrefix.length + 1);
+      return { valueKey: `${valuePrefix}.${suffix}`, metadataKey: key };
+    }
+  }
+  return undefined;
+}

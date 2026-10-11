@@ -304,25 +304,38 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
     platform = new VsCodeAdapter(context, machineSecretStore);
-    void migrateManagedSecrets(
+    const migrationResult = await migrateManagedSecrets(
       profileSecretStore,
       machineSecretStore,
       (key, error) =>
         Log.warn(
           `[Extension] ctrlyoke: Failed to migrate managed secret${key ? ` ${key}` : "s"}: ${getErrorMessage(error)}`
+        ),
+      (key) =>
+        Log.warn(
+          `[Extension] ctrlyoke: Conflicting managed secret ${key} has no usable lastUpdated metadata; profile value was kept.`
         )
-    ).then((result) => {
-      if (result.migrated > 0) {
-        Log.info(
-          `[Extension] ctrlyoke: Migrated ${result.migrated} managed secret storage entr${result.migrated === 1 ? "y" : "ies"} to the shared credential store.`
-        );
-      }
-      if (result.skipped) {
-        Log.info(
-          "[Extension] ctrlyoke: Managed secret migration left profile storage in place because the OS credential store is unavailable."
-        );
-      }
-    });
+    );
+    if (migrationResult.migrated > 0) {
+      Log.info(
+        `[Extension] ctrlyoke: Migrated ${migrationResult.migrated} managed secret entr${migrationResult.migrated === 1 ? "y" : "ies"} to the shared credential store.`
+      );
+    }
+    if (migrationResult.alreadyPresent > 0) {
+      Log.info(
+        `[Extension] ctrlyoke: Found ${migrationResult.alreadyPresent} managed secret entr${migrationResult.alreadyPresent === 1 ? "y" : "ies"} already present in the shared credential store.`
+      );
+    }
+    if (migrationResult.conflicts > 0) {
+      Log.info(
+        `[Extension] ctrlyoke: Resolved ${migrationResult.conflicts} managed secret conflict${migrationResult.conflicts === 1 ? "" : "s"}.`
+      );
+    }
+    if (migrationResult.skipped) {
+      Log.info(
+        "[Extension] ctrlyoke: Managed secret migration left profile storage in place because the OS credential store is unavailable."
+      );
+    }
     // License state is extension-host-owned so commands and the status bar
     // share one service instance and update immediately after activation.
     licenseService = new LicenseService(machineSecretStore, {

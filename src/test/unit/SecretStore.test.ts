@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import { OsCredentialStore } from "../../platform/OsCredentialStore";
 import {
   isValidSecretName,
   isManagedSecretStorageKey,
@@ -11,6 +12,47 @@ import {
 } from "../../platform/SecretKey";
 
 suite("SecretStore", () => {
+  test("serializes concurrent OS credential index updates", async () => {
+    const credentials = new Map<string, string>();
+    const store = new OsCredentialStore({
+      platform: "linux",
+      runCommand: async (_command, args, input) => {
+        const operation = args[0];
+        const key = args[args.length - 1];
+        if (operation === "lookup") {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          const value = credentials.get(key);
+          return {
+            exitCode: value === undefined ? 1 : 0,
+            stdout: value ?? "",
+            stderr: "",
+          };
+        }
+        if (operation === "store") {
+          credentials.set(key, input ?? "");
+          return { exitCode: 0, stdout: "", stderr: "" };
+        }
+        if (operation === "clear") {
+          credentials.delete(key);
+          return { exitCode: 0, stdout: "", stderr: "" };
+        }
+        return { exitCode: 1, stdout: "", stderr: "unexpected operation" };
+      },
+    });
+
+    await Promise.all([
+      store.store("ctrlyoke.secret.user.FIRST", "first"),
+      store.store("ctrlyoke.secret.user.SECOND", "second"),
+      store.store("ctrlyoke.secret.user.THIRD", "third"),
+    ]);
+
+    assert.deepStrictEqual(await store.keys(), [
+      "ctrlyoke.secret.user.FIRST",
+      "ctrlyoke.secret.user.SECOND",
+      "ctrlyoke.secret.user.THIRD",
+    ]);
+  });
+
   test("builds distinct user and workspace-scoped keys", () => {
     assert.strictEqual(
       userSecretKey("API_KEY"),
@@ -27,7 +69,10 @@ suite("SecretStore", () => {
   });
 
   test("recognizes only managed secret and metadata keys for migration", () => {
-    assert.strictEqual(isManagedSecretStorageKey(userSecretKey("API_KEY")), true);
+    assert.strictEqual(
+      isManagedSecretStorageKey(userSecretKey("API_KEY")),
+      true
+    );
     assert.strictEqual(
       isManagedSecretStorageKey("ctrlyoke.secret.ws.0123456789ab.API_KEY"),
       true

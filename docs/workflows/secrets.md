@@ -36,7 +36,9 @@ system credential store on this machine: Windows Credential Manager, the macOS
 keychain, or `secret-tool` (libsecret) on Linux. VS Code falls back to its
 per-profile secret storage when the OS credential store is unavailable. Existing
 managed secrets in that profile storage are moved to the shared store on
-activation when it is available.
+activation when it is available. If both stores contain different values,
+ctrlyoke keeps the value with the newer `lastUpdated` metadata; when either side
+lacks usable metadata, it leaves the profile value in place and logs a warning.
 
 ### The Secrets tab
 
