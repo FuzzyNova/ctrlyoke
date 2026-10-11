@@ -546,6 +546,7 @@ export const MESSAGE_TYPES = {
   OPEN_NEW_WORKFLOW_MODAL: "openNewWorkflowModal",
   TEMPLATE_INFO: "templateInfo",
   DEFAULT_TEMPLATE_SET: "defaultTemplateSet",
+  TEMPLATE_VARIABLE_DEFAULTS_SET: "templateVariableDefaultsSet",
   WORKFLOW_CREATED: "workflowCreated",
   CLOSE_MODAL: "closeModal",
 
@@ -553,6 +554,7 @@ export const MESSAGE_TYPES = {
   NEW_WORKFLOW: "newWorkflow", // Opens modal (from button click)
   TEMPLATE_SELECTED: "templateSelected",
   SET_DEFAULT_TEMPLATE: "setDefaultTemplate",
+  SET_TEMPLATE_VARIABLE_DEFAULTS: "setTemplateVariableDefaults",
   CREATE_WORKFLOW: "createWorkflow",
   CREATE_CUSTOM_TEMPLATE: "createCustomTemplate", // { name, scope, format, baseTemplateId } — fully webview-driven, no native VS Code UI
   BROWSE_TEMPLATE_FILE: "browseTemplateFile", // Request OS file picker for a template variable

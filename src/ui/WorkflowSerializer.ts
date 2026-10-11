@@ -13,6 +13,8 @@ import {
   type HistoryTrashAction,
   WORKFLOW_FILE_FORMATS,
   type WorkflowFileFormat,
+  SETTING_SCOPES,
+  type SettingWriteScope,
   WORKFLOW_VIEW_ADDRESS_KIND,
   PATH_SELECTION_KINDS,
   DASHBOARD_ACTION_RESULT_STATUSES,
@@ -21,6 +23,8 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
+import { configService } from "../config/CtrlYokeConfigService";
+import { shouldClearTemplateVariableDefaults } from "../utils/TemplateVariableDefaults";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
 import {
@@ -934,11 +938,14 @@ export class WorkflowSerializer {
     try {
       const templates = await this.templateManager.getAvailableTemplates();
       const defaultTemplateId = ConfigurationUtils.getDefaultWorkflowTemplate();
+      const defaultTemplateSource =
+        ConfigurationUtils.getDefaultWorkflowTemplateSource();
 
       pm({
         type: MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL,
         templates: this.toWireTemplates(templates),
         defaultTemplateId,
+        defaultTemplateSource,
       });
     } catch (error) {
       const errorMsg = getErrorMessage(error);
@@ -968,18 +975,100 @@ export class WorkflowSerializer {
 
   async handleSetDefaultTemplate(
     templateId: string,
+    scope: SettingWriteScope,
     postMessage?: PostMessageFn
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     try {
-      await ConfigurationUtils.setDefaultWorkflowTemplate(templateId);
+      await ConfigurationUtils.setDefaultWorkflowTemplate(templateId, scope);
+      const defaultTemplateId =
+        ConfigurationUtils.getDefaultWorkflowTemplate();
+      const defaultTemplateSource =
+        ConfigurationUtils.getDefaultWorkflowTemplateSource();
 
       pm({
         type: MESSAGE_TYPES.DEFAULT_TEMPLATE_SET,
         templateId,
+        defaultTemplateId,
+        defaultTemplateSource,
       });
     } catch (error) {
       Log.error("[WorkflowSerializer] Failed to set default template:", error);
+    }
+  }
+
+  async handleSetTemplateVariableDefaults(
+    templateId: string,
+    values: Record<string, string | null>,
+    scope: SettingWriteScope,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    try {
+      const template = await this.templateManager.getTemplateInfo(templateId);
+      if (!template) throw new Error(`Unknown template: ${templateId}`);
+
+      const userSettings = configService.getScoped(
+        "templates",
+        SETTING_SCOPES.USER
+      );
+      const workspaceSettings = configService.getScoped(
+        "templates",
+        SETTING_SCOPES.WORKSPACE
+      );
+      const userValues = userSettings?.variableDefaults?.[templateId];
+      const workspaceValues =
+        workspaceSettings?.variableDefaults?.[templateId];
+      const pinnedValues = Object.fromEntries(
+        Object.entries(values).filter(
+          (entry): entry is [string, string] => entry[1] !== null
+        )
+      );
+      const clearPinnedValues =
+        Object.keys(pinnedValues).length > 0 &&
+        shouldClearTemplateVariableDefaults(
+          template.variables,
+          scope,
+          userValues,
+          workspaceValues,
+          pinnedValues
+        );
+
+      const nextValues = {
+        ...(scope === SETTING_SCOPES.USER ? userValues : workspaceValues),
+      };
+      for (const [name, value] of Object.entries(values)) {
+        if (value === null || clearPinnedValues) {
+          delete nextValues[name];
+        } else {
+          nextValues[name] = value;
+        }
+      }
+
+      const variableDefaults = {
+        ...(scope === SETTING_SCOPES.USER
+          ? userSettings?.variableDefaults
+          : workspaceSettings?.variableDefaults),
+      };
+      if (Object.keys(nextValues).length === 0) {
+        delete variableDefaults[templateId];
+      } else {
+        variableDefaults[templateId] = nextValues;
+      }
+      await configService.set("templates.variableDefaults", variableDefaults, scope);
+
+      const templates = await this.templateManager.getAvailableTemplates();
+      pm({
+        type: MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET,
+        templates: this.toWireTemplates(templates),
+        templateId,
+        variableNames: Object.keys(values),
+      });
+    } catch (error) {
+      Log.error(
+        "[WorkflowSerializer] Failed to set template variable defaults:",
+        error
+      );
     }
   }
 

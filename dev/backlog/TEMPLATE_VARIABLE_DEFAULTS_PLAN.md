@@ -1,6 +1,6 @@
 # Template Variable Defaults Plan
 
-**Status:** Phase 1 Contract landed: scoped variable-default settings, pure resolution and classification, and TemplateManager overlays are implemented. Modal saving and UI work remain in Phase 1.
+**Status:** Phase 1 contract and extension-side persistence plumbing landed: scoped variable-default settings, pure resolution and classification, TemplateManager overlays, and scoped save/default messages are implemented. Modal scope toggle and pin/clear UI remain in Phase 1.
 
 ## Goal
 
@@ -285,6 +285,10 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
   re-renders with the new `defaultSource` and doesn't need an optimistic copy of the resolution
   logic. Changing a saved value must **not** reset the other fields the user has already typed:
   re-seed only the variables in the saved message.
+- The response is `TEMPLATE_VARIABLE_DEFAULTS_SET` with the refreshed `templates`, `templateId`,
+  and the request's `variableNames`. `useMessageHandler` updates the catalog/current template;
+  `TemplateModal` applies refreshed defaults only to those names. This keeps re-seeding scoped to
+  what the user pinned or cleared while leaving every other in-progress field alone.
 - The clear-instead-of-store comparison runs in the **extension** handler, against the resolver,
   not in the webview. The webview just sends what the user pinned.
 - `toWireTemplates` passes `variables` through untouched, so the new fields need no wire change
@@ -292,9 +296,12 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
 - `SET_DEFAULT_TEMPLATE` gains `scope: SettingWriteScope`. `OPEN_NEW_WORKFLOW_MODAL` and
   `DEFAULT_TEMPLATE_SET` gain `defaultTemplateSource` (the same
   `TEMPLATE_VARIABLE_DEFAULT_SOURCES` values, where `TEMPLATE` means the schema default). The
-  handler computes it with `getScoped("general", scope)`. The modal's current optimistic update
-  sets the id only. It should wait for `DEFAULT_TEMPLATE_SET` before showing the source, since a
-  clear can land on a different effective template than the one selected.
+  `ConfigurationUtils.getDefaultWorkflowTemplateSource()` determines the effective source from
+  `getScoped("general", WORKSPACE)` then `getScoped("general", USER)`, falling back to
+  `TEMPLATE`. `setDefaultWorkflowTemplate(templateId, scope)` compares against the value inherited
+  without that scope and clears the setting at the target scope when equal. The modal's current
+  optimistic update sets the id only. It should wait for `DEFAULT_TEMPLATE_SET` before showing the
+  source, since a clear can land on a different effective template than the one selected.
 
 ### Touchpoints
 

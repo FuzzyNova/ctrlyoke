@@ -14,6 +14,7 @@ import {
   SEARCH_HISTORY_ERROR_CODES,
   THEME_KINDS,
   THEME_KIND_CSS_VAR,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
   VSCODE_THEME_BODY_CLASSES,
 } from "@root/types/DashboardConstants";
 
@@ -751,12 +752,35 @@ describe("OPEN_NEW_WORKFLOW_MODAL", () => {
           },
         ],
         defaultTemplateId: "blank",
+        defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE,
         openCreateTemplateForm: true,
       });
     });
 
     expect(useUiStore.getState().newWorkflowModalOpen).toBe(true);
     expect(useUiStore.getState().openCreateTemplateForm).toBe(true);
+    expect(useUiStore.getState().defaultTemplateSource).toBe(
+      TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE
+    );
+  });
+});
+
+describe("DEFAULT_TEMPLATE_SET", () => {
+  it("stores the effective template id and source after a scoped clear", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.DEFAULT_TEMPLATE_SET, {
+        templateId: "selected-template",
+        defaultTemplateId: "inherited-template",
+        defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER,
+      });
+    });
+
+    expect(useUiStore.getState().defaultTemplateId).toBe("inherited-template");
+    expect(useUiStore.getState().defaultTemplateSource).toBe(
+      TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
+    );
   });
 });
 

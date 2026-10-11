@@ -1986,8 +1986,18 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.SET_DEFAULT_TEMPLATE, (message, ctx) => {
-      this.serializer.handleSetDefaultTemplate(
+      return this.serializer.handleSetDefaultTemplate(
         message.templateId,
+        message.scope,
+        ctx.postMessage
+      );
+    });
+
+    table.set(MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS, (message, ctx) => {
+      return this.serializer.handleSetTemplateVariableDefaults(
+        message.templateId,
+        message.values,
+        message.scope,
         ctx.postMessage
       );
     });

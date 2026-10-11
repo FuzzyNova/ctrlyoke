@@ -20,7 +20,7 @@ import {
   useSettingsStore,
   type WorkflowProperties,
 } from "../store/settingsStore";
-import { useUiStore } from "../store/uiStore";
+import { useUiStore, type TemplateInfo } from "../store/uiStore";
 import { useEditorStore } from "../store/editorStore";
 import { useRunSummaryCacheStore } from "../store/runSummaryCacheStore";
 import { useLanguageServerStore } from "../store/useLanguageServerStore";
@@ -1900,6 +1900,7 @@ export function createMessageHandlers(
     uiStore.openNewWorkflowModal({
       templates: message.templates || [],
       defaultTemplateId: message.defaultTemplateId,
+      defaultTemplateSource: message.defaultTemplateSource,
       openCreateTemplateForm: message.openCreateTemplateForm,
     });
   };
@@ -1917,7 +1918,23 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.DEFAULT_TEMPLATE_SET] = (message) => {
     const uiStore = useUiStore.getState();
-    uiStore.setDefaultTemplateId(message.templateId);
+    uiStore.setDefaultTemplateId(message.defaultTemplateId);
+    uiStore.setDefaultTemplateSource(message.defaultTemplateSource);
+  };
+
+  handlers[MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.setTemplates(message.templates);
+    const refreshedTemplate = message.templates.find(
+      (template: TemplateInfo) => template.id === message.templateId
+    );
+    if (refreshedTemplate?.id === uiStore.currentTemplate?.id) {
+      uiStore.setCurrentTemplate(refreshedTemplate);
+    }
+    uiStore.setTemplateVariableDefaultsSaved({
+      templateId: message.templateId,
+      variableNames: message.variableNames,
+    });
   };
 
   // --------------------------------------------------------------------------

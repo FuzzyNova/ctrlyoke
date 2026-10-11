@@ -5,6 +5,7 @@ import {
   TEMPLATE_VARIABLE_TYPES,
   WORKSPACE_ENTRY_KINDS,
   DASHBOARD_HOST_CAPABILITIES,
+  SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import React, {
   useState,
@@ -125,6 +126,12 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const templates = useUiStore((s) => s.templates);
   const openCreateTemplateForm = useUiStore((s) => s.openCreateTemplateForm);
   const defaultTemplateId = useUiStore((s) => s.defaultTemplateId);
+  const templateVariableDefaultsSaved = useUiStore(
+    (s) => s.templateVariableDefaultsSaved
+  );
+  const setTemplateVariableDefaultsSaved = useUiStore(
+    (s) => s.setTemplateVariableDefaultsSaved
+  );
   const currentTemplate = useUiStore((s) => s.currentTemplate);
   const setCurrentTemplate = useUiStore((s) => s.setCurrentTemplate);
   const setDefaultTemplateId = useUiStore((s) => s.setDefaultTemplateId);
@@ -196,6 +203,34 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     prevIsOpenRef.current = isOpen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, openCreateTemplateForm]);
+
+  // A save refreshes the template catalog. Re-seed only the fields included in
+  // that save so unrelated values the user has typed remain untouched.
+  useEffect(() => {
+    if (
+      !templateVariableDefaultsSaved ||
+      templateVariableDefaultsSaved.templateId !== selectedTemplateId ||
+      currentTemplate?.id !== selectedTemplateId
+    ) {
+      return;
+    }
+    const savedNames = new Set(templateVariableDefaultsSaved.variableNames);
+    const refreshedDefaults = seedVariableDefaults(currentTemplate);
+    setVariables((previous) => {
+      const next = { ...previous };
+      for (const name of savedNames) {
+        if (refreshedDefaults[name] === undefined) delete next[name];
+        else next[name] = refreshedDefaults[name];
+      }
+      return next;
+    });
+    setTemplateVariableDefaultsSaved(null);
+  }, [
+    templateVariableDefaultsSaved,
+    selectedTemplateId,
+    currentTemplate,
+    setTemplateVariableDefaultsSaved,
+  ]);
 
   // Focus filename input when modal opens
   useEffect(() => {
@@ -414,6 +449,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     vscode.postMessage({
       type: MESSAGE_TYPES.SET_DEFAULT_TEMPLATE,
       templateId: selectedTemplateId,
+      scope: SETTING_SCOPES.USER,
     });
 
     // Optimistic update
