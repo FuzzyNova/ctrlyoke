@@ -595,22 +595,34 @@ export class CopilotToolBuilder {
 
     const edits: Required<ApplyPatchFileEdit>[] = [];
     for (const section of sections) {
-      const plusMatch = section.match(/^\+\+\+ (?:b\/)?(.+)$/m);
-      const minusMatch = section.match(/^--- (?:a\/)?(.+)$/m);
+      const diffHeader = section.match(/^diff --git a\/(.+) b\/(.+)$/m);
+      const plusMatch = section.match(/^\+\+\+ (.+)$/m);
+      const minusMatch = section.match(/^--- (.+)$/m);
+      const normalizePath = (rawPath: string | undefined): string | undefined => {
+        const path = rawPath?.trim().replace(/\r$/, "");
+        return path?.replace(/^(?:a|b)\//, "");
+      };
+      const isNullPath = (rawPath: string | undefined): boolean => {
+        const path = normalizePath(rawPath);
+        return path === "/dev/null" || path === "dev/null";
+      };
+      const oldPath = normalizePath(diffHeader?.[1] ?? minusMatch?.[1]);
+      const newPath = normalizePath(diffHeader?.[2] ?? plusMatch?.[1]);
+      const isAdd =
+        /^new file mode /m.test(section) || isNullPath(minusMatch?.[1]);
+      const isDelete =
+        /^deleted file mode /m.test(section) || isNullPath(plusMatch?.[1]);
       const kind: ApplyPatchFileEditKind =
-        /^new file mode /m.test(section) || minusMatch?.[1] === "/dev/null"
+        isAdd
           ? APPLY_PATCH_FILE_EDIT_KINDS.ADD
-          : /^deleted file mode /m.test(section) ||
-              plusMatch?.[1] === "/dev/null"
+          : isDelete
             ? APPLY_PATCH_FILE_EDIT_KINDS.DELETE
             : APPLY_PATCH_FILE_EDIT_KINDS.UPDATE;
       const path =
-        plusMatch && plusMatch[1] !== "/dev/null"
-          ? plusMatch[1].trim()
-          : minusMatch && minusMatch[1] !== "/dev/null"
-            ? minusMatch[1].trim()
-            : undefined;
-      if (!path) {
+        kind === APPLY_PATCH_FILE_EDIT_KINDS.DELETE
+          ? oldPath
+          : newPath ?? oldPath;
+      if (!path || isNullPath(path)) {
         continue;
       }
 
