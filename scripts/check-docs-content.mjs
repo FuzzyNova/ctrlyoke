@@ -14,17 +14,25 @@
 //    (palette commands as `ctrlyoke: Title` in backticks, menu-only ones by
 //    plain title), every keybinding on its command's row, and no palette
 //    command that package.json doesn't contribute.
+// 4. CLI: `cli/ctrlyoke.md` has a `ctrlyoke <command>` heading for every
+//    command (a subcommand may share its parent's), mentions every option in
+//    that section or in the shared `run` options, and names no `--flag` the
+//    CLI doesn't have. The command tree is read from the built CLI's `--help`.
+//    The other CLI pages (`CLI_FLAG_PAGES`) get the unknown-flag check only.
 //
 // Generated pages are skipped: their generators run their own checks.
-// Requires `npm run compile-tests` (the parser is loaded from out/).
+// Requires `npm run compile-tests` (the parser and CLI are loaded from out/).
 
+import { execFile } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { load as loadYaml } from "js-yaml";
 
 const require = createRequire(import.meta.url);
+const execFileAsync = promisify(execFile);
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DOCS_DIR = resolve(ROOT_DIR, "docs");
 
@@ -275,6 +283,159 @@ export function findCommandDrift(markdown, contributes) {
   return problems;
 }
 
+export const CLI_PAGE = "cli/ctrlyoke.md";
+
+/**
+ * Other pages whose code spans name ctrlyoke flags. `cli/ctrlyoke-mcp.md` is
+ * a different binary, and harness pages quote the harnesses' own flags.
+ */
+const CLI_FLAG_PAGES = new Set([
+  "cli/index.md",
+  "cli/ci.md",
+  "cli/server.md",
+  "troubleshooting/common-errors.md",
+]);
+
+/** The command whose options table documents the shared execution options. */
+const SHARED_OPTIONS_COMMAND = "run";
+
+/** Flags every command has; the page needn't list them per command. */
+const IMPLICIT_FLAGS = new Set(["--help", "--version"]);
+
+/**
+ * Subcommand names and long option flags from one commander `--help` output.
+ * @returns {{ commands: string[], options: string[] }}
+ */
+export function parseCliHelp(text) {
+  const commands = [];
+  const options = [];
+  let section;
+  for (const line of text.split(/\r?\n/)) {
+    if (/^Commands:/.test(line)) section = "commands";
+    else if (/^Options:/.test(line)) section = "options";
+    else if (/^\S/.test(line)) section = undefined;
+    else if (section === "commands") {
+      const name = /^ {2}([a-z][\w-]*)/.exec(line)?.[1];
+      if (name && name !== "help") commands.push(name);
+    } else if (section === "options") {
+      const flags = /^ {2}(-\S.*?)(?: {2}|$)/.exec(line)?.[1];
+      for (const match of flags?.matchAll(/--[a-z][\w-]*/g) ?? []) {
+        if (!IMPLICIT_FLAGS.has(match[0])) options.push(match[0]);
+      }
+    }
+  }
+  return { commands, options };
+}
+
+/**
+ * Walk the CLI's command tree through `--help`.
+ * @param {(path: string[]) => Promise<string>} readHelp
+ * @returns {Promise<Map<string, string[]>>} command path ("history show") → long flags
+ */
+export async function readCliTree(readHelp) {
+  const tree = new Map();
+  const visit = async (path) => {
+    const { commands, options } = parseCliHelp(await readHelp(path));
+    if (path.length > 0) tree.set(path.join(" "), options);
+    await Promise.all(commands.map((name) => visit([...path, name])));
+  };
+  await visit([]);
+  return tree;
+}
+
+/** Text under each `ctrlyoke <command>` heading, keyed by command path. */
+function cliSections(markdown) {
+  const sections = new Map();
+  let current;
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = /^#{1,6} `ctrlyoke(?: ([^`]+))?`\s*$/.exec(line);
+    if (heading) current = heading[1];
+    if (current !== undefined) {
+      sections.set(current, `${sections.get(current) ?? ""}${line}\n`);
+    }
+  }
+  return sections;
+}
+
+const SHELL_FENCE_LANGS = new Set([
+  "bash",
+  "sh",
+  "shell",
+  "console",
+  "powershell",
+]);
+
+const LONG_FLAG = /--[a-z][\w-]*/g;
+
+/**
+ * Every long flag the page presents as a ctrlyoke flag: in inline code in
+ * prose, and on `ctrlyoke` command lines in shell examples.
+ * @returns {Set<string>}
+ */
+export function documentedCliFlags(markdown) {
+  const flags = new Set();
+  const add = (text) => {
+    for (const match of text.matchAll(LONG_FLAG)) flags.add(match[0]);
+  };
+  for (const { text } of proseLines(markdown)) {
+    for (const span of text.matchAll(/`([^`]+)`/g)) add(span[1]);
+  }
+  for (const block of extractFencedBlocks(markdown)) {
+    if (!SHELL_FENCE_LANGS.has(block.lang)) continue;
+    for (const line of block.body.split("\n")) {
+      if (/^\s*(?:\$\s+)?(?:npx\s+)?ctrlyoke\s/.test(line)) add(line);
+    }
+  }
+  return flags;
+}
+
+/**
+ * Drift between the CLI reference page and the CLI's real command tree.
+ * @param {Map<string, string[]>} tree from {@link readCliTree}
+ * @returns {string[]}
+ */
+export function findCliDrift(markdown, tree) {
+  const problems = [];
+  const sections = cliSections(markdown);
+  const shared = sections.get(SHARED_OPTIONS_COMMAND) ?? "";
+  for (const [command, options] of tree) {
+    const words = command.split(" ");
+    let section;
+    for (let length = words.length; length > 0 && !section; length--) {
+      section = sections.get(words.slice(0, length).join(" "));
+    }
+    // A pure group such as `history` has no options of its own; its
+    // subcommands are checked individually.
+    const isGroup =
+      options.length === 0 &&
+      [...tree.keys()].some((other) => other.startsWith(`${command} `));
+    if (section === undefined) {
+      if (!isGroup) problems.push(`\`ctrlyoke ${command}\` has no heading`);
+      continue;
+    }
+    for (const option of options) {
+      if (!section.includes(option) && !shared.includes(option)) {
+        problems.push(
+          `\`ctrlyoke ${command}\` option ${option} is not documented`
+        );
+      }
+    }
+  }
+  return [...problems, ...findUnknownCliFlags(markdown, tree)];
+}
+
+/**
+ * Flags a page presents as ctrlyoke flags that no command has.
+ * @param {Map<string, string[]>} tree from {@link readCliTree}
+ * @returns {string[]}
+ */
+export function findUnknownCliFlags(markdown, tree) {
+  const known = new Set([...tree.values()].flat());
+  return [...documentedCliFlags(markdown)]
+    .filter((flag) => !known.has(flag) && !IMPLICIT_FLAGS.has(flag))
+    .map((flag) => `${flag} is not an option of any ctrlyoke command`);
+}
+
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -290,7 +451,7 @@ function listPages(dir) {
   return pages;
 }
 
-function main() {
+async function main() {
   const { PromptFileParser } = require(
     resolve(ROOT_DIR, "out/core/PromptFileParser.js")
   );
@@ -314,6 +475,16 @@ function main() {
     yaml: CTRLYOKE_FILE_KINDS.WORKFLOW_YAML,
     json: CTRLYOKE_FILE_KINDS.WORKFLOW_JSON,
   };
+  const cliPath = resolve(ROOT_DIR, "out/cli.js");
+  const cliTree = await readCliTree(async (path) => {
+    // Wide columns keep each option's flags on one line.
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [cliPath, ...path, "--help"],
+      { cwd: ROOT_DIR, env: { ...process.env, COLUMNS: "200", NO_COLOR: "1" } }
+    );
+    return stdout;
+  });
 
   const failures = [];
   let examples = 0;
@@ -339,6 +510,15 @@ function main() {
         failures.push(`docs/${name}: ${message}`);
       }
     }
+    const cliMessages =
+      name === CLI_PAGE
+        ? findCliDrift(markdown, cliTree)
+        : CLI_FLAG_PAGES.has(name)
+          ? findUnknownCliFlags(markdown, cliTree)
+          : [];
+    for (const message of cliMessages) {
+      failures.push(`docs/${name}: ${message}`);
+    }
   }
 
   if (failures.length > 0) {
@@ -357,5 +537,5 @@ function main() {
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-  main();
+  await main();
 }

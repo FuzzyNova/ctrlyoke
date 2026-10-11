@@ -359,7 +359,7 @@ one only needs slotting in). As of 2026-10-10 only `workflows/properties-panel.m
 ## 6. Keeping docs accurate (guardrails)
 
 The audit found the same classes of drift again and again. Automate the ones that are cheap.
-**Status 2026-10-10:** items 1, 3, 4, 5 and 6 are done. `scripts/check-docs-content.mjs` runs at
+**Status 2026-10-10:** all six items are done. `scripts/check-docs-content.mjs` runs at
 the end of `check:docs` (so also in `predocs:build`), with unit tests in `test:packaging`. Item 1
 shipped as a two-way **drift check** rather than a generator: the commands page is mostly curated
 prose (submenu behaviour, "where it appears", Save As), so generating it would mean moving nearly
@@ -368,7 +368,13 @@ has no row, or a documented `ctrlyoke: …` command isn't contributed, which is 
 three-phantom-commands failure. Item 5 checks Copilot, Claude and Codex models only; OpenCode,
 Qwen and Antigravity model lists are discovered at runtime. The first run found one false positive
 (an MCP `append_step` argument in `mcp-tools.md`, now opted out) and no real defects. Item 2 is
-still open.
+also a drift check, not a generator, for the same reason. It walks the built CLI's `--help`
+tree (about 3 s, run in parallel) and fails when a command has no `ctrlyoke <command>` heading
+(subcommands may share their parent's), when an option is in neither its command's section nor
+the shared `run` options table, or when `cli/ctrlyoke.md`, `cli/index.md`, `cli/ci.md`,
+`cli/server.md` or `troubleshooting/common-errors.md` names a flag no command has. Its first run
+found two real gaps, both fixed: `trust-external-roots` had no section of its own, and
+`secret rm --yes` was undocumented.
 
 1. **Generate `reference/commands.md`** from `package.json` `contributes.commands`, `menus` and
    `keybindings`, the same way `generate-schema-docs.mjs` does. Add hand-written partials for the

@@ -3,13 +3,17 @@ import test from "node:test";
 
 import {
   NO_VALIDATE_MARKER,
+  documentedCliFlags,
   extractFencedBlocks,
+  findCliDrift,
   findCommandDrift,
   findInternalLeaks,
   findInvalidExamples,
   findUnknownModels,
   formatKeybinding,
   isWorkflowExample,
+  parseCliHelp,
+  readCliTree,
 } from "./check-docs-content.mjs";
 
 const FENCE = "```";
@@ -232,4 +236,104 @@ test("findCommandDrift reports missing rows, shortcuts and phantom commands", ()
     "ctrlyoke.clear shortcut Ctrl+Shift+N / Cmd+Shift+N is missing from its row",
     "line 2: `ctrlyoke: Does Not Exist` is not a contributed palette command",
   ]);
+});
+
+const ROOT_HELP = page(
+  "Usage: ctrlyoke [options] [command]",
+  "",
+  "Options:",
+  "  -V, --version   output the version number",
+  "  -h, --help      display help for command",
+  "",
+  "Commands:",
+  "  run [options] [file]   Execute a workflow",
+  "  secret                 Manage named secrets",
+  "  help [command]         display help for command"
+);
+
+const HELP_BY_PATH = {
+  "": ROOT_HELP,
+  run: page(
+    "Options:",
+    "  -H, --harness <harness>  Harness override",
+    "                           wrapped description line --not-a-flag",
+    "  --no-color               Disable colour",
+    "  -h, --help               display help for command"
+  ),
+  secret: page("Commands:", "  rm [options] <NAME>  Remove a secret"),
+  "secret rm": page("Options:", "  -y, --yes  Skip the prompt"),
+};
+
+test("parseCliHelp reads subcommands and long flags, skipping help and wrapped text", () => {
+  assert.deepEqual(parseCliHelp(ROOT_HELP), {
+    commands: ["run", "secret"],
+    options: [],
+  });
+  assert.deepEqual(parseCliHelp(HELP_BY_PATH.run), {
+    commands: [],
+    options: ["--harness", "--no-color"],
+  });
+});
+
+test("readCliTree walks every subcommand", async () => {
+  const tree = await readCliTree(async (path) => HELP_BY_PATH[path.join(" ")]);
+  assert.deepEqual(Object.fromEntries(tree), {
+    run: ["--harness", "--no-color"],
+    secret: [],
+    "secret rm": ["--yes"],
+  });
+});
+
+const CLI_TREE = new Map([
+  ["run", ["--harness", "--no-color"]],
+  ["rerun", ["--harness", "--from"]],
+  ["secret", []],
+  ["secret rm", ["--yes"]],
+]);
+
+test("findCliDrift accepts shared run options and parent sections", () => {
+  const markdown = page(
+    "# `ctrlyoke`",
+    "## `ctrlyoke run`",
+    "| `-H, --harness <harness>` | Harness |",
+    "| `--no-color` | Plain output |",
+    "## `ctrlyoke rerun`",
+    "`--from` picks the source run.",
+    "## `ctrlyoke secret`",
+    "`secret rm` asks first unless you pass `--yes`."
+  );
+  assert.deepEqual(findCliDrift(markdown, CLI_TREE), []);
+});
+
+test("findCliDrift reports missing headings, undocumented options and phantom flags", () => {
+  const markdown = page(
+    "## `ctrlyoke run`",
+    "| `--harness` | Harness |",
+    "| `--allow-all-tools` | Removed long ago |",
+    "",
+    FENCE + "bash",
+    "ctrlyoke run --resume abc",
+    "copilot --not-ours",
+    FENCE
+  );
+  assert.deepEqual(findCliDrift(markdown, CLI_TREE), [
+    "`ctrlyoke run` option --no-color is not documented",
+    "`ctrlyoke rerun` has no heading",
+    "`ctrlyoke secret rm` has no heading",
+    "--allow-all-tools is not an option of any ctrlyoke command",
+    "--resume is not an option of any ctrlyoke command",
+  ]);
+});
+
+test("documentedCliFlags ignores other tools' flags in shell examples", () => {
+  const flags = documentedCliFlags(
+    page(
+      FENCE + "bash",
+      "npm install --global ctrlyoke",
+      "ctrlyoke run --json",
+      "$ npx ctrlyoke validate --strict",
+      FENCE
+    )
+  );
+  assert.deepEqual([...flags], ["--json", "--strict"]);
 });

@@ -120,9 +120,9 @@ Use `--run` with `--workflow` to inspect a specific run.
 | `1`  | The workflow failed (a step or end condition failed), or a validation check failed                                           |
 | `2`  | Usage, parse, or unexpected error; also unapproved external roots or secret grants, or run state written by a newer ctrlyoke |
 | `3`  | A harness failed because its CLI could not be found (not installed, not on `PATH`)                                           |
-| `4`  | A step failed with a timeout that is not a configured execution guardrail                                                     |
+| `4`  | A step failed with a timeout that is not a configured execution guardrail                                                    |
 | `5`  | Interrupted with Ctrl+C or `SIGTERM`; the run is stopped and its runner lock released                                        |
-| `6`  | The run stopped after reaching a configured execution guardrail                                                             |
+| `6`  | The run stopped after reaching a configured execution guardrail                                                              |
 
 ## `ctrlyoke run`
 
@@ -397,9 +397,20 @@ allow or deny decision for that workflow on the local machine. Use
 roots cannot run; `ctrlyoke run` exits with code `2` and prints this command as
 the remediation.
 
-`ctrlyoke trust-external-roots` is the corresponding command for
-workspace-scope `permissions.trustedExternalRoots` requests. User-scope
-roots are trusted immediately when added to the user's settings.
+## `ctrlyoke trust-external-roots`
+
+Review and approve the external directories requested by this workspace's
+`permissions.trustedExternalRoots` setting:
+
+```bash
+ctrlyoke trust-external-roots
+ctrlyoke trust-external-roots --yes
+```
+
+This is the workspace-scope counterpart of `trust-workflow-external-roots`.
+User-scope roots are trusted immediately when added to the user's settings.
+While a workspace root is pending, every `ctrlyoke run` in that workspace exits
+with code `2`. `--yes` approves all pending roots without prompting.
 
 ## `ctrlyoke trust-secret-grants`
 
@@ -433,7 +444,8 @@ The `secret` commands never accept a value as an argument. `secret set` reads
 from a hidden TTY prompt by default, or from stdin with `--stdin`; `secret list`
 prints names, scope, set state, and source (`managed`, `environment`, or
 `unavailable`) only. There is intentionally no `secret get` command. `--scope`
-defaults to `user`.
+defaults to `user`. `secret rm <NAME>` asks for confirmation unless you pass
+`--yes`.
 
 Managed secrets use the host OS credential store and are never written to a
 plaintext fallback file. The CI-friendly path does not require a credential
