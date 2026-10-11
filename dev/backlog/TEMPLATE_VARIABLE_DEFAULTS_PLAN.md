@@ -96,8 +96,11 @@ New settings root `templates`, in `schemas/settings-schema.json` + `CtrlYokeSett
 
 ### Resolution (single source)
 
-One function in `TemplateManager` (or a small `TemplateVariableDefaults` helper it owns) resolves
-the effective default for every variable, and every consumer goes through it:
+One pure module, `src/utils/TemplateVariableDefaults.ts`, resolves the effective default for
+every variable, and every consumer goes through it. It has no Node or VS Code imports, so the
+extension (`TemplateManager`, the save handler) and the dashboard (the Phase 2 settings editor)
+import the same code. It owns the per-scope merge, the pair rule, the stale/invalid
+classification, and the clear-instead-of-store comparison.
 
 ```
 effective = workspace override ?? user override ?? authored _templateMeta default
@@ -293,7 +296,8 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
 | File                                                             | Change                                                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `schemas/settings-schema.json`, `src/types/CtrlYokeSettings.ts`  | `templates.variableDefaults` (record of record of string), default `{}`               |
-| `src/core/TemplateManager.ts`                                    | `TemplateVariable` fields; per-variable resolver; apply in `getAvailableTemplates`    |
+| `src/utils/TemplateVariableDefaults.ts` (new)                    | Pure resolver: per-scope merge, pair rule, classifier, clear comparison               |
+| `src/core/TemplateManager.ts`                                    | `TemplateVariable` fields; apply the resolver in `getAvailableTemplates`              |
 | `src/types/DashboardConstants.ts`                                | `TEMPLATE_VARIABLE_DEFAULT_SOURCES`, new message type                                 |
 | `src/types/WebviewMessageTypes.ts`                               | Message payload                                                                       |
 | `src/ui/WebviewMessageRouter.ts`, `src/ui/WorkflowSerializer.ts` | New route + handler; `handleSetDefaultTemplate` takes a scope and returns the source  |
@@ -335,15 +339,187 @@ directly, so the unit tests can supply overrides without a config backend.
   to the harness default. These belong in `TemplateModelVariables.test.tsx` if the new modal test
   file doesn't exist yet.
 
-## Phase 2 — see and clear saved values in Settings
+## Phase 2 — Templates settings tab
 
-Without a list, the only way to find a stale override is to open each template. Add a
-**Templates** group to the Settings view (`GeneralSection.tsx` neighbourhood, catalogued in
-`settingsCatalog.ts`), with one row per template that has saved values. Like every other drawer
-section, it shows and edits the drawer's active scope (User or Workspace), not a merged view.
-Each row shows its variables and values, with a clear button per value and per template. Show
-templates that no longer exist as "(template not found)" so they can be removed. Clearing a
-harness or model clears its whole pair, as in the modal.
+Without a list, the only way to find or fix a saved value is to open each template in **New
+Workflow**. Phase 2 adds a **Templates** tab to the Settings drawer that lists, edits, adds, and
+clears saved values for every template. It also takes over the default-template setting.
+
+### Placement and scope
+
+- New `GLOBAL_SETTINGS_TABS.TEMPLATES` entry in `settingsTabs.ts`, in the Core group after
+  **Workflow Defaults** (label "Templates", icon `codicon-file-code`). New `TemplatesSection`
+  component under `components/settings/`, rendered from `GlobalSettingsDrawer.tsx` like the
+  other sections.
+- Like every drawer section, it shows and edits **only the drawer's active scope** (User or
+  Workspace), not a merged view. The drawer's title-bar toggle is the scope control; the
+  section adds none of its own. With Workspace selected and no workspace open, the section
+  shows the drawer's usual no-workspace state.
+- The drawer's read-only state (settings written by a newer ctrlyoke) disables it through the
+  existing `<fieldset disabled>`, with no extra code.
+
+### Layout
+
+```
+TEMPLATES                                                    (scope: User)
+
+Default template   [ Bug Hunt Loop                       v ]   ↺
+                   Pre-selected when New Workflow opens.
+
+SAVED VARIABLE VALUES
+Values pre-filled when you create a workflow from a template.
+
+┌ Bug Hunt Loop  bug-hunt-loop                          [Clear all] ┐
+│ bugBacklogDir      [ dev/bugs/backlog            ] [Browse…]  🗑  │
+│                    Template default: bugs/backlog                 │
+│ hunterHarness      [ Codex CLI   v ] [ gpt-5-codex          v ]  🗑  │
+│ + hunterModel      Template default: Claude CLI · opus            │
+│                    ⚠ Workspace also saves this; its value wins in │
+│                      this workspace.                              │
+│ testCommand        [ npm test -- --run           ]            🗑  │
+│ [+ Add value v]                                                    │
+└───────────────────────────────────────────────────────────────────┘
+┌ old-template  (template not found)                    [Clear all] ┐
+│ planDoc            plans/plan.md                              🗑  │
+└───────────────────────────────────────────────────────────────────┘
+[+ Add template v]
+```
+
+**Default template row.** This replaces the free-text `general.defaultTemplate` input in
+`GeneralSection.tsx` (today you have to type a template id by hand). It becomes a dropdown
+grouped like the modal's picker (Built-in / Custom (Workspace) / Custom (User)), inside a
+`SettingInputRow`, so it gets the standard source indicator and reset. Move its
+`settingsCatalog.ts` entry to the new tab so settings search lands here. The setting key does
+not change.
+
+**One card per template**, not one row. Each template with at least one saved value at the
+active scope gets a bordered card:
+
+- **Header:** the template's display name, its id in muted monospace (so two templates with
+  the same name can be told apart), and a **Clear all** button that clears every saved value
+  for that template at this scope in one message.
+- **Body: one row per saved variable**, in the template's declaration order, laid out like
+  `KeyValueRowsEditor`: name | value control | trash, with `FieldDiagnostic` under the value.
+  The trash clears that one value. So yes, each saved value can be cleared on its own.
+- **Below each value:** a muted "Template default: …" hint (`authoredDefault`, or "none").
+- **Footer:** an **Add value** dropdown listing the template's variables that have no saved
+  value at this scope (multiline text excluded, as in the modal). Picking one adds a row
+  pre-filled with the variable's current effective value and focuses it. Nothing is written
+  until the value is committed.
+
+**Add template** at the bottom: a dropdown of templates with no saved values at this scope.
+Picking one adds an empty card with its **Add value** dropdown open. Nothing is written until a
+value is committed, and an empty card disappears when the tab is left.
+
+**Empty state** (no saved values at this scope): "No saved values in User settings. Pin a value
+in New Workflow, or add one here." followed by **Add template**.
+
+**Order:** cards follow the modal picker's order (built-in, workspace custom, user custom), with
+missing templates last.
+
+### Value controls
+
+Each value uses the same control as the modal field for its type. Extract the modal's
+per-variable field rendering into a shared `TemplateVariableField` (plus the existing paired
+model rendering) under `components/workflow/`. `TemplateModal` and `TemplatesSection` both use
+it, so the controls cannot drift apart:
+
+| Variable type        | Control                                                                        |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `text`               | single-line input, committed on blur / Enter                                   |
+| `file` / `directory` | input + **Browse…** (native dialog in VS Code, `FileBrowserModal` when hosted) |
+| `select`             | dropdown of `options`, committed on change                                     |
+| `harness` + models   | **one row**: `HarnessDropdown` and its model `CustomSelect`s side by side      |
+| unpaired `model`     | text input                                                                     |
+
+A harness and its linked models behave as one unit here too. They are one row with one trash
+button, and **Add value** offers the harness, never a model on its own. Changing the harness
+resets the models to the new harness's default (`defaultModelForHarness`) and writes harness
+and models in one message, so a saved pair is never half-updated.
+
+### Editing semantics
+
+- **Every commit is a write.** There is no Save button, consistent with the rest of the
+  drawer. Writes go through the Phase 1 `SET_TEMPLATE_VARIABLE_DEFAULTS` message at the
+  drawer's active scope, so the extension's clear-instead-of-store rule applies. If you commit
+  a value equal to the inherited one, the row disappears, and an inline note on the
+  card ("Matches the inherited value, so nothing is saved") explains why for a few seconds.
+- **Blank text is a clear.** Committing an empty text field clears that saved value instead of
+  storing `""`. The authored default or the other scope's value then applies again.
+- **Cross-scope hint.** When the other scope also saves a variable, the row says so. At User
+  scope: "Workspace also saves this; its value wins in this workspace." At Workspace scope:
+  "Overrides your User value: …". For a pair, the hint is about the harness, since the pair
+  resolves from one scope.
+
+### Stale and invalid entries
+
+These use the shared classifier from `TemplateVariableDefaults.ts`, so the editor flags exactly
+the entries the resolver ignores:
+
+| Case                               | Row                                                                                                             |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Template not found                 | Card titled with the raw id + "(template not found)"; values read-only text; trash and **Clear all** still work |
+| Variable no longer in the template | Value as read-only text, warning "This template no longer has this variable; the value is ignored"; trash works |
+| Harness not in `HARNESS_IDS`       | Editable dropdown with warning "Not a known harness; the value is ignored" until fixed                          |
+| `select` value not in `options`    | Editable dropdown with the same kind of warning                                                                 |
+| Model not offered by the harness   | The existing `modelWarning`, same as the modal (warning only; the value still applies)                          |
+
+### Data
+
+- **Per-scope values.** `FullGlobalSettings.settings` is the merged view, which can't show one
+  scope (and the generic merge is wrong for this key anyway; see "Setting"). Add
+  `templateVariableDefaultsByScope: Record<SettingWriteScope, …>` to `FullGlobalSettings`, read
+  with `getScoped`. It then refreshes on every existing `GLOBAL_SETTINGS_LOADED`, including
+  after a write or a hand edit of `settings.json`.
+- **Template catalog.** The editor needs template names, variable types, options, pairings, and
+  authored defaults. Add `TEMPLATE_CATALOG_REQUEST` → `TEMPLATE_CATALOG_LOADED`, answered with
+  the same `toWireTemplates` payload the modal gets. Request it when the tab opens. Don't reuse
+  `handleNewWorkflow`, which opens the modal.
+- **Writes.** Reuse `SET_TEMPLATE_VARIABLE_DEFAULTS` (values map, `null` clears). **Clear all**
+  is that message with every saved variable set to `null`. No new write message.
+
+### Why not `KeyValueRowsEditor` itself
+
+Its contract is free-text keys with free-text values: key validation, duplicate-key checks,
+bulk `KEY=value` editing, paste splitting, and a secret picker. Here the keys are fixed by the
+template, each value has a typed control, and two variables can share a row. Reusing it would
+mean disabling most of it and bolting on the rest. Borrow its row grid, trash button, and
+`FieldDiagnostic` placement so the two look like siblings, but keep the component separate.
+
+### Search
+
+Add `settingsCatalog.ts` entries for the tab, the **Default template** row (moved from
+General), and the **Saved variable values** heading, so "template", "default", and "saved
+value" all land on the tab. Individual saved values are dynamic data and are not indexed.
+
+### Touchpoints
+
+| File                                                                                | Change                                                                      |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `src/types/DashboardConstants.ts`                                                   | `GLOBAL_SETTINGS_TABS.TEMPLATES`; catalog request/loaded message types      |
+| `src/types/WebviewMessageTypes.ts`                                                  | `templateVariableDefaultsByScope` on `FullGlobalSettings`; catalog messages |
+| `src/ui/` settings load handler, `WebviewMessageRouter.ts`, `WorkflowSerializer.ts` | Populate per-scope values; answer the catalog request                       |
+| `src/ui/webview-react/components/settings/settingsTabs.ts`                          | New tab                                                                     |
+| `src/ui/webview-react/components/settings/TemplatesSection.tsx`                     | New section                                                                 |
+| `src/ui/webview-react/components/settings/GeneralSection.tsx`                       | Remove the default-template input                                           |
+| `src/ui/webview-react/components/settings/settingsCatalog.ts`                       | Move/add entries                                                            |
+| `src/ui/webview-react/components/workflow/TemplateVariableField.tsx`                | Extracted from `TemplateModal`; used by both                                |
+| `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx`                   | Render the section                                                          |
+| `docs/` settings / templates pages                                                  | Document the tab                                                            |
+
+### Tests
+
+- `TemplateVariableDefaults` unit tests (`src/test/unit/`): per-scope merge, pair resolution,
+  classifier cases, clear comparison. This is the shared module, so test it once, directly.
+- `TemplatesSection.test.tsx` (`src/ui/webview-react/test/components/settings/`): shows only the
+  active scope's entries; one card per template and one row per value; trash clears one value
+  and **Clear all** clears the template, each as one message at the active scope; a pair is one
+  row and a harness change sends harness + models together; **Add value** excludes saved and
+  multiline variables and offers the harness but not its models; blank text sends a clear;
+  cross-scope hint text at each scope; every stale/invalid case from the table; the
+  default-template dropdown writes `general.defaultTemplate` at the active scope.
+- `TemplateModal` tests keep passing after the field extraction. That is the check the extraction
+  didn't change modal behaviour.
 
 ## Phase 3 — carry saved values into a copied template
 
@@ -352,6 +528,33 @@ the effective defaults into the copy's `_templateMeta.variables.<name>.default` 
 from the source. The copy then starts as "my version of this template" instead of losing the
 user's settings at the moment they decide to customize further. Do not move or delete the
 overlay on the source; the user may still use the built-in.
+
+## Follow-up — community templates in the Templates tab
+
+[`COMMUNITY_TEMPLATES_PLAN.md`](COMMUNITY_TEMPLATES_PLAN.md) Phase 2 (Discovery & Import) puts
+its browse-and-install UI in the **Templates** tab instead of a separate Community Templates
+tab. That plan owns the design (fetch source, `CommunityTemplateService`, store, install
+validation). This section only records the shared layout so Phase 2 here doesn't paint it into a
+corner:
+
+- **Pages.** When community import lands, the tab gets a page bar at the bottom like
+  **Workflow Defaults**: **Defaults** (everything Phase 2 builds) and **Discover** (community
+  browse and install). Use the generic `SegmentedTabBar` with a Templates-specific page set.
+  `DrawerTabBar` is hard-wired to the Workflow Defaults pages (`DRAWER_TABS`). Phase 2 ships
+  without a page bar: a bar with one page is noise. `TemplatesSection` should still keep its
+  body in its own `TemplateDefaultsPage` component so adding the second page is a wrapper
+  change, not a rewrite.
+- **One scope control.** Install location follows the drawer's User/Workspace toggle (User →
+  `~/.ctrlyoke/templates/`, Workspace → `.ctrlyoke/templates/`), the same way it decides where
+  a saved value is written. The section has no second scope picker. Every write the tab makes
+  goes to the scope shown in the title bar.
+- **It flows into Defaults with no extra work.** An installed template is an ordinary custom
+  template (`custom:<scope>:<name>`), so it appears in the **Add template** dropdown and the
+  New Workflow picker, and its variables can be saved like any other. After an install,
+  **Discover** offers a **Set defaults** link that switches to **Defaults** with that
+  template's card added and its **Add value** dropdown open.
+- **Search.** Add the **Discover** page to the tab's settings-catalog entries so a search for
+  "community" lands on it.
 
 ## Non-goals
 

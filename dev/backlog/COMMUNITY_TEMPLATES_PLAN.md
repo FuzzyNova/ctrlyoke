@@ -227,9 +227,19 @@ undefined`, `isLoading`, `error`, `query`, `installingIds: Set<string>`
 tab's single loading flag). Actions: `requestIndex()`, `installTemplate(id,
 scope)`.
 
-### UI: `CommunityTemplatesSection.tsx`
+### UI: a **Discover** page in the Templates settings tab
 
-New `src/ui/webview-react/components/settings/CommunityTemplatesSection.tsx`,
+> **Revised 2026-10-11:** this UI is no longer its own settings tab. It is the
+> **Discover** page of the **Templates** tab designed in
+> [`TEMPLATE_VARIABLE_DEFAULTS_PLAN.md`](TEMPLATE_VARIABLE_DEFAULTS_PLAN.md)
+> (Phase 2, and "Follow-up — community templates in the Templates tab"). That
+> tab is where users already manage templates: the default template and saved
+> variable values. Installing a template belongs next to them, and an installed
+> template is immediately available in that tab's **Defaults** page. The page
+> structure and scope rules are recorded there. The component below is the
+> page's body. Build the Templates tab first; this phase depends on it.
+
+New `src/ui/webview-react/components/settings/CommunityTemplatesPage.tsx`,
 modeled directly on `McpManagerSection.tsx`'s "Discover & import" registry tab
 (starts near `:1170`; registry search near `:1317`) — installing a community template is structurally the same
 action as importing a registry MCP server: search box, result list, a per-row
@@ -241,11 +251,11 @@ templates are already fully managed by the existing New Workflow template
 picker):
 
 ```
-Community Templates (new settings tab)
+Templates tab → Discover page
 ├── Search box (client-side filter over the fetched index — no server-side
 │   pagination needed at this scale, unlike the MCP registry)
-├── Scope picker: install into Workspace | User (reuses TEMPLATE_SCOPE_OPTIONS
-│   from templateScope.ts)
+├── (no scope picker: installs go to the drawer's User/Workspace toggle —
+│   User → ~/.ctrlyoke/templates, Workspace → .ctrlyoke/templates)
 └── Result list
       — name, description, author, tags
       — "Install" button → INSTALL_COMMUNITY_TEMPLATE
@@ -253,20 +263,19 @@ Community Templates (new settings tab)
         exists in the target scope
       — "View source" link to the GitHub file (opens externally, never
         fetched into the webview)
+      — after install: "Set defaults" link → Defaults page, with the new
+        template's card added
 ```
 
 ### Settings drawer wiring
 
-Add `COMMUNITY_TEMPLATES: "communitytemplates"` to `GLOBAL_SETTINGS_TABS`
-(`src/types/DashboardConstants.ts:3122`), a tab entry in `ALL_TABS` right
-after `MCP_MANAGER`
-(`src/ui/webview-react/components/settings/settingsTabs.ts:76`–`80`),
-and a render branch next to the existing `MCP_MANAGER` one in
-`src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` (`:545`).
-No `fullSettings` dependency, same as
-`mcpmanager`/`agentskillsmanager`/`languageservers` — add it to the
-`!fullSettings` exclusion list (`:566`) and, if it should render full-width,
-to `isFullWidthSettingsTab` (`:121`).
+No new `GLOBAL_SETTINGS_TABS` entry. `TemplatesSection` gains the page bar
+described in the template-defaults plan's follow-up section and renders
+`CommunityTemplatesPage` on its **Discover** page. The page itself needs no
+`fullSettings`, but the Templates tab as a whole does (Defaults reads per-scope
+values from it), so the tab keeps its normal `fullSettings` gating in
+`GlobalSettingsDrawer.tsx`. `InstallCommunityTemplateMessage.scope` is filled
+from the drawer's active scope.
 
 ---
 
@@ -277,11 +286,14 @@ to `isFullWidthSettingsTab` (`:121`).
 - **Generated `index.json`, not a hand-edited manifest** — avoids merge
   conflicts across independent community PRs; the built-ins' hand-maintained
   `manifest.json` stays as-is (low churn, single maintainer).
-- **UI lives in the Settings drawer as its own tab**, not folded into the
-  existing `TemplateModal.tsx` creation flow — installing a shared template is
-  a one-time "add to my library" action like installing an MCP server, not a
+- **UI lives in the Settings drawer**, not folded into the existing
+  `TemplateModal.tsx` creation flow — installing a shared template is a
+  one-time "add to my library" action like installing an MCP server, not a
   per-workflow choice; once installed it shows up in the normal template
-  picker for free (it's just another `.ctrlyoke/templates/` file).
+  picker for free (it's just another `.ctrlyoke/templates/` file). It is the
+  **Discover** page of the Templates tab
+  ([`TEMPLATE_VARIABLE_DEFAULTS_PLAN.md`](TEMPLATE_VARIABLE_DEFAULTS_PLAN.md)),
+  not a tab of its own, and installs into the drawer's active scope.
 
 ## Open questions
 
