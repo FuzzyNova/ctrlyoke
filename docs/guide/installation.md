@@ -17,7 +17,22 @@ After install, open the panel:
 Command Palette → ctrlyoke: Open ctrlyoke Panel
 ```
 
-The panel opens in the secondary side bar (far right) by default. If you prefer a wider, horizontal layout, drag the ctrlyoke tab down to the bottom panel. The **ctrlyoke: Show Getting Started** command reopens the built-in walkthrough at any time.
+The panel opens in the secondary side bar (far right) by default. If you prefer a wider, horizontal layout, drag the ctrlyoke tab down to the bottom panel.
+
+### Getting Started walkthrough {#walkthrough}
+
+The first time the extension starts after install, VS Code opens the **Getting Started with
+ctrlyoke** walkthrough. It has six steps, each ticked off as you do it:
+
+1. **Open the ctrlyoke panel**
+2. **Install and verify a harness CLI**
+3. **Create a workflow from a template**
+4. **Run it and read the output**
+5. **Optional: use the CLI outside VS Code**: install the `ctrlyoke` command from npm for other
+   shells and CI (see [The command-line tool](#the-command-line-tool))
+6. **Get help when you're stuck**
+
+The **ctrlyoke: Show Getting Started** command reopens the walkthrough at any time.
 
 ## Install a harness
 
@@ -32,15 +47,48 @@ ctrlyoke does not bundle AI assistants. It orchestrates harnesses that you alrea
 | `qwen-cli`        | Qwen Code CLI installed and configured          |
 | `antigravity-cli` | Antigravity CLI (`agy`) installed and signed in |
 
-Any one of them is enough to get started — use the harness you already have. If none is detected,
-the dashboard shows the install command for each. See [Harness overview](/harnesses/) for how
-they differ.
+Any one of them is enough to get started — use the harness you already have. See
+[Harness overview](/harnesses/) for how they differ.
+
+### When no harness is found {#missing-harness}
+
+When the dashboard starts, it checks every supported CLI on your `PATH`. If none of them is
+available, it shows **No AI harness CLI is available** just below the header, listing each harness
+with the command that installs it. A harness that is installed but older than the minimum
+version ctrlyoke supports shows its update command instead; hover it to see the installed and
+minimum versions. The panel is guidance only and doesn't block the dashboard. It disappears once
+a harness is detected.
+
+<!-- SHOT D6: Dashboard with the "No AI harness CLI is available" preflight panel below the header, listing all six harnesses with their install commands (one harness showing an update command if possible). -->
+
+Install a harness, sign in with its own CLI, then let ctrlyoke check again: reload the window, or
+click **Retry** next to the harness picker.
+
+The harness picker marks each harness with a status dot:
+
+| Dot     | Meaning                                                |
+| ------- | ------------------------------------------------------ |
+| Green   | Available                                              |
+| Amber   | Available, but older than the recommended version      |
+| Red     | Not available. The row is dimmed and can't be selected |
+| Pulsing | Still checking                                         |
+
+Hover a harness to see why it is unavailable: its install command, or the version it needs. When
+the selected harness is unavailable, a **Retry** button next to the picker runs detection again.
 
 ## Initialize a workspace
 
 ctrlyoke keeps workspace-level files such as settings, templates, scripts, prompts, attachments, and logs in a `.ctrlyoke` folder.
 
-The first time you open the panel in a workspace that has no `.ctrlyoke/` folder, the dashboard asks **Initialize ctrlyoke here?** Click **Initialize ctrlyoke** to continue. You can also run the command directly at any time:
+The first time you open the panel in a workspace that has no `.ctrlyoke/` folder, the dashboard asks **Initialize ctrlyoke here?** Click **Initialize ctrlyoke** to continue. The dashboard stays covered by this prompt until you do. The hosted browser dashboard shows the same prompt.
+
+<!-- SHOT D9: The "Initialize ctrlyoke here?" overlay with its Initialize ctrlyoke button, in the VS Code side panel of a fresh workspace (npm run dev:host:start:onboarding); optionally paired with the Getting Started with ctrlyoke walkthrough page open in the editor area. -->
+
+Right after you initialize a workspace from this prompt, the dashboard shows **One quick tip**:
+the panel lives in the secondary side bar, and you can drag its tab to the bottom panel for a
+wider layout. Click **Got it** to continue.
+
+You can also run the command directly at any time:
 
 ```text
 Command Palette → ctrlyoke: Initialize Workspace

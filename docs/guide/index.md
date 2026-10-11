@@ -2,6 +2,8 @@
 
 Use this section for the shortest path from install to a working ctrlyoke run.
 
+<img src="/screenshots/hero-gif-1350x900.gif" alt="A six-step workflow running in the browser dashboard, one step per harness, with output streaming and the output minimap filling in" width="675" loading="lazy">
+
 ## Recommended order
 
 1. [Installation](/guide/installation)

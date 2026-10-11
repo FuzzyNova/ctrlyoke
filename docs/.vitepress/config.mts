@@ -38,6 +38,14 @@ export default defineConfig({
             { text: "Privacy and telemetry", link: "/guide/privacy" },
           ],
         },
+        {
+          text: "Using the dashboard",
+          items: [
+            { text: "Dashboard tour", link: "/guide/dashboard" },
+            { text: "Settings", link: "/guide/settings" },
+            { text: "Browser dashboard", link: "/guide/remote-dashboard" },
+          ],
+        },
       ],
       "/harnesses/": [
         {
@@ -54,6 +62,10 @@ export default defineConfig({
             { text: "OpenCode CLI", link: "/harnesses/opencode-cli" },
             { text: "Qwen CLI", link: "/harnesses/qwen-cli" },
             { text: "Antigravity CLI", link: "/harnesses/antigravity-cli" },
+            {
+              text: "Files ctrlyoke writes",
+              link: "/harnesses/files-ctrlyoke-writes",
+            },
           ],
         },
       ],
@@ -80,6 +92,8 @@ export default defineConfig({
             { text: "Script steps", link: "/workflows/script-steps" },
             { text: "Parallel steps", link: "/workflows/parallel-steps" },
             { text: "End conditions", link: "/workflows/end-conditions" },
+            { text: "Variables", link: "/workflows/variables" },
+            { text: "Error handling", link: "/workflows/error-handling" },
           ],
         },
         {
@@ -96,7 +110,11 @@ export default defineConfig({
         },
         {
           text: "Integrations",
-          items: [{ text: "Dynamic queue", link: "/workflows/dynamic-queue" }],
+          items: [
+            { text: "Secrets", link: "/workflows/secrets" },
+            { text: "Worktrees", link: "/workflows/worktrees" },
+            { text: "Dynamic queue", link: "/workflows/dynamic-queue" },
+          ],
         },
       ],
       "/reference/": [

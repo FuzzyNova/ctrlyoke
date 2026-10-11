@@ -80,6 +80,16 @@ Operators are word tokens (`gte`, not `>=`). Both `operator: >=` and
 `operator: !=` are YAML parse errors. The dashboard still shows you `>=` and
 `!=`.
 
+In the step editor, a script step's **Pass when** row holds the same three parts,
+with the sentence under it:
+
+![A script step in the editor: the npm test command, an empty Environment list, Pass when set to Stdout, Contains, "passed", and the On Pass, On Fail, Timeout, Shell and Execution Mode fields](/screenshots/script-step-editor-998x650.png)
+
+In the output, each check prints its result with the expected and actual values.
+A failed end condition also shows the retry it triggers:
+
+![An end condition failing with stdout == ready, actual "not ready", retry 1 of 2, followed by "Retrying Prompt 1 (Attempt 1/2)"](/screenshots/end-condition-retry-968x363.png)
+
 ## How scripts run {#how-scripts-run}
 
 `script` is either a path to a script file or an inline command.
