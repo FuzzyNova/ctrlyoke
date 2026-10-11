@@ -106,6 +106,34 @@ suite("CodexCliProvider", () => {
     });
   });
 
+  test("requests concise reasoning summaries ahead of any user additionalArgs", async () => {
+    // Codex's reasoning is encrypted; without a summary the dashboard has no
+    // readable trace of it. additionalArgs follow, so a user's own
+    // `-c model_reasoning_summary=...` still wins (Codex keeps the last -c).
+    for (const isInteractive of [true, false]) {
+      const args = await new CodexCliProvider().buildCliArgs(
+        {} as any,
+        isInteractive,
+        "/ext",
+        "/workspace",
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          resolvedProperties: {
+            additionalArgs: "-c model_reasoning_summary=detailed",
+          },
+        } as any
+      );
+      const ours = args.indexOf('model_reasoning_summary="concise"');
+      assert.ok(ours > 0 && args[ours - 1] === "-c", JSON.stringify(args));
+      assert.ok(
+        args.indexOf("model_reasoning_summary=detailed") > ours,
+        "user additionalArgs must come after the default"
+      );
+    }
+  });
+
   suite("buildCliArgs resume ordering", () => {
     const provider = new CodexCliProvider();
 

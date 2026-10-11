@@ -29,9 +29,12 @@ import {
 } from "../types/messages";
 import {
   DIFF_LINE_TYPES,
-  OUTPUT_DEFAULT_LABELS,
   OUTPUT_MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
+import {
+  formatThinkingLabel,
+  isRenderableThinkingBlock,
+} from "@root/utils/ThinkingBlockFormat";
 import {
   getTargetKey,
   mapOrderedHistoryEntriesToMessages,
@@ -292,12 +295,9 @@ function renderStructuredEventsToMarkdown(
 
       case CLI_EVENT_TYPES.THINKING: {
         const data = event.data as ThinkingBlock;
-        if (data.text) {
-          const label =
-            data.label && data.label !== OUTPUT_DEFAULT_LABELS.THINKING
-              ? data.label
-              : OUTPUT_DEFAULT_LABELS.THINKING;
-          lines.push(`● ${label}: ${data.text}`);
+        if (isRenderableThinkingBlock(data)) {
+          const label = formatThinkingLabel(data);
+          lines.push(data.text ? `● ${label}: ${data.text}` : `● ${label}`);
           lines.push("");
         }
         break;

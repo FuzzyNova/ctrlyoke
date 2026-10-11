@@ -1475,17 +1475,15 @@ function estimateStructuredTextHeight(
     }
     case CLI_EVENT_TYPES.THINKING: {
       const text = (row.event.data as { text?: string }).text ?? "";
-      const contentHeight = estimateTextBlockHeight(
-        text,
-        fullContentWidth,
-        outputFontSize,
-        {
-          chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
-          charWidthMultiplier: 0.56,
-          lineHeightMultiplier: 1.6,
-          verticalChrome: THINKING_CONTENT_VERTICAL_CHROME,
-        }
-      );
+      // A redacted block with no summary renders its label alone.
+      const contentHeight = text
+        ? estimateTextBlockHeight(text, fullContentWidth, outputFontSize, {
+            chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+            charWidthMultiplier: 0.56,
+            lineHeightMultiplier: 1.6,
+            verticalChrome: THINKING_CONTENT_VERTICAL_CHROME,
+          })
+        : 0;
       return (
         THINKING_LABEL_HEIGHT + contentHeight + THINKING_OUTER_VERTICAL_CHROME
       );

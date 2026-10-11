@@ -4250,6 +4250,7 @@ export type OutputScrollAnchorMode =
 /** Default labels used by structured output renderers. */
 export const OUTPUT_DEFAULT_LABELS = {
   THINKING: "Thinking",
+  REASONING: "Reasoning",
 } as const;
 
 /**

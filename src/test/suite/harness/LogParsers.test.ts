@@ -4012,6 +4012,98 @@ suite("CodexLogParser", () => {
       );
     });
 
+    suite("encrypted reasoning", () => {
+      // One response as Codex writes it: reasoning, a tool call, then the
+      // per-response usage record — before the tool's output.
+      const turn = (summary: string, tokens: number): BaseCliEvent[] => [
+        {
+          type: "response_item",
+          payload: {
+            type: "reasoning",
+            summary: summary ? [{ type: "summary_text", text: summary }] : [],
+            encrypted_content: "gAAAA-opaque",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "shell",
+            arguments: JSON.stringify({ command: ["ls"] }),
+            call_id: "call-1",
+          },
+        },
+        {
+          type: "token_usage_record",
+          payload: { usage: { reasoning_output_tokens: tokens } },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call_output",
+            call_id: "call-1",
+            output: "file.txt",
+          },
+        },
+      ];
+      const taskStarted: BaseCliEvent = {
+        type: "event_msg",
+        payload: { type: "task_started" },
+      };
+      const reasoningBlocks = (events: CliEvent[]) =>
+        events
+          .filter((event) => event.type === CLI_EVENT_TYPES.THINKING)
+          .map((event) => event.data as ThinkingBlock);
+
+      test("maps encrypted reasoning to a redacted block carrying its summary and token count", () => {
+        const output = parser.extractResponse(turn("**Listing files**", 453));
+
+        assert.deepStrictEqual(reasoningBlocks(output.events), [
+          {
+            text: "**Listing files**",
+            label: "Reasoning",
+            redacted: true,
+            reasoningTokens: 453,
+          },
+        ]);
+        assert.strictEqual(
+          output.events[0].type,
+          CLI_EVENT_TYPES.THINKING,
+          "reasoning keeps its place before the tool call"
+        );
+      });
+
+      test("streams the same blocks as the batch parse, in the same order", () => {
+        const events = turn("", 80);
+        const streamed = events.flatMap((event) =>
+          parser.extractStructuredEventsFromEvent(event)
+        );
+        const batch = new CodexLogParser().extractResponse(events).events;
+
+        assert.deepStrictEqual(
+          streamed.map((event) => event.type),
+          batch.map((event) => event.type)
+        );
+        assert.deepStrictEqual(reasoningBlocks(streamed), [
+          { text: "", label: "Reasoning", redacted: true, reasoningTokens: 80 },
+        ]);
+      });
+
+      test("drops a response held from an interrupted turn when the next turn starts", () => {
+        const [interruptedReasoning] = turn("**Stale**", 1);
+        parser.extractStructuredEventsFromEvent(interruptedReasoning);
+
+        const streamed = [taskStarted, ...turn("**Fresh**", 7)].flatMap(
+          (event) => parser.extractStructuredEventsFromEvent(event)
+        );
+
+        assert.deepStrictEqual(
+          reasoningBlocks(streamed).map((block) => block.text),
+          ["**Fresh**"]
+        );
+      });
+    });
+
     test("retains log coverage for todo lists, web search, MCP, and commands", () => {
       const output = parser.extractResponse([
         {

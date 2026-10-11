@@ -10,6 +10,8 @@ import type { RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { CLI_EVENT_TYPES } from "@/types/messages";
+import type { ThinkingBlock } from "@root/types/CliOutputTypes";
+import { isRenderableThinkingBlock } from "@root/utils/ThinkingBlockFormat";
 import { clamp } from "@utils/number";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
@@ -92,7 +94,7 @@ function getZeroHeightStructuredEventReason(
     case CLI_EVENT_TYPES.TEXT:
       return (row.event.data as { text?: string }).text ? null : "missing-text";
     case CLI_EVENT_TYPES.THINKING:
-      return (row.event.data as { text?: string }).text
+      return isRenderableThinkingBlock(row.event.data as ThinkingBlock)
         ? null
         : "missing-thinking-text";
     case CLI_EVENT_TYPES.FILE_EDIT:

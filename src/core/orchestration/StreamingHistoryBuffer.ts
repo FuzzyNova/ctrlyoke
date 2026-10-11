@@ -1,8 +1,4 @@
-import type {
-  CliEvent,
-  TextData,
-  ThinkingBlock,
-} from "../../types/CliOutputTypes";
+import type { CliEvent, TextData } from "../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
   getExecutionPhaseKeySuffix,
@@ -10,6 +6,10 @@ import {
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
+import {
+  canCoalesceTextEvents,
+  coalesceTextEvents,
+} from "../../utils/ThinkingBlockFormat";
 
 /**
  * Event types whose payload is nothing but streamed text, so consecutive ones
@@ -171,7 +171,7 @@ export class StreamingHistoryBuffer {
     for (const event of events) {
       const previous = entry.events[entry.events.length - 1];
       if (canMerge(previous, event)) {
-        entry.events[entry.events.length - 1] = mergeTextEvents(
+        entry.events[entry.events.length - 1] = coalesceTextEvents(
           previous,
           event
         );
@@ -313,29 +313,10 @@ function canMerge(
   previous: CliEvent | undefined,
   next: CliEvent
 ): previous is CliEvent {
-  if (!previous || previous.type !== next.type) {
-    return false;
-  }
-  if (!COALESCABLE_EVENT_TYPES.has(next.type)) {
-    return false;
-  }
-  if (previous.callerType !== next.callerType) {
-    return false;
-  }
   return (
-    (previous.data as ThinkingBlock).label ===
-    (next.data as ThinkingBlock).label
+    canCoalesceTextEvents(previous, next) &&
+    previous.callerType === next.callerType
   );
-}
-
-function mergeTextEvents(previous: CliEvent, next: CliEvent): CliEvent {
-  return {
-    ...previous,
-    data: {
-      ...previous.data,
-      text: getEventText(previous) + getEventText(next),
-    } as TextData,
-  };
 }
 
 function getEventText(event: CliEvent): string {

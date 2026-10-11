@@ -31,6 +31,10 @@ import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 import { normalizeCodexRolloutQuota } from "./CodexUsageNormalization";
 import {
+  buildCodexReasoningBlock,
+  CodexReasoningGrouper,
+} from "./CodexReasoningGrouper";
+import {
   CODEX_CONTENT_BLOCK_TYPES,
   CODEX_EVENT_TYPES,
   CODEX_MESSAGE_ROLES,
@@ -175,6 +179,9 @@ export class CodexLogParser extends BaseLogParser {
    */
   private pendingStreamingCalls: Map<string, CodexTrackedToolCall> = new Map();
 
+  /** Streaming-path reasoning grouping; see {@link CodexReasoningGrouper}. */
+  private readonly streamingReasoning = new CodexReasoningGrouper();
+
   /**
    * Extract complete response from Codex log events
    *
@@ -253,8 +260,11 @@ export class CodexLogParser extends BaseLogParser {
       );
     };
     const hasModelOutputEvents = events.some(isModelOutputEvent);
+    const reasoningGrouper = new CodexReasoningGrouper();
 
     for (const event of events as CodexProviderEvent[]) {
+      // Everything this iteration maps is routed through the grouper below.
+      const mappedFrom = outputEvents.length;
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
@@ -436,22 +446,17 @@ export class CodexLogParser extends BaseLogParser {
         );
       }
 
-      // response_item:reasoning - AI reasoning process (may be encrypted)
+      // response_item:reasoning - AI reasoning process (usually encrypted)
       if (
         event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
         event.payload?.type === CODEX_PAYLOAD_TYPES.REASONING
       ) {
-        const reasoningText =
-          event.payload.content ||
-          (event.payload.encrypted_content ? "[Encrypted reasoning]" : null);
-        if (reasoningText) {
+        const reasoning = buildCodexReasoningBlock(event.payload);
+        if (reasoning) {
           outputEvents.push({
             type: CLI_EVENT_TYPES.THINKING,
             timestamp,
-            data: {
-              text: reasoningText,
-              label: "Reasoning",
-            } as ThinkingBlock,
+            data: reasoning,
           });
         }
       }
@@ -598,7 +603,12 @@ export class CodexLogParser extends BaseLogParser {
           } as CompactionData,
         });
       }
+
+      outputEvents.push(
+        ...reasoningGrouper.accept(event, outputEvents.splice(mappedFrom))
+      );
     }
+    outputEvents.push(...reasoningGrouper.flush());
 
     // Fallback to cached session meta if not found in current events
     if (!sessionId && this.sessionMeta) {
@@ -1150,14 +1160,28 @@ export class CodexLogParser extends BaseLogParser {
    *
    * Overrides the base class default to emit richer events: tool call initiation
    * and completion pairs, thinking blocks, and text — mirroring extractResponse()
-   * event-by-event.  Uses pendingStreamingCalls (not toolCallMap) so this path
-   * never interferes with extractResponse().
+   * event-by-event.  Uses pendingStreamingCalls and streamingReasoning (not
+   * extractResponse()'s per-call state) so the two paths never interfere.
+   * Both are reset at each turn start, so an interrupted turn cannot leak
+   * held or pending state into the next step's stream.
    *
    * @param event - Single parsed Codex log event
    * @returns Array of CliEvents to emit; empty if event produces no output
    */
   extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
     const e = event as CodexProviderEvent;
+    if (
+      e.type === CODEX_EVENT_TYPES.EVENT_MSG &&
+      e.payload?.type === CODEX_PAYLOAD_TYPES.TASK_STARTED
+    ) {
+      this.streamingReasoning.reset();
+      this.pendingStreamingCalls.clear();
+    }
+    return this.streamingReasoning.accept(event, this.mapStreamingEvent(e));
+  }
+
+  /** Map one log event to CliEvents, before reasoning grouping. */
+  private mapStreamingEvent(e: CodexProviderEvent): CliEvent[] {
     const timestamp = e.timestamp
       ? new Date(e.timestamp).getTime()
       : Date.now();
@@ -1249,14 +1273,12 @@ export class CodexLogParser extends BaseLogParser {
       e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
       e.payload?.type === CODEX_PAYLOAD_TYPES.REASONING
     ) {
-      const reasoningText =
-        e.payload.content ||
-        (e.payload.encrypted_content ? "[Encrypted reasoning]" : null);
-      if (reasoningText) {
+      const reasoning = buildCodexReasoningBlock(e.payload);
+      if (reasoning) {
         results.push({
           type: CLI_EVENT_TYPES.THINKING,
           timestamp,
-          data: { text: reasoningText, label: "Reasoning" } as ThinkingBlock,
+          data: reasoning,
         });
       }
       return results;

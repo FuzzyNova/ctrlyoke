@@ -82,6 +82,15 @@ const CODEX_SKIP_UPDATE_CHECK_ARGS = [
   "-c",
   "check_for_update_on_startup=false",
 ] as const;
+// Codex's reasoning is encrypted, so its summary is the only readable trace of
+// it; without this, rollouts carry an empty `summary`. "concise" over "auto"
+// or "detailed": the summary is a progress hint in the dashboard, not a
+// transcript. A user can still override it through `additionalArgs`, which
+// are appended later, and Codex lets the last `-c` for a key win.
+const CODEX_REASONING_SUMMARY_ARGS = [
+  "-c",
+  `model_reasoning_summary=${quoteTomlBasicString("concise")}`,
+] as const;
 
 const CODEX_SECRET_REFERENCE_PATTERN = /^\$\{secret:([A-Z][A-Z0-9_]*)\}$/u;
 
@@ -313,6 +322,7 @@ export class CodexCliProvider implements ICliProvider {
     const args: string[] = [];
 
     args.push(...CODEX_SKIP_UPDATE_CHECK_ARGS);
+    args.push(...CODEX_REASONING_SUMMARY_ARGS);
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;

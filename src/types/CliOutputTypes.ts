@@ -283,12 +283,33 @@ export interface ToolResult {
  * Used for Claude's extended thinking feature and similar capabilities.
  */
 export interface ThinkingBlock {
-  /** The thinking/reasoning text */
+  /**
+   * The thinking/reasoning text. For a `redacted` block this is only the
+   * provider's reasoning summary, and may be empty.
+   */
   text: string;
   /** Timestamp when this thinking block was generated */
   timestamp?: number;
   /** Label for the thinking block (e.g., "Reasoning", "Planning", "Analysis") */
   label?: string;
+  /**
+   * The provider withheld the reasoning itself (e.g. Codex returns it
+   * encrypted). Renderers show the block's metadata even with no `text`, and
+   * prior-context extraction includes only the summary `text`, if any.
+   */
+  redacted?: boolean;
+  /** Reasoning output tokens the provider reported for this block. */
+  reasoningTokens?: number;
+  /**
+   * `reasoningTokens` is this block's estimated share of a total the provider
+   * reported for several blocks together, not an exact count.
+   */
+  reasoningTokensEstimated?: boolean;
+  /**
+   * How many provider reasoning items were merged into this block, when more
+   * than one (one model response can emit several).
+   */
+  segmentCount?: number;
 }
 
 /**

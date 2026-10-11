@@ -133,6 +133,10 @@ import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type { WorkflowProperties } from "./settingsStore";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import {
+  canCoalesceTextEvents,
+  coalesceTextEvents,
+} from "@root/utils/ThinkingBlockFormat";
+import {
   cliEntryIdentityKey,
   getCliEntryIdentity,
   matchesCliEntryIdentity,
@@ -147,26 +151,10 @@ import {
 function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
   const result = [...existing];
   for (const event of incoming) {
-    if (
-      event.type === CLI_EVENT_TYPES.TEXT ||
-      event.type === CLI_EVENT_TYPES.THINKING
-    ) {
-      const last = result[result.length - 1];
-      if (
-        last &&
-        last.type === event.type &&
-        (event.type !== CLI_EVENT_TYPES.THINKING ||
-          (last.data?.label ?? undefined) === (event.data?.label ?? undefined))
-      ) {
-        result[result.length - 1] = {
-          ...last,
-          data: {
-            ...last.data,
-            text: (last.data?.text || "") + (event.data?.text || ""),
-          },
-        };
-        continue;
-      }
+    const last = result[result.length - 1];
+    if (canCoalesceTextEvents(last, event)) {
+      result[result.length - 1] = coalesceTextEvents(last, event);
+      continue;
     }
     result.push(event);
   }

@@ -83,6 +83,40 @@ suite("StreamingHistoryBuffer", () => {
     ]);
   });
 
+  test("combines redacted reasoning items without joining them to plain thinking", async () => {
+    const { buffer, writes } = createBuffer();
+    const redacted = (text: string, reasoningTokens: number): CliEvent => ({
+      type: CLI_EVENT_TYPES.THINKING,
+      timestamp: 4,
+      data: { text, label: "Reasoning", redacted: true, reasoningTokens },
+    });
+
+    await buffer.addEvents(HISTORY_FILE, TARGET, 0, 0, [
+      redacted("**One**", 10),
+      redacted("**Two**", 5),
+      {
+        type: CLI_EVENT_TYPES.THINKING,
+        timestamp: 5,
+        data: { text: "plain", label: "Reasoning" },
+      },
+    ]);
+    await buffer.flush();
+
+    assert.deepStrictEqual(
+      writes[0].events?.map((event) => event.data),
+      [
+        {
+          text: "**One**\n\n**Two**",
+          label: "Reasoning",
+          redacted: true,
+          reasoningTokens: 15,
+          segmentCount: 2,
+        },
+        { text: "plain", label: "Reasoning" },
+      ]
+    );
+  });
+
   test("caps buffered text so a crash loses a bounded amount", async () => {
     const { buffer, writes } = createBuffer({ maxBufferedChars: 8 });
 

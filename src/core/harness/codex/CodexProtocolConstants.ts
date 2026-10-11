@@ -14,9 +14,13 @@ export const CODEX_EVENT_TYPES = {
   TURN_CONTEXT: "turn_context",
   COMPACTED: "compacted",
   TEXT: "text",
+  /** Per-response usage, written as soon as the response ends. */
+  TOKEN_USAGE_RECORD: "token_usage_record",
 } as const;
 
 export const CODEX_PAYLOAD_TYPES = {
+  TASK_STARTED: "task_started",
+  TASK_COMPLETE: "task_complete",
   TOKEN_COUNT: "token_count",
   PATCH_APPLY_END: "patch_apply_end",
   TURN_COMPLETED: "turn.completed",

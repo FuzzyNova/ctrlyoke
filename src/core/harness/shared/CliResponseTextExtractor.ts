@@ -1,6 +1,7 @@
 import type {
   FileEditData,
   FileWriteData,
+  ThinkingBlock,
   UnifiedDiffHunk,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
@@ -8,8 +9,6 @@ import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { joinResponseText } from "../../../utils/ResponseTextJoin";
 import { createTwoFilesPatch } from "diff";
-
-const ENCRYPTED_REASONING_PLACEHOLDER = "[Encrypted reasoning]";
 
 export interface ResponseTextExtractionOptions {
   includeFullDiffs?: boolean;
@@ -78,8 +77,10 @@ export function extractTextFromEvents(
       event.type === CLI_EVENT_TYPES.THINKING &&
       "text" in event.data
     ) {
-      const thinkingText = (event.data as { text: string }).text.trim();
-      if (thinkingText && thinkingText !== ENCRYPTED_REASONING_PLACEHOLDER) {
+      // A redacted block's text is only its summary, which is still the
+      // model's own account of its reasoning.
+      const thinkingText = (event.data as ThinkingBlock).text.trim();
+      if (thinkingText) {
         textParts.push(`\n[Thinking]\n${thinkingText}\n[/Thinking]`);
       }
     } else if (

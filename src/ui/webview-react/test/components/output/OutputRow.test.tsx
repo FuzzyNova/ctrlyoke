@@ -464,6 +464,59 @@ describe("OutputRow script commands", () => {
   });
 });
 
+describe("OutputRow redacted reasoning", () => {
+  function buildThinkingRow(data: Record<string, unknown>): StructuredEventRow {
+    return {
+      key: "row-thinking",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: {
+        type: CLI_EVENT_TYPES.THINKING,
+        data: { label: "Reasoning", redacted: true, ...data },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      hideDiff: false,
+    } as StructuredEventRow;
+  }
+
+  it("shows the token count of encrypted reasoning with no summary as a label-only row", () => {
+    const row = buildThinkingRow({ text: "", reasoningTokens: 453 });
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+
+    expect(container).toHaveTextContent("Reasoning · 453 tokens · encrypted");
+    expect(container.querySelector(".border-l")).toBeNull();
+    expect(estimateOutputRowHeight(row, 13, 760)).toBeLessThan(
+      estimateOutputRowHeight(
+        buildThinkingRow({ text: "**Summary**", reasoningTokens: 453 }),
+        13,
+        760
+      )
+    );
+  });
+
+  it("renders the summary under a summary label", () => {
+    const { container } = render(
+      <OutputRow
+        row={buildThinkingRow({
+          text: "**Counting primes**",
+          reasoningTokens: 631,
+          segmentCount: 2,
+        })}
+        isExecutionActive={false}
+      />
+    );
+
+    expect(container).toHaveTextContent(
+      "Reasoning summary · 2 parts · 631 tokens"
+    );
+    expect(container).toHaveTextContent("Counting primes");
+  });
+});
+
 describe("OutputRow collapsed attempt groups", () => {
   it("labels the aggregate with the number of attempts", () => {
     const onToggle = vi.fn();

@@ -9,12 +9,12 @@ function output(events: UniversalCliOutput["events"]): UniversalCliOutput {
 }
 
 suite("CliResponseTextExtractor", () => {
-  test("omits thinking blocks that contain only encrypted reasoning", () => {
+  test("omits redacted reasoning that has no summary", () => {
     const result = extractTextFromEvents(
       output([
         {
           type: CLI_EVENT_TYPES.THINKING,
-          data: { text: "[Encrypted reasoning]" },
+          data: { text: "", redacted: true, reasoningTokens: 453 },
         },
         { type: CLI_EVENT_TYPES.TEXT, data: { text: "Useful answer" } },
       ]),
@@ -24,7 +24,24 @@ suite("CliResponseTextExtractor", () => {
     assert.strictEqual(result, "Useful answer");
   });
 
-  test("keeps non-placeholder thinking blocks", () => {
+  test("keeps the summary of redacted reasoning", () => {
+    const result = extractTextFromEvents(
+      output([
+        {
+          type: CLI_EVENT_TYPES.THINKING,
+          data: { text: "**Counting primes**", redacted: true },
+        },
+      ]),
+      { includeFullDiffs: false }
+    );
+
+    assert.strictEqual(
+      result,
+      "\n[Thinking]\n**Counting primes**\n[/Thinking]"
+    );
+  });
+
+  test("keeps plain thinking blocks", () => {
     const result = extractTextFromEvents(
       output([
         {

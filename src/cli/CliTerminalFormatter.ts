@@ -71,6 +71,7 @@ import {
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
+import { formatThinkingLabel } from "../utils/ThinkingBlockFormat";
 import { getToolResultText } from "../utils/toolResultText";
 import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
 import { resolveCtrlYokeToolModel } from "../utils/ctrlyokeToolViews/registry";
@@ -1366,6 +1367,24 @@ export class CliTerminalFormatter {
 
       case CLI_EVENT_TYPES.THINKING: {
         const data = event.data as ThinkingBlock;
+        if (data.redacted) {
+          // A whole provider item, not a streamed delta: print its own
+          // header carrying the reasoning metadata, then its summary.
+          CliTerminalFormatter.beginEventOutput(target);
+          const body = data.text
+            ? `\n  ${data.text.replace(/\n/g, "\n  ")}`
+            : "";
+          process.stdout.write(
+            chalk.dim(`● ${formatThinkingLabel(data)}${body}`)
+          );
+          // Keyed by the full label so no later delta streams under it.
+          CliTerminalFormatter._streaming.set(key, {
+            type: CLI_EVENT_TYPES.THINKING,
+            label: formatThinkingLabel(data),
+            endsWithNewline: false,
+          });
+          break;
+        }
         if (!data.text) break;
         const label = data.label ?? "Thinking";
         const s = CliTerminalFormatter._streaming.get(key);

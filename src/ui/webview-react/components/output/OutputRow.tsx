@@ -17,7 +17,6 @@ import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
   BASH_OUTPUT_EXPANSION_SECTIONS,
   HISTORY_MATCH_FIELDS,
-  OUTPUT_DEFAULT_LABELS,
   OUTPUT_ROW_KINDS,
   TOOL_CALL_EXPANSION_SECTIONS,
   TOOL_RESULT_STATUSES,
@@ -84,6 +83,10 @@ import {
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { getToolResultText } from "@root/utils/toolResultText";
 import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
+import {
+  formatThinkingLabel,
+  isRenderableThinkingBlock,
+} from "@root/utils/ThinkingBlockFormat";
 import {
   getOutputRowSearchSegments,
   highlightText,
@@ -449,7 +452,8 @@ const ScriptOutputSegment: React.FC<{
 
 const ThinkingOutput: React.FC<{
   text: string;
-  label?: string;
+  /** Full header text, from `formatThinkingLabel`. */
+  label: string;
   findQuery?: string;
   findCaseSensitive?: boolean;
   highlightActiveIndex?: number;
@@ -458,23 +462,21 @@ const ThinkingOutput: React.FC<{
   priorContextStepCount?: number;
 }> = ({
   text,
-  label = OUTPUT_DEFAULT_LABELS.THINKING,
+  label,
   findQuery,
   findCaseSensitive,
   highlightActiveIndex,
   findDecorations,
   atomicContextReferences = false,
   priorContextStepCount,
-}) => {
-  const displayLabel =
-    label && label !== OUTPUT_DEFAULT_LABELS.THINKING
-      ? label
-      : OUTPUT_DEFAULT_LABELS.THINKING;
-  return (
-    <div className="my-2">
-      <div className="text-(length:--cy-output-font-size-xs) text-description-fg mb-1">
-        ● {displayLabel}
-      </div>
+}) => (
+  <div className="my-2">
+    <div
+      className={`text-(length:--cy-output-font-size-xs) text-description-fg${text ? " mb-1" : ""}`}
+    >
+      ● {label}
+    </div>
+    {text && (
       <div className="text-description-fg pl-3 border-l border-panel-border">
         <MarkdownText
           highlightQuery={findQuery}
@@ -488,9 +490,9 @@ const ThinkingOutput: React.FC<{
           {text}
         </MarkdownText>
       </div>
-    </div>
-  );
-};
+    )}
+  </div>
+);
 
 const UserSteerOutput: React.FC<{
   text: string;
@@ -857,11 +859,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       }
       case CLI_EVENT_TYPES.THINKING: {
         const data = event.data as ThinkingBlock;
-        if (!data.text) return null;
+        if (!isRenderableThinkingBlock(data)) return null;
         return (
           <ThinkingOutput
             text={data.text}
-            label={data.label}
+            label={formatThinkingLabel(data)}
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
             highlightActiveIndex={getActiveMatchIndex(
