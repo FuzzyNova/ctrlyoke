@@ -1,7 +1,6 @@
 import {
   HARNESS_USAGE_STATUS_CODES,
   HARNESS_USAGE_UNITS,
-  HARNESS_USAGE_WINDOW_KINDS,
 } from "@root/types/DashboardConstants";
 import type {
   HarnessUsageSnapshot,
@@ -13,6 +12,11 @@ import {
   type HarnessStatusInfo,
 } from "../types/messages";
 import { formatHarnessVersionGuidance } from "@root/utils/HarnessVersion";
+import {
+  STATUS_LINE_USAGE_DIRECTIONS,
+  formatUsagePercentForDisplay,
+  type UsagePercentDirection,
+} from "@root/utils/StatuslineFormat";
 import { formatFutureTime, formatTimestamp } from "./time";
 
 /**
@@ -57,6 +61,7 @@ export interface HarnessUsageDisplay {
  */
 export function getHarnessUsageDisplay(
   snapshot: HarnessUsageSnapshot | undefined,
+  percentDirection: UsagePercentDirection = STATUS_LINE_USAGE_DIRECTIONS.USED,
   now: number = Date.now()
 ): HarnessUsageDisplay {
   if (!snapshot) {
@@ -77,8 +82,13 @@ export function getHarnessUsageDisplay(
           : "No usage data",
     };
   }
-  const primaryPercentWindow = windows.find(
-    (window) => window.percentUsed !== undefined
+  const peakPercentWindow = windows.reduce<HarnessUsageWindow | undefined>(
+    (peak, window) =>
+      window.percentUsed !== undefined &&
+      (peak?.percentUsed === undefined || window.percentUsed > peak.percentUsed)
+        ? window
+        : peak,
+    undefined
   );
   const hasExplicitProviderQuotaDetails = windows.some(
     (window) => window.isUnlimited === true || hasFiniteQuotaTotals(window)
@@ -87,13 +97,18 @@ export function getHarnessUsageDisplay(
     .map((window) => {
       const resetPassed = window.resetAt !== undefined && now >= window.resetAt;
       const finiteTotals = hasFiniteQuotaTotals(window);
+      const displayedPercent =
+        window.percentUsed === undefined
+          ? undefined
+          : Math.round(
+              formatUsagePercentForDisplay(
+                window.percentUsed,
+                percentDirection
+              )
+            );
       const label = window.isUnlimited
         ? "Unlimited"
-        : `${Math.round(window.percentUsed ?? 0)}% ${window.label}${
-            finiteTotals && window.kind === HARNESS_USAGE_WINDOW_KINDS.MONTHLY
-              ? " used"
-              : ""
-          }`;
+        : `${displayedPercent}% ${percentDirection} ${window.label}`;
       const totals = finiteTotals
         ? ` (${formatQuotaNumber(window.used!)} / ${formatQuotaNumber(window.limit!)})`
         : "";
@@ -108,9 +123,14 @@ export function getHarnessUsageDisplay(
     ? `Provider quota: ${quotaPhrase}`
     : quotaPhrase;
   return {
-    ...(primaryPercentWindow
+    ...(peakPercentWindow
       ? {
-          percentOnly: `${Math.round(primaryPercentWindow.percentUsed ?? 0)}%`,
+          percentOnly: `${Math.round(
+            formatUsagePercentForDisplay(
+              peakPercentWindow.percentUsed!,
+              percentDirection
+            )
+          )}%`,
         }
       : {}),
     quotaPhrase:

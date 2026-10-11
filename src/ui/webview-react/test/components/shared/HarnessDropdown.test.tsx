@@ -15,14 +15,19 @@ import { HarnessPreflightPanel } from "@components/layout/HarnessPreflightPanel"
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import { STATUS_LINE_USAGE_DIRECTIONS } from "@root/utils/StatuslineFormat";
 
 const originalHarnessStatus = useSettingsStore.getState().harnessStatus;
+const originalFullGlobalSettings =
+  useSettingsStore.getState().fullGlobalSettings;
 const { notifyUserMock } = vi.hoisted(() => ({ notifyUserMock: vi.fn() }));
 
 vi.mock("@utils/notifyUser", () => ({ notifyUser: notifyUserMock }));
 
 afterEach(() => {
   useSettingsStore.setState({ harnessStatus: originalHarnessStatus });
+  useSettingsStore.setState({ fullGlobalSettings: originalFullGlobalSettings });
   useUiStore.getState().setHarnessDetectionRetryResult(null);
   useHarnessUsageStore.setState({ snapshotsByHarness: {} });
 });
@@ -248,6 +253,19 @@ describe("HarnessDropdown", () => {
         },
       },
     });
+    useSettingsStore.setState({
+      fullGlobalSettings: {
+        settings: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS,
+          usageTracking: {
+            ...CTRLYOKE_SETTINGS_DEFAULTS.usageTracking,
+            percentDirection: STATUS_LINE_USAGE_DIRECTIONS.REMAINING,
+          },
+        },
+        sources: {},
+        isMultiRoot: false,
+      },
+    });
 
     try {
       render(
@@ -261,9 +279,9 @@ describe("HarnessDropdown", () => {
         />
       );
 
-      expect(screen.getByText("25%")).toBeInTheDocument();
+      expect(screen.getByText("75%")).toBeInTheDocument();
       expect(
-        screen.getByTitle(/^Available \| 25% 5-hour \(updated .+\)$/)
+        screen.getByTitle(/^Available \| 75% remaining 5-hour \(updated .+\)$/)
       ).toBeInTheDocument();
     } finally {
       Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;

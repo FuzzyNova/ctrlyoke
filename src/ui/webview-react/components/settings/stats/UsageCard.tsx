@@ -20,7 +20,7 @@ import {
 } from "@root/utils/StatuslineFormat";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
 import { formatFutureTime, formatRelativeTimeVerbose } from "@utils/time";
-import { useSettingsStore } from "@store/settingsStore";
+import { useUsagePercentDirection } from "@hooks/useUsagePercentDirection";
 
 function isSidecarPending(quota: HarnessUsageSnapshot["quota"]): boolean {
   return (
@@ -78,11 +78,7 @@ export function UsageCard({
   harnessId: HarnessId;
   showCostEstimates: boolean;
 }) {
-  const percentDirection = useSettingsStore(
-    (state) =>
-      state.fullGlobalSettings?.settings.usageTracking.percentDirection ??
-      "used"
-  );
+  const percentDirection = useUsagePercentDirection();
 
   if (!snapshot) {
     return (

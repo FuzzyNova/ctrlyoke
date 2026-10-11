@@ -8,6 +8,7 @@ import {
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
 } from "@root/types/DashboardConstants";
+import { STATUS_LINE_USAGE_DIRECTIONS } from "@root/utils/StatuslineFormat";
 import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 import {
   getHarnessAvailabilityPhrase,
@@ -47,20 +48,22 @@ describe("getHarnessUsageDisplay", () => {
   it("annotates the last-known percentage with when it was fetched, while fresh", () => {
     const display = getHarnessUsageDisplay(
       snapshot([window], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 60_000
     );
     expect(display.percentOnly).toBe("63%");
-    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
+    expect(display.quotaPhrase).toMatch(/^63% used 5-hour \(updated .+\)$/);
     expect(display.quotaPhrase).not.toContain("stale");
   });
 
   it("keeps showing the last-known percentage past the freshness window, still annotated with the fetch time rather than 'stale'", () => {
     const display = getHarnessUsageDisplay(
       snapshot([window], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 5 * 60 * 1000 + 1
     );
     expect(display.percentOnly).toBe("63%");
-    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
+    expect(display.quotaPhrase).toMatch(/^63% used 5-hour \(updated .+\)$/);
     expect(display.quotaPhrase).not.toContain("stale");
   });
 
@@ -79,18 +82,20 @@ describe("getHarnessUsageDisplay", () => {
     };
     const display = getHarnessUsageDisplay(
       snapshot([fiveHour, sevenDay], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 120_000
     );
     // The five-hour window's own reset already passed, so its reset time is
     // dropped; the still-live seven-day window keeps its own.
     expect(display.quotaPhrase).toMatch(
-      /^63% 5-hour \| 10% 7-day, resets .+ \(updated .+\)$/
+      /^63% used 5-hour \| 10% used 7-day, resets .+ \(updated .+\)$/
     );
   });
 
   it("shows the fetch time with no numbers when no window ever reported a percentage", () => {
     const display = getHarnessUsageDisplay(
       snapshot([], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 5 * 60 * 1000 + 1
     );
     expect(display.percentOnly).toBeUndefined();
@@ -110,7 +115,11 @@ describe("getHarnessUsageDisplay", () => {
       },
       observed: {},
     };
-    const display = getHarnessUsageDisplay(neverFetched, fetchedAt);
+    const display = getHarnessUsageDisplay(
+      neverFetched,
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
+      fetchedAt
+    );
     expect(display.percentOnly).toBeUndefined();
     expect(display.quotaPhrase).toBe("No usage data");
   });
@@ -119,10 +128,11 @@ describe("getHarnessUsageDisplay", () => {
     const fiveHour = { ...window, resetAt: fetchedAt + 60 * 60 * 1000 };
     const display = getHarnessUsageDisplay(
       snapshot([fiveHour], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 60_000
     );
     expect(display.quotaPhrase).toMatch(
-      /^63% 5-hour, resets .+ \(updated .+\)$/
+      /^63% used 5-hour, resets .+ \(updated .+\)$/
     );
   });
 
@@ -140,11 +150,12 @@ describe("getHarnessUsageDisplay", () => {
     };
     const display = getHarnessUsageDisplay(
       snapshot([monthly], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 60_000
     );
     expect(display.percentOnly).toBe("37%");
     expect(display.quotaPhrase).toMatch(
-      /^Provider quota: 37% monthly used \(555 \/ 1,500\), resets .+ \(updated .+\)$/
+      /^Provider quota: 37% used monthly \(555 \/ 1,500\), resets .+ \(updated .+\)$/
     );
     expect(display.quotaPhrase).not.toContain("tokens");
   });
@@ -163,6 +174,7 @@ describe("getHarnessUsageDisplay", () => {
         ],
         fetchedAt
       ),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 60_000
     );
     expect(display.percentOnly).toBeUndefined();
@@ -190,7 +202,11 @@ describe("getHarnessUsageDisplay", () => {
         since: fetchedAt,
       },
     };
-    const display = getHarnessUsageDisplay(usage, fetchedAt + 60_000);
+    const display = getHarnessUsageDisplay(
+      usage,
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
+      fetchedAt + 60_000
+    );
     expect(display.quotaPhrase).toContain("Provider quota");
     expect(display.quotaPhrase).toContain("555 / 1,500");
     expect(display.quotaPhrase).not.toContain("102,000");
@@ -201,9 +217,10 @@ describe("getHarnessUsageDisplay", () => {
     const fiveHour = { ...window, resetAt: fetchedAt + 60_000 };
     const display = getHarnessUsageDisplay(
       snapshot([fiveHour], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 120_000
     );
-    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
+    expect(display.quotaPhrase).toMatch(/^63% used 5-hour \(updated .+\)$/);
   });
 
   it("leaves percent-unit windows unchanged, even though they carry used/limit", () => {
@@ -213,10 +230,11 @@ describe("getHarnessUsageDisplay", () => {
     const percentWindow = { ...window, used: 63, limit: 100, remaining: 37 };
     const display = getHarnessUsageDisplay(
       snapshot([percentWindow], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 60_000
     );
     expect(display.percentOnly).toBe("63%");
-    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
+    expect(display.quotaPhrase).toMatch(/^63% used 5-hour \(updated .+\)$/);
   });
 
   it("gives each window its own independent reset time when joined", () => {
@@ -234,10 +252,37 @@ describe("getHarnessUsageDisplay", () => {
     };
     const display = getHarnessUsageDisplay(
       snapshot([fiveHour, sevenDay], fetchedAt),
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
       fetchedAt + 30_000
     );
     expect(display.quotaPhrase).toMatch(
-      /^63% 5-hour, resets .+ \| 10% 7-day, resets .+ \(updated .+\)$/
+      /^63% used 5-hour, resets .+ \| 10% used 7-day, resets .+ \(updated .+\)$/
+    );
+  });
+
+  it("formats every window and the peak badge in the selected direction", () => {
+    const fiveHour = { ...window, percentUsed: 63 };
+    const weekly = { ...window, id: "weekly", label: "week", percentUsed: 94 };
+    const usage = snapshot([fiveHour, weekly], fetchedAt);
+
+    const used = getHarnessUsageDisplay(
+      usage,
+      STATUS_LINE_USAGE_DIRECTIONS.USED,
+      fetchedAt
+    );
+    expect(used.percentOnly).toBe("94%");
+    expect(used.quotaPhrase).toMatch(
+      /^63% used 5-hour \| 94% used week \(updated .+\)$/
+    );
+
+    const remaining = getHarnessUsageDisplay(
+      usage,
+      STATUS_LINE_USAGE_DIRECTIONS.REMAINING,
+      fetchedAt
+    );
+    expect(remaining.percentOnly).toBe("6%");
+    expect(remaining.quotaPhrase).toMatch(
+      /^37% remaining 5-hour \| 6% remaining week \(updated .+\)$/
     );
   });
 });

@@ -35,6 +35,8 @@ import {
 } from "@utils/schemaPropertyLabels";
 import { BULK_MIXED_OPTION } from "@store/editorStore";
 import { HARNESS_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import { useUsagePercentDirection } from "@hooks/useUsagePercentDirection";
+import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 
 // ─── Display names (official product names) ──────────────────────────────────
 
@@ -90,6 +92,7 @@ interface HarnessRowProps {
   isHidden: boolean;
   showStatus: boolean;
   narrow: boolean;
+  percentDirection: UsagePercentDirection;
   harnessStatus?: Record<string, HarnessAvailabilityStatus>;
   canHideRow: boolean;
   onSelect: (h: HarnessId) => void;
@@ -104,6 +107,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   isHidden,
   showStatus,
   narrow,
+  percentDirection,
   harnessStatus,
   canHideRow,
   onSelect,
@@ -118,7 +122,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   const usageSnapshot = useHarnessUsageStore(
     (s) => s.snapshotsByHarness[harness]
   );
-  const usageDisplay = getHarnessUsageDisplay(usageSnapshot);
+  const usageDisplay = getHarnessUsageDisplay(usageSnapshot, percentDirection);
   const availabilityPhrase = getHarnessAvailabilityPhrase(status);
   const rowTooltip = status
     ? formatHarnessUsageTooltip(usageDisplay, availabilityPhrase)
@@ -280,6 +284,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(180);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const percentDirection = useUsagePercentDirection();
 
   const popupPos = useDropdownPortalPosition(
     buttonRef,
@@ -291,7 +296,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       ? s.snapshotsByHarness[value as HarnessId]
       : undefined
   );
-  const triggerUsageDisplay = getHarnessUsageDisplay(triggerUsageSnapshot);
+  const triggerUsageDisplay = getHarnessUsageDisplay(
+    triggerUsageSnapshot,
+    percentDirection
+  );
 
   useEffect(() => {
     if (!retryResult || retryResult.requestId !== pendingRetryRequest.current) {
@@ -367,6 +375,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           isHidden={hidden}
           showStatus={showStatus}
           narrow={isNarrow}
+          percentDirection={percentDirection}
           harnessStatus={harnessStatus}
           canHideRow={canHide(harness)}
           onSelect={handleSelect}

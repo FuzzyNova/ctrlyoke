@@ -20,6 +20,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { buildHarnessChangeCascade } from "@utils/harnessChangeCascade";
+import { useUsagePercentDirection } from "@hooks/useUsagePercentDirection";
 import {
   formatHarnessUsageTooltip,
   getHarnessAvailabilityPhrase,
@@ -93,7 +94,11 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
   const usageSnapshot = useHarnessUsageStore(
     (state) => state.snapshotsByHarness[activeHarnessId]
   );
-  const usageDisplay = getHarnessUsageDisplay(usageSnapshot);
+  const percentDirection = useUsagePercentDirection();
+  const usageDisplay = getHarnessUsageDisplay(
+    usageSnapshot,
+    percentDirection
+  );
   const availabilityPhrase = getHarnessAvailabilityPhrase(
     harnessStatus[activeHarnessId]
   );
