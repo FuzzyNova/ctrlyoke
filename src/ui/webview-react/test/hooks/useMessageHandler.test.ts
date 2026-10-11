@@ -765,6 +765,30 @@ describe("OPEN_NEW_WORKFLOW_MODAL", () => {
   });
 });
 
+describe("TEMPLATE_CATALOG_LOADED", () => {
+  it("stores the catalog without opening the new workflow modal", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED, {
+        templates: [
+          {
+            id: "sample",
+            name: "Sample",
+            description: "",
+            isBuiltIn: true,
+            variables: [{ name: "topic", type: "text", authoredDefault: "" }],
+          },
+        ],
+      });
+    });
+
+    expect(useUiStore.getState().templateCatalog).toHaveLength(1);
+    expect(useUiStore.getState().templateCatalog[0].id).toBe("sample");
+    expect(useUiStore.getState().newWorkflowModalOpen).toBe(false);
+  });
+});
+
 describe("DEFAULT_TEMPLATE_SET", () => {
   it("stores the effective template id and source after a scoped clear", () => {
     renderHook(() => useMessageHandler());

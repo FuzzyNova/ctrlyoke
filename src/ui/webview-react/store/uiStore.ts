@@ -705,6 +705,7 @@ interface UiState {
   newWorkflowModalOpen: boolean;
   openCreateTemplateForm: boolean;
   templates: TemplateInfo[];
+  templateCatalog: TemplateInfo[];
   currentTemplate: TemplateInfo | null;
   defaultTemplateId: string;
   defaultTemplateConfirmedId: string | null;
@@ -987,6 +988,7 @@ interface UiActions {
     } | null
   ) => void;
   setTemplates: (templates: TemplateInfo[]) => void;
+  setTemplateCatalog: (templates: TemplateInfo[]) => void;
   setTemplateFileSelection: (
     selection: { variable: string; path: string } | null
   ) => void;
@@ -1231,6 +1233,7 @@ const initialState: UiState = {
   newWorkflowModalOpen: false,
   openCreateTemplateForm: false,
   templates: [],
+  templateCatalog: [],
   currentTemplate: null,
   defaultTemplateId: "blank",
   defaultTemplateConfirmedId: null,
@@ -1789,6 +1792,7 @@ export const useUiStore = create<UiState & UiActions>()(
         set({ templateVariableDefaultsSaved: saved }),
 
       setTemplates: (templates) => set({ templates }),
+      setTemplateCatalog: (templateCatalog) => set({ templateCatalog }),
 
       setTemplateFileSelection: (selection) =>
         set({ templateFileSelection: selection }),
@@ -2489,6 +2493,7 @@ export const useUiStore = create<UiState & UiActions>()(
           viewingDeletedWorkflow: null,
           viewedLineageIsSystemGenerated: false,
           templates: [],
+          templateCatalog: [],
           currentTemplate: null,
           isHistorySearchOpen: false,
           historySearchResults: [],

@@ -1059,6 +1059,14 @@ export class WebviewSettingsSync {
         settings: {
           settings: allSettings,
           sources,
+          templateVariableDefaultsByScope: {
+            user:
+              configService.getScoped("templates", "user")?.variableDefaults ??
+              {},
+            workspace:
+              configService.getScoped("templates", "workspace")
+                ?.variableDefaults ?? {},
+          },
           externalFileRootsByScope: this.buildExternalFileRootsByScope(),
           runHistoryPath: this.getResolvedRunHistoryPath(),
           isMultiRoot: this.host.getNamedRoots().length > 1,

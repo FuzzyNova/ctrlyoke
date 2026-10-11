@@ -1978,6 +1978,10 @@ export class WebviewMessageRouter {
       this.serializer.handleNewWorkflow(ctx.postMessage);
     });
 
+    table.set(MESSAGE_TYPES.TEMPLATE_CATALOG_REQUEST, (_message, ctx) => {
+      this.serializer.handleTemplateCatalogRequest(ctx.postMessage);
+    });
+
     table.set(MESSAGE_TYPES.TEMPLATE_SELECTED, (message, ctx) => {
       this.serializer.handleTemplateSelected(
         message.templateId,

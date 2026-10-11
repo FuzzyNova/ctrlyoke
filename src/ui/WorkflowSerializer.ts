@@ -957,6 +957,27 @@ export class WorkflowSerializer {
     }
   }
 
+  /** Load template metadata without opening the New Workflow modal. */
+  async handleTemplateCatalogRequest(
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    try {
+      const templates = await this.templateManager.getAvailableTemplates();
+      pm({
+        type: MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED,
+        templates: this.toWireTemplates(templates),
+      });
+    } catch (error) {
+      Log.error("[WorkflowSerializer] Failed to load template catalog:", error);
+      this.sendActionFailure(
+        pm,
+        "load templates",
+        `Failed to load templates: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
   async handleTemplateSelected(
     templateId: string,
     postMessage?: PostMessageFn

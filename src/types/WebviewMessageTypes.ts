@@ -1122,6 +1122,17 @@ export interface OpenNewWorkflowModalMessage {
   openCreateTemplateForm?: boolean;
 }
 
+/** Webview -> Extension: load template metadata without opening the modal. */
+export interface TemplateCatalogRequestMessage {
+  type: typeof MESSAGE_TYPES.TEMPLATE_CATALOG_REQUEST;
+}
+
+/** Extension -> Webview: available templates for settings and other catalogs. */
+export interface TemplateCatalogLoadedMessage {
+  type: typeof MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED;
+  templates: OpenNewWorkflowModalMessage["templates"];
+}
+
 /** Webview → Extension: save or clear pinned values for one template. */
 export interface SetTemplateVariableDefaultsMessage {
   type: typeof MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS;
@@ -1726,6 +1737,10 @@ export interface ExternalFileRootsByScope {
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  templateVariableDefaultsByScope?: Record<
+    SettingWriteScope,
+    Record<string, Record<string, string>>
+  >;
   externalFileRootsByScope?: ExternalFileRootsByScope;
   licenseAccess?: LicenseAccessState;
   /** Canonical absolute `.runs` directory for the current workspace. */
@@ -3164,6 +3179,7 @@ export type IncomingMessage =
   | RecentWorkflowsMessage
   | RunSummariesLoadedMessage
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }
+  | TemplateCatalogLoadedMessage
   | {
       type: typeof MESSAGE_TYPES.DEFAULT_TEMPLATE_SET;
       templateId: string;

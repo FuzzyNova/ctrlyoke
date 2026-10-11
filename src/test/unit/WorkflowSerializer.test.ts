@@ -285,6 +285,45 @@ async function withWorkspace(
 }
 
 suite("WorkflowSerializer", () => {
+  test("loads the template catalog without opening the new-workflow modal", async () => {
+    const messages: any[] = [];
+    const serializer = createWorkflowSerializer(
+      (message) => messages.push(message),
+      {
+        getAvailableTemplates: async () => [
+          {
+            id: "sample",
+            name: "Sample",
+            description: "Description",
+            variables: [{ name: "topic", type: "text", default: "hello" }],
+            isBuiltIn: true,
+          },
+        ],
+      },
+      () => undefined,
+      () => undefined,
+      fakeWorkspaceState()
+    );
+
+    await serializer.handleTemplateCatalogRequest();
+
+    assert.deepStrictEqual(messages, [
+      {
+        type: MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED,
+        templates: [
+          {
+            id: "sample",
+            name: "Sample",
+            description: "Description",
+            variables: [{ name: "topic", type: "text", default: "hello" }],
+            isBuiltIn: true,
+            source: undefined,
+          },
+        ],
+      },
+    ]);
+  });
+
   suite("handleSetDefaultTemplate", () => {
     test("writes or clears at the requested scope and reports the effective value", async () => {
       const originalSet = configService.set;

@@ -1,6 +1,6 @@
 # Template Variable Defaults Plan
 
-**Status:** Phase 1 complete. The contract, extension-side persistence plumbing, modal scope toggle, saved-value pin/clear controls, paired harness/model handling, documentation, and UI coverage are implemented. No deviations.
+**Status:** Phase 1 and Phase 2 groundwork complete. The shared template-variable field, per-scope settings payload, and template catalog request are implemented. The Templates settings tab UI remains the next step. No deviations.
 
 ## Goal
 

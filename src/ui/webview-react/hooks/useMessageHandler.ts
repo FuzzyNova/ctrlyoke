@@ -1905,6 +1905,10 @@ export function createMessageHandlers(
     });
   };
 
+  handlers[MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED] = (message) => {
+    useUiStore.getState().setTemplateCatalog(message.templates ?? []);
+  };
+
   // --------------------------------------------------------------------------
   // TEMPLATE_INFO - Template details for preview
   // --------------------------------------------------------------------------

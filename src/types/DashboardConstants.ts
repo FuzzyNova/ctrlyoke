@@ -544,6 +544,8 @@ export const MESSAGE_TYPES = {
 
   // New Workflow Modal - Extension -> Webview
   OPEN_NEW_WORKFLOW_MODAL: "openNewWorkflowModal",
+  TEMPLATE_CATALOG_REQUEST: "templateCatalogRequest",
+  TEMPLATE_CATALOG_LOADED: "templateCatalogLoaded",
   TEMPLATE_INFO: "templateInfo",
   DEFAULT_TEMPLATE_SET: "defaultTemplateSet",
   TEMPLATE_VARIABLE_DEFAULTS_SET: "templateVariableDefaultsSet",

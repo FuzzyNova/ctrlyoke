@@ -21,8 +21,6 @@ import {
   AnimatedSection,
   ScopeToggle,
   SETTING_SCOPE_OPTIONS,
-  HarnessDropdown,
-  CustomSelect,
 } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
@@ -36,16 +34,12 @@ import {
   type WorkflowFileFormat,
   type SettingWriteScope,
 } from "../../types/messages";
-import {
-  DROPDOWN_NAMESPACES,
-  modelNamespaceForHarness,
-} from "../../types/dropdownNamespaces";
 import { defaultModelForHarness } from "@utils/harnessChangeCascade";
-import { modelWarning } from "@utils/dropdownValidation";
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
 import { Icon } from "../shared/Icon";
+import { TemplateVariableField } from "./TemplateVariableField";
 
 interface TemplateModalProps {
   isOpen: boolean;
@@ -555,46 +549,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     (t) => !t.isBuiltIn && t.source === TEMPLATE_SOURCES.USER
   );
 
-  // A model variable paired with a harness variable: the same model list and
-  // hide/unhide behavior as the Workflow Properties model picker.
-  const renderModelField = (model: TemplateVariable, harnessValue?: string) => {
-    const harness = (harnessValue ?? HARNESS_IDS.CLAUDE_CLI) as HarnessId;
-    const models = modelOptions[harness] ?? [];
-    const value = variables[model.name] ?? "";
-    const namespace = modelNamespaceForHarness(harness);
-    return (
-      <div key={model.name} className="form-group">
-        <label
-          htmlFor={`var-${model.name}`}
-          className="block text-sm text-foreground"
-        >
-          <span className="block mb-1">{model.name}</span>
-          <CustomSelect
-            id={`var-${model.name}`}
-            triggerAriaLabel={model.name}
-            value={value}
-            onChange={(v) => handleVariableChange(model.name, v)}
-            options={
-              models.length === 0
-                ? [{ value: "", label: "Loading models...", disabled: true }]
-                : models.map((m) => ({ value: m.value, label: m.label }))
-            }
-            namespace={namespace}
-            hiddenValues={hiddenDropdownOptions[namespace] ?? []}
-            onHideOption={(v) => hideDropdownOption(namespace, v)}
-            onUnhideOption={(v) => unhideDropdownOption(namespace, v)}
-            warning={modelWarning(value, harness, models) ?? undefined}
-          />
-        </label>
-        {model.description && (
-          <p className="mt-1 text-xs text-description-fg">
-            {model.description}
-          </p>
-        )}
-      </div>
-    );
-  };
-
   const renderVariableDefaultControls = (
     group: TemplateVariable[],
     isMultiline: boolean
@@ -857,143 +811,41 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 variable.harness
               )
                 return null;
-              const isFile = variable.type === WORKSPACE_ENTRY_KINDS.FILE;
-              const isDirectory =
-                variable.type === WORKSPACE_ENTRY_KINDS.DIRECTORY;
-              const isPicker = isFile || isDirectory;
-              const isSelect = variable.type === TEMPLATE_VARIABLE_TYPES.SELECT;
               const isHarness =
                 variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS;
-              const isMultiline =
-                !!variable.multiline && !isPicker && !isSelect && !isHarness;
-              const inputClass =
-                "flex-1 px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border focus:outline-hidden focus:border-focus-border font-mono text-xs";
-              const selectClass =
-                "w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border";
-              const field = (
-                <div key={variable.name} className="form-group">
-                  <label
-                    htmlFor={`var-${variable.name}`}
-                    className="block text-sm text-foreground"
-                  >
-                    <span className="block mb-1">
-                      {variable.name}
-                      {isPicker && (
-                        <span className="ml-1 text-xs text-description-fg">
-                          ({isDirectory ? "directory" : "file path"})
-                        </span>
-                      )}
-                    </span>
-                    <div className={isPicker ? "flex gap-1.5" : undefined}>
-                      {isSelect ? (
-                        <select
-                          aria-label={variable.name}
-                          id={`var-${variable.name}`}
-                          value={variables[variable.name] ?? ""}
-                          onChange={(e) =>
-                            handleVariableChange(variable.name, e.target.value)
-                          }
-                          className={selectClass}
-                        >
-                          {(variable.options ?? []).map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : isHarness ? (
-                        <HarnessDropdown
-                          id={`var-${variable.name}`}
-                          schemaPath={`vars.${variable.name}`}
-                          value={variables[variable.name] ?? ""}
-                          onChange={(v) =>
-                            handleVariableChange(variable.name, v)
-                          }
-                          harnessStatus={harnessStatus}
-                          hiddenValues={
-                            hiddenDropdownOptions[
-                              DROPDOWN_NAMESPACES.HARNESS
-                            ] ?? []
-                          }
-                          onHideOption={(v) =>
-                            hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                          }
-                          onUnhideOption={(v) =>
-                            unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                          }
-                        />
-                      ) : isMultiline ? (
-                        <textarea
-                          aria-label={variable.name}
-                          id={`var-${variable.name}`}
-                          value={variables[variable.name] || ""}
-                          onChange={(e) =>
-                            handleVariableChange(variable.name, e.target.value)
-                          }
-                          onKeyDown={handleKeyDown}
-                          placeholder={`Enter ${variable.name}`}
-                          rows={3}
-                          className={`${inputClass} resize-y w-full`}
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          aria-label={variable.name}
-                          id={`var-${variable.name}`}
-                          value={variables[variable.name] || ""}
-                          onChange={(e) =>
-                            handleVariableChange(variable.name, e.target.value)
-                          }
-                          onKeyDown={handleKeyDown}
-                          placeholder={
-                            isDirectory
-                              ? "path/to/dir"
-                              : isFile
-                                ? "path/to/spec.md"
-                                : `Enter ${variable.name}`
-                          }
-                          className={inputClass}
-                        />
-                      )}
-                      {isPicker && (
-                        <Button
-                          variant="secondary"
-                          onClick={() =>
-                            handleBrowseFile(variable.name, variable)
-                          }
-                          title={
-                            isDirectory
-                              ? "Browse for folder"
-                              : "Browse for file"
-                          }
-                        >
-                          Browse…
-                        </Button>
-                      )}
-                    </div>
-                  </label>
-                  {variable.description && (
-                    <p className="mt-1 text-xs text-description-fg">
-                      {variable.description}
-                    </p>
-                  )}
-                  {(!isHarness || !pairedModels.get(variable.name)?.length) &&
-                    renderVariableDefaultControls([variable], isMultiline)}
-                </div>
-              );
               const models = isHarness
                 ? pairedModels.get(variable.name)
                 : undefined;
-              if (!models?.length) return field;
+              const paired = models ?? [];
+              const isMultiline =
+                !!variable.multiline &&
+                variable.type !== WORKSPACE_ENTRY_KINDS.FILE &&
+                variable.type !== WORKSPACE_ENTRY_KINDS.DIRECTORY &&
+                variable.type !== TEMPLATE_VARIABLE_TYPES.SELECT &&
+                !isHarness;
               return (
                 <div key={variable.name}>
-                  <div className="grid grid-cols-2 gap-3 items-start">
-                    {field}
-                    {models.map((model) =>
-                      renderModelField(model, variables[variable.name])
+                  <TemplateVariableField
+                    variable={variable}
+                    value={variables[variable.name] ?? ""}
+                    values={variables}
+                    onChange={handleVariableChange}
+                    pairedModels={paired}
+                    modelOptions={modelOptions}
+                    harnessStatus={harnessStatus}
+                    hiddenDropdownOptions={hiddenDropdownOptions}
+                    onHideOption={hideDropdownOption}
+                    onUnhideOption={unhideDropdownOption}
+                    onBrowse={(selected) =>
+                      handleBrowseFile(selected.name, selected)
+                    }
+                    multiline={isMultiline}
+                    onKeyDown={handleKeyDown}
+                    footer={renderVariableDefaultControls(
+                      models?.length ? [variable, ...models] : [variable],
+                      isMultiline
                     )}
-                  </div>
-                  {renderVariableDefaultControls([variable, ...models], false)}
+                  />
                 </div>
               );
             })}
