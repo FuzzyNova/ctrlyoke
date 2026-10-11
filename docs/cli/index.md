@@ -5,7 +5,7 @@ ctrlyoke ships with two command-line entry points:
 | Command        | Purpose                                                                                      |
 | -------------- | -------------------------------------------------------------------------------------------- |
 | `ctrlyoke`     | Run, continue, and validate workflows; inspect run history; manage secrets; generate commits |
-| `ctrlyoke-mcp` | Run the standalone ctrlyoke MCP server that harnesses use for queue and output tools         |
+| `ctrlyoke-mcp` | The built-in MCP server that ctrlyoke starts for harnesses to use for queue and output tools |
 
 Both are Node.js programs and require Node.js 22.12 or later. The harness CLIs
 you run workflows with (Copilot CLI, Claude Code, and so on) must be installed,

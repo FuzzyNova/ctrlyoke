@@ -29,15 +29,24 @@ features:
 
 ## What ctrlyoke is for
 
-ctrlyoke turns AI assistants into a repeatable workflow runner. Instead of pasting one prompt at a time, you define a sequence of steps, choose a harness, and let ctrlyoke execute the work while keeping outputs, session history, and validation results together.
+ctrlyoke gives you a better way to write prompts for any harness and to run them. You type a prompt in the dashboard's editor, and completions help you [reference the context it needs](/workflows/context-files): files, folders, symbols, editor selections, Git changes and earlier steps' output. ctrlyoke expands those references, sends the prompt to the harness you pick, and keeps the output, file changes and session history together.
 
-It ships in three forms:
+It works the same way however much you send:
 
-| Surface           | What it is                                                                                                     |
-| ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code    |
-| `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job                                           |
-| `ctrlyoke-mcp`    | Standalone MCP server that lets an agent inspect and edit the workflow queue, read step output, and coordinate |
+- **A single prompt**, the way you would use the harness on its own.
+- **A workflow**: prompt and script steps run in order, each on any harness, with [end conditions](/workflows/end-conditions) that check the result before moving on.
+- **A dynamic workflow**: a final step reviews the run and [queues more steps](/workflows/dynamic-queue) until the work is done, for example a plan–implement–review loop or a bug hunt that keeps going.
+
+Save any of them as a YAML, JSON or Markdown file to run again, share, or run in CI.
+
+It ships in two forms:
+
+| Form              | What it is                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code |
+| `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job                                        |
+
+Both include a built-in MCP server, [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp), and a set of built-in skills. A step that enables `ctrlyoke-mcp` can work on its own run: it can read earlier steps' output, [queue more steps](/workflows/dynamic-queue) (this is how a final step keeps a review or bug-hunt loop going), and coordinate with the other steps in its [parallel group](/workflows/parallel-steps).
 
 ## Where to start
 
