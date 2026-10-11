@@ -69,9 +69,9 @@ Right-click a file or folder (long-press on a phone) for:
 - **Delete**
 
 ::: danger
-**Delete** removes the file, or the folder and everything in it, from disk
-immediately. It doesn't ask for confirmation and doesn't use the Recycle Bin or
-Trash.
+**Delete** asks for confirmation before permanently removing a file, or a
+folder and everything in it, from disk. Choose **Don't warn me again** to turn
+off delete confirmations through `ui.confirmDeleteOperations`.
 :::
 
 The Explorer can't create new files or folders, or rename them.

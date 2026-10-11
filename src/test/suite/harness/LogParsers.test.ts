@@ -2860,6 +2860,132 @@ suite("CopilotLogParser", () => {
       );
     });
 
+    test("parses delete-and-recreate diffs with dev/null headers and CRLF", () => {
+      const gitDiff = [
+        "diff --git a/src/recreated.ts b/src/recreated.ts",
+        "--- a/src/recreated.ts",
+        "+++ b/dev/null",
+        "@@ -1,1 +0,0 @@",
+        "-old content",
+        "diff --git a/src/recreated.ts b/src/recreated.ts",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/src/recreated.ts",
+        "@@ -0,0 +1,1 @@",
+        "+new content",
+      ].join("\r\n");
+      const events = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "delete-recreate",
+            toolName: "apply_patch",
+            arguments: "*** Begin Patch\n*** End Patch",
+          },
+          timestamp: "2026-01-17T10:00:01Z",
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "delete-recreate",
+            success: true,
+            result: { detailedContent: gitDiff },
+          },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+      ];
+
+      const response = new CopilotLogParser().extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const fileEventTypes = new Set<string>([
+        CLI_EVENT_TYPES.FILE_WRITE,
+        CLI_EVENT_TYPES.FILE_DELETE,
+        CLI_EVENT_TYPES.FILE_EDIT,
+      ]);
+      const completedFileEvents = response.events.filter(
+        (event) =>
+          fileEventTypes.has(event.type) &&
+          (event.data as any).status === OPERATION_STATUS.COMPLETED
+      );
+
+      assert.deepStrictEqual(
+        completedFileEvents.map((event) => [
+          event.type,
+          (event.data as any).path,
+        ]),
+        [
+          [CLI_EVENT_TYPES.FILE_DELETE, "src/recreated.ts"],
+          [CLI_EVENT_TYPES.FILE_WRITE, "src/recreated.ts"],
+        ]
+      );
+      assert.ok(
+        completedFileEvents.every(
+          (event) => (event.data as any).path !== "dev/null"
+        )
+      );
+    });
+
+    test("keeps a top-level a/ or b/ directory in git diff paths", () => {
+      const gitDiff = [
+        "diff --git a/a/foo.ts b/a/foo.ts",
+        "--- a/a/foo.ts",
+        "+++ b/a/foo.ts",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+        "diff --git a/b/gone.ts b/b/gone.ts",
+        "deleted file mode 100644",
+        "--- a/b/gone.ts",
+        "+++ /dev/null",
+        "@@ -1,1 +0,0 @@",
+        "-gone",
+      ].join("\n");
+      const events = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "nested-prefix",
+            toolName: "apply_patch",
+            arguments: "*** Begin Patch\n*** End Patch",
+          },
+          timestamp: "2026-01-17T10:00:01Z",
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "nested-prefix",
+            success: true,
+            result: { detailedContent: gitDiff },
+          },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+      ];
+
+      const response = new CopilotLogParser().extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const fileEventTypes = new Set<string>([
+        CLI_EVENT_TYPES.FILE_WRITE,
+        CLI_EVENT_TYPES.FILE_DELETE,
+        CLI_EVENT_TYPES.FILE_EDIT,
+      ]);
+
+      assert.deepStrictEqual(
+        response.events
+          .filter(
+            (event) =>
+              fileEventTypes.has(event.type) &&
+              (event.data as any).status === OPERATION_STATUS.COMPLETED
+          )
+          .map((event) => [event.type, (event.data as any).path]),
+        [
+          [CLI_EVENT_TYPES.FILE_EDIT, "a/foo.ts"],
+          [CLI_EVENT_TYPES.FILE_DELETE, "b/gone.ts"],
+        ]
+      );
+    });
+
     test("keeps a parallel shell call running when a sibling call completes", () => {
       // Real Copilot shape: two shell calls start together, only one
       // completes, and each completion is followed by a TOOL_RESULT. The

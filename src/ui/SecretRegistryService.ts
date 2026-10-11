@@ -14,6 +14,10 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { SecretStore } from "../platform/SecretStore";
 import {
+  parseSecretMetadata,
+  type SecretMetadata,
+} from "../platform/SecretMetadata";
+import {
   isValidSecretName,
   userSecretKey,
   userSecretMetadataKey,
@@ -24,7 +28,10 @@ import {
 import { collectSecretInterpolationNames } from "../utils/SecretResolver";
 import { parseSecretReferences } from "../utils/SecretReferenceParser";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
-import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
+import {
+  loadYamlDocument,
+  WORKFLOW_YAML_SCHEMA,
+} from "../core/WorkflowYamlSchema";
 import { getCtrlYokeFileKind } from "../completions/CtrlYokeFileKind";
 
 export interface SecretRegistryWorkflowReference {
@@ -46,11 +53,6 @@ export interface SecretRegistryServiceOptions {
   getMcpReferences?: (
     scope: SettingWriteScope
   ) => Promise<SecretRegistryMcpReference[]>;
-}
-
-interface SecretMetadata {
-  description?: string;
-  lastUpdated: number;
 }
 
 interface ScannedWorkflowReference extends SecretRegistryWorkflowReference {
@@ -376,25 +378,9 @@ export class SecretRegistryService {
     scope: SettingWriteScope,
     name: string
   ): Promise<SecretMetadata | undefined> {
-    const raw = await this.options.secretStore.get(
-      this.metadataKey(scope, name)
+    return parseSecretMetadata(
+      await this.options.secretStore.get(this.metadataKey(scope, name))
     );
-    if (!raw) return undefined;
-    try {
-      const parsed = JSON.parse(raw) as Partial<SecretMetadata>;
-      return typeof parsed.lastUpdated === "number" &&
-        Number.isFinite(parsed.lastUpdated)
-        ? {
-            lastUpdated: parsed.lastUpdated,
-            ...(typeof parsed.description === "string" &&
-            parsed.description.trim()
-              ? { description: parsed.description }
-              : {}),
-          }
-        : undefined;
-    } catch {
-      return undefined;
-    }
   }
 
   private hasEnvironmentValue(name: string): boolean {

@@ -595,22 +595,38 @@ export class CopilotToolBuilder {
 
     const edits: Required<ApplyPatchFileEdit>[] = [];
     for (const section of sections) {
-      const plusMatch = section.match(/^\+\+\+ (?:b\/)?(.+)$/m);
-      const minusMatch = section.match(/^--- (?:a\/)?(.+)$/m);
-      const kind: ApplyPatchFileEditKind =
-        /^new file mode /m.test(section) || minusMatch?.[1] === "/dev/null"
-          ? APPLY_PATCH_FILE_EDIT_KINDS.ADD
-          : /^deleted file mode /m.test(section) ||
-              plusMatch?.[1] === "/dev/null"
-            ? APPLY_PATCH_FILE_EDIT_KINDS.DELETE
-            : APPLY_PATCH_FILE_EDIT_KINDS.UPDATE;
+      const diffHeader = section.match(/^diff --git a\/(.+) b\/(.+)$/m);
+      const plusMatch = section.match(/^\+\+\+ (.+)$/m);
+      const minusMatch = section.match(/^--- (.+)$/m);
+      const minusPath = CopilotToolBuilder.stripDiffPathPrefix(
+        minusMatch?.[1],
+        "a/"
+      );
+      const plusPath = CopilotToolBuilder.stripDiffPathPrefix(
+        plusMatch?.[1],
+        "b/"
+      );
+      // The `diff --git` capture groups already exclude the `a/`/`b/` prefix,
+      // so only the `---`/`+++` fallbacks are stripped (a top-level `a/` or
+      // `b/` directory must survive).
+      const oldPath = diffHeader?.[1].trim() ?? minusPath;
+      const newPath = diffHeader?.[2].trim() ?? plusPath;
+      const isAdd =
+        /^new file mode /m.test(section) ||
+        CopilotToolBuilder.isNullDiffPath(minusPath);
+      const isDelete =
+        /^deleted file mode /m.test(section) ||
+        CopilotToolBuilder.isNullDiffPath(plusPath);
+      const kind: ApplyPatchFileEditKind = isAdd
+        ? APPLY_PATCH_FILE_EDIT_KINDS.ADD
+        : isDelete
+          ? APPLY_PATCH_FILE_EDIT_KINDS.DELETE
+          : APPLY_PATCH_FILE_EDIT_KINDS.UPDATE;
       const path =
-        plusMatch && plusMatch[1] !== "/dev/null"
-          ? plusMatch[1].trim()
-          : minusMatch && minusMatch[1] !== "/dev/null"
-            ? minusMatch[1].trim()
-            : undefined;
-      if (!path) {
+        kind === APPLY_PATCH_FILE_EDIT_KINDS.DELETE
+          ? oldPath
+          : (newPath ?? oldPath);
+      if (!path || CopilotToolBuilder.isNullDiffPath(path)) {
         continue;
       }
 
@@ -621,5 +637,19 @@ export class CopilotToolBuilder {
     }
 
     return edits;
+  }
+
+  /** Path from a `---`/`+++` header line, minus its `a/`/`b/` side prefix. */
+  private static stripDiffPathPrefix(
+    rawPath: string | undefined,
+    prefix: "a/" | "b/"
+  ): string | undefined {
+    const path = rawPath?.trim();
+    return path?.startsWith(prefix) ? path.slice(prefix.length) : path;
+  }
+
+  /** `/dev/null` as written, or `dev/null` left by stripping `b/dev/null`. */
+  private static isNullDiffPath(path: string | undefined): boolean {
+    return path === "/dev/null" || path === "dev/null";
   }
 }

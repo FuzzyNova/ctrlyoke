@@ -9,7 +9,6 @@ import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { SecretStore } from "./SecretStore";
-import { VsCodeSecretStore } from "./VsCodeSecretStore";
 import { INTERACTIVE_TERMINAL_MODES } from "../types/DashboardConstants";
 
 /**
@@ -21,8 +20,11 @@ export class VsCodeAdapter implements PlatformAdapter {
   readonly interactiveTerminal = INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY;
   private readonly secretStore: SecretStore;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
-    this.secretStore = new VsCodeSecretStore(context.secrets);
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    secretStore: SecretStore
+  ) {
+    this.secretStore = secretStore;
   }
 
   getSecretStore(): SecretStore {

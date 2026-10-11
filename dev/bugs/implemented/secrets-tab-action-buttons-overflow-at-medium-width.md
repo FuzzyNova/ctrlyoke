@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 while capturing docs screenshot D23 (hosted dashboard, 1280 px window)
 - **Area:** `src/ui/webview-react/components/settings/SecretsSection.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

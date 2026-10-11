@@ -23,8 +23,7 @@ import {
 import type { SourceControlFile } from "@root/types/HostedWorkspaceViewerTypes";
 import { SCM_KIND_COLOR_CLASS } from "@utils/scmStatus";
 import { SCM_FILE_KINDS } from "@root/types/DashboardConstants";
-import { Button } from "../shared/Button";
-import { Modal } from "../shared/Modal";
+import { DeleteConfirmationModal } from "../shared/DeleteConfirmationModal";
 import { WorkspaceCommitArea } from "./WorkspaceCommitArea";
 import { WorkspaceCommitHistoryPane } from "./WorkspaceCommitHistoryPane";
 import { WorkspaceDiffPane } from "./WorkspaceDiffPane";
@@ -389,8 +388,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   }, [loadStatus, refreshCommitHistory, setScmError, staged]);
 
   const handleDiscardCheckboxChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const checked = e.target.checked;
+    (checked: boolean) => {
       setDontWarnAgain(checked);
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_CONFIRM_DELETE,
@@ -624,50 +622,22 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           </div>
         </div>
 
-        <Modal
+        <DeleteConfirmationModal
           isOpen={pendingDiscard !== null}
           onClose={() => setPendingDiscard(null)}
-          elevated
           title={
             pendingDiscard?.untrackedCount === 1
               ? "Delete Untracked File?"
               : "Delete Untracked Files?"
           }
-          size="sm"
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setPendingDiscard(null)}
-              >
-                Cancel
-              </Button>
-              <Button variant="danger" size="md" onClick={handleConfirmDiscard}>
-                Discard
-              </Button>
-            </>
-          }
-        >
-          <p className="text-foreground">{discardMessage}</p>
-          {discardDetail && (
-            <p className="mt-2 text-sm text-description-fg">{discardDetail}</p>
-          )}
-          <label
-            htmlFor="discard-untracked-dont-warn-mobile"
-            className="mt-4 flex cursor-pointer items-center gap-2 select-none text-sm text-description-fg transition-colors hover:text-foreground"
-          >
-            <input
-              id="discard-untracked-dont-warn-mobile"
-              type="checkbox"
-              checked={dontWarnAgain}
-              onChange={handleDiscardCheckboxChange}
-              aria-label="Don't warn me again before deleting untracked files"
-              className="h-3.5 w-3.5 cursor-pointer accent-button-bg"
-            />
-            Don't warn me again
-          </label>
-        </Modal>
+          message={discardMessage}
+          detail={discardDetail}
+          confirmLabel="Discard"
+          onConfirm={handleConfirmDiscard}
+          dontWarnAgain={dontWarnAgain}
+          onDontWarnAgainChange={handleDiscardCheckboxChange}
+          dontWarnAgainLabel="Don't warn me again before deleting untracked files"
+        />
       </>
     );
   }
@@ -698,50 +668,22 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         </Group>
       </div>
 
-      <Modal
+      <DeleteConfirmationModal
         isOpen={pendingDiscard !== null}
         onClose={() => setPendingDiscard(null)}
-        elevated
         title={
           pendingDiscard?.untrackedCount === 1
             ? "Delete Untracked File?"
             : "Delete Untracked Files?"
         }
-        size="sm"
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setPendingDiscard(null)}
-            >
-              Cancel
-            </Button>
-            <Button variant="danger" size="md" onClick={handleConfirmDiscard}>
-              Discard
-            </Button>
-          </>
-        }
-      >
-        <p className="text-foreground">{discardMessage}</p>
-        {discardDetail && (
-          <p className="mt-2 text-sm text-description-fg">{discardDetail}</p>
-        )}
-        <label
-          htmlFor="discard-untracked-dont-warn"
-          className="mt-4 flex cursor-pointer items-center gap-2 select-none text-sm text-description-fg transition-colors hover:text-foreground"
-        >
-          <input
-            id="discard-untracked-dont-warn"
-            type="checkbox"
-            checked={dontWarnAgain}
-            onChange={handleDiscardCheckboxChange}
-            aria-label="Don't warn me again before deleting untracked files"
-            className="h-3.5 w-3.5 cursor-pointer accent-button-bg"
-          />
-          Don't warn me again
-        </label>
-      </Modal>
+        message={discardMessage}
+        detail={discardDetail}
+        confirmLabel="Discard"
+        onConfirm={handleConfirmDiscard}
+        dontWarnAgain={dontWarnAgain}
+        onDontWarnAgainChange={handleDiscardCheckboxChange}
+        dontWarnAgainLabel="Don't warn me again before deleting untracked files"
+      />
     </>
   );
 };

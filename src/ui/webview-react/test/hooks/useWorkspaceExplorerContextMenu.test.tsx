@@ -1,7 +1,14 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useSettingsStore } from "@store/settingsStore";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { MESSAGE_TYPES } from "@/types/messages";
 
@@ -42,6 +49,8 @@ function TestHarness({
       onViewFileHistory: onViewFileHistory,
     });
 
+  // Render only what WorkspaceExplorerPane renders, so a modal the pane
+  // would drop fails these tests.
   return (
     <>
       <button onClick={() => openContextMenu(20, 20, entry)}>Open menu</button>
@@ -56,6 +65,9 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   useWorkspaceViewerStore.getState().reset();
+  useSettingsStore
+    .getState()
+    .updateGlobalSetting("confirmDeleteOperations", true);
 });
 
 describe("useWorkspaceExplorerContextMenu file history", () => {
@@ -138,10 +150,59 @@ describe("useWorkspaceExplorerContextMenu file mutations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "Delete “file.ts” permanently?"
+    );
+    expect(apiMocks.workspaceDeleteEntry).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Delete",
+      })
+    );
+
     await vi.waitFor(() =>
       expect(useWorkspaceViewerStore.getState().selectedFilePath).toBeNull()
     );
     expect(useWorkspaceViewerStore.getState().fileDrafts).toEqual({});
+    expect(apiMocks.workspaceDeleteEntry).toHaveBeenCalledWith({
+      path: "src/file.ts",
+    });
+  });
+
+  it("does nothing when the delete confirmation is canceled", () => {
+    render(
+      <TestHarness
+        entry={{ name: "file.ts", path: "src/file.ts", kind: "file" }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(apiMocks.workspaceDeleteEntry).not.toHaveBeenCalled();
+  });
+
+  it("deletes immediately when delete confirmations are disabled", async () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("confirmDeleteOperations", false);
+    apiMocks.workspaceDeleteEntry.mockResolvedValue(undefined);
+    render(
+      <TestHarness
+        entry={{ name: "file.ts", path: "src/file.ts", kind: "file" }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() =>
+      expect(apiMocks.workspaceDeleteEntry).toHaveBeenCalledWith({
+        path: "src/file.ts",
+      })
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("re-keys selected drafts after a successful cut and paste", async () => {

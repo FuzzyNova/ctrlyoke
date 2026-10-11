@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { foldPathForCompare } from "../../utils/PathCasing";
 import { projectWorktreeRuntime } from "../../types/CtrlYokeTypes";
 import type {
   RunRef,
@@ -99,6 +100,10 @@ import {
   type StreamingHistoryFlush,
   type StreamingHistoryFlushResult,
 } from "./StreamingHistoryBuffer";
+
+function undoFilePathKey(value: string): string {
+  return foldPathForCompare(value.replace(/\\/g, "/"));
+}
 
 /**
  * Each summary reads a manifest and then its small working definition. Keeping
@@ -1674,66 +1679,105 @@ export class OutputHistoryManager {
     historyFilePath: string,
     target: OutputExecutionTarget,
     undoRecord: UndoRecord
-  ): Promise<void> {
-    if (!historyFilePath) return;
+  ): Promise<UndoRecord | undefined> {
+    if (!historyFilePath) return undefined;
     try {
       const existingUndoRecord =
         await this.runMetadataScanner.findLatestUndoRecord(
           historyFilePath,
           target
         );
+      const restoredFiles = new Map<string, string>();
+      const redoInstructions = new Map<
+        string,
+        UndoRecord["redoInstructions"][number]
+      >();
+      if (existingUndoRecord?.isRedone !== true) {
+        for (const file of existingUndoRecord?.restoredFiles ?? []) {
+          restoredFiles.set(undoFilePathKey(file), file);
+        }
+        for (const instruction of existingUndoRecord?.redoInstructions ?? []) {
+          redoInstructions.set(undoFilePathKey(instruction.path), instruction);
+        }
+      }
+      for (const file of undoRecord.restoredFiles) {
+        restoredFiles.set(undoFilePathKey(file), file);
+      }
+      for (const instruction of undoRecord.redoInstructions) {
+        redoInstructions.set(undoFilePathKey(instruction.path), instruction);
+      }
+      const mergedUndoRecord: UndoRecord = {
+        ...existingUndoRecord,
+        ...undoRecord,
+        restoredFiles: [...restoredFiles.values()],
+        redoInstructions: [...redoInstructions.values()],
+        isRedone: undefined,
+        redoneAt: undefined,
+      };
       if (
         existingUndoRecord &&
-        JSON.stringify(existingUndoRecord) === JSON.stringify(undoRecord)
+        JSON.stringify(existingUndoRecord) === JSON.stringify(mergedUndoRecord)
       ) {
-        return;
+        return existingUndoRecord;
       }
 
       await this.timelineRecorder.appendEvents(historyFilePath, [
         {
           eventType: TIMELINE_EVENT_TYPES.UNDO_APPLIED,
-          timestampMs: undoRecord.appliedAt,
+          timestampMs: mergedUndoRecord.appliedAt,
           target,
           payload: {
-            undoRecord,
+            undoRecord: mergedUndoRecord,
           },
         },
       ]);
       this.refreshSearchIndex();
+      return mergedUndoRecord;
     } catch (error) {
       Log.warn(
         "[OutputHistoryManager] Failed to save undo record to history:",
         error
       );
+      return undefined;
     }
   }
 
-  /**
-   * Update the undoRecord after redo is applied (set isRedone=true, redoneAt).
-   */
+  /** Remove successfully redone paths and mark the record complete when empty. */
   async markUndoRecordRedone(
     historyFilePath: string,
     target: OutputExecutionTarget,
-    redoneAt: number
-  ): Promise<void> {
-    if (!historyFilePath) return;
+    redoneAt: number,
+    redoneFiles: readonly string[]
+  ): Promise<UndoRecord | undefined> {
+    if (!historyFilePath) return undefined;
     try {
       const undoRecord = await this.runMetadataScanner.findLatestUndoRecord(
         historyFilePath,
         target
       );
       if (!undoRecord) {
-        return;
+        return undefined;
       }
+
+      const redonePathKeys = new Set(redoneFiles.map(undoFilePathKey));
+      if (redonePathKeys.size === 0) return undoRecord;
+      const redoInstructions = undoRecord.redoInstructions.filter(
+        (instruction) => !redonePathKeys.has(undoFilePathKey(instruction.path))
+      );
+      const restoredFiles = undoRecord.restoredFiles.filter(
+        (file) => !redonePathKeys.has(undoFilePathKey(file))
+      );
 
       const updatedUndoRecord: UndoRecord = {
         ...undoRecord,
-        isRedone: true,
+        restoredFiles,
+        redoInstructions,
+        isRedone: redoInstructions.length === 0,
         redoneAt,
       };
 
       if (JSON.stringify(undoRecord) === JSON.stringify(updatedUndoRecord)) {
-        return;
+        return undoRecord;
       }
 
       await this.timelineRecorder.appendEvents(historyFilePath, [
@@ -1747,11 +1791,13 @@ export class OutputHistoryManager {
         },
       ]);
       this.refreshSearchIndex();
+      return updatedUndoRecord;
     } catch (error) {
       Log.warn(
         "[OutputHistoryManager] Failed to mark undo record as redone:",
         error
       );
+      return undefined;
     }
   }
 

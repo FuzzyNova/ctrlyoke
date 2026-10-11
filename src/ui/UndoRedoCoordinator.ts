@@ -84,8 +84,7 @@ export class UndoRedoCoordinator {
       [{ target, files: authoritativeFiles }],
       workflowKey,
       runRef,
-      postMessage,
-      { emitUndoRecordWithoutHistory: true }
+      postMessage
     );
     this.emitUndoPromptResult(postMessage, requestId, target, result);
   }
@@ -130,8 +129,7 @@ export class UndoRedoCoordinator {
       authoritativeEntries,
       workflowKey,
       runRef,
-      postMessage,
-      { emitUndoRecordWithoutHistory: false }
+      postMessage
     );
     this.emitUndoPromptResult(postMessage, requestId, firstTarget, result);
   }
@@ -196,8 +194,7 @@ export class UndoRedoCoordinator {
     entries: SnapshotEntry[],
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    postMessage: PostMessageFn,
-    options: { emitUndoRecordWithoutHistory: boolean }
+    postMessage: PostMessageFn
   ): Promise<UndoResult> {
     return this.applySnapshotEntries(
       entries,
@@ -209,8 +206,7 @@ export class UndoRedoCoordinator {
           result,
           postMessage,
           workflowKey,
-          runRef,
-          options.emitUndoRecordWithoutHistory
+          runRef
         );
       }
     );
@@ -226,9 +222,10 @@ export class UndoRedoCoordinator {
       entries,
       workflowKey,
       runRef,
-      async (entry) => {
+      async (entry, result) => {
         await this.recordRedoApplied(
           entry.target,
+          result.restoredFiles,
           postMessage,
           workflowKey,
           runRef
@@ -468,8 +465,7 @@ export class UndoRedoCoordinator {
     result: UndoResult,
     postMessage: PostMessageFn,
     workflowKey: WorkflowKey,
-    runRef: RunRef,
-    emitWithoutHistory: boolean
+    runRef: RunRef
   ): Promise<void> {
     const undoRecord: UndoRecord = {
       appliedAt: Date.now(),
@@ -483,34 +479,31 @@ export class UndoRedoCoordinator {
     const outputHistoryManager =
       this.getOrchestrator()?.getOutputHistoryManager();
     if (historyFilePath && outputHistoryManager) {
-      await outputHistoryManager.saveUndoRecord(
+      const mergedUndoRecord = await outputHistoryManager.saveUndoRecord(
         historyFilePath,
         target,
         undoRecord
       );
-      this.emitUndoRecordUpdated(
-        postMessage,
-        target,
-        undoRecord,
-        workflowKey,
-        runRef
-      );
+      if (mergedUndoRecord) {
+        this.emitUndoRecordUpdated(
+          postMessage,
+          target,
+          mergedUndoRecord,
+          workflowKey,
+          runRef
+        );
+      }
       return;
     }
 
-    if (emitWithoutHistory) {
-      this.emitUndoRecordUpdated(
-        postMessage,
-        target,
-        undoRecord,
-        workflowKey,
-        runRef
-      );
-    }
+    // Without history there is no authoritative merged record to post. Keep
+    // any existing dashboard redo state intact rather than replacing it with
+    // only this undo batch.
   }
 
   private async recordRedoApplied(
     target: OutputExecutionTarget,
+    redoneFiles: readonly string[],
     postMessage: PostMessageFn,
     workflowKey: WorkflowKey,
     runRef: RunRef
@@ -526,22 +519,17 @@ export class UndoRedoCoordinator {
     }
 
     const redoneAt = Date.now();
-    await outputHistoryManager.markUndoRecordRedone(
+    const updatedUndoRecord = await outputHistoryManager.markUndoRecordRedone(
       historyFilePath,
       target,
-      redoneAt
+      redoneAt,
+      redoneFiles
     );
-    const history = await outputHistoryManager.loadHistory(historyFilePath);
-    const stepOutput = (
-      target.kind === FINAL_STEP_PHASES.QUEUE
-        ? history.promptOutputs[target.stepIndex]
-        : history.finalStepOutputs?.[target.loopIndex]
-    ) as { undoRecord?: UndoRecord } | undefined;
-    if (stepOutput?.undoRecord) {
+    if (updatedUndoRecord) {
       this.emitUndoRecordUpdated(
         postMessage,
         target,
-        stepOutput.undoRecord,
+        updatedUndoRecord,
         workflowKey,
         runRef
       );

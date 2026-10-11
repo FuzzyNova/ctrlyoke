@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude (File changes docs pass, hosted dashboard capture)
 - **Area:** `src/ui/webview-react/utils/promptUndo.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

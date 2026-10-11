@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude (workspace viewer docs pass, code review)
 - **Area:** `src/ui/webview-react/hooks/useWorkspaceExplorerContextMenu.tsx`, `src/server/HostedWorkspaceViewerService.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit; OS trash support was deferred because no suitable filesystem-trash helper or dependency is available.
 
 ## Symptom
 

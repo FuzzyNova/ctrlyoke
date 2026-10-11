@@ -269,6 +269,10 @@ export function buildSyntaxTokenStyles(): string {
     "/* ctrlyoke - refractor tokens, coloured by the shared --cy-syntax-* palette */",
     ".cy-syntax {\n  color: var(--vscode-editor-foreground, #d4d4d4);\n}",
     ".cy-syntax .token,\n.diff .token {\n  color: inherit;\n}",
+    // Refractor's Markdown grammar names table tokens `table`. Tailwind also
+    // generates a `.table` display utility, which otherwise turns this token
+    // span into a layout table and breaks diff and code-block lines apart.
+    ".cy-syntax .token.table,\n.diff .token.table {\n  display: inline;\n}",
     ...rules,
   ].join("\n\n");
 }

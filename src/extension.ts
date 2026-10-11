@@ -41,7 +41,7 @@ import {
 import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
 import { OsCredentialStore } from "./platform/OsCredentialStore";
 import { FallbackSecretStore } from "./platform/FallbackSecretStore";
-import type { SecretStore } from "./platform/SecretStore";
+import { migrateManagedSecrets } from "./platform/ManagedSecretMigration";
 import {
   CtrlYokeHostedServer,
   maskHostedServerUrlToken,
@@ -148,7 +148,7 @@ let dashboardApplication: DashboardApplication;
 let licenseService: LicenseService;
 // OS-credential-store-first secrets shared by every VS Code profile, the dev
 // host, the CLI, and `ctrlyoke server`; set during activation.
-let machineSecretStore: SecretStore;
+let machineSecretStore: FallbackSecretStore;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let memoryWatchdog: MemoryWatchdog | undefined;
 let notificationManager: NotificationManager | undefined;
@@ -232,7 +232,7 @@ export async function activate(context: vscode.ExtensionContext) {
     hostInstanceId: crypto.randomUUID(),
     pid: process.pid,
   };
-  const platform = new VsCodeAdapter(context);
+  let platform: VsCodeAdapter;
 
   try {
     // Initialize config service with file-based backends BEFORE
@@ -290,23 +290,52 @@ export async function activate(context: vscode.ExtensionContext) {
     // can spawn, for the processes the orchestrator launches.
     exposeBundledCli(context);
 
-    // Deliberately NOT VsCodeAdapter.getSecretStore(): the license and the
-    // per-workspace server tokens are bound to the machine, not to one
-    // --user-data-dir/profile, so they prefer the OS credential store (shared
-    // by every VS Code profile, the dev host, the CLI, and `ctrlyoke server` —
-    // see dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md) and fall back to
-    // VS Code's own per-profile secret storage only where the OS store is
-    // unreachable (e.g. a remote/Codespaces extension host with no local
-    // keyring). Managed workflow secrets keep VsCodeAdapter's profile-scoped
-    // store unchanged.
+    // Managed secrets, license data, and server tokens share one OS-first
+    // store across VS Code profiles, the CLI, and `ctrlyoke server`. VS Code's
+    // per-profile secret storage is the fallback for hosts without an
+    // accessible OS credential store.
+    const profileSecretStore = new VsCodeSecretStore(context.secrets);
     machineSecretStore = new FallbackSecretStore(
       new OsCredentialStore(),
-      new VsCodeSecretStore(context.secrets),
+      profileSecretStore,
       (error) =>
         Log.warn(
-          `[Extension] ctrlyoke: OS credential store unavailable for license and server token storage, falling back to VS Code secret storage: ${error.message}`
+          `[Extension] ctrlyoke: OS credential store unavailable, falling back to VS Code secret storage: ${error.message}`
         )
     );
+    platform = new VsCodeAdapter(context, machineSecretStore);
+    const migrationResult = await migrateManagedSecrets(
+      profileSecretStore,
+      machineSecretStore,
+      (key, error) =>
+        Log.warn(
+          `[Extension] ctrlyoke: Failed to migrate managed secret${key ? ` ${key}` : "s"}: ${getErrorMessage(error)}`
+        ),
+      (key) =>
+        Log.warn(
+          `[Extension] ctrlyoke: Conflicting managed secret ${key} has no usable lastUpdated metadata; profile value was kept.`
+        )
+    );
+    if (migrationResult.migrated > 0) {
+      Log.info(
+        `[Extension] ctrlyoke: Migrated ${migrationResult.migrated} managed secret entr${migrationResult.migrated === 1 ? "y" : "ies"} to the shared credential store.`
+      );
+    }
+    if (migrationResult.alreadyPresent > 0) {
+      Log.info(
+        `[Extension] ctrlyoke: Found ${migrationResult.alreadyPresent} managed secret entr${migrationResult.alreadyPresent === 1 ? "y" : "ies"} already present in the shared credential store.`
+      );
+    }
+    if (migrationResult.conflicts > 0) {
+      Log.info(
+        `[Extension] ctrlyoke: Resolved ${migrationResult.conflicts} managed secret conflict${migrationResult.conflicts === 1 ? "" : "s"}.`
+      );
+    }
+    if (migrationResult.skipped) {
+      Log.info(
+        "[Extension] ctrlyoke: Managed secret migration left profile storage in place because the OS credential store is unavailable."
+      );
+    }
     // License state is extension-host-owned so commands and the status bar
     // share one service instance and update immediately after activation.
     licenseService = new LicenseService(machineSecretStore, {

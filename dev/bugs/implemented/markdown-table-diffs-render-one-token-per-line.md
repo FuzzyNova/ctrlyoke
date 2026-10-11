@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude (File changes and workspace viewer docs captures)
 - **Area:** `src/ui/webview-react/components/diff/`, `src/ui/webview-react/components/output/DiffView.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -27,9 +27,14 @@ The same happens with **View 8 changes** on the `hero-gif` run 4 and expanding
 
 ## Root Cause
 
-Not investigated. It looks like the markdown syntax highlighter emits table
-cells as block-level elements (or elements with `display: block`) inside the
-diff line, which forces a line break per token. Code files highlight normally.
+Diff syntax highlighting uses Refractor's Prism Markdown grammar and
+`react-diff-view` renders each token as a `<span>`. The Markdown grammar emits
+table rows inside a token with the class `table`; Tailwind also generates a
+`.table` utility with `display: table`. That utility applied to the token span,
+so the table grammar's outer token became a layout table inside the diff code
+cell and split the row into separate visual lines. The shared syntax-token
+styles now force `.diff .token.table` to remain inline, covering both diff
+surfaces without changing normal Markdown or code highlighting.
 
 ## Suggested Fix
 

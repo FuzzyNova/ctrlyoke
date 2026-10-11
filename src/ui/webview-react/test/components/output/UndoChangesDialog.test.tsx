@@ -169,7 +169,7 @@ describe("UndoChangesDialog", () => {
         input={input}
         requestId="view-intent"
         onClose={vi.fn()}
-        stepLabel="Prompt 1"
+        stepLabel="Step 1"
         stepName="Review changes"
       />
     );
@@ -220,7 +220,7 @@ describe("UndoChangesDialog", () => {
         workflowEntries={[
           {
             target: queueTarget,
-            label: "Prompt 1",
+            label: "Step 1",
             undoCandidates: [
               {
                 path: undoInstruction.path,
@@ -283,7 +283,7 @@ describe("UndoChangesDialog", () => {
           workflowEntries: [
             {
               target: queueTarget,
-              label: "Prompt 1",
+              label: "Step 1",
               undoCandidates: [candidate],
             },
           ],
@@ -291,8 +291,8 @@ describe("UndoChangesDialog", () => {
       },
       {
         expectedTitle: "Step changes",
-        expectedSubtitle: "Prompt 1 — Review changes · 1 file",
-        props: { input, stepLabel: "Prompt 1", stepName: "Review changes" },
+        expectedSubtitle: "Step 1 — Review changes · 1 file",
+        props: { input, stepLabel: "Step 1", stepName: "Review changes" },
       },
       {
         expectedTitle: "File changes",
@@ -363,7 +363,7 @@ describe("UndoChangesDialog", () => {
         workflowEntries={[
           {
             target: queueTarget,
-            label: "Prompt 1",
+            label: "Step 1",
             undoCandidates: [
               {
                 path: instruction.path,
@@ -630,6 +630,36 @@ describe("UndoChangesDialog", () => {
     }
   });
 
+  it("shows only the files still available to redo in a step record", () => {
+    const remainingRedo: UndoFileInstruction = {
+      path: "src/B.ts",
+      action: "restore-content",
+      contentToRestore: "AI version",
+    };
+
+    render(
+      <UndoChangesDialog
+        mode="redo"
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        workspacePath="C:/dev/ctrlyoke"
+        requestId="remaining-redo-files"
+        onClose={vi.fn()}
+        workflowEntries={[
+          {
+            target: queueTarget,
+            label: "Step 1",
+            redoInstructions: [remainingRedo],
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByLabelText("src/B.ts")).toBeInTheDocument();
+    expect(screen.queryByLabelText("src/A.ts")).not.toBeInTheDocument();
+  });
+
   it("keeps the single-step undo payload unchanged", () => {
     const instruction: UndoFileInstruction = {
       path: "src/example.ts",
@@ -705,7 +735,7 @@ describe("UndoChangesDialog", () => {
         workflowEntries={[
           {
             target: queueTarget,
-            label: "Prompt 1",
+            label: "Step 1",
             undoCandidates: [
               {
                 path: instruction.path,
@@ -945,7 +975,7 @@ describe("UndoChangesDialog", () => {
   it("sends workflow redo steps oldest first", () => {
     const entries = [0, 1, 2].map((stepIndex) => ({
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-      label: `Prompt ${stepIndex + 1}`,
+      label: `Step ${stepIndex + 1}`,
       redoInstructions: [
         {
           path: `src/file-${stepIndex}.ts`,
@@ -983,7 +1013,7 @@ describe("UndoChangesDialog", () => {
     const entries = [
       {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-        label: "Prompt 1",
+        label: "Step 1",
         undoCandidates: [
           {
             path: "src/shared.ts",
@@ -1017,7 +1047,7 @@ describe("UndoChangesDialog", () => {
       },
       {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
-        label: "Prompt 3",
+        label: "Step 3",
         undoCandidates: [
           {
             path: "C:\\repo\\src\\shared.ts",
@@ -1065,7 +1095,7 @@ describe("UndoChangesDialog", () => {
     );
 
     expect(screen.getAllByLabelText("src/shared.ts")).toHaveLength(1);
-    expect(screen.getByText("Prompt 1, Prompt 3")).toBeInTheDocument();
+    expect(screen.getByText("Step 1, Step 3")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Undo 1 file" }));
     expect(sendMessageMock).toHaveBeenCalledWith(

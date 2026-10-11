@@ -209,6 +209,104 @@ describe("OutputRow token stats", () => {
 });
 
 describe("OutputRow snapshot diffs", () => {
+  it("shows redo only for files undone in the current step record", () => {
+    const onFileUndo = vi.fn();
+    const makeRow = (
+      key: string,
+      filePath: string,
+      undoRecord?: StructuredEventRow["undoRecord"]
+    ): StructuredEventRow => ({
+      key,
+      target: TARGET,
+      estimateSize: 80,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: {
+        type: CLI_EVENT_TYPES.FILE_WRITE,
+        data: {
+          path: filePath,
+          content: "updated",
+          status: OPERATION_STATUS.COMPLETED,
+        },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      hideDiff: false,
+      undoRecord,
+    });
+    const initialRows = [
+      makeRow("file-a", "src/A.ts"),
+      makeRow("file-b", "src/B.ts"),
+    ];
+    const view = render(
+      <>
+        {initialRows.map((row) => (
+          <OutputRow
+            key={row.key}
+            row={row}
+            isExecutionActive={false}
+            onFileUndo={onFileUndo}
+          />
+        ))}
+      </>
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Undo file operation" })[0]!
+    );
+    expect(onFileUndo).toHaveBeenCalledTimes(1);
+    const afterUndoA = {
+      appliedAt: 1,
+      restoredFiles: ["src/A.ts"],
+      redoInstructions: [{ path: "src/A.ts", action: "delete" as const }],
+    };
+    view.rerender(
+      <>
+        {["src/A.ts", "src/B.ts"].map((filePath, index) => (
+          <OutputRow
+            key={filePath}
+            row={makeRow(`file-${index}`, filePath, afterUndoA)}
+            isExecutionActive={false}
+            onFileUndo={onFileUndo}
+          />
+        ))}
+      </>
+    );
+    expect(
+      screen.getByRole("button", { name: "Redo file operation" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Undo file operation" })
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Undo file operation" })
+    );
+    expect(onFileUndo).toHaveBeenCalledTimes(2);
+    const afterUndoB = {
+      appliedAt: 2,
+      restoredFiles: ["src/A.ts", "src/B.ts"],
+      redoInstructions: [
+        { path: "src/A.ts", action: "delete" as const },
+        { path: "src/B.ts", action: "delete" as const },
+      ],
+    };
+    view.rerender(
+      <>
+        {["src/A.ts", "src/B.ts"].map((filePath, index) => (
+          <OutputRow
+            key={filePath}
+            row={makeRow(`file-${index}`, filePath, afterUndoB)}
+            isExecutionActive={false}
+            onFileUndo={onFileUndo}
+          />
+        ))}
+      </>
+    );
+    expect(
+      screen.getAllByRole("button", { name: "Redo file operation" })
+    ).toHaveLength(2);
+  });
+
   it("hydrates a diff that mounts already expanded", async () => {
     const postMessage = vi.mocked(window.vscodeApi!.postMessage);
     postMessage.mockClear();

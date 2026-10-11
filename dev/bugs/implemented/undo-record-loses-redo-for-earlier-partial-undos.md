@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude (File changes docs pass, code review)
 - **Area:** `src/ui/UndoRedoCoordinator.ts`, `src/core/orchestration/OutputHistoryManager.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

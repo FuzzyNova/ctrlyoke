@@ -118,7 +118,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
 
   return (
     <div
-      className={`grid gap-3 rounded-sm border px-3 py-2 md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_auto] ${rowClass}`}
+      className={`grid gap-3 rounded-sm border px-3 py-2 md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_minmax(9rem,auto)] ${rowClass}`}
       data-testid={`secret-row-${entry.name}`}
     >
       <div className="min-w-0">
@@ -141,7 +141,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border"
+              className="border border-btn-border whitespace-nowrap"
               onClick={() => onReplace(entry.name)}
             >
               Replace
@@ -150,6 +150,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="danger"
               size="sm"
+              className="whitespace-nowrap"
               onClick={() => onDelete(entry.name)}
             >
               Delete
@@ -163,7 +164,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border"
+              className="border border-btn-border whitespace-nowrap"
               onClick={() => onSet(entry.name)}
             >
               Convert to managed
@@ -172,7 +173,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border"
+              className="border border-btn-border whitespace-nowrap"
               onClick={() => onDelete(entry.name)}
             >
               Remove declaration
@@ -186,7 +187,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border"
+              className="border border-btn-border whitespace-nowrap"
               onClick={() => onSet(entry.name)}
             >
               Set value
@@ -195,7 +196,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border"
+              className="border border-btn-border whitespace-nowrap"
               onClick={() => onDelete(entry.name)}
             >
               Remove declaration
@@ -478,8 +479,9 @@ export function SecretsSection({
               Two entry kinds share that same reference. If a name is already
               exported in your shell, ctrlyoke reads it there and stores nothing
               — the common case. If it isn&apos;t, you can set a managed value
-              below; ctrlyoke encrypts it in OS-backed storage and injects it as
-              an environment variable into the harness&apos;s child process, and
+              below; ctrlyoke encrypts it in OS-backed storage shared with the
+              CLI on this machine and injects it as an environment variable into
+              the harness&apos;s child process, and
               only for a step that actually grants that name.
             </p>
             <p className="mt-2 text-xs text-description-fg">
@@ -510,7 +512,7 @@ export function SecretsSection({
           </p>
         ) : (
           <div className="space-y-2">
-            <div className="hidden gap-3 px-3 text-xxs font-semibold uppercase tracking-wide text-description-fg md:grid md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_auto]">
+            <div className="hidden gap-3 px-3 text-xxs font-semibold uppercase tracking-wide text-description-fg md:grid md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_minmax(9rem,auto)]">
               <span>Name</span>
               <span>State</span>
               <span>Used by</span>

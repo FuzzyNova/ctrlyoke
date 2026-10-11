@@ -253,6 +253,18 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
+  it("merges FILE_WRITE events whose paths use different separators", () => {
+    const output = makeCliOutput([
+      makeFileWriteEvent("C:\\dev\\project\\src\\same.ts"),
+      makeFileWriteEvent("C:/dev/project/src/same.ts"),
+    ]);
+
+    const candidates = buildUndoCandidatesForOutputs([output], undefined);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].path).toBe("C:\\dev\\project\\src\\same.ts");
+  });
+
   it("matches a backslash Windows event path to its snapshot entry under a workspace root", () => {
     const output = makeCliOutput([makeFileWriteEvent("C:\\repo\\src\\new.ts")]);
     const snapshot = makeSnapshot([makeCreatedSnap("src/new.ts")]);
@@ -838,19 +850,52 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
     expect(result.eventAttributedFiles[0].instruction).toBeNull();
   });
 
-  it("FILE_WRITE → delete instruction", () => {
+  it("FILE_WRITE over an existing file → reverse-patch instruction", () => {
+    const snapshot = makeSnapshot([
+      makeModifiedSnap("src/existing.ts", PATCH, "previous content"),
+    ]);
+    const result = buildUndoDialogInputForSpecificEvent(
+      TARGET,
+      0,
+      "src/existing.ts",
+      makeFileWriteEvent("src/existing.ts") as never,
+      snapshot,
+      "/workspace"
+    );
+
+    expect(result.eventAttributedFiles[0].instruction).toMatchObject({
+      action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+      structuredPatch: PATCH,
+    });
+  });
+
+  it("FILE_WRITE of a newly created file → delete instruction", () => {
     const event = makeFileWriteEvent("src/new.ts");
+    const snapshot = makeSnapshot([makeCreatedSnap("src/new.ts")]);
     const result = buildUndoDialogInputForSpecificEvent(
       TARGET,
       0,
       "src/new.ts",
       event as never,
-      undefined,
+      snapshot,
       "/workspace"
     );
     expect(result.eventAttributedFiles[0].instruction?.action).toBe(
       UNDO_FILE_ACTIONS.DELETE
     );
+  });
+
+  it("FILE_WRITE without a snapshot match → null instruction", () => {
+    const result = buildUndoDialogInputForSpecificEvent(
+      TARGET,
+      0,
+      "src/unknown.ts",
+      makeFileWriteEvent("src/unknown.ts") as never,
+      undefined,
+      "/workspace"
+    );
+
+    expect(result.eventAttributedFiles[0].instruction).toBeNull();
   });
 
   it("FILE_DELETE with snapshot contentToRestore → restore-content instruction", () => {
@@ -1014,12 +1059,40 @@ function makeWorkflowCandidate(
 function makeWorkflowEntry(stepIndex: number, candidate: UndoFileCandidate) {
   return {
     target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-    label: `Prompt ${stepIndex + 1}`,
+    label: `Step ${stepIndex + 1}`,
     undoCandidates: [candidate],
   };
 }
 
 describe("aggregateWorkflowUndoFiles", () => {
+  it("merges separator variants and lists each workflow step only once", () => {
+    const candidate = (path: string): UndoFileCandidate => ({
+      path,
+      changeType: FILE_OPERATION_KINDS.MODIFIED,
+      tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
+      instruction: {
+        path,
+        action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+        structuredPatch: PATCH,
+      },
+      structuredPatch: PATCH,
+    });
+    const files = aggregateWorkflowUndoFiles([
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        label: "Step 1",
+        undoCandidates: [
+          candidate("C:\\repo\\src\\same.ts"),
+          candidate("C:/repo/src/same.ts"),
+        ],
+      },
+    ]);
+
+    expect(files).toHaveLength(1);
+    expect(files[0]?.path).toBe("C:\\repo\\src\\same.ts");
+    expect(files[0]?.steps.map((step) => step.label)).toEqual(["Step 1"]);
+  });
+
   it("contains malformed FILE_EDIT patches after a FILE_WRITE to the same file", () => {
     const writeOutput = makeCliOutput([
       makeFileWriteEvent("src/new.ts", { content: "a\n" }),
@@ -1100,8 +1173,8 @@ describe("aggregateWorkflowUndoFiles", () => {
       newContent: edited,
     });
     expect(files[0]?.steps.map((step) => step.label)).toEqual([
-      "Prompt 1",
-      "Prompt 2",
+      "Step 1",
+      "Step 2",
     ]);
   });
 
@@ -1220,7 +1293,7 @@ describe("aggregateWorkflowUndoFiles", () => {
     const files = aggregateWorkflowUndoFiles([
       {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-        label: "Prompt 1",
+        label: "Step 1",
         redoInstructions: [
           {
             path: "src/file.ts",
@@ -1232,7 +1305,7 @@ describe("aggregateWorkflowUndoFiles", () => {
       },
       {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
-        label: "Prompt 2",
+        label: "Step 2",
         redoInstructions: [
           {
             path: "C:\\repo\\src\\file.ts",
@@ -1246,8 +1319,8 @@ describe("aggregateWorkflowUndoFiles", () => {
 
     expect(files).toHaveLength(1);
     expect(files[0]?.steps.map((step) => step.label)).toEqual([
-      "Prompt 1",
-      "Prompt 2",
+      "Step 1",
+      "Step 2",
     ]);
   });
 
@@ -1255,7 +1328,7 @@ describe("aggregateWorkflowUndoFiles", () => {
     const files = aggregateWorkflowUndoFiles([
       {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-        label: "Prompt 1",
+        label: "Step 1",
         undoCandidates: [
           makeWorkflowCandidate(
             "src/blocked.ts",
@@ -1283,7 +1356,7 @@ describe("aggregateWorkflowUndoFiles", () => {
       workflowEntries: [
         {
           target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-          label: "Prompt 1",
+          label: "Step 1",
           undoCandidates: [
             makeWorkflowCandidate(
               "src/blocked.ts",
@@ -1313,7 +1386,7 @@ describe("aggregateWorkflowUndoFiles", () => {
       ),
       {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
-        label: "Prompt 3",
+        label: "Step 3",
         redoInstructions: [
           {
             path: "src/mixed.ts",
