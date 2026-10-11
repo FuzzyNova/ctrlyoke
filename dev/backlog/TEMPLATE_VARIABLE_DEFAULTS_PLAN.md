@@ -177,16 +177,27 @@ cleared as one unit, never one variable at a time:
 
 ### UX
 
-The modal's title bar gets a **User / Workspace** scope toggle, the same `ScopeToggle` control
-the Settings drawer puts in its title bar. It decides where both a pin and **Set as Default**
-save, so saving is one click with no follow-up menu, and the current target is always visible.
+`TemplateModal` gets **one new** **User / Workspace** scope toggle, in its title bar, like the
+one in the Settings drawer's title bar. It does not exist today. That single toggle controls
+where every save in the modal is written:
+
+- the existing **Set as Default** button in the footer (see "Set as Default uses the same
+  toggle");
+- every new per-variable **Save as default** pin and **Clear saved value** action.
+
+Saving is therefore one click with no follow-up menu, and the current target is always visible.
+Render it through `Modal`'s existing `headerActions` prop.
+
+The modal's other User/Workspace control is unrelated and stays as it is: the **Location**
+toggle inside the collapsed **New template…** form, which picks where a copied template _file_
+is written (the same control `SaveWorkflowDialog` shows under **Save as Template**).
 
 - **Single-source the options.** The drawer builds its User/Workspace options inline. Move them
   to a shared `SETTING_SCOPE_OPTIONS` beside `ScopeToggle` and use it in both places. Do **not**
   reuse `TEMPLATE_SCOPE_OPTIONS` (`templateScope.ts`): its tooltips describe template file
-  locations (`.ctrlyoke/templates`), which is what the **New template…** form's **Location**
-  toggle means, not where a setting is written. The title-bar toggle's `ariaLabel` should be
-  "Save defaults to" so it isn't confused with that **Location** toggle further down the modal.
+  locations (`.ctrlyoke/templates`), not where a setting is written. The title-bar toggle's
+  `ariaLabel` should be "Save defaults to" so screen readers can tell it apart from the
+  **Location** toggle.
 
 - **Toggle starting value:** **Workspace** until the user has saved a value at least once;
   after that, whichever scope they saved to last. The last-saved scope is a persisted `uiStore`
