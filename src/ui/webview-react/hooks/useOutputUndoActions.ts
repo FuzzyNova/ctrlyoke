@@ -18,6 +18,7 @@ import {
   buildUndoDialogInputForSpecificEvent,
   aggregateWorkflowUndoFiles,
   createPromptChangeSummary,
+  hasFileRedoInstruction,
   sameFilePath,
   resolveSnapshotFileMatch,
 } from "@utils/promptUndo";
@@ -406,8 +407,7 @@ export function useOutputUndoActions({
         stepOutputs && stepOutputs.length > 0
           ? (stepOutputs[stepOutputs.length - 1]?.workingDirectory ?? "")
           : "";
-      const showRedo =
-        row.undoRecord != null && row.undoRecord.isRedone !== true;
+      const showRedo = hasFileRedoInstruction(row.undoRecord, request.path);
 
       if (showRedo) {
         const fileRedoInstruction = row.undoRecord?.redoInstructions.find(
@@ -420,8 +420,8 @@ export function useOutputUndoActions({
             intent: UNDO_DIALOG_INTENTS.ACT,
             mode: UNDO_REDO_DIRECTIONS.REDO,
           });
+          return;
         }
-        return;
       }
 
       const indexedChange = row.workspaceSnapshot

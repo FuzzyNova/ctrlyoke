@@ -2914,6 +2914,76 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
     );
   });
 
+  test("does not revive redo data from an older record marked redone", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-undo-redone-merge"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    await recorder.appendEvents(filePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.UNDO_APPLIED,
+        timestampMs: 100,
+        target,
+        payload: {
+          undoRecord: {
+            appliedAt: 100,
+            restoredFiles: ["src/A.ts"],
+            redoInstructions: [
+              { path: "src/A.ts", action: UNDO_FILE_ACTIONS.DELETE },
+            ],
+            isRedone: true,
+            redoneAt: 110,
+          },
+        },
+      },
+    ]);
+
+    const merged = await manager.saveUndoRecord(filePath, target, {
+      appliedAt: 120,
+      restoredFiles: ["src/B.ts"],
+      redoInstructions: [
+        { path: "src/B.ts", action: UNDO_FILE_ACTIONS.DELETE },
+      ],
+    });
+
+    assert.deepStrictEqual(merged?.restoredFiles, ["src/B.ts"]);
+    assert.deepStrictEqual(
+      merged?.redoInstructions.map(({ path: filePath }) => filePath),
+      ["src/B.ts"]
+    );
+    assert.strictEqual(merged?.isRedone, undefined);
+  });
+
+  test("merges undo path keys with platform-aware casing", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-undo-path-casing"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const makeRecord = (path: string, appliedAt: number) => ({
+      appliedAt,
+      restoredFiles: [path],
+      redoInstructions: [{ path, action: UNDO_FILE_ACTIONS.DELETE }],
+    });
+    await manager.saveUndoRecord(filePath, target, makeRecord("A.ts", 100));
+    const merged = await manager.saveUndoRecord(
+      filePath,
+      target,
+      makeRecord("a.ts", 110)
+    );
+
+    const expectedPaths =
+      process.platform === "win32" ? ["a.ts"] : ["A.ts", "a.ts"];
+    assert.deepStrictEqual(
+      merged?.redoInstructions.map(({ path }) => path).sort(),
+      expectedPaths
+    );
+    assert.deepStrictEqual(merged?.restoredFiles.sort(), expectedPaths);
+  });
+
   test("partial redo keeps remaining files redoable until the final file", async () => {
     const { filePath } = await initTestRun(
       manager,
@@ -2934,7 +3004,7 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
       filePath,
       target,
       110,
-      ["src/a.ts"]
+      ["src/A.ts"]
     );
     assert.deepStrictEqual(
       afterFirstRedo?.redoInstructions.map(({ path: filePath }) => filePath),

@@ -96,6 +96,7 @@ import {
   type RowFindDecoration,
 } from "@utils/outputFind";
 import {
+  hasFileRedoInstruction,
   getPromptChangeLabelParts,
   resolveSnapshotFileMatch,
 } from "@utils/promptUndo";
@@ -965,7 +966,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             }
             onUndoFile={handleUndo}
             fileUndoMode={
-              row.undoRecord != null && row.undoRecord.isRedone !== true
+              hasFileRedoInstruction(row.undoRecord, data.path)
                 ? "redo"
                 : "undo"
             }
@@ -1018,7 +1019,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                     })
             }
             fileUndoMode={
-              row.undoRecord != null && row.undoRecord.isRedone !== true
+              hasFileRedoInstruction(row.undoRecord, data.path)
                 ? "redo"
                 : "undo"
             }
@@ -1066,7 +1067,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                     })
             }
             fileUndoMode={
-              row.undoRecord != null && row.undoRecord.isRedone !== true
+              hasFileRedoInstruction(row.undoRecord, data.path)
                 ? "redo"
                 : "undo"
             }

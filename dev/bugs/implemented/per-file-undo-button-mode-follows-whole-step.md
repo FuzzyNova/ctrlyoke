@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude (bug-drain review of 9ce775f63)
 - **Area:** `src/ui/webview-react/hooks/useOutputUndoActions.ts`, `src/ui/webview-react/components/output/OutputRow.tsx`, `src/core/orchestration/OutputHistoryManager.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -176,6 +176,20 @@ export function sameFilePath(a: string, b: string): boolean {
   return sameCliFilePath(a, b);
 }
 
+/** A file is redoable only when its undo record still contains its instruction. */
+export function hasFileRedoInstruction(
+  undoRecord: UndoRecord | undefined,
+  path: string
+): boolean {
+  return (
+    undoRecord != null &&
+    undoRecord.isRedone !== true &&
+    undoRecord.redoInstructions.some((instruction) =>
+      sameFilePath(instruction.path, path)
+    )
+  );
+}
+
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }

@@ -249,15 +249,148 @@ suite("UndoRedoCoordinator", function () {
         await fs.readFile(filePath, "utf8"),
         "authoritative history content"
       );
-      const undoRecordUpdate = messages.find(
+      assert.strictEqual(
+        messages.some(
+          (message) => message.type === MESSAGE_TYPES.UNDO_RECORD_UPDATED
+        ),
+        false,
+        "without history, the coordinator must not replace dashboard state with an unmerged undo batch"
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("posts the merged undo record returned by history", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-undo-merged-post-")
+    );
+    try {
+      await fs.writeFile(path.join(workspaceRoot, "B.ts"), "after\n", "utf8");
+      const workflowKey = "undo-merged-post" as WorkflowKey;
+      const runRef = "run-2026-08-11T00-00-00-000Z" as RunRef;
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        runRef
+      );
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(runFilePath, JSON.stringify({}), "utf8");
+      const target = {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 0,
+      } as const;
+      const mergedRecord = {
+        appliedAt: 200,
+        restoredFiles: ["A.ts", "B.ts"],
+        redoInstructions: [
+          {
+            path: "A.ts",
+            action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+            contentToRestore: "redo A",
+          },
+          {
+            path: "B.ts",
+            action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+            contentToRestore: "after\n",
+          },
+        ],
+      };
+      const remainingRecord = {
+        appliedAt: 200,
+        restoredFiles: ["A.ts"],
+        redoInstructions: [
+          {
+            path: "A.ts",
+            action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+            contentToRestore: "redo A",
+          },
+        ],
+        isRedone: false,
+      };
+      const saveUndoRecord = async () => mergedRecord;
+      const loadHistory = () => {
+        throw new Error("Redo should use the record returned by history");
+      };
+      const outputHistoryManager = {
+        getHistoryFilePath: () => "history/events.jsonl",
+        saveUndoRecord,
+        markUndoRecordRedone: async () => remainingRecord,
+        loadHistory,
+      };
+      const orchestrator = {
+        getOutputHistoryManager: () => outputHistoryManager,
+        getWorkspaceSnapshotFileContent: async () => ({
+          contentToRestore: "before\n",
+        }),
+      } as unknown as WorkflowOrchestrator;
+      const coordinator = new UndoRedoCoordinator(
+        () => orchestrator,
+        () => ({ executionRoot: workspaceRoot, namedWorkspaceRoots: [] })
+      );
+      const messages: Record<string, unknown>[] = [];
+      const postMessage = ((message: Record<string, unknown>) => {
+        messages.push(message);
+      }) as PostMessageFn;
+
+      await coordinator.handleUndoPromptChanges(
+        {
+          type: MESSAGE_TYPES.UNDO_PROMPT_CHANGES,
+          data: {
+            requestId: "undo-merged-post",
+            target,
+            workflowKey,
+            runRef,
+            files: [
+              {
+                path: "B.ts",
+                action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+                contentToRestore: "untrusted",
+              },
+            ],
+          },
+        },
+        postMessage
+      );
+
+      const update = messages.find(
         (message) => message.type === MESSAGE_TYPES.UNDO_RECORD_UPDATED
       );
       assert.deepStrictEqual(
+        update && (update as { undoRecord: unknown }).undoRecord,
+        mergedRecord
+      );
+      assert.deepStrictEqual(
+        (update as { undoRecord: { restoredFiles: string[] } }).undoRecord
+          .restoredFiles,
+        ["A.ts", "B.ts"]
+      );
+
+      await coordinator.handleRedoPromptChanges(
         {
-          workflowKey: undoRecordUpdate?.workflowKey,
-          runRef: undoRecordUpdate?.runRef,
+          type: MESSAGE_TYPES.REDO_PROMPT_CHANGES,
+          data: {
+            requestId: "redo-merged-post",
+            target,
+            workflowKey,
+            runRef,
+            files: [
+              {
+                path: "B.ts",
+                action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+                contentToRestore: "after\n",
+              },
+            ],
+          },
         },
-        { workflowKey, runRef }
+        postMessage
+      );
+      const updates = messages.filter(
+        (message) => message.type === MESSAGE_TYPES.UNDO_RECORD_UPDATED
+      );
+      assert.deepStrictEqual(
+        (updates[1] as { undoRecord: unknown }).undoRecord,
+        remainingRecord
       );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });

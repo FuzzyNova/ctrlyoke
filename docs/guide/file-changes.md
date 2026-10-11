@@ -142,14 +142,15 @@ ctrlyoke marks the operation **Cannot undo** rather than guessing.
 
 Undone files stay in the dialog with a green **Undone** label. Tick them and
 select **Redo N files** to put the step's version back. On the output, a step
-with undone files shows **Redo** instead of **Undo** on its file blocks.
+shows **Redo** on the file blocks that have been undone; files from the same
+step that have not been undone keep their **Undo** button.
 
 Undo and redo can't be mixed in one action. When the dialog has both, ticking a
 file of the other kind switches the selection to it, and the dialog notes
 "Undo and redo are applied separately."
 
-Each step remembers only its most recent undo. Undo a step's files together if
-you might want to redo them, rather than one at a time.
+Each step remembers the latest undo state for each file, so files can be undone
+and redone one at a time.
 
 ## Undo and worktrees
 
