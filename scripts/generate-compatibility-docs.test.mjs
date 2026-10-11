@@ -9,6 +9,7 @@ import {
   loadCompatibilityTypes,
   loadDocumentationFacts,
 } from "./generate-compatibility-docs.mjs";
+import { findInternalLeaks } from "./check-docs-content.mjs";
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -113,6 +114,13 @@ test("every limited matrix cell links to a note with a reason", () => {
       }
     }
   }
+});
+
+test("compatibility documentation passes the hand-written docs leak check", () => {
+  const { facts, compatibilityTypes } = loadFacts();
+  const generated = buildCompatibilityDocumentation(facts, compatibilityTypes);
+
+  assert.deepEqual(findInternalLeaks(generated), []);
 });
 
 test("checked-in compatibility documentation matches the generator output", () => {

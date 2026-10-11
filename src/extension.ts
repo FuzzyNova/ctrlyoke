@@ -26,7 +26,11 @@ import {
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
 import { VsCodeDashboardHostActions } from "./platform/VsCodeDashboardHostActions";
-import { VsCodeHostedServerControl } from "./platform/VsCodeHostedServerControl";
+import {
+  QUIET_SERVER_COMMAND,
+  VsCodeHostedServerControl,
+  type ServerCommandOptions,
+} from "./platform/VsCodeHostedServerControl";
 import { VsCodeKeyValueStore } from "./platform/VsCodeKeyValueStore";
 import { TemplateManager } from "./core/TemplateManager";
 import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
@@ -1632,10 +1636,24 @@ function registerCommands(
   );
 
   // Server commands
+  const confirmServerCommand = (message: string): void =>
+    notifyUserFeedback(
+      workflowOrchestrator.getUserFeedbackSink(),
+      USER_FEEDBACK_SEVERITY.SUCCESS,
+      message
+    );
+  const confirmServerRunning = (url: string): void =>
+    confirmServerCommand(
+      `ctrlyoke: Hosted dashboard server running at ${maskHostedServerUrlToken(url)}. The full URL and access token are in the dashboard's Server settings.`
+    );
   const enableServerCommand = vscode.commands.registerCommand(
-    "ctrlyoke.enableServer",
-    async () => {
-      if (hostedServer) return;
+    VSCODE_COMMANDS.ENABLE_SERVER,
+    async (options?: ServerCommandOptions) => {
+      if (hostedServer) {
+        const runningUrl = hostedServer.getServerUrl();
+        if (!options?.quiet && runningUrl) confirmServerRunning(runningUrl);
+        return;
+      }
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
@@ -1748,12 +1766,20 @@ function registerCommands(
           `ctrlyoke: Port ${portFallback.requestedPort} was already in use by another process. The server started on port ${portFallback.actualPort} instead — restart the server to try binding to ${portFallback.requestedPort} again.`
         );
       }
+      if (!options?.quiet) confirmServerRunning(url);
     }
   );
 
   const disableServerCommand = vscode.commands.registerCommand(
-    "ctrlyoke.disableServer",
-    () => {
+    VSCODE_COMMANDS.DISABLE_SERVER,
+    (options?: ServerCommandOptions) => {
+      if (!options?.quiet) {
+        confirmServerCommand(
+          hostedServer
+            ? "ctrlyoke: Hosted dashboard server stopped."
+            : "ctrlyoke: Hosted dashboard server is not running."
+        );
+      }
       hostedServer?.dispose();
       hostedServer = undefined;
       unprotectServerToken?.();
@@ -1877,7 +1903,10 @@ function registerCommands(
 
   // Auto-start hosted server if enabled in config (must be after command registration)
   if (configService.get("server")?.autoStart) {
-    void vscode.commands.executeCommand("ctrlyoke.enableServer");
+    void vscode.commands.executeCommand(
+      VSCODE_COMMANDS.ENABLE_SERVER,
+      QUIET_SERVER_COMMAND
+    );
   }
 
   // Register development commands (only in dev mode)

@@ -140,6 +140,17 @@ function formatReference(reference) {
   return `https://github.com/FuzzyNova/ctrlyoke/blob/main/${reference}`;
 }
 
+/**
+ * A verification's evidence label, linked to its reference. Internal `dev/`
+ * plans are maintainer records, not reader documentation, so their evidence
+ * is named without a link.
+ */
+function formatEvidence({ kind, reference }) {
+  return reference.startsWith("dev/")
+    ? kind
+    : `[${kind}](${formatReference(reference)})`;
+}
+
 function escapeCell(value) {
   return String(value).replaceAll("|", "\\|").replaceAll("\n", "<br>");
 }
@@ -353,7 +364,7 @@ function formatDomainEvidence(harness, domain) {
     if (!verification) {
       continue;
     }
-    const claim = `${verification.verifiedVersions.join(", ")} ([${verification.kind}](${formatReference(verification.reference)}))`;
+    const claim = `${verification.verifiedVersions.join(", ")} (${formatEvidence(verification)})`;
     if (!claims.includes(claim)) {
       claims.push(claim);
     }

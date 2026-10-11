@@ -108,10 +108,10 @@ These menu items insert a reference into the dashboard's prompt editor. They are
 
 ## Hosted dashboard server
 
-| Command                                   | What it does                                                                                                                             |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `ctrlyoke: Start Hosted Dashboard Server` | Start the browser dashboard server, the same as the toggle in the dashboard's Server settings. The URL and access token are shown there. |
-| `ctrlyoke: Stop Hosted Dashboard Server`  | Stop the server and disconnect every browser                                                                                             |
+| Command                                   | What it does                                                                                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ctrlyoke: Start Hosted Dashboard Server` | Start the browser dashboard server, the same as the toggle in the dashboard's Server settings. A notification confirms it with the token masked; the full URL and access token are in Server settings. |
+| `ctrlyoke: Stop Hosted Dashboard Server`  | Stop the server and disconnect every browser                                                                                                                                                           |
 
 Regenerating the access token is available only from the Server settings tab.
 
