@@ -2441,12 +2441,11 @@ export class WorkingFileManager {
       totalPausedDuration,
       executionEndTime,
       stopReason,
-    } =
-      this.queueAccess.getRuntimeState?.() ?? {
-        status: this.queueAccess.getStatus(),
-        stopped: false,
-        totalPausedDuration: 0,
-      };
+    } = this.queueAccess.getRuntimeState?.() ?? {
+      status: this.queueAccess.getStatus(),
+      stopped: false,
+      totalPausedDuration: 0,
+    };
     return {
       ...(startTime !== undefined ? { startTime } : {}),
       ...(pausedTime !== undefined ? { pausedTime } : {}),

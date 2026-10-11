@@ -1310,12 +1310,11 @@ export class WorkflowExecutor {
         ) {
           await this.promptQueue.commitRuntimeTransition();
         }
+        // Drain every member's reason so a non-terminal failure leaves none behind.
+        const stopReason = groupOutcome.outcomes
+          .map((outcome) => this.takeTargetRunStopReason(outcome.target))
+          .find((reason) => reason !== undefined);
         if (groupOutcome.terminalFailure && !groupOutcome.stopped) {
-          const stopReason = groupOutcome.outcomes
-            .map((outcome) =>
-              this.takeTargetRunStopReason(outcome.target)
-            )
-            .find((reason) => reason !== undefined);
           this.getRuntime().fail(stopReason);
           await this.promptQueue.commitRuntimeTransition();
         }
@@ -1795,10 +1794,10 @@ export class WorkflowExecutor {
     }
 
     if (outcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
+      // Always drain so an `onError: continue` failure leaves no stale reason.
+      const stopReason = this.takeTargetRunStopReason(outcome.target);
       if (outcome.terminalFailure !== false) {
-        this.getRuntime().fail(
-          this.takeTargetRunStopReason(outcome.target)
-        );
+        this.getRuntime().fail(stopReason);
         await this.promptQueue.commitRuntimeTransition();
         const targetKey = getExecutionTargetRunKey(outcome.target);
         const executionError = this.targetExecutionErrors.get(targetKey);
@@ -5030,9 +5029,7 @@ export class WorkflowExecutor {
     }
   }
 
-  private async checkExecutionTimeLimit(
-    totalSteps: number
-  ): Promise<boolean> {
+  private async checkExecutionTimeLimit(totalSteps: number): Promise<boolean> {
     const maxTimeSec =
       ConfigurationUtils.getDynamicQueueConfig().maxWorkflowExecutionTime;
     if (isUnlimited(maxTimeSec)) {
@@ -5497,15 +5494,19 @@ export class WorkflowExecutor {
 
     await persistFailureOutput();
 
-    if (failureKind === FAILURE_KINDS.TIMEOUT) {
-      const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
+    // Only a finite `execution.maxPromptTimeoutSec` is a guardrail; a timeout
+    // reported while it is unlimited came from elsewhere and gets no code.
+    const promptTimeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
+    if (
+      failureKind === FAILURE_KINDS.TIMEOUT &&
+      promptTimeoutMs !== undefined
+    ) {
+      const thresholdSeconds = Math.ceil(promptTimeoutMs / 1000);
       const startedAt = this.getPromptPhaseStartedAt(target);
-      const observedSeconds = startedAt === undefined
-        ? (timeoutMs === undefined ? 0 : Math.ceil(timeoutMs / 1000))
-        : Math.floor(Math.max(0, failureObservedAtMs - startedAt) / 1000);
-      const thresholdSeconds = timeoutMs === undefined
-        ? Math.max(1, observedSeconds)
-        : Math.ceil(timeoutMs / 1000);
+      const observedSeconds =
+        startedAt === undefined
+          ? thresholdSeconds
+          : Math.floor(Math.max(0, failureObservedAtMs - startedAt) / 1000);
       const stopReason = buildPromptTimeoutStopReason(
         observedSeconds,
         thresholdSeconds

@@ -1106,8 +1106,7 @@ export const useWorkflowStore = create<
         }
         withUndoPause(() => set({ executionState }));
       },
-      setStopReason: (stopReason) =>
-        withUndoPause(() => set({ stopReason })),
+      setStopReason: (stopReason) => withUndoPause(() => set({ stopReason })),
 
       setCurrentStep: (currentStep) => {
         const prevCurrentStep = get().currentStep;

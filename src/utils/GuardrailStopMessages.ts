@@ -28,7 +28,11 @@ export function buildQueueSizeLimitAgentMessage(
 export function buildWorkflowTimeLimitStopReason(
   observedSeconds: number,
   thresholdSeconds: number,
-  details?: { completedCount: number; totalSteps: number; remainingCount: number }
+  details?: {
+    completedCount: number;
+    totalSteps: number;
+    remainingCount: number;
+  }
 ): WorkflowStopReason {
   const detailsMessage = details
     ? `\nCompleted ${details.completedCount} of ${details.totalSteps} steps. ${details.remainingCount} steps remaining in queue.`

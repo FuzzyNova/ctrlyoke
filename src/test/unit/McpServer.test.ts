@@ -2322,7 +2322,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       threshold: 600,
       observed: 601,
       unit: "seconds" as const,
-      message: "Workflow stopped - Maximum execution time reached (601s / 600s).",
+      message:
+        "Workflow stopped - Maximum execution time reached (601s / 600s).",
     };
     workingFile._runtime!.stopReason = stopReason;
     await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");

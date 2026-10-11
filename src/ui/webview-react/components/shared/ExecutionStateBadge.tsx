@@ -44,7 +44,8 @@ export const ExecutionStateBadge: React.FC<ExecutionStateBadgeProps> = ({
   titleOverride,
   className = "",
 }) => {
-  const label = labelOverride ??
+  const label =
+    labelOverride ??
     (unstarted && state === EXECUTION_STATES.IDLE ? UNSTARTED_LABEL : state);
   return (
     <span

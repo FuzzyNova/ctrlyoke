@@ -572,10 +572,12 @@ export class WorkflowStateMachine {
    * Mark the run as errored: → ERROR.
    */
   fail(stopReason?: WorkflowStopReason): boolean {
+    // A later reasonless fail() (e.g. the failed step unwinding after a
+    // guardrail already stopped the run) must not erase the recorded reason.
     if (
       this._status === EXECUTION_STATES.ERROR &&
       !this._stopped &&
-      this._stopReason === stopReason
+      (stopReason === undefined || this._stopReason === stopReason)
     ) {
       return false;
     }

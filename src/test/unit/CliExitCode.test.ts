@@ -70,7 +70,8 @@ suite("CliExitCode", () => {
         threshold: 600,
         observed: 601,
         unit: "seconds",
-        message: "Workflow stopped - Maximum execution time reached (601s / 600s).",
+        message:
+          "Workflow stopped - Maximum execution time reached (601s / 600s).",
       },
     };
     assert.strictEqual(getExitCode(state), CLI_GUARDRAIL_STOP_EXIT_CODE);

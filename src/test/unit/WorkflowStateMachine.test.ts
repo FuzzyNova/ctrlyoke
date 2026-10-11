@@ -58,6 +58,22 @@ suite("WorkflowStateMachine", () => {
     assert.strictEqual(failed.getSnapshot().stopReason, undefined);
   });
 
+  test("a later reasonless fail keeps the recorded guardrail reason", () => {
+    const runtime = new WorkflowStateMachine();
+    const stopReason = {
+      code: GUARDRAIL_STOP_CODES.WORKFLOW_TIME_LIMIT,
+      threshold: 1,
+      observed: 2,
+      unit: "seconds" as const,
+      message: "Workflow stopped",
+    };
+    runtime.startExecution();
+    runtime.fail(stopReason);
+
+    assert.strictEqual(runtime.fail(), false);
+    assert.deepStrictEqual(runtime.getSnapshot().stopReason, stopReason);
+  });
+
   test("emits ordered runtime transitions with previous and current snapshots", () => {
     const runtime = new WorkflowStateMachine();
     const transitions: Array<{

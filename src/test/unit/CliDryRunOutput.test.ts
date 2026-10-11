@@ -323,7 +323,11 @@ for (const code of ["queue-size-limit", "workflow-time-limit", "prompt-timeout"]
   CliTerminalFormatter.renderGuardrailStopReason({ code, threshold: 10, observed: 11, unit: code === "queue-size-limit" ? "steps" : "seconds", message: code + " shared message" });
 }
 `);
-    for (const code of ["queue-size-limit", "workflow-time-limit", "prompt-timeout"]) {
+    for (const code of [
+      "queue-size-limit",
+      "workflow-time-limit",
+      "prompt-timeout",
+    ]) {
       assert.ok(output.includes(`${code} shared message`));
     }
   });

@@ -1362,7 +1362,8 @@ export class ExecutionPreviewService {
     stepCount: number,
     workflow: PromptFile
   ): ExecutionLimitsPreview {
-    const config = this.options.dynamicQueueConfig ??
+    const config =
+      this.options.dynamicQueueConfig ??
       ConfigurationUtils.getDynamicQueueConfig();
     const violations: string[] = [];
     const workflowMaxSteps = workflow.maxSteps;

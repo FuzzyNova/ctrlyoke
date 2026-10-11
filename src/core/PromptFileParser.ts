@@ -1516,8 +1516,7 @@ export class PromptFileParser {
         effectiveMaxSteps,
         getEffectiveMaxStepsSource(workflowMaxSteps)
       ).message,
-      propertyPointer:
-        workflowMaxSteps === undefined ? "/steps" : "/maxSteps",
+      propertyPointer: workflowMaxSteps === undefined ? "/steps" : "/maxSteps",
     };
   }
 }

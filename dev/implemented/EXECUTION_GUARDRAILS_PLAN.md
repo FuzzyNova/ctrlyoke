@@ -6,7 +6,8 @@
 
 > **2026-10-10 audit:** Phase 1 complete. The `queue.maxSteps` single-sourcing landed: every path
 > resolves the limit through `src/utils/QueueLimitUtils.ts` (`resolveEffectiveMaxSteps`,
-> `buildStepLimitError`) plus `exceedsLimit` from `LimitUtils` (append paths in `1661a4231`), and
+> `getEffectiveMaxStepsSource`) plus `exceedsLimit` from `LimitUtils` (append paths in `1661a4231`),
+> with every limit message built by `src/utils/GuardrailStopMessages.ts`, and
 > `WorkflowExecutor.checkStepLimit` already fails an oversized run at execution start before the first
 > step and again after out-of-process appends. The timeout audits are complete;
 > Phase 2 core contract and CLI/MCP/dry-run surfaces are shipped. Setting names
@@ -67,8 +68,9 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 ### Phase 1 — Single-source existing enforcement
 
 - ~~Create or identify one shared queue-limit check~~ — **done**: `QueueLimitUtils`
-  (`resolveEffectiveMaxSteps`, `getEffectiveMaxStepsSource`, `buildStepLimitError`)
-  with `LimitUtils.exceedsLimit`, used by `WorkflowInstance` (manual/topology
+  (`resolveEffectiveMaxSteps`, `getEffectiveMaxStepsSource`) with
+  `LimitUtils.exceedsLimit`; messages come from `GuardrailStopMessages`
+  (which absorbed `buildStepLimitError`), used by `WorkflowInstance` (manual/topology
   append), `mcp-server.ts` (MCP append), `RunContinuationService`,
   `ExecutionPreviewService`, and `WorkflowExecutor.checkStepLimit`.
 - ~~Reject an oversized initial workflow before its first step starts~~ —
@@ -148,7 +150,8 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   (absorbing `buildStepLimitError` and the workflow-time message) so every
   surface renders the same text. A prompt timeout stays a step failure
   (`FailureKind.TIMEOUT`) but the run-level stop it causes carries the
-  prompt-timeout code.
+  prompt-timeout code — only when `execution.maxPromptTimeoutSec` is finite;
+  a timeout reported while the setting is unlimited carries no guardrail code.
 
 - **Core contract implemented:** `GUARDRAIL_STOP_CODES` / `GuardrailStopCode`
   define `queue-size-limit`, `workflow-time-limit`, and `prompt-timeout`.

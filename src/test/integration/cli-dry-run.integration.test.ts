@@ -460,7 +460,8 @@ suite("CLI run process harness reporting", () => {
       threshold: 2,
       observed: 3,
       unit: "steps",
-      message: "Step limit reached: this run has 3/2 steps (workflow maxSteps: 2).",
+      message:
+        "Step limit reached: this run has 3/2 steps (workflow maxSteps: 2).",
     });
     assert.match(
       `${result.stdout}\n${result.stderr}`,

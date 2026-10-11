@@ -656,7 +656,9 @@ export class CliTerminalFormatter {
       writeLine(
         `  Prompt timeout: ${CliTerminalFormatter.formatPreviewLimit(limits.maxPromptTimeoutSeconds)} seconds`
       );
-      writeLine(`  Script timeout: ${limits.scriptTimeoutSeconds ?? "—"} seconds`);
+      writeLine(
+        `  Script timeout: ${limits.scriptTimeoutSeconds ?? "—"} seconds`
+      );
       writeLine("");
     }
 
