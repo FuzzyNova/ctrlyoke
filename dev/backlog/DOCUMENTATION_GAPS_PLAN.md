@@ -49,10 +49,11 @@
 > (`status-line-tab`). Settings-tab shots are cropped to the 680 CSS px content column at 1.25×
 > (850 px wide). The Dry Run shots replace the Windows username with `you` through a DOM text
 > substitution before capture; the real paths appear in the source path, executables and hook
-> commands. **Not captured:** D13, because the interactive Claude TUI rendered past the right
-> edge of the hosted terminal both times (likely the PTY sized by the VS Code client as well) and
-> a reload dropped the AI tab; the throwaway `docs-terminal` workflow in the demo project can be
-> reused. D28 needs a key-activated license (the demo machine has an offline perpetual file).
+> commands. **Not captured:** D13. The interactive Claude TUI rendered past the right edge of the
+> hosted terminal. That turned out to be a headless-Chromium artifact of the emulated 1.25×
+> scale (see `dev/bugs/implemented/terminal-font-size-change-never-resizes-pty.md`). Re-shoot
+> D13 in a `deviceScaleFactor: 1` context; the throwaway `docs-terminal` workflow in the demo
+> project can be reused. D28 needs a key-activated license (the demo machine has an offline perpetual file).
 > Bugs filed: `template-modal-text-inputs-too-narrow`, `secrets-tab-actions-overflow-card`,
 > `model-pricing-editor-stale-token-semantics-warning`,
 > `near-limit-warning-ignores-usage-tracking-switch`.

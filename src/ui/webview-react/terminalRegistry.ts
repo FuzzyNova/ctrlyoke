@@ -93,6 +93,13 @@ const orphanOutput = new Map<string, string[]>();
 
 let viewportMeasurementEntry: FitRegistryTarget | null = null;
 
+/**
+ * Subscribers told when a font or terminal-option change alters cell metrics.
+ * The registry can only refit xterm locally; a mounted controller must also
+ * send the new size to its PTY, or the harness keeps drawing at the old width.
+ */
+const metricsChangedListeners = new Set<() => void>();
+
 let currentTerminalSettings: TerminalSettings = {
   fontSize: 14,
   lineHeight: 1.2,
@@ -219,6 +226,33 @@ function fitRegistryEntry(
 
 function getFitMode(entry: RegistryEntry): "controller" | "viewer" {
   return entry.controllerCols != null ? "viewer" : "controller";
+}
+
+/**
+ * Refit every rendered entry after its cell metrics changed, in that entry's
+ * own mode so a viewer keeps the controller's column count, then let mounted
+ * controllers report the new size to their PTYs. Detached or collapsed entries
+ * are skipped; they refit when they become visible again.
+ */
+function refitAfterMetricsChange(): void {
+  for (const entry of registry.values()) {
+    if (
+      !entry.term.element ||
+      !entry.domEl.isConnected ||
+      entry.domEl.offsetWidth === 0 ||
+      entry.domEl.offsetHeight === 0
+    ) {
+      continue;
+    }
+    try {
+      fitRegistryEntry(entry, getFitMode(entry));
+    } catch {
+      // Ignore — terminal may not be fully initialized
+    }
+  }
+  for (const listener of metricsChangedListeners) {
+    listener();
+  }
 }
 
 function ensureViewportMeasurementEntry(): FitRegistryTarget {
@@ -504,15 +538,11 @@ export const terminalRegistry = {
     currentTerminalSettings = { ...settings };
     for (const entry of registry.values()) {
       applyTerminalSettings(entry.term, settings);
-      try {
-        entry.fitAddon.fit();
-      } catch {
-        // Ignore — terminal may not be attached
-      }
     }
     if (viewportMeasurementEntry) {
       applyTerminalSettings(viewportMeasurementEntry.term, settings);
     }
+    refitAfterMetricsChange();
   },
 
   /**
@@ -526,15 +556,22 @@ export const terminalRegistry = {
     };
     for (const entry of registry.values()) {
       entry.term.options.fontSize = size;
-      try {
-        entry.fitAddon.fit();
-      } catch {
-        // Ignore — terminal may not be attached
-      }
     }
     if (viewportMeasurementEntry) {
       viewportMeasurementEntry.term.options.fontSize = size;
     }
+    refitAfterMetricsChange();
+  },
+
+  /**
+   * Subscribe to cell-metric changes (font size or terminal options). Fires
+   * after every rendered entry has been refit locally. Returns an unsubscribe.
+   */
+  onMetricsChanged(listener: () => void): () => void {
+    metricsChangedListeners.add(listener);
+    return () => {
+      metricsChangedListeners.delete(listener);
+    };
   },
 
   measureViewportContainer(container: HTMLElement): FitSessionResult | null {
