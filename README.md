@@ -248,7 +248,7 @@ steps:
     sessionId: 1 # resume the session from prompt index 1
 ```
 
-See `dev/implemented/SESSION_MANAGEMENT.md` for full details.
+See [Session management](https://ctrlyoke.dev/docs/workflows/session-management) for full details.
 
 ### Context references in prompts
 
@@ -303,16 +303,17 @@ Configure workflow defaults and extension behavior in `.ctrlyoke/settings.json`.
 
 ## Further Reading
 
-Design documents and implementation notes are in `dev/implemented/`.
+The full documentation is at [ctrlyoke.dev/docs](https://ctrlyoke.dev/docs/).
 
-| Document                                       | Topic                                                       |
-| ---------------------------------------------- | ----------------------------------------------------------- |
-| `dev/implemented/WORKFLOW_PROPERTIES.md`       | Full prompt property reference                              |
-| `dev/implemented/QUEUE_APPEND_FEATURE.md`      | Dynamic queue extension and `finalStep` loop behavior       |
-| `dev/implemented/SESSION_MANAGEMENT.md`        | Session resumption across prompts and harnesses             |
-| `dev/implemented/HOOKS_EXPOSURE_PLAN.md`       | User-defined hooks: events, merge behavior, harness support |
-| `dev/implemented/MCP_SERVERS_PROPERTY_PLAN.md` | `mcpServers` property design and per-harness behavior       |
-| `QUICK_START.md`                               | Five-minute setup walkthrough                               |
+| Page                                                                                                | Topic                                                           |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Quick start](https://ctrlyoke.dev/docs/guide/quick-start)                                          | Five-minute setup walkthrough                                   |
+| [Workflow schema](https://ctrlyoke.dev/docs/reference/workflow-schema)                              | Full workflow property reference                                |
+| [Dynamic queue](https://ctrlyoke.dev/docs/workflows/dynamic-queue)                                  | Dynamic queue extension and `finalStep` loop behavior           |
+| [Session management](https://ctrlyoke.dev/docs/workflows/session-management)                        | Session resumption across prompts and harnesses                 |
+| [`hooks`](https://ctrlyoke.dev/docs/reference/workflow-schema#execution-properties-hooks)           | User-defined hooks                                              |
+| [`mcpServers`](https://ctrlyoke.dev/docs/reference/workflow-schema#execution-properties-mcpservers) | Attaching MCP servers to a workflow or step                     |
+| [Harness compatibility](https://ctrlyoke.dev/docs/harnesses/compatibility)                          | Which hooks, permissions and MCP features each harness supports |
 
 ---
 

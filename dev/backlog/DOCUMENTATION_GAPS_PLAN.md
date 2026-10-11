@@ -159,8 +159,12 @@ afterwards.
   - ~~It says the panel opens in the bottom tab area.~~ **Done:** now says the secondary side bar.
   - ~~`## Commands` is an empty heading.~~ **Done:** it links the commands reference.
   - **Still open:** its hooks bullet (line 13) lists 4 of 8 events, and the Hooks section lists 5.
-  - **Still open:** "Further Reading" and the Session management section link FlightPath-era
-    `dev/implemented/` docs. These are internal, and they 404 until the Phase 14 visibility flip.
+  - ~~"Further Reading" and the Session management section link FlightPath-era
+    `dev/implemented/` docs.~~ **Done 2026-10-11:** they link `ctrlyoke.dev/docs` pages now. Hooks
+    and `mcpServers` point at the schema reference until the P1 `workflows/hooks.md` and
+    `workflows/mcp-servers.md` pages exist. `check-docs-content.mjs` now runs the leak check on
+    the README, `QUICK_START.md`, `CHANGELOG.md` and the walkthroughs, and checks the landing
+    source for `dev/` links.
   - **Still open:** it links docs as repo-relative `docs/reference/*.md` paths, not
     `https://ctrlyoke.dev/docs/...`. The Marketplace resolves those against the GitHub repo, so
     they show raw markdown, or a 404 while the repo is private.

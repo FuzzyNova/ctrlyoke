@@ -9,7 +9,8 @@
 //    fragment or counter-example out.
 // 2. Internal leakage: hand-written pages must not link internal `dev/` plans,
 //    cite `ClassName.method()` internals, or mention the removed copilot-chat
-//    harness.
+//    harness. The README, QUICK_START, CHANGELOG and walkthroughs get the same
+//    check, and the landing site's source is checked for `dev/` links.
 // 3. Commands: `reference/commands.md` has a row for every contributed command
 //    (palette commands as `ctrlyoke: Title` in backticks, menu-only ones by
 //    plain title), every keybinding on its command's row, and no palette
@@ -24,7 +25,7 @@
 // Requires `npm run compile-tests` (the parser and CLI are loaded from out/).
 
 import { execFile } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { dirname, relative, resolve, sep } from "node:path";
@@ -50,11 +51,27 @@ export const NO_VALIDATE_MARKER = "<!-- no-validate -->";
 
 const WORKFLOW_ROOT_KEYS = ["steps", "prompt", "finalStep"];
 
+/** Internal plans: linking one from a public page means the public docs have a gap. */
+const DEV_DOC_LEAK = {
+  pattern:
+    /\bdev\/(?:active|backlog|bugs|implemented|reference|rejected|research)\//,
+  reason: "links an internal dev/ document",
+};
+
+/** Markdown outside docs/ that users read: the Marketplace page and walkthroughs. */
+const PUBLIC_MARKDOWN_OUTSIDE_DOCS = [
+  "README.md",
+  "QUICK_START.md",
+  "CHANGELOG.md",
+  "walkthroughs",
+];
+
+/** Landing-site source. Only checked for dev/ links: its code would trip the prose rules. */
+const LANDING_SOURCE_DIR = "landing/src";
+const LANDING_SOURCE_EXTENSIONS = [".astro", ".ts", ".md", ".mdx"];
+
 export const INTERNAL_LEAK_PATTERNS = [
-  {
-    pattern: /\bdev\/(?:active|backlog|bugs|implemented|reference|research)\//,
-    reason: "links an internal dev/ document",
-  },
+  DEV_DOC_LEAK,
   {
     pattern: /\b[A-Z][A-Za-z0-9]+\.[a-z][A-Za-z0-9]*\(\)/,
     reason: "cites an internal ClassName.method()",
@@ -440,15 +457,47 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function listPages(dir) {
+function listPages(dir, extensions = [".md"]) {
   const pages = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (SKIPPED_DIRS.has(entry.name)) continue;
     const full = resolve(dir, entry.name);
-    if (entry.isDirectory()) pages.push(...listPages(full));
-    else if (entry.name.endsWith(".md")) pages.push(full);
+    if (entry.isDirectory()) pages.push(...listPages(full, extensions));
+    else if (extensions.some((extension) => entry.name.endsWith(extension))) {
+      pages.push(full);
+    }
   }
   return pages;
+}
+
+/** Internal-document leaks in public pages that live outside docs/. */
+function findLeaksOutsideDocs() {
+  const failures = [];
+  const report = (file, problems) => {
+    const name = relative(ROOT_DIR, file).split(sep).join("/");
+    for (const { line, message } of problems) {
+      failures.push(`${name}:${line}: ${message}`);
+    }
+  };
+  for (const entry of PUBLIC_MARKDOWN_OUTSIDE_DOCS) {
+    const path = resolve(ROOT_DIR, entry);
+    const files = statSync(path).isDirectory() ? listPages(path) : [path];
+    for (const file of files) {
+      report(file, findInternalLeaks(readFileSync(file, "utf8")));
+    }
+  }
+  const landing = resolve(ROOT_DIR, LANDING_SOURCE_DIR);
+  for (const file of listPages(landing, LANDING_SOURCE_EXTENSIONS)) {
+    const problems = readFileSync(file, "utf8")
+      .split(/\r?\n/)
+      .flatMap((text, index) =>
+        DEV_DOC_LEAK.pattern.test(text)
+          ? [{ line: index + 1, message: DEV_DOC_LEAK.reason }]
+          : []
+      );
+    report(file, problems);
+  }
+  return failures;
 }
 
 async function main() {
@@ -520,6 +569,7 @@ async function main() {
       failures.push(`docs/${name}: ${message}`);
     }
   }
+  failures.push(...findLeaksOutsideDocs());
 
   if (failures.length > 0) {
     console.error(

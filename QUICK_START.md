@@ -73,8 +73,7 @@ author are tracked like any other source file.
 The generated `.ctrlyoke/.gitignore` ignores `.runs/`, `attachments/`, `prompts/`, logs, temporary
 files, and other machine-local runtime data. It does not ignore exported `<workflow>.assets/`
 directories. `ensureGitignore` restores missing entries on activation, so editing the file is not
-the way to share or retain a run. Use an explicit run export when that feature is available; its
-portable bundle is described in `dev/backlog/RUN_EXPORT_PLAN.md`.
+the way to share or retain a run. To share a workflow, save it as a file, as described below.
 
 **Durable workflows** are ordinary files you export with Save As, hand-author anywhere in the
 repo, or promote to a template. Templates are the reusable form for workflows you run often; Save
