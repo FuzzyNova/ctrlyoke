@@ -4,7 +4,9 @@ import {
   type StepContextMenuState,
 } from "@components/shared/StepContextMenu";
 import { useWorkflowFileMenuItems } from "@hooks/useWorkflowFileMenuItems";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useEditorStore } from "@store/editorStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   workspaceCopyEntry,
@@ -13,7 +15,8 @@ import {
 } from "@utils/hostedApi";
 import { WebviewLog } from "@utils/logger";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
-import { PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
+import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
+import { DeleteConfirmationModal } from "@components/shared/DeleteConfirmationModal";
 import {
   CLIPBOARD_OPERATIONS,
   WORKSPACE_ENTRY_KINDS,
@@ -74,6 +77,14 @@ export function useWorkspaceExplorerContextMenu({
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
+  const [pendingDelete, setPendingDelete] = useState<WorkspaceEntry | null>(
+    null
+  );
+  const [dontWarnAgain, setDontWarnAgain] = useState(false);
+  const confirmDeleteOperations = useSettingsStore(
+    (s) => s.globalSettings.confirmDeleteOperations
+  );
+  const vscode = useVsCodeApi();
 
   const handleAddToCtrlYoke = useCallback((entry: WorkspaceEntry) => {
     const ref =
@@ -97,7 +108,7 @@ export function useWorkspaceExplorerContextMenu({
     [onViewFileHistory]
   );
 
-  const handleDelete = useCallback(
+  const performDelete = useCallback(
     async (path: string) => {
       try {
         await workspaceDeleteEntry({ path });
@@ -112,6 +123,35 @@ export function useWorkspaceExplorerContextMenu({
     },
     [onRefresh]
   );
+
+  const handleDelete = useCallback(
+    (entry: WorkspaceEntry) => {
+      if (confirmDeleteOperations) {
+        setDontWarnAgain(false);
+        setPendingDelete(entry);
+      } else {
+        void performDelete(entry.path);
+      }
+    },
+    [confirmDeleteOperations, performDelete]
+  );
+
+  const handleDontWarnAgainChange = useCallback(
+    (checked: boolean) => {
+      setDontWarnAgain(checked);
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_CONFIRM_DELETE,
+        value: !checked,
+      });
+    },
+    [vscode]
+  );
+
+  const handleConfirmDelete = useCallback(() => {
+    const entry = pendingDelete;
+    setPendingDelete(null);
+    if (entry) void performDelete(entry.path);
+  }, [pendingDelete, performDelete]);
 
   const handlePaste = useCallback(async () => {
     if (!clipboard || isRootsList) return;
@@ -228,7 +268,7 @@ export function useWorkspaceExplorerContextMenu({
                 : rootDisabledTitle,
             onClick: () => {
               if (!entry.path) return;
-              void handleDelete(entry.path);
+              handleDelete(entry);
             },
           },
         ],
@@ -249,9 +289,32 @@ export function useWorkspaceExplorerContextMenu({
     <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
+  const deleteConfirmationModal = (
+    <DeleteConfirmationModal
+      isOpen={pendingDelete !== null}
+      onClose={() => setPendingDelete(null)}
+      title={
+        pendingDelete?.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+          ? "Delete Folder?"
+          : "Delete File?"
+      }
+      message={
+        pendingDelete?.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+          ? `Delete “${pendingDelete.name}” permanently? Everything inside this folder will also be deleted.`
+          : `Delete “${pendingDelete?.name ?? ""}” permanently?`
+      }
+      confirmLabel="Delete"
+      onConfirm={handleConfirmDelete}
+      dontWarnAgain={dontWarnAgain}
+      onDontWarnAgainChange={handleDontWarnAgainChange}
+      dontWarnAgainLabel="Don't warn me again before deleting workspace files"
+    />
+  );
+
   return {
     clipboard,
     openContextMenu,
     explorerContextMenuPortal,
+    deleteConfirmationModal,
   };
 }
