@@ -1,8 +1,11 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
 **Recapture needed:** `images/screenshots/secrets-tab-828x440.png` — the action
-buttons now stay on one line and the Actions column has a minimum width. Re-capture
-at 828×440 from the hosted dashboard when Playwright is available.
+buttons now stay on one line and the Actions column has a minimum width. Blocked
+2026-10-11: at 1280 CSS px the new column minimums overflow each row's card
+(`dev/bugs/backlog/secrets-tab-actions-overflow-card.md`). Fix that first, then re-capture at
+828×440. The demo's `DEMO_API_KEY` also no longer has a managed value, so set one again before
+capturing.
 
 **Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
 
@@ -201,6 +204,11 @@ Each item: what to capture, what prep it needs, where it's used.
   workspace's persisted usage history.
 - **Use:** new landing feature card/section (stats aren't mentioned on the landing page at all today);
   `docs/reference/settings.md` or a new docs page on usage tracking.
+- **Status — done 2026-10-11** from the demo project's real usage history (no seeding needed):
+  `stats-usage-collection-850x603`, `stats-usage-workspace-850x785` (tiles plus harness share)
+  and `stats-usage-harness-cards-850x659` (Copilot and Claude cards), slotted into
+  `docs/guide/usage-and-stats.md`. The Codex card was left out because it showed a
+  `codex-app-server-probe-failed` "Last safe error". Landing use is still open.
 
 ### 5. `StatusLineSection.tsx` — statusline tracking page
 
@@ -210,6 +218,9 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Prep:** set a non-default, interesting status line format in the editor before capturing so the
   preview isn't the bland default string.
 - **Use:** same landing section as #4, or its own callout; `docs/reference/settings.md`.
+- **Status — done 2026-10-11** as `status-line-tab-850x1216.png` (the shared format editor with
+  seven fields and colors, plus the Claude Code section with its live preview), in
+  `docs/guide/usage-and-stats.md#status-line`.
 
 ### 6. GIF: multi-step, multi-harness workflow run with output minimap
 

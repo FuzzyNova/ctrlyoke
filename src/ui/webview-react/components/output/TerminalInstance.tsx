@@ -161,6 +161,20 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     previousIsControllerRef.current = isController;
   }, [controllerCols, isController, workflowId, sessionId]);
 
+  // A font-size or terminal-option change refits xterm in the registry without
+  // a container resize, so the ResizeObserver never fires. The controller must
+  // still tell the PTY, or the harness keeps drawing at the old column count.
+  // The registry has already refit locally, so the resize is forced.
+  useEffect(() => {
+    return terminalRegistry.onMetricsChanged(() => {
+      const sessNow = useTerminalStore
+        .getState()
+        .sessions[workflowId]?.find((s) => s.id === sessionId);
+      if (sessNow?.isController === false) return;
+      syncControllerTerminalSize("metrics-changed", { forceResize: true });
+    });
+  }, [workflowId, sessionId, syncControllerTerminalSize]);
+
   // Mount effect: create registry entry, attach to DOM, flush pending output
   useEffect(() => {
     let cancelled = false;

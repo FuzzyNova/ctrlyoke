@@ -77,7 +77,7 @@ Run **ctrlyoke: Refresh Harness Usage** to fetch them again. When `codex app-ser
 available, ctrlyoke picks up the same numbers from Codex's session log during each run instead.
 
 Quota percentages appear next to the harness in the harness picker, with the reset time in its
-tooltip, and on the **Stats & Usage** settings tab. If a queued step's harness is above
+tooltip, and on the [**Stats & Usage**](/guide/usage-and-stats) settings tab. If a queued step's harness is above
 [`usageTracking.warningPercentUsed`](/reference/settings#usagetracking-warningpercentused) (80% by
 default), ctrlyoke warns when the run starts but doesn't stop it. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).

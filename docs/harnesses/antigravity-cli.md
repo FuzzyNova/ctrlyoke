@@ -77,12 +77,12 @@ keeps running yours underneath; see
 [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line).
 
 Because of that, the quota updates only while an `agy` session that ctrlyoke started is running,
-and only while the Antigravity status line is turned on in **Settings → Status Line**. `agy` has no
+and only while the Antigravity status line is turned on in [**Settings → Status Line**](/guide/usage-and-stats#status-line). `agy` has no
 way to ask for the quota on demand, so **ctrlyoke: Refresh Harness Usage** can't update it. Between
 runs, ctrlyoke keeps showing the last value along with the time it was read.
 
 Quota percentages appear next to the harness in the harness picker, with the reset time in its
-tooltip, and on the **Stats & Usage** settings tab. If a queued step's harness is above
+tooltip, and on the [**Stats & Usage**](/guide/usage-and-stats) settings tab. If a queued step's harness is above
 [`usageTracking.warningPercentUsed`](/reference/settings#usagetracking-warningpercentused) (80% by
 default), ctrlyoke warns when the run starts but doesn't stop it. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).

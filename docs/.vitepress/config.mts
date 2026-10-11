@@ -42,7 +42,12 @@ export default defineConfig({
           text: "Using the dashboard",
           items: [
             { text: "Dashboard tour", link: "/guide/dashboard" },
+            { text: "The output pane", link: "/guide/output" },
             { text: "File changes and undo", link: "/guide/file-changes" },
+            { text: "Dry Run", link: "/guide/dry-run" },
+            { text: "Run history and search", link: "/guide/history" },
+            { text: "Notifications", link: "/guide/notifications" },
+            { text: "Usage and stats", link: "/guide/usage-and-stats" },
             { text: "Settings", link: "/guide/settings" },
             { text: "Browser dashboard", link: "/guide/remote-dashboard" },
             { text: "Workspace viewer", link: "/guide/workspace-viewer" },

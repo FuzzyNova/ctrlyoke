@@ -72,6 +72,6 @@ steps:
 OpenCode doesn't report a quota, so the harness picker shows no percentage for it. ctrlyoke
 records what it observes in the runs it starts instead: the tokens each step used and, where the
 model's pricing is known (see [`modelPricing`](/reference/settings#modelpricing)), an estimated
-cost. Those totals are on the **Stats & Usage** settings tab, and each step shows its
+cost. Those totals are on the [**Stats & Usage**](/guide/usage-and-stats) settings tab, and each step shows its
 own token count in the steps panel. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).

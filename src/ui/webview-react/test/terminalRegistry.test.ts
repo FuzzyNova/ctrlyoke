@@ -193,6 +193,100 @@ describe("terminalRegistry orphan output buffer", () => {
   });
 });
 
+describe("terminalRegistry font metric changes", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    terminalConstructCount = 0;
+    document.body.innerHTML = "";
+  });
+
+  function giveSize(el: HTMLElement, width: number, height: number): void {
+    Object.defineProperty(el, "offsetWidth", {
+      configurable: true,
+      get: () => width,
+    });
+    Object.defineProperty(el, "offsetHeight", {
+      configurable: true,
+      get: () => height,
+    });
+  }
+
+  async function createRenderedEntry(
+    terminalRegistry: typeof import("../terminalRegistry").terminalRegistry,
+    workflowId: string,
+    sessionId: string
+  ) {
+    const entry = await terminalRegistry.create(workflowId, sessionId);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    entry.term.open(entry.domEl);
+    container.appendChild(entry.domEl);
+    giveSize(entry.domEl, 640, 360);
+    return entry;
+  }
+
+  it("refits rendered controllers, keeps a viewer on the controller's columns, and then notifies listeners", async () => {
+    vi.doMock("@xterm/addon-webgl", () => new Promise(() => {}));
+    const { terminalRegistry } = await import("../terminalRegistry");
+
+    const controller = await createRenderedEntry(
+      terminalRegistry,
+      "wf-metrics",
+      "sess-controller"
+    );
+    controller.term.resize(10, 5);
+
+    const viewer = await createRenderedEntry(
+      terminalRegistry,
+      "wf-metrics",
+      "sess-viewer"
+    );
+    viewer.controllerCols = 132;
+    viewer.controllerRows = 40;
+
+    const seenAtNotify: Array<{ controllerCols: number; fontSize: unknown }> =
+      [];
+    const unsubscribe = terminalRegistry.onMetricsChanged(() => {
+      seenAtNotify.push({
+        controllerCols: controller.term.cols,
+        fontSize: controller.term.options.fontSize,
+      });
+    });
+
+    terminalRegistry.updateFontSize(12);
+
+    expect(controller.term.options.fontSize).toBe(12);
+    expect(viewer.term.options.fontSize).toBe(12);
+    // Controller refit to the fit addon's proposal before listeners run.
+    expect(seenAtNotify).toEqual([{ controllerCols: 80, fontSize: 12 }]);
+    // Viewer keeps the controller's grid instead of fitting its own columns.
+    expect(viewer.term.cols).toBe(132);
+    expect(viewer.term.rows).toBe(40);
+
+    unsubscribe();
+    terminalRegistry.updateFontSize(13);
+    expect(seenAtNotify).toHaveLength(1);
+  });
+
+  it("skips detached entries when refitting after a metrics change", async () => {
+    vi.doMock("@xterm/addon-webgl", () => new Promise(() => {}));
+    const { terminalRegistry } = await import("../terminalRegistry");
+
+    const detached = await terminalRegistry.create("wf-metrics", "sess-off");
+    detached.term.open(detached.domEl);
+    detached.term.resize(10, 5);
+    const listener = vi.fn();
+    terminalRegistry.onMetricsChanged(listener);
+
+    terminalRegistry.updateFontSize(16);
+
+    expect(detached.term.options.fontSize).toBe(16);
+    expect(detached.term.cols).toBe(10);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("terminalRegistry viewport measurement", () => {
   afterEach(() => {
     vi.resetModules();
