@@ -131,6 +131,7 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
 <agentGuidance>
 - Keep shared contracts, persisted workflow fields, schema definitions, config plumbing, and webview/server message payloads synchronized when changing cross-layer behavior.
 - Update nearby tests with every behavior change: core/orchestration/harness changes belong in `src/test/**`; React dashboard changes belong in `src/ui/webview-react/test/**`.
+- Update the public docs in the same commit when a change alters anything a user sees or types (dashboard UI, commands, CLI flags, workflow fields, settings, harness behavior). Generated reference pages follow from `npm run schema:update`; hand-written `docs/` pages must be edited by hand, and `check:docs` validates their workflow examples and rejects internal references (`scripts/check-docs-content.mjs`).
 </agentGuidance>
 
 <knowledgeCapture>

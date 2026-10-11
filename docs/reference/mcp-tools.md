@@ -53,6 +53,8 @@ When `harness` or `model` is set, it is checked against the installed harnesses 
 
 Example:
 
+<!-- no-validate -->
+
 ```json
 {
   "steps": [

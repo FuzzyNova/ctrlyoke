@@ -359,8 +359,16 @@ one only needs slotting in). As of 2026-10-10 only `workflows/properties-panel.m
 ## 6. Keeping docs accurate (guardrails)
 
 The audit found the same classes of drift again and again. Automate the ones that are cheap.
-(None of items 1–6 had been done as of 2026-10-10. `check:docs` still covers only the schema,
-compatibility, UI-description, outline and prompt-markdown generators.)
+**Status 2026-10-10:** items 1, 3, 4, 5 and 6 are done. `scripts/check-docs-content.mjs` runs at
+the end of `check:docs` (so also in `predocs:build`), with unit tests in `test:packaging`. Item 1
+shipped as a two-way **drift check** rather than a generator: the commands page is mostly curated
+prose (submenu behaviour, "where it appears", Save As), so generating it would mean moving nearly
+all of it into partials for little gain. The check fails when a contributed command or keybinding
+has no row, or a documented `ctrlyoke: …` command isn't contributed, which is exactly the
+three-phantom-commands failure. Item 5 checks Copilot, Claude and Codex models only; OpenCode,
+Qwen and Antigravity model lists are discovered at runtime. The first run found one false positive
+(an MCP `append_step` argument in `mcp-tools.md`, now opted out) and no real defects. Item 2 is
+still open.
 
 1. **Generate `reference/commands.md`** from `package.json` `contributes.commands`, `menus` and
    `keybindings`, the same way `generate-schema-docs.mjs` does. Add hand-written partials for the
