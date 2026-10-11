@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude (File changes docs pass)
 - **Area:** `src/ui/webview-react/hooks/useOutputUndoActions.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

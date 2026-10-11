@@ -18,7 +18,7 @@ import {
   computePromptChangeSummary,
 } from "@utils/promptUndo";
 import type { CliOutput as CliOutputType } from "@/types/cliEvents";
-import { FINAL_STEP_PHASES, STEP_TYPES } from "@/types/messages";
+import { FINAL_STEP_PHASES } from "@/types/messages";
 import {
   OUTPUT_ROW_KINDS,
   UNDO_DIALOG_INTENTS,
@@ -33,6 +33,7 @@ import type {
   WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { getQueueStepLabel } from "@utils/stepLabels";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -77,15 +78,6 @@ function getStepName(
 ): string {
   const name = step?.name?.trim();
   return name || fallback;
-}
-
-function getQueueStepFallbackName(
-  step: WorkflowStep | null | undefined,
-  stepIndex: number
-): string {
-  return step?.type === STEP_TYPES.SCRIPT
-    ? `Script ${stepIndex + 1}`
-    : `Prompt ${stepIndex + 1}`;
 }
 
 function getStepScrollFractions(
@@ -208,7 +200,7 @@ export function useOutputMinimapModel({
             ? getStepName(workflowStep, formatFinalPassLabel(stepIndex + 1))
             : getStepName(
                 workflowStep,
-                getQueueStepFallbackName(workflowStep, stepIndex)
+                getQueueStepLabel(stepIndex)
               );
           const scrollFraction =
             stepScrollFractions.get(key) ??
@@ -389,11 +381,12 @@ export function useOutputMinimapModel({
                       input,
                       redoInstructions: alreadyUndone,
                       intent: UNDO_DIALOG_INTENTS.VIEW,
-                      stepLabel: label,
-                      stepName: getStepName(
-                        isFinalStep ? finalStep : steps[stepIndex],
-                        label
-                      ),
+                      stepLabel: isFinalStep
+                        ? label
+                        : getQueueStepLabel(stepIndex),
+                      stepName: isFinalStep
+                        ? getStepName(finalStep, label)
+                        : workflowStep?.name?.trim() || undefined,
                     });
                   },
                 }

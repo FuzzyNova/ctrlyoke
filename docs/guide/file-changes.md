@@ -60,7 +60,7 @@ Each file is a row with:
 - **Show diff**, with the approximate size and the lines added and removed
 
 In **Workflow changes**, each row also lists the steps that changed the file,
-for example "Prompt 4, Prompt 5, Prompt 6". A file that was created and then
+for example "Step 4, Step 5, Step 6". A file that was created and then
 deleted within the run nets out and isn't listed. When ctrlyoke can't combine
 the steps' edits into one before-and-after diff, the row adds "diff shown per
 step; original content unavailable" and shows each step's diff in turn.
@@ -133,12 +133,10 @@ Undo changes only files in your working folder. It doesn't touch the git index
 or any commits, so if a step committed its work, undo leaves the commit in your
 history and the reverted files show as uncommitted changes.
 
-::: warning
-The **Undo** button on a "Wrote" block in the output always deletes the file,
-even when the harness overwrote a file that already existed. To put back a file
-that a step rewrote, undo it from the step's **View N changes…** dialog
-instead, which restores the earlier content.
-:::
+The **Undo** button on a "Wrote" block uses the step snapshot to decide what to
+restore. If the file existed before the step, it reverses the step's changes;
+if the step created it, undo deletes it. If no snapshot entry is available,
+ctrlyoke marks the operation **Cannot undo** rather than guessing.
 
 ## Redo
 

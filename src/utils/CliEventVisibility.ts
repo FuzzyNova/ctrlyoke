@@ -6,9 +6,13 @@ import type {
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/DashboardConstants";
 
 /** Match paths the same way output and undo views do, including absolute suffixes. */
+export function normalizeCliFilePathKey(path: string): string {
+  return path.replace(/\\/g, "/").toLowerCase();
+}
+
 export function sameCliFilePath(a: string, b: string): boolean {
-  const normalizedA = a.replace(/\\/g, "/").toLowerCase();
-  const normalizedB = b.replace(/\\/g, "/").toLowerCase();
+  const normalizedA = normalizeCliFilePathKey(a);
+  const normalizedB = normalizeCliFilePathKey(b);
   return (
     normalizedA === normalizedB ||
     normalizedA.endsWith(`/${normalizedB}`) ||

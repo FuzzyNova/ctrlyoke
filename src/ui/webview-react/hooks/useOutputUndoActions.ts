@@ -52,6 +52,8 @@ import {
 } from "@hooks/useWorkspaceSnapshotContent";
 import { WebviewLog } from "@utils/logger";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { getQueueStepLabel } from "@utils/stepLabels";
+import { useWorkflowStore } from "@store/workflowStore";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -129,6 +131,7 @@ export function useOutputUndoActions({
     [displayedViewAddress]
   );
   const workflowDisplayName = useWorkflowDisplayName();
+  const workflowSteps = useWorkflowStore((state) => state.steps);
   const requestSnapshotContent = useWorkspaceSnapshotContent();
   const [minimapDialogState, setMinimapDialogState] =
     useState<MinimapDialogState | null>(null);
@@ -209,7 +212,7 @@ export function useOutputUndoActions({
           ? formatFinalPassLabel(stepIndex + 1)
           : concurrentGroup
             ? `Parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
-            : `Prompt ${stepIndex + 1}`;
+            : getQueueStepLabel(stepIndex, workflowSteps[stepIndex]?.name);
 
         const redoInstructions =
           effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true

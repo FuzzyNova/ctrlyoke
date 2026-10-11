@@ -29,6 +29,7 @@ import type {
 import * as Diff from "diff";
 import { fromPromptChangeType, type DiffFileCardProps } from "@components/diff";
 import {
+  FINAL_STEP_PHASES,
   FILE_OPERATION_KINDS,
   MAX_CONTENT_SIZE,
   UNDO_REDO_DIRECTIONS,
@@ -38,7 +39,10 @@ import {
 } from "@root/types/DashboardConstants";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { hasRenderableDiff, normalizeStructuredPatch } from "@utils/diffUtils";
-import { sameCliFilePath } from "@root/utils/CliEventVisibility";
+import {
+  normalizeCliFilePathKey,
+  sameCliFilePath,
+} from "@root/utils/CliEventVisibility";
 
 export const UNDO_FILE_CANDIDATE_TIERS = {
   TIER1: "tier1",
@@ -134,7 +138,12 @@ function resolveEventUndoInstruction(
     case CLI_EVENT_TYPES.FILE_WRITE: {
       const d = event.data as FileWriteData;
       if (!d.path) return null;
-      return { path: d.path, action: UNDO_FILE_ACTIONS.DELETE };
+      const snap = resolveSnapshotFileMatch(
+        snapshotFiles,
+        d.path,
+        workspaceRoot
+      );
+      return snap ? resolveSnapshotUndoInstruction(snap) : null;
     }
     case CLI_EVENT_TYPES.FILE_DELETE: {
       const d = event.data as FileDeleteData;
@@ -265,6 +274,8 @@ export function getFileEventPaths(cliOutputs: CliOutput[]): Set<string> {
 
 /** Per-file accumulator used while building Tier 1 undo candidates. */
 interface FileAccum {
+  /** Display path: first-seen spelling is preserved when separators differ. */
+  path: string;
   changeType: PromptChangeType;
   /** Display: first-write-wins (shows what the file looked like before AI touched it) */
   oldContent: string | undefined;
@@ -317,7 +328,8 @@ export function buildUndoCandidatesForOutputs(
         continue;
       }
 
-      const existing = accumMap.get(filePath);
+      const pathKey = normalizeCliFilePathKey(filePath);
+      const existing = accumMap.get(pathKey);
 
       let oldContent = existing?.oldContent;
       let newContent = existing?.newContent;
@@ -358,7 +370,8 @@ export function buildUndoCandidatesForOutputs(
         oldContent = "";
       }
 
-      accumMap.set(filePath, {
+      accumMap.set(pathKey, {
+        path: existing?.path ?? filePath,
         changeType: resolvedChangeType,
         oldContent,
         newContent,
@@ -371,7 +384,8 @@ export function buildUndoCandidatesForOutputs(
   const matchedSnapshotIndexes = new Set<number>();
   const tier1Candidates: UndoFileCandidate[] = Array.from(
     accumMap.entries()
-  ).map(([filePath, accum]) => {
+  ).map(([, accum]) => {
+    const filePath = accum.path;
     const snapEntry = resolveSnapshotFileMatch(
       snapshotFiles,
       filePath,
@@ -524,7 +538,19 @@ function redoInstructionToDiffChangeType(
 }
 
 function normalizeFilePath(path: string): string {
-  return path.replace(/\\/g, "/").toLowerCase();
+  return normalizeCliFilePathKey(path);
+}
+
+function sameUndoTarget(
+  left: UndoExecutionTarget,
+  right: UndoExecutionTarget
+): boolean {
+  return left.kind === right.kind &&
+    (left.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ? left.loopIndex ===
+        (right.kind === FINAL_STEP_PHASES.FINAL_STEP ? right.loopIndex : -1)
+      : left.stepIndex ===
+        (right.kind === FINAL_STEP_PHASES.QUEUE ? right.stepIndex : -1));
 }
 
 function formatStructuredPatch(
@@ -746,10 +772,10 @@ function buildRedoAggregationPart(
 export function aggregateWorkflowUndoFiles(
   entries: WorkflowStepEntry[]
 ): AggregatedUndoFile[] {
-  const aggregates: Array<{
+  const aggregates = new Map<string, {
     path: string;
     byDirection: Map<UndoRedoDirection, AggregationPart[]>;
-  }> = [];
+  }>();
 
   for (const entry of entries) {
     const partsForEntry = [
@@ -761,26 +787,26 @@ export function aggregateWorkflowUndoFiles(
       ),
     ];
     for (const part of partsForEntry) {
-      const pathAggregate = aggregates.find((aggregate) =>
-        sameFilePath(aggregate.path, part.path)
-      );
-      const targetAggregate =
-        pathAggregate ??
-        (() => {
-          const created = {
-            path: part.path,
-            byDirection: new Map<UndoRedoDirection, AggregationPart[]>(),
-          };
-          aggregates.push(created);
-          return created;
-        })();
+      const pathKey = normalizeCliFilePathKey(part.path);
+      let targetAggregate =
+        aggregates.get(pathKey) ??
+        [...aggregates.values()].find((aggregate) =>
+          sameFilePath(aggregate.path, part.path)
+        );
+      if (!targetAggregate) {
+        targetAggregate = {
+          path: part.path,
+          byDirection: new Map<UndoRedoDirection, AggregationPart[]>(),
+        };
+        aggregates.set(pathKey, targetAggregate);
+      }
       const parts = targetAggregate.byDirection.get(part.direction) ?? [];
       parts.push(part);
       targetAggregate.byDirection.set(part.direction, parts);
     }
   }
 
-  return aggregates.flatMap(({ byDirection }) =>
+  return [...aggregates.values()].flatMap(({ byDirection }) =>
     [...byDirection.entries()].flatMap(([direction, parts]) => {
       const changeType = getNetChangeType(
         parts[0].changeType,
@@ -797,7 +823,13 @@ export function aggregateWorkflowUndoFiles(
           oldContent: composed.oldContent,
           newContent: composed.newContent,
           structuredPatch: composed.structuredPatch,
-          steps: parts.map((part) => part.step),
+          steps: parts.reduce<AggregationPart["step"][]>((steps, part) => {
+            const alreadyListed = steps.some((step) =>
+              sameUndoTarget(step.target, part.step.target)
+            );
+            if (!alreadyListed) steps.push(part.step);
+            return steps;
+          }, []),
           direction,
           contentCaptureSkipped: parts.some(
             (part) => part.contentCaptureSkipped === true
@@ -1092,6 +1124,7 @@ export function buildUndoDialogInputForSpecificEvent(
   let oldContent = fallback?.oldContent;
   let newContent = fallback?.newContent;
   let structuredPatch = fallback?.structuredPatch;
+  let snapshotFile: SnapshotFileChange | undefined;
 
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const editData = event.data as FileEditData;
@@ -1120,11 +1153,24 @@ export function buildUndoDialogInputForSpecificEvent(
       snapshotFiles,
       workspacePath
     );
+    if (
+      event.type === CLI_EVENT_TYPES.FILE_WRITE ||
+      event.type === CLI_EVENT_TYPES.FILE_DELETE
+    ) {
+      const eventPath = (event.data as FileWriteData | FileDeleteData).path;
+      if (eventPath) {
+        snapshotFile = resolveSnapshotFileMatch(
+          snapshotFiles,
+          eventPath,
+          workspacePath
+        );
+      }
+    }
   }
 
   const candidate: UndoFileCandidate = {
     path,
-    changeType,
+    changeType: snapshotFile?.changeType ?? changeType,
     tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
     instruction,
     oldContent,
