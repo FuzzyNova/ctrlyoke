@@ -545,12 +545,14 @@ function sameUndoTarget(
   left: UndoExecutionTarget,
   right: UndoExecutionTarget
 ): boolean {
-  return left.kind === right.kind &&
+  return (
+    left.kind === right.kind &&
     (left.kind === FINAL_STEP_PHASES.FINAL_STEP
       ? left.loopIndex ===
         (right.kind === FINAL_STEP_PHASES.FINAL_STEP ? right.loopIndex : -1)
       : left.stepIndex ===
-        (right.kind === FINAL_STEP_PHASES.QUEUE ? right.stepIndex : -1));
+        (right.kind === FINAL_STEP_PHASES.QUEUE ? right.stepIndex : -1))
+  );
 }
 
 function formatStructuredPatch(
@@ -772,10 +774,13 @@ function buildRedoAggregationPart(
 export function aggregateWorkflowUndoFiles(
   entries: WorkflowStepEntry[]
 ): AggregatedUndoFile[] {
-  const aggregates = new Map<string, {
-    path: string;
-    byDirection: Map<UndoRedoDirection, AggregationPart[]>;
-  }>();
+  const aggregates = new Map<
+    string,
+    {
+      path: string;
+      byDirection: Map<UndoRedoDirection, AggregationPart[]>;
+    }
+  >();
 
   for (const entry of entries) {
     const partsForEntry = [

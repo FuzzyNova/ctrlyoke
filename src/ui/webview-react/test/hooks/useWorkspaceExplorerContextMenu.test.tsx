@@ -40,11 +40,7 @@ function TestHarness({
   explorerPath?: string;
   onOpenFile?: (path: string) => void;
 }) {
-  const {
-    openContextMenu,
-    explorerContextMenuPortal,
-    deleteConfirmationModal,
-  } =
+  const { openContextMenu, explorerContextMenuPortal } =
     useWorkspaceExplorerContextMenu({
       explorerPath,
       isRootsList: false,
@@ -53,11 +49,12 @@ function TestHarness({
       onViewFileHistory: onViewFileHistory,
     });
 
+  // Render only what WorkspaceExplorerPane renders, so a modal the pane
+  // would drop fails these tests.
   return (
     <>
       <button onClick={() => openContextMenu(20, 20, entry)}>Open menu</button>
       {explorerContextMenuPortal}
-      {deleteConfirmationModal}
     </>
   );
 }

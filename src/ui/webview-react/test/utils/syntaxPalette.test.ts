@@ -125,6 +125,7 @@ describe("syntax palette", () => {
         color: inherit;
       }
 
+      .cy-syntax .token.table,
       .diff .token.table {
         display: inline;
       }

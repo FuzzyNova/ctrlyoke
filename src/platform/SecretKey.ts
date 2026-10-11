@@ -18,6 +18,7 @@ const WORKSPACE_SECRET_PREFIX = "ctrlyoke.secret.ws";
 const USER_SECRET_METADATA_PREFIX = "ctrlyoke.secret.meta.user";
 const WORKSPACE_SECRET_METADATA_PREFIX = "ctrlyoke.secret.meta.ws";
 const WORKSPACE_HASH_LENGTH = 12;
+const WORKSPACE_HASH_PATTERN = /^[0-9a-f]{12}$/i;
 
 export type SecretName = string & { readonly __secretName: unique symbol };
 
@@ -47,7 +48,7 @@ export function workspaceSecretKey(
   name: string
 ): string {
   validateSecretName(name);
-  if (!/^[0-9a-f]{12}$/i.test(workspaceHash)) {
+  if (!WORKSPACE_HASH_PATTERN.test(workspaceHash)) {
     throw new Error(
       `Invalid workspace secret hash "${workspaceHash}". Expected 12 hexadecimal characters.`
     );
@@ -84,7 +85,7 @@ export function workspaceSecretMetadataKey(
   name: string
 ): string {
   validateSecretName(name);
-  if (!/^[0-9a-f]{12}$/i.test(workspaceHash)) {
+  if (!WORKSPACE_HASH_PATTERN.test(workspaceHash)) {
     throw new Error(
       `Invalid workspace secret hash "${workspaceHash}". Expected 12 hexadecimal characters.`
     );
@@ -102,23 +103,24 @@ export function workspaceSecretMetadataKeyForRoot(
 
 /** Return whether a SecretStore key belongs to a managed secret or its metadata. */
 export function isManagedSecretStorageKey(key: string): boolean {
-  const parts = key.split(".");
-  if (parts[0] !== "ctrlyoke" || parts[1] !== "secret") return false;
-
-  if (parts[2] === "user" && parts.length === 4) {
-    return isValidSecretName(parts[3]);
+  for (const prefix of [USER_SECRET_PREFIX, USER_SECRET_METADATA_PREFIX]) {
+    if (key.startsWith(`${prefix}.`)) {
+      return isValidSecretName(key.slice(prefix.length + 1));
+    }
   }
-  if (parts[2] === "ws" && parts.length === 5) {
-    return /^[0-9a-f]{12}$/i.test(parts[3]) && isValidSecretName(parts[4]);
+  for (const prefix of [
+    WORKSPACE_SECRET_PREFIX,
+    WORKSPACE_SECRET_METADATA_PREFIX,
+  ]) {
+    if (key.startsWith(`${prefix}.`)) {
+      const [hash, name, ...rest] = key.slice(prefix.length + 1).split(".");
+      return (
+        rest.length === 0 &&
+        WORKSPACE_HASH_PATTERN.test(hash) &&
+        name !== undefined &&
+        isValidSecretName(name)
+      );
+    }
   }
-  if (parts[2] !== "meta") return false;
-  if (parts[3] === "user" && parts.length === 5) {
-    return isValidSecretName(parts[4]);
-  }
-  return (
-    parts[3] === "ws" &&
-    parts.length === 6 &&
-    /^[0-9a-f]{12}$/i.test(parts[4]) &&
-    isValidSecretName(parts[5])
-  );
+  return false;
 }

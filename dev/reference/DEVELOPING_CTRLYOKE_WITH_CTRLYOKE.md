@@ -303,8 +303,10 @@ from:
   driver, every dev host mode, and eventually the CLI/server, all at once.
   The per-workspace server tokens (`ServerTokenStore`) share the same store,
   so a workspace keeps one link across profiles, the dev host, and
-  `ctrlyoke server`. `VsCodeAdapter.getSecretStore()` itself is untouched, so
-  managed workflow secrets keep their per-profile `context.secrets` scoping.
+  `ctrlyoke server`. Managed workflow secrets (`VsCodeAdapter.getSecretStore()`)
+  use the same OS-first store too, so the dashboard and the CLI share them;
+  `ManagedSecretMigration.ts` moves any left in per-profile `context.secrets`
+  into it on activation.
 
   Because `OsCredentialStore` shells out to a platform CLI
   (`security`/`secret-tool`/PowerShell CredMan) per call with no built-in

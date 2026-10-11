@@ -285,36 +285,41 @@ export function useWorkspaceExplorerContextMenu({
     ]
   );
 
-  const explorerContextMenuPortal = contextMenu ? (
-    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
-  ) : null;
-
-  const deleteConfirmationModal = (
-    <DeleteConfirmationModal
-      isOpen={pendingDelete !== null}
-      onClose={() => setPendingDelete(null)}
-      title={
-        pendingDelete?.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
-          ? "Delete Folder?"
-          : "Delete File?"
-      }
-      message={
-        pendingDelete?.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
-          ? `Delete “${pendingDelete.name}” permanently? Everything inside this folder will also be deleted.`
-          : `Delete “${pendingDelete?.name ?? ""}” permanently?`
-      }
-      confirmLabel="Delete"
-      onConfirm={handleConfirmDelete}
-      dontWarnAgain={dontWarnAgain}
-      onDontWarnAgainChange={handleDontWarnAgainChange}
-      dontWarnAgainLabel="Don't warn me again before deleting workspace files"
-    />
+  // The delete confirmation travels with the context menu so a consumer that
+  // renders the menu can never drop the modal and turn Delete into a no-op.
+  const explorerContextMenuPortal = (
+    <>
+      {contextMenu ? (
+        <StepContextMenu
+          {...contextMenu}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
+      <DeleteConfirmationModal
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        title={
+          pendingDelete?.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+            ? "Delete Folder?"
+            : "Delete File?"
+        }
+        message={
+          pendingDelete?.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+            ? `Delete “${pendingDelete.name}” permanently? Everything inside this folder will also be deleted.`
+            : `Delete “${pendingDelete?.name ?? ""}” permanently?`
+        }
+        confirmLabel="Delete"
+        onConfirm={handleConfirmDelete}
+        dontWarnAgain={dontWarnAgain}
+        onDontWarnAgainChange={handleDontWarnAgainChange}
+        dontWarnAgainLabel="Don't warn me again before deleting workspace files"
+      />
+    </>
   );
 
   return {
     clipboard,
     openContextMenu,
     explorerContextMenuPortal,
-    deleteConfirmationModal,
   };
 }

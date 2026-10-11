@@ -2878,7 +2878,11 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
   });
 
   test("separate undo batches merge into one redoable step record", async () => {
-    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-undo-merge");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-undo-merge"
+    );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     await manager.saveUndoRecord(filePath, target, {
       appliedAt: 100,
@@ -2911,7 +2915,11 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
   });
 
   test("partial redo keeps remaining files redoable until the final file", async () => {
-    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-redo-partial");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-redo-partial"
+    );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     await manager.saveUndoRecord(filePath, target, {
       appliedAt: 100,

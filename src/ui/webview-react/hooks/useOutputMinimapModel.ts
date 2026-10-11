@@ -198,10 +198,7 @@ export function useOutputMinimapModel({
               : undefined;
           const label = isFinalStep
             ? getStepName(workflowStep, formatFinalPassLabel(stepIndex + 1))
-            : getStepName(
-                workflowStep,
-                getQueueStepLabel(stepIndex)
-              );
+            : getStepName(workflowStep, getQueueStepLabel(stepIndex));
           const scrollFraction =
             stepScrollFractions.get(key) ??
             rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;

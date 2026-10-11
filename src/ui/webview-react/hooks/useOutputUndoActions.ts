@@ -298,6 +298,7 @@ export function useOutputUndoActions({
     stepOutputsMap,
     undoRecords,
     uniqueStepTargets,
+    workflowSteps,
     workspaceSnapshots,
   ]);
 
