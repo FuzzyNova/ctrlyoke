@@ -170,6 +170,22 @@ suite("LicenseService", () => {
     assert.strictEqual(trialState.updates, 0);
   });
 
+  test("fails closed for remote access when trial state is unavailable", async () => {
+    const unwired = createService(new InMemorySecretStore());
+    assert.strictEqual(await unwired.canUseRemoteAccess(), false);
+    assert.strictEqual(await unwired.beginRemoteAccess(), false);
+
+    const throwing = new InMemoryTrialState();
+    throwing.get = () => {
+      throw new Error("globalState unavailable");
+    };
+    const unreadable = createService(new InMemorySecretStore(), {
+      trialState: throwing,
+    });
+    assert.strictEqual(await unreadable.canUseRemoteAccess(), false);
+    assert.strictEqual(await unreadable.beginRemoteAccess(), false);
+  });
+
   test("beginRemoteAccess starts the trial once", async () => {
     const secrets = new InMemorySecretStore();
     const trialState = new InMemoryTrialState();

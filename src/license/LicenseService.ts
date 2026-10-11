@@ -315,9 +315,13 @@ export class LicenseService implements LicenseService {
     if (await this.isPro()) {
       return true;
     }
-    const startedAt = await this.getRemoteAccessTrialStartedAt();
+    const trial = this.readRemoteAccessTrial();
+    if (!trial.readable) {
+      return false;
+    }
     return (
-      startedAt === null || this.now() < startedAt + REMOTE_ACCESS_TRIAL_MS
+      trial.startedAt === null ||
+      this.now() < trial.startedAt + REMOTE_ACCESS_TRIAL_MS
     );
   }
 
@@ -848,21 +852,34 @@ export class LicenseService implements LicenseService {
   }
 
   private async getRemoteAccessTrialStartedAt(): Promise<number | null> {
+    const trial = this.readRemoteAccessTrial();
+    return trial.readable ? trial.startedAt : null;
+  }
+
+  /**
+   * Distinguishes "trial not started" (`startedAt: null`, eligible) from
+   * "trial state unavailable" (`readable: false`: no store wired, as in the
+   * CLI, or the read threw), which must fail closed for remote reach.
+   */
+  private readRemoteAccessTrial():
+    { readable: false } | { readable: true; startedAt: number | null } {
     if (!this.trialState) {
-      return null;
+      return { readable: false };
     }
 
     try {
       const stored = this.trialState.get<unknown>(
         REMOTE_ACCESS_TRIAL_START_KEY
       );
-      return typeof stored === "number" && Number.isFinite(stored)
-        ? stored
-        : null;
+      return {
+        readable: true,
+        startedAt:
+          typeof stored === "number" && Number.isFinite(stored) ? stored : null,
+      };
     } catch {
       // A trial-state failure must not crash the extension. Fail closed for
       // remote reach while the free localhost product remains available.
-      return null;
+      return { readable: false };
     }
   }
 
