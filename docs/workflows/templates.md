@@ -2,6 +2,46 @@
 
 Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrlyoke ships these built-in templates: Blank, Template Starter, Simple Feature, Parallel Research, Fix Tests, Full Feature Pipeline, Spec-Driven Loop, Bug Hunt Loop, and Bug Drain Loop. You can add your own templates under `.ctrlyoke/templates/` in the workspace or under `~/.ctrlyoke/templates/` for your user account. When you run **New Workflow from Template**, ctrlyoke prompts for each variable, substitutes the values, and creates a ready-to-run workflow.
 
+## Create a workflow from a template {#create-from-template}
+
+Open the **Create Workflow from Template** dialog in any of these ways:
+
+- the arrow beside **New** in the dashboard header, then **New From Template...**;
+- **Create from Template** in the steps panel of an empty workflow;
+- the **ctrlyoke: New Workflow from Template** command (`Ctrl+Shift+T`, or
+  `Cmd+Shift+T` on macOS).
+
+![The Create Workflow from Template dialog with Full Feature Pipeline selected. Under its description, the Variables form has featureDescription "Add tag filtering and pagination to GET /notes" in a multi-line box, planDocument "plans/notes-tags.md", reviewHarness set to Codex in a harness picker, testCommand "npm test" and formatCommand "npm run format", each with helper text. Workflow Name is "notes-tags", and the footer has Set as Default, Cancel, Create and Create & Run](/screenshots/template-modal-full-feature-840x1123.png)
+
+1. Pick a template under **Template**. The list groups **Built-in Templates**,
+   **Custom Templates (Workspace)** and **Custom Templates (User)**. It starts on
+   your default template.
+2. Read the description under the picker, then fill in the **Variables**. Each
+   field's helper text comes from the template, and fields with a `default`
+   start filled in. The control depends on the variable's type:
+
+   | Type                   | Control                                                                                                                                                                                  |
+   | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | text                   | A single-line box, or a resizable multi-line box with `multiline: true`.                                                                                                                 |
+   | file, directory        | A box with a **Browse…** button. In VS Code it opens your system's file or folder picker. In the [browser dashboard](/guide/remote-dashboard) it opens a file browser for the workspace. |
+   | select                 | A dropdown of the template's `options`.                                                                                                                                                  |
+   | harness                | The harness picker, showing which harnesses are installed.                                                                                                                               |
+   | model (with a harness) | A model picker beside its harness, listing that harness's models.                                                                                                                        |
+
+3. Enter a **Workflow Name**. It is required, and some characters aren't
+   allowed in it.
+4. Click **Create** to open the new workflow without running it, or **Create &
+   Run** to start it right away. `Enter` in a single-line field creates the
+   workflow, and `Ctrl+Enter` in any text field creates and runs it.
+
+**Set as Default** makes the selected template the one the dialog starts on
+next time. It saves [`general.defaultTemplate`](/reference/settings#general-defaulttemplate)
+in your user settings. When the selected template is already the default, the
+footer reads **Default template** instead.
+
+**New template...** under the picker creates a custom template from the
+selected one. See [Custom templates](#custom-templates).
+
 ## Bug Hunt Loop and Bug Drain Loop {#bug-loops}
 
 Both templates are [dynamic-queue](/workflows/dynamic-queue) loops that keep bug reports as Markdown files in your repo, one file per bug, rather than in an issue tracker. They have no steps up front. Their final step reviews the fixes that landed since its previous pass, then queues new fix steps; the loop ends on the first pass that queues nothing.
@@ -114,7 +154,7 @@ A key under `_templateMeta.variables` only takes effect if a matching `{token}` 
 
 If a variable declares a `default`, that value is pre-filled in the UI and used when the field is left empty. A `select` variable without a default starts on its first option. A text, file, or directory variable with **no** default that is never filled in stays in the output as a literal `{token}` — so give optional inputs a sensible default, and treat description/required inputs as fields the user must fill.
 
-## Custom templates
+## Custom templates {#custom-templates}
 
 Custom templates are `*.ctrlyoke.yaml`, `*.ctrlyoke.yml`, or `*.ctrlyoke.json` files in `.ctrlyoke/templates/` (workspace) or `~/.ctrlyoke/templates/` (user). They use the same `_templateMeta` schema as the built-ins. A file name must be unique within its location, regardless of format.
 

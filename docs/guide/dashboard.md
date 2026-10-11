@@ -13,7 +13,7 @@ a wider layout. The same dashboard also runs in a browser (see
 | --- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | **Header**              | Workflow actions, the workflow name and state, the run controls, and buttons for history search and settings.                              |
 | 2   | **Steps panel**         | Every step in the workflow, its status, and the final step at the bottom.                                                                  |
-| 3   | **Output**              | The output of each step as it runs, with a **Terminal** tab beside it for interactive sessions.                                            |
+| 3   | **Output**              | The output of each step as it runs, with a **Terminal** tab beside it for interactive sessions. See [The output pane](/guide/output).      |
 | 4   | **Prompt editor**       | Write a new step, or select a step to edit it. Its footer holds the per-step quick pickers and the **Queue** and **Run** buttons.          |
 | 5   | **Workflow Properties** | The workflow-level harness, context, validation, MCP, hooks and permissions. See [Workflow properties panel](/workflows/properties-panel). |
 
@@ -38,7 +38,7 @@ From left to right:
 - **Save workflow**: save the workflow as a `.ctrlyoke.yaml` or `.ctrlyoke.json`
   file, or as a template.
 - **Dry Run**: preview exactly what each step would send to its harness, without
-  running anything.
+  running anything. See [Dry Run](/guide/dry-run).
 - **Undo** and **Redo**: undo edits to the workflow definition. The chevron shows
   the undo history. To undo the files a step changed, see
   [File changes and undo](/guide/file-changes).
@@ -79,8 +79,8 @@ workflow you're viewing.
 - **Resume** continues a paused, stopped or failed run from where it left off.
 - **Stop** ends the current step immediately and stops the workflow.
 
-Right-click (or long-press) the first button for a **Dry Run** of the whole
-workflow.
+Right-click (or long-press) the first button for a [Dry Run](/guide/dry-run) of
+the whole workflow.
 
 If a run belongs to the CLI or to another VS Code window, the dashboard shows it
 read-only with a lock banner. Its Stop button still works: it stops the run in
@@ -223,6 +223,8 @@ Right-click a workflow or run for:
 
 ## Related
 
+- [The output pane](/guide/output)
+- [Dry Run](/guide/dry-run)
 - [File changes and undo](/guide/file-changes)
 - [Workspace viewer](/guide/workspace-viewer)
 - [Workflow properties panel](/workflows/properties-panel)

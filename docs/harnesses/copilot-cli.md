@@ -78,7 +78,7 @@ turns on for every Copilot process it starts. ctrlyoke also installs a status li
 [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line).
 
 Quota percentages appear next to the harness in the harness picker, with the reset time in its
-tooltip, and on the **Stats & Usage** settings tab. If a queued step's harness is above
+tooltip, and on the [**Stats & Usage**](/guide/usage-and-stats) settings tab. If a queued step's harness is above
 [`usageTracking.warningPercentUsed`](/reference/settings#usagetracking-warningpercentused) (80% by
 default), ctrlyoke warns when the run starts but doesn't stop it. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).
