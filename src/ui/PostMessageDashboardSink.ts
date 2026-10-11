@@ -303,6 +303,21 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
+  updateFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    this.send({
+      type: MESSAGE_TYPES.FINAL_STEP_CONTEXT_WINDOW_UPDATE,
+      loopIndex,
+      used,
+      size,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+    });
+  }
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

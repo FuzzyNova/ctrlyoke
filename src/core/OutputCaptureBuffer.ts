@@ -199,6 +199,11 @@ export class OutputCaptureBuffer {
     number,
     { used: number; size: number }
   >();
+  /** Latest live context-window reading for each in-flight final-step pass. */
+  private readonly finalStepContextWindowBuffer = new Map<
+    number,
+    { used: number; size: number }
+  >();
 
   constructor(
     private readonly instanceTag: string,
@@ -220,6 +225,7 @@ export class OutputCaptureBuffer {
     this.finalStepCompletedOutputs.clear();
     this.finalStepStatusMessages.clear();
     this.contextWindowBuffer.clear();
+    this.finalStepContextWindowBuffer.clear();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -302,6 +308,10 @@ export class OutputCaptureBuffer {
   /** Always-on live context-window capture — enables gauge replay on workflow switch. */
   captureContextWindow(stepIndex: number, used: number, size: number): void {
     this.contextWindowBuffer.set(stepIndex, { used, size });
+  }
+
+  captureFinalStepContextWindow(loopIndex: number, used: number, size: number): void {
+    this.finalStepContextWindowBuffer.set(loopIndex, { used, size });
   }
 
   captureCompletedOutput(stepIndex: number, output: any): void {
@@ -420,6 +430,7 @@ export class OutputCaptureBuffer {
       this.finalStepCompletedOutputs.set(loopIndex, { outputs: [output] });
     }
     this.finalStepOutputBuffer.delete(loopIndex);
+    this.finalStepContextWindowBuffer.delete(loopIndex);
     this.callbacks.onTargetAttemptComplete({
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
       stats: getAttemptStats(output),
@@ -672,6 +683,14 @@ export class OutputCaptureBuffer {
           runIndex: buffer.runIndex,
           rawTextOutput: buffer.rawTextOutput,
         });
+      }
+      const contextWindow = this.finalStepContextWindowBuffer.get(loopIndex);
+      if (contextWindow) {
+        dashboardSink.updateFinalStepContextWindow(
+          loopIndex,
+          contextWindow.used,
+          contextWindow.size
+        );
       }
     }
   }

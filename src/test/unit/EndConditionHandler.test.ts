@@ -199,6 +199,7 @@ class DashboardSinkDouble implements IDashboardSink {
   updateCliStreamingChunk(): void {}
   updateCliStreamingEvents(): void {}
   updateContextWindow(): void {}
+  updateFinalStepContextWindow(): void {}
   updateStatusMessage(
     stepIndex: number,
     message: string,

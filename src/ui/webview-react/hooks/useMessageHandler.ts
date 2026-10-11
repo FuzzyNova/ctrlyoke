@@ -1723,6 +1723,25 @@ export function createMessageHandlers(
     );
   };
 
+  handlers[MESSAGE_TYPES.FINAL_STEP_CONTEXT_WINDOW_UPDATE] = (message) => {
+    if (isForInactiveWorkflow(message)) return;
+    const store = useWorkflowStore.getState();
+    if (
+      !isWorkflowRunning(store.executionState) ||
+      store.finalStepLoopCount !== message.loopIndex ||
+      store.finalStepPhase !== FINAL_STEP_PHASES.FINAL_STEP ||
+      isTerminalStepStatus(store.finalStepStatus)
+    ) {
+      return;
+    }
+
+    store.updateLiveFinalStepContextWindow(
+      message.loopIndex,
+      message.used,
+      message.size
+    );
+  };
+
   // --------------------------------------------------------------------------
   // CLI_WATCH_OUTPUT - Live CLI output streamed from a CLI-managed workflow.
   // Only processed when this workflowId is the currently active workflow so

@@ -4462,6 +4462,53 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(completedCalls[0].output.isStreaming, false);
   });
 
+  test("forwards finalStep context-window updates through its dedicated target", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const captured: Array<[number, number, number]> = [];
+    const forwarded: Array<[number, number, number]> = [];
+
+    integration.onSend = async (prompt) => {
+      if (prompt.prompt === "final-context") {
+        (integration as any).contextWindowUpdateEmitter.fire({
+          used: 75000,
+          size: 200000,
+        });
+      }
+      return { success: true, responseText: "done" };
+    };
+
+    const context = makeContext(integration);
+    context.captureFinalStepContextWindow = (loopIndex, used, size) => {
+      captured.push([loopIndex, used, size]);
+    };
+    context.dashboardProvider = new Proxy(
+      {
+        updateFinalStepContextWindow: (
+          loopIndex: number,
+          used: number,
+          size: number
+        ) => {
+          forwarded.push([loopIndex, used, size]);
+        },
+      } as any,
+      {
+        get: (target, property) =>
+          target[property] ?? (() => {}),
+      }
+    );
+    queue.loadPrompts({
+      steps: [{ prompt: "queue" }],
+      finalStep: { prompt: "final-context" },
+    });
+
+    await executor.execute(integration, context);
+
+    assert.deepStrictEqual(captured, [[0, 75000, 200000]]);
+    assert.deepStrictEqual(forwarded, [[0, 75000, 200000]]);
+  });
+
   test("fails the step on process exit by default and persists warning plus PTY tail", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

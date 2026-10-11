@@ -952,6 +952,14 @@ export class CtrlYokeHostedServer
   ): void {
     this.sink.updateContextWindow(stepIndex, used, size, workflowId);
   }
+  updateFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    this.sink.updateFinalStepContextWindow(loopIndex, used, size, workflowId);
+  }
   updateStatusMessage(
     stepIndex: number,
     message: string,

@@ -54,6 +54,9 @@ export function useFinalStepContextMenu({
   const soloOutputTargets = useUiStore((s) => s.soloOutputTargets);
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
   const finalStepLoopCount = useWorkflowStore((s) => s.finalStepLoopCount);
+  const liveContextWindow = useWorkflowStore(
+    (s) => s.liveFinalStepContextWindow[s.finalStepLoopCount]
+  );
   const liveOrderedEntries = useWorkflowStore((s) => s.liveOrderedEntries);
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
   const outputEntries = isViewingHistory
@@ -86,6 +89,7 @@ export function useFinalStepContextMenu({
             outputText,
             latestOutput,
             runtimeMeta,
+            liveContextWindow,
           })
         : [];
       // The final step card stands for the final step as a whole, so its
@@ -169,6 +173,7 @@ export function useFinalStepContextMenu({
       outputText,
       latestOutput,
       runtimeMeta,
+      liveContextWindow,
       finalStepLoopCount,
       hiddenOutputKeys,
       outputFilterWorkflowKey,

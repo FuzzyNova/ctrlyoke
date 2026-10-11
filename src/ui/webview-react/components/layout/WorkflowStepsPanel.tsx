@@ -835,6 +835,7 @@ const WorkflowStepsPanelInner: React.FC<{
     finalStepLoopCount,
     finalStepPhase,
     liveContextWindow,
+    liveFinalStepContextWindow,
   } = useWorkflowStore();
   const {
     stepsCollapsed,
@@ -2220,6 +2221,7 @@ const WorkflowStepsPanelInner: React.FC<{
         onContextMenu={openFinalStepContextMenu}
         {...getFinalStepHarnessModel()}
         latestOutput={finalStepLatestOutput}
+        liveContextWindow={liveFinalStepContextWindow[finalStepLoopCount]}
         overrides={finalStepOverrides}
       />
       {contextMenuPortal}

@@ -397,6 +397,7 @@ export const MESSAGE_TYPES = {
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
   CLI_STREAMING_EVENTS: "cliStreamingEvents", // Structured events for Claude/Codex CLI
   CONTEXT_WINDOW_UPDATE: "contextWindowUpdate", // Live context window usage update (extension -> webview)
+  FINAL_STEP_CONTEXT_WINDOW_UPDATE: "finalStepContextWindowUpdate", // Live final-step context-window usage update
   STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
   STEPS_EXTENDED: "stepsExtended", // Send updated steps list after queue extension

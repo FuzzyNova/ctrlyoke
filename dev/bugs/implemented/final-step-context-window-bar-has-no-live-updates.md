@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-10 by Nathan (manual observation), confirmed in code by claude-cli
 - **Area:** `src/core/WorkflowExecutor.ts` (`onContextWindowUpdate` listener), `src/ui/webview-react/components/prompts/FinalStepFooter.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

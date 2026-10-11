@@ -261,6 +261,19 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateContextWindow(stepIndex, used, size, this.workflowId);
   }
 
+  updateFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number
+  ): void {
+    this.inner.updateFinalStepContextWindow(
+      loopIndex,
+      used,
+      size,
+      this.workflowId
+    );
+  }
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

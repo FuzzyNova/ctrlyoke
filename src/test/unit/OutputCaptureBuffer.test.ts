@@ -1073,6 +1073,36 @@ suite("OutputCaptureBuffer", () => {
       assert.ok(fpCall!.args[1].structured?.events?.length === 1);
     });
 
+    test("should replay the latest finalStep context-window reading", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+      buffer.captureFinalStepOutputInit(
+        2,
+        "final prompt",
+        "cmd",
+        undefined,
+        "/ws",
+        999,
+        0,
+        false
+      );
+      buffer.captureFinalStepContextWindow(2, 40000, 200000);
+      buffer.captureFinalStepContextWindow(2, 80000, 200000);
+
+      const { sink, calls } = makeDashboardSink();
+      buffer.replayTo(
+        sink,
+        { status: EXECUTION_STATES.RUNNING, currentIndex: 0 },
+        { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 2 },
+        "tag"
+      );
+
+      const contextCall = calls.find(
+        (call) => call.method === "updateFinalStepContextWindow"
+      );
+      assert.deepStrictEqual(contextCall?.args, [2, 80000, 200000]);
+    });
+
     // Pausing or cancelling lets the current step keep running. Skipping its
     // buffer left the client holding a sealed output, so its next streamed
     // batch rendered under a "Follow-up" divider.

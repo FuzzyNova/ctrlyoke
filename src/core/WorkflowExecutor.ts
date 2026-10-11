@@ -314,6 +314,12 @@ export interface WorkflowExecutionContext {
     used: number,
     size: number
   ) => void;
+  /** Always-on live context-window buffer for final-step passes. */
+  captureFinalStepContextWindow?: (
+    loopIndex: number,
+    used: number,
+    size: number
+  ) => void;
   /** Snapshot of in-flight queue output already sent to the dashboard. */
   getBufferedOutput?: (stepIndex: number) => CliOutput | undefined;
   /** Mirror of captureOutputInit for finalStep loops, keyed by loopIndex. */
@@ -4387,6 +4393,13 @@ export class WorkflowExecutor {
           context.captureContextWindow?.(signedStepIndex, used, size);
           context.dashboardProvider?.updateContextWindow(
             signedStepIndex,
+            used,
+            size
+          );
+        } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+          context.captureFinalStepContextWindow?.(target.loopIndex, used, size);
+          context.dashboardProvider?.updateFinalStepContextWindow(
+            target.loopIndex,
             used,
             size
           );
