@@ -226,9 +226,10 @@ export class UndoRedoCoordinator {
       entries,
       workflowKey,
       runRef,
-      async (entry) => {
+      async (entry, result) => {
         await this.recordRedoApplied(
           entry.target,
+          result.restoredFiles,
           postMessage,
           workflowKey,
           runRef
@@ -483,7 +484,7 @@ export class UndoRedoCoordinator {
     const outputHistoryManager =
       this.getOrchestrator()?.getOutputHistoryManager();
     if (historyFilePath && outputHistoryManager) {
-      await outputHistoryManager.saveUndoRecord(
+      const mergedUndoRecord = await outputHistoryManager.saveUndoRecord(
         historyFilePath,
         target,
         undoRecord
@@ -491,7 +492,7 @@ export class UndoRedoCoordinator {
       this.emitUndoRecordUpdated(
         postMessage,
         target,
-        undoRecord,
+        mergedUndoRecord ?? undoRecord,
         workflowKey,
         runRef
       );
@@ -511,6 +512,7 @@ export class UndoRedoCoordinator {
 
   private async recordRedoApplied(
     target: OutputExecutionTarget,
+    redoneFiles: readonly string[],
     postMessage: PostMessageFn,
     workflowKey: WorkflowKey,
     runRef: RunRef
@@ -529,7 +531,8 @@ export class UndoRedoCoordinator {
     await outputHistoryManager.markUndoRecordRedone(
       historyFilePath,
       target,
-      redoneAt
+      redoneAt,
+      redoneFiles
     );
     const history = await outputHistoryManager.loadHistory(historyFilePath);
     const stepOutput = (

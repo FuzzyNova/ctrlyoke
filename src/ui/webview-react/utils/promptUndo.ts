@@ -1254,7 +1254,7 @@ export function computePromptChangeSummary(
   effectiveSnapshot: WorkspaceSnapshot | undefined
 ): PromptChangeSummary {
   // Redo: files that were previously undone and can be redone.
-  // Only available while isRedone is falsy (a redo resets the record).
+  // The persisted record removes each redone path; isRedone marks the final one.
   const undone =
     effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
       ? (effectiveUndoRecord.redoInstructions?.length ?? 0)

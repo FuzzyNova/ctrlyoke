@@ -630,6 +630,36 @@ describe("UndoChangesDialog", () => {
     }
   });
 
+  it("shows only the files still available to redo in a step record", () => {
+    const remainingRedo: UndoFileInstruction = {
+      path: "src/B.ts",
+      action: "restore-content",
+      contentToRestore: "AI version",
+    };
+
+    render(
+      <UndoChangesDialog
+        mode="redo"
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        workspacePath="C:/dev/ctrlyoke"
+        requestId="remaining-redo-files"
+        onClose={vi.fn()}
+        workflowEntries={[
+          {
+            target: queueTarget,
+            label: "Step 1",
+            redoInstructions: [remainingRedo],
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByLabelText("src/B.ts")).toBeInTheDocument();
+    expect(screen.queryByLabelText("src/A.ts")).not.toBeInTheDocument();
+  });
+
   it("keeps the single-step undo payload unchanged", () => {
     const instruction: UndoFileInstruction = {
       path: "src/example.ts",
