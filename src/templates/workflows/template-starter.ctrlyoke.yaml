@@ -28,6 +28,11 @@ _templateMeta:
       type: harness
       default: claude-cli
       description: Which harness runs the implementation step.
+    model:
+      type: model
+      harness: harness
+      default: sonnet
+      description: Which model the implementation step uses. The list follows the harness above.
 
 steps:
   - name: plan
@@ -43,3 +48,4 @@ steps:
     prompt: Implement the plan you just created.
     resumeSession: true
     harness: "{harness}"
+    model: "{model}"

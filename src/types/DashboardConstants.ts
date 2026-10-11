@@ -4537,6 +4537,7 @@ export const TEMPLATE_VARIABLE_TYPES = {
   DIRECTORY: WORKSPACE_ENTRY_KINDS.DIRECTORY,
   SELECT: "select",
   HARNESS: "harness",
+  MODEL: "model",
 } as const;
 
 /** Tabs for the two input shapes in the shared MCP server form. */

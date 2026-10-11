@@ -1,6 +1,24 @@
 # Templates
 
-Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrlyoke ships these built-in templates: Blank, Template Starter, Simple Feature, Parallel Research, Fix Tests, Full Feature Pipeline, and Spec-Driven Loop. You can add your own templates under `.ctrlyoke/templates/` in the workspace or under `~/.ctrlyoke/templates/` for your user account. When you run **New Workflow from Template**, ctrlyoke prompts for each variable, substitutes the values, and creates a ready-to-run workflow.
+Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrlyoke ships these built-in templates: Blank, Template Starter, Simple Feature, Parallel Research, Fix Tests, Full Feature Pipeline, Spec-Driven Loop, Bug Hunt Loop, and Bug Drain Loop. You can add your own templates under `.ctrlyoke/templates/` in the workspace or under `~/.ctrlyoke/templates/` for your user account. When you run **New Workflow from Template**, ctrlyoke prompts for each variable, substitutes the values, and creates a ready-to-run workflow.
+
+## Bug Hunt Loop and Bug Drain Loop {#bug-loops}
+
+Both templates are [dynamic-queue](/workflows/dynamic-queue) loops that keep bug reports as Markdown files in your repo, one file per bug, rather than in an issue tracker. They have no steps up front. Their final step reviews the fixes that landed since its previous pass, then queues new fix steps; the loop ends on the first pass that queues nothing.
+
+| Template       | Each pass                                                                                   | Ends when                                            |
+| -------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Bug Hunt Loop  | Finds and files at least two new bugs, then queues fixes for the ones it is confident about | A pass finds nothing, you stop it, or the step limit |
+| Bug Drain Loop | Queues fixes for every report already in the backlog directory. Never files new bugs        | The backlog is empty                                 |
+
+Both ask for the same directories, so the hunt can fill a backlog that the drain later clears:
+
+- **`bugBacklogDir`** (default `bugs/backlog`): where open bug reports are filed.
+- **`bugImplementedDir`** (default `bugs/implemented`): where a fix step moves its report once the bug is fixed.
+
+Put a README or template in the backlog directory, or the directory above it, that describes your bug report format. The hunter follows it, so every report has the same sections. Without one, it writes a title, severity, reproduction steps, expected and actual behavior, evidence, and a suggested fix.
+
+Both templates also ask for `testCommand`, which every queued fix must pass, and a harness and model for each of two roles: the final step that reviews and queues, and the fix steps. Give the final step your most capable model; a cheaper model is usually enough for the fix steps, because each one gets a self-contained description of its fix. The defaults are `opus` on Claude Code for the final step and `gpt-6-luna` on Codex CLI for the fixes. Each model picker sits beside its harness and lists that harness's models; changing the harness switches the model to that harness's default model. Bug Hunt Loop has no natural end, so set `maxSteps` on the workflow or the `queue.maxSteps` setting if you want to cap how much it runs.
 
 ## Variables in the body
 
@@ -14,7 +32,7 @@ A variable is a `{placeholder}` token in a prompt (or any string field). The tok
 
 Variable names must start with a lowercase letter and contain only letters and digits. Condition output references (`$preCondition:<field>` and `$endCondition:<field>`) are runtime values and never treated as template variables. `$preCondition:*` works in step and retry prompts; `$endCondition:*` is only available in retry prompts.
 
-The `{file:…}` / `{text:…}` inline prefixes only cover those two types. For a `directory`, `select`, or `harness` variable, write a plain `{name}` token in the body and declare its type in `_templateMeta` (below).
+The `{file:…}` / `{text:…}` inline prefixes only cover those two types. For a `directory`, `select`, `harness`, or `model` variable, write a plain `{name}` token in the body and declare its type in `_templateMeta` (below).
 
 Put a file variable in prompt text as `@{file:name}`. Keep the `@` outside the braces so the substituted value becomes a normal file reference.
 
@@ -52,7 +70,8 @@ steps:
 
 | Field              | Applies to      | Effect                                                                                                                 |
 | ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `type`             | any             | `text` (default), `file`, `directory`, `select`, or `harness`.                                                         |
+| `type`             | any             | `text` (default), `file`, `directory`, `select`, `harness`, or `model`.                                                |
+| `harness`          | model           | Name of the `harness` variable whose models this variable offers. Required for `model`.                                |
 | `options`          | select          | The dropdown choices (e.g. `[debug, info, warn]`). The first option is used as the default unless `default` is set.    |
 | `default`          | any             | Pre-fills the input; substituted when the field is left blank.                                                         |
 | `description`      | any             | Helper text shown under the input.                                                                                     |
@@ -60,7 +79,22 @@ steps:
 | `fileFilter`       | file            | Glob patterns for the file picker (e.g. `["**/*.md"]`).                                                                |
 | `autoFillFilename` | file, directory | Seeds the new workflow's filename from the picked file/folder basename. Only the first variable that declares it wins. |
 
-Input controls by type: **text** → single-line input (or textarea with `multiline`); **file** → input + Browse (file picker); **directory** → input + Browse (folder picker); **select** → dropdown of `options`; **harness** → the harness picker (no `options` needed; defaults to `claude-cli` when no `default` is set).
+Input controls by type: **text** → single-line input (or textarea with `multiline`); **file** → input + Browse (file picker); **directory** → input + Browse (folder picker); **select** → dropdown of `options`; **harness** → the harness picker (no `options` needed; defaults to `claude-cli` when no `default` is set); **model** → a model picker on the same row as its harness, listing that harness's models. Changing the harness switches the model to that harness's default model, and a model with no `default` starts on it too.
+
+Pair a model with its harness so a template can run each role on its own harness and model:
+
+```yaml
+_templateMeta:
+  variables:
+    reviewHarness:
+      type: harness
+      default: codex-cli
+    reviewModel:
+      type: model
+      harness: reviewHarness
+```
+
+Use both in the body, for example `harness: "{reviewHarness}"` and `model: "{reviewModel}"` on the step they configure.
 
 ```yaml
 _templateMeta:

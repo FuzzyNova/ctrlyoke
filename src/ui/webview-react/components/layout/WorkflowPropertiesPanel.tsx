@@ -40,6 +40,7 @@ import {
   getResumeSessionOptions,
 } from "../../types/dropdownNamespaces";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { defaultModelForHarness } from "@utils/harnessChangeCascade";
 import {
   PanelBar,
   CustomSelect,
@@ -810,16 +811,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       const updates: Partial<WorkflowProperties> = { harness };
 
       // Always update model to the global default for the new harness
-      if (newHarnessModels.length > 0) {
-        const globalDefaultForHarness =
-          settingsStore.globalSettings.harnessDefaultModels[harness];
-        const isGlobalDefaultValid = newHarnessModels.some(
-          (m) => m.value === globalDefaultForHarness
-        );
-        const defaultModel = isGlobalDefaultValid
-          ? globalDefaultForHarness
-          : newHarnessModels[0].value;
-
+      const defaultModel = defaultModelForHarness(
+        harness,
+        settingsStore.globalSettings.harnessDefaultModels,
+        newHarnessModels
+      );
+      if (defaultModel !== undefined) {
         updates.model = defaultModel;
       }
 

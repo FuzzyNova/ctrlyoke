@@ -214,8 +214,18 @@ $defs:
           - directory
           - select
           - harness
-        description: Control used to collect this variable in the template dialog.
+          - model
+        description: >-
+          Control used to collect this variable in the template dialog. A `model` variable shows the
+          models of the harness variable named by `harness`, beside that harness picker.
         title: Type
+      harness:
+        type: string
+        pattern: ^[a-z][a-zA-Z0-9]*$
+        description: >-
+          For a `model` variable: the name of the `harness` variable whose models it offers.
+          Changing that harness resets this model to the harness's default model.
+        title: Harness
       fileFilter:
         type: array
         items:
@@ -245,6 +255,16 @@ $defs:
         type: boolean
         description: Render a text variable as a multiline input.
         title: Multiline
+    if:
+      properties:
+        type:
+          const: model
+          title: Type
+      required:
+        - type
+    then:
+      required:
+        - harness
     additionalProperties: false
   promptFileFrontmatter:
     type: object

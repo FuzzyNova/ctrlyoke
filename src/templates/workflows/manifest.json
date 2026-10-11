@@ -49,6 +49,22 @@
       "file": "spec-driven-loop.ctrlyoke.yaml",
       "tags": ["advanced", "loop", "spec"],
       "icon": "$(sync)"
+    },
+    {
+      "id": "bug-hunt-loop",
+      "label": "Bug Hunt Loop",
+      "description": "Open-ended loop that reviews the last round of fixes, files new bugs in your repo, and queues their fixes",
+      "file": "bug-hunt-loop.ctrlyoke.yaml",
+      "tags": ["advanced", "loop", "bugs"],
+      "icon": "$(bug)"
+    },
+    {
+      "id": "bug-drain-loop",
+      "label": "Bug Drain Loop",
+      "description": "Loop that queues fixes for the bug reports filed in your repo until the backlog is empty",
+      "file": "bug-drain-loop.ctrlyoke.yaml",
+      "tags": ["advanced", "loop", "bugs"],
+      "icon": "$(checklist)"
     }
   ]
 }

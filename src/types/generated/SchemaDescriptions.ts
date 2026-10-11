@@ -134,9 +134,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_templateMeta.variables.*.default": "Initial value used when the user leaves the variable unchanged.",
   "_templateMeta.variables.*.description": "Help text shown below the variable control.",
   "_templateMeta.variables.*.fileFilter": "File-picker glob patterns used by file variables.",
+  "_templateMeta.variables.*.harness": "For a `model` variable: the name of the `harness` variable whose models it offers. Changing that harness resets this model to the harness's default model.",
   "_templateMeta.variables.*.multiline": "Render a text variable as a multiline input.",
   "_templateMeta.variables.*.options": "Available values for a select variable.",
-  "_templateMeta.variables.*.type": "Control used to collect this variable in the template dialog.",
+  "_templateMeta.variables.*.type": "Control used to collect this variable in the template dialog. A `model` variable shows the models of the harness variable named by `harness`, beside that harness picker.",
   "additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow.",
   "color": "Optional authored identity colour for this step.",
@@ -1251,7 +1252,8 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "file",
     "directory",
     "select",
-    "harness"
+    "harness",
+    "model"
   ],
   "agent": [
     ""

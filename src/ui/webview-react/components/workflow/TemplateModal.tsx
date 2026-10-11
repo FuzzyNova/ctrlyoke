@@ -6,13 +6,20 @@ import {
   WORKSPACE_ENTRY_KINDS,
   DASHBOARD_HOST_CAPABILITIES,
 } from "@root/types/DashboardConstants";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Modal,
   Button,
   AnimatedSection,
   ScopeToggle,
   HarnessDropdown,
+  CustomSelect,
 } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
@@ -22,9 +29,15 @@ import {
   MESSAGE_TYPES,
   HARNESS_IDS,
   WORKFLOW_FILE_FORMATS,
+  type HarnessId,
   type WorkflowFileFormat,
 } from "../../types/messages";
-import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
+import {
+  DROPDOWN_NAMESPACES,
+  modelNamespaceForHarness,
+} from "../../types/dropdownNamespaces";
+import { defaultModelForHarness } from "@utils/harnessChangeCascade";
+import { modelWarning } from "@utils/dropdownValidation";
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
@@ -56,6 +69,26 @@ function seedVariableDefaults(
     }
   }
   return seed;
+}
+
+/**
+ * Map each harness variable to the model variables that follow it. Only
+ * pairings the extension validated (`harness` names a harness variable)
+ * arrive here; an unpaired model variable renders as a text input.
+ */
+function modelVariablesByHarness(
+  template: TemplateInfo | null
+): Map<string, TemplateVariable[]> {
+  const pairs = new Map<string, TemplateVariable[]>();
+  for (const variable of template?.variables ?? []) {
+    if (variable.type !== TEMPLATE_VARIABLE_TYPES.MODEL || !variable.harness)
+      continue;
+    pairs.set(variable.harness, [
+      ...(pairs.get(variable.harness) ?? []),
+      variable,
+    ]);
+  }
+  return pairs;
 }
 
 /**
@@ -110,6 +143,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const fileBrowserState = useUiStore((s) => s.fileBrowserState);
   const openFileBrowser = useUiStore((s) => s.openFileBrowser);
   const harnessStatus = useSettingsStore((s) => s.harnessStatus);
+  const modelOptions = useSettingsStore((s) => s.modelOptions);
+  const harnessDefaultModels = useSettingsStore(
+    (s) => s.globalSettings.harnessDefaultModels
+  );
 
   // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -278,13 +315,50 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     setCustomTemplateCreated,
   ]);
 
-  // Handle variable change
+  const pairedModels = useMemo(
+    () => modelVariablesByHarness(currentTemplate),
+    [currentTemplate]
+  );
+
+  // Handle variable change. Changing a harness clears the models that follow
+  // it; the effect below then picks the new harness's default model.
   const handleVariableChange = useCallback(
     (variable: string, value: string) => {
-      setVariables((prev) => ({ ...prev, [variable]: value }));
+      setVariables((prev) => {
+        const next = { ...prev, [variable]: value };
+        if (prev[variable] !== value) {
+          for (const model of pairedModels.get(variable) ?? []) {
+            next[model.name] = "";
+          }
+        }
+        return next;
+      });
     },
-    []
+    [pairedModels]
   );
+
+  // Give every paired model without a value its harness's default model, as
+  // soon as that harness's model list has loaded.
+  useEffect(() => {
+    setVariables((prev) => {
+      let next = prev;
+      for (const [harnessVariable, models] of pairedModels) {
+        const harness = prev[harnessVariable] as HarnessId;
+        const fallback = defaultModelForHarness(
+          harness,
+          harnessDefaultModels,
+          modelOptions[harness] ?? []
+        );
+        if (fallback === undefined) continue;
+        for (const model of models) {
+          if (next[model.name]) continue;
+          next = next === prev ? { ...prev } : next;
+          next[model.name] = fallback;
+        }
+      }
+      return next;
+    });
+  }, [variables, pairedModels, modelOptions, harnessDefaultModels]);
 
   // Open a file/directory picker for a file- or directory-type variable.
   // VS Code panel → native OS dialog (same machine as the extension host).
@@ -386,6 +460,46 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const userTemplates = templates.filter(
     (t) => !t.isBuiltIn && t.source === TEMPLATE_SOURCES.USER
   );
+
+  // A model variable paired with a harness variable: the same model list and
+  // hide/unhide behavior as the Workflow Properties model picker.
+  const renderModelField = (model: TemplateVariable, harnessValue?: string) => {
+    const harness = (harnessValue ?? HARNESS_IDS.CLAUDE_CLI) as HarnessId;
+    const models = modelOptions[harness] ?? [];
+    const value = variables[model.name] ?? "";
+    const namespace = modelNamespaceForHarness(harness);
+    return (
+      <div key={model.name} className="form-group">
+        <label
+          htmlFor={`var-${model.name}`}
+          className="block text-sm text-foreground"
+        >
+          <span className="block mb-1">{model.name}</span>
+          <CustomSelect
+            id={`var-${model.name}`}
+            triggerAriaLabel={model.name}
+            value={value}
+            onChange={(v) => handleVariableChange(model.name, v)}
+            options={
+              models.length === 0
+                ? [{ value: "", label: "Loading models...", disabled: true }]
+                : models.map((m) => ({ value: m.value, label: m.label }))
+            }
+            namespace={namespace}
+            hiddenValues={hiddenDropdownOptions[namespace] ?? []}
+            onHideOption={(v) => hideDropdownOption(namespace, v)}
+            onUnhideOption={(v) => unhideDropdownOption(namespace, v)}
+            warning={modelWarning(value, harness, models) ?? undefined}
+          />
+        </label>
+        {model.description && (
+          <p className="mt-1 text-xs text-description-fg">
+            {model.description}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Modal
@@ -588,6 +702,12 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-foreground">Variables</h4>
             {currentTemplate.variables.map((variable) => {
+              // A paired model renders beside its harness, not in order.
+              if (
+                variable.type === TEMPLATE_VARIABLE_TYPES.MODEL &&
+                variable.harness
+              )
+                return null;
               const isFile = variable.type === WORKSPACE_ENTRY_KINDS.FILE;
               const isDirectory =
                 variable.type === WORKSPACE_ENTRY_KINDS.DIRECTORY;
@@ -601,7 +721,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 "flex-1 px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border focus:outline-hidden focus:border-focus-border font-mono text-xs";
               const selectClass =
                 "w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border";
-              return (
+              const field = (
                 <div key={variable.name} className="form-group">
                   <label
                     htmlFor={`var-${variable.name}`}
@@ -707,6 +827,21 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                     <p className="mt-1 text-xs text-description-fg">
                       {variable.description}
                     </p>
+                  )}
+                </div>
+              );
+              const models = isHarness
+                ? pairedModels.get(variable.name)
+                : undefined;
+              if (!models?.length) return field;
+              return (
+                <div
+                  key={variable.name}
+                  className="grid grid-cols-2 gap-3 items-start"
+                >
+                  {field}
+                  {models.map((model) =>
+                    renderModelField(model, variables[variable.name])
                   )}
                 </div>
               );

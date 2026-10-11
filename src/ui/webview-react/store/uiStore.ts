@@ -10,7 +10,10 @@ import type {
 } from "../types/messages";
 import { EXECUTION_STATES, type FooterPicker } from "../types/messages";
 import { isExecutionFinished } from "../utils/status";
-import type { OutputTab } from "@root/types/DashboardConstants";
+import type {
+  OutputTab,
+  TemplateVariableType,
+} from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
   HistorySearchCountState,
@@ -198,7 +201,9 @@ function areRunSummariesForLineage(
  */
 export interface TemplateVariable {
   name: string;
-  type?: "text" | "file" | "directory" | "select" | "harness";
+  type?: TemplateVariableType;
+  /** For a model variable: the harness variable whose models it offers. */
+  harness?: string;
   fileFilter?: string[];
   options?: string[];
   autoFillFilename?: boolean;

@@ -1,0 +1,116 @@
+schemaVersion: 1
+_templateMeta:
+  name: Bug Drain Loop
+  description: "Fixes the bug reports already filed in your repo. Each pass reviews the last round of fixes, then queues fixes for what's left in the backlog directory, until it's empty. Never files new bugs."
+  variables:
+    bugBacklogDir:
+      type: directory
+      default: bugs/backlog
+      description: Where open bug reports live, one Markdown file per bug.
+    bugImplementedDir:
+      type: directory
+      default: bugs/implemented
+      description: Where a fix step moves its bug report once the bug is fixed.
+    testCommand:
+      type: text
+      default: npm test
+      description: Your test suite. Every queued fix must pass it.
+    orchestratorHarness:
+      type: harness
+      default: claude-cli
+      description: Runs the orchestrator (the final step) that reviews fixes and queues the backlog.
+    orchestratorModel:
+      type: model
+      harness: orchestratorHarness
+      default: opus
+      description: Use a capable model; reviewing fixes and splitting the backlog takes judgment.
+    fixerHarness:
+      type: harness
+      default: codex-cli
+      description: Runs every queued fix step.
+    fixerModel:
+      type: model
+      harness: fixerHarness
+      default: gpt-6-luna
+      description: A cheaper model is usually enough for a well-described fix.
+
+# This loop reads bug reports from a directory in your repo, not from an issue
+# tracker. Use the Bug Hunt Loop template to file reports in the same layout.
+#
+# Queued fix steps inherit these workflow defaults; the final step overrides
+# the harness and model. Every queued step runs in a fresh, self-contained
+# session.
+resumeSession: false
+priorContext: none
+harness: "{fixerHarness}"
+model: "{fixerModel}"
+executionMode: headless
+
+# No up-front steps: the first pass finds an empty history, skips the review,
+# and queues the backlog. The loop ends on the first pass that queues nothing.
+steps: []
+
+finalStep:
+  name: drain-backlog
+  harness: "{orchestratorHarness}"
+  model: "{orchestratorModel}"
+  mcpServers:
+    - ctrlyoke
+  # Each pass is a fresh session. The previous pass's output is attached so it
+  # can see what was queued last time.
+  resumeSession: false
+  priorContext: finalStepPrevious
+  prompt: |
+    Your goal is to review the bug fixes from previous steps, then use append_step to
+    queue fixes for the bug reports currently in {bugBacklogDir}.
+
+    You run as this workflow's final step. Every pass is a new session, so you have no
+    memory of earlier passes; the previous pass's output (if any) is attached above. Use
+    workflow_status and read_output for more detail.
+
+    ## 1. Review the last round of fixes
+
+    Use workflow_status to find the steps that ran since the previous pass. If there are
+    none, skip to section 2. If a step only merged in another branch, don't review it as a
+    bug fix, but do account for what it brought in.
+
+    Review every bug fix that landed in that window (git log and the diffs). Confirm each
+    one actually fixes its bug, didn't introduce a regression, has test coverage, and moved
+    its bug report to {bugImplementedDir}. Fix the problems you find and commit them. If a
+    follow-up is too big for this session, use append_step to queue it instead.
+
+    ## 2. Queue the backlog
+
+    Read every bug report in {bugBacklogDir} and the code it touches. Do not file new
+    bugs; this workflow only drains the existing backlog. If you notice a new bug while
+    reviewing, mention it in your summary instead.
+
+    If a report's description or suggested fix is clearly wrong, update the report first.
+    If a bug needs more thought than you can give it here, make finalizing it the first
+    queued step.
+
+    Then use append_step to add one step per chunk of work that can be completed in a
+    single session, ordered so fixes don't duplicate or conflict with each other. Group
+    small or related bugs into one step; split a really large fix into several. How you
+    split the work is your call; that judgment is the point of this workflow. Every queued
+    step must:
+    - be self-contained (it runs in a fresh session with none of your reasoning)
+    - name the bug report(s) it fixes
+    - add or update tests and pass `{testCommand}`
+    - move each bug report it fixes to {bugImplementedDir} (git mv) with a note that it
+      was fixed in this commit
+    - commit its own work before finishing
+
+    If a bug needs my decision on the fix direction, skip it, queue the rest, and list it
+    in your summary with the decision you need from me. If every remaining bug is blocked
+    on me, queue nothing. If the backlog is empty and your review found nothing left to
+    fix, queue nothing; that ends the workflow.
+
+    End with a short summary: what you reviewed and fixed, what you queued, and anything
+    that needs my input.
+
+    You are running headless, so you can't ask questions. Use your best judgment, and if
+    you truly need my input, say so in your summary. When your turn ends your process
+    stops and kills any subprocesses you started, so don't end your turn to wait on a
+    task; block on long-running commands such as `{testCommand}` instead, and stop any
+    server you started before you end your turn.

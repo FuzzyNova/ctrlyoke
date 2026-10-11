@@ -981,9 +981,16 @@ One entry in `_templateMeta.variables`.
 
 ### `type` {#template-variable-type}
 
-- **Type:** `"text" | "file" | "directory" | "select" | "harness"`
+- **Type:** `"text" | "file" | "directory" | "select" | "harness" | "model"`
 
-Control used to collect this variable in the template dialog.
+Control used to collect this variable in the template dialog. A `model` variable shows the models of the harness variable named by `harness`, beside that harness picker.
+
+### `harness` {#template-variable-harness}
+
+- **Type:** `string`
+- **Constraints:** pattern `^[a-z][a-zA-Z0-9]*$`
+
+For a `model` variable: the name of the `harness` variable whose models it offers. Changing that harness resets this model to the harness's default model.
 
 ### `fileFilter` {#template-variable-filefilter}
 

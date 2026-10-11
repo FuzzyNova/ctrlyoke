@@ -70,8 +70,14 @@ const CUSTOM_TEMPLATE_EXTENSIONS = [
 export interface TemplateVariable {
   /** Matches the {placeholder} in the template content */
   name: string;
-  /** 'file'/'directory' show a Browse button; 'select'/'harness' show a dropdown; 'text' (default) is a plain input */
+  /** 'file'/'directory' show a Browse button; 'select'/'harness'/'model' show a dropdown; 'text' (default) is a plain input */
   type?: TemplateVariableType;
+  /**
+   * For a 'model' variable: the name of the 'harness' variable whose models it
+   * offers. Dropped during merging when it doesn't name a harness variable, so
+   * the UI can trust it.
+   */
+  harness?: string;
   /** Glob patterns for the file picker filter. Only used when type = 'file' */
   fileFilter?: string[];
   /** Choices for the dropdown. Required (non-empty) when type = 'select' */
@@ -130,6 +136,8 @@ export class TemplateManager {
     "fix-tests",
     "full-feature",
     "spec-driven-loop",
+    "bug-hunt-loop",
+    "bug-drain-loop",
   ] as const;
 
   constructor(
@@ -175,13 +183,12 @@ export class TemplateManager {
           const vm = varMeta as Record<string, unknown>;
           const entry: Partial<Omit<TemplateVariable, "name">> = {};
           if (
-            vm["type"] === TEMPLATE_VARIABLE_TYPES.FILE ||
-            vm["type"] === TEMPLATE_VARIABLE_TYPES.TEXT ||
-            vm["type"] === TEMPLATE_VARIABLE_TYPES.DIRECTORY ||
-            vm["type"] === TEMPLATE_VARIABLE_TYPES.SELECT ||
-            vm["type"] === TEMPLATE_VARIABLE_TYPES.HARNESS
+            (Object.values(TEMPLATE_VARIABLE_TYPES) as unknown[]).includes(
+              vm["type"]
+            )
           )
-            entry.type = vm["type"];
+            entry.type = vm["type"] as TemplateVariableType;
+          if (typeof vm["harness"] === "string") entry.harness = vm["harness"];
           if (
             Array.isArray(vm["fileFilter"]) &&
             vm["fileFilter"].every((f) => typeof f === "string")
@@ -222,6 +229,14 @@ export class TemplateManager {
     templateName: string
   ): TemplateVariable[] {
     let autoFillAssigned = false;
+    const harnessVariables = new Set(
+      extracted
+        .filter(
+          (variable) =>
+            meta[variable.name]?.type === TEMPLATE_VARIABLE_TYPES.HARNESS
+        )
+        .map((variable) => variable.name)
+    );
 
     return extracted.map((variable) => {
       const varMeta = meta[variable.name];
@@ -234,6 +249,15 @@ export class TemplateManager {
       if (varMeta.description) merged.description = varMeta.description;
       if (varMeta.default !== undefined) merged.default = varMeta.default;
       if (varMeta.multiline) merged.multiline = true;
+      if (merged.type === TEMPLATE_VARIABLE_TYPES.MODEL && varMeta.harness) {
+        if (harnessVariables.has(varMeta.harness)) {
+          merged.harness = varMeta.harness;
+        } else {
+          Log.warn(
+            `[TemplateManager] Template "${templateName}": model variable "${variable.name}" names "${varMeta.harness}", which is not a harness variable in this template; showing a text input instead.`
+          );
+        }
+      }
 
       if (varMeta.autoFillFilename) {
         if (!autoFillAssigned) {

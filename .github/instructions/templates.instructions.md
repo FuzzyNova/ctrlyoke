@@ -14,7 +14,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 </entryPoints>
 
 <workflowTemplates>
-- Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`template-starter`, `simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`, `parallel-research`). `blank` is special-cased in code and has no file here.
+- Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`template-starter`, `simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`, `parallel-research`, `bug-hunt-loop`, `bug-drain-loop`). `blank` is special-cased in code and has no file here.
 - Workspace and user custom templates are discovered from `.ctrlyoke/templates/*.ctrlyoke.{yaml,yml,json}` as scope-qualified custom IDs. A basename is unique within a scope regardless of format. Do not assume files under `src/templates/workflows/` cover all available templates.
 - `_templateMeta` is authoring-only metadata for the picker UI; `createWorkflow()` strips it before writing the real workflow file.
 - `spec-driven-loop` is the canonical example of `finalStep` orchestration, and deliberately ships `steps: []` — the orchestrator stages every step itself. It relies on `agent`, `mcpServers: [ctrlyoke]`, `resumeSession: true`, and `sessionId: finalStep` together; the resumed session (not `priorContext`) is what carries the plan across loops.
@@ -26,6 +26,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 - The workflow schema treats `_templateMeta` as the authoring marker: valid `{variableName}` placeholders are accepted in enum-constrained template fields such as `harness`, while ordinary workflows without `_templateMeta` remain restricted to concrete runtime values.
 - File variables belong in prompt text as `@{file:name}` — the `@` stays outside the braces so substitution still produces a valid attachment reference.
 - `_templateMeta.variables` can enrich extracted variables with `type`, `fileFilter`, and `autoFillFilename`; only the first variable marked `autoFillFilename: true` wins.
+- A `model` variable names its `harness` variable. `TemplateManager.mergeVariablesWithMeta` drops a `harness` link that doesn't name a harness variable, so `TemplateModal` trusts any link it receives: it renders the model beside its harness, lists that harness's models, and resets the model to the harness default (`defaultModelForHarness`) when the harness changes. An unlinked model variable is a plain text input. Give a model variable a `default` that fits its harness's `default`; the modal fills a blank one, but no other path does.
 - Condition output references use `$preCondition:<field>` and `$endCondition:<field>` with fields `stdout`, `stderr`, `expected`, `actual`, `exitCode`, and `compareSource`; they are runtime values, not template-input variables. `$preCondition:*` works in step and retry prompts, while `$endCondition:*` is only available in retry prompts.
 </templateVariables>
 

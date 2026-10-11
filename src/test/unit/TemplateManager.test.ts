@@ -205,6 +205,34 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(merged[1].autoFillFilename, undefined);
     });
 
+    test("pairs a model variable only with a harness variable", () => {
+      const tm = makeManager();
+      const merged = tm.mergeVariablesWithMeta(
+        [
+          { name: "fixerHarness" },
+          { name: "fixerModel" },
+          { name: "testCommand" },
+          { name: "strayModel" },
+        ],
+        tm.parseTemplateMeta(
+          [
+            "_templateMeta:",
+            "  variables:",
+            "    fixerHarness: { type: harness }",
+            "    fixerModel: { type: model, harness: fixerHarness }",
+            "    strayModel: { type: model, harness: testCommand }",
+          ].join("\n")
+        ).variables,
+        "demo"
+      );
+      assert.deepStrictEqual(merged[1], {
+        name: "fixerModel",
+        type: "model",
+        harness: "fixerHarness",
+      });
+      assert.deepStrictEqual(merged[3], { name: "strayModel", type: "model" });
+    });
+
     test("leaves variables without matching meta untouched", () => {
       const tm = makeManager();
       const extracted = [{ name: "loneVar" }];
@@ -485,6 +513,70 @@ suite("TemplateManager variable metadata", () => {
         assert.ok(step.prompt.includes(testCommand));
       }
     });
+
+    test("declares only variables each bundled template's body uses", () => {
+      const tm = makeManager();
+      const workflowsDirectory = path.resolve(
+        __dirname,
+        "../../templates/workflows"
+      );
+      for (const fileName of fs
+        .readdirSync(workflowsDirectory)
+        .filter((name) => name.endsWith(".ctrlyoke.yaml"))) {
+        const content = fs.readFileSync(
+          path.join(workflowsDirectory, fileName),
+          "utf-8"
+        );
+        const extracted = new Set(
+          tm.extractVariables(content).map((v: { name: string }) => v.name)
+        );
+        for (const name of Object.keys(
+          tm.parseTemplateMeta(content).variables
+        )) {
+          assert.ok(
+            extracted.has(name),
+            `${fileName} declares ${name} in _templateMeta but never uses it`
+          );
+        }
+      }
+    });
+
+    for (const templateId of ["bug-hunt-loop", "bug-drain-loop"]) {
+      test(`substitutes the bug directories and harnesses in ${templateId}`, async () => {
+        const tm = makeManager();
+        const workspaceDir = makeTempDir();
+        tm.getWorkspaceFolder = () => ({ uri: { fsPath: workspaceDir } });
+        tm.getTemplateContent = async (id: string) =>
+          fs.promises.readFile(
+            path.resolve(
+              __dirname,
+              "../../templates/workflows",
+              `${id}.ctrlyoke.yaml`
+            ),
+            "utf-8"
+          );
+
+        const workflow = await tm.createWorkflow(templateId, {
+          bugBacklogDir: "dev/bugs/backlog",
+          bugImplementedDir: "dev/bugs/implemented",
+          testCommand: "make check",
+          fixerHarness: "opencode-cli",
+          fixerModel: "opencode/big-pickle",
+        });
+        const prompt: string = workflow.finalStep!.prompt;
+
+        assert.deepStrictEqual(workflow.steps, []);
+        assert.strictEqual(workflow.harness, "opencode-cli");
+        assert.strictEqual(workflow.model, "opencode/big-pickle");
+        assert.strictEqual(workflow.finalStep!.harness, "claude-cli");
+        assert.strictEqual(workflow.finalStep!.model, "opus");
+        assert.deepStrictEqual(workflow.finalStep!.mcpServers, ["ctrlyoke"]);
+        assert.ok(prompt.includes("dev/bugs/backlog"));
+        assert.ok(prompt.includes("dev/bugs/implemented"));
+        assert.ok(prompt.includes("`make check`"));
+        assert.ok(!/\{[a-z][a-zA-Z0-9]*\}/.test(prompt), prompt);
+      });
+    }
 
     test("keeps dollar replacement tokens literal in prompt and script values", async () => {
       const tm = makeManager();

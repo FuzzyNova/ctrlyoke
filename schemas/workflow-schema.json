@@ -234,8 +234,13 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["text", "file", "directory", "select", "harness"],
-          "description": "Control used to collect this variable in the template dialog."
+          "enum": ["text", "file", "directory", "select", "harness", "model"],
+          "description": "Control used to collect this variable in the template dialog. A `model` variable shows the models of the harness variable named by `harness`, beside that harness picker."
+        },
+        "harness": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]*$",
+          "description": "For a `model` variable: the name of the `harness` variable whose models it offers. Changing that harness resets this model to the harness's default model."
         },
         "fileFilter": {
           "type": "array",
@@ -268,6 +273,17 @@
           "type": "boolean",
           "description": "Render a text variable as a multiline input."
         }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "const": "model"
+          }
+        },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["harness"]
       },
       "additionalProperties": false
     },
@@ -1327,7 +1343,11 @@
           "properties": {
             "code": {
               "type": "string",
-              "enum": ["queue-size-limit", "workflow-time-limit", "prompt-timeout"]
+              "enum": [
+                "queue-size-limit",
+                "workflow-time-limit",
+                "prompt-timeout"
+              ]
             },
             "threshold": {
               "type": "number",
