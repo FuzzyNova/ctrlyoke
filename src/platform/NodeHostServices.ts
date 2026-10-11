@@ -404,7 +404,7 @@ export async function createNodeHostedServer(options: {
         ptyManager.gracefulShutdownAllAiCliSessions(),
         orchestrator.shutdown(),
       ]);
-      orchestrator.dispose();
+      await orchestrator.disposeAsync();
       services.dispose();
       unprotectToken();
     },

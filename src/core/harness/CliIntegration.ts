@@ -1993,6 +1993,10 @@ export class CliIntegration extends HarnessIntegration {
     );
   }
 
+  override async waitForProcessShutdown(): Promise<void> {
+    await this.processManager.disposeAsync();
+  }
+
   /**
    * Returns true when inject mode is configured AND the last run left a live PTY
    * session with known inject context. WorkflowInstance checks this in the

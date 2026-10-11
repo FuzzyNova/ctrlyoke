@@ -56,7 +56,12 @@ import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
 import { CliTerminalOutputGate } from "./cli/CliTerminalOutputGate";
+import {
+  defaultShutdownTimers,
+  installTwoStageShutdown,
+} from "./cli/SignalShutdown";
 import { inheritedTerminalOwnership } from "./utils/InheritedTerminalOwnership";
+import { PROCESS_SIGNALS } from "./types/DashboardConstants";
 import { CliAttemptTally } from "./cli/CliAttemptTally";
 import {
   CliTerminalFormatter,
@@ -1284,24 +1289,40 @@ async function runCommand(
   // WorkflowInstance.startWorkflowExecution (single owner across CLI and
   // extension — see WorkflowLockManager). The CLI no longer duplicates it here.
 
-  // Handle Ctrl+C gracefully — shutdown() requests a stop and waits (with a
-  // bounded timeout) for the in-flight execution to actually settle, which is
-  // what guarantees the runner lock has been released before we exit.
-  const cleanup = async (): Promise<void> => {
-    if (!options.quiet && !options.json) {
-      console.log(chalk.yellow("\n\nInterrupted. Stopping workflow..."));
-    }
-    await instance.shutdown();
-    // Flush any pending retry aggregate so an interrupted run still reports the
-    // attempts it made. Idempotent with the normal and error exit paths.
-    releaseLiveOutputState();
-    process.exit(5);
-  };
-  process.on("SIGINT", () => {
-    void cleanup();
-  });
-  process.on("SIGTERM", () => {
-    void cleanup();
+  // shutdown() requests a stop and waits for the execution to settle, which
+  // guarantees the runner lock has been released before exit.
+  installTwoStageShutdown({
+    signals: process,
+    signalNames: [PROCESS_SIGNALS.INTERRUPT, PROCESS_SIGNALS.TERMINATE],
+    exit: process.exit,
+    timers: defaultShutdownTimers,
+    isInteractive: false,
+    countRunningWorkflows: () => {
+      const state = instance.getSummary().executionState;
+      return state === EXECUTION_STATES.RUNNING ||
+        state === EXECUTION_STATES.PAUSING
+        ? 1
+        : 0;
+    },
+    dispose: async () => {
+      await instance.shutdown();
+      // Flush any pending retry aggregate so an interrupted run still reports
+      // the attempts it made. Idempotent with normal/error exit paths.
+      releaseLiveOutputState();
+    },
+    deadlineMs: 5000,
+    confirmationMessage: () => "",
+    shutdownMessage: () => "\n\nInterrupted. Stopping workflow...",
+    forceMessage: "Force quitting.",
+    timeoutMessage: () => "Workflow shutdown timed out.",
+    onMessage: (message) => {
+      if (!options.quiet && !options.json) {
+        console.log(chalk.yellow(message));
+      }
+    },
+    exitCodeForSignal: () => 5,
+    successExitCode: 5,
+    timeoutExitCode: 5,
   });
 
   try {

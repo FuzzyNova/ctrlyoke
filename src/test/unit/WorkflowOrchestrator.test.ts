@@ -133,6 +133,26 @@ suite("WorkflowOrchestrator unseen failed runs", () => {
   });
 });
 
+suite("WorkflowOrchestrator running workflow count", () => {
+  test("counts only locally running or pausing workflows", () => {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    internal.instances = new Map([
+      ["running", { getSummary: () => ({ executionState: EXECUTION_STATES.RUNNING }) }],
+      ["pausing", { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSING }) }],
+      ["paused", { getSummary: () => ({ executionState: EXECUTION_STATES.PAUSED }) }],
+    ]);
+
+    // External watched runs are exposed in getWorkflowSummaries(), not this
+    // process-owned instance registry.
+    internal.externalRunWatchCoordinator.getSummaries = () => [
+      { executionState: EXECUTION_STATES.RUNNING },
+    ];
+
+    assert.strictEqual(orchestrator.countRunningWorkflows(), 2);
+  });
+});
+
 function createTestOrchestrator(
   overrides: Partial<WorkflowOrchestratorDependencies> = {}
 ): WorkflowOrchestrator {

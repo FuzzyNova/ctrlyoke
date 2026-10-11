@@ -1235,4 +1235,10 @@ export class EndConditionEvaluator {
     this.killAllProcesses();
     Log.trace("[EndConditionEvaluator] disposed");
   }
+
+  async disposeAsync(): Promise<void> {
+    const runners = [...this.processRunners];
+    this.dispose();
+    await Promise.all(runners.map((runner) => runner.waitForProcessShutdown()));
+  }
 }

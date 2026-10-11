@@ -31,6 +31,18 @@ export const HOST_KINDS = {
 
 export type HostKind = (typeof HOST_KINDS)[keyof typeof HOST_KINDS];
 
+/** OS process signals used by CLI and harness shutdown paths. */
+export const PROCESS_SIGNALS = {
+  INTERRUPT: "SIGINT",
+  TERMINATE: "SIGTERM",
+  HANGUP: "SIGHUP",
+  BREAK: "SIGBREAK",
+  KILL: "SIGKILL",
+} as const;
+
+export type ProcessSignal =
+  (typeof PROCESS_SIGNALS)[keyof typeof PROCESS_SIGNALS];
+
 /** Outcomes returned by host actions invoked from shared workflow code. */
 export const DASHBOARD_ACTION_RESULT_STATUSES = {
   OPENED: "opened",

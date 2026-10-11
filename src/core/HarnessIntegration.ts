@@ -190,6 +190,9 @@ export abstract class HarnessIntegration {
   protected responseCompleteEmitter = new TypedEmitter<string>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
 
+  /** Await host-owned child cleanup when a Node host is shutting down. */
+  async waitForProcessShutdown(): Promise<void> {}
+
   /**
    * When true, this harness emits pre-formatted plain text rather than markdown.
    * The UI skips the Streamdown pipeline to avoid double-rendering artifacts.

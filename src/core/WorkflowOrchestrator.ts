@@ -1182,6 +1182,17 @@ export class WorkflowOrchestrator {
     return summaries;
   }
 
+  /** Count only workflows whose execution this process owns and is stopping. */
+  countRunningWorkflows(): number {
+    return [...this.instances.values()].filter((instance) => {
+      const state = instance.getSummary().executionState;
+      return (
+        state === EXECUTION_STATES.RUNNING ||
+        state === EXECUTION_STATES.PAUSING
+      );
+    }).length;
+  }
+
   /**
    * Load a working file for a specific browser client without changing the VS Code
    * sidebar's active view. Used by LOAD_WORKFLOW from external clients.
@@ -4685,19 +4696,42 @@ export class WorkflowOrchestrator {
   }
 
   dispose(): void {
+    this.disposeResources(true);
+  }
+
+  /** Dispose and wait for CLI child processes to close after SIGTERM/SIGKILL. */
+  async disposeAsync(): Promise<void> {
+    const instances = new Set([
+      ...this.instances.values(),
+      ...this.retiredInstances.values(),
+    ]);
+    await Promise.all([...instances].map((instance) => instance.disposeAsync()));
+    const endConditionDisposal = this.endConditionEvaluator.disposeAsync();
+    this.disposeResources(false, false);
+    await endConditionDisposal;
+  }
+
+  private disposeResources(
+    disposeInstances: boolean,
+    disposeEndConditionEvaluator = true
+  ): void {
     this.activeQueueStateChangedEmitter?.dispose();
     this.activeQueueStateChangedEmitter = undefined;
     this.workflowActivityTracker?.dispose();
 
     // Dispose all retired instances (completed/stopped, not in main map)
-    for (const instance of this.retiredInstances.values()) {
-      instance.dispose();
+    if (disposeInstances) {
+      for (const instance of this.retiredInstances.values()) {
+        instance.dispose();
+      }
     }
     this.retiredInstances.clear();
     this.setViewedWorkflowId(this.PANEL_CLIENT_ID, null);
 
-    for (const instance of this.instances.values()) {
-      instance.dispose();
+    if (disposeInstances) {
+      for (const instance of this.instances.values()) {
+        instance.dispose();
+      }
     }
     this.instances.clear();
 
@@ -4710,7 +4744,9 @@ export class WorkflowOrchestrator {
 
     // The extension owns the injected status sink. Its StatusBarManager is
     // registered with context.subscriptions at construction time.
-    this.endConditionEvaluator.dispose();
+    if (disposeEndConditionEvaluator) {
+      this.endConditionEvaluator.dispose();
+    }
     this.compatibilityRegistry.dispose();
     // Cancels any in-flight provider quota probe so its subprocess cannot
     // outlive the host (workspace close, extension deactivate).
