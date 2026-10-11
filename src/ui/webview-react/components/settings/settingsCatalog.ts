@@ -215,7 +215,8 @@ const STATIC_SETTINGS_CATALOG = {
     path: "runs.maxRuns",
     tab: GLOBAL_SETTINGS_TABS.GENERAL,
     label: "Max runs to keep",
-    description: "Deletes entire runs—definition and output—oldest first.",
+    description:
+      "Per workflow. Starting a new run permanently deletes that workflow's oldest runs, definition and output together.",
   },
   "runs.historySearchCacheMb": {
     id: "runs.historySearchCacheMb",
@@ -320,7 +321,8 @@ const STATIC_SETTINGS_CATALOG = {
     path: "execution.closeTerminalOnComplete",
     tab: GLOBAL_SETTINGS_TABS.EXECUTION,
     label: "Close terminal on completion",
-    description: "Automatically close the terminal when a workflow completes.",
+    description:
+      "Automatically close the terminal when a workflow completes. Turns off inject mode.",
   },
   "execution.injectMode": {
     id: "execution.injectMode",
@@ -481,7 +483,7 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,
     label: "VS Code notifications",
     description:
-      "Show notification popups in the VS Code window when workflows complete.",
+      "Show notification popups in the VS Code window when workflows and steps complete, and for hook events.",
   },
   "notifications.browser.mode": {
     id: "notifications.browser.mode",
@@ -709,7 +711,7 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.STATS,
     label: "Save usage history",
     description:
-      "Keep a running record of usage in this workspace so totals and stats survive restarts. Off keeps usage in memory for this session only.",
+      "Keep a running record of usage with this project's run history so totals and stats survive restarts. Off keeps usage in memory for this session only.",
     revealedBy: "usageTracking.enabled",
   },
   "landmark:stats:model-pricing": {

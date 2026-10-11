@@ -89,7 +89,7 @@ fields.
 | [`languageServers`](#languageservers) | Managed language server definitions and language selections for the workspace editor. |
 | [`storage`](#storage) | User-only storage location configuration. |
 | [`permissions`](#permissions) | Harness-specific path and sandbox permission settings. |
-| [`usageTracking`](#usagetracking) | Controls workspace-local provider quota and observed-usage collection. |
+| [`usageTracking`](#usagetracking) | Controls provider quota and observed-usage collection. |
 | [`execution`](#execution) | Execution settings. |
 | [`queue`](#queue) | Queue management settings. |
 | [`runs`](#runs) | Execution run retention settings. |
@@ -581,7 +581,7 @@ User-only storage location configuration.
 - **Type:** `"user" | "workspace"`
 - **Default:** `"user"`
 
-Store run history under the user state home or beside the workspace.
+Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it.
 
 ### `storage.trashRetentionDays` {#storage-trashretentiondays}
 
@@ -654,7 +654,7 @@ Apply pattern-based heuristics (e.g. 'token=...', 'Bearer ...', private-key bloc
 
 ## `usageTracking` {#usagetracking}
 
-Controls workspace-local provider quota and observed-usage collection.
+Controls provider quota and observed-usage collection.
 
 ### `usageTracking.enabled` {#usagetracking-enabled}
 
@@ -668,14 +668,14 @@ Enable usage collection for ctrlyoke-started harness sessions.
 - **Type:** `boolean`
 - **Default:** `true`
 
-Allow provider quota refreshes from configured collectors.
+Allow provider quota refreshes from configured collectors. Requires `usageTracking.enabled`.
 
 ### `usageTracking.persistObservedUsage` {#usagetracking-persistobservedusage}
 
 - **Type:** `boolean`
 - **Default:** `true`
 
-Persist normalized observed usage in the workspace.
+Save observed usage and lifetime statistics with this project's run history, so they survive a restart. The location follows `storage.runHistoryLocation`. Requires `usageTracking.enabled`.
 
 ### `usageTracking.warningPercentUsed` {#usagetracking-warningpercentused}
 
@@ -701,14 +701,14 @@ Execution settings.
 - **Type:** `boolean`
 - **Default:** `true`
 
-When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug.
+When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug. Interactive steps only, and only when the step resumes the previous session. Has no effect while `execution.closeTerminalOnComplete` is on.
 
 ### `execution.closeTerminalOnComplete` {#execution-closeterminaloncomplete}
 
 - **Type:** `boolean`
 - **Default:** `false`
 
-Automatically close the terminal when execution completes.
+Automatically close the interactive terminal when execution completes. Turning this on disables `execution.injectMode`.
 
 ### `execution.autoDeleteTempFiles` {#execution-autodeletetempfiles}
 
@@ -736,7 +736,7 @@ Maximum time in seconds for one harness prompt to complete. A finite value stops
 - **Type:** `number`
 - **Default:** `3600`
 
-Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. This setting must be greater than zero and has no unlimited value. A script's own `timeoutSec` (in seconds) overrides it.
+Maximum time in seconds for pre-condition, end-condition, and script-step scripts, and for a worktree's setup command, to run. This setting must be greater than zero and has no unlimited value. A script's own `timeoutSec` (in seconds) overrides it.
 
 ### `execution.ctrlyokeMcpMode` {#execution-ctrlyokemcpmode}
 
@@ -761,7 +761,7 @@ not isolate members from each other or merge their work.
 - **Type:** `-1` or `integer`
 - **Default:** `100`
 
-Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. `-1` disables the queue-size limit.
+Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. A workflow's own `maxSteps` replaces this value for that workflow, so a workflow `maxSteps: -1` lifts this cap. Dashboard appends, MCP `append_step`, and run continuation enforce the same resolved limit. `-1` disables the queue-size limit.
 
 ### `queue.maxParallelSteps` {#queue-maxparallelsteps}
 
@@ -787,7 +787,7 @@ Execution run retention settings. History is always on.
 - **Type:** `-1` or `integer`
 - **Default:** `-1`
 
-Deletes entire runs—definition and output—oldest first. `-1` means unlimited.
+Maximum runs kept per workflow. When a new run starts, that workflow's oldest runs are permanently deleted, definition and output together, without passing through Recently deleted. Running runs and runs another workflow uses as prior context are kept, so the count can briefly exceed the limit. `-1` means unlimited.
 
 ### `runs.historySearchCacheMb` {#runs-historysearchcachemb}
 
@@ -879,41 +879,61 @@ When to show the mobile terminal control bar.
 
 - **Type:** `{ bar, popup, hidden }`
 
-Which keys the mobile terminal control bar shows: 'bar' keys are always visible, 'popup' keys sit behind the More menu, and 'hidden' keys are not shown.
+Which keys the mobile terminal control bar shows: 'bar' keys are always visible, 'popup' keys sit behind the More menu, and 'hidden' keys are not shown. Each entry is a key ID: `modifier:ctrl` (a one-shot Ctrl toggle); `key:esc`, `key:tab`, `key:up`, `key:down`, `key:left`, `key:right`, or `key:enter`; `shortcut:shift-tab`, `shortcut:ctrl-c`, `shortcut:ctrl-z`, `shortcut:ctrl-l`, `shortcut:ctrl-r`, or `shortcut:ctrl-a`; or the `id` of an entry in `terminal.mobileCustomShortcuts`. Unknown IDs are dropped, and a known key missing from all three lists is added to 'popup'.
+
+### `terminal.mobileBarLayout.bar` {#terminal-mobilebarlayout-bar}
+
+- **Type:** `string[]`
+- **Required:** yes
+
+Key IDs always visible on the bar, in order. `modifier:ctrl` is kept here unless it is hidden.
 
 <details><summary>Default value</summary>
 
 ```json
-{
-  "bar": [
-    "modifier:ctrl",
-    "key:esc",
-    "key:tab",
-    "key:up",
-    "key:down",
-    "key:left",
-    "key:right",
-    "key:enter"
-  ],
-  "popup": [
-    "shortcut:shift-tab",
-    "shortcut:ctrl-c",
-    "shortcut:ctrl-z",
-    "shortcut:ctrl-l",
-    "shortcut:ctrl-r",
-    "shortcut:ctrl-a"
-  ],
-  "hidden": []
-}
+[
+  "modifier:ctrl",
+  "key:esc",
+  "key:tab",
+  "key:up",
+  "key:down",
+  "key:left",
+  "key:right",
+  "key:enter"
+]
 ```
 
 </details>
 
-Fields:
+### `terminal.mobileBarLayout.popup` {#terminal-mobilebarlayout-popup}
 
-- `bar` · `string[]` · required
-- `popup` · `string[]` · required
-- `hidden` · `string[]` · required
+- **Type:** `string[]`
+- **Required:** yes
+
+Key IDs shown in the More menu, in order. The menu shows shortcuts only, and `modifier:ctrl` placed here moves to 'bar'.
+
+<details><summary>Default value</summary>
+
+```json
+[
+  "shortcut:shift-tab",
+  "shortcut:ctrl-c",
+  "shortcut:ctrl-z",
+  "shortcut:ctrl-l",
+  "shortcut:ctrl-r",
+  "shortcut:ctrl-a"
+]
+```
+
+</details>
+
+### `terminal.mobileBarLayout.hidden` {#terminal-mobilebarlayout-hidden}
+
+- **Type:** `string[]`
+- **Required:** yes
+- **Default:** `[]`
+
+Key IDs not shown anywhere.
 
 ### `terminal.mobileCustomShortcuts` {#terminal-mobilecustomshortcuts}
 
@@ -1187,7 +1207,7 @@ VS Code notification settings.
 - **Type:** `boolean`
 - **Default:** `true`
 
-Show VS Code notification popups when workflows complete.
+Show VS Code notification popups for workflow and step completion and for hook events. Operational messages are controlled by `notifications.toastLevel` instead.
 
 ### `notifications.browser` {#notifications-browser}
 

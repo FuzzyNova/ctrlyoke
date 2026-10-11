@@ -354,7 +354,7 @@
           "type": "string",
           "enum": ["user", "workspace"],
           "default": "user",
-          "description": "Store run history under the user state home or beside the workspace."
+          "description": "Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it."
         },
         "trashRetentionDays": {
           "type": "integer",
@@ -398,7 +398,7 @@
     },
     "usageTracking": {
       "type": "object",
-      "description": "Controls workspace-local provider quota and observed-usage collection.",
+      "description": "Controls provider quota and observed-usage collection.",
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -408,12 +408,12 @@
         },
         "providerRefreshEnabled": {
           "type": "boolean",
-          "description": "Allow provider quota refreshes from configured collectors.",
+          "description": "Allow provider quota refreshes from configured collectors. Requires `usageTracking.enabled`.",
           "default": true
         },
         "persistObservedUsage": {
           "type": "boolean",
-          "description": "Persist normalized observed usage in the workspace.",
+          "description": "Save observed usage and lifetime statistics with this project's run history, so they survive a restart. The location follows `storage.runHistoryLocation`. Requires `usageTracking.enabled`.",
           "default": true
         },
         "warningPercentUsed": {
@@ -475,12 +475,12 @@
       "properties": {
         "injectMode": {
           "type": "boolean",
-          "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug.",
+          "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug. Interactive steps only, and only when the step resumes the previous session. Has no effect while `execution.closeTerminalOnComplete` is on.",
           "default": true
         },
         "closeTerminalOnComplete": {
           "type": "boolean",
-          "description": "Automatically close the terminal when execution completes.",
+          "description": "Automatically close the interactive terminal when execution completes. Turning this on disables `execution.injectMode`.",
           "default": false
         },
         "autoDeleteTempFiles": {
@@ -510,7 +510,7 @@
         "scriptTimeoutSec": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. This setting must be greater than zero and has no unlimited value. A script's own `timeoutSec` (in seconds) overrides it.",
+          "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts, and for a worktree's setup command, to run. This setting must be greater than zero and has no unlimited value. A script's own `timeoutSec` (in seconds) overrides it.",
           "default": 3600
         },
         "ctrlyokeMcpMode": {
@@ -528,7 +528,7 @@
       "properties": {
         "maxSteps": {
           "$ref": "workflow.json#/$defs/maxStepsValue",
-          "description": "Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. `-1` disables the queue-size limit.",
+          "description": "Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. A workflow's own `maxSteps` replaces this value for that workflow, so a workflow `maxSteps: -1` lifts this cap. Dashboard appends, MCP `append_step`, and run continuation enforce the same resolved limit. `-1` disables the queue-size limit.",
           "default": 100
         },
         "maxParallelSteps": {
@@ -567,7 +567,7 @@
               "minimum": 1
             }
           ],
-          "description": "Deletes entire runs—definition and output—oldest first. `-1` means unlimited.",
+          "description": "Maximum runs kept per workflow. When a new run starts, that workflow's oldest runs are permanently deleted, definition and output together, without passing through Recently deleted. Running runs and runs another workflow uses as prior context are kept, so the count can briefly exceed the limit. `-1` means unlimited.",
           "default": -1
         },
         "historySearchCacheMb": {
@@ -644,11 +644,12 @@
           "default": "auto"
         },
         "mobileBarLayout": {
-          "description": "Which keys the mobile terminal control bar shows: 'bar' keys are always visible, 'popup' keys sit behind the More menu, and 'hidden' keys are not shown.",
+          "description": "Which keys the mobile terminal control bar shows: 'bar' keys are always visible, 'popup' keys sit behind the More menu, and 'hidden' keys are not shown. Each entry is a key ID: `modifier:ctrl` (a one-shot Ctrl toggle); `key:esc`, `key:tab`, `key:up`, `key:down`, `key:left`, `key:right`, or `key:enter`; `shortcut:shift-tab`, `shortcut:ctrl-c`, `shortcut:ctrl-z`, `shortcut:ctrl-l`, `shortcut:ctrl-r`, or `shortcut:ctrl-a`; or the `id` of an entry in `terminal.mobileCustomShortcuts`. Unknown IDs are dropped, and a known key missing from all three lists is added to 'popup'.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "bar": {
+              "description": "Key IDs always visible on the bar, in order. `modifier:ctrl` is kept here unless it is hidden.",
               "type": "array",
               "items": {
                 "type": "string"
@@ -665,6 +666,7 @@
               ]
             },
             "popup": {
+              "description": "Key IDs shown in the More menu, in order. The menu shows shortcuts only, and `modifier:ctrl` placed here moves to 'bar'.",
               "type": "array",
               "items": {
                 "type": "string"
@@ -679,6 +681,7 @@
               ]
             },
             "hidden": {
+              "description": "Key IDs not shown anywhere.",
               "type": "array",
               "items": {
                 "type": "string"
@@ -948,7 +951,7 @@
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "Show VS Code notification popups when workflows complete.",
+              "description": "Show VS Code notification popups for workflow and step completion and for hook events. Operational messages are controlled by `notifications.toastLevel` instead.",
               "default": true
             }
           }

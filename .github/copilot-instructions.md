@@ -26,10 +26,10 @@ checkout's `stateRoot`; opening a worktree directory directly as its own VS Code
 it its own history.
 
 - `workflow.json` — lineage descriptor (name, favorite, `latestRunRef`, `nextRunId`).
-- `runner.json` — runner lock, naming the exact executing `RunRef`; a stale file with a dead PID can cause false "already running" errors — safe to delete.
+- `runner.json` — runner lock, naming the exact executing `RunRef`. A lock whose PID is dead or whose heartbeat is over 30 s old is reclaimed automatically; only a lock written by a newer ctrlyoke version is never reclaimed and must be deleted by hand.
 - `draft/workflow.ctrlyoke.json` — the lineage's not-yet-executed definition, present before the first run.
 - `run-<timestamp>/workflow.ctrlyoke.json` — that run's live working copy with `_runtime` blocks per step (harness, sessionId, timestamps, terminal status).
-- `run-<timestamp>/events.jsonl` — per-step output events (one CLI output chunk per line). Useful for comparing actual AI output vs. what an end-condition script received, or diagnosing why a retry loop triggered.
+- `run-<timestamp>/events.jsonl` — the run's typed timeline (`TIMELINE_EVENT_TYPES`): CLI output, attempts and retries, script results, runtime transitions, snapshots and undo. It is the only durable record of step output; `responseText` is stripped from `_runtime`. Useful for comparing actual AI output vs. what an end-condition script received, or diagnosing why a retry loop triggered.
 - `run-<timestamp>/manifest.json` — step metadata and run summary.
 
 User-scoped history under OneDrive or Dropbox is synchronized, but running the same project
