@@ -2,7 +2,7 @@
 
 **Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
 
-> **2026-10-10 audit:** Done: #6 (`hero-gif-1350x900.gif`, the landing hero), #1 in a different
+> **2026-10-10 audit:** Done: #6 (the landing hero, now `hero-{av1,h264}-1350x900.mp4`), #1 in a different
 > form (the six `rate-limiter-*-1200x800.png` stills in landing's `HarnessDeck.astro` instead of a
 > layered composite), #3/#7 motion (`ctrlyoke-take-control-1080p.mp4` on landing), and #7's iOS,
 > Android and desktop setup sets, slotted into `docs/pro/mobile-setup.md`. #12 is captured and
@@ -218,8 +218,10 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** landing hero (replace/accompany the static YAML snippet) or a new "watch it work" section;
   `docs/workflows/index.md` and `docs/guide/your-first-workflow.md`.
 - **Dimensions:** category D — see "Target dimensions" above.
-- **Status — done:** `images/screenshots/hero-gif-1350x900.gif` (`6cb508eca`…`0a3be9795`), used as
-  the landing hero. It is not yet in `docs/` or `README.md`.
+- **Status — done:** captured as `hero-gif-1350x900.gif` (`6cb508eca`…`0a3be9795`); re-encoded
+  2026-10-11 to `hero-av1-1350x900.mp4` (720 KB) plus an H.264 fallback
+  `hero-h264-1350x900.mp4` (1.7 MB), and the GIF removed. Used as the landing hero and on
+  `docs/guide/index.md`; not yet in `README.md` (the Marketplace needs a GIF or image there).
 
 ### 7. Built-in mobile editor section, plus the QR-scan/PWA-install walkthrough (iOS & Android)
 
@@ -296,7 +298,7 @@ Each item: what to capture, what prep it needs, where it's used.
   centerpiece asset — the hard requirement is documented Android + iOS install instructions in
   `docs/pro/`, and these recordings are the visual walkthrough that instructions alone don't convey
   well. **Status — instructions: done** as `docs/pro/mobile-setup.md` (`b32f403fd`; ticked in
-`RELEASE_CHECKLIST.md` Phase 6): shared desktop and
+  `RELEASE_CHECKLIST.md` Phase 6): shared desktop and
   open-the-link steps, then separate iPhone/iPad and Android sections with each step's stills in a
   row (`.device-shots`, `docs/.vitepress/theme/custom.css`; click opens full size) and the overview
   animation in a collapsed `<details>`. Stills are unannotated; the text names the item to tap.
@@ -365,9 +367,9 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Dimensions:** two sets, both needed — category G (wide desktop browser) for the landing/general-docs
   use, and category H (real iPhone, mobile Safari or the installed PWA) for the PWA-setup docs and the
   mobile section. Neither is a VS Code sidebar capture — see "Window size" in Capture setup.
-- **Status:** wide desktop stills done — `workspace-viewer-explorer-1600x1000.png` and
-  `workspace-viewer-search-1600x1000.png`. Still to capture: the Source Control + diff still and the
-  iPhone set.
+- **Status:** wide desktop stills done and slotted (2026-10-11) into `docs/guide/workspace-viewer.md`
+  and `docs/guide/source-control.md`: `workspace-viewer-explorer-references`, `-editor-menu`,
+  `-search-1600x830`, `-source-control` and `-commit-diff`. Still to capture: the iPhone set.
 - **Plus a phone clip: edit a file and commit it** (~10–15s, category H motion, animated WebP with
   alpha like #7's). The motion version of the iPhone set, and a stronger "real IDE on your phone"
   demo than any still: Explorer → open a file and change a line (`WorkspaceFileEditor`) → save →
@@ -389,7 +391,9 @@ Each item: what to capture, what prep it needs, where it's used.
   file list rather than one line.
 - **Use:** landing "One reversible view of every result" feature card (`⬛`, icon-only today);
   `docs/workflows/index.md` or wherever undo/history is documented.
-- **Status:** captured as `undo-changes-dialog-1680x1800.png`, not yet slotted anywhere.
+- **Status:** done 2026-10-11 as `file-changes-workflow-1600x1000.png` and
+  `file-changes-output-undo-1000x510.png` on `docs/guide/file-changes.md` (the older
+  `undo-changes-dialog` capture showed a since-renamed title and was removed).
 
 ### 12. `WorkflowPropertiesPanel` — all six drawer tabs, plus key settings pages
 
@@ -506,8 +510,8 @@ ctrlyoke.
 | `docs/guide/concepts.md` or new editor page                       | #10      |
 | New/expanded workflow-properties + permissions + MCP + hooks docs | #12      |
 
-| VS Code surface                                  | Asset(s)  |
-| ------------------------------------------------ | --------- |
+| VS Code surface                                  | Asset(s)                                |
+| ------------------------------------------------ | --------------------------------------- |
 | `ctrlyoke.gettingStarted` walkthrough, steps 1–6 | #13a–#13e (+ `installCli`, no shot yet) |
 
 ## Execution order (suggested)

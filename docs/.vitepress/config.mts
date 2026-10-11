@@ -42,8 +42,11 @@ export default defineConfig({
           text: "Using the dashboard",
           items: [
             { text: "Dashboard tour", link: "/guide/dashboard" },
+            { text: "File changes and undo", link: "/guide/file-changes" },
             { text: "Settings", link: "/guide/settings" },
             { text: "Browser dashboard", link: "/guide/remote-dashboard" },
+            { text: "Workspace viewer", link: "/guide/workspace-viewer" },
+            { text: "Source control", link: "/guide/source-control" },
           ],
         },
       ],

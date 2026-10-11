@@ -85,7 +85,8 @@ the conflicting files. In every case the branch is still there to merge by hand.
 
 ### Keeping the directory
 
-Removing the worktree directory also ends file-change undo for that run. Set
+Removing the worktree directory also ends
+[file-change undo](/guide/file-changes) for that run. Set
 `keep: true` (**Keep directory** in the dashboard) when you want to inspect the
 files in place, undo individual changes afterwards, or append follow-up prompts
 to the run.

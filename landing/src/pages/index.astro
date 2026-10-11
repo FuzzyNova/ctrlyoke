@@ -5,7 +5,10 @@ import HarnessDeck from "../components/HarnessDeck.astro";
 import { LAUNCHED, MARKETPLACE_URL } from "../config";
 // Canonical screenshots live at repo-root images/screenshots/, not duplicated into
 // landing/public/ — see "Screenshot assets" in .github/copilot-instructions.md.
-import heroGif from "../../../images/screenshots/hero-gif-1350x900.gif";
+// The hero ships as AV1 with an H.264 fallback for browsers without AV1 decode
+// (older Safari); browsers fetch only the first source they can play.
+import heroAv1 from "../../../images/screenshots/hero-av1-1350x900.mp4";
+import heroH264 from "../../../images/screenshots/hero-h264-1350x900.mp4";
 import takeControlVideo from "../../../images/screenshots/ctrlyoke-take-control-1080p.mp4";
 
 const features = [
@@ -103,15 +106,19 @@ const steps = [
     </div>
     <div class="relative mx-auto mt-10 max-w-6xl">
       <div class="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50">
-        <img
-          src={heroGif.src}
+        <video
           width={1350}
           height={900}
-          alt="ctrlyoke running a multi-step workflow across several CLI coding agents, with live output and the output minimap"
-          loading="eager"
-          decoding="async"
+          autoplay
+          muted
+          loop
+          playsinline
+          aria-label="ctrlyoke running a multi-step workflow across several CLI coding agents, with live output and the output minimap"
           class="w-full"
-        />
+        >
+          <source src={heroAv1} type='video/mp4; codecs="av01.0.08M.08"' />
+          <source src={heroH264} type="video/mp4" />
+        </video>
       </div>
     </div>
     <div class="relative mx-auto mt-10 max-w-4xl text-center">

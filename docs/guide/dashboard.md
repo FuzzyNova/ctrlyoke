@@ -40,14 +40,16 @@ From left to right:
 - **Dry Run**: preview exactly what each step would send to its harness, without
   running anything.
 - **Undo** and **Redo**: undo edits to the workflow definition. The chevron shows
-  the undo history.
+  the undo history. To undo the files a step changed, see
+  [File changes and undo](/guide/file-changes).
 - **Back** and **Forward** (on layouts at least 768 px wide): move between the
   workflows and runs you viewed.
 - The **workflow name and state** badge, which opens the
   [workflow menu](#the-workflow-menu). Click the name to rename the workflow.
 - The [run controls](#run-controls).
 - **Search History** (`Ctrl+Shift+F`), **Explore files and changes** (browser
-  dashboard only) and **Global Settings**. See [Settings](/guide/settings).
+  dashboard only; see [Workspace viewer](/guide/workspace-viewer)) and **Global
+  Settings**. See [Settings](/guide/settings).
 
 The state badge reads **Ready**, **Running**, **Pausing...**, **Paused**,
 **Stopped**, **Cancelling...**, **Completed** or **Error**.
@@ -221,6 +223,8 @@ Right-click a workflow or run for:
 
 ## Related
 
+- [File changes and undo](/guide/file-changes)
+- [Workspace viewer](/guide/workspace-viewer)
 - [Workflow properties panel](/workflows/properties-panel)
 - [Parallel steps](/workflows/parallel-steps)
 - [Error handling](/workflows/error-handling)
