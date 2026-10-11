@@ -11,15 +11,17 @@ import {
   AskUserQuestionData,
   AskUserQuestionEntry,
   AskUserQuestionOption,
-  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import {
+  APPLY_PATCH_FILE_EDIT_KINDS,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
+import type { ApplyPatchFileEditKind } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import type { McpToolHint } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
+import type { ApplyPatchFileEdit } from "../shared/ApplyPatchParser";
 import {
   buildApplyPatchFallbackEvent,
   buildApplyPatchFileEvent,
@@ -586,30 +588,22 @@ export class CopilotToolBuilder {
    */
   private static parseGitDiffFileEdits(
     diffText: string
-  ): {
-    path: string;
-    kind: "add" | "update" | "delete";
-    structuredPatch: UnifiedDiffHunk[];
-  }[] {
+  ): Required<ApplyPatchFileEdit>[] {
     const sections = diffText
       .split(/(?=^diff --git )/m)
       .filter((section) => section.trim().length > 0);
 
-    const edits: {
-      path: string;
-      kind: "add" | "update" | "delete";
-      structuredPatch: UnifiedDiffHunk[];
-    }[] = [];
+    const edits: Required<ApplyPatchFileEdit>[] = [];
     for (const section of sections) {
       const plusMatch = section.match(/^\+\+\+ (?:b\/)?(.+)$/m);
       const minusMatch = section.match(/^--- (?:a\/)?(.+)$/m);
-      const kind =
+      const kind: ApplyPatchFileEditKind =
         /^new file mode /m.test(section) || minusMatch?.[1] === "/dev/null"
-          ? "add"
+          ? APPLY_PATCH_FILE_EDIT_KINDS.ADD
           : /^deleted file mode /m.test(section) ||
               plusMatch?.[1] === "/dev/null"
-            ? "delete"
-            : "update";
+            ? APPLY_PATCH_FILE_EDIT_KINDS.DELETE
+            : APPLY_PATCH_FILE_EDIT_KINDS.UPDATE;
       const path =
         plusMatch && plusMatch[1] !== "/dev/null"
           ? plusMatch[1].trim()

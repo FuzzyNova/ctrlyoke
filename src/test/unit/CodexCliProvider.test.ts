@@ -55,19 +55,29 @@ suite("CodexCliProvider", () => {
         {
           id: "io.github.upstash/context7",
           command: "npx",
-          autoApprove: ["list-tools", "tool.with.dot"],
+          autoApprove: ["list-tools", "files/read", "tool.with.dot"],
         },
       ]
     );
     const args = preparation.cliArgs;
 
     assert.ok(
-      args.some((arg) => arg.includes("mcp_servers.io_github_upstash_context7="))
+      args.some((arg) =>
+        arg.includes("mcp_servers.io_github_upstash_context7=")
+      )
     );
     assert.ok(
       args.some((arg) =>
         arg.includes(
           "mcp_servers.io_github_upstash_context7.tools.list-tools.approval_mode"
+        )
+      )
+    );
+    // Tool names are server-defined, so they are never renamed.
+    assert.ok(
+      args.some((arg) =>
+        arg.includes(
+          "mcp_servers.io_github_upstash_context7.tools.files/read.approval_mode"
         )
       )
     );

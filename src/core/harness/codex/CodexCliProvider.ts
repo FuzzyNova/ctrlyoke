@@ -189,9 +189,11 @@ export class CodexCliProvider implements ICliProvider {
         );
         return [];
       }
+      // Tool names are server-defined: renaming one would target a tool that
+      // doesn't exist, so only the server key (ours to choose) is sanitized.
       return [
         "-c",
-        `mcp_servers.${serverKey}.tools.${sanitizeCodexConfigKeySegment(toolName)}.approval_mode='approve'`,
+        `mcp_servers.${serverKey}.tools.${toolName}.approval_mode='approve'`,
       ];
     });
   }
