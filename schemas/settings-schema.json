@@ -50,6 +50,22 @@
         }
       }
     },
+    "templates": {
+      "type": "object",
+      "description": "Template-specific settings.",
+      "additionalProperties": false,
+      "properties": {
+        "variableDefaults": {
+          "type": "object",
+          "description": "Saved defaults for declared template variables. Workspace values override User values per variable. A harness and its linked model variables resolve together from one scope; if that scope has no model value, the model uses the template's authored default. Unknown or invalid values are ignored until corrected or the template definition changes.",
+          "default": {},
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      }
+    },
     "defaults": {
       "type": "object",
       "description": "Default execution properties applied to all new workflows (mirrors ExecutionProperties).",

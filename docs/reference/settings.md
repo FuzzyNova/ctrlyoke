@@ -83,6 +83,7 @@ fields.
 | Section | Purpose |
 | --- | --- |
 | [`general`](#general) | General format, template, and behavior settings. |
+| [`templates`](#templates) | Template-specific settings. |
 | [`defaults`](#defaults) | Default execution properties applied to all new workflows (mirrors ExecutionProperties). |
 | [`worktrees`](#worktrees) | User-only worktree checkout placement configuration. |
 | [`coordination`](#coordination) | Retention and participant settings for the execution-root coordination board. |
@@ -141,6 +142,17 @@ When resuming an existing session, omit only agent/skill declarations that were 
 - **Default:** `true`
 
 Include full file diffs in captured AI responses so later prior-context attachments contain the actual changes instead of edit summaries.
+
+## `templates` {#templates}
+
+Template-specific settings.
+
+### `templates.variableDefaults` {#templates-variabledefaults}
+
+- **Type:** map of map of `string`
+- **Default:** `{}`
+
+Saved defaults for declared template variables. Workspace values override User values per variable. A harness and its linked model variables resolve together from one scope; if that scope has no model value, the model uses the template's authored default. Unknown or invalid values are ignored until corrected or the template definition changes.
 
 ## `defaults` {#defaults}
 

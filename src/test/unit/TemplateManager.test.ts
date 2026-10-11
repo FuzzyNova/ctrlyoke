@@ -4,7 +4,13 @@ import * as path from "path";
 import * as jsYaml from "js-yaml";
 import { suite, teardown, test } from "mocha";
 import { TemplateManager } from "../../core/TemplateManager";
-import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
+import {
+  SETTING_SCOPES,
+  TEMPLATE_SCOPES,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
+  WORKFLOW_FILE_FORMATS,
+  type SettingWriteScope,
+} from "../../types/DashboardConstants";
 import { MockPlatform } from "../helpers/mockHarness";
 import { EXECUTION_PROPERTY_KEYS } from "../../types/CtrlYokeTypes";
 import { parseAtReferences } from "../../utils/FileReferenceParser";
@@ -17,11 +23,15 @@ import {
 // only on strings/objects and never touch the ExtensionContext — so we construct a
 // manager with a stub context and reach the methods via `as any` to unit-test the
 // variable metadata model without needing a workspace or file system.
-function makeManager(): any {
+function makeManager(
+  getVariableDefaults?: (scope: SettingWriteScope) => Record<string, Record<string, string | undefined> | undefined> | undefined,
+  workspaceRoot: string | undefined = process.cwd()
+): any {
   return new TemplateManager(
     process.cwd(),
-    () => process.cwd(),
-    new MockPlatform()
+    () => workspaceRoot,
+    new MockPlatform(),
+    getVariableDefaults
   );
 }
 
@@ -40,6 +50,129 @@ teardown(() => {
 });
 
 suite("TemplateManager variable metadata", () => {
+  suite("variable default overlays", () => {
+    test("applies user and per-variable workspace values with authored metadata", () => {
+      const tm = makeManager((scope) =>
+        scope === SETTING_SCOPES.USER
+          ? { demo: { first: "user-first", second: "user-second" } }
+          : { demo: { first: "workspace-first" } }
+      );
+      const variables = tm.mergeTemplateVariables(
+        [{ name: "first" }, { name: "second" }],
+        { first: { type: "text", default: "authored-first" }, second: { default: "authored-second" } },
+        "demo"
+      );
+      assert.deepStrictEqual(
+        variables.map((variable: any) => [variable.default, variable.authoredDefault, variable.defaultSource]),
+        [
+          ["workspace-first", "authored-first", TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE],
+          ["user-second", "authored-second", TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER],
+        ]
+      );
+    });
+
+    test("ignores stale and invalid saved values", () => {
+      const tm = makeManager((scope) =>
+        scope === SETTING_SCOPES.USER
+          ? { demo: { removed: "old", harness: "gone-cli", model: "old-model", choice: "unknown" } }
+          : undefined
+      );
+      const variables = tm.mergeTemplateVariables(
+        [
+          { name: "harness" },
+          { name: "model" },
+          { name: "choice" },
+        ],
+        {
+          harness: { type: "harness", default: "claude-cli" },
+          model: { type: "model", harness: "harness", default: "opus" },
+          choice: { type: "select", options: ["one", "two"], default: "one" },
+        },
+        "demo"
+      );
+      assert.deepStrictEqual(variables.map((variable: any) => variable.default), [
+        "claude-cli",
+        "opus",
+        "one",
+      ]);
+    });
+
+    test("does not read workspace values when there is no workspace", () => {
+      let workspaceReads = 0;
+      const tm = makeManager((scope) => {
+        if (scope === SETTING_SCOPES.WORKSPACE) workspaceReads += 1;
+        return { demo: { value: "saved" } };
+      }, "");
+      const [variable] = tm.mergeTemplateVariables(
+        [{ name: "value" }],
+        { value: { default: "authored" } },
+        "demo"
+      );
+      assert.strictEqual(workspaceReads, 0);
+      assert.strictEqual(variable.default, "saved");
+    });
+
+    test("uses a saved default when createWorkflow's caller omits the variable", async () => {
+      const tm = makeManager((scope) =>
+        scope === SETTING_SCOPES.USER ? { "custom:user:demo": { feature: "saved-value" } } : undefined
+      );
+      tm.getTemplateContent = async () =>
+        [
+          "_templateMeta:",
+          "  variables:",
+          "    feature:",
+          "      default: authored-value",
+          "steps:",
+          "  - prompt: Build {feature}",
+        ].join("\n");
+      const workflow = await tm.createWorkflow("custom:user:demo", {});
+      assert.strictEqual((workflow.steps[0] as { prompt: string }).prompt, "Build saved-value");
+    });
+
+    test("uses the full custom id when discovering an overlay", async () => {
+      const tm = makeManager((scope) =>
+        scope === SETTING_SCOPES.USER
+          ? { "custom:user:custom-demo": { value: "custom-saved" } }
+          : undefined
+      );
+      const templateDir = makeTempDir();
+      await fs.promises.writeFile(
+        path.join(templateDir, "custom-demo.ctrlyoke.yaml"),
+        "_templateMeta:\n  variables:\n    value:\n      default: authored\nsteps:\n  - prompt: '{value}'\n",
+        "utf-8"
+      );
+      const [template] = await tm.discoverTemplatesInDir(templateDir, TEMPLATE_SCOPES.USER);
+      assert.strictEqual(template.variables[0].default, "custom-saved");
+    });
+
+    test("workspace harness does not inherit user model and invalid harness drops its model", () => {
+      const tm = makeManager((scope) =>
+        scope === SETTING_SCOPES.USER
+          ? { demo: { harness: "codex-cli", model: "gpt-6-luna" } }
+          : { demo: { harness: "claude-cli" } }
+      );
+      const vars = [
+        { name: "harness", type: "harness" },
+        { name: "model", type: "model", harness: "harness" },
+      ];
+      const workspacePair = tm.mergeTemplateVariables(
+        vars,
+        { harness: { default: "codex-cli" }, model: { default: "opus" } },
+        "demo"
+      );
+      assert.deepStrictEqual(workspacePair.map((variable: any) => variable.default), ["claude-cli", "opus"]);
+
+      const invalid = makeManager((scope: SettingWriteScope) =>
+        scope === SETTING_SCOPES.WORKSPACE ? { demo: { harness: "removed", model: "invalid-model" } } : undefined
+      ).mergeTemplateVariables(
+        vars,
+        { harness: { default: "claude-cli" }, model: { default: "opus" } },
+        "demo"
+      );
+      assert.deepStrictEqual(invalid.map((variable: any) => variable.default), ["claude-cli", "opus"]);
+    });
+  });
+
   suite("parseTemplateMeta", () => {
     test("parses type, fileFilter, autoFillFilename, description, default, multiline", () => {
       const tm = makeManager();
@@ -314,17 +447,17 @@ suite("TemplateManager variable metadata", () => {
   suite("custom template ID scope encoding", () => {
     test("buildCustomTemplateId round-trips through parseCustomTemplateId", () => {
       const tm = makeManager();
-      const workspaceId = tm.buildCustomTemplateId("workspace", "my-template");
+      const workspaceId = tm.buildCustomTemplateId(TEMPLATE_SCOPES.WORKSPACE, "my-template");
       assert.strictEqual(workspaceId, "custom:workspace:my-template");
       assert.deepStrictEqual(tm.parseCustomTemplateId(workspaceId), {
-        scope: "workspace",
+        scope: TEMPLATE_SCOPES.WORKSPACE,
         name: "my-template",
       });
 
-      const userId = tm.buildCustomTemplateId("user", "shared-template");
+      const userId = tm.buildCustomTemplateId(TEMPLATE_SCOPES.USER, "shared-template");
       assert.strictEqual(userId, "custom:user:shared-template");
       assert.deepStrictEqual(tm.parseCustomTemplateId(userId), {
-        scope: "user",
+        scope: TEMPLATE_SCOPES.USER,
         name: "shared-template",
       });
     });
@@ -357,7 +490,7 @@ suite("TemplateManager variable metadata", () => {
 
       const createdPath = await tm.createCustomTemplate(
         "My Copy",
-        "workspace",
+        TEMPLATE_SCOPES.WORKSPACE,
         WORKFLOW_FILE_FORMATS.YAML,
         "base"
       );
@@ -384,7 +517,7 @@ suite("TemplateManager variable metadata", () => {
 
       const createdPath = await tm.saveWorkflowAsTemplate(
         "Snapshot",
-        "workspace",
+        TEMPLATE_SCOPES.WORKSPACE,
         { steps: [{ prompt: "Ship it" }] },
         WORKFLOW_FILE_FORMATS.JSON
       );
@@ -424,7 +557,7 @@ suite("TemplateManager variable metadata", () => {
 
       const templates = await tm.discoverTemplatesInDir(
         templateDir,
-        "workspace"
+        TEMPLATE_SCOPES.WORKSPACE
       );
 
       assert.deepStrictEqual(
@@ -450,7 +583,7 @@ suite("TemplateManager variable metadata", () => {
       await assert.rejects(
         tm.saveWorkflowAsTemplate(
           "taken",
-          "workspace",
+          TEMPLATE_SCOPES.WORKSPACE,
           { steps: [] },
           WORKFLOW_FILE_FORMATS.YAML
         ),

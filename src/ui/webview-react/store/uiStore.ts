@@ -13,6 +13,7 @@ import { isExecutionFinished } from "../utils/status";
 import type {
   OutputTab,
   TemplateVariableType,
+  TemplateVariableDefaultSource,
 } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
@@ -209,6 +210,8 @@ export interface TemplateVariable {
   autoFillFilename?: boolean;
   description?: string;
   default?: string;
+  authoredDefault?: string;
+  defaultSource?: TemplateVariableDefaultSource;
   multiline?: boolean;
 }
 

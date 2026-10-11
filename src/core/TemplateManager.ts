@@ -15,7 +15,14 @@ import {
   type TemplateVariableType,
   type DiscoverySource,
   type WorkflowFileFormat,
+  type SettingWriteScope,
+  type TemplateVariableDefaultSource,
 } from "../types/DashboardConstants";
+import {
+  classifyTemplateVariableDefaults,
+  resolveTemplateVariableDefaults,
+  type TemplateVariableDefaultsByScope,
+} from "../utils/TemplateVariableDefaults";
 import { PromptFileParser } from "./PromptFileParser";
 import type { PromptFile } from "../types/CtrlYokeTypes";
 import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
@@ -88,6 +95,10 @@ export interface TemplateVariable {
   description?: string;
   /** Default value pre-filled in the UI and substituted when the field is left blank */
   default?: string;
+  /** Value authored in `_templateMeta`, before a saved settings overlay. */
+  authoredDefault?: string;
+  /** Scope from which the effective default resolves. */
+  defaultSource?: TemplateVariableDefaultSource;
   /** When true, the input renders as a multi-line textarea instead of a single-line field */
   multiline?: boolean;
 }
@@ -125,6 +136,9 @@ interface ParsedTemplateMeta {
 export class TemplateManager {
   private readonly extensionPath: string;
   private readonly promptFileParser: PromptFileParser;
+  private readonly getVariableDefaults?: (
+    scope: SettingWriteScope
+  ) => TemplateVariableDefaultsByScope | undefined;
 
   // Ordered list of built-in template IDs. "blank" is special-cased (generated, no file).
   // All others are self-describing via _templateMeta in their YAML files.
@@ -143,10 +157,43 @@ export class TemplateManager {
   constructor(
     extensionPath: string,
     private readonly workspaceRootResolver: () => string | undefined,
-    platform: PlatformAdapter
+    platform: PlatformAdapter,
+    getVariableDefaults?: (
+      scope: SettingWriteScope
+    ) => TemplateVariableDefaultsByScope | undefined
   ) {
     this.extensionPath = extensionPath;
     this.promptFileParser = new PromptFileParser(platform);
+    this.getVariableDefaults = getVariableDefaults;
+  }
+
+  /** Merge authored metadata and apply the saved overlay for the full template id. */
+  private mergeTemplateVariables(
+    extracted: TemplateVariable[],
+    meta: Record<string, Partial<Omit<TemplateVariable, "name">>>,
+    templateId: string
+  ): TemplateVariable[] {
+    const merged = this.mergeVariablesWithMeta(extracted, meta, templateId);
+    const workspaceValues = this.getWorkspaceRoot()
+      ? this.getVariableDefaults?.(TEMPLATE_SCOPES.WORKSPACE)?.[templateId]
+      : undefined;
+    const userValues = this.getVariableDefaults?.(TEMPLATE_SCOPES.USER)?.[templateId];
+    const { issues } = classifyTemplateVariableDefaults(
+      merged,
+      userValues,
+      workspaceValues
+    );
+    const resolved = resolveTemplateVariableDefaults(
+      merged,
+      userValues,
+      workspaceValues
+    );
+    for (const issue of issues) {
+      Log.debug(
+        `[TemplateManager] Ignoring ${issue.reason} override for template "${templateId}" variable "${issue.variableName}" at ${issue.scope} scope.`
+      );
+    }
+    return resolved.map(({ variable }) => variable);
   }
 
   /**
@@ -410,7 +457,7 @@ export class TemplateManager {
         const content = await fs.promises.readFile(templatePath, "utf-8");
         const meta = this.parseTemplateMeta(content);
         const extracted = this.extractVariables(content);
-        const variables = this.mergeVariablesWithMeta(
+        const variables = this.mergeTemplateVariables(
           extracted,
           meta.variables,
           id
@@ -584,7 +631,7 @@ export class TemplateManager {
     // Apply declared defaults for any variable the caller left blank or absent,
     // so an untouched field substitutes its default instead of leaving a literal
     // {token} in the generated workflow.
-    const declared = this.mergeVariablesWithMeta(
+    const declared = this.mergeTemplateVariables(
       this.extractVariables(templateContent),
       this.parseTemplateMeta(templateContent).variables,
       templateId
@@ -840,14 +887,15 @@ export class TemplateManager {
             const content = await fs.promises.readFile(fullPath, "utf-8");
             const meta = this.parseTemplateMeta(content);
             const extracted = this.extractVariables(content);
-            const variables = this.mergeVariablesWithMeta(
+            const templateId = this.buildCustomTemplateId(source, name);
+            const variables = this.mergeTemplateVariables(
               extracted,
               meta.variables,
-              name
+              templateId
             );
 
             templates.push({
-              id: this.buildCustomTemplateId(source, name),
+              id: templateId,
               name: meta.name ?? name,
               description: meta.description ?? "Custom template",
               path: fullPath,

@@ -3632,6 +3632,16 @@ export const TEMPLATE_SCOPES = {
 export type TemplateScope =
   (typeof TEMPLATE_SCOPES)[keyof typeof TEMPLATE_SCOPES];
 
+/** Provenance for a template variable's effective default. */
+export const TEMPLATE_VARIABLE_DEFAULT_SOURCES = {
+  TEMPLATE: "template",
+  USER: "user",
+  WORKSPACE: "workspace",
+} as const;
+
+export type TemplateVariableDefaultSource =
+  (typeof TEMPLATE_VARIABLE_DEFAULT_SOURCES)[keyof typeof TEMPLATE_VARIABLE_DEFAULT_SOURCES];
+
 /** IDs for built-in templates whose content is generated or bundled. */
 export const TEMPLATE_IDS = {
   BLANK: "blank",

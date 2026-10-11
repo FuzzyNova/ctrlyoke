@@ -132,6 +132,11 @@ export interface CtrlYokeGlobalSettings {
     includeFullDiffsInPriorContext: boolean;
   };
 
+  /** Saved per-variable defaults keyed by template id and variable name. */
+  templates: {
+    variableDefaults: Record<string, Record<string, string>>;
+  };
+
   // Defaults (mirrors executionProperties 1:1)
   defaults: {
     /** Empty ({@link AUTO_DETECT_HARNESS}) means the first installed harness. */
@@ -427,6 +432,9 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     autoLoadRecentSession: true,
     omitPreviouslyAttachedAgentsSkillsOnResume: true,
     includeFullDiffsInPriorContext: true,
+  },
+  templates: {
+    variableDefaults: {},
   },
   defaults: {
     harness: AUTO_DETECT_HARNESS,

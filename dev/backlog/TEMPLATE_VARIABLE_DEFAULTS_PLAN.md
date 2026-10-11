@@ -1,6 +1,6 @@
 # Template Variable Defaults Plan
 
-**Status:** Ready to implement (not started)
+**Status:** Phase 1 Contract landed: scoped variable-default settings, pure resolution and classification, and TemplateManager overlays are implemented. Modal saving and UI work remain in Phase 1.
 
 ## Goal
 
