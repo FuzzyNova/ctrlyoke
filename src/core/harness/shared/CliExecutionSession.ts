@@ -32,6 +32,7 @@ export class CliExecutionSession {
 
   private promptText: string;
   private tempFiles: string[] = [];
+  private deferredHookEnvironmentFiles: string[] = [];
   private imageFiles: string[] = [];
   private attachedSkillNames?: string[];
   private actualPromptSentText?: string;
@@ -71,6 +72,16 @@ export class CliExecutionSession {
     if (!this.tempFiles.includes(tempFilePath)) {
       this.tempFiles.push(tempFilePath);
     }
+  }
+
+  addDeferredHookEnvironmentFilePath(filePath: string): void {
+    if (!this.deferredHookEnvironmentFiles.includes(filePath)) {
+      this.deferredHookEnvironmentFiles.push(filePath);
+    }
+  }
+
+  get deferredHookEnvironmentFilePaths(): string[] {
+    return [...this.deferredHookEnvironmentFiles];
   }
 
   markInjectModePrepared(): void {

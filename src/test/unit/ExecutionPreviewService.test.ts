@@ -190,6 +190,7 @@ function createExecutionPlan(mutations: PreparedMutation[]): ExecutionPlan {
     effectiveToolPermissions: undefined,
     diagnostics: [],
     tempFilePaths: [],
+    deferredHookEnvironmentFilePaths: [],
   };
 }
 

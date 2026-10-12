@@ -33,6 +33,7 @@ import {
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 import { CliProviderUtils } from "./CliProviderUtils";
+import { projectStateRoot } from "../../../utils/ProjectStatePaths";
 import {
   hasUserHookEnvironment,
   prepareUserHookEnvironments,
@@ -67,6 +68,8 @@ export interface ExecutionPlan {
     ResolvedProperties["toolPermissions"] | undefined;
   readonly diagnostics: CliProviderPreparation["diagnostics"];
   readonly tempFilePaths: string[];
+  /** Hook environment files stay available for the lifetime of their hook config. */
+  readonly deferredHookEnvironmentFilePaths: string[];
 }
 
 type ProviderWorkflowContext = {
@@ -148,6 +151,7 @@ export class ExecutionPlanBuilder {
     const mutations = [...providerPreparation.mutations];
     const hookPreparations: CliProviderPreparation[] = [];
     const tempFilePaths: string[] = [];
+    const deferredHookEnvironmentFilePaths: string[] = [];
 
     if (workspaceRoot) {
       const resolvedHooks = session.workflowContext?.resolvedProperties?.hooks;
@@ -164,23 +168,22 @@ export class ExecutionPlanBuilder {
       let hookEnvironmentMutation: PreparedMutation | undefined;
 
       if (userHooks && hasUserHookEnvironment(originalUserHooks)) {
-        const notifyDir = this.deps.provider.notificationMonitor
-          ?.getNotificationDirectory(workspaceRoot);
-        if (!notifyDir) {
-          throw new Error(
-            "Cannot scope hook environment: harness notification directory is unavailable"
-          );
-        }
+        const stateRoot = this.deps.getStateRoot?.() ?? workspaceRoot;
+        const hookTempDirectory = path.join(
+          projectStateRoot(stateRoot, "user"),
+          "temp",
+          "hook-environments"
+        );
         const hookEnvironment = prepareUserHookEnvironments({
           hooks: userHooks,
           harnessId: this.deps.provider.config.harnessId,
           extensionPath,
-          hookTempDirectory: notifyDir,
+          hookTempDirectory,
           promptIndex,
         });
         userHooks.splice(0, userHooks.length, ...(hookEnvironment.hooks ?? []));
         if (hookEnvironment.tempFilePath) {
-          tempFilePaths.push(hookEnvironment.tempFilePath);
+          deferredHookEnvironmentFilePaths.push(hookEnvironment.tempFilePath);
         }
         hookEnvironmentMutation = hookEnvironment.mutation;
       }
@@ -339,6 +342,7 @@ export class ExecutionPlanBuilder {
         ...permissionApplication.diagnostics,
       ],
       tempFilePaths,
+      deferredHookEnvironmentFilePaths,
     };
   }
 

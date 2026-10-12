@@ -222,7 +222,7 @@ function createRunner(options?: {
 }
 
 suite("CliExecutionRunner", () => {
-  test("passes hook env files into step cleanup", async () => {
+  test("keeps deferred hook env files available after a turn", async () => {
     const tempPath = require("path").join(
       require("os").tmpdir(),
       `ctrlyoke-hook-env-cleanup-${Date.now()}.json`
@@ -235,10 +235,40 @@ suite("CliExecutionRunner", () => {
       },
     });
     const session = new CliExecutionSession({ prompt: { prompt: "cleanup" } });
-    session.addTempFilePath(tempPath);
+    session.addDeferredHookEnvironmentFilePath(tempPath);
 
     await counters.runner.executeHeadless(session, []);
-    await assert.rejects(fs.access(tempPath));
+    await fs.access(tempPath);
+    await fs.rm(tempPath, { force: true });
+  });
+
+  test("keeps hook env files until the user Stop hook can run", async () => {
+    const fs = require("fs/promises") as typeof import("fs/promises");
+    const tempPath = require("path").join(
+      require("os").tmpdir(),
+      `ctrlyoke-hook-env-stop-${Date.now()}.json`
+    ) as string;
+    await fs.writeFile(tempPath, "{}");
+    const counters = createRunner({
+      writeToCurrentPtySession: () => true,
+    });
+    (counters.runner as any).lastInteractiveContext = {
+      logPath: "test.log",
+      sessionId: "test-session",
+    };
+    (counters.runner as any).monitorLogFile = async () => ({ success: true });
+    const session = new CliExecutionSession({ prompt: { prompt: "stop" } });
+    session.addDeferredHookEnvironmentFilePath(tempPath);
+
+    try {
+      assert.deepStrictEqual(
+        await counters.runner.executeInteractiveInject(session),
+        { injected: true, success: true }
+      );
+      await fs.access(tempPath);
+    } finally {
+      await fs.rm(tempPath, { force: true });
+    }
   });
 
   test("does not add user hook environment values to the harness process", async () => {

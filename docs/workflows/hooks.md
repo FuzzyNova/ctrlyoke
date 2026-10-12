@@ -102,9 +102,11 @@ are included when available.
 
 **Environment.** The hook inherits the harness environment and ctrlyoke's
 workflow variables below. Its own `env` values are merged over that environment
-for this hook only. Those values are not available to the AI harness or to
-other hooks. Two hooks may safely use the same key with different values.
-Resolved secret values are passed only to the hook that declares them.
+for this hook only; each hook receives only its own configured `env` values.
+Those values are not added to the harness process environment. ctrlyoke writes
+them to a per-step temp file readable by the local user, so a model with shell
+access can read them. Secret values therefore are not hidden from the model.
+Two hooks may use the same key with different values.
 
 | Variable                     | Value                                                    |
 | ---------------------------- | -------------------------------------------------------- |

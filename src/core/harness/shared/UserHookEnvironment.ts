@@ -77,6 +77,7 @@ export function prepareUserHookEnvironments(params: {
       apply: async () => {
         const fs = await import("fs/promises");
         await fs.mkdir(params.hookTempDirectory, { recursive: true });
+        // Windows ignores POSIX file modes; on POSIX, keep secret-bearing data owner-only.
         await fs.writeFile(tempFilePath, JSON.stringify(envByHookId), {
           encoding: "utf8",
           ...(mode === undefined ? {} : { mode }),

@@ -6,11 +6,64 @@ import { spawnSync, type SpawnSyncReturns } from "child_process";
 import { suite, test } from "mocha";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 import { prepareUserHookEnvironments } from "../../core/harness/shared/UserHookEnvironment";
+import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
+import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 
 const extensionPath = path.resolve(__dirname, "../../..");
 const launcherPath = path.resolve(__dirname, "../../scripts/ctrlyoke-hook-run.js");
 
 suite("UserHookEnvironment", () => {
+  test("plans per-user env files and wires them to the session outside the workspace", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-hook-env-workspace-")
+    );
+    try {
+      const properties = {
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "model-x",
+        executionMode: "interactive" as const,
+        resumeSession: false,
+        mcpServers: null,
+        hooks: [{ event: "stop" as const, command: "node stop.js", env: { TOKEN: "value" } }],
+        toolPermissions: null,
+      };
+      const session = new CliExecutionSession({
+        prompt: { prompt: "prompt" },
+        resolvedProperties: properties,
+        workflowContext: {
+          promptIndex: 0,
+          allPrompts: [],
+          resolvedProperties: properties,
+        },
+      });
+      const plan = await new ExecutionPlanBuilder({
+        provider: new ClaudeCliProvider(),
+        getWorkspaceRoot: () => workspaceRoot,
+        getWorkspaceRoots: () => [workspaceRoot],
+        getExtensionPath: () => extensionPath,
+        getExecutionMode: () => "interactive",
+        getEnabledHookNotificationEvents: () => [],
+        resolveCliCommand: async (command, args) => ({
+          command,
+          args,
+          displayCommand: command,
+          launcherKind: "direct",
+        }),
+      }).plan(session);
+      assert.strictEqual(plan.deferredHookEnvironmentFilePaths.length, 1);
+      const [envFilePath] = plan.deferredHookEnvironmentFilePaths;
+      assert.ok(!envFilePath.startsWith(workspaceRoot));
+      for (const filePath of plan.deferredHookEnvironmentFilePaths) {
+        session.addDeferredHookEnvironmentFilePath(filePath);
+      }
+      assert.deepStrictEqual(session.deferredHookEnvironmentFilePaths, [envFilePath]);
+      assert.deepStrictEqual(session.tempFilePaths, []);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("writes isolated per-hook values and registers the file for cleanup", async () => {
     const tempDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-hook-env-")

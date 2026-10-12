@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude (bug-drain review of ~33d934f87)
 - **Area:** `src/core/harness/shared/UserHookEnvironment.ts`, `docs/workflows/hooks.md`, `schemas/workflow-schema.json`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
