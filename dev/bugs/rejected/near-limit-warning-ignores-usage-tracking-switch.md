@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude while writing `docs/guide/usage-and-stats.md`
 - **Area:** `src/core/orchestration/WorkflowStartupPipeline.ts`
-- **Resolution:** fixed in this commit
+- **Resolution:** not reproducible — `warnBeforeWorkflowStart` already returned early when `shouldTrackHarnessUsage()` was false (since cdea0c63f); 31907f092 only added regression tests and a redundant `usageTrackingEnabled` pass-through
 
 ## Symptom
 

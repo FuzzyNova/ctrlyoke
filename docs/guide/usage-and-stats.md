@@ -19,7 +19,7 @@ the prompt editor footer show a percentage beside each harness that reports a
 quota, such as **Codex 12%**. The badge follows **Quota percent direction**
 and shows the fullest quota window. Hover it for every quota window, labeled
 as **used** or **remaining**, when each one resets, and when the numbers were
-last read, for example "Available | 12% used 5h | 98% used week, resets
+last read, for example "Available | 12% used 5h | 2% used week, resets
 11:11 AM 10/18 (updated …)".
 
 ## Near-limit warning

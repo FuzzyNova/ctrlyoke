@@ -485,8 +485,8 @@ export function SecretsSection({
               — the common case. If it isn&apos;t, you can set a managed value
               below; ctrlyoke encrypts it in OS-backed storage shared with the
               CLI on this machine and injects it as an environment variable into
-              the harness&apos;s child process, and
-              only for a step that actually grants that name.
+              the harness&apos;s child process, and only for a step that
+              actually grants that name.
             </p>
             <p className="mt-2 text-xs text-description-fg">
               Granted names can be used in prompts, MCP server env and headers,
@@ -516,7 +516,9 @@ export function SecretsSection({
           </p>
         ) : (
           <div className="space-y-2">
-            <div className={`hidden gap-3 px-3 text-xxs font-semibold uppercase tracking-wide text-description-fg md:grid ${SECRET_GRID_COLUMNS}`}>
+            <div
+              className={`hidden gap-3 px-3 text-xxs font-semibold uppercase tracking-wide text-description-fg md:grid ${SECRET_GRID_COLUMNS}`}
+            >
               <span>Name</span>
               <span>State</span>
               <span>Used by</span>
