@@ -2,13 +2,19 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { Log } from "../../utils/Log";
-import { WorkflowStep, WorkingFile } from "../../types/CtrlYokeTypes";
+import type {
+  WorkflowKey,
+  WorkflowLineageDescriptor,
+  WorkflowStep,
+  WorkingFile,
+} from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
   getLineageLastModifiedAt,
+  getLineageLastModifiedUpperBound,
   stripLegacyWorkingFileLineageMetadata,
 } from "../../utils/WorkingFileMetadata";
 
@@ -83,14 +89,65 @@ export class WorkspaceSessionManager {
    * Resolve the current most-recent working file from run storage.
    * Reads lineage metadata from disk each time so reconnecting clients always
    * use fresh recency data rather than a startup snapshot.
+   *
+   * Gives the same answer as the head of {@link listWorkingFilesByRecency}
+   * without reading every lineage's run files. That full scan parsed every
+   * working file in run storage (~3,300 with ~1,450 lineages) and ran inside a
+   * browser client's READY, stalling the shared message queue for 5–7 s per
+   * phone connect. Lineages are visited in descending order of a stat-only
+   * upper bound on their recency, and the walk stops once the best exact
+   * recency found beats every remaining bound.
    */
   async getMostRecentWorkingFilePath(
     workspaceFolderPath: string
   ): Promise<string | undefined> {
     try {
-      const workingFiles =
-        await this.listWorkingFilesByRecency(workspaceFolderPath);
-      return workingFiles[0]?.filePath;
+      const workflowKeys =
+        await this.lineageRepository.listLineageKeys(workspaceFolderPath);
+      const candidates = (
+        await Promise.all(
+          workflowKeys.map(async (workflowKey, order) => {
+            const descriptor = await this.readRecentSessionDescriptor(
+              workspaceFolderPath,
+              workflowKey
+            );
+            if (!descriptor) return undefined;
+            const upperBound = await getLineageLastModifiedUpperBound(
+              workspaceFolderPath,
+              workflowKey,
+              descriptor.lastModifiedAt
+            );
+            return { workflowKey, descriptor, order, upperBound };
+          })
+        )
+      )
+        .filter((candidate) => candidate !== undefined)
+        .sort((a, b) => b.upperBound - a.upperBound || a.order - b.order);
+
+      // Ties keep listing order, matching the stable sort of the full scan.
+      let best:
+        { filePath: string; timestamp: number; order: number } | undefined;
+      for (const candidate of candidates) {
+        if (best && best.timestamp > candidate.upperBound) break;
+        const entry = await this.readRecencyEntry(
+          workspaceFolderPath,
+          candidate.workflowKey,
+          candidate.descriptor
+        );
+        if (!entry) continue;
+        if (
+          !best ||
+          entry.timestamp > best.timestamp ||
+          (entry.timestamp === best.timestamp && candidate.order < best.order)
+        ) {
+          best = {
+            filePath: entry.filePath,
+            timestamp: entry.timestamp,
+            order: candidate.order,
+          };
+        }
+      }
+      return best?.filePath;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
@@ -148,54 +205,81 @@ export class WorkspaceSessionManager {
 
     const filesWithTimestamps = await Promise.all(
       workflowKeys.map(async (workflowKey) => {
-        try {
-          const descriptor = await this.lineageRepository.readDescriptor(
-            workspaceFolderPath,
-            workflowKey
-          );
-          if (descriptor.isSystemGenerated) {
-            return undefined;
-          }
-          const filePath = descriptor.latestRunRef
-            ? WorkflowPaths.runFilePath(
-                workspaceFolderPath,
-                workflowKey,
-                descriptor.latestRunRef
-              )
-            : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
-
-          const content = await fs.readFile(filePath, "utf8");
-          const workingFile = stripLegacyWorkingFileLineageMetadata(
-            JSON.parse(content) as WorkingFile
-          );
-          const timestamp = await getLineageLastModifiedAt(
-            workspaceFolderPath,
-            workflowKey,
-            descriptor.lastModifiedAt
-          );
-
-          return { filePath, workingFile, timestamp };
-        } catch (error) {
-          Log.warn(
-            `[WorkspaceSessionManager] Failed to read lineage ${workflowKey}:`,
-            error
-          );
-          return undefined;
-        }
+        const descriptor = await this.readRecentSessionDescriptor(
+          workspaceFolderPath,
+          workflowKey
+        );
+        return descriptor
+          ? this.readRecencyEntry(workspaceFolderPath, workflowKey, descriptor)
+          : undefined;
       })
     );
 
     return filesWithTimestamps
-      .filter(
-        (
-          entry
-        ): entry is {
-          filePath: string;
-          workingFile: WorkingFile;
-          timestamp: number;
-        } => entry !== undefined
-      )
+      .filter((entry) => entry !== undefined)
       .sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  /**
+   * A lineage's descriptor, or `undefined` when it is unreadable or the
+   * lineage is system-generated and so excluded from recent sessions.
+   */
+  private async readRecentSessionDescriptor(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey
+  ): Promise<WorkflowLineageDescriptor | undefined> {
+    try {
+      const descriptor = await this.lineageRepository.readDescriptor(
+        workspaceFolderPath,
+        workflowKey
+      );
+      return descriptor.isSystemGenerated ? undefined : descriptor;
+    } catch (error) {
+      Log.warn(
+        `[WorkspaceSessionManager] Failed to read lineage ${workflowKey}:`,
+        error
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Read a lineage's CURRENT definition file — the descriptor's `latestRunRef`
+   * run file, otherwise the draft — and its exact recency.
+   */
+  private async readRecencyEntry(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    descriptor: WorkflowLineageDescriptor
+  ): Promise<
+    | { filePath: string; workingFile: WorkingFile; timestamp: number }
+    | undefined
+  > {
+    const filePath = descriptor.latestRunRef
+      ? WorkflowPaths.runFilePath(
+          workspaceFolderPath,
+          workflowKey,
+          descriptor.latestRunRef
+        )
+      : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
+    try {
+      const content = await fs.readFile(filePath, "utf8");
+      const workingFile = stripLegacyWorkingFileLineageMetadata(
+        JSON.parse(content) as WorkingFile
+      );
+      const timestamp = await getLineageLastModifiedAt(
+        workspaceFolderPath,
+        workflowKey,
+        descriptor.lastModifiedAt
+      );
+      return { filePath, workingFile, timestamp };
+    } catch (error) {
+      Log.warn(
+        `[WorkspaceSessionManager] Failed to read lineage ${workflowKey}:`,
+        error
+      );
+      return undefined;
+    }
   }
 
   /**

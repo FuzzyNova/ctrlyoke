@@ -134,6 +134,19 @@ const DEFAULT_JSON_BODY_LIMIT = "64kb";
 // message is about 20 MiB; 24 MiB leaves room for the message envelope while
 // bounding inbound WebSocket buffering well below ws's 100 MiB default.
 const HOSTED_WEBSOCKET_MAX_PAYLOAD_BYTES = 24 * 1024 * 1024;
+/**
+ * permessage-deflate for the dashboard socket. `ws` leaves it off by default,
+ * which shipped multi-megabyte RUN_VIEW_LOADED snapshots and the ~1 MB
+ * RECENT_WORKFLOWS list raw — over a phone's cellular link that alone took
+ * 20–100 s per connect. Run-view JSON compresses ~4x; level 3 gets nearly
+ * all of level 6's ratio for half its CPU (measured on a 7.9 MB timeline:
+ * 1.83 MB in 80 ms vs 1.63 MB in 163 ms). Frames under the threshold
+ * (heartbeats, terminal keystrokes) are sent uncompressed.
+ */
+const HOSTED_WEBSOCKET_PER_MESSAGE_DEFLATE = {
+  threshold: 1024,
+  zlibDeflateOptions: { level: 3 },
+} as const;
 const JSON_STRING_MAX_BYTE_EXPANSION_FACTOR = 6;
 const WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES = 4 * 1024;
 const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
@@ -413,6 +426,7 @@ export class CtrlYokeHostedServer
     this.wss = new WebSocketServer({
       noServer: true,
       maxPayload: HOSTED_WEBSOCKET_MAX_PAYLOAD_BYTES,
+      perMessageDeflate: HOSTED_WEBSOCKET_PER_MESSAGE_DEFLATE,
     });
     this.lspWss = new WebSocketServer({
       noServer: true,

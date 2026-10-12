@@ -2246,6 +2246,15 @@ export function createMessageHandlers(
     );
     clearPanelReconnectReloadWatchdog();
     useUiStore.getState().setStartupReady(true);
+    // The first recent-workflows fetch waits for the handshake to settle rather
+    // than firing when the dropdown mounts: in a browser that mount runs before
+    // the socket opens, and the shim drops the request (it never queues
+    // outbound messages), which left the dropdown showing only running
+    // workflows. Asking here also keeps the multi-second lineage scan from
+    // competing with the replay that delivers the workflow on screen.
+    if (!useUiStore.getState().recentWorkflowsLoaded) {
+      getVsCodeApi().postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
+    }
     // If startup completed with no session and no persisted target workflow,
     // auto-create a blank workflow so the user lands on "New Workflow" rather
     // than the "No workflow loaded" empty state.

@@ -13,6 +13,12 @@ Do not re-derive them here.
 > streamed-redaction fixes (`659d3494d`, `f2a6b5d56`) touch output redaction but
 > not item 5's "redaction at the source" investigation.
 
+> **2026-10-12:** The hosted dashboard socket now negotiates permessage-deflate
+> (level 3), so the sizes below are serialized sizes, not bytes on the wire.
+> A run timeline compressed about 4×. Heap use on both ends is unchanged, so
+> item 1's phone re-measurement still decides 1A. See
+> `DASHBOARD_CONNECT_THROUGHPUT_PLAN.md` for the connect-time measurements.
+
 ## Where the payload stands
 
 The `bug-backlog` run (`run-2026-09-30T13-41-01-546Z`) serialized to 42.7 MB

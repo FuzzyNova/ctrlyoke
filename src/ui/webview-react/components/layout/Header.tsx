@@ -125,8 +125,7 @@ export const Header: React.FC<{
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
   // WorkflowStatus is a heavy, stateful component (dropdown-open state, its own
-  // ResizeObserver, document-level outside-click listener, and a GET_RECENT_WORKFLOWS
-  // postMessage on mount). The header's three responsive tiers each have their own
+  // ResizeObserver, document-level outside-click listener). The header's three responsive tiers each have their own
   // wrapper with tier-specific layout, so historically each tier mounted its own
   // <WorkflowStatus>, hidden/shown purely via Tailwind classes — three simultaneous
   // live instances at all times, only one of which is ever visible. `layoutTier`

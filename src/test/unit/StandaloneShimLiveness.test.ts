@@ -286,7 +286,9 @@ suite("standalone-shim connection liveness", () => {
     );
   });
 
-  test("foreground probe acknowledgment refreshes READY after the preferred view changes", () => {
+  test("foreground probe acknowledgment does not resend READY when only the URL changed", () => {
+    // The app writes the workflow the server just delivered into the URL. A
+    // second READY on the same socket replayed that whole workflow again.
     const { location, dispatchWindow } = loadShim();
     const socket = FakeWebSocket.instances[0];
     socket.open();
@@ -304,11 +306,30 @@ suite("standalone-shim connection liveness", () => {
       id: probe.id,
     });
 
-    const readyMessages = socket.sent.filter(
+    assert.strictEqual(
+      socket.sent.filter((message) => message.type === MESSAGE_TYPES.READY)
+        .length,
+      1
+    );
+  });
+
+  test("a replacement socket's READY carries the view the URL has moved to", () => {
+    const { clock, location } = loadShim();
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.open();
+
+    location.search =
+      "?token=test-token&workflowKey=workflow-1&runRef=run-2026-07-21";
+    firstSocket.serverClose();
+    clock.advance(250);
+    const replacement = FakeWebSocket.instances[1];
+    replacement.open();
+
+    const readyMessages = replacement.sent.filter(
       (message) => message.type === MESSAGE_TYPES.READY
     );
-    assert.strictEqual(readyMessages.length, 2);
-    assert.deepStrictEqual(readyMessages[1].preferredViewAddress, {
+    assert.strictEqual(readyMessages.length, 1);
+    assert.deepStrictEqual(readyMessages[0].preferredViewAddress, {
       workflowKey: "workflow-1",
       kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: "run-2026-07-21",

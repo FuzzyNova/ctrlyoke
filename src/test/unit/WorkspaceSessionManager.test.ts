@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as fsCallbacks from "fs";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -132,6 +133,120 @@ suite("WorkspaceSessionManager", () => {
         /Configured worktree default did not apply: workspace is not a Git repository\./
       );
     } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("finds the most recent lineage from run-file activity newer than its descriptor", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-recent-activity-")
+    );
+
+    try {
+      // Appending to a run writes only the run file, never the descriptor.
+      const appendedKey = "appended-2026-01-01T00-00-00" as WorkflowKey;
+      const editedKey = "edited-2026-01-02T00-00-00" as WorkflowKey;
+      await writeDraftLineage(
+        workspaceRoot,
+        appendedKey,
+        "appended",
+        100,
+        1000
+      );
+      await writeDraftLineage(workspaceRoot, editedKey, "edited", 200, 5000);
+      const appendedPath = WorkflowPaths.draftFilePath(
+        workspaceRoot,
+        appendedKey
+      );
+      const appended = JSON.parse(
+        await fs.readFile(appendedPath, "utf8")
+      ) as Record<string, unknown>;
+      appended.steps = [
+        { prompt: "continue", _runtime: { completedAt: 9000 } },
+      ];
+      await fs.writeFile(appendedPath, JSON.stringify(appended), "utf8");
+      // Real mtimes trail the activity they record; pin them to match.
+      await fs.utimes(appendedPath, new Date(9000), new Date(9000));
+      await fs.utimes(
+        WorkflowPaths.draftFilePath(workspaceRoot, editedKey),
+        new Date(5000),
+        new Date(5000)
+      );
+
+      const manager = new WorkspaceSessionManager(
+        new PromptFileParser(),
+        {} as any
+      );
+
+      assert.strictEqual(
+        await manager.getMostRecentWorkingFilePath(workspaceRoot),
+        appendedPath
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("reads only lineages whose recency bound can still beat the best found", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-recent-bound-")
+    );
+    const promises = fsCallbacks.promises;
+    const originalReadFile = promises.readFile;
+    const workingFilesRead = new Set<string>();
+
+    try {
+      const keys = [
+        "oldest-2026-01-01T00-00-00",
+        "newest-2026-01-02T00-00-00",
+        "middle-2026-01-03T00-00-00",
+      ] as WorkflowKey[];
+      const modifiedAt = [1000, 9000, 5000];
+      for (const [index, workflowKey] of keys.entries()) {
+        await writeDraftLineage(
+          workspaceRoot,
+          workflowKey,
+          workflowKey,
+          modifiedAt[index],
+          modifiedAt[index]
+        );
+        const filePath = WorkflowPaths.draftFilePath(
+          workspaceRoot,
+          workflowKey
+        );
+        await fs.utimes(
+          filePath,
+          new Date(modifiedAt[index]),
+          new Date(modifiedAt[index])
+        );
+      }
+
+      promises.readFile = ((
+        file: Parameters<typeof originalReadFile>[0],
+        ...rest: unknown[]
+      ) => {
+        if (String(file).endsWith("workflow.ctrlyoke.json")) {
+          workingFilesRead.add(String(file));
+        }
+        return (originalReadFile as (...args: unknown[]) => unknown)(
+          file,
+          ...rest
+        );
+      }) as typeof originalReadFile;
+
+      const manager = new WorkspaceSessionManager(
+        new PromptFileParser(),
+        {} as any
+      );
+      const newestPath = WorkflowPaths.draftFilePath(workspaceRoot, keys[1]);
+
+      assert.strictEqual(
+        await manager.getMostRecentWorkingFilePath(workspaceRoot),
+        newestPath
+      );
+      assert.deepStrictEqual([...workingFilesRead], [newestPath]);
+    } finally {
+      promises.readFile = originalReadFile;
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });

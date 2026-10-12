@@ -178,6 +178,70 @@ describe("WorkflowList token totals", () => {
   );
 });
 
+describe("WorkflowList recent-history loading", () => {
+  afterEach(() => cleanup());
+
+  const runningRow: UnifiedWorkflowRow = {
+    kind: WORKFLOW_ROW_KINDS.RUNNING,
+    key: "running:wf",
+    workflow: {
+      id: "workflow-id",
+      workflowName: "bug drain",
+      filePath: "workflow.ctrlyoke.json",
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 2,
+      totalSteps: 6,
+    },
+  };
+
+  function renderList(rows: UnifiedWorkflowRow[], isLoadingRecent: boolean) {
+    return render(
+      <WorkflowList
+        rows={rows}
+        currentAddress={null}
+        activeWorkflowId="workflow-id"
+        runningHasActiveTerminal={() => false}
+        onSelectRecent={() => undefined}
+        onSwitchRunning={() => undefined}
+        onPauseRunning={() => undefined}
+        onCancelPauseRunning={() => undefined}
+        onResumeRunning={() => undefined}
+        onStopRunning={() => undefined}
+        onNewWorkflow={() => undefined}
+        isLoadingRecent={isLoadingRecent}
+      />
+    );
+  }
+
+  it("shows a loading row beneath running workflows until history arrives", () => {
+    renderList([runningRow], true);
+
+    expect(screen.getByText("Loading workflows…")).toHaveAttribute(
+      "role",
+      "status"
+    );
+    expect(
+      screen.getByRole("region", { name: "Running workflows" })
+    ).toBeInTheDocument();
+  });
+
+  it("shows loading instead of the New Workflow prompt before history arrives", () => {
+    renderList([], true);
+
+    expect(screen.getByText("Loading workflows…")).toHaveAttribute(
+      "role",
+      "status"
+    );
+    expect(screen.queryByRole("button", { name: /New Workflow/ })).toBeNull();
+  });
+
+  it("drops the loading row once history has loaded", () => {
+    renderList([runningRow], false);
+
+    expect(screen.queryByText("Loading workflows…")).toBeNull();
+  });
+});
+
 describe("WorkflowList row action scoping", () => {
   afterEach(() => cleanup());
 

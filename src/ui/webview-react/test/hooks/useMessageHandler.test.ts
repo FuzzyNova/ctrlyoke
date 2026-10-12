@@ -1075,6 +1075,42 @@ describe("STARTUP_COMPLETE", () => {
     });
   });
 
+  it("requests recent workflows once the handshake settles if none have loaded", () => {
+    const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    postMessageMock.mockClear();
+    useUiStore.setState({ recentWorkflows: [], recentWorkflowsLoaded: false });
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
+    });
+
+    expect(postMessageMock).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS,
+    });
+  });
+
+  it("does not re-request recent workflows on a reconnect after they loaded", () => {
+    const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    postMessageMock.mockClear();
+    useUiStore.getState().setRecentWorkflows([]);
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
+    });
+
+    expect(postMessageMock).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS,
+    });
+  });
+
   it("does not request CLEAR_WORKFLOW when a persisted workflow path is pending", () => {
     const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
       typeof vi.fn
@@ -3888,9 +3924,10 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
       });
     });
 
-    expect(
-      useWorkflowStore.getState().liveFinalStepContextWindow[0]
-    ).toEqual({ used: 90000, size: 200000 });
+    expect(useWorkflowStore.getState().liveFinalStepContextWindow[0]).toEqual({
+      used: 90000,
+      size: 200000,
+    });
 
     act(() => {
       dispatch(MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED, {
@@ -3905,9 +3942,10 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
       });
     });
 
-    expect(
-      useWorkflowStore.getState().liveFinalStepContextWindow[0]
-    ).toEqual({ used: 90000, size: 200000 });
+    expect(useWorkflowStore.getState().liveFinalStepContextWindow[0]).toEqual({
+      used: 90000,
+      size: 200000,
+    });
   });
 });
 

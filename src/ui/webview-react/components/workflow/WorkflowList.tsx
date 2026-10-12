@@ -113,6 +113,8 @@ interface WorkflowListProps {
   onToggleFilters?: () => void;
   filterControls?: React.ReactNode;
   isFiltering?: boolean;
+  /** The host has not answered GET_RECENT_WORKFLOWS yet; an empty recent region is pending, not empty. */
+  isLoadingRecent?: boolean;
   tier?: WorkflowRowTier;
   className?: string;
 }
@@ -388,6 +390,7 @@ export const WorkflowList = React.forwardRef<
     onToggleFilters,
     filterControls,
     isFiltering = false,
+    isLoadingRecent = false,
     tier = WORKFLOW_ROW_TIERS.STACKED,
     className = "",
   },
@@ -517,6 +520,12 @@ export const WorkflowList = React.forwardRef<
           hasRecentRows || !hasRunningRows ? "flex-1 min-h-0" : "shrink-0"
         }`}
       >
+        {/* With no recent rows: a pending history shows a loading row, even
+            beneath running rows — otherwise a running workflow reads as the
+            whole history until the slow lineage scan answers. Once loaded,
+            running matches fill the pinned region above, so an empty recent
+            region then needs neither a "no match" message nor a New Workflow
+            prompt while workflows are actively running. */}
         {hasRecentRows ? (
           // Rows never wrap (every line truncates), so a flat per-layout
           // estimate is enough — but it has to follow the layout, since
@@ -541,7 +550,15 @@ export const WorkflowList = React.forwardRef<
               />
             )}
           />
-        ) : hasRunningRows ? null : isFiltering ? ( // prompt while workflows are actively running. // region needs neither a "no match" message nor a New Workflow // Running matches fill the pinned region above; an empty recent
+        ) : isLoadingRecent ? (
+          <div
+            role="status"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-description-fg"
+          >
+            <Icon name="loading" className="codicon-modifier-spin" />
+            Loading workflows…
+          </div>
+        ) : hasRunningRows ? null : isFiltering ? (
           <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
             No workflows match your search.
           </div>

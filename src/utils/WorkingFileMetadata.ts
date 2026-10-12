@@ -55,6 +55,41 @@ export function resolveLineageLastModifiedAt(
 }
 
 /**
+ * The run and draft working files a lineage's recency is computed from, or
+ * `undefined` when the lineage directory cannot be listed.
+ */
+async function listLineageWorkingFilePaths(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey
+): Promise<string[] | undefined> {
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(
+      WorkflowPaths.lineageDir(workspaceRoot, workflowKey),
+      { withFileTypes: true }
+    );
+  } catch {
+    return undefined;
+  }
+  return entries
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        (WorkflowPaths.isRunDirEntry(entry) ||
+          WorkflowPaths.isDraftDirEntry(entry))
+    )
+    .map((entry) =>
+      WorkflowPaths.isDraftDirEntry(entry)
+        ? WorkflowPaths.draftFilePath(workspaceRoot, workflowKey)
+        : WorkflowPaths.runFilePath(
+            workspaceRoot,
+            workflowKey,
+            entry.name as RunRef
+          )
+    );
+}
+
+/**
  * Resolves lineage recency from the descriptor and every persisted run file.
  * Keeping this scan here gives every recency surface the same inputs and keeps
  * summary-cache freshness aligned with the lineage list.
@@ -64,42 +99,27 @@ export async function getLineageLastModifiedAt(
   workflowKey: WorkflowKey,
   descriptorLastModifiedAt: number | undefined
 ): Promise<number> {
-  const lineageDirectory = WorkflowPaths.lineageDir(workspaceRoot, workflowKey);
-  let entries: fs.Dirent[];
-  try {
-    entries = await fs.promises.readdir(lineageDirectory, {
-      withFileTypes: true,
-    });
-  } catch {
+  const workingFilePaths = await listLineageWorkingFilePaths(
+    workspaceRoot,
+    workflowKey
+  );
+  if (!workingFilePaths) {
     return resolveLineageLastModifiedAt(descriptorLastModifiedAt);
   }
 
-  const directories = entries.filter(
-    (entry) =>
-      entry.isDirectory() &&
-      (WorkflowPaths.isRunDirEntry(entry) ||
-        WorkflowPaths.isDraftDirEntry(entry))
-  );
   const activityTimestamps: Array<number | undefined> = [];
   for (
     let startIndex = 0;
-    startIndex < directories.length;
+    startIndex < workingFilePaths.length;
     startIndex += LINEAGE_ACTIVITY_READ_BATCH_SIZE
   ) {
-    const batch = directories.slice(
+    const batch = workingFilePaths.slice(
       startIndex,
       startIndex + LINEAGE_ACTIVITY_READ_BATCH_SIZE
     );
     activityTimestamps.push(
       ...(await Promise.all(
-        batch.map(async (entry) => {
-          const workingFilePath = WorkflowPaths.isDraftDirEntry(entry)
-            ? WorkflowPaths.draftFilePath(workspaceRoot, workflowKey)
-            : WorkflowPaths.runFilePath(
-                workspaceRoot,
-                workflowKey,
-                entry.name as RunRef
-              );
+        batch.map(async (workingFilePath) => {
           try {
             const content = await fs.promises.readFile(workingFilePath, "utf8");
             return getWorkingFileLastActivityAt(
@@ -115,5 +135,36 @@ export async function getLineageLastModifiedAt(
   return resolveLineageLastModifiedAt(
     descriptorLastModifiedAt,
     ...activityTimestamps
+  );
+}
+
+/**
+ * A cheap upper bound on {@link getLineageLastModifiedAt}: the descriptor's
+ * stamp or the newest working-file mtime. Every activity timestamp is written
+ * into its file by the write that sets that file's mtime, so the bound never
+ * undercuts the exact value — while costing one `stat` per file instead of a
+ * read and JSON parse. Use it to skip lineages that cannot be the most recent.
+ */
+export async function getLineageLastModifiedUpperBound(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  descriptorLastModifiedAt: number | undefined
+): Promise<number> {
+  const workingFilePaths = await listLineageWorkingFilePaths(
+    workspaceRoot,
+    workflowKey
+  );
+  const modifiedTimes = await Promise.all(
+    (workingFilePaths ?? []).map(async (workingFilePath) => {
+      try {
+        return (await fs.promises.stat(workingFilePath)).mtimeMs;
+      } catch {
+        return undefined;
+      }
+    })
+  );
+  return resolveLineageLastModifiedAt(
+    descriptorLastModifiedAt,
+    ...modifiedTimes
   );
 }

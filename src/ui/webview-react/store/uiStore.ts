@@ -730,6 +730,12 @@ interface UiState {
 
   // Recent workflows dropdown
   recentWorkflows: RecentWorkflow[];
+  /**
+   * False until the host has answered GET_RECENT_WORKFLOWS once, so the
+   * dropdown can tell "still loading" apart from "no history". Building the
+   * list scans every lineage, which takes seconds on a large history.
+   */
+  recentWorkflowsLoaded: boolean;
   recentWorkflowsDropdownOpen: boolean;
 
   // Multi-workflow support
@@ -1236,6 +1242,7 @@ const initialState: UiState = {
   templateFileSelection: null,
   customTemplateCreated: null,
   recentWorkflows: [],
+  recentWorkflowsLoaded: false,
   recentWorkflowsDropdownOpen: false,
   loadedWorkflows: [],
   observedRunningWorkflowIds: new Set<string>(),
@@ -1793,7 +1800,8 @@ export const useUiStore = create<UiState & UiActions>()(
       // RECENT WORKFLOWS
       // ============================================================================
 
-      setRecentWorkflows: (workflows) => set({ recentWorkflows: workflows }),
+      setRecentWorkflows: (workflows) =>
+        set({ recentWorkflows: workflows, recentWorkflowsLoaded: true }),
 
       updateRecentWorkflowFromSummary: (summary) =>
         set((state) => {
@@ -2494,6 +2502,7 @@ export const useUiStore = create<UiState & UiActions>()(
           pendingFindRequest: null,
           workflowVariableRevealRequest: null,
           recentWorkflows: [],
+          recentWorkflowsLoaded: false,
           recentWorkflowsDropdownOpen: false,
           workspaceWorktreeOwnership: null,
           isLoading: false,

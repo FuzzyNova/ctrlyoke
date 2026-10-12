@@ -149,6 +149,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const displayedRunDirectory = useUiStore((s) => s.displayedRunDirectory);
   const pendingRunViewSwitch = useUiStore((s) => s.pendingRunViewSwitch);
   const recentWorkflows = useUiStore((s) => s.recentWorkflows);
+  const recentWorkflowsLoaded = useUiStore((s) => s.recentWorkflowsLoaded);
   const setRecentWorkflows = useUiStore((s) => s.setRecentWorkflows);
   const openDuplicateWorkflowDialog = useUiStore(
     (s) => s.openDuplicateWorkflowDialog
@@ -731,11 +732,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const handleToggleFilters = useCallback(() => {
     setFiltersOpen((open) => !open);
   }, []);
-
-  // Request recent workflows once on mount so the count badge is visible immediately
-  useEffect(() => {
-    vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1835,6 +1831,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               onToggleFilters={handleToggleFilters}
               filterControls={workflowFilterControls}
               isFiltering={isFilteringWorkflows}
+              isLoadingRecent={!recentWorkflowsLoaded}
               onNewWorkflow={() => {
                 setActiveWorkflowWorkingFilePath(null);
                 setEditValue("");

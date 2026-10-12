@@ -667,7 +667,11 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
       port: number,
       token: string,
       wasConnectionObserved: () => boolean
-    ) => Promise<void>
+    ) => Promise<void>,
+    routeClientMessage: (
+      message: unknown,
+      send: (reply: unknown) => void
+    ) => Promise<void> = async () => undefined
   ): Promise<void> {
     const token = "0123456789abcdef0123456789abcdef";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-websocket-");
@@ -677,7 +681,7 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
         connectionObserved = true;
       },
       disconnectClient: () => undefined,
-      routeClientMessage: async () => undefined,
+      routeClientMessage,
     };
     const server = createHostedServer({
       endpoint: webviewProvider as never,
@@ -794,6 +798,54 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
       ws.send(Buffer.alloc(24 * 1024 * 1024 + 1));
       assert.strictEqual(await closed, 1009);
     });
+  });
+
+  test("compresses large dashboard messages with permessage-deflate", async () => {
+    // Repetitive like run-view JSON, so a compressed frame is a small
+    // fraction of the serialized size; an uncompressed one is the whole of it.
+    const payload = JSON.stringify(
+      Array.from({ length: 4000 }, (_, index) => ({
+        type: "cliOutput",
+        index,
+        text: "tool call completed",
+      }))
+    );
+    await withServer(
+      async (port, token) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`);
+        let upgradeSocket: import("net").Socket | undefined;
+        ws.once("upgrade", (response) => {
+          upgradeSocket = response.socket;
+        });
+        await new Promise<void>((resolve, reject) => {
+          ws.once("open", resolve);
+          ws.once("error", reject);
+        });
+        assert.match(ws.extensions, /permessage-deflate/);
+
+        const reply = new Promise<string>((resolve) => {
+          ws.on("message", (data) => {
+            const text = String(data);
+            if (text.includes("largeReply")) resolve(text);
+          });
+        });
+        ws.send(JSON.stringify({ type: "probe" }));
+        const received = await reply;
+        ws.close();
+
+        assert.ok(received.length > payload.length);
+        assert.ok(upgradeSocket, "upgrade socket was not captured");
+        assert.ok(
+          upgradeSocket.bytesRead < received.length / 4,
+          `expected a compressed frame: read ${upgradeSocket.bytesRead} bytes for a ${received.length}-byte message`
+        );
+      },
+      async (message, send) => {
+        if ((message as { type?: unknown }).type === "probe") {
+          send({ type: "largeReply", payload });
+        }
+      }
+    );
   });
 });
 

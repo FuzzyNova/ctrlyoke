@@ -215,18 +215,16 @@
     };
   }
 
+  // READY registers a socket and replays the whole workflow to it, so each
+  // socket gets exactly one from the shim. A live socket keeps the server's
+  // binding for this tab, and its view only moves through messages the server
+  // handled — the URL follows those navigations, it does not lead them. Re-
+  // sending READY because the URL changed (as the foreground probe used to)
+  // replayed multi-megabyte state a second time over the same connection and
+  // flipped the tab between workflows while the copies landed.
   function sendReadyIfNeeded(socket) {
-    const readyMessage = buildReadyMessage();
-    const preferredViewAddress = JSON.stringify(
-      readyMessage.preferredViewAddress
-    );
-    if (
-      readySentForSocket &&
-      preferredViewAddress === lastSentReadyPreferredViewAddress
-    ) {
-      return false;
-    }
-    return sendNow(socket, readyMessage);
+    if (readySentForSocket) return false;
+    return sendNow(socket, buildReadyMessage());
   }
 
   function dispatchToReact(msg) {
