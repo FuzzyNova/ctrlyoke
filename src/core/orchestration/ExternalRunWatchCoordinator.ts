@@ -13,6 +13,7 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  EXECUTION_PHASES,
   EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   FINAL_STEP_PHASES,
@@ -120,6 +121,10 @@ export interface ExternalRunWatchEntry {
   summary: WorkflowSummary;
   /** Last per-step statuses broadcast for this run. */
   lastStepStatuses: StepStatus[];
+  /** Serializes history snapshots so older reads cannot replace newer output. */
+  historyLoadPromise: Promise<void>;
+  /** Prevents watcher callbacks from queuing reads after the final snapshot. */
+  finishing?: boolean;
 }
 
 export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunWatchPort {
@@ -597,7 +602,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         this.handleExternalRunWatchOutput(workflowId, historyFilePath);
       },
       (reason) => {
-        this.handleExternalRunFinished(workflowId, workingFilePath, reason);
+        void this.handleExternalRunFinished(workflowId, workingFilePath, reason);
       },
       this.host.fileWatcherFactory
     );
@@ -612,6 +617,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         undefined,
         workingFile._runtime?.finalStep?.phase
       ),
+      historyLoadPromise: Promise.resolve(),
     });
     await session.start();
     const activeEntry = this.externalRunSessions.get(workflowId);
@@ -760,17 +766,22 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
   ): Promise<void> {
     const entry = this.externalRunSessions.get(workflowId);
     if (!entry) return;
-    try {
-      const history = await this.host
-        .getOutputHistoryManager()
-        .loadHistory(historyFilePath);
-      this.broadcastChangedCliWatchOutputs(workflowId, entry, history);
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] replayExternalWatchHistoryFile: failed to read history file:`,
-        err
-      );
-    }
+    const load = entry.historyLoadPromise.then(async () => {
+      if (this.externalRunSessions.get(workflowId) !== entry) return;
+      try {
+        const history = await this.host
+          .getOutputHistoryManager()
+          .loadHistory(historyFilePath);
+        this.broadcastChangedCliWatchOutputs(workflowId, entry, history);
+      } catch (err) {
+        Log.warn(
+          `[WorkflowOrchestrator] replayExternalWatchHistoryFile: failed to read history file:`,
+          err
+        );
+      }
+    });
+    entry.historyLoadPromise = load;
+    await load;
   }
 
   handleExternalRunWatchOutput(
@@ -778,19 +789,15 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     historyFilePath: string
   ): void {
     const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) return;
-    this.host
-      .getOutputHistoryManager()
-      .loadHistory(historyFilePath)
-      .then((history) => {
-        this.broadcastChangedCliWatchOutputs(workflowId, entry, history);
-      })
-      .catch((err: unknown) => {
+    if (!entry || entry.finishing) return;
+    void this.replayExternalWatchHistoryFile(workflowId, historyFilePath).catch(
+      (err: unknown) => {
         Log.warn(
           `[WorkflowOrchestrator] handleExternalRunWatchOutput: failed to read history file:`,
           err
         );
-      });
+      }
+    );
   }
 
   private broadcastChangedCliWatchOutputs(
@@ -799,6 +806,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     history: Awaited<ReturnType<OutputHistoryManager["loadHistory"]>>
   ): void {
     for (const historyEntry of history.orderedEntries) {
+      if (this.externalRunSessions.get(workflowId) !== entry) return;
       if (
         historyEntry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
         historyEntry.target.kind !== FINAL_STEP_PHASES.QUEUE
@@ -811,10 +819,11 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         `queue:${stepIndex}`,
         `run:${historyEntry.runIndex ?? output.runIndex ?? 0}`,
         `attempt:${historyEntry.attemptIndex ?? output.attemptIndex ?? 0}`,
-        `phase:${historyEntry.phase ?? "prompt"}`,
+        `phase:${historyEntry.phase ?? EXECUTION_PHASES.PROMPT}`,
       ].join(":");
       const signature = getCliOutputSignature(output);
       if (!entry.session.shouldBroadcastOutput(entryKey, signature)) continue;
+      if (this.externalRunSessions.get(workflowId) !== entry) return;
       this.host.broadcast.notifyCliWatchOutput(workflowId, stepIndex, output);
     }
   }
@@ -825,7 +834,8 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     reason: ExternalRunWatchFinishReason
   ): Promise<void> {
     const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) return;
+    if (!entry || entry.finishing) return;
+    entry.finishing = true;
     Log.info(
       `[WorkflowOrchestrator] external run session finished for "${workflowId}" (reason=${reason})`
     );

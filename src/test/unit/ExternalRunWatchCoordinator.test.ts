@@ -23,6 +23,7 @@ import type {
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
   STEP_STATUS,
   type ExecutionState,
@@ -179,6 +180,20 @@ function createCoordinator(
 ): { coordinator: ExternalRunWatchCoordinator; host: TestHost } {
   const host = new TestHost(workspace, [], runnerHostIdentity);
   return { coordinator: new ExternalRunWatchCoordinator(host), host };
+}
+
+type LoadedHistory = Awaited<ReturnType<OutputHistoryManager["loadHistory"]>>;
+
+function historyWithCliOutput(response: string): LoadedHistory {
+  return {
+    orderedEntries: [
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        cliOutput: { response, isStreaming: false },
+      },
+    ],
+  } as LoadedHistory;
 }
 
 async function createLiveRun(
@@ -393,6 +408,113 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
     }
   });
 
+  test("applies the final history read after an older pending read", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-history-order-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.CLI,
+        "external-history-order"
+      );
+      const { coordinator, host } = createCoordinator(workspace);
+      assert.strictEqual(
+        await coordinator.startExternalRunWatchSessionIfExternal(
+          run.filePath,
+          workspace
+        ),
+        true
+      );
+      const historyManager = host.getOutputHistoryManager();
+      let resolveOlder!: (history: LoadedHistory) => void;
+      const olderHistory = new Promise<LoadedHistory>((resolve) => {
+        resolveOlder = resolve;
+      });
+      let loadCount = 0;
+      historyManager.loadHistory = async () => {
+        loadCount++;
+        return loadCount === 1
+          ? olderHistory
+          : historyWithCliOutput("final output");
+      };
+
+      const historyPath = coordinator
+        .getEntry(run.workflowKey)!
+        .session.getActiveHistoryFilePath();
+      coordinator.handleExternalRunWatchOutput(run.workflowKey, historyPath);
+      await Promise.resolve();
+      assert.strictEqual(loadCount, 1);
+
+      const finishing = coordinator.handleExternalRunFinished(
+        run.workflowKey,
+        run.filePath,
+        "lock-deleted"
+      );
+      resolveOlder(historyWithCliOutput("stale output"));
+      await finishing;
+
+      assert.deepStrictEqual(
+        host.broadcast.cliOutputs.map(({ response }) => response),
+        ["stale output", "final output"]
+      );
+      assert.deepStrictEqual(host.broadcast.notificationOrder, [
+        "output:stale output",
+        "output:final output",
+        "dismissed",
+      ]);
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not forward a history load after its session is removed", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-history-disposed-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.CLI,
+        "external-history-disposed"
+      );
+      const { coordinator, host } = createCoordinator(workspace);
+      assert.strictEqual(
+        await coordinator.startExternalRunWatchSessionIfExternal(
+          run.filePath,
+          workspace
+        ),
+        true
+      );
+      let resolveHistory!: (history: LoadedHistory) => void;
+      host.getOutputHistoryManager().loadHistory = () =>
+        new Promise<LoadedHistory>((resolve) => {
+          resolveHistory = resolve;
+        });
+
+      const historyPath = coordinator
+        .getEntry(run.workflowKey)!
+        .session.getActiveHistoryFilePath();
+      coordinator.handleExternalRunWatchOutput(run.workflowKey, historyPath);
+      const pendingLoad =
+        coordinator.getEntry(run.workflowKey)!.historyLoadPromise;
+      await Promise.resolve();
+      coordinator.dispose();
+      resolveHistory(historyWithCliOutput("too late"));
+      await pendingLoad;
+
+      assert.deepStrictEqual(host.broadcast.cliOutputs, []);
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("reports final-step state in live and finished external summaries", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-coordinator-final-step-")
@@ -445,7 +567,7 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
         }),
         "utf8"
       );
-      coordinator.handleExternalRunFinished(
+      await coordinator.handleExternalRunFinished(
         run.workflowKey,
         run.filePath,
         "lock-deleted"
@@ -487,7 +609,7 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
         true
       );
 
-      coordinator.handleExternalRunFinished(
+      await coordinator.handleExternalRunFinished(
         run.workflowKey,
         run.filePath,
         "lock-deleted"
@@ -535,6 +657,7 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
           currentStep: 0,
         } as WorkflowSummary,
         lastStepStatuses: [],
+        historyLoadPromise: Promise.resolve(),
       });
       assert.strictEqual(host.broadcast.restoredCalls[0][12], undefined);
     } finally {
@@ -578,6 +701,7 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
           currentStep: 2,
         } as WorkflowSummary,
         lastStepStatuses: [],
+        historyLoadPromise: Promise.resolve(),
       });
       const results = host.broadcast.restoredCalls[0][2] as Array<{
         status: string;
@@ -730,7 +854,7 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
           ],
         })
       );
-      coordinator.handleExternalRunFinished(
+      await coordinator.handleExternalRunFinished(
         run.workflowKey,
         run.filePath,
         "lock-deleted"

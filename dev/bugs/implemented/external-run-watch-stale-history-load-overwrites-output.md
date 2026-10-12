@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude (bug-drain review of ~2e4f60854)
 - **Area:** `src/core/orchestration/ExternalRunWatchCoordinator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
