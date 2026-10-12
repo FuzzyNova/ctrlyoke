@@ -14,6 +14,7 @@ import {
   PERMISSION_MODE_OPTIONS_META,
   PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
   RUN_HISTORY_LOCATION_OPTIONS_META,
+  SERVER_THEME_OPTIONS_META,
   STEP_COLOR_MODE_OPTIONS_META,
   TERMINAL_CURSOR_STYLE_OPTIONS_META,
   TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
@@ -254,7 +255,6 @@ const PENDING_UI_PARITY: readonly string[] = [
   "languageServers.maxRunning",
   "languageServers.settings",
   "languageServers.startOnLaunch",
-  "server.theme",
   "templates.variableDefaults",
   "terminal.mobileBarLayout.bar",
   "terminal.mobileBarLayout.hidden",
@@ -293,6 +293,7 @@ const SETTINGS_ENUM_METADATA = [
     STEP_COLOR_MODE_OPTIONS_META,
     "STEP_COLOR_MODE_OPTIONS_META",
   ],
+  ["server.theme", SERVER_THEME_OPTIONS_META, "SERVER_THEME_OPTIONS_META"],
   [
     "execution.ctrlyokeMcpMode",
     CTRLYOKE_MCP_MODE_OPTIONS_META,

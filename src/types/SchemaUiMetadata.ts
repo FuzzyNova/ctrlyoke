@@ -25,6 +25,7 @@ import {
   RUN_HISTORY_LOCATIONS,
   SESSION_ID_SENTINELS,
   SCRIPT_OPERATORS,
+  SERVER_THEME_MODES,
   STEP_COLOR_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
@@ -43,6 +44,7 @@ import {
   type HookEvent,
   type NotificationEventMode,
   type PermissionMode,
+  type ServerThemeMode,
   type StepColorMode,
   type TerminalCursorStyle,
   type TerminalMobileControlBar,
@@ -690,6 +692,21 @@ export const STEP_COLOR_MODE_OPTIONS_META: Record<
     value: STEP_COLOR_MODES.UNIQUE,
     label: "Unique",
   },
+};
+
+export const SERVER_THEME_OPTIONS_META: Record<
+  ServerThemeMode,
+  SchemaOptionMeta<ServerThemeMode>
+> = {
+  [SERVER_THEME_MODES.AUTO]: {
+    value: SERVER_THEME_MODES.AUTO,
+    label: "Auto (match system)",
+  },
+  [SERVER_THEME_MODES.LIGHT]: {
+    value: SERVER_THEME_MODES.LIGHT,
+    label: "Light",
+  },
+  [SERVER_THEME_MODES.DARK]: { value: SERVER_THEME_MODES.DARK, label: "Dark" },
 };
 
 /** `ui.editorFontSize` choices; Custom reveals a pixel-size stepper. */

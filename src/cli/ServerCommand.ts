@@ -6,6 +6,7 @@ import {
   EXECUTION_MODES,
   type ServerThemeMode,
   SERVER_BIND_ADDRESSES,
+  SETTING_PATHS,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import type { CtrlYokeGlobalSettings } from "../types/CtrlYokeSettings";
@@ -38,13 +39,18 @@ export interface ResolvedServerSettings {
   https: boolean;
   certPath: string;
   keyPath: string;
-  theme: ServerThemeMode;
+  /**
+   * Set only when `--theme` was passed, and then only as the starting value:
+   * the hosted server reads `server.theme` on every page load, so a change
+   * made in the dashboard's settings applies without restarting the server.
+   */
+  theme?: ServerThemeMode;
   verbose: boolean;
 }
 
 type ServerSettingValues = Pick<
   CtrlYokeGlobalSettings["server"],
-  "port" | "fallbackPorts" | "bindAddress" | "theme" | "tls"
+  "port" | "fallbackPorts" | "bindAddress" | "tls"
 >;
 
 export function resolveServerSettings(
@@ -65,7 +71,7 @@ export function resolveServerSettings(
     https: options.https ?? settings.tls.enabled,
     certPath: options.cert ?? settings.tls.certPath,
     keyPath: options.key ?? settings.tls.keyPath,
-    theme: options.theme ?? settings.theme,
+    theme: options.theme,
     verbose: options.verbose ?? configService.get("diagnostics").verboseLogging,
   };
 }
@@ -188,13 +194,20 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     port: initial.port,
     fallbackPorts: initial.fallbackPorts,
     bindAddress: initial.bindAddress,
-    theme: initial.theme,
+    ...(initial.theme ? { theme: initial.theme } : {}),
     tls: { enabled: initial.https, certPath, keyPath },
   };
-  configService.setCliOverlay({
-    diagnostics: { verboseLogging: initial.verbose },
-    server: serverSettings,
-  });
+  // `--theme` only picks the starting theme; changing it in the dashboard's
+  // settings releases the override.
+  const applyOverlay = (tls: typeof serverSettings.tls): void =>
+    configService.setCliOverlay(
+      {
+        diagnostics: { verboseLogging: initial.verbose },
+        server: { ...serverSettings, tls },
+      },
+      [SETTING_PATHS.SERVER_THEME]
+    );
+  applyOverlay(serverSettings.tls);
 
   if (initial.https && (!certPath || !keyPath)) {
     const licenseStore = await import("../platform/OsCredentialStore.js");
@@ -213,13 +226,7 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
       );
       certPath = generated.certPath;
       keyPath = generated.keyPath;
-      configService.setCliOverlay({
-        diagnostics: { verboseLogging: initial.verbose },
-        server: {
-          ...serverSettings,
-          tls: { enabled: true, certPath, keyPath },
-        },
-      });
+      applyOverlay({ enabled: true, certPath, keyPath });
     }
   }
 

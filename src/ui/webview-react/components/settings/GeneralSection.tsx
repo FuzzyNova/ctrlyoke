@@ -17,6 +17,7 @@ import {
   DEFAULT_FORMAT_OPTIONS_META,
   STEP_COLOR_MODE_OPTIONS_META,
   CTRLYOKE_MCP_MODE_OPTIONS_META,
+  SERVER_THEME_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import { STEP_COLOR_MODES } from "@root/types/DashboardConstants";
@@ -119,6 +120,19 @@ export function GeneralSection({
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           UI Preferences
         </h3>
+        <SettingInputRow
+          settingKey="server.theme"
+          id="server-theme"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="server-theme"
+            value={settings.settings.server.theme}
+            onChange={(v) => onUpdate("server.theme", v)}
+            schemaPath="server.theme"
+            options={toSelectOptions(SERVER_THEME_OPTIONS_META, "server.theme")}
+          />
+        </SettingInputRow>
         <SettingToggleRow
           settingKey="ui.showCliCommand"
           checked={ui.showCliCommand}

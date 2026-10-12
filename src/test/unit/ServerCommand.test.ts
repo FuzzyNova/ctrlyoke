@@ -112,6 +112,13 @@ suite("ServerCommand", () => {
     );
   });
 
+  test("leaves the theme to the live server.theme setting unless --theme is passed", () => {
+    assert.strictEqual(
+      resolveServerSettings({}, "C:/repo", settings).theme,
+      undefined
+    );
+  });
+
   test("maps invalid server ports to a clean CLI usage error", () => {
     let error: unknown;
     assert.throws(

@@ -256,10 +256,26 @@ function deepMerge<T extends Record<string, unknown>>(
   return result;
 }
 
+/** Copy of `obj` without the value at `pathParts`, pruning parents it empties. */
+function withoutPath(
+  obj: Record<string, unknown>,
+  pathParts: readonly string[]
+): Record<string, unknown> {
+  const [head, ...rest] = pathParts;
+  if (head === undefined || !(head in obj)) return obj;
+  const { [head]: child, ...others } = obj;
+  if (rest.length === 0 || !isPlainObject(child)) return others;
+  const pruned = withoutPath(child, rest);
+  return Object.keys(pruned).length > 0
+    ? { ...others, [head]: pruned }
+    : others;
+}
+
 export class CtrlYokeConfigService {
   private workspaceBackend?: ConfigBackend;
   private userBackend?: ConfigBackend;
   private cliOverlay?: PartialCtrlYokeSettings;
+  private cliOverlaySeedPaths = new Set<string>();
   private listeners: Set<() => void> = new Set();
   private warnedWorkspaceForbiddenPaths = new WeakMap<
     ConfigBackend,
@@ -282,8 +298,17 @@ export class CtrlYokeConfigService {
     this.userBackend = backend;
   }
 
-  setCliOverlay(overlay: PartialCtrlYokeSettings): void {
+  /**
+   * @param seedPaths Overlay paths that only choose a starting value. The
+   * first `set()` of one of them (a write or a reset) drops it from the
+   * overlay, so the user's choice takes effect for the rest of the process.
+   */
+  setCliOverlay(
+    overlay: PartialCtrlYokeSettings,
+    seedPaths: readonly string[] = []
+  ): void {
     this.cliOverlay = overlay;
+    this.cliOverlaySeedPaths = new Set(seedPaths);
   }
 
   /** Replace the trust-decision source (tests only; defaults to the user store). */
@@ -483,7 +508,16 @@ export class CtrlYokeConfigService {
         this.getWorkspaceSensitiveSettingRequestsFrom(before);
       await this.approveNewWorkspaceSensitiveValues(sensitiveBefore, path);
     }
+    this.releaseCliOverlaySeed(path);
     this.notify();
+  }
+
+  private releaseCliOverlaySeed(path: string): void {
+    if (!this.cliOverlay || !this.cliOverlaySeedPaths.delete(path)) return;
+    this.cliOverlay = withoutPath(
+      this.cliOverlay as Record<string, unknown>,
+      path.split(".")
+    ) as PartialCtrlYokeSettings;
   }
 
   /**

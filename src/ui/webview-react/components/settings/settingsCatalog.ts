@@ -89,6 +89,15 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Editor font size",
     keywords: ["text size", "zoom", "prompt editor", "retry prompt"],
   },
+  "server.theme": {
+    id: "server.theme",
+    path: "server.theme",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Browser dashboard theme",
+    description:
+      "Light or dark theme for the dashboard served by ctrlyoke server. Auto follows each browser's system setting. Takes effect when the page reloads. A browser dashboard started from VS Code follows the VS Code theme instead.",
+    keywords: ["dark mode", "light mode", "appearance", "color theme"],
+  },
   "ui.showCliCommand": {
     id: "ui.showCliCommand",
     path: "ui.showCliCommand",

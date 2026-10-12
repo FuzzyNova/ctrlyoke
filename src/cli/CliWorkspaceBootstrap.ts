@@ -53,7 +53,7 @@ export async function bootstrapCliWorkspace(
   dependencies: CliWorkspaceBootstrapDependencies = {}
 ): Promise<CliWorkspaceBootstrap> {
   const workspaceRoot = path.resolve(options.cwd ?? process.cwd());
-  const activeConfigService =
+  const activeConfigService: CliWorkspaceConfigService =
     dependencies.configService ?? defaultConfigService;
   const initializeCliLog =
     dependencies.initializeCliLog ??

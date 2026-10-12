@@ -92,8 +92,11 @@ for the full configuration shape.
 ## Themes and browser storage
 
 By default, each browser follows its own light or dark system preference.
-Choose a server-wide default with `--theme light`, `--theme dark`, or the
-`server.theme` setting. A `?theme=light` or `?theme=dark` URL parameter can
+Choose a server-wide default with **Browser dashboard theme** on the
+dashboard's General settings tab, which writes the `server.theme` setting. A
+change applies the next time a browser loads the page, without restarting the
+server. `--theme light` or `--theme dark` fixes the theme for that server run
+and overrides the setting. A `?theme=light` or `?theme=dark` URL parameter can
 choose a theme for one browser.
 
 Dashboard drafts and UI state are stored by the browser, scoped to the

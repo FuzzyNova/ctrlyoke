@@ -15,6 +15,13 @@
 > and that the bundled themes are the generated
 > `src/server/themes/vscode-default-{dark,light}.css` (`npm run generate-server-themes`).
 
+> **2026-10-12:** `server.theme` now has a dashboard control: **Browser
+> dashboard theme** in `GeneralSection.tsx` (catalog entry `server.theme`,
+> options from `SERVER_THEME_OPTIONS_META`). `ctrlyoke server` no longer pins
+> `server.theme` into its CLI overlay unless `--theme` is passed, so a change
+> applies on the next page load. Design 4's `server.themeLight`/`themeDark`
+> dropdowns belong next to it.
+
 ## Goal
 
 Let a VS Code user who moves to `ctrlyoke server` keep using their own VS Code

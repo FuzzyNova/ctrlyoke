@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GeneralSection } from "@components/settings/GeneralSection";
 import {
   EDITOR_FONT_SIZE_VSCODE,
+  SERVER_THEME_MODES,
   STEP_COLOR_MODES,
   type EditorFontSize,
 } from "@root/types/DashboardConstants";
@@ -109,6 +110,32 @@ describe("GeneralSection limit controls", () => {
         name: "Unlimited, property runs.maxRuns",
       })
     ).toBeInTheDocument();
+  });
+});
+
+describe("GeneralSection browser dashboard theme", () => {
+  it("writes the chosen theme to server.theme", () => {
+    const onUpdate = vi.fn();
+    render(
+      <GeneralSection
+        settings={settings(STEP_COLOR_MODES.NONE)}
+        activeScope="user"
+        onUpdate={onUpdate}
+        onReset={() => undefined}
+        onReload={() => undefined}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Auto (match system), property server.theme",
+      })
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Dark,/ }));
+    expect(onUpdate).toHaveBeenCalledWith(
+      "server.theme",
+      SERVER_THEME_MODES.DARK
+    );
   });
 });
 

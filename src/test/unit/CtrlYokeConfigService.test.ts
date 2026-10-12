@@ -261,6 +261,36 @@ suite("CtrlYokeConfigService", () => {
     });
   });
 
+  test("a write to a seeded CLI overlay path releases only that path", async () => {
+    const user: PartialCtrlYokeSettings = { server: { theme: "auto" } };
+    service.setUserBackend({
+      getAll: () => user,
+      set: async (_path: string, value: unknown) => {
+        const before = structuredClone(user);
+        user.server = { ...user.server, theme: value as "dark" };
+        return before;
+      },
+    });
+    service.setCliOverlay({ server: { theme: "light", port: 5010 } }, [
+      "server.theme",
+    ]);
+    assert.strictEqual(service.get("server").theme, "light");
+
+    await service.set("server.theme", "dark", "user");
+
+    assert.strictEqual(service.get("server").theme, "dark");
+    assert.strictEqual(service.get("server").port, 5010);
+  });
+
+  test("a write to an unseeded CLI overlay path leaves the overlay in force", async () => {
+    service.setUserBackend(makeBackend({}));
+    service.setCliOverlay({ server: { theme: "light" } });
+
+    await service.set("server.theme", "dark", "user");
+
+    assert.strictEqual(service.get("server").theme, "light");
+  });
+
   test("filters malformed workspace object sections before merge", () => {
     service.setWorkspaceBackend({
       getAll: () =>

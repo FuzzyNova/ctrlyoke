@@ -2054,6 +2054,7 @@ export const SETTING_PATHS = {
   EXECUTION_CONTEXT_RESOLUTION_FAILURE: "execution.contextResolutionFailure",
   UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
   SERVER_AUTO_START: "server.autoStart",
+  SERVER_THEME: "server.theme",
   COMMIT_SYSTEM_PROMPT: "commit.systemPrompt",
   STATUS_LINE: "statusLine",
   STATUS_LINE_USE_DIFFERENT_FORMAT_PER_HARNESS:

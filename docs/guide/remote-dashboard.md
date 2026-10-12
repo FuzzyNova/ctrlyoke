@@ -152,8 +152,10 @@ closing the tab but don't sync between your phone and your computer.
 ## Theme and icon
 
 The browser dashboard follows each browser's light or dark preference. Set
-`server.theme` to `light` or `dark` to pick one for every browser, or add
-`?theme=light` or `?theme=dark` to the link for one browser.
+**Browser dashboard theme** on the General settings tab (`server.theme`) to
+`light` or `dark` to pick one for every browser, or add `?theme=light` or
+`?theme=dark` to the link for one browser. A change applies when the page
+reloads.
 
 With Pro, **Icon Colors** on the Server tab set the background and foreground
 colors of the browser tab icon and the home-screen app icon, which helps tell
