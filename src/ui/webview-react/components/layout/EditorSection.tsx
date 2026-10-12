@@ -4,7 +4,10 @@ import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useBulkSelectionGates } from "../../hooks/useBulkSelectionGates";
 import { getBulkDisplayValue, MIXED_VALUE } from "../../store/editorStore";
-import { useSettingsStore } from "../../store/settingsStore";
+import {
+  selectSettingWriteScope,
+  useSettingsStore,
+} from "../../store/settingsStore";
 import { useElementTier } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -22,7 +25,6 @@ import {
 } from "../../types/messages";
 import {
   KEYBOARD_KEYS,
-  SETTING_SCOPES,
   STEP_COLOR_MODES,
   STEP_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
@@ -183,19 +185,17 @@ const EditorSectionInner: React.FC = () => {
 
   const handleRespectGitignoreChange = useCallback(
     (checked: boolean) => {
-      const scope =
-        globalSettings.settingSources["ui.respectGitignoreForCompletions"] ===
-        SETTING_SCOPES.WORKSPACE
-          ? SETTING_SCOPES.WORKSPACE
-          : SETTING_SCOPES.USER;
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
         path: "ui.respectGitignoreForCompletions",
         value: checked,
-        scope,
+        scope: selectSettingWriteScope(
+          useSettingsStore.getState(),
+          "ui.respectGitignoreForCompletions"
+        ),
       });
     },
-    [vscode, globalSettings.settingSources]
+    [vscode]
   );
 
   const handleNameKeyDown = (e: React.KeyboardEvent) => {

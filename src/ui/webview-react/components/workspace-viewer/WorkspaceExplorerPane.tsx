@@ -14,7 +14,10 @@ import {
 } from "@/constants";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { useSettingsStore } from "@store/settingsStore";
+import {
+  selectSettingWriteScope,
+  useSettingsStore,
+} from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -24,7 +27,6 @@ import { usePagedWorkspaceDirectory } from "@hooks/usePagedWorkspaceDirectory";
 import {
   HOSTED_WORKSPACE_FILE_CHANGED_EVENT,
   MESSAGE_TYPES,
-  SETTING_SCOPES,
   WORKSPACE_VIEWER_TABS,
 } from "@/types/messages";
 import type {
@@ -177,10 +179,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
     (s) => s.globalSettings.hideGitIgnoredFiles
   );
   const hideGitIgnoredFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.hideGitIgnoredFiles"] ===
-    SETTING_SCOPES.WORKSPACE
-      ? SETTING_SCOPES.WORKSPACE
-      : SETTING_SCOPES.USER
+    selectSettingWriteScope(s, "ui.hideGitIgnoredFiles")
   );
   const vscode = useVsCodeApi();
   const workspaceEntrySort = useUiStore((s) => s.workspaceEntrySort);

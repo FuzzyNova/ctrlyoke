@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@components/shared/Button";
 import { Modal } from "@components/shared/Modal";
 import { hostedFetch } from "@utils/hostedApi";
-import { useSettingsStore } from "@store/settingsStore";
+import {
+  selectSettingWriteScope,
+  useSettingsStore,
+} from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
+import { MESSAGE_TYPES } from "@/types/messages";
 import type { WorkflowFileEntry } from "@root/utils/WorkflowFileDiscovery";
 import { Icon } from "../shared/Icon";
 
@@ -41,10 +44,7 @@ export const WorkflowFilePickerModal: React.FC<
     (s) => s.globalSettings.hideGitIgnoredFiles
   );
   const hideGitIgnoredFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.hideGitIgnoredFiles"] ===
-    SETTING_SCOPES.WORKSPACE
-      ? SETTING_SCOPES.WORKSPACE
-      : SETTING_SCOPES.USER
+    selectSettingWriteScope(s, "ui.hideGitIgnoredFiles")
   );
   const vscode = useVsCodeApi();
 
