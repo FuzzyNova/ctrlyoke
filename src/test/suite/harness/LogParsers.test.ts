@@ -2177,6 +2177,56 @@ suite("ClaudeLogParser", () => {
         "human-steer"
       );
     });
+
+    // A message typed while a turn is running is absorbed into that turn and
+    // logged only as a `queued_command` attachment, never as a `user` event.
+    const midTurnSteer = (attachment: Record<string, unknown>) => ({
+      type: "attachment",
+      attachment: {
+        type: "queued_command",
+        prompt: "in celcius",
+        commandMode: "prompt",
+        origin: { kind: "human" },
+        humanTurn: true,
+        ...attachment,
+      },
+    });
+
+    test("should classify a mid-turn queued human message as a human steer", () => {
+      const event = midTurnSteer({});
+
+      assert.strictEqual(parser.classifyUserEvent(event, {}), "human-steer");
+      assert.strictEqual(parser.extractUserSteerText(event), "in celcius");
+    });
+
+    test("should classify a queued human message without an origin as a human steer", () => {
+      const event = midTurnSteer({ origin: undefined });
+
+      assert.strictEqual(parser.classifyUserEvent(event, {}), "human-steer");
+    });
+
+    test("should not classify queued task notifications or non-human commands as human steers", () => {
+      const notification = midTurnSteer({
+        commandMode: "task-notification",
+        prompt:
+          "<task-notification><tool-use-id>toolu_1</tool-use-id></task-notification>",
+      });
+      const nonHuman = midTurnSteer({ origin: { kind: "system" } });
+
+      assert.strictEqual(parser.classifyUserEvent(notification, {}), "other");
+      assert.strictEqual(parser.extractUserSteerText(notification), undefined);
+      assert.strictEqual(parser.classifyUserEvent(nonHuman, {}), "other");
+      assert.strictEqual(parser.extractUserSteerText(nonHuman), undefined);
+    });
+
+    test("should classify a queued copy of the dispatched prompt as an injected prompt", () => {
+      assert.strictEqual(
+        parser.classifyUserEvent(midTurnSteer({}), {
+          dispatchedPromptText: "in celcius",
+        }),
+        "injected-prompt"
+      );
+    });
   });
 
   suite("readNewLines", () => {

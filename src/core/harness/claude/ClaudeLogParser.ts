@@ -31,9 +31,12 @@ import {
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
+  CLAUDE_ATTACHMENT_TYPES,
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_EVENT_TYPES,
   CLAUDE_MODEL_SENTINELS,
+  CLAUDE_QUEUED_COMMAND_MODES,
+  CLAUDE_QUEUED_COMMAND_ORIGINS,
   CLAUDE_PROGRESS_TYPES,
   CLAUDE_STOP_REASONS,
   CLAUDE_SYSTEM_SUBTYPES,
@@ -121,7 +124,10 @@ interface ClaudeProviderEvent extends BaseCliEvent {
   data?: Record<string, any>;
   content?: string;
   attachment?: {
+    type?: string;
     prompt?: string;
+    commandMode?: string;
+    origin?: { kind?: string };
   };
   total_cost_usd?: number;
   modelUsage?: Record<string, ProviderModelUsage>;
@@ -617,13 +623,26 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * prompts echoed back, its own `<task-notification>` resume signal, and genuine
    * human follow-ups typed into the live TUI — only the last is a "user steer".
    *
-   * Non-`user` events and events with no text content are always `"other"`.
+   * A message typed while a turn is still running never becomes a `user` event:
+   * Claude absorbs it into the running turn and logs only a `queued_command`
+   * attachment (see `extractHumanQueuedCommandText`), so that shape is a steer too.
+   *
+   * Other events and events with no text content are always `"other"`.
    */
   override classifyUserEvent(
     event: BaseCliEvent,
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
     const e = event as ClaudeProviderEvent;
+    if (e.type === CLAUDE_EVENT_TYPES.ATTACHMENT) {
+      const text = this.extractHumanQueuedCommandText(e);
+      if (!text) {
+        return "other";
+      }
+      return this.matchesDispatchedPrompt(text, ctx.dispatchedPromptText)
+        ? "injected-prompt"
+        : "human-steer";
+    }
     if (e.type !== CLAUDE_EVENT_TYPES.USER) {
       return "other";
     }
@@ -647,32 +666,61 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return "resume-signal";
     }
 
-    if (ctx.dispatchedPromptText) {
-      const normalizedDispatched = this.normalizePromptForMatching(
-        ctx.dispatchedPromptText.substring(0, 100)
-      );
-      const normalizedLogged = this.normalizePromptForMatching(
-        text.substring(0, 100)
-      );
-      if (normalizedDispatched === normalizedLogged) {
-        return "injected-prompt";
-      }
-    }
+    return this.matchesDispatchedPrompt(text, ctx.dispatchedPromptText)
+      ? "injected-prompt"
+      : "human-steer";
+  }
 
-    return "human-steer";
+  /** True when logged text is ctrlyoke's own dispatched prompt echoed back. */
+  private matchesDispatchedPrompt(
+    text: string,
+    dispatchedPromptText: string | undefined
+  ): boolean {
+    if (!dispatchedPromptText) {
+      return false;
+    }
+    return (
+      this.normalizePromptForMatching(
+        dispatchedPromptText.substring(0, 100)
+      ) === this.normalizePromptForMatching(text.substring(0, 100))
+    );
+  }
+
+  /**
+   * Text of a human message Claude absorbed into a running turn. Claude logs
+   * it as an `attachment` of type `queued_command` with `commandMode: "prompt"`;
+   * background-task notifications use the same attachment type with
+   * `commandMode: "task-notification"` and are excluded here. An explicit
+   * non-human `origin` is excluded too; older logs omit `origin` entirely.
+   */
+  private extractHumanQueuedCommandText(e: ClaudeProviderEvent): string {
+    const attachment = e.attachment;
+    if (
+      e.parent_tool_use_id ||
+      attachment?.type !== CLAUDE_ATTACHMENT_TYPES.QUEUED_COMMAND ||
+      attachment.commandMode !== CLAUDE_QUEUED_COMMAND_MODES.PROMPT ||
+      (attachment.origin?.kind !== undefined &&
+        attachment.origin.kind !== CLAUDE_QUEUED_COMMAND_ORIGINS.HUMAN) ||
+      typeof attachment.prompt !== "string"
+    ) {
+      return "";
+    }
+    return attachment.prompt.trim();
   }
 
   /**
    * Extract the display text for an event already classified as `"human-steer"`
-   * by `classifyUserEvent`. Reuses the same block-text extraction so the two
-   * stay in sync — see `extractUserMessageText`.
+   * by `classifyUserEvent`. Reuses the same extraction helpers so the two stay
+   * in sync — see `extractUserMessageText` and `extractHumanQueuedCommandText`.
    */
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as ClaudeProviderEvent;
-    if (e.type !== CLAUDE_EVENT_TYPES.USER) {
-      return undefined;
+    let text = "";
+    if (e.type === CLAUDE_EVENT_TYPES.USER) {
+      text = this.extractUserMessageText(e);
+    } else if (e.type === CLAUDE_EVENT_TYPES.ATTACHMENT) {
+      text = this.extractHumanQueuedCommandText(e);
     }
-    const text = this.extractUserMessageText(e);
     return text || undefined;
   }
 
@@ -724,7 +772,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     if (e.type === CLAUDE_EVENT_TYPES.USER) {
       return this.extractUserMessageText(e);
     }
-    if (e.type === "attachment" && typeof e.attachment?.prompt === "string") {
+    if (
+      e.type === CLAUDE_EVENT_TYPES.ATTACHMENT &&
+      typeof e.attachment?.prompt === "string"
+    ) {
       return e.attachment.prompt;
     }
     return "";

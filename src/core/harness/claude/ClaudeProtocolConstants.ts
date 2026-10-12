@@ -5,6 +5,24 @@ export const CLAUDE_EVENT_TYPES = {
   SYSTEM: "system",
   RESULT: "result",
   PROGRESS: "progress",
+  ATTACHMENT: "attachment",
+} as const;
+
+/** `attachment.type` values Claude writes on `attachment` log events. */
+export const CLAUDE_ATTACHMENT_TYPES = {
+  /** A queued message Claude delivered mid-turn (human steer or task notification). */
+  QUEUED_COMMAND: "queued_command",
+} as const;
+
+/** `attachment.commandMode` values on a `queued_command` attachment. */
+export const CLAUDE_QUEUED_COMMAND_MODES = {
+  PROMPT: "prompt",
+  TASK_NOTIFICATION: "task-notification",
+} as const;
+
+/** `attachment.origin.kind` values on a `queued_command` attachment. */
+export const CLAUDE_QUEUED_COMMAND_ORIGINS = {
+  HUMAN: "human",
 } as const;
 
 export const CLAUDE_MODEL_SENTINELS = {
