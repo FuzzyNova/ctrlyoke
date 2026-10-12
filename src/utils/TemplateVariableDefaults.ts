@@ -21,6 +21,7 @@ export interface TemplateVariableDefaultDefinition {
   options?: string[];
   default?: string;
   authoredDefault?: string;
+  defaultSource?: TemplateVariableDefaultSource;
 }
 
 export type TemplateVariableDefaultIssueReason =
@@ -80,7 +81,12 @@ export function resolveTemplateVariableDefaults<
   }
 
   return variables.map((variable) => {
-    const authoredDefault = variable.authoredDefault ?? variable.default;
+    // An already-resolved variable's `default` is the effective value, and JSON
+    // drops an undefined `authoredDefault`, so only unresolved input falls back.
+    const authoredDefault =
+      variable.defaultSource !== undefined
+        ? variable.authoredDefault
+        : variable.default;
     let resolved: string | undefined;
     let source: TemplateVariableDefaultSource = TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
 

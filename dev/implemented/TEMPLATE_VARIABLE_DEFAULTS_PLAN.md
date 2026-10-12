@@ -1,6 +1,7 @@
 # Template Variable Defaults Plan
 
-**Status:** Implemented. Phases 1–3 are complete: saved variable values carry into copied templates as authored defaults. No deviations.
+**Status:** Implemented. Phases 1–3 are complete. The "Follow-up — community templates" section
+below is owned by `../backlog/COMMUNITY_TEMPLATES_PLAN.md` and is not part of this plan.
 
 ## Goal
 
@@ -545,7 +546,7 @@ overlay on the source; the user may still use the built-in.
 
 ## Follow-up — community templates in the Templates tab
 
-[`COMMUNITY_TEMPLATES_PLAN.md`](COMMUNITY_TEMPLATES_PLAN.md) Phase 2 (Discovery & Import) puts
+[`COMMUNITY_TEMPLATES_PLAN.md`](../backlog/COMMUNITY_TEMPLATES_PLAN.md) Phase 2 (Discovery & Import) puts
 its browse-and-install UI in the **Templates** tab instead of a separate Community Templates
 tab. That plan owns the design (fetch source, `CommunityTemplateService`, store, install
 validation). This section only records the shared layout so Phase 2 here doesn't paint it into a

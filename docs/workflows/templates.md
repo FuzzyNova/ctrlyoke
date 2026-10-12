@@ -6,8 +6,8 @@ Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrl
 
 Open **Settings → Templates** to choose the default template and save variable values for any
 built-in or custom template. The drawer's **User** scope stores values for your own use across
-workspaces; **Workspace** stores values with the project. When both scopes save the same value,
-the Workspace value wins in that workspace. Linked harness and model values are saved together.
+workspaces; **Workspace** stores values with the project. When both scopes save the same
+variable, the Workspace value wins in that workspace. Linked harness and model values are saved together.
 
 Each saved value is used to pre-fill the matching field in **New Workflow**. Choose **Add
 template** and **Add value** to add a value from Settings, or pin a value while creating a
