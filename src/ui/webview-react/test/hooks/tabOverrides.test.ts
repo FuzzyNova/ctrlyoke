@@ -4,6 +4,7 @@ import {
   HARNESS_IDS,
   PERMISSION_MODES,
   TOAST_LEVEL_MODES,
+  EDITOR_FONT_SIZE_VSCODE,
 } from "@root/types/DashboardConstants";
 import type { GlobalSettings } from "@store/settingsStore";
 import { useDrawerTabOverrides } from "@hooks/useDrawerTabOverrides";
@@ -40,6 +41,8 @@ const globalSettings: GlobalSettings = {
   confirmContinuationDiscardOperations: true,
   hideGitIgnoredFiles: false,
   wordWrap: true,
+  outputFontSize: 13,
+  editorFontSize: EDITOR_FONT_SIZE_VSCODE,
   isMultiRoot: false,
   priorContext: "none",
   workspaceRoot: "",

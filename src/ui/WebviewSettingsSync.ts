@@ -909,6 +909,8 @@ export class WebviewSettingsSync {
         ConfigurationUtils.shouldConfirmContinuationDiscardOperations(),
       hideGitIgnoredFiles: ConfigurationUtils.shouldHideGitIgnoredFiles(),
       wordWrap: ConfigurationUtils.shouldWrapCodeLines(),
+      outputFontSize: ConfigurationUtils.getOutputFontSize(),
+      editorFontSize: ConfigurationUtils.getEditorFontSize(),
       showCostEstimates: ConfigurationUtils.shouldShowCostEstimates(),
       stepColorMode: ConfigurationUtils.getStepColorMode(),
       harnessColors: ConfigurationUtils.getHarnessColorSettings(),

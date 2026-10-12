@@ -28,6 +28,7 @@ import { useOutputScrollTarget } from "@hooks/useOutputScrollTarget";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
 import { useOutputFind } from "@hooks/useOutputFind";
+import { useFontSizeControls } from "@hooks/useFontSizeControls";
 import {
   bucketOutputContentWidth,
   DIFF_SPLIT_VIEW_THRESHOLD,
@@ -38,7 +39,6 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   SESSION_KINDS,
-  SETTING_SCOPES,
 } from "../../types/messages";
 import {
   DIFF_VIEW_TYPES,
@@ -298,31 +298,14 @@ const OutputSectionInner: React.FC = () => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
   const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
-  const outputFontSize = useUiStore((s) => s.outputFontSize);
-  const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
+  const {
+    outputFontSize,
+    terminalFontSize,
+    setOutputFontSize,
+    setTerminalFontSize,
+  } = useFontSizeControls();
   const pendingFindRequest = useUiStore((s) => s.pendingFindRequest);
   const setPendingFindRequest = useUiStore((s) => s.setPendingFindRequest);
-  const terminalFontSize = useUiStore((s) => s.terminalFontSize);
-  const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
-  const terminalFontSizeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["terminal.fontSize"] ===
-    SETTING_SCOPES.WORKSPACE
-      ? SETTING_SCOPES.WORKSPACE
-      : SETTING_SCOPES.USER
-  );
-  const updateTerminalFontSize = useCallback(
-    (size: number) => {
-      const next = Math.min(24, Math.max(8, size));
-      setTerminalFontSize(next);
-      getVsCodeApi()?.postMessage({
-        type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-        path: "terminal.fontSize",
-        value: next,
-        scope: terminalFontSizeScope,
-      });
-    },
-    [setTerminalFontSize, terminalFontSizeScope]
-  );
 
   // Terminal tab state
   const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
@@ -1673,7 +1656,7 @@ const OutputSectionInner: React.FC = () => {
           onOutputFontSizeChange={setOutputFontSize}
           onSelectOutputTab={handleSelectOutputTab}
           onSelectTerminalTab={handleSelectTerminalTab}
-          onTerminalFontSizeChange={updateTerminalFontSize}
+          onTerminalFontSizeChange={setTerminalFontSize}
           onTerminalSessionClose={handleCloseActiveTerminalSession}
           onToggleFullscreen={handleToggleFullscreen}
           onToggleCollapse={handleToggleOutputCollapse}

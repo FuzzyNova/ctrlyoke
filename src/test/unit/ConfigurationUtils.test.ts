@@ -8,8 +8,12 @@ import {
   secondsToMs,
 } from "../../utils/ConfigurationUtils";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
-import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
+  CTRLYOKE_SETTINGS_DEFAULTS,
+  FONT_SIZE_LIMITS,
+} from "../../types/CtrlYokeSettings";
+import {
+  EDITOR_FONT_SIZE_VSCODE,
   HARNESS_DISPLAY_ORDER,
   HARNESS_IDS,
   PERMISSION_MODES,
@@ -604,6 +608,51 @@ suite("ConfigurationUtils — default harness", () => {
     assert.strictEqual(
       ConfigurationUtils.getIntegrationMode(),
       HARNESS_DISPLAY_ORDER[0]
+    );
+  });
+});
+
+suite("ConfigurationUtils — font sizes", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+  });
+
+  test("defaults: output 13px, editor follows VS Code", () => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+
+    assert.strictEqual(ConfigurationUtils.getOutputFontSize(), 13);
+    assert.strictEqual(
+      ConfigurationUtils.getEditorFontSize(),
+      EDITOR_FONT_SIZE_VSCODE
+    );
+  });
+
+  test("clamps hand-edited sizes into the schema bounds", () => {
+    configService.setUserBackend(
+      makeBackend({ ui: { outputFontSize: 40, editorFontSize: 2 } })
+    );
+
+    assert.strictEqual(
+      ConfigurationUtils.getOutputFontSize(),
+      FONT_SIZE_LIMITS.output.max
+    );
+    assert.strictEqual(
+      ConfigurationUtils.getEditorFontSize(),
+      FONT_SIZE_LIMITS.editor.min
+    );
+  });
+
+  test("a malformed editor size follows VS Code instead", () => {
+    // JSON.parse stands in for a hand-edited settings file the type system never saw.
+    configService.setUserBackend(
+      makeBackend(JSON.parse('{"ui":{"editorFontSize":"large"}}'))
+    );
+
+    assert.strictEqual(
+      ConfigurationUtils.getEditorFontSize(),
+      EDITOR_FONT_SIZE_VSCODE
     );
   });
 });

@@ -26,6 +26,9 @@ import {
   WORKTREE_MODES,
   COMPARE_SOURCES,
   TOAST_LEVEL_MODES,
+  SETTING_SCOPES,
+  type EditorFontSize,
+  type SettingWriteScope,
   type StepColorMode,
   type ToastLevelMode,
 } from "@root/types/DashboardConstants";
@@ -135,6 +138,10 @@ export interface GlobalSettings {
   confirmContinuationDiscardOperations: boolean;
   hideGitIgnoredFiles: boolean;
   wordWrap: boolean;
+  /** Mirrored `ui.outputFontSize`. */
+  outputFontSize: number;
+  /** Mirrored `ui.editorFontSize`. */
+  editorFontSize: EditorFontSize;
   isMultiRoot: boolean;
   priorContext: string;
   workspaceRoot: string;
@@ -433,6 +440,8 @@ const initialGlobalSettings: GlobalSettings = {
   confirmContinuationDiscardOperations: true,
   hideGitIgnoredFiles: false,
   wordWrap: CTRLYOKE_SETTINGS_DEFAULTS.ui.wordWrap,
+  outputFontSize: CTRLYOKE_SETTINGS_DEFAULTS.ui.outputFontSize,
+  editorFontSize: CTRLYOKE_SETTINGS_DEFAULTS.ui.editorFontSize,
   isMultiRoot: false,
   priorContext: "none",
   workspaceRoot: "",
@@ -846,6 +855,20 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       }),
   })
 );
+
+/**
+ * The scope a quick control (outside the settings drawer) writes `path` to:
+ * the workspace when a workspace file already owns it, otherwise the user.
+ * Returns a primitive, so it is safe as a `useSettingsStore` selector.
+ */
+export function selectSettingWriteScope(
+  state: { globalSettings: Pick<GlobalSettings, "settingSources"> },
+  path: string
+): SettingWriteScope {
+  return state.globalSettings.settingSources[path] === SETTING_SCOPES.WORKSPACE
+    ? SETTING_SCOPES.WORKSPACE
+    : SETTING_SCOPES.USER;
+}
 
 /**
  * Resolve the operational-toast severity threshold.

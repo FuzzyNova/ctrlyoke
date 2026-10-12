@@ -932,12 +932,14 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "ui.confirmContinuationDiscardOperations": "Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead).",
   "ui.confirmDeleteOperations": "Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files.",
   "ui.confirmResetOperations": "Show a confirmation dialog before resetting workflow start position.",
+  "ui.editorFontSize": "Font size of the prompt editor, retry prompts, condition and script-step scripts, and the workspace file editor, in pixels. 'vscode' matches the VS Code editor font size; a browser connected to the ctrlyoke server uses 14px for 'vscode' because it cannot read VS Code's setting. One-line form fields such as additional arguments, hook commands, and permission lists keep their own fixed size.",
   "ui.harnessColors": "Controls the per-harness identity colors used to correlate workflow steps across the dashboard.",
   "ui.harnessColors.byHarness": "Optional hex color overrides for each harness. Remove an override to follow the built-in theme-aware chart color.",
   "ui.harnessColors.script": "Hex color used for script steps.",
   "ui.hideGitIgnoredFiles": "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker.",
   "ui.offerTrustForUntrustedFileLinks": "Allow AI-generated file links outside trusted roots to offer a Trust Parent Folder action. Untrusted paths are always blocked unless their parent is explicitly trusted; this only controls whether the trust offer appears.",
   "ui.openPromptsInSecondGroup": "Open prompt files in a second editor group.",
+  "ui.outputFontSize": "Output pane font size in pixels. The output toolbar's − and + buttons change this setting.",
   "ui.outputVirtualizationRowThreshold": "Minimum projected output row count before the Output panel uses virtualization. 0 means always virtualize. `-1` means never.",
   "ui.respectGitignoreForCompletions": "Filter file completions using .gitignore rules.",
   "ui.showCliCommand": "Show the CLI command being executed.",
@@ -2533,6 +2535,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "type": [
     "prompt",
     "script"
+  ],
+  "ui.editorFontSize": [
+    "vscode"
   ],
   "ui.outputVirtualizationRowThreshold": [
     -1

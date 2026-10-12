@@ -1,4 +1,5 @@
 import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
+import { FONT_SIZE_LIMITS } from "@root/types/CtrlYokeSettings";
 import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
@@ -172,7 +173,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               title="Decrease font size"
               aria-label="Decrease font size"
               onClick={() => onOutputFontSizeChange(outputFontSize - 1)}
-              disabled={outputFontSize <= 10}
+              disabled={outputFontSize <= FONT_SIZE_LIMITS.output.min}
             >
               <Icon name="remove" className="codicon-sm" />
             </button>
@@ -186,7 +187,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               title="Increase font size"
               aria-label="Increase font size"
               onClick={() => onOutputFontSizeChange(outputFontSize + 1)}
-              disabled={outputFontSize >= 24}
+              disabled={outputFontSize >= FONT_SIZE_LIMITS.output.max}
             >
               <Icon name="add" className="codicon-sm" />
             </button>
@@ -198,7 +199,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               title="Decrease terminal font size"
               aria-label="Decrease terminal font size"
               onClick={() => onTerminalFontSizeChange(terminalFontSize - 1)}
-              disabled={terminalFontSize <= 8}
+              disabled={terminalFontSize <= FONT_SIZE_LIMITS.terminal.min}
             >
               <Icon name="remove" className="codicon-sm" />
             </button>
@@ -212,7 +213,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               title="Increase terminal font size"
               aria-label="Increase terminal font size"
               onClick={() => onTerminalFontSizeChange(terminalFontSize + 1)}
-              disabled={terminalFontSize >= 24}
+              disabled={terminalFontSize >= FONT_SIZE_LIMITS.terminal.max}
             >
               <Icon name="add" className="codicon-sm" />
             </button>

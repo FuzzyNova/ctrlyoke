@@ -8,6 +8,7 @@ import {
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
   CONTEXT_RESOLUTION_FAILURE_MODES,
+  EDITOR_FONT_SIZE_VSCODE,
   EXECUTION_MODES,
   HARNESS_IDS,
   HARNESS_INFO,
@@ -690,6 +691,18 @@ export const STEP_COLOR_MODE_OPTIONS_META: Record<
     label: "Unique",
   },
 };
+
+/** `ui.editorFontSize` choices; Custom reveals a pixel-size stepper. */
+export const EDITOR_FONT_SIZE_OPTIONS_META = {
+  [EDITOR_FONT_SIZE_VSCODE]: {
+    value: EDITOR_FONT_SIZE_VSCODE,
+    label: "Match VS Code",
+  },
+  [LIMIT_CUSTOM_OPTION_META.value]: {
+    ...LIMIT_CUSTOM_OPTION_META,
+    pseudo: { writes: "{path}: <pixels>" },
+  },
+} as const satisfies Record<string, SchemaOptionMeta<string>>;
 
 export const CONTEXT_RESOLUTION_FAILURE_OPTIONS_META: Record<
   ContextResolutionFailureMode,

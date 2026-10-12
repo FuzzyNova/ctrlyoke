@@ -6,6 +6,7 @@ import {
   EXECUTION_MODES,
   WORKTREE_MODES,
   TOAST_LEVEL_MODES,
+  EDITOR_FONT_SIZE_VSCODE,
 } from "@root/types/DashboardConstants";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 
@@ -181,6 +182,8 @@ describe("setGlobalSettings", () => {
       confirmContinuationDiscardOperations: false,
       hideGitIgnoredFiles: true,
       wordWrap: true,
+      outputFontSize: 13,
+      editorFontSize: EDITOR_FONT_SIZE_VSCODE,
       isMultiRoot: false,
       priorContext: "none",
       workspaceRoot: "",

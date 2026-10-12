@@ -1063,6 +1063,21 @@ Hide files and directories ignored by .gitignore in the workspace file explorer 
 
 Wrap long lines in code views: the workspace file editor, script and condition editors, and diffs. When off, long lines extend past the view and scroll horizontally. The prompt editor always wraps.
 
+### `ui.outputFontSize` {#ui-outputfontsize}
+
+- **Type:** `number`
+- **Default:** `13`
+- **Constraints:** minimum 10 · maximum 24
+
+Output pane font size in pixels. The output toolbar's − and + buttons change this setting.
+
+### `ui.editorFontSize` {#ui-editorfontsize}
+
+- **Type:** `"vscode"` or `number`
+- **Default:** `"vscode"`
+
+Font size of the prompt editor, retry prompts, condition and script-step scripts, and the workspace file editor, in pixels. 'vscode' matches the VS Code editor font size; a browser connected to the ctrlyoke server uses 14px for 'vscode' because it cannot read VS Code's setting. One-line form fields such as additional arguments, hook commands, and permission lists keep their own fixed size.
+
 ### `ui.atomicContextReferences` {#ui-atomiccontextreferences}
 
 - **Type:** `boolean`

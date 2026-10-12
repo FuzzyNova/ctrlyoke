@@ -15,7 +15,11 @@ import type {
   StatusLineHarnessSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
-import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
+import {
+  CTRLYOKE_SETTINGS_DEFAULTS,
+  FONT_SIZE_LIMITS,
+  clampFontSize,
+} from "../types/CtrlYokeSettings";
 import type { PriorContext } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import type { StatusLineSegment } from "./StatuslineFormat";
@@ -33,7 +37,9 @@ import {
   SETTING_SCOPES,
   TEMPLATE_IDS,
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
+  EDITOR_FONT_SIZE_VSCODE,
   isHarnessId,
+  type EditorFontSize,
   type StatusLineHarnessId,
   type HarnessId,
   type ContextResolutionFailureMode,
@@ -1408,8 +1414,8 @@ export const ConfigurationUtils = {
   ): Promise<void> {
     const inheritedTemplateId =
       scope === SETTING_SCOPES.WORKSPACE
-        ? configService.getScoped("general", SETTING_SCOPES.USER)
-            ?.defaultTemplate ?? TEMPLATE_IDS.BLANK
+        ? (configService.getScoped("general", SETTING_SCOPES.USER)
+            ?.defaultTemplate ?? TEMPLATE_IDS.BLANK)
         : TEMPLATE_IDS.BLANK;
     await configService.set(
       CONFIG_KEYS.GENERAL_DEFAULT_TEMPLATE,
@@ -1476,6 +1482,26 @@ export const ConfigurationUtils = {
 
   shouldWrapCodeLines(): boolean {
     return configService.get(CONFIG_KEYS.UI).wordWrap;
+  },
+
+  /** `ui.outputFontSize`, clamped to `FONT_SIZE_LIMITS.output`. */
+  getOutputFontSize(): number {
+    return clampFontSize(
+      configService.get(CONFIG_KEYS.UI).outputFontSize,
+      FONT_SIZE_LIMITS.output,
+      CTRLYOKE_SETTINGS_DEFAULTS.ui.outputFontSize
+    );
+  },
+
+  /**
+   * `ui.editorFontSize`: `EDITOR_FONT_SIZE_VSCODE`, or a pixel size clamped to
+   * `FONT_SIZE_LIMITS.editor`. Anything else follows VS Code.
+   */
+  getEditorFontSize(): EditorFontSize {
+    const value: unknown = configService.get(CONFIG_KEYS.UI).editorFontSize;
+    return typeof value === "number" && Number.isFinite(value)
+      ? clampFontSize(value, FONT_SIZE_LIMITS.editor, value)
+      : EDITOR_FONT_SIZE_VSCODE;
   },
 
   async setConfirmResetOperations(enabled: boolean): Promise<void> {

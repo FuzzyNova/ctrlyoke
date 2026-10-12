@@ -9,6 +9,7 @@ import {
   captureAndSendThemeVars,
 } from "@hooks/useMessageHandler";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
+import { useFontSizeSync } from "@hooks/useFontSizeSync";
 import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
 import { useHistorySearchKeyHandler } from "@hooks/useHistorySearchKeyHandler";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
@@ -43,7 +44,6 @@ import {
   type EditorOverflowDetail,
 } from "@utils/editorAutoExpand";
 import { SIDEBAR_LAYOUT_PANEL_IDS } from "@utils/sidebarLayout";
-import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
 // uiStore.ts) and is rehydrated from main.tsx before App mounts.
@@ -431,21 +431,7 @@ function App() {
     }
   }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync output font size CSS variable to the document root so all output
-  // area consumers (markdown-text prose, tool call output, etc.) pick it up.
-  const outputFontSize = useUiStore((s) => s.outputFontSize);
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--cy-output-font-size",
-      `${outputFontSize}px`
-    );
-  }, [outputFontSize]);
-
-  // Sync terminal font size to all live xterm instances.
-  const terminalFontSize = useUiStore((s) => s.terminalFontSize);
-  useEffect(() => {
-    terminalRegistry.updateFontSize(terminalFontSize);
-  }, [terminalFontSize]);
+  useFontSizeSync();
 
   // Clear the PWA home screen badge when the user returns to the app.
   useEffect(() => {

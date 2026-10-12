@@ -488,7 +488,6 @@ function persistViewedWorkingFilePath(path: unknown): void {
 
 function applyTerminalSettings(settings: TerminalSettings): void {
   terminalRegistry.updateTerminalOptions(settings);
-  useUiStore.getState().setTerminalFontSize(settings.fontSize);
 }
 
 function applyTerminalSetting(path: string, value: unknown): void {

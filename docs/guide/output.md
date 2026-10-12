@@ -32,15 +32,15 @@ worktree and whether its changes were merged.
 
 ## The toolbar
 
-| Control                                       | What it does                                                                                              |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **−** / **+**                                 | Change the output font size (10–24 px). On the **Terminal** tab they change the terminal font size.       |
-| **N hidden · Show all**                       | Appears when you have hidden steps. Click it to show every step again. See [Hiding steps](#hiding-steps). |
-| **View N changes**                            | Opens every file the run changed. See [File changes and undo](/guide/file-changes).                       |
-| **Find in output**                            | Opens the find bar. See [Finding text](#finding-text).                                                    |
-| **Collapse all diffs** / **Expand all diffs** | Collapses or expands every file diff in the output at once.                                               |
-| **Export output to markdown**                 | Exports the output as a Markdown file. See [Copying and exporting](#copying-and-exporting).               |
-| **Full screen**                               | Fills the dashboard with the output pane. Press `Esc` or click the button again to leave.                 |
+| Control                                       | What it does                                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **−** / **+**                                 | Change the output font size (10–24 px, saved as `ui.outputFontSize`). On the **Terminal** tab they change `terminal.fontSize`. |
+| **N hidden · Show all**                       | Appears when you have hidden steps. Click it to show every step again. See [Hiding steps](#hiding-steps).                      |
+| **View N changes**                            | Opens every file the run changed. See [File changes and undo](/guide/file-changes).                                            |
+| **Find in output**                            | Opens the find bar. See [Finding text](#finding-text).                                                                         |
+| **Collapse all diffs** / **Expand all diffs** | Collapses or expands every file diff in the output at once.                                                                    |
+| **Export output to markdown**                 | Exports the output as a Markdown file. See [Copying and exporting](#copying-and-exporting).                                    |
+| **Full screen**                               | Fills the dashboard with the output pane. Press `Esc` or click the button again to leave.                                      |
 
 On a narrow dashboard, some controls show only their icon.
 

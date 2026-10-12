@@ -14,9 +14,9 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
 import { NumberField, SettingInputRow, SettingToggleRow } from "../shared";
-import { clamp } from "@utils/number";
+import { FONT_SIZE_LIMITS } from "@root/types/CtrlYokeSettings";
 import { TerminalControlBarEditor } from "./TerminalControlBarEditor";
-import { Icon } from "../shared/Icon";
+import { FontSizeStepper } from "./FontSizeStepper";
 import {
   TERMINAL_CURSOR_STYLE_OPTIONS_META,
   TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
@@ -45,59 +45,6 @@ const WINDOWS_SHELL_OPTIONS = [
     pseudo: { writes: 'terminal.shellExecutable: "<custom path>"' },
   },
 ];
-
-function FontStepper({
-  value,
-  onChange,
-  sources,
-  onReset,
-  activeScope,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  sources?: Record<string, SettingSource>;
-  onReset?: (path: string) => void;
-  activeScope?: SettingWriteScope;
-}) {
-  const min = 8;
-  const max = 24;
-  const setSize = (next: number) => onChange(clamp(next, min, max));
-
-  return (
-    <SettingInputRow
-      settingKey="terminal.fontSize"
-      sources={sources}
-      onReset={onReset}
-      activeScope={activeScope}
-    >
-      <div className="flex items-center">
-        <button
-          className="icon-btn py-0 px-1"
-          title="Decrease terminal font size"
-          aria-label="Decrease terminal font size"
-          onClick={() => setSize(value - 1)}
-          disabled={value <= min}
-          type="button"
-        >
-          <Icon name="remove" className="codicon-sm" />
-        </button>
-        <span className="text-xs text-description-fg tabular-nums w-[28px] text-center select-none">
-          {value}
-        </span>
-        <button
-          className="icon-btn py-0 px-1"
-          title="Increase terminal font size"
-          aria-label="Increase terminal font size"
-          onClick={() => setSize(value + 1)}
-          disabled={value >= max}
-          type="button"
-        >
-          <Icon name="add" className="codicon-sm" />
-        </button>
-      </div>
-    </SettingInputRow>
-  );
-}
 
 export function TerminalSection({
   settings,
@@ -133,11 +80,14 @@ export function TerminalSection({
           Terminal Appearance
         </h3>
 
-        <FontStepper
-          value={terminal.fontSize}
-          onChange={(v) => onUpdate("terminal.fontSize", v)}
-          {...rowProps}
-        />
+        <SettingInputRow settingKey="terminal.fontSize" {...rowProps}>
+          <FontSizeStepper
+            value={terminal.fontSize}
+            limits={FONT_SIZE_LIMITS.terminal}
+            subject="terminal font size"
+            onChange={(v) => onUpdate("terminal.fontSize", v)}
+          />
+        </SettingInputRow>
 
         <NumberField
           id="terminal-line-height"

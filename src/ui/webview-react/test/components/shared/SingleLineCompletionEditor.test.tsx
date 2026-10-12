@@ -7,6 +7,7 @@ import type {
   CompletionResult,
 } from "@codemirror/autocomplete";
 import { SingleLineCompletionEditor } from "@components/shared/SingleLineCompletionEditor";
+import { EDITOR_FONT_SIZE } from "@utils/codemirrorTheme";
 
 const completionSource = vi.fn(
   (_context: CompletionContext): CompletionResult | null => null
@@ -175,5 +176,38 @@ describe("SingleLineCompletionEditor", () => {
     expect(content).toHaveAttribute("contenteditable", "false");
     expect(onChange).not.toHaveBeenCalled();
     expect(disabledCompletionSource).not.toHaveBeenCalled();
+  });
+});
+
+describe("SingleLineCompletionEditor font size", () => {
+  /** The font-size the editor's own theme gives `.cm-content`. */
+  function themedContentFontSize(content: HTMLElement): string {
+    const editor = content.closest<HTMLElement>(".cm-editor");
+    for (const sheet of Array.from(document.styleSheets)) {
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (
+          rule instanceof CSSStyleRule &&
+          rule.selectorText.endsWith(" .cm-content") &&
+          editor?.matches(rule.selectorText.replace(/ \.cm-content$/, "")) &&
+          rule.style.fontSize
+        ) {
+          return rule.style.fontSize;
+        }
+      }
+    }
+    return "";
+  }
+
+  it("takes its wrapper's text size by default, like the inputs beside it", () => {
+    const { content } = renderEditor({ className: "text-xs" });
+    expect(themedContentFontSize(content)).toBe("inherit");
+  });
+
+  it("follows the editor font size when a code editor opts in", () => {
+    const { content } = renderEditor({
+      multiline: true,
+      fontSize: EDITOR_FONT_SIZE,
+    });
+    expect(themedContentFontSize(content)).toBe(EDITOR_FONT_SIZE);
   });
 });

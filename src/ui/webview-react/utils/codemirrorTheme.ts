@@ -25,11 +25,22 @@ export function createAtomicReferenceWidgetTheme() {
 type ThemeSurface =
   (typeof CODEMIRROR_THEME_SURFACES)[keyof typeof CODEMIRROR_THEME_SURFACES];
 
+/**
+ * Root CSS custom property carrying `ui.editorFontSize` when it is a pixel
+ * size. App.tsx sets it and removes it for "vscode", so the fallback below
+ * resumes and every editor follows live without reconfiguring CodeMirror.
+ */
+export const EDITOR_FONT_SIZE_CSS_VAR = "--cy-editor-font-size";
+
+/** Font size of prompt and code editors: `ui.editorFontSize`, else VS Code's. */
+export const EDITOR_FONT_SIZE = `var(${EDITOR_FONT_SIZE_CSS_VAR}, var(--vscode-editor-font-size, 14px))`;
+
 export interface ThemeExtensionOptions {
   /**
-   * Overrides .cm-content's font size, which otherwise follows the VS Code
-   * editor font size. Any CSS font-size value is accepted (e.g. "0.75rem"
-   * to match the text-xs control typography used across form controls).
+   * Overrides .cm-content's font size, which otherwise is `EDITOR_FONT_SIZE`.
+   * Any CSS font-size value is accepted: "0.75rem" matches the text-xs
+   * control typography of form fields, and "inherit" takes the mount
+   * wrapper's own text size class.
    */
   fontSize?: string;
 }
@@ -83,6 +94,7 @@ export function createThemeExtension(
     surface === CODEMIRROR_THEME_SURFACES.INPUT
       ? "var(--vscode-input-foreground)"
       : "var(--vscode-editor-foreground)";
+  const contentFontSize = options.fontSize ?? EDITOR_FONT_SIZE;
   const selectionForegroundColor =
     "var(--vscode-editor-selectionForeground, var(--vscode-editor-foreground))";
   const autocompleteSelectedOutlineColor =
@@ -121,7 +133,7 @@ export function createThemeExtension(
       ".cm-content": {
         caretColor: "var(--vscode-editorCursor-foreground)",
         fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
-        fontSize: options.fontSize ?? "var(--vscode-editor-font-size, 14px)",
+        fontSize: contentFontSize,
         padding: "8px 0",
       },
       ".cm-line": {
@@ -156,7 +168,9 @@ export function createThemeExtension(
               backgroundColor:
                 "color-mix(in srgb, var(--vscode-editor-lineHighlightBackground) 40%, transparent)",
             },
+      // Line numbers scale with the text they label, as VS Code's do.
       ".cm-gutters": {
+        fontSize: contentFontSize,
         backgroundColor: "var(--vscode-editorGutter-background)",
         color: "var(--vscode-editorLineNumber-foreground)",
         border: "none",

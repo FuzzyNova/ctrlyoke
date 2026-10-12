@@ -56,6 +56,7 @@ import {
   type WorktreeManagementAction,
   type WorkflowFileFormat,
   type StepColorMode,
+  type EditorFontSize,
   type HarnessStatusString,
   type CtrlYokeFileKind,
 } from "./DashboardConstants";
@@ -557,6 +558,8 @@ export interface InitMessageData {
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
     wordWrap?: boolean;
+    outputFontSize?: number;
+    editorFontSize?: EditorFontSize;
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
@@ -1707,6 +1710,8 @@ export interface GlobalSettingsUpdatedMessage {
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
     wordWrap?: boolean;
+    outputFontSize?: number;
+    editorFontSize?: EditorFontSize;
     stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];

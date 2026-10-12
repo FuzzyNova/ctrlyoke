@@ -761,11 +761,6 @@ interface UiState {
   isLoading: boolean;
   loadingMessage: string | null;
 
-  // Output / editor font size (px) — user-adjustable, persisted
-  outputFontSize: number;
-  // Terminal font size (px) — user-adjustable, persisted
-  terminalFontSize: number;
-
   // Whether the output pane's run summary banner (run id, date, status,
   // token/cost totals) stays fixed at the top while scrolling, or scrolls
   // away as the first row of content. Persisted so it survives reloads.
@@ -1029,10 +1024,6 @@ interface UiActions {
     value: { workflowKey: WorkflowKey; workflowName: string } | null
   ) => void;
 
-  // Output / editor font size
-  setOutputFontSize: (size: number) => void;
-  // Terminal font size
-  setTerminalFontSize: (size: number) => void;
   // Run summary banner pin state
   toggleRunBannerPinned: () => void;
 
@@ -1253,8 +1244,6 @@ const initialState: UiState = {
   workspaceWorktreeOwnership: null,
   isLoading: false,
   loadingMessage: null,
-  outputFontSize: 13,
-  terminalFontSize: 14,
   runBannerPinned: true,
   toastQueue: [],
   harnessDetectionRetryResult: null,
@@ -1311,8 +1300,6 @@ const persistedFields = [
   "lastMobileSizes",
   "diffsCollapsed",
   "undoDialogDiffsCollapsed",
-  "outputFontSize",
-  "terminalFontSize",
   "runBannerPinned",
   "terminalRailCollapsed",
   "terminalRailSizePx",
@@ -1943,16 +1930,6 @@ export const useUiStore = create<UiState & UiActions>()(
       setViewingDeletedWorkflow: (value) =>
         set({ viewingDeletedWorkflow: value }),
 
-      // ============================================================================
-      // OUTPUT FONT SIZE
-      // ============================================================================
-
-      setOutputFontSize: (size) =>
-        set({ outputFontSize: Math.min(24, Math.max(10, size)) }),
-
-      setTerminalFontSize: (size) =>
-        set({ terminalFontSize: Math.min(24, Math.max(8, size)) }),
-
       toggleRunBannerPinned: () =>
         set((state) => ({ runBannerPinned: !state.runBannerPinned })),
 
@@ -2549,8 +2526,6 @@ export const useUiStore = create<UiState & UiActions>()(
           terminalRailSizePx: initialState.terminalRailSizePx,
           diffsCollapsed: initialState.diffsCollapsed,
           undoDialogDiffsCollapsed: initialState.undoDialogDiffsCollapsed,
-          outputFontSize: initialState.outputFontSize,
-          terminalFontSize: initialState.terminalFontSize,
           runBannerPinned: initialState.runBannerPinned,
           workspaceEntrySort: { ...initialState.workspaceEntrySort },
         });

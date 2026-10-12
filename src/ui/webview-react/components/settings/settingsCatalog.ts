@@ -75,6 +75,20 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "When resuming a session, only attach agents and skills that are not already present in that session's context.",
   },
+  "ui.outputFontSize": {
+    id: "ui.outputFontSize",
+    path: "ui.outputFontSize",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Output font size",
+    keywords: ["text size", "zoom"],
+  },
+  "ui.editorFontSize": {
+    id: "ui.editorFontSize",
+    path: "ui.editorFontSize",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Editor font size",
+    keywords: ["text size", "zoom", "prompt editor", "retry prompt"],
+  },
   "ui.showCliCommand": {
     id: "ui.showCliCommand",
     path: "ui.showCliCommand",

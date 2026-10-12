@@ -814,6 +814,27 @@
           "description": "Wrap long lines in code views: the workspace file editor, script and condition editors, and diffs. When off, long lines extend past the view and scroll horizontally. The prompt editor always wraps.",
           "default": true
         },
+        "outputFontSize": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 24,
+          "description": "Output pane font size in pixels. The output toolbar's − and + buttons change this setting.",
+          "default": 13
+        },
+        "editorFontSize": {
+          "anyOf": [
+            {
+              "const": "vscode"
+            },
+            {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 32
+            }
+          ],
+          "description": "Font size of the prompt editor, retry prompts, condition and script-step scripts, and the workspace file editor, in pixels. 'vscode' matches the VS Code editor font size; a browser connected to the ctrlyoke server uses 14px for 'vscode' because it cannot read VS Code's setting. One-line form fields such as additional arguments, hook commands, and permission lists keep their own fixed size.",
+          "default": "vscode"
+        },
         "atomicContextReferences": {
           "type": "boolean",
           "description": "In the prompt editor, treat @file/#symbol/~git/$context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or tapping a chip opens it, and right-clicking or long-pressing it offers Go to Reference, Copy Reference, and Send as Plain Text; when off, editor references edit character by character and output uses ordinary text links.",

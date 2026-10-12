@@ -2676,10 +2676,10 @@ export function buildOutputRows(
     const rawTextOutput = getRawTextOutput(output);
     // Tool call bodies sit in ToolCallBlock's content column, right of the ●
     // gutter. Diffs don't — they render full-bleed and keep the whole width.
+    const outputFontSize = input.outputFontSize ?? DEFAULT_OUTPUT_FONT_SIZE;
     const toolCallContentWidth =
       input.outputContentWidth != null
-        ? input.outputContentWidth -
-          toolCallGutterWidth(input.outputFontSize ?? 13)
+        ? input.outputContentWidth - toolCallGutterWidth(outputFontSize)
         : undefined;
     // Must use the ⎿ line's real geometry, not the prose allowance: this budget
     // decides how much text BashOutput actually renders, so any disagreement
@@ -2688,10 +2688,9 @@ export function buildOutputRows(
     const collapsedToolOutputMaxCharacters = getCollapsedOutputMaxChars({
       maxLines: collapsedToolOutputLineCount,
       contentWidth: toolCallContentWidth,
-      outputFontSize: Math.max(10, (input.outputFontSize ?? 13) - 1),
+      outputFontSize: Math.max(10, outputFontSize - 1),
       horizontalChrome:
-        OUTPUT_ROW_HORIZONTAL_PADDING +
-        toolResultPrefixWidth(input.outputFontSize ?? 13),
+        OUTPUT_ROW_HORIZONTAL_PADDING + toolResultPrefixWidth(outputFontSize),
     });
     const streamingChunk = message.isActivity
       ? ""

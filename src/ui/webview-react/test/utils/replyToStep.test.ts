@@ -6,6 +6,7 @@ import {
   PERMISSION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
   TOAST_LEVEL_MODES,
+  EDITOR_FONT_SIZE_VSCODE,
 } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
@@ -48,6 +49,8 @@ const globalSettings: GlobalSettings = {
   confirmContinuationDiscardOperations: true,
   hideGitIgnoredFiles: false,
   wordWrap: true,
+  outputFontSize: 13,
+  editorFontSize: EDITOR_FONT_SIZE_VSCODE,
   isMultiRoot: false,
   priorContext: PRIOR_CONTEXT_KEYWORDS.ALL,
   workspaceRoot: "",

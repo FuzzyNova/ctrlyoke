@@ -2,6 +2,7 @@ import {
   DIFF_VIEW_TYPES,
   type DiffViewType,
 } from "@root/types/DashboardConstants";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import { formatBytes } from "./number";
 
 /**
@@ -57,8 +58,9 @@ export const OUTPUT_ROW_GROUP_END_PADDING = 7;
  */
 export const OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT = 20;
 
-/** Fallback output font size when a caller has no `uiStore.outputFontSize` to hand. */
-export const DEFAULT_OUTPUT_FONT_SIZE = 13;
+/** Fallback output font size when a caller has no `ui.outputFontSize` to hand. */
+export const DEFAULT_OUTPUT_FONT_SIZE =
+  CTRLYOKE_SETTINGS_DEFAULTS.ui.outputFontSize;
 /** Fallback pane width when the output pane has not been measured yet. */
 export const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
 /** Never estimate against a width narrower than this — it explodes line counts. */

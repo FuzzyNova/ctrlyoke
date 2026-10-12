@@ -29,6 +29,7 @@ import {
 } from "@utils/fieldValidation";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { ScriptCommandEditor } from "./ScriptCommandEditor";
+import { EDITOR_FONT_SIZE } from "@utils/codemirrorTheme";
 import { CreateScriptModal } from "./CreateScriptModal";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { useSettingsStore } from "@store/settingsStore";
@@ -507,6 +508,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           onChange={setScriptInput}
           onBlur={() => update({ script: scriptInput })}
           multiline
+          fontSize={EDITOR_FONT_SIZE}
           placeholder="npm test"
           disabled={disabled}
           className="w-full bg-input-bg text-input-fg border border-input-border rounded-sm focus:outline-hidden focus:border-focus-border disabled:opacity-50"

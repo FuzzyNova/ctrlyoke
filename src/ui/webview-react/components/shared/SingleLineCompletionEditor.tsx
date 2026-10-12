@@ -55,7 +55,9 @@ export interface SingleLineCompletionEditorProps {
   extensions?: Extension[];
   /**
    * Overrides the editor font size (any CSS font-size value). Read once at
-   * mount; omit to follow the VS Code editor font size.
+   * mount. Omitted, the field is a form control and takes its wrapper's text
+   * size class (`className`), so it matches the inputs beside it; pass
+   * `EDITOR_FONT_SIZE` for a code editor that follows `ui.editorFontSize`.
    */
   fontSize?: string;
   "aria-label"?: string;
@@ -66,6 +68,13 @@ export interface SingleLineCompletionEditorProps {
 }
 
 const externalValueUpdateAnnotation = Annotation.define<boolean>();
+
+/**
+ * Default font size: the wrapper's own. CodeMirror's base theme sets no font
+ * size on the editor, so `inherit` on `.cm-content` reaches the wrapper's
+ * `text-xs`/`text-sm` class, which an explicit size would silently override.
+ */
+const FORM_FIELD_FONT_SIZE = "inherit";
 
 const singleLineTransactionFilter = EditorState.transactionFilter.of(
   (transaction) => {
@@ -378,7 +387,7 @@ export function SingleLineCompletionEditor({
         ),
         placeholder(initialProps.placeholderText ?? ""),
         createThemeExtension("input", {
-          fontSize: initialProps.fontSize,
+          fontSize: initialProps.fontSize ?? FORM_FIELD_FONT_SIZE,
         } satisfies ThemeExtensionOptions),
         multiline
           ? multilineTheme

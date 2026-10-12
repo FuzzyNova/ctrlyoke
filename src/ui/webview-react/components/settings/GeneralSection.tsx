@@ -9,7 +9,10 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { LocalNumberInput } from "../shared/LocalInputs";
 import { LimitSelect } from "../shared/LimitSelect";
 import { CustomSelect } from "../shared/CustomSelect";
-import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
+import {
+  DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
+  FONT_SIZE_LIMITS,
+} from "@root/types/CtrlYokeSettings";
 import {
   DEFAULT_FORMAT_OPTIONS_META,
   STEP_COLOR_MODE_OPTIONS_META,
@@ -18,6 +21,8 @@ import {
 } from "@root/types/SchemaUiMetadata";
 import { STEP_COLOR_MODES } from "@root/types/DashboardConstants";
 import { RunHistorySection } from "./RunHistorySection";
+import { FontSizeStepper } from "./FontSizeStepper";
+import { EditorFontSizeSetting } from "./EditorFontSizeSetting";
 import { settingLabel } from "./settingsCatalog";
 
 interface Props {
@@ -89,6 +94,24 @@ export function GeneralSection({
           onChange={(v) =>
             onUpdate("general.omitPreviouslyAttachedAgentsSkillsOnResume", v)
           }
+          {...rowProps}
+        />
+      </div>
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          Font Sizes
+        </h3>
+        <SettingInputRow settingKey="ui.outputFontSize" {...rowProps}>
+          <FontSizeStepper
+            value={ui.outputFontSize}
+            limits={FONT_SIZE_LIMITS.output}
+            subject="output font size"
+            onChange={(v) => onUpdate("ui.outputFontSize", v)}
+          />
+        </SettingInputRow>
+        <EditorFontSizeSetting
+          value={ui.editorFontSize}
+          onUpdate={onUpdate}
           {...rowProps}
         />
       </div>

@@ -30,6 +30,8 @@ import {
   type StatusLineHarnessId,
   type ToastLevelMode,
   DEFAULT_MAX_STEPS,
+  EDITOR_FONT_SIZE_VSCODE,
+  type EditorFontSize,
 } from "./DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -68,6 +70,26 @@ export interface ModelPricingOverride {
 
 /** Default number of lines shown before a tool result is collapsed. */
 export const DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT = 3;
+
+/** Pixel bounds for the font-size settings; mirrored in settings-schema.json. */
+export const FONT_SIZE_LIMITS = {
+  terminal: { min: 8, max: 24 },
+  output: { min: 10, max: 24 },
+  editor: { min: 8, max: 32 },
+} as const satisfies Record<string, { min: number; max: number }>;
+
+export type FontSizeLimits =
+  (typeof FONT_SIZE_LIMITS)[keyof typeof FONT_SIZE_LIMITS];
+
+/** Round to a whole pixel and clamp into `limits`; non-numbers yield `fallback`. */
+export function clampFontSize(
+  value: unknown,
+  limits: FontSizeLimits,
+  fallback: number
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(limits.max, Math.max(limits.min, Math.round(value)));
+}
 
 export interface StatusLineHarnessSettings {
   enabled: boolean;
@@ -305,6 +327,15 @@ export interface CtrlYokeGlobalSettings {
      * always wraps.
      */
     wordWrap: boolean;
+    /** Output pane font size in pixels (`FONT_SIZE_LIMITS.output`). */
+    outputFontSize: number;
+    /**
+     * Font size of the prompt and code editors: the prompt editor, retry
+     * prompts, condition and script-step scripts, and the workspace file
+     * editor. `EDITOR_FONT_SIZE_VSCODE` follows the host editor; one-line form
+     * fields keep their own control size either way.
+     */
+    editorFontSize: EditorFontSize;
     /**
      * Treat `@file`/`#symbol`/`~git`/`$context` references in the prompt editor
      * as atomic units: cursor motion skips over them and Backspace/Delete
@@ -605,6 +636,8 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     confirmContinuationDiscardOperations: true,
     hideGitIgnoredFiles: false,
     wordWrap: true,
+    outputFontSize: 13,
+    editorFontSize: EDITOR_FONT_SIZE_VSCODE,
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
     showCostEstimates: true,

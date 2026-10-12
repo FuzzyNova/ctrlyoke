@@ -2205,6 +2205,15 @@ export const STEP_COLOR_MODES = {
 export type StepColorMode =
   (typeof STEP_COLOR_MODES)[keyof typeof STEP_COLOR_MODES];
 
+/**
+ * `ui.editorFontSize` value that keeps prompt and code editors at the host
+ * editor's font size: VS Code's in the panel, the theme's 14px in a browser.
+ */
+export const EDITOR_FONT_SIZE_VSCODE = "vscode";
+
+/** `ui.editorFontSize`: a size in pixels, or follow the host editor. */
+export type EditorFontSize = number | typeof EDITOR_FONT_SIZE_VSCODE;
+
 /** Neutral identity color for script steps, which have no harness. */
 export const SCRIPT_STEP_DEFAULT_COLOR = "var(--vscode-charts-gray, #808080)";
 

@@ -79,7 +79,7 @@ The Explorer can't create new files or folders, or rename them.
 ## Editing files
 
 Select a file to open it in the editor. It has syntax highlighting, follows your
-`ui.wordWrap` setting, and has these buttons above it:
+`ui.wordWrap` and `ui.editorFontSize` settings, and has these buttons above it:
 
 - **Save** (`Ctrl+S`, or `Cmd+S` on a Mac)
 - **Undo** and **Redo**

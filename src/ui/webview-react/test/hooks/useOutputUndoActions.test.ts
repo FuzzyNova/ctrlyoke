@@ -50,7 +50,7 @@ describe("useOutputUndoActions", () => {
     const rendersAfterMount = getRenderCount();
 
     act(() => {
-      useUiStore.setState({ outputFontSize: 15 });
+      useUiStore.getState().toggleRunBannerPinned();
     });
     rerender();
 
