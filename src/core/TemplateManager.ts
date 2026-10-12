@@ -9,6 +9,7 @@ import {
   RETRY_PROMPT_PLACEHOLDERS,
   DISCOVERY_SOURCES,
   TEMPLATE_VARIABLE_TYPES,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
   WORKFLOW_FILE_FORMATS,
   TEMPLATE_SCOPES,
   TEMPLATE_IDS,
@@ -177,7 +178,9 @@ export class TemplateManager {
     const workspaceValues = this.getWorkspaceRoot()
       ? this.getVariableDefaults?.(TEMPLATE_SCOPES.WORKSPACE)?.[templateId]
       : undefined;
-    const userValues = this.getVariableDefaults?.(TEMPLATE_SCOPES.USER)?.[templateId];
+    const userValues = this.getVariableDefaults?.(TEMPLATE_SCOPES.USER)?.[
+      templateId
+    ];
     const { issues } = classifyTemplateVariableDefaults(
       merged,
       userValues,
@@ -772,12 +775,65 @@ export class TemplateManager {
       !Array.isArray(base["_templateMeta"])
         ? (base["_templateMeta"] as Record<string, unknown>)
         : {};
+    const existingVariables =
+      existingMeta["variables"] &&
+      typeof existingMeta["variables"] === "object" &&
+      !Array.isArray(existingMeta["variables"])
+        ? (existingMeta["variables"] as Record<string, unknown>)
+        : {};
+    const variablesToCopy = new Set(
+      baseInfo.variables
+        .filter(
+          (variable) =>
+            variable.defaultSource !==
+              TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE &&
+            variable.default !== undefined
+        )
+        .map((variable) => variable.name)
+    );
+
+    // Linked harnesses and models are a single saved choice, so bake the whole
+    // pair into the copy even when one member resolves to its authored value.
+    for (const variable of baseInfo.variables) {
+      if (variable.type !== TEMPLATE_VARIABLE_TYPES.HARNESS) continue;
+      const linkedModels = baseInfo.variables.filter(
+        (candidate) =>
+          candidate.type === TEMPLATE_VARIABLE_TYPES.MODEL &&
+          candidate.harness === variable.name
+      );
+      if (
+        [variable.name, ...linkedModels.map((model) => model.name)].some(
+          (name) => variablesToCopy.has(name)
+        )
+      ) {
+        variablesToCopy.add(variable.name);
+        for (const model of linkedModels) variablesToCopy.add(model.name);
+      }
+    }
+
+    const copiedVariables = { ...existingVariables };
+    for (const variable of baseInfo.variables) {
+      if (!variablesToCopy.has(variable.name) || variable.default === undefined)
+        continue;
+      const existingVariable = copiedVariables[variable.name];
+      copiedVariables[variable.name] = {
+        ...(existingVariable &&
+        typeof existingVariable === "object" &&
+        !Array.isArray(existingVariable)
+          ? (existingVariable as Record<string, unknown>)
+          : {}),
+        default: variable.default,
+      };
+    }
+
+    const copiedMeta: Record<string, unknown> = {
+      ...existingMeta,
+      name: templateName,
+    };
+    if (variablesToCopy.size > 0) copiedMeta.variables = copiedVariables;
     const template = {
       ...base,
-      _templateMeta: {
-        ...existingMeta,
-        name: templateName,
-      },
+      _templateMeta: copiedMeta,
     };
 
     await fs.promises.writeFile(

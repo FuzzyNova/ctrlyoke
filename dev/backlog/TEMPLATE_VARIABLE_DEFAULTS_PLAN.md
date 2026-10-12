@@ -1,6 +1,6 @@
 # Template Variable Defaults Plan
 
-**Status:** Phase 1 and Phase 2 complete. The shared template-variable field, per-scope settings payload, template catalog request, and Templates settings tab are implemented. Phase 3 remains. No deviations.
+**Status:** Implemented. Phases 1–3 are complete: saved variable values carry into copied templates as authored defaults. No deviations.
 
 ## Goal
 

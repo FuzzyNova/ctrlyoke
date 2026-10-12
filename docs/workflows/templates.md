@@ -140,5 +140,5 @@ Custom templates are `*.ctrlyoke.yaml`, `*.ctrlyoke.yml`, or `*.ctrlyoke.json` f
 
 There are two ways to create one:
 
-- In the template picker, click **New template...**, or run the **Create New Custom Template** command, which opens the same form. Choose a name, a location (workspace or user), and a format (YAML or JSON). ctrlyoke copies the currently selected template as the starting point. Select **Template Starter** first to get an example of every variable type.
+- In the template picker, click **New template...**, or run the **Create New Custom Template** command, which opens the same form. Choose a name, a location (workspace or user), and a format (YAML or JSON). ctrlyoke copies the currently selected template as the starting point, carrying any saved variable values into the copy as its authored defaults. Select **Template Starter** first to get an example of every variable type.
 - In the Save Workflow dialog, turn on **Save as Template**. This saves the workflow's current values as-is; edit the file afterward to replace fixed values with `{placeholder}` variables.
