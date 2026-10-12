@@ -57,6 +57,21 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
   footer,
 }) => {
   const id = `${idPrefix}-${variable.name}`;
+  // Leaving a text field commits only an edit made since it gained focus, so
+  // tabbing through (or away from a freshly pre-filled row) never writes.
+  const focusValueRef = React.useRef(value);
+  const trackFocus = () => {
+    focusValueRef.current = value;
+  };
+  const commitText = () => {
+    focusValueRef.current = value;
+    onCommit?.(variable.name, value);
+  };
+  const commitTextIfEdited = commitTextOnBlur
+    ? () => {
+        if (value !== focusValueRef.current) commitText();
+      }
+    : undefined;
   const isFile = variable.type === WORKSPACE_ENTRY_KINDS.FILE;
   const isDirectory = variable.type === WORKSPACE_ENTRY_KINDS.DIRECTORY;
   const isPicker = isFile || isDirectory;
@@ -151,9 +166,8 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
       id={id}
       value={value}
       onChange={(event) => onChange(variable.name, event.target.value)}
-      onBlur={
-        commitTextOnBlur ? () => onCommit?.(variable.name, value) : undefined
-      }
+      onFocus={trackFocus}
+      onBlur={commitTextIfEdited}
       onKeyDown={onKeyDown}
       placeholder={`Enter ${variable.name}`}
       rows={3}
@@ -166,13 +180,11 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
       id={id}
       value={value}
       onChange={(event) => onChange(variable.name, event.target.value)}
-      onBlur={
-        commitTextOnBlur ? () => onCommit?.(variable.name, value) : undefined
-      }
+      onFocus={trackFocus}
+      onBlur={commitTextIfEdited}
       onKeyDown={(event) => {
         onKeyDown?.(event);
-        if (event.key === KEYBOARD_KEYS.ENTER && commitTextOnBlur)
-          onCommit?.(variable.name, value);
+        if (event.key === KEYBOARD_KEYS.ENTER && commitTextOnBlur) commitText();
       }}
       placeholder={
         isDirectory

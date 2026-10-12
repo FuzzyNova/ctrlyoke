@@ -69,21 +69,33 @@ describe("TemplateVariableField", () => {
     expect(commit).toHaveBeenCalledWith("choice", "two");
   });
 
-  it("commits text on blur and Enter when requested", () => {
-    render(
+  it("commits text on Enter, and on blur only after an edit", () => {
+    const field = (value: string) => (
       <TemplateVariableField
         variable={{ name: "topic", type: "text" }}
-        value="draft"
+        value={value}
         onChange={change}
         onCommit={commit}
         commitTextOnBlur
       />
     );
+    const { rerender } = render(field("draft"));
     const input = screen.getByRole("textbox", { name: "topic" });
+    fireEvent.focus(input);
     fireEvent.blur(input);
+    expect(commit).not.toHaveBeenCalled();
+
+    fireEvent.focus(input);
+    rerender(field("edited"));
+    fireEvent.blur(input);
+    expect(commit).toHaveBeenCalledWith("topic", "edited");
+
+    commit.mockClear();
+    fireEvent.focus(input);
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(commit).toHaveBeenNthCalledWith(1, "topic", "draft");
-    expect(commit).toHaveBeenNthCalledWith(2, "topic", "draft");
+    fireEvent.blur(input);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commit).toHaveBeenCalledWith("topic", "edited");
   });
 
   it("renders a harness and its paired model in one row", () => {

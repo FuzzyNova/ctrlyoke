@@ -26,6 +26,7 @@ import {
 import { configService } from "../config/CtrlYokeConfigService";
 import { shouldClearTemplateVariableDefaults } from "../utils/TemplateVariableDefaults";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+import { AsyncWriteQueue } from "../config/AsyncWriteQueue";
 import { Log } from "../utils/Log";
 import {
   CURRENT_SCHEMA_VERSIONS,
@@ -112,6 +113,7 @@ export class WorkflowSerializer {
   private readonly getWorkspaceRoot: () => string | undefined;
   private readonly getNamedRoots: () => readonly NamedRoot[];
   private readonly getTrustedRoots: () => readonly string[];
+  private readonly templateVariableDefaultsQueue = new AsyncWriteQueue();
 
   constructor(
     private readonly postMessage: PostMessageFn,
@@ -1003,8 +1005,7 @@ export class WorkflowSerializer {
     const pm = postMessage ?? this.postMessage;
     try {
       await ConfigurationUtils.setDefaultWorkflowTemplate(templateId, scope);
-      const defaultTemplateId =
-        ConfigurationUtils.getDefaultWorkflowTemplate();
+      const defaultTemplateId = ConfigurationUtils.getDefaultWorkflowTemplate();
       const defaultTemplateSource =
         ConfigurationUtils.getDefaultWorkflowTemplateSource();
 
@@ -1027,9 +1028,26 @@ export class WorkflowSerializer {
     postMessage?: PostMessageFn
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
+    // Each write reads the scope's current values and writes them back, so two
+    // messages in flight (a text field's blur plus a click) must not interleave.
+    return this.templateVariableDefaultsQueue.enqueue(() =>
+      this.writeTemplateVariableDefaults(templateId, values, scope, pm)
+    );
+  }
+
+  private async writeTemplateVariableDefaults(
+    templateId: string,
+    values: Record<string, string | null>,
+    scope: SettingWriteScope,
+    pm: PostMessageFn
+  ): Promise<void> {
     try {
       const template = await this.templateManager.getTemplateInfo(templateId);
-      if (!template) throw new Error(`Unknown template: ${templateId}`);
+      const clearsOnly = Object.values(values).every((value) => value === null);
+      // Saved values for a template that no longer exists can still be cleared.
+      if (!template && !clearsOnly) {
+        throw new Error(`Unknown template: ${templateId}`);
+      }
 
       const userSettings = configService.getScoped(
         "templates",
@@ -1040,14 +1058,14 @@ export class WorkflowSerializer {
         SETTING_SCOPES.WORKSPACE
       );
       const userValues = userSettings?.variableDefaults?.[templateId];
-      const workspaceValues =
-        workspaceSettings?.variableDefaults?.[templateId];
+      const workspaceValues = workspaceSettings?.variableDefaults?.[templateId];
       const pinnedValues = Object.fromEntries(
         Object.entries(values).filter(
           (entry): entry is [string, string] => entry[1] !== null
         )
       );
       const clearPinnedValues =
+        !!template &&
         Object.keys(pinnedValues).length > 0 &&
         shouldClearTemplateVariableDefaults(
           template.variables,
@@ -1078,7 +1096,11 @@ export class WorkflowSerializer {
       } else {
         variableDefaults[templateId] = nextValues;
       }
-      await configService.set("templates.variableDefaults", variableDefaults, scope);
+      await configService.set(
+        "templates.variableDefaults",
+        variableDefaults,
+        scope
+      );
 
       const templates = await this.templateManager.getAvailableTemplates();
       pm({

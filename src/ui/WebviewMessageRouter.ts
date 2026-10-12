@@ -1997,14 +1997,22 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS, (message, ctx) => {
-      return this.serializer.handleSetTemplateVariableDefaults(
-        message.templateId,
-        message.values,
-        message.scope,
-        ctx.postMessage
-      );
-    });
+    table.set(
+      MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS,
+      async (message, ctx) => {
+        await this.serializer.handleSetTemplateVariableDefaults(
+          message.templateId,
+          message.values,
+          message.scope,
+          ctx.postMessage
+        );
+        // The Templates settings tab reads per-scope values from the full
+        // settings payload, which GLOBAL_SETTINGS_UPDATED does not carry.
+        await this.settingsSync.handleGlobalSettingsLoadRequest(
+          ctx.postMessage
+        );
+      }
+    );
 
     table.set(MESSAGE_TYPES.CREATE_WORKFLOW, async (message, ctx) => {
       // createWorkflowFromTemplateForClient scopes the new instance to clientId,

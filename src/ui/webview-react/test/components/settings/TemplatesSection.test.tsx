@@ -202,6 +202,132 @@ describe("TemplatesSection", () => {
     expect(lastWrite()).toMatchObject({ values: { text: null } });
   });
 
+  it("keeps an unedited added row when the next value is added", () => {
+    const three = template({
+      variables: [
+        { name: "first", type: "text", default: "a" },
+        { name: "second", type: "text", default: "b" },
+        { name: "third", type: "text", default: "c" },
+      ],
+    });
+    mount({ templates: [three] });
+    fireEvent.change(screen.getByRole("combobox", { name: "Add template" }), {
+      target: { value: "sample" },
+    });
+    const add = () => screen.getByRole("combobox", { name: "Add value" });
+    fireEvent.change(add(), { target: { value: "first" } });
+    fireEvent.change(add(), { target: { value: "second" } });
+    const second = screen.getByRole("textbox", { name: "second" });
+    fireEvent.focus(second);
+    fireEvent.blur(second);
+    expect(
+      within(add()).queryByRole("option", { name: "second" })
+    ).not.toBeInTheDocument();
+    fireEvent.change(add(), { target: { value: "third" } });
+    expect(writes()).toHaveLength(0);
+    expect(screen.getByRole("textbox", { name: "first" })).toHaveValue("a");
+    expect(screen.getByRole("textbox", { name: "second" })).toHaveValue("b");
+    expect(screen.getByRole("textbox", { name: "third" })).toHaveValue("c");
+  });
+
+  it("edits a saved value and shows refreshed settings once committed", () => {
+    const { rerender } = mount({
+      values: { user: { sample: { path: "lib" } }, workspace: {} },
+    });
+    const input = screen.getByRole("textbox", { name: "path" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "app" } });
+    expect(input).toHaveValue("app");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(lastWrite()).toMatchObject({ values: { path: "app" } });
+
+    for (const path of ["app", "hand-edited"]) {
+      rerender(
+        <TemplatesSection
+          settings={makeSettings({
+            templateVariableDefaultsByScope: {
+              user: { sample: { path } },
+              workspace: {},
+            },
+          })}
+          activeScope="user"
+          onUpdate={onUpdate}
+          onReset={onReset}
+        />
+      );
+    }
+    expect(screen.getByRole("textbox", { name: "path" })).toHaveValue(
+      "hand-edited"
+    );
+  });
+
+  it("clears saved and unsaved rows with Clear all", () => {
+    const two = template({
+      variables: [
+        { name: "path", type: "text", default: "src" },
+        { name: "task", type: "text", default: "build" },
+      ],
+    });
+    mount({
+      templates: [two],
+      values: { user: { sample: { path: "lib" } }, workspace: {} },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Add value" }), {
+      target: { value: "task" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Clear all sample" }));
+    expect(lastWrite()).toMatchObject({ values: { path: null } });
+    expect(lastWrite().values).not.toHaveProperty("task");
+    expect(
+      screen.queryByRole("textbox", { name: "task" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("removes an unsaved card with Clear all without writing", () => {
+    mount();
+    fireEvent.change(screen.getByRole("combobox", { name: "Add template" }), {
+      target: { value: "sample" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Add value" }), {
+      target: { value: "path" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Clear all sample" }));
+    expect(writes()).toHaveLength(0);
+    expect(
+      screen.queryByTestId("template-card-sample")
+    ).not.toBeInTheDocument();
+  });
+
+  it("saves the harness with a changed paired model", () => {
+    const paired = template({
+      variables: [
+        { name: "runner", type: "harness" },
+        { name: "model", type: "model", harness: "runner" },
+      ],
+    });
+    useSettingsStore.setState({
+      modelOptions: {
+        ...useSettingsStore.getState().modelOptions,
+        "codex-cli": [
+          { value: "gpt-a", label: "GPT A" },
+          { value: "gpt-b", label: "GPT B" },
+        ],
+      },
+    });
+    mount({
+      templates: [paired],
+      values: {
+        user: { sample: { runner: "codex-cli", model: "gpt-a" } },
+        workspace: {},
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^model/ }));
+    fireEvent.click(screen.getByText("GPT B"));
+    expect(lastWrite()).toMatchObject({
+      values: { runner: "codex-cli", model: "gpt-b" },
+    });
+  });
+
   it("shows cross-scope hints, stale values and invalid dropdown entries", () => {
     const invalid = template({
       variables: [

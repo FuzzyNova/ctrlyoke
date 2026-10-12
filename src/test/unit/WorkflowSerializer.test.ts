@@ -345,13 +345,18 @@ suite("WorkflowSerializer", () => {
           const settings = scoped[scope];
           if (key === CONFIG_KEYS.GENERAL_DEFAULT_TEMPLATE) {
             if (value === undefined) delete settings.general?.defaultTemplate;
-            else settings.general = { ...settings.general, defaultTemplate: value };
+            else
+              settings.general = {
+                ...settings.general,
+                defaultTemplate: value,
+              };
           }
         }) as typeof configService.set;
         configService.getScoped = ((key, scope) =>
           scoped[scope][key]) as typeof configService.getScoped;
         configService.get = ((key) => {
-          if (key !== CONFIG_KEYS.GENERAL) return originalGet.call(configService, key);
+          if (key !== CONFIG_KEYS.GENERAL)
+            return originalGet.call(configService, key);
           return {
             defaultTemplate:
               scoped[SETTING_SCOPES.WORKSPACE].general?.defaultTemplate ??
@@ -436,9 +441,14 @@ suite("WorkflowSerializer", () => {
         }) as typeof configService.set;
         configService.getScoped = ((_key, scope) =>
           scoped[scope][_key]) as typeof configService.getScoped;
-        configService.get = ((key) => key === CONFIG_KEYS.GENERAL
-          ? { defaultTemplate: scoped[SETTING_SCOPES.USER].general?.defaultTemplate ?? "blank" }
-          : originalGet.call(configService, key)) as typeof configService.get;
+        configService.get = ((key) =>
+          key === CONFIG_KEYS.GENERAL
+            ? {
+                defaultTemplate:
+                  scoped[SETTING_SCOPES.USER].general?.defaultTemplate ??
+                  "blank",
+              }
+            : originalGet.call(configService, key)) as typeof configService.get;
         const serializer = createWorkflowSerializer(
           (message) => messages.push(message),
           {} as any,
@@ -473,7 +483,12 @@ suite("WorkflowSerializer", () => {
       path: null,
       isBuiltIn: true,
       variables: [
-        { name: "value", type: "text", default: "authored", authoredDefault: "authored" },
+        {
+          name: "value",
+          type: "text",
+          default: "authored",
+          authoredDefault: "authored",
+        },
       ],
     };
     const pairTemplate = {
@@ -544,7 +559,9 @@ suite("WorkflowSerializer", () => {
       const writes: unknown[] = [];
       const scoped: Record<string, Record<string, any>> = {
         [SETTING_SCOPES.USER]: {
-          templates: { variableDefaults: { "single-template": { value: "user" } } },
+          templates: {
+            variableDefaults: { "single-template": { value: "user" } },
+          },
         },
         [SETTING_SCOPES.WORKSPACE]: { templates: { variableDefaults: {} } },
       };
@@ -600,7 +617,12 @@ suite("WorkflowSerializer", () => {
         const manager = {
           getTemplateInfo: async () => pairTemplate,
           getAvailableTemplates: async () => [
-            { ...pairTemplate, variables: pairTemplate.variables.map((variable) => ({ ...variable })) },
+            {
+              ...pairTemplate,
+              variables: pairTemplate.variables.map((variable) => ({
+                ...variable,
+              })),
+            },
           ],
         };
         const serializer = createWorkflowSerializer(
@@ -641,7 +663,9 @@ suite("WorkflowSerializer", () => {
       const messages: any[] = [];
       const settings: Record<string, any> = {
         [SETTING_SCOPES.USER]: {
-          templates: { variableDefaults: { "pair-template": { harness: "codex-cli" } } },
+          templates: {
+            variableDefaults: { "pair-template": { harness: "codex-cli" } },
+          },
         },
         [SETTING_SCOPES.WORKSPACE]: {},
       };
@@ -684,6 +708,107 @@ suite("WorkflowSerializer", () => {
         );
         assert.strictEqual(messages[1].templates.length, 1);
         assert.strictEqual(messages[1].templates[0].id, "pair-template");
+      } finally {
+        configService.set = originalSet;
+        configService.getScoped = originalGetScoped;
+      }
+    });
+
+    test("serializes concurrent writes so neither overwrites the other", async () => {
+      const originalSet = configService.set;
+      const originalGetScoped = configService.getScoped;
+      const twoVariableTemplate = {
+        ...singleVariableTemplate,
+        variables: [
+          { name: "first", type: "text" },
+          { name: "second", type: "text" },
+        ],
+      };
+      const settings: Record<string, any> = {
+        [SETTING_SCOPES.USER]: {
+          templates: {
+            variableDefaults: { "single-template": { second: "old" } },
+          },
+        },
+        [SETTING_SCOPES.WORKSPACE]: {},
+      };
+      try {
+        configService.getScoped = ((key, scope) =>
+          settings[scope][key]) as typeof configService.getScoped;
+        configService.set = (async (_key, value, scope) => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          settings[scope].templates = { variableDefaults: value };
+        }) as typeof configService.set;
+        const manager = {
+          getTemplateInfo: async () => twoVariableTemplate,
+          getAvailableTemplates: async () => [twoVariableTemplate],
+        };
+        const serializer = createWorkflowSerializer(
+          () => undefined,
+          manager,
+          () => undefined,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await Promise.all([
+          serializer.handleSetTemplateVariableDefaults(
+            "single-template",
+            { first: "typed" },
+            SETTING_SCOPES.USER
+          ),
+          serializer.handleSetTemplateVariableDefaults(
+            "single-template",
+            { second: null },
+            SETTING_SCOPES.USER
+          ),
+        ]);
+
+        assert.deepStrictEqual(settings[SETTING_SCOPES.USER].templates, {
+          variableDefaults: { "single-template": { first: "typed" } },
+        });
+      } finally {
+        configService.set = originalSet;
+        configService.getScoped = originalGetScoped;
+      }
+    });
+
+    test("clears saved values for a template that no longer exists", async () => {
+      const originalSet = configService.set;
+      const originalGetScoped = configService.getScoped;
+      const settings: Record<string, any> = {
+        [SETTING_SCOPES.USER]: {
+          templates: { variableDefaults: { retired: { key: "value" } } },
+        },
+        [SETTING_SCOPES.WORKSPACE]: {},
+      };
+      try {
+        configService.getScoped = ((key, scope) =>
+          settings[scope][key]) as typeof configService.getScoped;
+        configService.set = (async (_key, value, scope) => {
+          settings[scope].templates = { variableDefaults: value };
+        }) as typeof configService.set;
+        const manager = {
+          getTemplateInfo: async () => undefined,
+          getAvailableTemplates: async () => [],
+        };
+        const serializer = createWorkflowSerializer(
+          () => undefined,
+          manager,
+          () => undefined,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await serializer.handleSetTemplateVariableDefaults(
+          "retired",
+          { key: null },
+          SETTING_SCOPES.USER
+        );
+
+        assert.deepStrictEqual(settings[SETTING_SCOPES.USER].templates, {
+          variableDefaults: {},
+        });
       } finally {
         configService.set = originalSet;
         configService.getScoped = originalGetScoped;

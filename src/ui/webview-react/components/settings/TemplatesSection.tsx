@@ -130,6 +130,26 @@ function TemplateDefaultsPage({
     setFocusTarget(null);
   }, [activeScope]);
 
+  // Once refreshed settings carry a committed value, its draft is redundant;
+  // dropping it lets later edits (including hand edits of settings.json) show.
+  useEffect(() => {
+    setDrafts((previous) => {
+      let changed = false;
+      const next: DraftValues = {};
+      for (const [templateId, values] of Object.entries(previous)) {
+        const kept = Object.fromEntries(
+          Object.entries(values).filter(
+            ([name, value]) => currentValues[templateId]?.[name] !== value
+          )
+        );
+        if (Object.keys(kept).length !== Object.keys(values).length)
+          changed = true;
+        if (Object.keys(kept).length) next[templateId] = kept;
+      }
+      return changed ? next : previous;
+    });
+  }, [currentValues]);
+
   useEffect(() => {
     if (!fileSelection) return;
     const target = pendingBrowse.current;
@@ -193,6 +213,24 @@ function TemplateDefaultsPage({
       else delete next[templateId];
       return next;
     });
+  }
+
+  function clearAll(templateId: string, saved: Record<string, string>) {
+    const savedNames = Object.keys(saved);
+    if (savedNames.length)
+      commit(
+        templateId,
+        Object.fromEntries(savedNames.map((name) => [name, null]))
+      );
+    // Unsaved rows go too, and the card with them.
+    setDrafts((previous) => {
+      const next = { ...previous };
+      delete next[templateId];
+      return next;
+    });
+    setExtraCards((previous) =>
+      previous.filter((card) => card.templateId !== templateId)
+    );
   }
 
   function addCard(templateId: string) {
@@ -278,16 +316,20 @@ function TemplateDefaultsPage({
     name: string,
     value: string
   ) {
-    if (name !== variable.name) {
-      commit(template.id, { [name]: value });
-      return;
-    }
     const pairModels =
       variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS
         ? (pairedModels(template).get(variable.name) ?? [])
         : [];
-    const valuesToPin: Record<string, string> = { [name]: value };
-    if (pairModels.length) {
+    const valuesToPin: Record<string, string> = {};
+    if (name !== variable.name) {
+      // A model edit saves its harness and every linked model with it, so a
+      // pair is never half-written.
+      valuesToPin[variable.name] = effectiveValue(template, variable);
+      for (const model of pairModels)
+        valuesToPin[model.name] =
+          model.name === name ? value : effectiveValue(template, model);
+    } else if (pairModels.length) {
+      valuesToPin[name] = value;
       const harness = value as HarnessId;
       const fallback = defaultModelForHarness(
         harness,
@@ -295,6 +337,8 @@ function TemplateDefaultsPage({
         modelOptions[harness] ?? []
       );
       for (const model of pairModels) valuesToPin[model.name] = fallback ?? "";
+    } else {
+      valuesToPin[name] = value;
     }
     if (
       shouldClearTemplateVariableDefaults(
@@ -452,6 +496,8 @@ function TemplateDefaultsPage({
           );
           const hasValue = (name: string) =>
             Object.prototype.hasOwnProperty.call(saved, name);
+          const hasDraft = (name: string) =>
+            drafts[templateId]?.[name] !== undefined;
           const savedRows = template
             ? fields.filter((field) =>
                 field.type === TEMPLATE_VARIABLE_TYPES.HARNESS
@@ -466,6 +512,7 @@ function TemplateDefaultsPage({
             ? fields.filter(
                 (field) =>
                   !hasValue(field.name) &&
+                  !hasDraft(field.name) &&
                   !(
                     field.type === TEMPLATE_VARIABLE_TYPES.HARNESS &&
                     (modelPairs.get(field.name) ?? []).some((m) =>
@@ -478,16 +525,10 @@ function TemplateDefaultsPage({
           const card = extraCards.find(
             (item) => item.templateId === templateId
           );
-          const showFields = template
-            ? [
-                ...savedRows,
-                ...fields.filter(
-                  (field) =>
-                    drafts[templateId]?.[field.name] !== undefined &&
-                    !savedRows.includes(field)
-                ),
-              ]
-            : [];
+          // Declaration order, whether a row is saved or still a draft.
+          const showFields = fields.filter(
+            (field) => savedRows.includes(field) || hasDraft(field.name)
+          );
           return (
             <article
               key={templateId}
@@ -512,18 +553,16 @@ function TemplateDefaultsPage({
                   type="button"
                   className="text-xs text-description-fg hover:text-error-fg"
                   aria-label={`Clear all ${templateId}`}
-                  onClick={() =>
-                    commit(
-                      templateId,
-                      Object.fromEntries(
-                        Object.keys(saved).map((name) => [name, null])
-                      )
-                    )
-                  }
+                  onClick={() => clearAll(templateId, saved)}
                 >
                   Clear all
                 </button>
               </header>
+              {noticeByTemplate[templateId] && (
+                <p role="status" className="text-xs text-description-fg">
+                  Matches the inherited value, so nothing is saved
+                </p>
+              )}
               {showFields.map((variable) => {
                 const paired =
                   variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS
@@ -542,8 +581,9 @@ function TemplateDefaultsPage({
                   issues.get(variable.name)?.reason === "invalid-harness";
                 const invalidSelect =
                   issues.get(variable.name)?.reason === "invalid-select";
-                const stored =
-                  saved[variable.name] ?? effectiveValue(template!, variable);
+                const stored = template
+                  ? effectiveValue(template, variable)
+                  : (saved[variable.name] ?? "");
                 const inherited = variable.authoredDefault ?? "none";
                 const crossHint = names.some(
                   (name) => otherValues[templateId]?.[name] !== undefined
@@ -645,14 +685,6 @@ function TemplateDefaultsPage({
                             : `Overrides your User value: ${otherValues[templateId]?.[variable.name] ?? otherValues[templateId]?.[names[0]]}`}
                         </p>
                       )}
-                      {noticeByTemplate[templateId] && (
-                        <p
-                          role="status"
-                          className="text-xs text-description-fg"
-                        >
-                          Matches the inherited value, so nothing is saved
-                        </p>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -687,16 +719,18 @@ function TemplateDefaultsPage({
                       <p className="font-mono text-xs text-description-fg">
                         {saved[name]}
                       </p>
-                      <FieldDiagnostic
-                        id={`stale-${templateId}-${name}`}
-                        diagnostics={[
-                          {
-                            severity: "warning",
-                            message:
-                              "This template no longer has this variable; the value is ignored",
-                          },
-                        ]}
-                      />
+                      {template && (
+                        <FieldDiagnostic
+                          id={`stale-${templateId}-${name}`}
+                          diagnostics={[
+                            {
+                              severity: "warning",
+                              message:
+                                "This template no longer has this variable; the value is ignored",
+                            },
+                          ]}
+                        />
+                      )}
                     </div>
                     <button
                       type="button"

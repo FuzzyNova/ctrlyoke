@@ -15,6 +15,7 @@ import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
+  SETTING_SCOPES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   END_CONDITION_SCRIPT_TYPES,
@@ -696,6 +697,41 @@ suite("WebviewMessageRouter — statusline tracking", () => {
         },
       ]
     );
+  });
+
+  test("reloads full settings after saving template variable defaults", async () => {
+    const calls: string[] = [];
+    const postMessage = () => {};
+    const router = new WebviewMessageRouter(
+      () => {},
+      {
+        sendWorkflowPropertiesToSettings: async () => {},
+        handleGlobalSettingsLoadRequest: async (pm: unknown) => {
+          assert.strictEqual(pm, postMessage);
+          calls.push("load");
+        },
+      } as any,
+      {
+        handleSetTemplateVariableDefaults: async () => {
+          calls.push("write");
+        },
+      } as any,
+      () => undefined,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS,
+        templateId: "bug-hunt-loop",
+        values: { testCommand: null },
+        scope: SETTING_SCOPES.USER,
+      },
+      { postMessage }
+    );
+
+    assert.deepStrictEqual(calls, ["write", "load"]);
   });
 
   test("rejects unsupported harness ids before dispatch", async () => {
