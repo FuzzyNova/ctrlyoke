@@ -54,6 +54,7 @@ finalStep:
   name: drain-backlog
   harness: "{orchestratorHarness}"
   model: "{orchestratorModel}"
+  agent: workflow-orchestrator
   mcpServers:
     - ctrlyoke
   # Each pass is a fresh session. The previous pass's output is attached so it

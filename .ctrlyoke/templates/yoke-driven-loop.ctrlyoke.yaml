@@ -22,7 +22,7 @@ steps:
   - name: plan
     harness: claude-cli
     model: opus
-    agent: spec-orchestrator
+    agent: workflow-orchestrator
     executionMode: interactive
     mcpServers:
       - ctrlyoke
@@ -46,7 +46,7 @@ finalStep:
   harness: claude-cli
   model: opus
   executionMode: interactive
-  agent: spec-orchestrator
+  agent: workflow-orchestrator
   mcpServers:
     - ctrlyoke
   resumeSession: true

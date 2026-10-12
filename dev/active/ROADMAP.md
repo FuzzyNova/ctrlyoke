@@ -462,7 +462,7 @@ lost.
 | [MCP lifecycle control surface](../rejected/MCP_CONTROL_SURFACE_PLAN.md)       | The built-in MCP server is blanket auto-approved and scoped to its own run; auto-approved start/cancel/pause would be an unbounded spawn and DoS primitive and duplicate the CLI's control plane. Cursor-based output paging was harvested to `MCP_OUTPUT_PAGING_PLAN.md`. |
 
 AI-generated workflow scaffolding is also removed as a separate roadmap feature:
-the built-in workflow-composer/spec-orchestrator agents and
+the built-in workflow-composer/workflow-orchestrator agents and
 `spec-driven-loop.ctrlyoke.yaml` already provide the useful behavior without a
 new core subsystem.
 

@@ -34,7 +34,7 @@ in order, and the first agent with a matching name wins:
    `.agents/`, `.opencode/agents/`, and `.qwen/agents/`
 4. `.ctrlyoke/agents/` in the workspace, which no harness scans natively
 5. the agents bundled with ctrlyoke, such as `ctrlyoke-workflow-composer`,
-   `ctrlyoke-tech-support`, `spec-orchestrator`, and `test-repair`
+   `ctrlyoke-tech-support`, `workflow-orchestrator`, and `test-repair`
 
 Put an agent with the same name in any of the earlier locations to override a
 bundled one.

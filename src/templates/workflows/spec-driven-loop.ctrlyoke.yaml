@@ -26,7 +26,7 @@ priorContext: none
 # before the final step comes back around to review.
 steps:
   - name: plan
-    agent: spec-orchestrator
+    agent: workflow-orchestrator
     mcpServers:
       - ctrlyoke
     prompt: |
@@ -47,7 +47,7 @@ steps:
 
 finalStep:
   name: review
-  agent: spec-orchestrator
+  agent: workflow-orchestrator
   mcpServers:
     - ctrlyoke
   # The orchestrator resumes the session it started for the plan step above on

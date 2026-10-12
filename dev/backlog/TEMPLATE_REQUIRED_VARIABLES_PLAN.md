@@ -182,7 +182,7 @@ steps:
 
 finalStep:
   name: orchestrate
-  agent: spec-orchestrator
+  agent: workflow-orchestrator
   mcpServers: [ctrlyoke]
   resumeSession: true
   sessionId: finalStep
@@ -223,9 +223,9 @@ No other change; it stays the "I already have the doc" path.
 
 ### Agent
 
-The `finalStep` of both templates uses `spec-orchestrator`. Its instructions are already written in
+The `finalStep` of both templates uses `workflow-orchestrator`. Its instructions are already written in
 terms of "the spec file referenced in the prompt", which the generated plan document satisfies.
-Re-read `src/templates/agents/spec-orchestrator.agent.md` when implementing and adjust only if a
+Re-read `src/templates/agents/workflow-orchestrator.agent.md` when implementing and adjust only if a
 sentence reads as file-specific; do not fork a second agent.
 
 **The `plan` step declares no agent** (decided). No bundled agent fits the "architect a plan doc"

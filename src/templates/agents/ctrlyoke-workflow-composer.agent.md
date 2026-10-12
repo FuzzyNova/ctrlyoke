@@ -78,7 +78,7 @@ Never invent model names. When in doubt, omit the field.
 
 ## Fixed workflow vs. self-extending loop
 
-A plain `steps:` list is a **fixed, linear** plan — best when you can enumerate the work up front. For **open-ended** work ("keep going until every requirement is met"), a fixed list can't know how many steps it needs. In that case, tell the user the **spec-driven loop** pattern fits better: it starts with an _empty_ `steps:` list and a `finalStep` running an orchestrator agent, which plans the work, calls the `append_step` MCP tool to stage the steps, then reviews the results and queues more until the spec is met. Point them at the built-in **Spec-Driven Loop** template rather than composing that machinery by hand.
+A plain `steps:` list is a **fixed, linear** plan — best when you can enumerate the work up front. For **open-ended** work ("keep going until every requirement is met"), a fixed list can't know how many steps it needs. In that case, tell the user the **spec-driven loop** pattern fits better: it starts with an _empty_ `steps:` list and a `finalStep` running the built-in `workflow-orchestrator` agent, which plans the work, calls the `append_step` MCP tool to stage the steps, then reviews the results and queues more until the spec is met. Point them at the built-in **Spec-Driven Loop** template rather than composing that machinery by hand.
 
 ## Example — large feature (separate sessions, shared plan doc)
 

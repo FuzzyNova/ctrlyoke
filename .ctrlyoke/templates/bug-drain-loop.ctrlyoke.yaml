@@ -42,7 +42,7 @@ finalStep:
   harness: "{orchestratorHarness}"
   model: "{orchestratorModel}"
   executionMode: headless
-  agent: spec-orchestrator
+  agent: workflow-orchestrator
   mcpServers:
     - ctrlyoke
   # Each pass is a fresh session; the previous pass's output is attached so
