@@ -44,7 +44,9 @@ interface WorkflowRowLayoutProps {
   badge?: React.ReactNode;
   /** Column 6 / run-total usage; joins stacked metadata. */
   usage?: React.ReactNode;
-  /** Column 7 / last meta item — relative time or elapsed timer. */
+  /** Run time (`RunDuration`), settled or ticking. Kept at every tier. */
+  duration?: React.ReactNode;
+  /** Last meta item — relative time since the row's last activity. */
   time?: React.ReactNode;
   /**
    * Small fixed-content pill in the meta line (e.g. an external-owner badge).
@@ -176,6 +178,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   worktree,
   badge,
   usage,
+  duration,
   time,
   metaBadge,
 }) => {
@@ -188,6 +191,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   if (hasContent(count)) metaParts.push({ key: "count", node: count });
   if (hasContent(visibleUsage))
     metaParts.push({ key: "usage", node: visibleUsage });
+  if (hasContent(duration)) metaParts.push({ key: "duration", node: duration });
   if (hasContent(time)) metaParts.push({ key: "time", node: time });
   const worktreeTitle = worktree
     ? `Branch: ${worktree.branchName}\nWorktree: ${worktree.worktreePath}`

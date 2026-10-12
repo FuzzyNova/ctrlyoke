@@ -148,6 +148,11 @@ export interface RunSummary {
   hasMixedHarnesses: boolean;
   hasMixedModels: boolean;
   /**
+   * Pause-aware active execution time once the run's clock has stopped
+   * (settled or paused). Absent while it is still ticking or never started.
+   */
+  activeExecutionMs?: number;
+  /**
    * True when the run was prepared but has executed nothing (`isUnstartedRun`).
    * Display-only, like the rest of this summary.
    */

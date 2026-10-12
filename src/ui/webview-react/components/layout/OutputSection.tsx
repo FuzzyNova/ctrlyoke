@@ -53,6 +53,7 @@ import {
   type RunBannerData,
 } from "../output/RunSummaryBanner";
 import { TerminalView } from "../output/TerminalView";
+import { liveRunDuration, settledRunDuration } from "../workflow/RunDuration";
 import { isTerminalSessionInUseByActiveStep } from "@utils/terminalPresentation";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
@@ -263,6 +264,7 @@ const OutputSectionInner: React.FC = () => {
         stopReason:
           matchingHistoryMetadata?.stopReason ?? displayedRunSummary.stopReason,
         tokenTotals: displayedRunSummary.tokenTotals,
+        duration: settledRunDuration(displayedRunSummary.activeExecutionMs),
         worktree:
           displayedRunSummary.worktree ?? matchingHistoryMetadata?.worktree,
       };
@@ -276,6 +278,9 @@ const OutputSectionInner: React.FC = () => {
       stopReason: stopReason ?? displayedRunSummary.stopReason,
       tokenTotals:
         liveWorkflowSummary?.tokenTotals ?? displayedRunSummary.tokenTotals,
+      duration: liveWorkflowSummary
+        ? liveRunDuration(liveWorkflowSummary)
+        : settledRunDuration(displayedRunSummary.activeExecutionMs),
       // Keep this run-owned: the bound live instance may not be the run shown
       // in the banner while history navigation is in progress.
       worktree: displayedRunSummary.worktree,

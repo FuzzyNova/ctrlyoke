@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   RunSummaryBanner,
   WorkspaceWorktreeOwnershipBanner,
@@ -77,6 +77,45 @@ describe("RunSummaryBanner", () => {
     expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
       "410k · ≈$0.41"
     );
+  });
+
+  it("shows the run time beside the start date when one is known", () => {
+    const { rerender } = renderBanner({ duration: { durationMs: 149_700 } });
+    expect(screen.getByTestId("run-id-banner")).toHaveTextContent(/· 2:29$/);
+    expect(screen.getByTitle("Run time (excludes pauses)")).toHaveTextContent(
+      "2:29"
+    );
+
+    rerender(
+      <RunSummaryBanner
+        runId={14}
+        startedAt={Date.parse("2026-08-10T12:10:23Z")}
+        executionState={EXECUTION_STATES.COMPLETED}
+        isPinned={true}
+        onTogglePinned={vi.fn()}
+        showBackToLive={false}
+      />
+    );
+    expect(
+      screen.queryByTitle("Run time (excludes pauses)")
+    ).not.toBeInTheDocument();
+  });
+
+  it("ticks a live run's time forward", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-08-10T12:20:00Z"));
+      renderBanner({
+        executionState: EXECUTION_STATES.RUNNING,
+        duration: { durationMs: 65_000, tickingSince: Date.now() },
+      });
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(screen.getByText("1:08")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([

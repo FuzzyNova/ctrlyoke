@@ -343,6 +343,62 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(summary?.tokenTotals?.total, 42);
   });
 
+  test("run summaries carry the run's pause-aware active execution time", async () => {
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-active-time"
+    );
+    await fs.writeFile(
+      WorkflowPaths.runFilePath(tempWorkspace, workflowKey, runRef),
+      JSON.stringify({
+        workflowName: "wf-active-time",
+        startedAt: 1,
+        definitionRevision: 1,
+        steps: [{ prompt: "prompt" }],
+        _runtime: {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+          startTime: 10_000,
+          totalPausedDuration: 30_000,
+          executionEndTime: 160_000,
+        },
+      }),
+      "utf8"
+    );
+    // The working file is fresher than the manifest's finalize-time copy.
+    await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 1, 1);
+
+    const [summary] = await manager.getRunSummaries(workflowKey);
+    assert.strictEqual(summary?.activeExecutionMs, 120_000);
+  });
+
+  test("run summaries fall back to the manifest's active time when the working file has no timing", async () => {
+    const { workflowKey, runRef, filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-active-time-fallback"
+    );
+    await fs.writeFile(
+      WorkflowPaths.runFilePath(tempWorkspace, workflowKey, runRef),
+      JSON.stringify({
+        workflowName: "wf-active-time-fallback",
+        startedAt: 1,
+        definitionRevision: 1,
+        steps: [{ prompt: "prompt" }],
+        _runtime: {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+        },
+      }),
+      "utf8"
+    );
+    await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 1, 45_000);
+
+    const [summary] = await manager.getRunSummaries(workflowKey);
+    assert.strictEqual(summary?.activeExecutionMs, 45_000);
+  });
+
   test("startup recovery repairs a missing working-file aggregate without double-counting", async () => {
     const { workflowKey, runRef, filePath } = await initTestRun(
       manager,

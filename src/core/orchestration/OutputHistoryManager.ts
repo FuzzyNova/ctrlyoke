@@ -3,8 +3,12 @@ import * as path from "path";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { foldPathForCompare } from "../../utils/PathCasing";
-import { projectWorktreeRuntime } from "../../types/CtrlYokeTypes";
+import {
+  frozenActiveExecutionMs,
+  projectWorktreeRuntime,
+} from "../../types/CtrlYokeTypes";
 import type {
+  ExecutionTiming,
   RunRef,
   WorkflowKey,
   WorkingFile,
@@ -1377,10 +1381,13 @@ export class OutputHistoryManager {
         workingFileStepCount,
         unstarted,
         tokenTotals,
+        activeExecutionMs,
         worktree,
         worktreeNotice,
         stopReason,
       } = await this.readRunFileSummaryFields(runFilePath);
+      const runActiveExecutionMs =
+        activeExecutionMs ?? manifest.activeExecutionMs;
 
       const record: RunSummaryRecord = {
         manifestExecutionState: manifest.executionState,
@@ -1411,6 +1418,9 @@ export class OutputHistoryManager {
           primaryModel,
           hasMixedHarnesses,
           hasMixedModels,
+          ...(runActiveExecutionMs !== undefined
+            ? { activeExecutionMs: runActiveExecutionMs }
+            : {}),
           ...(unstarted ? { unstarted } : {}),
           tokenTotals: tokenTotals ?? manifest.tokenTotals,
           worktree,
@@ -1450,6 +1460,7 @@ export class OutputHistoryManager {
     executionState?: ExecutionState;
     executionEndTime?: number;
     tokenTotals?: WorkflowTokenTotals;
+    activeExecutionMs?: number;
     worktree?: WorktreeRunProjection;
     worktreeNotice?: string;
     stopReason?: import("../../types/CtrlYokeTypes").WorkflowStopReason;
@@ -1466,11 +1477,10 @@ export class OutputHistoryManager {
       const workingFile = JSON.parse(content) as {
         harness?: string;
         model?: string;
-        _runtime?: {
+        _runtime?: ExecutionTiming & {
           executionState?: ExecutionState;
           currentIndex?: number;
           finalStep?: { status?: string };
-          executionEndTime?: number;
           tokenTotals?: WorkflowTokenTotals;
           worktree?: import("../../types/CtrlYokeTypes").WorkingFileWorktreeRuntime;
           worktreeNotice?: string;
@@ -1513,6 +1523,7 @@ export class OutputHistoryManager {
         executionState: workingFile._runtime?.executionState,
         executionEndTime: workingFile._runtime?.executionEndTime,
         tokenTotals: workingFile._runtime?.tokenTotals,
+        activeExecutionMs: frozenActiveExecutionMs(workingFile._runtime ?? {}),
         worktree: projectWorktreeRuntime(workingFile._runtime?.worktree),
         worktreeNotice: workingFile._runtime?.worktreeNotice,
         stopReason: workingFile._runtime?.stopReason,

@@ -54,6 +54,7 @@ import type { PostMessageFn } from "./WebviewSettingsSync";
 import {
   isScriptStep,
   EXECUTION_PROPERTY_KEYS,
+  frozenActiveExecutionMs,
   type PromptStep,
   type WorkingFile,
   type WorkflowViewAddress,
@@ -1417,6 +1418,9 @@ export class WorkflowSerializer {
                 ? { unstarted: true }
                 : {}),
               tokenTotals: workingFile._runtime?.tokenTotals,
+              activeExecutionMs: frozenActiveExecutionMs(
+                workingFile._runtime ?? {}
+              ),
               worktree: workingFile._runtime?.worktree
                 ? {
                     branchName: workingFile._runtime.worktree.branchName,

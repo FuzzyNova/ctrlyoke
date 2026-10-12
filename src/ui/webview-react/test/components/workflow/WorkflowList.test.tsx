@@ -292,6 +292,51 @@ describe("WorkflowList recent row worktree", () => {
       "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"
     );
   });
+
+  it.each([WORKFLOW_ROW_TIERS.STACKED, WORKFLOW_ROW_TIERS.COMPACT] as const)(
+    "shows a settled lineage's run time at the %s tier",
+    (tier) => {
+      render(
+        <WorkflowList
+          rows={[
+            {
+              kind: WORKFLOW_ROW_KINDS.RECENT,
+              key: "recent:wf",
+              workflow: {
+                address: {
+                  workflowKey: "wf" as never,
+                  kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+                  runRef: "run-1" as never,
+                },
+                workflowName: "Timed workflow",
+                executionState: EXECUTION_STATES.COMPLETED,
+                totalSteps: 3,
+                lastModifiedAt: Date.now() - 14 * 60_000,
+                activeExecutionMs: 531_000,
+              },
+            },
+          ]}
+          currentAddress={null}
+          activeWorkflowId={null}
+          runningHasActiveTerminal={() => false}
+          onSelectRecent={() => undefined}
+          onSwitchRunning={() => undefined}
+          onPauseRunning={() => undefined}
+          onCancelPauseRunning={() => undefined}
+          onResumeRunning={() => undefined}
+          onStopRunning={() => undefined}
+          tier={tier}
+        />
+      );
+
+      expect(
+        document.querySelector(".workflow-row-cell-meta")?.textContent
+      ).toMatch(/3 steps.*·.*8:51.*·.*14 minutes ago/);
+      expect(
+        screen.getByRole("button", { name: /run time 8 minutes 51 seconds/ })
+      ).toBeInTheDocument();
+    }
+  );
 });
 
 describe("WorkflowList context targets", () => {

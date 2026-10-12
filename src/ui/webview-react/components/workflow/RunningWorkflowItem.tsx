@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   EXECUTION_STATES,
   HARNESS_INFO,
+  hasWorkflowStepProgress,
   workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
 } from "../../types/messages";
+import { RunDuration, liveRunDuration } from "./RunDuration";
 import type { WorkflowSummary } from "../../types/messages";
 import { HarnessIcon } from "../shared/HarnessIcon";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
@@ -60,32 +62,6 @@ interface RunningWorkflowItemProps {
 }
 
 /**
- * Format elapsed time as m:ss (e.g. "5:43", "0:07")
- * No leading zero on minutes; leading zero on seconds.
- */
-function formatElapsed(elapsedMs: number): string {
-  const elapsed = Math.max(0, Math.floor(elapsedMs / 1000));
-  const minutes = Math.floor(elapsed / 60);
-  const seconds = elapsed % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
-
-function getElapsedMs(
-  executionTimeMs: number | undefined,
-  executionTimeUpdatedAt: number | undefined,
-  startedAt: number | undefined,
-  isActivelyTiming: boolean
-): number {
-  if (executionTimeMs !== undefined) {
-    if (isActivelyTiming && executionTimeUpdatedAt !== undefined) {
-      return executionTimeMs + Math.max(0, Date.now() - executionTimeUpdatedAt);
-    }
-    return executionTimeMs;
-  }
-  return startedAt ? Math.max(0, Date.now() - startedAt) : 0;
-}
-
-/**
  * RunningWorkflowItem - Single entry in the "Running Workflows" dropdown section.
  *
  * Shows:
@@ -115,54 +91,13 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   const isRunning = workflow.executionState === EXECUTION_STATES.RUNNING;
   const isPausing = workflow.executionState === EXECUTION_STATES.PAUSING;
   const isPaused = workflow.executionState === EXECUTION_STATES.PAUSED;
-  const isActivelyTiming = isRunning || isPausing;
+  const showStepProgress = hasWorkflowStepProgress(workflow);
   const accessibleName = composeRowAccessibleName([
     workflow.workflowName,
     workflow.executionState,
-    workflow.totalSteps > 0 && workflowStepProgressAccessibleLabel(workflow),
+    showStepProgress && workflowStepProgressAccessibleLabel(workflow),
     workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
     hasActiveTerminal && "terminal session is still running",
-  ]);
-
-  const [elapsed, setElapsed] = useState(() =>
-    formatElapsed(
-      getElapsedMs(
-        workflow.executionTimeMs,
-        workflow.executionTimeUpdatedAt,
-        workflow.startedAt,
-        isActivelyTiming
-      )
-    )
-  );
-
-  useEffect(() => {
-    const updateElapsed = () =>
-      setElapsed(
-        formatElapsed(
-          getElapsedMs(
-            workflow.executionTimeMs,
-            workflow.executionTimeUpdatedAt,
-            workflow.startedAt,
-            isActivelyTiming
-          )
-        )
-      );
-    updateElapsed();
-
-    if (!isActivelyTiming) {
-      // PAUSED — freeze the display, no interval needed
-      return;
-    }
-
-    // RUNNING / PAUSING — tick every second
-    const interval = setInterval(updateElapsed, 1000);
-
-    return () => clearInterval(interval);
-  }, [
-    isActivelyTiming,
-    workflow.executionTimeMs,
-    workflow.executionTimeUpdatedAt,
-    workflow.startedAt,
   ]);
 
   const openContextMenu = (
@@ -225,7 +160,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       <WorkflowRowLayout
         tier={tier}
         onClick={onClick}
-        // Deliberately excludes `elapsed` — it ticks every second, and an
+        // Deliberately excludes the run time — it ticks every second, and an
         // accessible name that changes on a timer re-announces the row.
         ariaLabel={accessibleName}
         harness={
@@ -240,9 +175,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         }
         label={<span className="text-sm">{workflow.workflowName}</span>}
         count={
-          workflow.totalSteps > 0
-            ? workflowStepProgressLabel(workflow)
-            : undefined
+          showStepProgress ? workflowStepProgressLabel(workflow) : undefined
         }
         // The live instance's own projection only — never the lineage's
         // last-persisted snapshot, which can still name a worktree this run
@@ -270,7 +203,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
             <WorkflowTokenUsage totals={workflow.tokenTotals} />
           ) : undefined
         }
-        time={<span className="font-mono">{elapsed}</span>}
+        duration={<RunDuration {...liveRunDuration(workflow)} />}
         metaBadge={
           workflow.externalOwner != null ? (
             <span

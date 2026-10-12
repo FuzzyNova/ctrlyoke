@@ -316,6 +316,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
             startedAt={runBanner.startedAt}
             executionState={runBanner.executionState}
             tokenTotals={runBanner.tokenTotals}
+            duration={runBanner.duration}
             worktree={runBanner.worktree}
             address={runBanner.address}
             isPinned={isRunBannerPinned}

@@ -590,7 +590,7 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
 
     render(<WorkflowStepsPanel />);
 
-    expect(screen.getByText("12.3s")).toBeInTheDocument();
+    expect(screen.getByText("0:12.3")).toBeInTheDocument();
     expect(screen.getByText("abc123")).toBeInTheDocument();
   });
 

@@ -101,6 +101,7 @@ import {
   resolveSnapshotFileMatch,
 } from "@utils/promptUndo";
 import { workflowViewAddressKey } from "@utils/viewAddress";
+import { formatClockDuration } from "@utils/time";
 import {
   OUTPUT_BLOCK_BASE,
   TOOL_RESULT_LINE,
@@ -1623,7 +1624,11 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   }
 
   if (!output.isStreaming && output.elapsed !== undefined) {
-    parts.push(<span key="elapsed">{output.elapsed}s</span>);
+    parts.push(
+      <span key="elapsed" title="Step duration">
+        {formatClockDuration(output.elapsed * 1000)}
+      </span>
+    );
   }
 
   if (

@@ -12,6 +12,7 @@ import {
   hasWorkflowTokenUsage,
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
+import { RunDuration, runDurationAccessibleLabel } from "./RunDuration";
 import type { WorkflowRowTier } from "../../constants";
 import { HARNESS_INFO, type HarnessId } from "../../types/messages";
 import { formatRelativeTimeVerbose } from "../../utils/time";
@@ -98,6 +99,9 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     : harnessLabel;
 
   const label = isDraft ? "Draft" : `Run ${summary!.runId}`;
+  // The live run's clock is still running, and its persisted summary only
+  // knows a stale value; the Running row and the output banner tick it live.
+  const activeExecutionMs = isLive ? undefined : summary?.activeExecutionMs;
   const stepCount = summary?.stepCount ?? 0;
   const stepLabel =
     stepCount > 0
@@ -110,6 +114,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     harnessTitle,
     stepLabel,
     workflowTokenTotalsAccessibleLabel(summary?.tokenTotals),
+    runDurationAccessibleLabel(activeExecutionMs),
     timeAgo,
   ]);
   const openContextMenu = (
@@ -199,6 +204,11 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
         usage={
           hasWorkflowTokenUsage(summary?.tokenTotals) ? (
             <WorkflowTokenUsage totals={summary?.tokenTotals} />
+          ) : undefined
+        }
+        duration={
+          activeExecutionMs !== undefined ? (
+            <RunDuration durationMs={activeExecutionMs} />
           ) : undefined
         }
         time={timeAgo}

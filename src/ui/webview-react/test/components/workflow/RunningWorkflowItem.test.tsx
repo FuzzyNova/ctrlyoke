@@ -25,6 +25,83 @@ describe("RunningWorkflowItem", () => {
     vi.clearAllMocks();
   });
 
+  it("shows Final step for a final-step-only workflow with an empty queue", () => {
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "final-step-only",
+          workflowName: "Bug drain",
+          filePath: "bug-drain.ctrlyoke.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 0,
+          finalStepRunning: true,
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+
+    const row = screen.getByRole("listitem");
+    expect(within(row).getByText("Final step")).toBeInTheDocument();
+    expect(row).toHaveAccessibleName(/final step/i);
+  });
+
+  it("ticks in tenths of a second under a minute, then whole seconds", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T12:00:00Z"));
+
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "quick",
+          workflowName: "Quick workflow",
+          filePath: "quick.prompt.md",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 1,
+          executionTimeMs: 59_500,
+          executionTimeUpdatedAt: Date.now(),
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByText("0:59.8")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1_200);
+    });
+    expect(screen.getByText("1:01")).toBeInTheDocument();
+  });
+
+  it("formats an hour or more of run time as h:mm:ss", () => {
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "long",
+          workflowName: "Long workflow",
+          filePath: "long.prompt.md",
+          executionState: EXECUTION_STATES.PAUSED,
+          currentStep: 1,
+          totalSteps: 2,
+          executionTimeMs: 8_419_000,
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+
+    expect(screen.getByText("2:20:19")).toBeInTheDocument();
+  });
+
   it("shows Final step in the count and accessible name while the final step runs", () => {
     render(
       <RunningWorkflowItem

@@ -16,6 +16,7 @@ import {
   hasWorkflowTokenUsage,
   workflowTokenTotalsAccessibleLabel,
 } from "./WorkflowTokenUsage";
+import { RunDuration, runDurationAccessibleLabel } from "./RunDuration";
 import {
   WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE,
   WORKFLOW_ROW_KINDS,
@@ -160,6 +161,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
     showStepCount &&
       `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`,
     workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
+    runDurationAccessibleLabel(workflow.activeExecutionMs),
     timeAgo,
     showTerminalIcon && "terminal session is still running",
   ]);
@@ -255,6 +257,11 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         usage={
           hasWorkflowTokenUsage(workflow.tokenTotals) ? (
             <WorkflowTokenUsage totals={workflow.tokenTotals} />
+          ) : undefined
+        }
+        duration={
+          workflow.activeExecutionMs !== undefined ? (
+            <RunDuration durationMs={workflow.activeExecutionMs} />
           ) : undefined
         }
         time={

@@ -6,6 +6,7 @@ import type { StepDetails } from "./WorkflowStep";
 import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { Icon } from "../shared/Icon";
 import { formatRetryDenominator } from "../../../../utils/LimitUtils";
+import { formatClockDuration } from "../../utils/time";
 
 /**
  * A single prompt-level property override to display in the overrides row.
@@ -161,7 +162,9 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
           >
             {[
               durationSeconds !== undefined ? (
-                <span key="dur">{durationSeconds.toFixed(1)}s</span>
+                <span key="dur" title="Step duration">
+                  {formatClockDuration(durationSeconds * 1000)}
+                </span>
               ) : null,
               attemptTotalLabel ? (
                 <span key="tokens">{attemptTotalLabel} tks</span>

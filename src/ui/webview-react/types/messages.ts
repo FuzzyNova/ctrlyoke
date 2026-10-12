@@ -262,6 +262,7 @@ export type {
 } from "@root/types/CtrlYokeTypes";
 export {
   FINAL_STEP_PROGRESS_LABEL,
+  hasWorkflowStepProgress,
   workflowDisplayStep,
   workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,

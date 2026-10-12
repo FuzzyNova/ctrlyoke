@@ -1148,6 +1148,8 @@ export interface RecentWorkflowsMessage {
     unstarted?: boolean;
     runNav?: WorkflowRunNavigationSummary;
     tokenTotals?: WorkflowTokenTotals;
+    /** Primary run's pause-aware run time, once its clock has stopped (`frozenActiveExecutionMs`). */
+    activeExecutionMs?: number;
     worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
   }>;
 }

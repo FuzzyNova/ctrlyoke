@@ -733,6 +733,52 @@ export interface ActiveParallelGroupRuntime {
   admission: ParallelGroupAdmission;
 }
 
+/** Pause-aware execution timing, as owned by WorkflowStateMachine and persisted on `_runtime`. */
+export type ExecutionTiming = Pick<
+  WorkingFileRuntime,
+  "startTime" | "pausedTime" | "totalPausedDuration" | "executionEndTime"
+>;
+
+/**
+ * Active execution time: wall-clock time since `startTime` minus every pause.
+ * The clock freezes at `executionEndTime` once the run settles and otherwise
+ * reads `now`. Returns 0 before the timer has started.
+ */
+export function computeActiveExecutionMs(
+  timing: ExecutionTiming,
+  now: number
+): number {
+  if (timing.startTime === undefined) {
+    return 0;
+  }
+  const referenceTime = timing.executionEndTime ?? now;
+  const activePauseDuration =
+    timing.pausedTime !== undefined ? referenceTime - timing.pausedTime : 0;
+  return (
+    referenceTime -
+    timing.startTime -
+    (timing.totalPausedDuration ?? 0) -
+    activePauseDuration
+  );
+}
+
+/**
+ * Active execution time of a persisted run whose clock is not advancing
+ * (settled or paused). Returns `undefined` for a run that never started or is
+ * still ticking, because a snapshot cannot say how long a live run has gone on.
+ */
+export function frozenActiveExecutionMs(
+  timing: ExecutionTiming
+): number | undefined {
+  if (timing.startTime === undefined) {
+    return undefined;
+  }
+  const frozenAt = timing.executionEndTime ?? timing.pausedTime;
+  return frozenAt === undefined
+    ? undefined
+    : Math.max(0, computeActiveExecutionMs(timing, frozenAt));
+}
+
 /**
  * Runtime execution fields owned by WorkflowStateMachine.
  * PromptQueue projects these onto QueueState for consumers.
@@ -1332,6 +1378,15 @@ export const workflowDisplayStep = (
 
 /** Visible row text for a lineage executing its final step. */
 export const FINAL_STEP_PROGRESS_LABEL = "Final step";
+
+/**
+ * Whether a running row has step progress to show. A workflow whose only work
+ * is its final step (`steps: []`) has no queue to count, but while that final
+ * step executes it still reports "Final step".
+ */
+export const hasWorkflowStepProgress = (
+  s: Pick<WorkflowSummary, "totalSteps" | "finalStepRunning">
+): boolean => s.totalSteps > 0 || s.finalStepRunning === true;
 
 /**
  * Returns the running row's step-progress label, including its final-step state.

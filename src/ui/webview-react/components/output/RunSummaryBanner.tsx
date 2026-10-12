@@ -12,6 +12,10 @@ import {
   WorkflowTokenUsage,
   hasWorkflowTokenUsage,
 } from "@components/workflow/WorkflowTokenUsage";
+import {
+  RunDuration,
+  type RunDurationValue,
+} from "@components/workflow/RunDuration";
 import { writeClipboardText } from "@utils/stepClipboard";
 import type { ExecutionState } from "@root/types/DashboardConstants";
 import type {
@@ -51,6 +55,8 @@ export interface RunBannerData {
   executionState: ExecutionState;
   stopReason?: WorkflowStopReason;
   tokenTotals?: WorkflowTokenTotals;
+  /** The run's active time; ticking while it is the live run. */
+  duration?: RunDurationValue;
   /** Persisted projection from the displayed run's `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
   address?: Extract<WorkflowViewAddress, { kind: "run" }>;
@@ -119,6 +125,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   executionState,
   stopReason,
   tokenTotals,
+  duration,
   worktree,
   address,
   isPinned,
@@ -193,6 +200,12 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
         <span className="flex items-center gap-2 min-w-0">
           <span className="truncate min-w-0" data-testid="run-id-banner">
             Run {runId} &middot; {new Date(startedAt).toLocaleString()}
+            {duration && (
+              <>
+                {" "}
+                &middot; <RunDuration {...duration} />
+              </>
+            )}
           </span>
           <ExecutionStateBadge
             state={executionState}

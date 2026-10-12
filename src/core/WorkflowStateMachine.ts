@@ -1,4 +1,7 @@
-import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
+import {
+  EXECUTION_STATES,
+  computeActiveExecutionMs,
+} from "../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -661,19 +664,14 @@ export class WorkflowStateMachine {
    * Returns 0 if the timer has not been started.
    */
   getActiveExecutionTime(): number {
-    if (this._startTime === undefined) {
-      return 0;
-    }
-
-    const referenceTime = this._executionEndTime ?? Date.now();
-    const activePauseDuration =
-      this._pausedTime !== undefined ? referenceTime - this._pausedTime : 0;
-
-    return (
-      referenceTime -
-      this._startTime -
-      this._totalPausedDuration -
-      activePauseDuration
+    return computeActiveExecutionMs(
+      {
+        startTime: this._startTime,
+        pausedTime: this._pausedTime,
+        totalPausedDuration: this._totalPausedDuration,
+        executionEndTime: this._executionEndTime,
+      },
+      Date.now()
     );
   }
 

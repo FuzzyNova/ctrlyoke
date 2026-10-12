@@ -23,8 +23,8 @@ name, and its harness and model. Below it, in the order they happened:
 | Script and condition rows | A script step's or condition's output, and its verdict: **Passed**, **Failed** or **Errored**, the comparison, and what happens next.                                 |
 | Stats                     | Context window use, tokens, an estimated cost, the session ID, the duration, and **Copy output**.                                                                     |
 
-A banner at the top names the run, when it started, its state and its token
-total. Click the pin to keep it at the top of the pane while you scroll, or
+A banner at the top names the run, when it started, how long it has run, its
+state and its token total. Click the pin to keep it at the top of the pane while you scroll, or
 unpin it to let it scroll away with the output. While you look at an earlier
 run of a workflow that is running now, the banner has a **Back to Live** link.
 For a run in a [worktree](/workflows/worktrees), the banner also shows the

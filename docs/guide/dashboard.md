@@ -201,6 +201,11 @@ Click the workflow name in the header to open the **Workflows** menu.
   the star to add or remove a favorite.
 - Search by name, or filter by state, harness or **Favorites only**.
 
+Each row shows the workflow's step progress, its token total and estimated
+cost, and its run time. Durations everywhere in the dashboard read as a clock:
+`0:ss.t` (with tenths of a second) under a minute, `m:ss` under an hour and
+`h:mm:ss` from an hour on. A run's time leaves out the time it spent paused.
+
 Each time a workflow runs it creates a numbered **run**. The `#N ›` at the right
 of a row opens that workflow's runs, newest first, with **Newer run** and
 **Older run** buttons. When the workflow you're viewing has more than one run,

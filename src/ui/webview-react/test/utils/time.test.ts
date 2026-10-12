@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  formatClockDuration,
   formatDuration,
   formatFutureTime,
+  formatSpokenDuration,
   formatRelativeTime,
   formatRelativeTimeVerbose,
   formatTime,
@@ -189,5 +191,48 @@ describe("formatRelativeTimeVerbose", () => {
   it("accepts an explicit reference time instead of the system clock", () => {
     const now = Date.now();
     expect(formatRelativeTimeVerbose(now - 120_000, now)).toBe("2 minutes ago");
+  });
+});
+
+describe("formatClockDuration", () => {
+  it("shows floored tenths of a second under a minute", () => {
+    expect(formatClockDuration(0)).toBe("0:00.0");
+    expect(formatClockDuration(400)).toBe("0:00.4");
+    expect(formatClockDuration(7_990)).toBe("0:07.9");
+    expect(formatClockDuration(59_999)).toBe("0:59.9");
+  });
+
+  it("is not thrown off by float noise from seconds * 1000", () => {
+    expect(formatClockDuration(4.35 * 1000)).toBe("0:04.3");
+    expect(formatClockDuration(12.3 * 1000)).toBe("0:12.3");
+  });
+
+  it("drops tenths from a minute on, formatting under an hour as m:ss", () => {
+    expect(formatClockDuration(60_000)).toBe("1:00");
+    expect(formatClockDuration(149_700)).toBe("2:29");
+    expect(formatClockDuration(3_599_999)).toBe("59:59");
+  });
+
+  it("formats an hour or more as h:mm:ss", () => {
+    expect(formatClockDuration(3_600_000)).toBe("1:00:00");
+    expect(formatClockDuration(8_419_000)).toBe("2:20:19");
+  });
+
+  it("clamps negative durations to zero", () => {
+    expect(formatClockDuration(-5_000)).toBe("0:00.0");
+  });
+});
+
+describe("formatSpokenDuration", () => {
+  it("reads tenths under a minute", () => {
+    expect(formatSpokenDuration(7_400)).toBe("7.4 seconds");
+    expect(formatSpokenDuration(400)).toBe("0.4 seconds");
+  });
+
+  it("names each non-zero unit with singular and plural forms", () => {
+    expect(formatSpokenDuration(60_000)).toBe("1 minute");
+    expect(formatSpokenDuration(149_700)).toBe("2 minutes 29 seconds");
+    expect(formatSpokenDuration(3_661_000)).toBe("1 hour 1 minute 1 second");
+    expect(formatSpokenDuration(3_600_000)).toBe("1 hour");
   });
 });

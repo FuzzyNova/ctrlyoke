@@ -58,6 +58,47 @@ function renderRow(tier: WorkflowRowTier) {
 }
 
 describe("RunSummaryRow", () => {
+  it("shows the run's settled run time between usage and time ago", () => {
+    const { container } = render(
+      <RunSummaryRow
+        row={{
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          summary: { ...summary, activeExecutionMs: 531_000 },
+        }}
+        rowKey="run:wf:run-14"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        canDelete
+        onSelect={vi.fn()}
+      />
+    );
+    expect(
+      container.querySelector(".workflow-row-cell-meta")?.textContent
+    ).toMatch(/410k.*·.*8:51.*·.*ago/);
+    expect(
+      screen.getByRole("button", { name: /^Run 14/ })
+    ).toHaveAccessibleName(/run time 8 minutes 51 seconds/);
+  });
+
+  it("omits the stale persisted run time on the live run's row", () => {
+    render(
+      <RunSummaryRow
+        row={{
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          summary: { ...summary, activeExecutionMs: 531_000 },
+        }}
+        rowKey="run:wf:run-14"
+        isViewed={false}
+        isPending={false}
+        isLive
+        canDelete={false}
+        onSelect={vi.fn()}
+      />
+    );
+    expect(screen.queryByText("8:51")).not.toBeInTheDocument();
+  });
+
   it("shows run number, step count, state, and time, full text throughout", () => {
     const { container } = renderRow("stacked");
     expect(

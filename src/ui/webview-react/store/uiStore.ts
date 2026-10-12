@@ -294,6 +294,8 @@ export interface RecentWorkflow {
   unstarted?: boolean;
   runNav?: WorkflowRunNavigationSummary;
   tokenTotals?: WorkflowTokenTotals;
+  /** Primary run's pause-aware run time, once its clock has stopped. */
+  activeExecutionMs?: number;
   worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
 }
 
@@ -1771,6 +1773,10 @@ export const useUiStore = create<UiState & UiActions>()(
               executionState: summary.executionState,
               totalSteps: summary.totalSteps,
               tokenTotals: summary.tokenTotals ?? workflow.tokenTotals,
+              // Ticking while live, but a live lineage is listed under
+              // Running; once it settles this is the frozen run time.
+              activeExecutionMs:
+                summary.executionTimeMs ?? workflow.activeExecutionMs,
               worktree: summary.worktree ?? workflow.worktree,
               lastModifiedAt: Math.max(
                 workflow.lastModifiedAt ?? 0,

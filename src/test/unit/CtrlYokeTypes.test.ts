@@ -1,10 +1,86 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  computeActiveExecutionMs,
+  frozenActiveExecutionMs,
+  hasWorkflowStepProgress,
   workflowDisplayStep,
   workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
 } from "../../types/CtrlYokeTypes";
+
+suite("CtrlYokeTypes hasWorkflowStepProgress", () => {
+  test("reports progress for a non-empty queue", () => {
+    assert.strictEqual(
+      hasWorkflowStepProgress({ totalSteps: 2, finalStepRunning: false }),
+      true
+    );
+  });
+
+  test("reports progress for a final step running with an empty queue", () => {
+    assert.strictEqual(
+      hasWorkflowStepProgress({ totalSteps: 0, finalStepRunning: true }),
+      true
+    );
+  });
+
+  test("reports no progress for an empty queue outside the final step", () => {
+    assert.strictEqual(hasWorkflowStepProgress({ totalSteps: 0 }), false);
+  });
+});
+
+suite("CtrlYokeTypes active execution time", () => {
+  test("subtracts settled and open pauses from wall-clock time", () => {
+    assert.strictEqual(
+      computeActiveExecutionMs(
+        { startTime: 1_000, totalPausedDuration: 2_000, pausedTime: 9_000 },
+        10_000
+      ),
+      6_000
+    );
+  });
+
+  test("freezes at the execution end time", () => {
+    assert.strictEqual(
+      computeActiveExecutionMs(
+        { startTime: 1_000, totalPausedDuration: 500, executionEndTime: 4_000 },
+        99_000
+      ),
+      2_500
+    );
+  });
+
+  test("reports zero before the timer starts", () => {
+    assert.strictEqual(computeActiveExecutionMs({}, 10_000), 0);
+  });
+
+  test("reads a settled or paused run's frozen time", () => {
+    assert.strictEqual(
+      frozenActiveExecutionMs({
+        startTime: 1_000,
+        totalPausedDuration: 500,
+        executionEndTime: 4_000,
+      }),
+      2_500
+    );
+    assert.strictEqual(
+      frozenActiveExecutionMs({
+        startTime: 1_000,
+        totalPausedDuration: 500,
+        pausedTime: 3_000,
+      }),
+      1_500
+    );
+  });
+
+  test("has no frozen time for a ticking or never-started run", () => {
+    assert.strictEqual(
+      frozenActiveExecutionMs({ startTime: 1_000 }),
+      undefined
+    );
+    assert.strictEqual(frozenActiveExecutionMs({}), undefined);
+  });
+});
 
 suite("CtrlYokeTypes workflowDisplayStep", () => {
   test("converts an active queue cursor to a one-indexed display step", () => {
