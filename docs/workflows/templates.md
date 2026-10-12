@@ -36,11 +36,27 @@ Open the **Create Workflow from Template** dialog in any of these ways:
 
 **Set as Default** makes the selected template the one the dialog starts on
 next time. It saves [`general.defaultTemplate`](/reference/settings#general-defaulttemplate)
-in your user settings. When the selected template is already the default, the
-footer reads **Default template** instead.
+at the scope chosen by the dialog's User/Workspace toggle. When the selected
+template is already the default, the footer reads **Default template** instead,
+with the scope it comes from when it is a saved setting. See
+[Defaults and blank fields](#defaults-and-blank-fields).
 
 **New template...** under the picker creates a custom template from the
 selected one. See [Custom templates](#custom-templates).
+
+## Saved variable values {#saved-variable-values}
+
+Open **Settings → Templates** to choose the default template and save variable values for any
+built-in or custom template. The drawer's **User** scope stores values for your own use across
+workspaces; **Workspace** stores values with the project. When both scopes save the same
+variable, the Workspace value wins in that workspace. Linked harness and model values are saved together.
+
+Each saved value is used to pre-fill the matching field in **New Workflow**. Choose **Add
+template** and **Add value** to add a value from Settings, or pin a value while creating a
+workflow. Blank text clears a saved value. **Clear all** removes every saved value for that
+template at the selected scope, returning fields to the other scope or the variable default
+authored by the template. Missing templates and variables that have since been removed remain
+visible until cleared, so stale settings can be cleaned up.
 
 ## Bug Hunt Loop and Bug Drain Loop {#bug-loops}
 
@@ -154,11 +170,17 @@ A key under `_templateMeta.variables` only takes effect if a matching `{token}` 
 
 If a variable declares a `default`, that value is pre-filled in the UI and used when the field is left empty. A `select` variable without a default starts on its first option. A text, file, or directory variable with **no** default that is never filled in stays in the output as a literal `{token}` — so give optional inputs a sensible default, and treat description/required inputs as fields the user must fill.
 
+You can save a field's current value as a **variable default** from the template picker. The User/Workspace toggle in the title bar selects where **Save as default** writes; it also selects where **Set as Default** writes the default template setting. The toggle starts on Workspace until a save succeeds, then remembers the scope of the last successful save. With no workspace open, it stays on User.
+
+Saved values override the value declared in the template. Workspace values take precedence over User values, which take precedence over the template's authored value. This is resolved per variable, so a template can use some values saved in Workspace and others saved in User. A **Saved (User)** or **Saved (Workspace)** marker shows the source, and **Clear saved value** removes the value from that scope so the next value in the precedence order applies. Saving the value already inherited at the selected scope clears that scope's override instead of keeping a redundant saved value.
+
+A harness and its linked model fields are one unit: they are saved, marked, and cleared together, and resolve from the same scope. Multiline text fields cannot be saved as variable defaults.
+
 ## Custom templates {#custom-templates}
 
 Custom templates are `*.ctrlyoke.yaml`, `*.ctrlyoke.yml`, or `*.ctrlyoke.json` files in `.ctrlyoke/templates/` (workspace) or `~/.ctrlyoke/templates/` (user). They use the same `_templateMeta` schema as the built-ins. A file name must be unique within its location, regardless of format.
 
 There are two ways to create one:
 
-- In the template picker, click **New template...**, or run the **Create New Custom Template** command, which opens the same form. Choose a name, a location (workspace or user), and a format (YAML or JSON). ctrlyoke copies the currently selected template as the starting point. Select **Template Starter** first to get an example of every variable type.
+- In the template picker, click **New template...**, or run the **Create New Custom Template** command, which opens the same form. Choose a name, a location (workspace or user), and a format (YAML or JSON). ctrlyoke copies the currently selected template as the starting point, carrying any saved variable values into the copy as its authored defaults. Select **Template Starter** first to get an example of every variable type.
 - In the Save Workflow dialog, turn on **Save as Template**. This saves the workflow's current values as-is; edit the file afterward to replace fixed values with `{placeholder}` variables.

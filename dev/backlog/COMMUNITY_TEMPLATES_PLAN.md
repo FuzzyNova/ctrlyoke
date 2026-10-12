@@ -231,7 +231,7 @@ scope)`.
 
 > **Revised 2026-10-11:** this UI is no longer its own settings tab. It is the
 > **Discover** page of the **Templates** tab designed in
-> [`TEMPLATE_VARIABLE_DEFAULTS_PLAN.md`](TEMPLATE_VARIABLE_DEFAULTS_PLAN.md)
+> [`TEMPLATE_VARIABLE_DEFAULTS_PLAN.md`](../implemented/TEMPLATE_VARIABLE_DEFAULTS_PLAN.md)
 > (Phase 2, and "Follow-up — community templates in the Templates tab"). That
 > tab is where users already manage templates: the default template and saved
 > variable values. Installing a template belongs next to them, and an installed
@@ -292,7 +292,7 @@ from the drawer's active scope.
   per-workflow choice; once installed it shows up in the normal template
   picker for free (it's just another `.ctrlyoke/templates/` file). It is the
   **Discover** page of the Templates tab
-  ([`TEMPLATE_VARIABLE_DEFAULTS_PLAN.md`](TEMPLATE_VARIABLE_DEFAULTS_PLAN.md)),
+  ([`TEMPLATE_VARIABLE_DEFAULTS_PLAN.md`](../implemented/TEMPLATE_VARIABLE_DEFAULTS_PLAN.md)),
   not a tab of its own, and installs into the drawer's active scope.
 
 ## Open questions

@@ -30,6 +30,9 @@ import {
   SETTING_PATHS,
   PERMISSION_MODES,
   HARNESS_DISPLAY_ORDER,
+  SETTING_SCOPES,
+  TEMPLATE_IDS,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
   isHarnessId,
   type StatusLineHarnessId,
   type HarnessId,
@@ -37,6 +40,8 @@ import {
   type PermissionMode,
   type CtrlYokeMcpMode,
   type StepColorMode,
+  type SettingWriteScope,
+  type TemplateVariableDefaultSource,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { isUnlimited } from "./LimitUtils";
@@ -1132,6 +1137,23 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.GENERAL).defaultTemplate;
   },
 
+  /** Identify which saved layer supplies the effective default template. */
+  getDefaultWorkflowTemplateSource(): TemplateVariableDefaultSource {
+    if (
+      configService.getScoped("general", SETTING_SCOPES.WORKSPACE)
+        ?.defaultTemplate !== undefined
+    ) {
+      return TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE;
+    }
+    if (
+      configService.getScoped("general", SETTING_SCOPES.USER)
+        ?.defaultTemplate !== undefined
+    ) {
+      return TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER;
+    }
+    return TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
+  },
+
   /**
    * Check if recent session should be auto-loaded on startup
    */
@@ -1380,11 +1402,19 @@ export const ConfigurationUtils = {
   /**
    * Set the default workflow template
    */
-  async setDefaultWorkflowTemplate(templateId: string): Promise<void> {
+  async setDefaultWorkflowTemplate(
+    templateId: string,
+    scope: SettingWriteScope
+  ): Promise<void> {
+    const inheritedTemplateId =
+      scope === SETTING_SCOPES.WORKSPACE
+        ? configService.getScoped("general", SETTING_SCOPES.USER)
+            ?.defaultTemplate ?? TEMPLATE_IDS.BLANK
+        : TEMPLATE_IDS.BLANK;
     await configService.set(
       CONFIG_KEYS.GENERAL_DEFAULT_TEMPLATE,
-      templateId,
-      CONFIG_SCOPE.USER
+      templateId === inheritedTemplateId ? undefined : templateId,
+      scope
     );
   },
 

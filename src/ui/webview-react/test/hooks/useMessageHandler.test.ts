@@ -14,6 +14,7 @@ import {
   SEARCH_HISTORY_ERROR_CODES,
   THEME_KINDS,
   THEME_KIND_CSS_VAR,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
   VSCODE_THEME_BODY_CLASSES,
 } from "@root/types/DashboardConstants";
 
@@ -751,12 +752,106 @@ describe("OPEN_NEW_WORKFLOW_MODAL", () => {
           },
         ],
         defaultTemplateId: "blank",
+        defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE,
         openCreateTemplateForm: true,
       });
     });
 
     expect(useUiStore.getState().newWorkflowModalOpen).toBe(true);
     expect(useUiStore.getState().openCreateTemplateForm).toBe(true);
+    expect(useUiStore.getState().defaultTemplateSource).toBe(
+      TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE
+    );
+  });
+});
+
+describe("TEMPLATE_CATALOG_LOADED", () => {
+  it("stores the catalog without opening the new workflow modal", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED, {
+        templates: [
+          {
+            id: "sample",
+            name: "Sample",
+            description: "",
+            isBuiltIn: true,
+            variables: [{ name: "topic", type: "text", authoredDefault: "" }],
+          },
+        ],
+      });
+    });
+
+    expect(useUiStore.getState().templateCatalog).toHaveLength(1);
+    expect(useUiStore.getState().templateCatalog[0].id).toBe("sample");
+    expect(useUiStore.getState().newWorkflowModalOpen).toBe(false);
+  });
+});
+
+describe("DEFAULT_TEMPLATE_SET", () => {
+  it("stores the effective template id and source after a scoped clear", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.DEFAULT_TEMPLATE_SET, {
+        templateId: "selected-template",
+        defaultTemplateId: "inherited-template",
+        defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER,
+        scope: "workspace",
+      });
+    });
+
+    expect(useUiStore.getState().defaultTemplateId).toBe("inherited-template");
+    expect(useUiStore.getState().defaultTemplateSource).toBe(
+      TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
+    );
+    expect(useUiStore.getState().defaultTemplateConfirmedId).toBe(
+      "inherited-template"
+    );
+    expect(useUiStore.getState().lastSavedTemplateScope).toBe("workspace");
+  });
+});
+
+describe("TEMPLATE_VARIABLE_DEFAULTS_SET", () => {
+  it("replaces the template catalog and records the successful save scope", () => {
+    renderHook(() => useMessageHandler());
+    const refreshedTemplate = {
+      id: "saved-template",
+      name: "Saved template",
+      description: "",
+      isBuiltIn: true,
+      variables: [
+        {
+          name: "path",
+          type: "text" as const,
+          default: "saved-value",
+          defaultSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE,
+        },
+      ],
+    };
+    useUiStore.setState({
+      templates: [{ ...refreshedTemplate, variables: [] }],
+      currentTemplate: { ...refreshedTemplate, variables: [] },
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET, {
+        templates: [refreshedTemplate],
+        templateId: "saved-template",
+        variableNames: ["path"],
+        scope: "workspace",
+      });
+    });
+
+    expect(useUiStore.getState().templates).toEqual([refreshedTemplate]);
+    expect(useUiStore.getState().currentTemplate).toEqual(refreshedTemplate);
+    expect(useUiStore.getState().templateVariableDefaultsSaved).toEqual({
+      templateId: "saved-template",
+      variableNames: ["path"],
+      scope: "workspace",
+    });
+    expect(useUiStore.getState().lastSavedTemplateScope).toBe("workspace");
   });
 });
 

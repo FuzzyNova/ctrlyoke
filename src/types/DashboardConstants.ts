@@ -544,8 +544,11 @@ export const MESSAGE_TYPES = {
 
   // New Workflow Modal - Extension -> Webview
   OPEN_NEW_WORKFLOW_MODAL: "openNewWorkflowModal",
+  TEMPLATE_CATALOG_REQUEST: "templateCatalogRequest",
+  TEMPLATE_CATALOG_LOADED: "templateCatalogLoaded",
   TEMPLATE_INFO: "templateInfo",
   DEFAULT_TEMPLATE_SET: "defaultTemplateSet",
+  TEMPLATE_VARIABLE_DEFAULTS_SET: "templateVariableDefaultsSet",
   WORKFLOW_CREATED: "workflowCreated",
   CLOSE_MODAL: "closeModal",
 
@@ -553,6 +556,7 @@ export const MESSAGE_TYPES = {
   NEW_WORKFLOW: "newWorkflow", // Opens modal (from button click)
   TEMPLATE_SELECTED: "templateSelected",
   SET_DEFAULT_TEMPLATE: "setDefaultTemplate",
+  SET_TEMPLATE_VARIABLE_DEFAULTS: "setTemplateVariableDefaults",
   CREATE_WORKFLOW: "createWorkflow",
   CREATE_CUSTOM_TEMPLATE: "createCustomTemplate", // { name, scope, format, baseTemplateId } — fully webview-driven, no native VS Code UI
   BROWSE_TEMPLATE_FILE: "browseTemplateFile", // Request OS file picker for a template variable
@@ -3156,6 +3160,7 @@ export type PropertyEditorMode =
 export const GLOBAL_SETTINGS_TABS = {
   GENERAL: "general",
   WORKFLOW: "workflow",
+  TEMPLATES: "templates",
   EXECUTION: "execution",
   QUEUE: "queue",
   WORKTREES: "worktrees",
@@ -3631,6 +3636,16 @@ export const TEMPLATE_SCOPES = {
 
 export type TemplateScope =
   (typeof TEMPLATE_SCOPES)[keyof typeof TEMPLATE_SCOPES];
+
+/** Provenance for a template variable's effective default. */
+export const TEMPLATE_VARIABLE_DEFAULT_SOURCES = {
+  TEMPLATE: "template",
+  USER: "user",
+  WORKSPACE: "workspace",
+} as const;
+
+export type TemplateVariableDefaultSource =
+  (typeof TEMPLATE_VARIABLE_DEFAULT_SOURCES)[keyof typeof TEMPLATE_VARIABLE_DEFAULT_SOURCES];
 
 /** IDs for built-in templates whose content is generated or bundled. */
 export const TEMPLATE_IDS = {

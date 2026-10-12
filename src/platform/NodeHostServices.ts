@@ -217,7 +217,8 @@ export async function createNodeHostedServer(options: {
   const templateManager = new TemplateManager(
     services.platform.getExtensionPath(),
     () => cwd,
-    services.platform
+    services.platform,
+    (scope) => configService.getScoped("templates", scope)?.variableDefaults
   );
   const dashboardApplication = new DashboardApplication({
     templateManager,

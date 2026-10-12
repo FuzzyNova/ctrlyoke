@@ -6,7 +6,7 @@ import type {
 import { useEffect, useState } from "react";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { SettingInputRow } from "../shared/SettingInputRow";
-import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
+import { LocalNumberInput } from "../shared/LocalInputs";
 import { LimitSelect } from "../shared/LimitSelect";
 import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
@@ -71,19 +71,6 @@ export function GeneralSection({
             DEFAULT_FORMAT_OPTIONS_META,
             "general.defaultFormat"
           )}
-        />
-      </SettingInputRow>
-      <SettingInputRow
-        settingKey="general.defaultTemplate"
-        id="general-default-template"
-        {...rowProps}
-      >
-        <LocalTextInput
-          id="general-default-template"
-          value={general.defaultTemplate}
-          onCommit={(v) => onUpdate("general.defaultTemplate", v || "blank")}
-          placeholder="blank"
-          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
       <div className="pt-3 border-t border-panel-border mt-3">

@@ -425,7 +425,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const templateManager = new TemplateManager(
       context.extensionPath,
       () => getVsCodeWorkspaceFolder()?.uri.fsPath,
-      platform
+      platform,
+      (scope) => configService.getScoped("templates", scope)?.variableDefaults
     );
     const webviewHostDependencies = {
       actions: dashboardHostActions,

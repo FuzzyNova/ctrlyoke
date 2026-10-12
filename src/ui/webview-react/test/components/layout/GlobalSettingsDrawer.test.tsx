@@ -27,7 +27,7 @@ describe("GlobalSettingsDrawer", () => {
     });
   });
 
-  it("includes the Status Line tab beside the stats tab", () => {
+  it("renders the shared User and Workspace scope options beside settings tabs", () => {
     render(<GlobalSettingsDrawer />);
 
     expect(

@@ -899,6 +899,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "storage": "User-only storage location configuration.",
   "storage.runHistoryLocation": "Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it.",
   "storage.trashRetentionDays": "Days a deleted run or workflow stays in Recently deleted before it is permanently removed. Every history delete, including Clear all history, moves runs to Recently deleted, where they can be restored until then.",
+  "templates": "Template-specific settings.",
+  "templates.variableDefaults": "Saved defaults for declared template variables. Workspace values override User values per variable. A harness and its linked model variables resolve together from one scope; if that scope has no model value, the model uses the template's authored default. Unknown or invalid values are ignored until corrected or the template definition changes.",
   "terminal": "Embedded terminal settings.",
   "terminal.cursorBlink": "Blink the terminal cursor.",
   "terminal.cursorStyle": "Terminal cursor shape.",

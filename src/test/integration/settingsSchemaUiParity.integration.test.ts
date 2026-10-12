@@ -255,6 +255,7 @@ const PENDING_UI_PARITY: readonly string[] = [
   "languageServers.settings",
   "languageServers.startOnLaunch",
   "server.theme",
+  "templates.variableDefaults",
   "terminal.mobileBarLayout.bar",
   "terminal.mobileBarLayout.hidden",
   "terminal.mobileBarLayout.popup",

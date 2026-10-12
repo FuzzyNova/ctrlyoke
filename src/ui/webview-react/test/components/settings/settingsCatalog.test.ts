@@ -102,6 +102,13 @@ const sourceTemplates = settingKeys.flatMap(({ templatePrefix }) =>
 );
 
 describe("settings catalog drift guards", () => {
+  it("places the default template and saved variable values on the Templates tab", () => {
+    expect(SETTINGS_CATALOG["general.defaultTemplate"].tab).toBe("templates");
+    expect(SETTINGS_CATALOG["landmark:templates.tab"].tab).toBe("templates");
+    expect(SETTINGS_CATALOG["landmark:templates.savedValues"].tab).toBe(
+      "templates"
+    );
+  });
   it("points every catalog path at a schema property, including family parents", () => {
     for (const entry of SETTINGS_CATALOG_ENTRIES) {
       if (!entry.path) continue;

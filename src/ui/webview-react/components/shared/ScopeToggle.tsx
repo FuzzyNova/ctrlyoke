@@ -1,5 +1,6 @@
 import React from "react";
 import { Icon } from "./Icon";
+import { SETTING_SCOPES } from "@root/types/DashboardConstants";
 
 export interface ScopeToggleOption<T extends string> {
   value: T;
@@ -7,7 +8,23 @@ export interface ScopeToggleOption<T extends string> {
   /** Codicon class, e.g. "codicon-person" */
   icon: string;
   title?: string;
+  disabled?: boolean;
 }
+
+export const SETTING_SCOPE_OPTIONS = [
+  {
+    value: SETTING_SCOPES.USER,
+    label: "User",
+    icon: "codicon-person",
+    title: "Save to User settings",
+  },
+  {
+    value: SETTING_SCOPES.WORKSPACE,
+    label: "Workspace",
+    icon: "codicon-project",
+    title: "Save to Workspace settings",
+  },
+] as const;
 
 interface ScopeToggleProps<T extends string> {
   value: T;
@@ -47,6 +64,7 @@ export function ScopeToggle<T extends string>({
         title={first.title ?? first.label}
         aria-label={first.label}
         aria-pressed={value === first.value}
+        disabled={first.disabled}
       >
         <Icon name={first.icon} />
         {!iconOnly && first.label}
@@ -61,6 +79,7 @@ export function ScopeToggle<T extends string>({
         title={second.title ?? second.label}
         aria-label={second.label}
         aria-pressed={value === second.value}
+        disabled={second.disabled}
       >
         <Icon name={second.icon} />
         {!iconOnly && second.label}

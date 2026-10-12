@@ -36,10 +36,25 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Default format",
     description: "Default file format used when creating new workflows.",
   },
+  "landmark:templates.tab": {
+    id: "landmark:templates.tab",
+    tab: GLOBAL_SETTINGS_TABS.TEMPLATES,
+    label: "Templates",
+    description: "Browse templates and manage saved variable values.",
+    keywords: ["template", "saved value", "default"],
+  },
+  "landmark:templates.savedValues": {
+    id: "landmark:templates.savedValues",
+    tab: GLOBAL_SETTINGS_TABS.TEMPLATES,
+    label: "Saved variable values",
+    description:
+      "Values pre-filled when you create a workflow from a template.",
+    keywords: ["template", "saved value", "defaults"],
+  },
   "general.defaultTemplate": {
     id: "general.defaultTemplate",
     path: "general.defaultTemplate",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    tab: GLOBAL_SETTINGS_TABS.TEMPLATES,
     label: "Default template",
     description:
       "Template ID used when creating new workflows. Use 'blank' for a minimal starter.",

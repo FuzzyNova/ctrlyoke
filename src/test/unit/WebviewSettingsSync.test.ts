@@ -935,6 +935,43 @@ suite("WebviewSettingsSync", () => {
   });
 
   suite("handleGlobalSettingsLoadRequest", () => {
+    test("includes user and workspace template variable defaults separately", async () => {
+      const originalGetScoped = configService.getScoped;
+      configService.getScoped = ((key, scope) => {
+        if (key !== "templates") {
+          return originalGetScoped.call(configService, key, scope);
+        }
+        return {
+          variableDefaults:
+            scope === "user"
+              ? { sample: { topic: "user value" } }
+              : { sample: { topic: "workspace value" } },
+        };
+      }) as typeof configService.getScoped;
+      try {
+        const messages: any[] = [];
+        const sync = new WebviewSettingsSync(
+          (message) => messages.push(message),
+          () => undefined
+        );
+        await sync.handleGlobalSettingsLoadRequest((message) =>
+          messages.push(message)
+        );
+        const loaded = messages.find(
+          (message) => message.type === MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED
+        );
+        assert.deepStrictEqual(
+          loaded.settings.templateVariableDefaultsByScope,
+          {
+            user: { sample: { topic: "user value" } },
+            workspace: { sample: { topic: "workspace value" } },
+          }
+        );
+      } finally {
+        configService.getScoped = originalGetScoped;
+      }
+    });
+
     test("should include notifications settings and leaf-level source metadata", async () => {
       const originalGetAll = configService.getAll.bind(configService);
       const originalGetLeafSources =

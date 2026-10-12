@@ -1,6 +1,7 @@
 # Template Variable Defaults Plan
 
-**Status:** Ready to implement (not started)
+**Status:** Implemented. Phases 1–3 are complete. The "Follow-up — community templates" section
+below is owned by `../backlog/COMMUNITY_TEMPLATES_PLAN.md` and is not part of this plan.
 
 ## Goal
 
@@ -116,8 +117,13 @@ effective = workspace override ?? user override ?? authored _templateMeta defaul
 
 `defaultSource` values go in `DashboardConstants.ts` (flow-control strings rule).
 
-Apply the overlay after `mergeVariablesWithMeta` in `getAvailableTemplates`. Because `default`
-is already effective by then:
+Apply the overlay right after `mergeVariablesWithMeta` at **every** call site. There are three:
+the built-in loop in `getAvailableTemplates`, `discoverTemplatesInDir` (custom templates), and
+`createWorkflow`, which re-parses the template content and calls `mergeVariablesWithMeta` itself
+rather than going through `getAvailableTemplates`. Fold "merge with meta, then apply the overlay
+for this template id" into one private helper that all three use, so `createWorkflow` cannot
+silently skip the overlay. (`discoverTemplatesInDir` passes the bare file name as the log label;
+the overlay needs the full `custom:<scope>:<name>` id.) Because `default` is then effective:
 
 - `TemplateModal.seedVariableDefaults` pre-fills the saved value with no change.
 - `createWorkflow`'s `withDefaults` loop substitutes the saved value when a caller omits the
@@ -280,6 +286,10 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
   re-renders with the new `defaultSource` and doesn't need an optimistic copy of the resolution
   logic. Changing a saved value must **not** reset the other fields the user has already typed:
   re-seed only the variables in the saved message.
+- The response is `TEMPLATE_VARIABLE_DEFAULTS_SET` with the refreshed `templates`, `templateId`,
+  and the request's `variableNames`. `useMessageHandler` updates the catalog/current template;
+  `TemplateModal` applies refreshed defaults only to those names. This keeps re-seeding scoped to
+  what the user pinned or cleared while leaving every other in-progress field alone.
 - The clear-instead-of-store comparison runs in the **extension** handler, against the resolver,
   not in the webview. The webview just sends what the user pinned.
 - `toWireTemplates` passes `variables` through untouched, so the new fields need no wire change
@@ -287,9 +297,12 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
 - `SET_DEFAULT_TEMPLATE` gains `scope: SettingWriteScope`. `OPEN_NEW_WORKFLOW_MODAL` and
   `DEFAULT_TEMPLATE_SET` gain `defaultTemplateSource` (the same
   `TEMPLATE_VARIABLE_DEFAULT_SOURCES` values, where `TEMPLATE` means the schema default). The
-  handler computes it with `getScoped("general", scope)`. The modal's current optimistic update
-  sets the id only. It should wait for `DEFAULT_TEMPLATE_SET` before showing the source, since a
-  clear can land on a different effective template than the one selected.
+  `ConfigurationUtils.getDefaultWorkflowTemplateSource()` determines the effective source from
+  `getScoped("general", WORKSPACE)` then `getScoped("general", USER)`, falling back to
+  `TEMPLATE`. `setDefaultWorkflowTemplate(templateId, scope)` compares against the value inherited
+  without that scope and clears the setting at the target scope when equal. The modal's current
+  optimistic update sets the id only. It should wait for `DEFAULT_TEMPLATE_SET` before showing the
+  source, since a clear can land on a different effective template than the one selected.
 
 ### Touchpoints
 
@@ -310,15 +323,17 @@ Record<string, string | null>, scope: SettingWriteScope }`. A `null` value clear
 
 `TemplateManager` currently takes only a `workspaceRootResolver`. Inject a narrow
 "read variable defaults per scope" accessor rather than reaching for `ConfigurationUtils`
-directly, so the unit tests can supply overrides without a config backend.
+directly, so the unit tests can supply overrides without a config backend. It is constructed in
+two places, `src/extension.ts` and `src/platform/NodeHostServices.ts` (hosted server); wire the
+accessor in both.
 
 ### Tests
 
 - `src/test/unit/TemplateManager.test.ts`: user override replaces the authored default; workspace
   beats user per variable while other user values still apply; `authoredDefault`/`defaultSource`
   are set correctly; stale variable, invalid harness, and out-of-options select overrides are
-  dropped; `createWorkflow` substitutes an override when the caller omits the variable; overlay
-  on a `custom:` id. Pairs: a workspace harness with no workspace model resolves the model to
+  dropped; `createWorkflow` substitutes an override when the caller omits the variable (it has
+  its own merge path, so this needs a direct test); overlay on a `custom:` id. Pairs: a workspace harness with no workspace model resolves the model to
   its authored default, not the user's model; dropping an invalid harness override also drops
   its linked models' overrides.
 - Serializer handler (`src/test/unit/WorkflowSerializer.test.ts`): saving
@@ -531,7 +546,7 @@ overlay on the source; the user may still use the built-in.
 
 ## Follow-up — community templates in the Templates tab
 
-[`COMMUNITY_TEMPLATES_PLAN.md`](COMMUNITY_TEMPLATES_PLAN.md) Phase 2 (Discovery & Import) puts
+[`COMMUNITY_TEMPLATES_PLAN.md`](../backlog/COMMUNITY_TEMPLATES_PLAN.md) Phase 2 (Discovery & Import) puts
 its browse-and-install UI in the **Templates** tab instead of a separate Community Templates
 tab. That plan owns the design (fetch source, `CommunityTemplateService`, store, install
 validation). This section only records the shared layout so Phase 2 here doesn't paint it into a

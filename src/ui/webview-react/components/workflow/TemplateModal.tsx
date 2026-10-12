@@ -5,6 +5,8 @@ import {
   TEMPLATE_VARIABLE_TYPES,
   WORKSPACE_ENTRY_KINDS,
   DASHBOARD_HOST_CAPABILITIES,
+  SETTING_SCOPES,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
 } from "@root/types/DashboardConstants";
 import React, {
   useState,
@@ -18,8 +20,7 @@ import {
   Button,
   AnimatedSection,
   ScopeToggle,
-  HarnessDropdown,
-  CustomSelect,
+  SETTING_SCOPE_OPTIONS,
 } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
@@ -31,17 +32,14 @@ import {
   WORKFLOW_FILE_FORMATS,
   type HarnessId,
   type WorkflowFileFormat,
+  type SettingWriteScope,
 } from "../../types/messages";
-import {
-  DROPDOWN_NAMESPACES,
-  modelNamespaceForHarness,
-} from "../../types/dropdownNamespaces";
 import { defaultModelForHarness } from "@utils/harnessChangeCascade";
-import { modelWarning } from "@utils/dropdownValidation";
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
 import { Icon } from "../shared/Icon";
+import { TemplateVariableField } from "./TemplateVariableField";
 
 interface TemplateModalProps {
   isOpen: boolean;
@@ -125,6 +123,17 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const templates = useUiStore((s) => s.templates);
   const openCreateTemplateForm = useUiStore((s) => s.openCreateTemplateForm);
   const defaultTemplateId = useUiStore((s) => s.defaultTemplateId);
+  const defaultTemplateSource = useUiStore((s) => s.defaultTemplateSource);
+  const defaultTemplateConfirmedId = useUiStore(
+    (s) => s.defaultTemplateConfirmedId
+  );
+  const lastSavedTemplateScope = useUiStore((s) => s.lastSavedTemplateScope);
+  const templateVariableDefaultsSaved = useUiStore(
+    (s) => s.templateVariableDefaultsSaved
+  );
+  const setTemplateVariableDefaultsSaved = useUiStore(
+    (s) => s.setTemplateVariableDefaultsSaved
+  );
   const currentTemplate = useUiStore((s) => s.currentTemplate);
   const setCurrentTemplate = useUiStore((s) => s.setCurrentTemplate);
   const setDefaultTemplateId = useUiStore((s) => s.setDefaultTemplateId);
@@ -147,13 +156,26 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const harnessDefaultModels = useSettingsStore(
     (s) => s.globalSettings.harnessDefaultModels
   );
+  const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
+  const hasWorkspace = Boolean(workspaceRoot?.trim());
 
   // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [filename, setFilename] = useState("");
   const [filenameError, setFilenameError] = useState<string | null>(null);
-  const [defaultConfirmation, setDefaultConfirmation] = useState(false);
+  const [selectedScope, setSelectedScope] = useState<SettingWriteScope>(
+    lastSavedTemplateScope
+  );
+  const saveScope = hasWorkspace ? selectedScope : SETTING_SCOPES.USER;
+  const scopeOptions = useMemo(
+    () =>
+      [
+        SETTING_SCOPE_OPTIONS[0],
+        { ...SETTING_SCOPE_OPTIONS[1], disabled: !hasWorkspace },
+      ] as const,
+    [hasWorkspace]
+  );
 
   // "New template..." inline accordion state
   const [showCreateTemplateForm, setShowCreateTemplateForm] = useState(false);
@@ -181,7 +203,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setSelectedTemplateId(initId);
       setFilename("");
       setFilenameError(null);
-      setDefaultConfirmation(false);
+      setSelectedScope(lastSavedTemplateScope);
       setShowCreateTemplateForm(openCreateTemplateForm);
       setNewTemplateName("");
       setNewTemplateNameError(null);
@@ -195,7 +217,39 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
     prevIsOpenRef.current = isOpen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, openCreateTemplateForm]);
+  }, [isOpen, openCreateTemplateForm, lastSavedTemplateScope]);
+
+  useEffect(() => {
+    setSelectedScope(lastSavedTemplateScope);
+  }, [lastSavedTemplateScope]);
+
+  // A save refreshes the template catalog. Re-seed only the fields included in
+  // that save so unrelated values the user has typed remain untouched.
+  useEffect(() => {
+    if (
+      !templateVariableDefaultsSaved ||
+      templateVariableDefaultsSaved.templateId !== selectedTemplateId ||
+      currentTemplate?.id !== selectedTemplateId
+    ) {
+      return;
+    }
+    const savedNames = new Set(templateVariableDefaultsSaved.variableNames);
+    const refreshedDefaults = seedVariableDefaults(currentTemplate);
+    setVariables((previous) => {
+      const next = { ...previous };
+      for (const name of savedNames) {
+        if (refreshedDefaults[name] === undefined) delete next[name];
+        else next[name] = refreshedDefaults[name];
+      }
+      return next;
+    });
+    setTemplateVariableDefaultsSaved(null);
+  }, [
+    templateVariableDefaultsSaved,
+    selectedTemplateId,
+    currentTemplate,
+    setTemplateVariableDefaultsSaved,
+  ]);
 
   // Focus filename input when modal opens
   useEffect(() => {
@@ -414,13 +468,47 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     vscode.postMessage({
       type: MESSAGE_TYPES.SET_DEFAULT_TEMPLATE,
       templateId: selectedTemplateId,
+      scope: saveScope,
     });
 
     // Optimistic update
     setDefaultTemplateId(selectedTemplateId);
-    setDefaultConfirmation(true);
-    setTimeout(() => setDefaultConfirmation(false), 2000);
-  }, [vscode, selectedTemplateId, setDefaultTemplateId]);
+  }, [vscode, selectedTemplateId, saveScope, setDefaultTemplateId]);
+
+  const handleSaveVariableDefaults = useCallback(
+    (group: TemplateVariable[]) => {
+      if (!selectedTemplateId || selectedTemplateId === "__create_new__")
+        return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS,
+        templateId: selectedTemplateId,
+        scope: saveScope,
+        values: Object.fromEntries(
+          group.map((variable) => [
+            variable.name,
+            variables[variable.name] ?? "",
+          ])
+        ),
+      });
+    },
+    [selectedTemplateId, vscode, saveScope, variables]
+  );
+
+  const handleClearSavedVariableDefaults = useCallback(
+    (group: TemplateVariable[], scope: SettingWriteScope) => {
+      if (!selectedTemplateId || selectedTemplateId === "__create_new__")
+        return;
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS,
+        templateId: selectedTemplateId,
+        scope,
+        values: Object.fromEntries(
+          group.map((variable) => [variable.name, null])
+        ),
+      });
+    },
+    [selectedTemplateId, vscode]
+  );
 
   // Submit workflow creation
   const handleSubmit = useCallback(
@@ -461,42 +549,49 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     (t) => !t.isBuiltIn && t.source === TEMPLATE_SOURCES.USER
   );
 
-  // A model variable paired with a harness variable: the same model list and
-  // hide/unhide behavior as the Workflow Properties model picker.
-  const renderModelField = (model: TemplateVariable, harnessValue?: string) => {
-    const harness = (harnessValue ?? HARNESS_IDS.CLAUDE_CLI) as HarnessId;
-    const models = modelOptions[harness] ?? [];
-    const value = variables[model.name] ?? "";
-    const namespace = modelNamespaceForHarness(harness);
+  const renderVariableDefaultControls = (
+    group: TemplateVariable[],
+    isMultiline: boolean
+  ) => {
+    if (isMultiline) return null;
+    const source = group.find(
+      (variable) =>
+        variable.defaultSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER ||
+        variable.defaultSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
+    )?.defaultSource;
+    const savedScope =
+      source === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
+        ? SETTING_SCOPES.WORKSPACE
+        : source === TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
+          ? SETTING_SCOPES.USER
+          : null;
+    const differsFromDefault = group.some(
+      (variable) => variables[variable.name] !== variable.default
+    );
+    if (!savedScope && !differsFromDefault) return null;
+    const scopeLabel =
+      savedScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
     return (
-      <div key={model.name} className="form-group">
-        <label
-          htmlFor={`var-${model.name}`}
-          className="block text-sm text-foreground"
-        >
-          <span className="block mb-1">{model.name}</span>
-          <CustomSelect
-            id={`var-${model.name}`}
-            triggerAriaLabel={model.name}
-            value={value}
-            onChange={(v) => handleVariableChange(model.name, v)}
-            options={
-              models.length === 0
-                ? [{ value: "", label: "Loading models...", disabled: true }]
-                : models.map((m) => ({ value: m.value, label: m.label }))
-            }
-            namespace={namespace}
-            hiddenValues={hiddenDropdownOptions[namespace] ?? []}
-            onHideOption={(v) => hideDropdownOption(namespace, v)}
-            onUnhideOption={(v) => unhideDropdownOption(namespace, v)}
-            warning={modelWarning(value, harness, models) ?? undefined}
-          />
-        </label>
-        {model.description && (
-          <p className="mt-1 text-xs text-description-fg">
-            {model.description}
-          </p>
+      <div className="mt-1 flex items-center gap-2 text-xs">
+        {savedScope && (
+          <span className="text-description-fg">Saved ({scopeLabel})</span>
         )}
+        <button
+          type="button"
+          onClick={() =>
+            savedScope
+              ? handleClearSavedVariableDefaults(group, savedScope)
+              : handleSaveVariableDefaults(group)
+          }
+          className="text-link-fg hover:underline cursor-pointer bg-transparent border-0 p-0 font-inherit"
+          title={
+            savedScope
+              ? `Clear saved value from ${scopeLabel} settings`
+              : `Save ${group.length > 1 ? "these values" : "this value"} as the variable default in ${saveScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"} settings`
+          }
+        >
+          {savedScope ? "Clear saved value" : "Save as default"}
+        </button>
       </div>
     );
   };
@@ -507,6 +602,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       onClose={onClose}
       title="Create Workflow from Template"
       size="lg"
+      headerActions={
+        <ScopeToggle
+          ariaLabel="Save defaults to"
+          value={saveScope}
+          onChange={setSelectedScope}
+          options={scopeOptions}
+        />
+      }
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
@@ -524,14 +627,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             ) : selectedTemplateId === defaultTemplateId &&
               selectedTemplateId !== "__create_new__" ? (
               <span className="text-sm text-description-fg">
-                Default template
+                {defaultTemplateSource ===
+                TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE
+                  ? "Default template"
+                  : defaultTemplateConfirmedId === selectedTemplateId
+                    ? `Default template (${defaultTemplateSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE ? "Workspace" : "User"})`
+                    : "Default template"}
               </span>
             ) : null}
-            {defaultConfirmation && (
-              <span className="text-xs text-notification-info-fg animate-pulse">
-                ✓ Default set
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={onClose}>
@@ -708,141 +811,41 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 variable.harness
               )
                 return null;
-              const isFile = variable.type === WORKSPACE_ENTRY_KINDS.FILE;
-              const isDirectory =
-                variable.type === WORKSPACE_ENTRY_KINDS.DIRECTORY;
-              const isPicker = isFile || isDirectory;
-              const isSelect = variable.type === TEMPLATE_VARIABLE_TYPES.SELECT;
               const isHarness =
                 variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS;
-              const isMultiline =
-                !!variable.multiline && !isPicker && !isSelect && !isHarness;
-              const inputClass =
-                "w-full min-w-0 px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border focus:outline-hidden focus:border-focus-border font-mono text-xs";
-              const selectClass =
-                "w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border";
-              const field = (
-                <div key={variable.name} className="form-group">
-                  <label
-                    htmlFor={`var-${variable.name}`}
-                    className="block text-sm text-foreground"
-                  >
-                    <span className="block mb-1">
-                      {variable.name}
-                      {isPicker && (
-                        <span className="ml-1 text-xs text-description-fg">
-                          ({isDirectory ? "directory" : "file path"})
-                        </span>
-                      )}
-                    </span>
-                    <div className={isPicker ? "flex gap-1.5" : undefined}>
-                      {isSelect ? (
-                        <select
-                          aria-label={variable.name}
-                          id={`var-${variable.name}`}
-                          value={variables[variable.name] ?? ""}
-                          onChange={(e) =>
-                            handleVariableChange(variable.name, e.target.value)
-                          }
-                          className={selectClass}
-                        >
-                          {(variable.options ?? []).map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : isHarness ? (
-                        <HarnessDropdown
-                          id={`var-${variable.name}`}
-                          schemaPath={`vars.${variable.name}`}
-                          value={variables[variable.name] ?? ""}
-                          onChange={(v) =>
-                            handleVariableChange(variable.name, v)
-                          }
-                          harnessStatus={harnessStatus}
-                          hiddenValues={
-                            hiddenDropdownOptions[
-                              DROPDOWN_NAMESPACES.HARNESS
-                            ] ?? []
-                          }
-                          onHideOption={(v) =>
-                            hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                          }
-                          onUnhideOption={(v) =>
-                            unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                          }
-                        />
-                      ) : isMultiline ? (
-                        <textarea
-                          aria-label={variable.name}
-                          id={`var-${variable.name}`}
-                          value={variables[variable.name] || ""}
-                          onChange={(e) =>
-                            handleVariableChange(variable.name, e.target.value)
-                          }
-                          onKeyDown={handleKeyDown}
-                          placeholder={`Enter ${variable.name}`}
-                          rows={3}
-                          className={`${inputClass} resize-y w-full`}
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          aria-label={variable.name}
-                          id={`var-${variable.name}`}
-                          value={variables[variable.name] || ""}
-                          onChange={(e) =>
-                            handleVariableChange(variable.name, e.target.value)
-                          }
-                          onKeyDown={handleKeyDown}
-                          placeholder={
-                            isDirectory
-                              ? "path/to/dir"
-                              : isFile
-                                ? "path/to/spec.md"
-                                : `Enter ${variable.name}`
-                          }
-                          className={`${inputClass}${isPicker ? " flex-1" : ""}`}
-                        />
-                      )}
-                      {isPicker && (
-                        <Button
-                          variant="secondary"
-                          onClick={() =>
-                            handleBrowseFile(variable.name, variable)
-                          }
-                          title={
-                            isDirectory
-                              ? "Browse for folder"
-                              : "Browse for file"
-                          }
-                        >
-                          Browse…
-                        </Button>
-                      )}
-                    </div>
-                  </label>
-                  {variable.description && (
-                    <p className="mt-1 text-xs text-description-fg">
-                      {variable.description}
-                    </p>
-                  )}
-                </div>
-              );
               const models = isHarness
                 ? pairedModels.get(variable.name)
                 : undefined;
-              if (!models?.length) return field;
+              const paired = models ?? [];
+              const isMultiline =
+                !!variable.multiline &&
+                variable.type !== WORKSPACE_ENTRY_KINDS.FILE &&
+                variable.type !== WORKSPACE_ENTRY_KINDS.DIRECTORY &&
+                variable.type !== TEMPLATE_VARIABLE_TYPES.SELECT &&
+                !isHarness;
               return (
-                <div
-                  key={variable.name}
-                  className="grid grid-cols-2 gap-3 items-start"
-                >
-                  {field}
-                  {models.map((model) =>
-                    renderModelField(model, variables[variable.name])
-                  )}
+                <div key={variable.name}>
+                  <TemplateVariableField
+                    variable={variable}
+                    value={variables[variable.name] ?? ""}
+                    values={variables}
+                    onChange={handleVariableChange}
+                    pairedModels={paired}
+                    modelOptions={modelOptions}
+                    harnessStatus={harnessStatus}
+                    hiddenDropdownOptions={hiddenDropdownOptions}
+                    onHideOption={hideDropdownOption}
+                    onUnhideOption={unhideDropdownOption}
+                    onBrowse={(selected) =>
+                      handleBrowseFile(selected.name, selected)
+                    }
+                    multiline={isMultiline}
+                    onKeyDown={handleKeyDown}
+                    footer={renderVariableDefaultControls(
+                      models?.length ? [variable, ...models] : [variable],
+                      isMultiline
+                    )}
+                  />
                 </div>
               );
             })}

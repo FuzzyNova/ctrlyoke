@@ -7,12 +7,18 @@ import type {
   HarnessId,
   ExecutionState,
   WorkflowFileFormat,
+  SettingWriteScope,
 } from "../types/messages";
 import { EXECUTION_STATES, type FooterPicker } from "../types/messages";
 import { isExecutionFinished } from "../utils/status";
 import type {
   OutputTab,
   TemplateVariableType,
+  TemplateVariableDefaultSource,
+} from "@root/types/DashboardConstants";
+import {
+  SETTING_SCOPES,
+  TEMPLATE_VARIABLE_DEFAULT_SOURCES,
 } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
@@ -209,6 +215,8 @@ export interface TemplateVariable {
   autoFillFilename?: boolean;
   description?: string;
   default?: string;
+  authoredDefault?: string;
+  defaultSource?: TemplateVariableDefaultSource;
   multiline?: boolean;
 }
 
@@ -699,8 +707,18 @@ interface UiState {
   newWorkflowModalOpen: boolean;
   openCreateTemplateForm: boolean;
   templates: TemplateInfo[];
+  templateCatalog: TemplateInfo[];
   currentTemplate: TemplateInfo | null;
   defaultTemplateId: string;
+  defaultTemplateConfirmedId: string | null;
+  defaultTemplateSource: TemplateVariableDefaultSource;
+  /** Scope used by the last successful template-default save. */
+  lastSavedTemplateScope: SettingWriteScope;
+  templateVariableDefaultsSaved: {
+    templateId: string;
+    variableNames: string[];
+    scope: SettingWriteScope;
+  } | null;
   /** Last file selected via OS file picker for a template variable; cleared after TemplateModal consumes it */
   templateFileSelection: { variable: string; path: string } | null;
   /** Result of the last CREATE_CUSTOM_TEMPLATE request; cleared after TemplateModal consumes it */
@@ -955,12 +973,24 @@ interface UiActions {
   openNewWorkflowModal: (data: {
     templates: TemplateInfo[];
     defaultTemplateId?: string;
+    defaultTemplateSource?: TemplateVariableDefaultSource;
     openCreateTemplateForm?: boolean;
   }) => void;
   closeNewWorkflowModal: () => void;
   setCurrentTemplate: (template: TemplateInfo | null) => void;
   setDefaultTemplateId: (id: string) => void;
+  setDefaultTemplateConfirmedId: (id: string | null) => void;
+  setDefaultTemplateSource: (source: TemplateVariableDefaultSource) => void;
+  setLastSavedTemplateScope: (scope: SettingWriteScope) => void;
+  setTemplateVariableDefaultsSaved: (
+    saved: {
+      templateId: string;
+      variableNames: string[];
+      scope: SettingWriteScope;
+    } | null
+  ) => void;
   setTemplates: (templates: TemplateInfo[]) => void;
+  setTemplateCatalog: (templates: TemplateInfo[]) => void;
   setTemplateFileSelection: (
     selection: { variable: string; path: string } | null
   ) => void;
@@ -1205,8 +1235,13 @@ const initialState: UiState = {
   newWorkflowModalOpen: false,
   openCreateTemplateForm: false,
   templates: [],
+  templateCatalog: [],
   currentTemplate: null,
   defaultTemplateId: "blank",
+  defaultTemplateConfirmedId: null,
+  defaultTemplateSource: TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE,
+  lastSavedTemplateScope: SETTING_SCOPES.WORKSPACE,
+  templateVariableDefaultsSaved: null,
   templateFileSelection: null,
   customTemplateCreated: null,
   recentWorkflows: [],
@@ -1270,6 +1305,7 @@ const persistedFields = [
   "editorCollapsed",
   "settingsCollapsed",
   "defaultTemplateId",
+  "lastSavedTemplateScope",
   "hiddenDropdownOptions",
   "lastDesktopSizes",
   "lastMobileSizes",
@@ -1722,6 +1758,7 @@ export const useUiStore = create<UiState & UiActions>()(
       openNewWorkflowModal: ({
         templates,
         defaultTemplateId,
+        defaultTemplateSource,
         openCreateTemplateForm,
       }) =>
         set({
@@ -1729,6 +1766,9 @@ export const useUiStore = create<UiState & UiActions>()(
           openCreateTemplateForm: openCreateTemplateForm ?? false,
           templates,
           defaultTemplateId: defaultTemplateId ?? "blank",
+          defaultTemplateConfirmedId: defaultTemplateId ?? "blank",
+          defaultTemplateSource:
+            defaultTemplateSource ?? TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE,
           currentTemplate:
             templates.find((t) => t.id === (defaultTemplateId ?? "blank")) ??
             null,
@@ -1744,8 +1784,17 @@ export const useUiStore = create<UiState & UiActions>()(
       setCurrentTemplate: (template) => set({ currentTemplate: template }),
 
       setDefaultTemplateId: (id) => set({ defaultTemplateId: id }),
+      setDefaultTemplateConfirmedId: (id) =>
+        set({ defaultTemplateConfirmedId: id }),
+      setDefaultTemplateSource: (source) =>
+        set({ defaultTemplateSource: source }),
+      setLastSavedTemplateScope: (scope) =>
+        set({ lastSavedTemplateScope: scope }),
+      setTemplateVariableDefaultsSaved: (saved) =>
+        set({ templateVariableDefaultsSaved: saved }),
 
       setTemplates: (templates) => set({ templates }),
+      setTemplateCatalog: (templateCatalog) => set({ templateCatalog }),
 
       setTemplateFileSelection: (selection) =>
         set({ templateFileSelection: selection }),
@@ -2450,6 +2499,7 @@ export const useUiStore = create<UiState & UiActions>()(
           viewingDeletedWorkflow: null,
           viewedLineageIsSystemGenerated: false,
           templates: [],
+          templateCatalog: [],
           currentTemplate: null,
           isHistorySearchOpen: false,
           historySearchResults: [],

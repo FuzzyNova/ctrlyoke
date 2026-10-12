@@ -44,6 +44,7 @@ import {
   type NotificationKind,
   type SettingScope,
   type SettingWriteScope,
+  type TemplateVariableDefaultSource,
   type LspExportTargetId,
   type SecretRegistryActionState,
   type SecretRegistryState,
@@ -1116,8 +1117,38 @@ export interface OpenNewWorkflowModalMessage {
     isBuiltIn: boolean;
   }>;
   defaultTemplateId?: string;
+  defaultTemplateSource: TemplateVariableDefaultSource;
   /** Open the inline custom-template form when the modal is first shown. */
   openCreateTemplateForm?: boolean;
+}
+
+/** Webview -> Extension: load template metadata without opening the modal. */
+export interface TemplateCatalogRequestMessage {
+  type: typeof MESSAGE_TYPES.TEMPLATE_CATALOG_REQUEST;
+}
+
+/** Extension -> Webview: available templates for settings and other catalogs. */
+export interface TemplateCatalogLoadedMessage {
+  type: typeof MESSAGE_TYPES.TEMPLATE_CATALOG_LOADED;
+  templates: OpenNewWorkflowModalMessage["templates"];
+}
+
+/** Webview → Extension: save or clear pinned values for one template. */
+export interface SetTemplateVariableDefaultsMessage {
+  type: typeof MESSAGE_TYPES.SET_TEMPLATE_VARIABLE_DEFAULTS;
+  templateId: string;
+  values: Record<string, string | null>;
+  scope: SettingWriteScope;
+}
+
+/** Extension → Webview: refreshed templates after saving pinned values. */
+export interface TemplateVariableDefaultsSetMessage {
+  type: typeof MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET;
+  templates: OpenNewWorkflowModalMessage["templates"];
+  templateId: string;
+  /** Only these fields may be re-seeded; preserve the user's other edits. */
+  variableNames: string[];
+  scope: SettingWriteScope;
 }
 
 /** Webview → Extension: clone the selected base into a custom template. */
@@ -1708,6 +1739,10 @@ export interface ExternalFileRootsByScope {
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  templateVariableDefaultsByScope?: Record<
+    SettingWriteScope,
+    Record<string, Record<string, string>>
+  >;
   externalFileRootsByScope?: ExternalFileRootsByScope;
   licenseAccess?: LicenseAccessState;
   /** Canonical absolute `.runs` directory for the current workspace. */
@@ -3146,7 +3181,15 @@ export type IncomingMessage =
   | RecentWorkflowsMessage
   | RunSummariesLoadedMessage
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }
-  | { type: typeof MESSAGE_TYPES.DEFAULT_TEMPLATE_SET; templateId: string }
+  | TemplateCatalogLoadedMessage
+  | {
+      type: typeof MESSAGE_TYPES.DEFAULT_TEMPLATE_SET;
+      templateId: string;
+      defaultTemplateId: string;
+      defaultTemplateSource: TemplateVariableDefaultSource;
+      scope: SettingWriteScope;
+    }
+  | TemplateVariableDefaultsSetMessage
   | { type: typeof MESSAGE_TYPES.WORKFLOW_CREATED; filePath: string }
   | EndConditionScriptCreatedMessage
   | EndConditionScriptCreationFailedMessage
