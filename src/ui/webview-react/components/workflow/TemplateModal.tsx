@@ -21,7 +21,11 @@ import {
   AnimatedSection,
   ScopeToggle,
   SETTING_SCOPE_OPTIONS,
+  LabelActionLink,
+  FieldLabelRow,
+  LABEL_ACTION_NOTE_CLASS,
 } from "../shared";
+import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useUiStore } from "@store/uiStore";
 import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -40,6 +44,9 @@ import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
 import { Icon } from "../shared/Icon";
 import { TemplateVariableField } from "./TemplateVariableField";
+
+/** Below this content width the header's scope toggle drops its labels. */
+const TEMPLATE_MODAL_NARROW_PX = 480;
 
 interface TemplateModalProps {
   isOpen: boolean;
@@ -118,6 +125,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   );
   const vscode = useVsCodeApi();
   const filenameRef = useRef<HTMLInputElement>(null);
+  // The form spans the same width as the header row, so measuring it tells
+  // whether the title and a labelled scope toggle fit side by side.
+  const [formRef, isNarrow] = useElementNarrow<HTMLFormElement>(
+    TEMPLATE_MODAL_NARROW_PX
+  );
 
   // Data from uiStore (populated by useMessageHandler on OPEN_NEW_WORKFLOW_MODAL)
   const templates = useUiStore((s) => s.templates);
@@ -549,6 +561,35 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     (t) => !t.isBuiltIn && t.source === TEMPLATE_SOURCES.USER
   );
 
+  // Set as Default acts on the picked template, so it sits on the Template
+  // label row; once the picked template is the default, a marker replaces it.
+  const renderDefaultTemplateControl = () => {
+    if (!selectedTemplateId || selectedTemplateId === "__create_new__")
+      return null;
+    if (selectedTemplateId !== defaultTemplateId) {
+      return (
+        <LabelActionLink
+          onClick={handleSetDefault}
+          title="Set this as the default template"
+        >
+          Set as Default
+        </LabelActionLink>
+      );
+    }
+    const savedSource =
+      defaultTemplateSource !== TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE &&
+      defaultTemplateConfirmedId === selectedTemplateId
+        ? defaultTemplateSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
+          ? "Workspace"
+          : "User"
+        : null;
+    return (
+      <span className={LABEL_ACTION_NOTE_CLASS}>
+        {savedSource ? `Default template (${savedSource})` : "Default template"}
+      </span>
+    );
+  };
+
   const renderVariableDefaultControls = (
     group: TemplateVariable[],
     isMultiline: boolean
@@ -572,18 +613,16 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     const scopeLabel =
       savedScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
     return (
-      <div className="mt-1 flex items-center gap-2 text-xs">
+      <span className="inline-flex items-center gap-2">
         {savedScope && (
-          <span className="text-description-fg">Saved ({scopeLabel})</span>
+          <span className={LABEL_ACTION_NOTE_CLASS}>Saved ({scopeLabel})</span>
         )}
-        <button
-          type="button"
+        <LabelActionLink
           onClick={() =>
             savedScope
               ? handleClearSavedVariableDefaults(group, savedScope)
               : handleSaveVariableDefaults(group)
           }
-          className="text-link-fg hover:underline cursor-pointer bg-transparent border-0 p-0 font-inherit"
           title={
             savedScope
               ? `Clear saved value from ${scopeLabel} settings`
@@ -591,8 +630,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           }
         >
           {savedScope ? "Clear saved value" : "Save as default"}
-        </button>
-      </div>
+        </LabelActionLink>
+      </span>
     );
   };
 
@@ -602,41 +641,19 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       onClose={onClose}
       title="Create Workflow from Template"
       size="lg"
+      wrapTitle
       headerActions={
         <ScopeToggle
           ariaLabel="Save defaults to"
           value={saveScope}
           onChange={setSelectedScope}
           options={scopeOptions}
+          iconOnly={isNarrow}
         />
       }
       footer={
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
-            {selectedTemplateId &&
-            selectedTemplateId !== "__create_new__" &&
-            selectedTemplateId !== defaultTemplateId ? (
-              <button
-                type="button"
-                onClick={handleSetDefault}
-                className="text-sm font-medium text-link-fg hover:underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-inherit"
-                title="Set this as the default template"
-              >
-                Set as Default
-              </button>
-            ) : selectedTemplateId === defaultTemplateId &&
-              selectedTemplateId !== "__create_new__" ? (
-              <span className="text-sm text-description-fg">
-                {defaultTemplateSource ===
-                TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE
-                  ? "Default template"
-                  : defaultTemplateConfirmedId === selectedTemplateId
-                    ? `Default template (${defaultTemplateSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE ? "Workspace" : "User"})`
-                    : "Default template"}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end w-full">
+          <div className="flex items-center gap-2 whitespace-nowrap">
             <Button variant="secondary" onClick={onClose}>
               Cancel
             </Button>
@@ -658,51 +675,56 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         </div>
       }
     >
-      <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+      <form
+        ref={formRef}
+        className="space-y-4"
+        onSubmit={(e) => e.preventDefault()}
+      >
         {/* Template Selection */}
         <div className="form-group">
-          <label
+          <FieldLabelRow
             htmlFor="template-select"
-            className="block text-sm font-medium text-foreground"
+            labelClassName="text-sm font-medium text-foreground"
+            action={renderDefaultTemplateControl()}
           >
-            <span className="block mb-1">Template</span>
-            <select
-              id="template-select"
-              value={selectedTemplateId}
-              onChange={(e) => handleTemplateChange(e.target.value)}
-              className="w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border"
-            >
-              {builtInTemplates.length > 0 && (
-                <optgroup label="Built-in Templates">
-                  {builtInTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
+            Template
+          </FieldLabelRow>
+          <select
+            id="template-select"
+            value={selectedTemplateId}
+            onChange={(e) => handleTemplateChange(e.target.value)}
+            className="w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border"
+          >
+            {builtInTemplates.length > 0 && (
+              <optgroup label="Built-in Templates">
+                {builtInTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
 
-              {workspaceTemplates.length > 0 && (
-                <optgroup label="Custom Templates (Workspace)">
-                  {workspaceTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
+            {workspaceTemplates.length > 0 && (
+              <optgroup label="Custom Templates (Workspace)">
+                {workspaceTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
 
-              {userTemplates.length > 0 && (
-                <optgroup label="Custom Templates (User)">
-                  {userTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </label>
+            {userTemplates.length > 0 && (
+              <optgroup label="Custom Templates (User)">
+                {userTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
           <button
             type="button"
             onClick={handleToggleCreateTemplateForm}
@@ -841,7 +863,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                     }
                     multiline={isMultiline}
                     onKeyDown={handleKeyDown}
-                    footer={renderVariableDefaultControls(
+                    labelAction={renderVariableDefaultControls(
                       models?.length ? [variable, ...models] : [variable],
                       isMultiline
                     )}

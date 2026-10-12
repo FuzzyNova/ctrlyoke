@@ -34,10 +34,10 @@ Open the **Create Workflow from Template** dialog in any of these ways:
    Run** to start it right away. `Enter` in a single-line field creates the
    workflow, and `Ctrl+Enter` in any text field creates and runs it.
 
-**Set as Default** makes the selected template the one the dialog starts on
-next time. It saves [`general.defaultTemplate`](/reference/settings#general-defaulttemplate)
+**Set as Default**, at the right of the **Template** label, makes the selected
+template the one the dialog starts on next time. It saves [`general.defaultTemplate`](/reference/settings#general-defaulttemplate)
 at the scope chosen by the dialog's User/Workspace toggle. When the selected
-template is already the default, the footer reads **Default template** instead,
+template is already the default, it reads **Default template** instead,
 with the scope it comes from when it is a saved setting. See
 [Defaults and blank fields](#defaults-and-blank-fields).
 
@@ -170,11 +170,11 @@ A key under `_templateMeta.variables` only takes effect if a matching `{token}` 
 
 If a variable declares a `default`, that value is pre-filled in the UI and used when the field is left empty. A `select` variable without a default starts on its first option. A text, file, or directory variable with **no** default that is never filled in stays in the output as a literal `{token}` — so give optional inputs a sensible default, and treat description/required inputs as fields the user must fill.
 
-You can save a field's current value as a **variable default** from the template picker. The User/Workspace toggle in the title bar selects where **Save as default** writes; it also selects where **Set as Default** writes the default template setting. The toggle starts on Workspace until a save succeeds, then remembers the scope of the last successful save. With no workspace open, it stays on User.
+You can save a field's current value as a **variable default** from the template picker. Once you change a field, **Save as default** appears at the right of its label. The User/Workspace toggle in the title bar selects where **Save as default** writes; it also selects where **Set as Default** writes the default template setting. The toggle starts on Workspace until a save succeeds, then remembers the scope of the last successful save. With no workspace open, it stays on User.
 
 Saved values override the value declared in the template. Workspace values take precedence over User values, which take precedence over the template's authored value. This is resolved per variable, so a template can use some values saved in Workspace and others saved in User. A **Saved (User)** or **Saved (Workspace)** marker shows the source, and **Clear saved value** removes the value from that scope so the next value in the precedence order applies. Saving the value already inherited at the selected scope clears that scope's override instead of keeping a redundant saved value.
 
-A harness and its linked model fields are one unit: they are saved, marked, and cleared together, and resolve from the same scope. Multiline text fields cannot be saved as variable defaults.
+A harness and its linked model fields are one unit: they are saved, marked, and cleared together, and resolve from the same scope. The picker draws a box around them, with their shared save or clear action in the box's top edge. Multiline text fields cannot be saved as variable defaults.
 
 ## Custom templates {#custom-templates}
 

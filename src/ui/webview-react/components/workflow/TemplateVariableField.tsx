@@ -12,7 +12,12 @@ import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
 } from "../../types/dropdownNamespaces";
-import { CustomSelect, HarnessDropdown, Button } from "../shared";
+import {
+  CustomSelect,
+  HarnessDropdown,
+  Button,
+  FieldLabelRow,
+} from "../shared";
 
 export interface TemplateVariableFieldProps {
   variable: TemplateVariable;
@@ -33,7 +38,12 @@ export interface TemplateVariableFieldProps {
     HTMLInputElement | HTMLTextAreaElement
   >;
   idPrefix?: string;
-  footer?: React.ReactNode;
+  /**
+   * Field-level action (e.g. "Save as default"), drawn right-aligned on the
+   * label row. For a harness with paired models it sits in the top border of
+   * the box that groups the pair, since it applies to the whole pair.
+   */
+  labelAction?: React.ReactNode;
 }
 
 /** Shared typed control for one template variable and any models paired to its harness. */
@@ -54,7 +64,7 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
   multiline = false,
   onKeyDown,
   idPrefix = "var",
-  footer,
+  labelAction,
 }) => {
   const id = `${idPrefix}-${variable.name}`;
   // Leaving a text field commits only an edit made since it gained focus, so
@@ -90,34 +100,31 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
     const modelValue = values[model.name] ?? "";
     return (
       <div key={model.name} className="form-group min-w-0">
-        <label
-          htmlFor={`${idPrefix}-${model.name}`}
-          className="block text-sm text-foreground"
-        >
-          <span className="block mb-1">{model.name}</span>
-          <CustomSelect
-            id={`${idPrefix}-${model.name}`}
-            triggerAriaLabel={model.name}
-            value={modelValue}
-            onChange={(next) => {
-              onChange(model.name, next);
-              onCommit?.(model.name, next);
-            }}
-            options={
-              models.length === 0
-                ? [{ value: "", label: "Loading models...", disabled: true }]
-                : models.map((item) => ({
-                    value: item.value,
-                    label: item.label,
-                  }))
-            }
-            namespace={namespace}
-            hiddenValues={hiddenDropdownOptions[namespace] ?? []}
-            onHideOption={(next) => onHideOption?.(namespace, next)}
-            onUnhideOption={(next) => onUnhideOption?.(namespace, next)}
-            warning={modelWarning(modelValue, harness, models) ?? undefined}
-          />
-        </label>
+        <FieldLabelRow htmlFor={`${idPrefix}-${model.name}`}>
+          {model.name}
+        </FieldLabelRow>
+        <CustomSelect
+          id={`${idPrefix}-${model.name}`}
+          triggerAriaLabel={model.name}
+          value={modelValue}
+          onChange={(next) => {
+            onChange(model.name, next);
+            onCommit?.(model.name, next);
+          }}
+          options={
+            models.length === 0
+              ? [{ value: "", label: "Loading models...", disabled: true }]
+              : models.map((item) => ({
+                  value: item.value,
+                  label: item.label,
+                }))
+          }
+          namespace={namespace}
+          hiddenValues={hiddenDropdownOptions[namespace] ?? []}
+          onHideOption={(next) => onHideOption?.(namespace, next)}
+          onUnhideOption={(next) => onUnhideOption?.(namespace, next)}
+          warning={modelWarning(modelValue, harness, models) ?? undefined}
+        />
         {model.description && (
           <p className="mt-1 text-xs text-description-fg">
             {model.description}
@@ -213,34 +220,44 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
   );
   const field = (
     <div className="form-group min-w-0">
-      <label htmlFor={id} className="block text-sm text-foreground">
-        <span className="block mb-1">
-          {variable.name}
-          {isPicker && (
-            <span className="ml-1 text-xs text-description-fg">
-              ({isDirectory ? "directory" : "file path"})
-            </span>
-          )}
-        </span>
-        {body}
-      </label>
+      <FieldLabelRow htmlFor={id} action={paired ? undefined : labelAction}>
+        {variable.name}
+        {isPicker && (
+          <span className="ml-1 text-xs text-description-fg">
+            ({isDirectory ? "directory" : "file path"})
+          </span>
+        )}
+      </FieldLabelRow>
+      {body}
       {variable.description && (
         <p className="mt-1 text-xs text-description-fg">
           {variable.description}
         </p>
       )}
-      {!paired && footer}
     </div>
   );
 
   if (!paired) return field;
+  // A harness and its models are one unit (saved and cleared together), so a
+  // border groups them and their shared action sits in its top edge. They sit
+  // side by side when there is room and stack when the box is narrow.
   return (
-    <div>
-      <div className="grid grid-cols-2 gap-3 items-start">
-        {field}
-        {pairedModels.map(renderModel)}
+    <fieldset
+      className="min-w-0 rounded-sm border border-panel-border px-3 pb-3"
+      aria-label={[variable.name, ...pairedModels.map((m) => m.name)].join(
+        " and "
+      )}
+    >
+      {/* Always rendered, so the box doesn't shift when the action appears. */}
+      <legend className="ml-auto h-4 px-1 leading-4 empty:px-0">
+        {labelAction}
+      </legend>
+      <div className="@container">
+        <div className="grid grid-cols-1 gap-3 items-start @sm:grid-cols-2">
+          {field}
+          {pairedModels.map(renderModel)}
+        </div>
       </div>
-      {footer}
-    </div>
+    </fieldset>
   );
 };

@@ -241,7 +241,14 @@ describe("TemplateModal variable defaults", () => {
     openModal(template([{ name: "path", type: "text", default: "authored" }]));
     act(() => useUiStore.setState({ defaultTemplateId: "other" }));
     fireEvent.click(scopeButton("User"));
-    fireEvent.click(screen.getByRole("button", { name: "Set as Default" }));
+    const setDefault = screen.getByRole("button", { name: "Set as Default" });
+    // It sits on the Template label row, not in the footer beside Create.
+    expect(
+      document
+        .querySelector('label[for="template-select"]')
+        ?.parentElement?.contains(setDefault)
+    ).toBe(true);
+    fireEvent.click(setDefault);
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: MESSAGE_TYPES.SET_DEFAULT_TEMPLATE,

@@ -106,4 +106,40 @@ describe("TemplateVariableField", () => {
     expect(document.getElementById("var-model")).toBeTruthy();
     expect(document.getElementById("var-model")?.textContent).toContain("opus");
   });
+
+  it("puts a field's label action on its label row, outside the label", () => {
+    render(
+      <TemplateVariableField
+        variable={{ name: "topic", type: "text" }}
+        value=""
+        onChange={change}
+        labelAction={<button type="button">Save as default</button>}
+      />
+    );
+    const action = screen.getByRole("button", { name: "Save as default" });
+    const label = document.querySelector('label[for="var-topic"]');
+    expect(label?.contains(action)).toBe(false);
+    expect(label?.parentElement?.contains(action)).toBe(true);
+  });
+
+  it("groups a paired harness and model in a box whose border carries the action", () => {
+    render(
+      <TemplateVariableField
+        variable={{ name: "harness", type: "harness" }}
+        value="claude-cli"
+        values={{ model: "opus" }}
+        onChange={change}
+        pairedModels={[{ name: "model", type: "model", harness: "harness" }]}
+        labelAction={<button type="button">Save as default</button>}
+      />
+    );
+    const group = screen.getByRole("group", { name: "harness and model" });
+    expect(group.querySelector("#var-harness")).toBeTruthy();
+    expect(group.querySelector("#var-model")).toBeTruthy();
+    const legend = group.querySelector("legend");
+    expect(legend?.textContent).toBe("Save as default");
+    expect(
+      screen.getAllByRole("button", { name: "Save as default" })
+    ).toHaveLength(1);
+  });
 });

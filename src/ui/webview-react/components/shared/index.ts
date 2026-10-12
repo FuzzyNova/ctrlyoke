@@ -16,6 +16,12 @@ export {
   type KeyValueRowsEditorProps,
 } from "./KeyValueRowsEditor";
 export { ExitButton } from "./ExitButton";
+export {
+  LabelActionLink,
+  FieldLabelRow,
+  LABEL_ACTION_LINK_CLASS,
+  LABEL_ACTION_NOTE_CLASS,
+} from "./LabelActionLink";
 export { ExecutionStateBadge } from "./ExecutionStateBadge";
 export { CustomSelect, type SelectOption } from "./CustomSelect";
 export {

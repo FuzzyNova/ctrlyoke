@@ -66,6 +66,7 @@ import {
   AnimatedSection,
   AutoResumeStatusRow,
   ExitButton,
+  LabelActionLink,
   filterExplicitSecretGrants,
   useSecretGrantOptions,
 } from "../shared";
@@ -223,16 +224,15 @@ const SetAsDefaultButton: React.FC<{
   if (!show && state === BUTTON_STATE.IDLE) return null;
 
   return (
-    <button
-      type="button"
+    <LabelActionLink
       onClick={handleClick}
-      className={`text-xxs font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors ${
+      className={`${
         state === BUTTON_STATE.SUCCESS ? "text-indicator-success" : ""
       } ${state === BUTTON_STATE.FADING ? "opacity-0" : ""}`}
       title="Set this as the default for new workflows"
     >
       {state === BUTTON_STATE.SUCCESS ? "✓ Default" : "Set as Default"}
-    </button>
+    </LabelActionLink>
   );
 };
 
