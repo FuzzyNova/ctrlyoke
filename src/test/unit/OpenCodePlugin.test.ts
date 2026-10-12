@@ -4,6 +4,7 @@ import * as path from "path";
 import * as vm from "vm";
 import { createRequire } from "module";
 import * as ts from "typescript";
+import { EventEmitter } from "events";
 import { suite, test } from "mocha";
 
 interface SpawnCall {
@@ -11,7 +12,10 @@ interface SpawnCall {
   options: Record<string, unknown>;
 }
 
-async function loadPlugin(hooks: unknown[]): Promise<{
+async function loadPlugin(
+  hooks: unknown[],
+  pluginOptions: { platform?: string; holdHookProcess?: boolean } = {}
+): Promise<{
   plugin: Record<string, (...args: any[]) => unknown>;
   spawnCalls: SpawnCall[];
 }> {
@@ -28,14 +32,46 @@ async function loadPlugin(hooks: unknown[]): Promise<{
     },
   }).outputText;
   const spawnCalls: SpawnCall[] = [];
+  const hookChildren: EventEmitter[] = [];
   const module = { exports: {} as Record<string, unknown> };
   const actualRequire = createRequire(__filename);
   const mockRequire = (name: string): unknown => {
     if (name === "child_process") {
       return {
-        spawnSync: (command: string, options: Record<string, unknown>) => {
-          spawnCalls.push({ command, options });
-          return { status: 0, stdout: "", stderr: "" };
+        spawn: (
+          command: string,
+          argsOrOptions: string[] | Record<string, unknown>,
+          _spawnOptions?: Record<string, unknown>
+        ) => {
+          const spawnOptions = Array.isArray(argsOrOptions)
+            ? { args: argsOrOptions }
+            : argsOrOptions;
+          spawnCalls.push({ command, options: spawnOptions });
+          const child = new EventEmitter() as EventEmitter & {
+            pid: number;
+            stdin: { end: (input: string) => void };
+            stdout: EventEmitter & { setEncoding: (encoding: string) => void };
+            kill: () => void;
+          };
+          child.pid = 4321;
+          child.stdin = {
+            end: (input: string) => {
+              (spawnOptions as Record<string, unknown>).input = input;
+            },
+          };
+          child.stdout = Object.assign(new EventEmitter(), {
+            setEncoding: () => undefined,
+          });
+          child.kill = () => undefined;
+          if (command === "taskkill") {
+            queueMicrotask(() => hookChildren[0]?.emit("close", 1));
+          } else {
+            hookChildren.push(child);
+            if (!pluginOptions.holdHookProcess) {
+              queueMicrotask(() => child.emit("close", 0));
+            }
+          }
+          return child;
         },
       };
     }
@@ -44,6 +80,7 @@ async function loadPlugin(hooks: unknown[]): Promise<{
   const processStub = {
     env: { CTRLYOKE_OPENCODE_HOOKS: JSON.stringify(hooks) },
     pid: 123,
+    platform: pluginOptions.platform ?? process.platform,
     cwd: () => path.resolve("."),
   };
   vm.runInNewContext(compiled, {
@@ -88,7 +125,7 @@ suite("OpenCode plugin user hooks", () => {
       tool_name: "bash",
       tool_input: { command: "pwd" },
     });
-    assert.strictEqual(spawnCalls[0].options.timeout, 3000);
+    assert.strictEqual(spawnCalls[0].options.shell, true);
     assert.deepStrictEqual(Array.from(spawnCalls[0].options.stdio as string[]), [
       "pipe",
       "inherit",
@@ -103,12 +140,101 @@ suite("OpenCode plugin user hooks", () => {
     await plugin["permission.asked"]({ sessionID: "session-2", permission: "write" });
 
     assert.strictEqual(spawnCalls.length, 1);
-    assert.strictEqual(spawnCalls[0].options.timeout, 2000);
     assert.deepStrictEqual(JSON.parse(spawnCalls[0].options.input as string), {
       sessionID: "session-2",
       permission: "write",
       hook_event_name: "permissionRequest",
       session_id: "session-2",
     });
+  });
+
+  test("sends payloads for sessionStart, userPromptSubmit, stop, error, and postToolUse", async () => {
+    const events = [
+      "sessionStart",
+      "userPromptSubmit",
+      "stop",
+      "error",
+      "postToolUse",
+    ];
+    const { plugin, spawnCalls } = await loadPlugin(
+      events.map((event) => ({ event, command: `hook-${event}` }))
+    );
+    await plugin.event({
+      event: {
+        type: "session.created",
+        properties: { info: { id: "session-start" } },
+      },
+    });
+    await plugin.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: "session-prompt", status: { type: "busy" } },
+      },
+    });
+    await plugin.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: "session-stop", status: { type: "idle" } },
+      },
+    });
+    await plugin.event({
+      event: {
+        type: "session.error",
+        properties: { sessionID: "session-error", message: "failed" },
+      },
+    });
+    await plugin["tool.execute.after"](
+      {
+        tool: "bash",
+        sessionID: "session-tool",
+        callID: "call-1",
+        args: { command: "pwd" },
+      },
+      { title: "pwd", output: "/tmp", metadata: {} }
+    );
+
+    assert.deepStrictEqual(
+      spawnCalls.map(({ command }) => command),
+      events.map((event) => `hook-${event}`)
+    );
+    const payloads = spawnCalls.map(({ options }) =>
+      JSON.parse(options.input as string)
+    );
+    assert.strictEqual(payloads[0].hook_event_name, "sessionStart");
+    assert.strictEqual(payloads[0].session_id, "session-start");
+    assert.strictEqual(payloads[1].hook_event_name, "userPromptSubmit");
+    assert.strictEqual(payloads[1].session_id, "session-prompt");
+    assert.strictEqual(payloads[2].hook_event_name, "stop");
+    assert.strictEqual(payloads[2].session_id, "session-stop");
+    assert.strictEqual(payloads[3].hook_event_name, "error");
+    assert.strictEqual(payloads[3].session_id, "session-error");
+    assert.deepStrictEqual(payloads[4], {
+      tool: "bash",
+      sessionID: "session-tool",
+      callID: "call-1",
+      args: { command: "pwd" },
+      hook_event_name: "postToolUse",
+      session_id: "session-tool",
+      tool_name: "bash",
+      tool_input: { command: "pwd" },
+      tool_output: { title: "pwd", output: "/tmp", metadata: {} },
+    });
+  });
+
+  test("kills the hook process tree when an OpenCode hook times out", async () => {
+    const { plugin, spawnCalls } = await loadPlugin(
+      [{ event: "preToolUse", command: "slow hook", timeoutSec: 0 }],
+      { platform: "win32", holdHookProcess: true }
+    );
+    await plugin["tool.execute.before"](
+      { tool: "bash", sessionID: "session-1", callID: "call-1" },
+      { args: { command: "pwd" } }
+    );
+
+    assert.strictEqual(spawnCalls[1].command, "taskkill");
+    assert.deepStrictEqual(
+      Array.from(spawnCalls[1].options.args as string[]),
+      ["/PID", "4321", "/T", "/F"]
+    );
   });
 });

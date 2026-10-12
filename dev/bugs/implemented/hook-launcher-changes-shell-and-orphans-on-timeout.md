@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude (bug-drain review of ~f31da1790 and ~33d934f87)
 - **Area:** `src/scripts/ctrlyoke-hook-run.js`, `src/scripts/ctrlyoke-opencode-plugin.ts`, hook timeout builders
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -108,6 +108,12 @@ them to a per-step temp file readable by the local user, so a model with shell
 access can read them. Secret values therefore are not hidden from the model.
 Two hooks may use the same key with different values.
 
+**Shell and timeout.** When `env` requires the launcher, Copilot hooks keep the
+shell selected by their `powershell` or `bash` field, and Claude uses Git Bash
+on Windows. Other harnesses use their default shell. OpenCode runs hooks from
+its plugin using the system default shell. When a timeout ends a launched hook,
+ctrlyoke terminates its child process tree as well.
+
 | Variable                     | Value                                                    |
 | ---------------------------- | -------------------------------------------------------- |
 | `CTRLYOKE_WORKFLOW_NAME`     | The workflow's name.                                     |

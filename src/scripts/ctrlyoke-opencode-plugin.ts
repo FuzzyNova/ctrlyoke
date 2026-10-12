@@ -45,7 +45,7 @@
 //  - Logs written to .ctrlyoke/logs/ctrlyoke-opencode-plugin-debug.log
 
 import { writeFileSync, mkdirSync, appendFileSync, readFileSync } from "fs";
-import { spawnSync } from "child_process";
+import { spawn } from "child_process";
 import path from "path";
 
 const OPENCODE_BOOLEAN_TRUE = "true" as const;
@@ -146,19 +146,18 @@ try {
  * plus tool_name, tool_input, and tool_output for tool hooks. Native event
  * properties are preserved for additional context.
  */
-function _runUserHooks(event: string, payload: Record<string, unknown>): void {
+async function _runUserHooks(
+  event: string,
+  payload: Record<string, unknown>
+): Promise<void> {
   for (const hook of _userHooks) {
     if (hook.event === event) {
       try {
-        spawnSync(hook.command, {
-          input: JSON.stringify(payload),
-          shell: true,
-          stdio: ["pipe", "inherit", "inherit"],
+        await _runHook(hook.command, JSON.stringify(payload), {
           cwd: workspaceRoot,
           env: _getUserHookEnv(hook),
-          ...(hook.timeoutSec !== undefined
-            ? { timeout: hook.timeoutSec * 1000 }
-            : {}),
+          timeoutSec: hook.timeoutSec,
+          captureStdout: false,
         });
       } catch (_e) {}
     }
@@ -173,27 +172,23 @@ function _runUserHooks(event: string, payload: Record<string, unknown>): void {
  * Used for decision hooks (permissionRequest) where the hook script's stdout
  * is the harness decision rather than a fire-and-forget side-effect.
  */
-function _runDecisionUserHook(
+async function _runDecisionUserHook(
   event: string,
   payloadJson: string
-): unknown | undefined {
+): Promise<unknown | undefined> {
   for (const hook of _userHooks) {
     if (hook.event === event) {
       try {
-        const result = spawnSync(hook.command, {
-          input: payloadJson,
-          encoding: "utf-8",
-          shell: true,
+        const result = await _runHook(hook.command, payloadJson, {
           cwd: workspaceRoot,
           env: _getUserHookEnv(hook),
-          ...(hook.timeoutSec !== undefined
-            ? { timeout: hook.timeoutSec * 1000 }
-            : {}),
+          timeoutSec: hook.timeoutSec,
+          captureStdout: true,
         });
         _debugLog("🔐 _runDecisionUserHook: ran", {
           event,
           command: hook.command,
-          exitCode: result.status,
+          exitCode: result.exitCode,
           stdout: result.stdout,
         });
         if (result.stdout && result.stdout.trim()) {
@@ -214,6 +209,71 @@ function _runDecisionUserHook(
     }
   }
   return undefined;
+}
+
+interface UserHookRunOptions {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  timeoutSec?: number;
+  captureStdout: boolean;
+}
+
+function _runHook(
+  command: string,
+  input: string,
+  options: UserHookRunOptions
+): Promise<{ exitCode: number | null; stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, {
+      cwd: options.cwd,
+      env: options.env,
+      shell: true,
+      detached: process.platform !== "win32",
+      stdio: ["pipe", options.captureStdout ? "pipe" : "inherit", "inherit"],
+    });
+    let stdout = "";
+    let timedOut = false;
+    if (options.captureStdout) {
+      child.stdout?.setEncoding("utf8");
+      child.stdout?.on("data", (chunk: string) => {
+        stdout += chunk;
+      });
+    }
+    child.once("error", reject);
+    child.once("close", (exitCode) => resolve({ exitCode, stdout }));
+    child.stdin?.end(input);
+
+    if (options.timeoutSec !== undefined) {
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        _killProcessTree(child);
+      }, options.timeoutSec * 1000);
+      child.once("close", () => clearTimeout(timeout));
+    }
+    child.once("close", () => {
+      if (timedOut) {
+        _debugLog("⏱️ User hook timed out", { command });
+      }
+    });
+  });
+}
+
+function _killProcessTree(child: ReturnType<typeof spawn>): void {
+  if (!child.pid) return;
+  if (process.platform === "win32") {
+    const killer = spawn(
+      "taskkill",
+      ["/PID", String(child.pid), "/T", "/F"],
+      { stdio: "ignore", windowsHide: true }
+    );
+    killer.once("error", () => child.kill("SIGKILL"));
+    return;
+  }
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    child.kill("SIGKILL");
+  }
 }
 
 function _getUserHookEnv(hook: UserHook): NodeJS.ProcessEnv {
@@ -502,7 +562,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
           _writeHookArtifact("sessionStart", "session.created", session, {
             sessionId: session.id,
           });
-          _runUserHooks("sessionStart", {
+          await _runUserHooks("sessionStart", {
             ...session,
             hook_event_name: "sessionStart",
             session_id: session.id,
@@ -565,7 +625,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
               event.properties,
               { sessionId: sessionID }
             );
-            _runUserHooks("userPromptSubmit", {
+            await _runUserHooks("userPromptSubmit", {
               ...event.properties,
               hook_event_name: "userPromptSubmit",
               session_id: sessionID,
@@ -601,7 +661,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
                 });
               }
             }
-            _runUserHooks("stop", {
+            await _runUserHooks("stop", {
               ...event.properties,
               hook_event_name: "stop",
               session_id: sessionID,
@@ -629,7 +689,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         });
         _writeErrorFile(sessionId, "session.error", event.properties);
 
-        _runUserHooks("error", {
+        await _runUserHooks("error", {
           ...event.properties,
           hook_event_name: "error",
           session_id: sessionId,
@@ -656,7 +716,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         hook_event_name: "permissionRequest",
         session_id: _resolveSessionId(decisionInput),
       };
-      const decision = _runDecisionUserHook(
+      const decision = await _runDecisionUserHook(
         "permissionRequest",
         JSON.stringify(decisionPayload)
       );
@@ -683,7 +743,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         sessionId: _input.sessionID,
         toolName: _input.tool,
       });
-      _runUserHooks("preToolUse", {
+      await _runUserHooks("preToolUse", {
         ..._input,
         hook_event_name: "preToolUse",
         session_id: _input.sessionID,
@@ -709,7 +769,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         sessionId: _input.sessionID,
         toolName: _input.tool,
       });
-      _runUserHooks("postToolUse", {
+      await _runUserHooks("postToolUse", {
         ..._input,
         hook_event_name: "postToolUse",
         session_id: _input.sessionID,

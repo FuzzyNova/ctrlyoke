@@ -3,10 +3,14 @@ import {
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
-  timeoutSecToNative,
+  buildHookTimeoutOptions,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type {
+  HookEvent,
+  PreparedUserHookConfig,
+  UserHookConfig,
+} from "../../../types/CtrlYokeTypes";
 import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
@@ -66,7 +70,7 @@ export class CopilotNotificationMonitor
    * Build a user-hooks-only Copilot hook config object (no ctrlyoke notification entries).
    */
   static buildUserOnlyConfig(
-    userHooks: UserHookConfig[]
+    userHooks: PreparedUserHookConfig[]
   ): Record<string, unknown> {
     const hooks: Record<string, unknown[]> = {};
     for (const uh of userHooks) {
@@ -75,9 +79,9 @@ export class CopilotNotificationMonitor
       if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
       hooks[nativeEvent].push({
         type: "command",
-        bash: uh.command,
-        powershell: uh.command,
-        timeoutSec: timeoutSecToNative(uh.timeoutSec) ?? 10,
+        bash: uh.bashCommand ?? uh.command,
+        powershell: uh.powershellCommand ?? uh.command,
+        timeoutSec: buildHookTimeoutOptions(uh.timeoutSec).timeout ?? 10,
       });
     }
     return { version: 1, hooks };
@@ -164,9 +168,10 @@ export class CopilotNotificationMonitor
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
         hooks[nativeEvent].push({
           type: "command",
-          bash: uh.command,
-          powershell: uh.command,
-          timeoutSec: timeoutSecToNative(uh.timeoutSec) ?? 10,
+          bash: (uh as PreparedUserHookConfig).bashCommand ?? uh.command,
+          powershell:
+            (uh as PreparedUserHookConfig).powershellCommand ?? uh.command,
+          timeoutSec: buildHookTimeoutOptions(uh.timeoutSec).timeout ?? 10,
         });
       }
     }

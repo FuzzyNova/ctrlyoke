@@ -2,7 +2,6 @@ import {
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
-  timeoutSecToNative,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
@@ -68,23 +67,13 @@ export class ClaudeNotificationMonitor
    * Used for headless mode where completion detection is process-exit based.
    */
   static buildUserOnlyConfig(userHooks: UserHookConfig[]): string {
-    const hooks: Record<string, unknown[]> = {};
-    for (const uh of userHooks) {
-      const nativeEvent = ClaudeNotificationMonitor.EVENT_MAP[uh.event];
-      if (!nativeEvent) continue;
-      if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-      hooks[nativeEvent].push({
-        hooks: [
-          {
-            type: "command",
-            command: uh.command,
-            ...(timeoutSecToNative(uh.timeoutSec) !== undefined
-              ? { timeout: timeoutSecToNative(uh.timeoutSec) }
-              : {}),
-          },
-        ],
-      });
-    }
+    const hooks = new ClaudeNotificationMonitor().buildCommandHooks(
+      "",
+      ClaudeNotificationMonitor.EVENT_MAP,
+      [],
+      userHooks,
+      undefined
+    );
     return JSON.stringify({ hooks });
   }
 

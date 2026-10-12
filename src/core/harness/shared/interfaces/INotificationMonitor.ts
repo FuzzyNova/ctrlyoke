@@ -13,13 +13,24 @@ import type {
   UserHookConfig,
 } from "../../../../types/CtrlYokeTypes";
 
-/** Convert workflow timeout seconds to a harness hook's native unit. */
-export function timeoutSecToNative(
+export const HOOK_TIMEOUT_UNITS = {
+  SECONDS: "seconds",
+  MILLISECONDS: "milliseconds",
+} as const;
+
+export type HookTimeoutUnit =
+  (typeof HOOK_TIMEOUT_UNITS)[keyof typeof HOOK_TIMEOUT_UNITS];
+
+/** Convert workflow timeout seconds to a native `{ timeout }` option. */
+export function buildHookTimeoutOptions(
   timeoutSec: number | undefined,
-  unit: "seconds" | "milliseconds" = "seconds"
-): number | undefined {
-  if (timeoutSec === undefined) return undefined;
-  return unit === "milliseconds" ? timeoutSec * 1000 : timeoutSec;
+  unit: HookTimeoutUnit = HOOK_TIMEOUT_UNITS.SECONDS
+): { timeout: number } | Record<string, never> {
+  if (timeoutSec === undefined) return {};
+  return {
+    timeout:
+      unit === HOOK_TIMEOUT_UNITS.MILLISECONDS ? timeoutSec * 1000 : timeoutSec,
+  };
 }
 
 /**
@@ -602,9 +613,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         {
           type: "command",
           command: hookCommand,
-          ...(timeoutSecToNative(userHook?.timeoutSec) !== undefined
-            ? { timeout: timeoutSecToNative(userHook?.timeoutSec) }
-            : {}),
+          ...buildHookTimeoutOptions(userHook?.timeoutSec),
         },
       ],
     })

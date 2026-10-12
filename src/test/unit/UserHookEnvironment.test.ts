@@ -1,8 +1,11 @@
 import * as assert from "assert";
 import * as fs from "fs/promises";
+import * as fsSync from "fs";
 import * as os from "os";
 import * as path from "path";
-import { spawnSync, type SpawnSyncReturns } from "child_process";
+import * as vm from "vm";
+import { EventEmitter } from "events";
+import { spawn, spawnSync, type SpawnSyncReturns } from "child_process";
 import { suite, test } from "mocha";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 import { prepareUserHookEnvironments } from "../../core/harness/shared/UserHookEnvironment";
@@ -71,7 +74,7 @@ suite("UserHookEnvironment", () => {
     try {
       const printTokenCommand = "node -e \"process.stdout.write(process.env.TOKEN)\"";
       const prepared = prepareUserHookEnvironments({
-        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        harnessId: HARNESS_IDS.CODEX_CLI,
         extensionPath,
         hookTempDirectory: tempDirectory,
         promptIndex: 3,
@@ -147,6 +150,7 @@ suite("UserHookEnvironment", () => {
           launcherPath,
           envFile,
           "hook-0",
+          "default",
           Buffer.from(command, "utf8").toString("base64"),
         ],
         { input: "permission payload", encoding: "utf8" }
@@ -158,7 +162,146 @@ suite("UserHookEnvironment", () => {
       await fs.rm(tempDirectory, { recursive: true, force: true });
     }
   });
+
+  test("runs a PowerShell-syntax command under PowerShell on Windows", async function () {
+    if (process.platform !== "win32") return;
+    const tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-hook-powershell-")
+    );
+    const envFile = path.join(tempDirectory, "env.json");
+    try {
+      await fs.writeFile(envFile, JSON.stringify({ "hook-0": { HOOK_TOKEN: "value" } }));
+      const command = "Write-Output $env:HOOK_TOKEN";
+      const result = spawnSync(
+        process.execPath,
+        [
+          launcherPath,
+          envFile,
+          "hook-0",
+          "powershell.exe",
+          Buffer.from(command, "utf8").toString("base64"),
+        ],
+        { encoding: "utf8" }
+      );
+      assert.strictEqual(result.error, undefined);
+      assert.strictEqual(result.status, 0, result.stderr);
+      assert.strictEqual(result.stdout.trim(), "value");
+    } finally {
+      await fs.rm(tempDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("kills a launched hook's child process tree when the launcher is terminated", async function () {
+    if (process.platform === "win32") return;
+    const tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-hook-kill-tree-")
+    );
+    const envFile = path.join(tempDirectory, "env.json");
+    const childPidPath = path.join(tempDirectory, "child.pid");
+    await fs.writeFile(envFile, JSON.stringify({ "hook-0": {} }));
+    const command = `node -e "require('fs').writeFileSync(process.env.HOOK_CHILD_PID_FILE, String(process.pid)); setInterval(() => {}, 1000)"`;
+    const launcher = spawn(
+      process.execPath,
+      [
+        launcherPath,
+        envFile,
+        "hook-0",
+        "default",
+        Buffer.from(command, "utf8").toString("base64"),
+      ],
+      { env: { ...process.env, HOOK_CHILD_PID_FILE: childPidPath }, stdio: "ignore" }
+    );
+    try {
+      const childPid = await waitForChildPid(childPidPath);
+      const launcherExit = new Promise<void>((resolve, reject) => {
+        launcher.once("exit", () => resolve());
+        launcher.once("error", reject);
+      });
+      launcher.kill("SIGTERM");
+      await launcherExit;
+      await waitForProcessExit(childPid);
+      assert.strictEqual(isProcessRunning(childPid), false);
+    } finally {
+      launcher.kill("SIGKILL");
+      await fs.rm(tempDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("uses taskkill for the launcher child tree on Windows", function () {
+    if (process.platform !== "win32") return;
+    const handlers = new Map<string, () => void>();
+    const spawnCalls: Array<{ command: string; args: string[] }> = [];
+    const child = new EventEmitter() as EventEmitter & {
+      pid: number;
+      kill: () => void;
+    };
+    child.pid = 4321;
+    child.kill = () => undefined;
+    const processStub = {
+      argv: ["node", launcherPath, "env.json", "hook-0", "default", "YQ=="],
+      platform: "win32",
+      env: {},
+      pid: 123,
+      exitCode: undefined as number | undefined,
+      cwd: () => os.tmpdir(),
+      on: (signal: string, handler: () => void) => handlers.set(signal, handler),
+      removeListener: () => undefined,
+    };
+    vm.runInNewContext(fsSync.readFileSync(launcherPath, "utf8"), {
+      Buffer,
+      process: processStub,
+      require: (name: string) => {
+        if (name === "node:fs") {
+          return { readFileSync: () => JSON.stringify({ "hook-0": {} }) };
+        }
+        if (name === "node:child_process") {
+          return {
+            spawn: (command: string, args: string[]) => {
+              spawnCalls.push({ command, args });
+              return command === "taskkill" ? new EventEmitter() : child;
+            },
+          };
+        }
+        throw new Error(`Unexpected module ${name}`);
+      },
+    });
+    handlers.get("SIGINT")?.();
+
+    assert.strictEqual(spawnCalls[1].command, "taskkill");
+    assert.deepStrictEqual(
+      Array.from(spawnCalls[1].args),
+      ["/PID", "4321", "/T", "/F"]
+    );
+  });
 });
+
+async function waitForChildPid(filePath: string): Promise<number> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      return Number(await fs.readFile(filePath, "utf8"));
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  throw new Error("Hook child did not write its PID");
+}
+
+async function waitForProcessExit(pid: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline && isProcessRunning(pid)) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function runThroughHarnessShell(command: string): SpawnSyncReturns<string>[] {
   if (process.platform === "win32") {

@@ -2,6 +2,7 @@ import * as crypto from "crypto";
 import * as path from "path";
 import type {
   OpenCodeUserHookConfig,
+  PreparedUserHookConfig,
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
@@ -45,7 +46,7 @@ export function prepareUserHookEnvironments(params: {
     "ctrlyoke-hook-run.js"
   );
   const envByHookId: Record<string, Record<string, string>> = {};
-  const wrappedHooks = hooks.map((hook, index) => {
+  const wrappedHooks: PreparedUserHookConfig[] = hooks.map((hook, index) => {
     const env = hook.env;
     if (!env || Object.keys(env).length === 0) {
       return hook;
@@ -57,13 +58,43 @@ export function prepareUserHookEnvironments(params: {
     }
 
     const encodedCommand = Buffer.from(hook.command, "utf8").toString("base64");
+    const quoted = CliNotificationMonitor.shouldQuoteNodeCommand(params.harnessId);
+    const shell = resolveHookShell(params.harnessId);
+    const bashCommand =
+      params.harnessId === HARNESS_IDS.COPILOT_CLI
+        ? buildLauncherCommand(
+            launcherPath,
+            tempFilePath,
+            hookId,
+            encodedCommand,
+            "bash",
+            quoted
+          )
+        : undefined;
     const launcherCommand = buildLauncherCommand(
       launcherPath,
       tempFilePath,
       hookId,
       encodedCommand,
-      CliNotificationMonitor.shouldQuoteNodeCommand(params.harnessId)
+      shell,
+      quoted
     );
+    if (params.harnessId === HARNESS_IDS.COPILOT_CLI) {
+      return {
+        ...hook,
+        command: bashCommand ?? launcherCommand,
+        bashCommand,
+        powershellCommand: buildLauncherCommand(
+          launcherPath,
+          tempFilePath,
+          hookId,
+          encodedCommand,
+          "powershell.exe",
+          quoted
+        ),
+        env: undefined,
+      };
+    }
     return { ...hook, command: launcherCommand, env: undefined };
   });
 
@@ -95,11 +126,19 @@ function buildLauncherCommand(
   envFilePath: string,
   hookId: string,
   encodedCommand: string,
+  shell: string,
   quoted: boolean
 ): string {
   return CliNotificationMonitor.buildNodeCommand(
     launcherPath,
-    [envFilePath, hookId, encodedCommand],
+    [envFilePath, hookId, shell, encodedCommand],
     quoted
   );
+}
+
+function resolveHookShell(harnessId: string | undefined): string {
+  if (process.platform === "win32" && harnessId === HARNESS_IDS.CLAUDE_CLI) {
+    return "bash";
+  }
+  return "default";
 }

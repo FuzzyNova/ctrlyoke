@@ -3,7 +3,7 @@ import {
   HookConfig,
   INotificationMonitor,
   NotificationMonitorBase,
-  timeoutSecToNative,
+  buildHookTimeoutOptions,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
@@ -115,7 +115,7 @@ export class AntigravityNotificationMonitor
         type: "command",
         command: handlerCommand,
         // agy's per-handler `timeout` is in seconds; 0 means its default.
-        timeout: timeoutSecToNative(userHook?.timeoutSec) ?? 0,
+        timeout: buildHookTimeoutOptions(userHook?.timeoutSec).timeout ?? 0,
       });
     };
 

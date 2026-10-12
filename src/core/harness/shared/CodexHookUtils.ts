@@ -1,5 +1,5 @@
 import type { UserHookConfig } from "../../../types/CtrlYokeTypes";
-import { timeoutSecToNative } from "./interfaces/INotificationMonitor";
+import { buildHookTimeoutOptions } from "./interfaces/INotificationMonitor";
 
 const CODEX_EVENTS_WITH_MATCHERS = new Set([
   "PreToolUse",
@@ -29,9 +29,7 @@ export function createCodexCommandHookGroup(
       {
         type: "command",
         command,
-        ...(timeoutSecToNative(userHook?.timeoutSec) !== undefined
-          ? { timeout: timeoutSecToNative(userHook?.timeoutSec) }
-          : {}),
+        ...buildHookTimeoutOptions(userHook?.timeoutSec),
       },
     ],
   };

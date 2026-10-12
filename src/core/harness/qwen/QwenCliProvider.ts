@@ -11,7 +11,8 @@ import {
 } from "../../../types/DashboardConstants";
 import {
   INotificationMonitor,
-  timeoutSecToNative,
+  buildHookTimeoutOptions,
+  HOOK_TIMEOUT_UNITS,
 } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
@@ -706,14 +707,10 @@ export class QwenCliProvider implements ICliProvider {
           {
             type: "command",
             command: uh.command,
-            ...(timeoutSecToNative(uh.timeoutSec, "milliseconds") !== undefined
-              ? {
-                  timeout: timeoutSecToNative(
-                    uh.timeoutSec,
-                    "milliseconds"
-                  ),
-                }
-              : {}),
+            ...buildHookTimeoutOptions(
+              uh.timeoutSec,
+              HOOK_TIMEOUT_UNITS.MILLISECONDS
+            ),
           },
         ],
       });

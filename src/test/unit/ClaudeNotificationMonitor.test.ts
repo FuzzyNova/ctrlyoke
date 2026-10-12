@@ -1,8 +1,21 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import {
+  buildHookTimeoutOptions,
+  HOOK_TIMEOUT_UNITS,
+} from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ClaudeNotificationMonitor } from "../../core/harness/claude/ClaudeNotificationMonitor";
 
 suite("ClaudeNotificationMonitor", () => {
+  test("builds native timeout options in typed units", () => {
+    assert.deepStrictEqual(buildHookTimeoutOptions(undefined), {});
+    assert.deepStrictEqual(buildHookTimeoutOptions(7), { timeout: 7 });
+    assert.deepStrictEqual(
+      buildHookTimeoutOptions(7, HOOK_TIMEOUT_UNITS.MILLISECONDS),
+      { timeout: 7000 }
+    );
+  });
+
   test("registers Notification for combined and user-only hook configs", () => {
     const userHook = {
       event: "notification" as const,
