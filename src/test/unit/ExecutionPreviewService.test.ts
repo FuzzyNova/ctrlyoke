@@ -189,6 +189,7 @@ function createExecutionPlan(mutations: PreparedMutation[]): ExecutionPlan {
     mcpApplication: providerPreparation,
     effectiveToolPermissions: undefined,
     diagnostics: [],
+    tempFilePaths: [],
   };
 }
 

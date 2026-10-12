@@ -876,7 +876,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "env": {
         "valueKind": "object",
-        "description": "Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values."
+        "description": "Environment map available only to this hook process. Values are merged over the harness environment when the hook runs. Secret references are allowed only as ${secret:NAME} values."
       },
       "timeoutSec": {
         "valueKind": "number",

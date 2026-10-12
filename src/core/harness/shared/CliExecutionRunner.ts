@@ -508,7 +508,6 @@ export class CliExecutionRunner {
     const env: Record<string, string> = {
       CTRLYOKE_RUN_ID: runId,
       ...this.buildHookEnvVars(session),
-      ...this.buildHookProcessEnv(session),
     };
     const workingFilePath = session.workflowContext?.workingFilePath;
     if (workingFilePath) {
@@ -575,16 +574,6 @@ export class CliExecutionRunner {
       env.CTRLYOKE_HARNESS_ID = harnessId;
     }
     return env;
-  }
-
-  private buildHookProcessEnv(
-    session: CliExecutionSession
-  ): Record<string, string> {
-    return Object.fromEntries(
-      (session.resolvedProperties?.hooks ?? []).flatMap((hook) =>
-        Object.entries(hook.env ?? {})
-      )
-    );
   }
 
   /**

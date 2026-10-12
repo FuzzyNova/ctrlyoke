@@ -1570,6 +1570,7 @@ suite("CliIntegration", () => {
       mcpApplication: { cliArgs: [], mutations: [], diagnostics: [] },
       effectiveToolPermissions: undefined,
       diagnostics: [],
+      tempFilePaths: [],
     });
     (integration as any).executionPlanBuilder.apply = async () => {};
     (integration as any).executionRunner.executeInteractive = async () => {

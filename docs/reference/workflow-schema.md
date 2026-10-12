@@ -853,7 +853,7 @@ Command to execute. Resolved relative to workspace root if not absolute.
 
 - **Type:** map of `string`
 
-Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.
+Environment map available only to this hook process. Values are merged over the harness environment when the hook runs. Secret references are allowed only as ${secret:NAME} values.
 
 ### `timeoutSec` {#hook-entry-timeoutsec}
 

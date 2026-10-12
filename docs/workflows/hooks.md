@@ -100,8 +100,11 @@ documentation for the fields. OpenCode sends a stable JSON object with
 `tool_input`, and, after execution, `tool_output`. Other native event fields
 are included when available.
 
-**Environment.** The hook inherits the harness's environment, which includes
-the `env` of every hook on the step, and these variables from ctrlyoke:
+**Environment.** The hook inherits the harness environment and ctrlyoke's
+workflow variables below. Its own `env` values are merged over that environment
+for this hook only. Those values are not available to the AI harness or to
+other hooks. Two hooks may safely use the same key with different values.
+Resolved secret values are passed only to the hook that declares them.
 
 | Variable                     | Value                                                    |
 | ---------------------------- | -------------------------------------------------------- |
@@ -112,9 +115,6 @@ the `env` of every hook on the step, and these variables from ctrlyoke:
 | `CTRLYOKE_HARNESS_ID`        | The harness, for example `claude-cli`.                   |
 | `CTRLYOKE_WORKSPACE_ROOT`    | The workspace root.                                      |
 | `CTRLYOKE_WORKING_FILE`      | The run's working copy of the workflow.                  |
-
-All hooks on a step share one environment, so two hooks that set the same
-`env` key get the same value. Use distinct names.
 
 **Output.** What a hook's exit code or output does is up to the harness. Some
 harnesses let a `preToolUse` hook block the tool call, for example. ctrlyoke

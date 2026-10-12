@@ -44,7 +44,7 @@
 //  - Enabled when CTRLYOKE_DIAGNOSTIC_LOGS=true
 //  - Logs written to .ctrlyoke/logs/ctrlyoke-opencode-plugin-debug.log
 
-import { writeFileSync, mkdirSync, appendFileSync } from "fs";
+import { writeFileSync, mkdirSync, appendFileSync, readFileSync } from "fs";
 import { spawnSync } from "child_process";
 import path from "path";
 
@@ -128,6 +128,8 @@ interface UserHook {
   event: string;
   command: string;
   timeoutSec?: number;
+  envFile?: string;
+  envId?: string;
 }
 let _userHooks: UserHook[] = [];
 try {
@@ -153,6 +155,7 @@ function _runUserHooks(event: string, payload: Record<string, unknown>): void {
           shell: true,
           stdio: ["pipe", "inherit", "inherit"],
           cwd: workspaceRoot,
+          env: _getUserHookEnv(hook),
           ...(hook.timeoutSec !== undefined
             ? { timeout: hook.timeoutSec * 1000 }
             : {}),
@@ -182,6 +185,7 @@ function _runDecisionUserHook(
           encoding: "utf-8",
           shell: true,
           cwd: workspaceRoot,
+          env: _getUserHookEnv(hook),
           ...(hook.timeoutSec !== undefined
             ? { timeout: hook.timeoutSec * 1000 }
             : {}),
@@ -210,6 +214,20 @@ function _runDecisionUserHook(
     }
   }
   return undefined;
+}
+
+function _getUserHookEnv(hook: UserHook): NodeJS.ProcessEnv {
+  let hookEnv: Record<string, string> = {};
+  if (hook.envFile && hook.envId) {
+    try {
+      const envByHookId = JSON.parse(readFileSync(hook.envFile, "utf8")) as
+        | Record<string, Record<string, string>>;
+      hookEnv = envByHookId[hook.envId] ?? {};
+    } catch {
+      // A missing or malformed per-step file gives the hook no extra values.
+    }
+  }
+  return { ...process.env, ...hookEnv };
 }
 
 // Diagnostic logging — derive logs dir from NOTIFY_DIR (interactive) or workspaceRoot (headless).

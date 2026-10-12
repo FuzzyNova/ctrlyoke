@@ -67,6 +67,12 @@ export class CliExecutionSession {
     this.injectModePrepared = false;
   }
 
+  addTempFilePath(tempFilePath: string): void {
+    if (!this.tempFiles.includes(tempFilePath)) {
+      this.tempFiles.push(tempFilePath);
+    }
+  }
+
   markInjectModePrepared(): void {
     this.injectModePrepared = true;
   }

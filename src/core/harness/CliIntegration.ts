@@ -1251,6 +1251,9 @@ export class CliIntegration extends HarnessIntegration {
     await this.retireConflictingSiblingPty(session);
 
     const executionPlan = await this.executionPlanBuilder.plan(session);
+    for (const tempFilePath of executionPlan.tempFilePaths) {
+      session.addTempFilePath(tempFilePath);
+    }
     const routedDiagnostics =
       executionPlan.permissionApplication.diagnostics.map((diagnostic) => {
         const workflowContext = session.workflowContext;

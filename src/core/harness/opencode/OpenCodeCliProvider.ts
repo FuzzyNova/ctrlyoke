@@ -903,11 +903,19 @@ export class OpenCodeCliProvider implements ICliProvider {
       return undefined;
     }
     return JSON.stringify(
-      supportedHooks.map((hook) => ({
-        event: hook.event,
-        command: hook.command,
-        ...(hook.timeoutSec !== undefined ? { timeoutSec: hook.timeoutSec } : {}),
-      }))
+      supportedHooks.map((hook) => {
+        const scopedHook = hook as UserHookConfig & {
+          envFile?: string;
+          envId?: string;
+        };
+        return {
+          event: hook.event,
+          command: hook.command,
+          ...(hook.timeoutSec !== undefined ? { timeoutSec: hook.timeoutSec } : {}),
+          ...(scopedHook.envFile ? { envFile: scopedHook.envFile } : {}),
+          ...(scopedHook.envId ? { envId: scopedHook.envId } : {}),
+        };
+      })
     );
   }
 

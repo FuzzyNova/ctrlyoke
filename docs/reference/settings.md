@@ -310,7 +310,7 @@ Fields:
 
 - `event` · `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest" | "notification" | "error"` · required — Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
 - `command` · `string` · required — Command to execute. Resolved relative to workspace root if not absolute.
-- `env` · map of `string` — Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.
+- `env` · map of `string` — Environment map available only to this hook process. Values are merged over the harness environment when the hook runs. Secret references are allowed only as ${secret:NAME} values.
 - `timeoutSec` · `integer` — Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.
 
 ### `defaults.errorBehavior` {#defaults-errorbehavior}
