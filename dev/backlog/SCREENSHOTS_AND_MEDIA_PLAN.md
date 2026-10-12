@@ -1,17 +1,9 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
-**Recapture needed:**
-
-- `images/screenshots/secrets-tab-828x440.png` — recapture after the Actions column
-  template is changed to fit the settings card. The demo's `DEMO_API_KEY` also needs
-  a managed value before capturing.
-- `images/screenshots/template-modal-full-feature-840x1123.png` — recapture: plain
-  text variable inputs now fill the modal, and since 42d325220 **Set as Default**
-  sits on the Template label row (the footer is only Cancel, Create and Create &
-  Run), with **Save as default** on each changed variable's label row and
-  harness/model pairs boxed. Use Full Feature Pipeline's default `planDocument`
-  value (`.ctrlyoke/plans/plan.md`), and update the image's alt text in
-  `docs/workflows/templates.md`, which still describes Set as Default in the footer.
+**Recaptures done 2026-10-12:** `secrets-tab-810x360` (the demo's `DEMO_API_KEY` has a
+dummy managed value again) and `template-modal-full-feature-840x1119` (default
+`planDocument`, a changed `testCommand` showing **Save as default**), both with updated alt
+text.
 
 **Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
 
@@ -432,11 +424,13 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Crop — decided: panel only.** No surrounding dashboard; at docs width a half-dashboard crop
   shrinks the form text to unreadable. Where the panel lives is shown once by #13a, which leads the
   docs page.
-- **Status:** captured (`images/screenshots/*-tab-*-400x800.png`) and slotted into
-  `docs/workflows/properties-panel.md`. Open follow-ups: re-capture `mcp-tab` with no personal
-  path visible (the cclsp entry shows a `C:/Users/<name>/...` command); re-shoot the set at 2x when
-  convenient (current captures are 1x, below category A's 880px floor); add #13a to the top of the page
-  once captured.
+- **Status:** re-shot 2026-10-12 at 2× as `images/screenshots/*-tab-*-800x1600.png` (a
+  400×800 CSS viewport at `deviceScaleFactor: 2`, cropped to the panel) from the demo project's
+  throwaway `docs-properties.ctrlyoke.yaml`, and slotted into `docs/workflows/properties-panel.md`,
+  `permissions.md` and `mcp-servers.md` with `{.panel-shot}` so they display at 400 px. The MCP
+  tab's cclsp path has the Windows username replaced with `you` before capture. 800 px is still
+  a little under category A's 880 px floor, but it is the panel's real 2× width. Open
+  follow-up: add #13a to the top of the page once captured.
 
 ### 13. VS Code "Getting Started with ctrlyoke" walkthrough — one media asset per step
 

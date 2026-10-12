@@ -34,3 +34,12 @@
 .vp-doc .device-shots img {
   width: 100%;
 }
+
+/*
+ * A narrow panel captured at 2x (e.g. an 800x1600 properties-panel tab). Tag the
+ * image with {.panel-shot} so it shows at its 1x size instead of filling the column.
+ */
+.vp-doc img.panel-shot {
+  width: 400px;
+  height: auto;
+}

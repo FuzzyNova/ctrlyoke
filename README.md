@@ -9,8 +9,8 @@ ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Cl
 - **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; ctrlyoke sends them one at a time, waits for each to finish, and advances automatically
 - **Script-based validation** — attach an end condition script to any prompt; by default the step passes when the script exits 0, and you can instead compare its stdout/stderr with an explicit operator. Otherwise the AI retries with a configurable retry prompt
 - **Harness-agnostic** — switch between six AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
-- **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to let the AI extend the workflow queue with ctrlyoke's [MCP tools](docs/reference/mcp-tools.md)
-- **User-defined hooks** — attach shell commands to harness lifecycle events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) per prompt, per workflow, or globally in settings
+- **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to let the AI extend the workflow queue with ctrlyoke's [MCP tools](https://ctrlyoke.dev/docs/reference/mcp-tools)
+- **User-defined hooks** — attach shell commands to harness lifecycle events (`sessionStart`, `userPromptSubmit`, `preToolUse`, `postToolUse`, `permissionRequest`, `notification`, `stop`, `error`) per prompt, per workflow, or globally in settings
 - **Universal agents and skills** — define agent instruction files once; ctrlyoke discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.ctrlyoke/agents/`) and injects content into prompts regardless of harness
 - **Dashboard with embedded terminal** — a secondary side bar UI with a CodeMirror prompt editor, live xterm.js terminal running the AI CLI directly, streaming output with tool-call visualization, file diff views, undo/redo for workspace changes, and per-run output history
 
@@ -134,7 +134,7 @@ steps:
 
 ## Prompt Properties
 
-See the generated [workflow schema reference](docs/reference/workflow-schema.md) for all properties and their validation rules. Effective values can come from prompt fields, workflow fields, and `.ctrlyoke/settings.json` defaults.
+See the generated [workflow schema reference](https://ctrlyoke.dev/docs/reference/workflow-schema) for all properties and their validation rules. Effective values can come from prompt fields, workflow fields, and `.ctrlyoke/settings.json` defaults.
 
 ### End condition
 
@@ -177,7 +177,7 @@ steps:
     mcpServers: null
 ```
 
-The `"ctrlyoke"` shorthand injects the built-in server. See the [MCP tools reference](docs/reference/mcp-tools.md) for its complete tool set and response formats. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
+The `"ctrlyoke"` shorthand injects the built-in server. See the [MCP tools reference](https://ctrlyoke.dev/docs/reference/mcp-tools) for its complete tool set and response formats. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
 
 ### Final prompt
 
@@ -229,7 +229,7 @@ steps:
         command: node ./scripts/setup.js
 ```
 
-Supported events: `stop`, `sessionStart`, `preToolUse`, `postToolUse`, `userPromptSubmit` (support varies by harness). Hooks defined here are merged with any hooks already in the harness settings file — existing hooks are preserved.
+Supported events: `sessionStart`, `userPromptSubmit`, `preToolUse`, `postToolUse`, `permissionRequest`, `notification`, `stop` and `error`. Support varies by harness, and an unsupported event is skipped. Hooks defined here are added alongside any hooks already in the harness settings file — existing hooks are preserved. See [Hooks](https://ctrlyoke.dev/docs/workflows/hooks) for the full guide.
 
 ### Session management
 
@@ -291,13 +291,13 @@ The ctrlyoke panel opens in the VS Code secondary side bar (far right) by defaul
 
 ## Commands
 
-See the [commands reference](docs/reference/commands.md) for the current Command Palette commands and menu actions.
+See the [commands reference](https://ctrlyoke.dev/docs/reference/commands) for the current Command Palette commands and menu actions.
 
 ---
 
 ## Settings
 
-Configure workflow defaults and extension behavior in `.ctrlyoke/settings.json`. The [settings reference](docs/reference/settings.md) lists the supported properties and defaults. `ctrlyoke.workspaceDirectory` is the VS Code setting used to locate that file.
+Configure workflow defaults and extension behavior in `.ctrlyoke/settings.json`. The [settings reference](https://ctrlyoke.dev/docs/reference/settings) lists the supported properties and defaults. `ctrlyoke.workspaceDirectory` is the VS Code setting used to locate that file.
 
 ---
 
@@ -305,15 +305,15 @@ Configure workflow defaults and extension behavior in `.ctrlyoke/settings.json`.
 
 The full documentation is at [ctrlyoke.dev/docs](https://ctrlyoke.dev/docs/).
 
-| Page                                                                                                | Topic                                                           |
-| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [Quick start](https://ctrlyoke.dev/docs/guide/quick-start)                                          | Five-minute setup walkthrough                                   |
-| [Workflow schema](https://ctrlyoke.dev/docs/reference/workflow-schema)                              | Full workflow property reference                                |
-| [Dynamic queue](https://ctrlyoke.dev/docs/workflows/dynamic-queue)                                  | Dynamic queue extension and `finalStep` loop behavior           |
-| [Session management](https://ctrlyoke.dev/docs/workflows/session-management)                        | Session resumption across prompts and harnesses                 |
-| [`hooks`](https://ctrlyoke.dev/docs/reference/workflow-schema#execution-properties-hooks)           | User-defined hooks                                              |
-| [`mcpServers`](https://ctrlyoke.dev/docs/reference/workflow-schema#execution-properties-mcpservers) | Attaching MCP servers to a workflow or step                     |
-| [Harness compatibility](https://ctrlyoke.dev/docs/harnesses/compatibility)                          | Which hooks, permissions and MCP features each harness supports |
+| Page                                                                         | Topic                                                           |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Quick start](https://ctrlyoke.dev/docs/guide/quick-start)                   | Five-minute setup walkthrough                                   |
+| [Workflow schema](https://ctrlyoke.dev/docs/reference/workflow-schema)       | Full workflow property reference                                |
+| [Dynamic queue](https://ctrlyoke.dev/docs/workflows/dynamic-queue)           | Dynamic queue extension and `finalStep` loop behavior           |
+| [Session management](https://ctrlyoke.dev/docs/workflows/session-management) | Session resumption across prompts and harnesses                 |
+| [Hooks](https://ctrlyoke.dev/docs/workflows/hooks)                           | User-defined hooks                                              |
+| [MCP servers](https://ctrlyoke.dev/docs/workflows/mcp-servers)               | Attaching MCP servers to a workflow or step                     |
+| [Harness compatibility](https://ctrlyoke.dev/docs/harnesses/compatibility)   | Which hooks, permissions and MCP features each harness supports |
 
 ---
 

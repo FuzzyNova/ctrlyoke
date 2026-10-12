@@ -56,7 +56,7 @@ by** lists the workflows and MCP servers that reference the name. The scope
 switch at the top of the settings drawer picks user or workspace scope. The tab
 only ever shows names, never values.
 
-![The Secrets tab: DEMO_API_KEY is a managed secret used by one workflow, and DEMO_DB_PASSWORD and DEMO_WEBHOOK_TOKEN are expected from the environment but not found](/screenshots/secrets-tab-828x440.png)
+![The Secrets tab: DEMO_API_KEY is a managed secret used by one workflow, and DEMO_DB_PASSWORD and DEMO_WEBHOOK_TOKEN are expected from the environment but not found](/screenshots/secrets-tab-810x360.png)
 
 ### From the command line
 

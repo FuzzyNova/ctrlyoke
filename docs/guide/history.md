@@ -107,6 +107,8 @@ is running via ctrlyoke CLI** (or **another ctrlyoke window**), and the editing
 controls are disabled. The header's **Stop** button still works: it stops the
 run in the CLI or the other window.
 
+![A two-step script workflow started with ctrlyoke run, mirrored in the dashboard. A banner under the header reads "Read-only — workflow is running via ctrlyoke CLI", step 1 has passed, and step 2's output is streaming](/screenshots/cli-run-read-only-banner-1600x750.png)
+
 ## Where runs are stored
 
 By default run history lives in your home folder, under

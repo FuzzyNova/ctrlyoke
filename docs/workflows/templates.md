@@ -11,7 +11,7 @@ Open the **Create Workflow from Template** dialog in any of these ways:
 - the **ctrlyoke: New Workflow from Template** command (`Ctrl+Shift+T`, or
   `Cmd+Shift+T` on macOS).
 
-![The Create Workflow from Template dialog with Full Feature Pipeline selected. Under its description, the Variables form has featureDescription "Add tag filtering and pagination to GET /notes" in a multi-line box, planDocument "plans/notes-tags.md", reviewHarness set to Codex in a harness picker, testCommand "npm test" and formatCommand "npm run format", each with helper text. Workflow Name is "notes-tags", and the footer has Set as Default, Cancel, Create and Create & Run](/screenshots/template-modal-full-feature-840x1123.png)
+![The Create Workflow from Template dialog with Full Feature Pipeline selected and Set as Default beside the Template label. Under its description, the Variables form has featureDescription in a multi-line box, planDocument ".ctrlyoke/plans/plan.md", reviewHarness set to Codex in a harness picker, testCommand changed to "npm run test:unit" with Save as Default beside its label, and formatCommand "npm run format", each with helper text. Workflow Name is "notes-tags", and the footer has Cancel, Create and Create & Run](/screenshots/template-modal-full-feature-840x1119.png)
 
 1. Pick a template under **Template**. The list groups **Built-in Templates**,
    **Custom Templates (Workspace)** and **Custom Templates (User)**. It starts on

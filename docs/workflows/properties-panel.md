@@ -19,7 +19,7 @@ for the full order.
 
 ## Harness
 
-![Harness tab with the harness picker open, listing all six harnesses](/screenshots/harness-tab-with-dropdown-400x800.png)
+![Harness tab with the harness picker open, listing all six harnesses](/screenshots/harness-tab-with-dropdown-800x1600.png){.panel-shot}
 
 The Harness tab chooses what runs each prompt and where it runs:
 
@@ -41,19 +41,19 @@ worktree is created (for example `npm ci`). **Keep directory** leaves the
 worktree on disk after the run for review and undo, and **Merge** merges the
 branch back into your working checkout after every run.
 
-![Harness tab with a managed worktree, showing Base, Setup, Keep directory, and Merge](/screenshots/harness-tab-managed-worktree-400x800.png)
+![Harness tab with a managed worktree, showing Base, Setup, Keep directory, and Merge](/screenshots/harness-tab-managed-worktree-800x1600.png){.panel-shot}
 
 A **Named** worktree targets a persistent branch you own. ctrlyoke creates it if
 needed but never commits, merges, or removes it, which suits workflows you keep
 appending to.
 
-![Harness tab with a named worktree on the bug-fix branch](/screenshots/harness-tab-named-worktree-400x800.png)
+![Harness tab with a named worktree on the bug-fix branch](/screenshots/harness-tab-named-worktree-800x1600.png){.panel-shot}
 
 Field details: [`worktree`](/reference/workflow-schema#worktree).
 
 ## Context
 
-![Context tab with Resume Session, Prior Context, and a workflow variable](/screenshots/context-tab-400x800.png)
+![Context tab with Resume Session, Prior Context, and a workflow variable](/screenshots/context-tab-800x1600.png){.panel-shot}
 
 - **Resume Session** — continue an earlier harness session instead of starting
   fresh. Leave the session field blank to auto-resume, or enter a session ID or a
@@ -68,39 +68,39 @@ Field details: [`worktree`](/reference/workflow-schema#worktree).
 With nothing enabled, the Validation tab shows the **Pre-Condition** and **End
 Condition** toggles, plus the workflow's **Error Behavior** and **Max Steps**.
 
-![Validation tab with no pre-condition or end condition enabled](/screenshots/validation-tab-none-400x800.png)
+![Validation tab with no pre-condition or end condition enabled](/screenshots/validation-tab-none-800x1600.png){.panel-shot}
 
 Enable **End Condition** to run a script after each prompt and decide whether the
 work passed. **Pass when** compares the script's exit code or output against an
 expected value, and **On Pass** / **On Fail** decide what happens next.
 
-![Validation tab with an npm test end condition that passes on exit code 0](/screenshots/validation-tab-end-condition-with-script-400x800.png)
+![Validation tab with an npm test end condition that passes when stdout contains "passed", retrying on failure](/screenshots/validation-tab-end-condition-with-script-800x1600.png){.panel-shot}
 
 When **On Fail** is **Retry**, the **Retry Prompt** tells the harness what went
 wrong. Condition-output references such as `$endCondition:stdout` insert the
 script's actual results.
 
-![Validation tab retry settings with a retry prompt that references the end condition's output](/screenshots/validation-tab-end-condition-with-retry-400x800.png)
+![Validation tab retry settings with a retry prompt that references the end condition's output](/screenshots/validation-tab-end-condition-with-retry-800x1600.png){.panel-shot}
 
 See [End conditions and pre-conditions](/workflows/end-conditions) for every
 option.
 
 ## MCP
 
-![MCP tab with the built-in ctrlyoke server's tools and two installed servers](/screenshots/mcp-tab-400x800.png)
+![MCP tab: the built-in ctrlyoke server with 11 of 12 tools enabled (Remove step unticked), and two installed servers, cclsp off and playwright on and expanded](/screenshots/mcp-tab-800x1600.png){.panel-shot}
 
 The MCP tab picks which MCP servers are attached to the harness. The built-in
 **ctrlyoke** server lets the AI read workflow status and extend the queue (see
 [Dynamic queue](/workflows/dynamic-queue)), and each of its tools can be switched
 off individually. **Installed Servers** lists the servers registered with
 ctrlyoke; **Manage MCP Servers** opens the MCP manager in Settings to add, edit,
-or remove them.
+or remove them. See [MCP servers](/workflows/mcp-servers).
 
 Tool reference: [MCP tools](/reference/mcp-tools).
 
 ## Hooks
 
-![Hooks tab with Session Start, Stop, and Error hooks that run node scripts](/screenshots/hooks-tab-400x800.png)
+![Hooks tab with Session Start, Stop, and Error hooks that run node scripts](/screenshots/hooks-tab-800x1600.png){.panel-shot}
 
 Hooks run your own commands on harness events such as **Session Start**,
 **Stop**, and **Error**, alongside the hooks ctrlyoke uses for completion
@@ -111,16 +111,17 @@ Field details: [`hooks`](/reference/workflow-schema#execution-properties-hooks).
 
 ## Permissions
 
-![Permissions tab in Custom mode with allowed and denied tool lists](/screenshots/permissions-tab-400x800.png)
+![Permissions tab in Custom mode with allowed and denied tool lists](/screenshots/permissions-tab-800x1600.png){.panel-shot}
 
 - **Tool Permission Mode** — how much the harness may do without asking. In
-  **Custom** mode only the **Allowed Tools** list is granted, and **Denied
-  Tools** always wins over it.
+  **Custom** mode the harness gets the **Allowed Tools** and **Denied Tools**
+  lists, and a denied tool always wins. How strictly each harness applies them
+  differs; see [How each harness applies them](/workflows/permissions#how-each-harness-applies-them).
 - **Secrets** — secret environment variables this workflow may use.
 - **Trusted External Roots** — directories outside the workspace this workflow
   may use. **Inherit** keeps the roots from your settings. See
   [External file roots](/reference/settings#external-file-roots).
 
 Not every harness enforces individual tool patterns. See
-[`toolPermissions`](/reference/workflow-schema#execution-properties-toolpermissions)
-and the [permission settings](/reference/settings#permissions).
+[Permissions](/workflows/permissions) for the modes, the pattern syntax and what
+each harness enforces.

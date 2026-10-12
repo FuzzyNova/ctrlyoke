@@ -25,8 +25,8 @@ ctrlyoke prompt files support structured references that help you attach the rig
 - A path starting with `./` or `../` is relative to the workflow file's own
   directory.
 - An absolute path is accepted only when it points inside the workspace or an
-  approved external root (see `trustedExternalRoots` in the
-  [YAML format](/workflows/yaml-format#workflow-scoped-external-roots)).
+  approved external root (see
+  [Trusted external folders](/workflows/permissions#trusted-external-roots)).
   References that escape those roots are blocked and reported as skipped.
 
 ## Snippet references
