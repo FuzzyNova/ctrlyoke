@@ -41,7 +41,7 @@ suite("CLI tool permission mappings", () => {
 
       assert.deepStrictEqual(application.cliArgs, [
         "--permission-mode",
-        "bypassPermissions",
+        "dontAsk",
         "--allowedTools",
         "Bash",
         "Write",

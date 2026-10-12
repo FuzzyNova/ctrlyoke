@@ -8,6 +8,7 @@ import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermis
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type {
   IToolPermissionMapper,
+  PermissionContext,
   ToolPermissionConfig,
 } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
@@ -29,9 +30,10 @@ function cfg(
 
 async function mapperArgs(
   mapper: IToolPermissionMapper,
-  config: ToolPermissionConfig
+  config: ToolPermissionConfig,
+  context: PermissionContext = {}
 ): Promise<string[]> {
-  return (await mapper.prepare(config, {})).cliArgs;
+  return (await mapper.prepare(config, context)).cliArgs;
 }
 
 /** Return all args after the first occurrence of `flag` */
@@ -370,11 +372,16 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("custom mode with allowed tools converts Copilot names to Claude names", async () => {
+      test("headless custom mode uses dontAsk and converts Copilot names to Claude names", async () => {
         const args = await mapperArgs(
           mapper,
-          cfg(PERMISSION_MODES.CUSTOM, ["shell", "write", "edit", "glob"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["shell", "write", "edit", "glob"], []),
+          { isInteractive: false }
         );
+        assert.deepStrictEqual(args.slice(0, 2), [
+          "--permission-mode",
+          "dontAsk",
+        ]);
         assert.ok(args.includes("--allowedTools"));
         const allowedValues = argsAfterFlag(args, "--allowedTools");
         assert.ok(
@@ -395,15 +402,33 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("custom mode with no tools → only --permission-mode bypassPermissions", async () => {
+      test("interactive custom mode omits permission mode and keeps allow and deny lists", async () => {
         const args = await mapperArgs(
           mapper,
-          cfg(PERMISSION_MODES.CUSTOM, [], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"]),
+          { isInteractive: true }
         );
-        assert.deepStrictEqual(args, [
-          "--permission-mode",
-          "bypassPermissions",
-        ]);
+        assert.ok(!args.includes("--permission-mode"));
+        assert.ok(args.includes("--allowedTools"));
+        assert.ok(args.includes("--disallowedTools"));
+      });
+
+      test("headless custom mode with no tools uses dontAsk", async () => {
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.CUSTOM, [], []),
+          { isInteractive: false }
+        );
+        assert.deepStrictEqual(args, ["--permission-mode", "dontAsk"]);
+      });
+
+      test("interactive custom mode with no tools leaves Claude's default mode", async () => {
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.CUSTOM, [], []),
+          { isInteractive: true }
+        );
+        assert.deepStrictEqual(args, []);
       });
 
       test("custom mode deduplicates converted tool names", async () => {
