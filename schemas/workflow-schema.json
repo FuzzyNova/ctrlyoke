@@ -696,7 +696,7 @@
               "items": {
                 "$ref": "#/$defs/userHookConfig"
               },
-              "description": "User-defined hooks. Per-event override: events present replace the tier below for that event; absent events inherit."
+              "description": "User-defined hooks. A step's hooks replace the workflow's hooks for each event it defines; other workflow events inherit. A workflow's hooks array replaces defaults.hooks from settings entirely."
             },
             {
               "type": "null",
@@ -1797,7 +1797,7 @@
             "notification",
             "error"
           ],
-          "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode."
+          "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode."
         },
         "command": {
           "type": "string",

@@ -2339,6 +2339,46 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("gates unknown mcpServers list IDs in fail mode", async () => {
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      steps: [{ prompt: "Run this step", mcpServers: ["missing-list-id-test"] }],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    let integrationLookups = 0;
+
+    configService.setCliOverlay({
+      execution: {
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    try {
+      await assert.rejects(
+        makeExecutor(queue).execute(integration, {
+          ...makeContext(integration),
+          getIntegrationForPrompt: () => {
+            integrationLookups += 1;
+            return integration;
+          },
+          reportCompatibilityDiagnostics: (reported) =>
+            diagnostics.push(...reported),
+        }),
+        /Step blocked by execution\.contextResolutionFailure="fail"/u
+      );
+      assert.strictEqual(integration.sentPrompts.length, 0);
+      assert.strictEqual(integrationLookups, 0);
+      assert.strictEqual(diagnostics.length, 1);
+      assert.strictEqual(
+        diagnostics[0].code,
+        PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE
+      );
+      assert.match(diagnostics[0].message, /listed in mcpServers/u);
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
   test("rethrows a terminal step failure tagged with the step it already failed", async () => {
     const queue = new PromptQueue();
     queue.loadPrompts({

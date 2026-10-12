@@ -868,7 +868,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "notification",
           "error"
         ],
-        "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode."
+        "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode."
       },
       "command": {
         "valueKind": "string",

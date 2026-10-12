@@ -183,7 +183,7 @@ User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supporte
 
 Accepted forms:
 
-- array of [Hook entry](#hook-entry) — User-defined hooks. Per-event override: events present replace the tier below for that event; absent events inherit.
+- array of [Hook entry](#hook-entry) — User-defined hooks. A step's hooks replace the workflow's hooks for each event it defines; other workflow events inherit. A workflow's hooks array replaces defaults.hooks from settings entirely.
 - `null` — Explicitly disables all hooks for this prompt/workflow.
 
 ### `sessionId` {#execution-properties-sessionid}
@@ -840,7 +840,7 @@ One user-defined hook in a `hooks` array.
 - **Type:** `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest" | "notification" | "error"`
 - **Required:** yes
 
-Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
+Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
 
 ### `command` {#hook-entry-command}
 
