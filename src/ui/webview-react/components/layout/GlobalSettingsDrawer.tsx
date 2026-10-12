@@ -25,6 +25,7 @@ import {
 } from "../settings/settingsTabs";
 import {
   GeneralSection,
+  TemplatesSection,
   WorkflowDefaultsSection,
   AdvancedPermissionsSection,
   ExecutionSection,
@@ -443,6 +444,13 @@ export function GlobalSettingsDrawer() {
                         settings={fullSettings}
                         {...sectionProps}
                         onReload={handleReloadWindow}
+                      />
+                    )}
+                  {fullSettings &&
+                    effectiveActiveTab === GLOBAL_SETTINGS_TABS.TEMPLATES && (
+                      <TemplatesSection
+                        settings={fullSettings}
+                        {...sectionProps}
                       />
                     )}
                   {effectiveActiveTab === GLOBAL_SETTINGS_TABS.LICENSE && (

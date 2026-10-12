@@ -2,6 +2,20 @@
 
 Templates are reusable workflow skeletons with fill-in-the-blank variables. ctrlyoke ships these built-in templates: Blank, Template Starter, Simple Feature, Parallel Research, Fix Tests, Full Feature Pipeline, Spec-Driven Loop, Bug Hunt Loop, and Bug Drain Loop. You can add your own templates under `.ctrlyoke/templates/` in the workspace or under `~/.ctrlyoke/templates/` for your user account. When you run **New Workflow from Template**, ctrlyoke prompts for each variable, substitutes the values, and creates a ready-to-run workflow.
 
+## Saved variable values {#saved-variable-values}
+
+Open **Settings → Templates** to choose the default template and save variable values for any
+built-in or custom template. The drawer's **User** scope stores values for your own use across
+workspaces; **Workspace** stores values with the project. When both scopes save the same value,
+the Workspace value wins in that workspace. Linked harness and model values are saved together.
+
+Each saved value is used to pre-fill the matching field in **New Workflow**. Choose **Add
+template** and **Add value** to add a value from Settings, or pin a value while creating a
+workflow. Blank text clears a saved value. **Clear all** removes every saved value for that
+template at the selected scope, returning fields to the other scope or the variable default
+authored by the template. Missing templates and variables that have since been removed remain
+visible until cleared, so stale settings can be cleaned up.
+
 ## Bug Hunt Loop and Bug Drain Loop {#bug-loops}
 
 Both templates are [dynamic-queue](/workflows/dynamic-queue) loops that keep bug reports as Markdown files in your repo, one file per bug, rather than in an issue tracker. They have no steps up front. Their final step reviews the fixes that landed since its previous pass, then queues new fix steps; the loop ends on the first pass that queues nothing.

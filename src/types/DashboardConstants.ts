@@ -3160,6 +3160,7 @@ export type PropertyEditorMode =
 export const GLOBAL_SETTINGS_TABS = {
   GENERAL: "general",
   WORKFLOW: "workflow",
+  TEMPLATES: "templates",
   EXECUTION: "execution",
   QUEUE: "queue",
   WORKTREES: "worktrees",

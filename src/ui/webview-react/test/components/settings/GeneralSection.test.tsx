@@ -33,6 +33,13 @@ function renderGeneralSection(stepColorMode: string) {
 }
 
 describe("GeneralSection script step color control", () => {
+  it("leaves the default-template setting to the Templates tab", () => {
+    renderGeneralSection(STEP_COLOR_MODES.UNIQUE);
+    expect(
+      screen.queryByLabelText(/general.defaultTemplate/)
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the script step color control only in harness mode", () => {
     renderGeneralSection(STEP_COLOR_MODES.HARNESS);
 

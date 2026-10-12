@@ -1931,6 +1931,7 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.TEMPLATE_VARIABLE_DEFAULTS_SET] = (message) => {
     const uiStore = useUiStore.getState();
     uiStore.setTemplates(message.templates);
+    uiStore.setTemplateCatalog(message.templates);
     const refreshedTemplate = message.templates.find(
       (template: TemplateInfo) => template.id === message.templateId
     );

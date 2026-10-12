@@ -151,6 +151,9 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
       id={id}
       value={value}
       onChange={(event) => onChange(variable.name, event.target.value)}
+      onBlur={
+        commitTextOnBlur ? () => onCommit?.(variable.name, value) : undefined
+      }
       onKeyDown={onKeyDown}
       placeholder={`Enter ${variable.name}`}
       rows={3}

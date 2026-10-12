@@ -78,7 +78,7 @@ Programs**.
 
 Open it from the gear button (**Global Settings**) in the dashboard header.
 
-![Settings on the General tab with the scope switch on Workspace: Default template shows a user badge, and Step identity colors shows a workspace badge with its Reset button](/screenshots/settings-scopes-1075x720.png)
+![Settings on the General tab with the scope switch on Workspace: Step identity colors shows a workspace badge with its Reset button](/screenshots/settings-scopes-1075x720.png)
 
 - **Scope switch.** **User** and **Workspace** in the title bar choose which file your edits are
   saved to. The drawer opens on **User**.
@@ -91,11 +91,11 @@ Open it from the gear button (**Global Settings**) in the dashboard header.
   how many matches it holds.
 - **Open settings file.** Opens the `settings.json` for the selected scope in the editor.
 
-The drawer has 18 tabs:
+The drawer has 19 tabs:
 
 | Group        | Tabs                                                          |
 | ------------ | ------------------------------------------------------------- |
-| Core         | General, Workflow Defaults                                    |
+| Core         | General, Workflow Defaults, Templates                         |
 | Execution    | Execution, Queue, Worktrees, Coordination                     |
 | Output       | Terminal, Status Line, Commit Message                         |
 | Security     | Advanced Permissions, Secrets                                 |
@@ -106,6 +106,12 @@ The drawer has 18 tabs:
 **Workflow Defaults** uses the same Harness, Context, Validation, MCP, Hooks and Permissions tabs
 as the [workflow properties panel](/workflows/properties-panel). Values there are the `defaults.*`
 settings, which every workflow inherits unless the workflow or step sets its own.
+
+**Templates** lets you choose the default template for New Workflow and save variable values for
+each template. The drawer's User/Workspace scope switch applies here too. Saved values fill in
+when you create a workflow from that template; variable defaults authored by the template
+remain available when you clear a saved value. See
+[Templates](/workflows/templates#saved-variable-values).
 
 If a settings file was written by a newer version of ctrlyoke, the drawer shows **These settings
 use a newer format. Update ctrlyoke to edit them.** and stays read-only until you update.

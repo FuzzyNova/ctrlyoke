@@ -180,7 +180,7 @@ export function classifyTemplateVariableDefaults(
     for (const variable of variables) {
       if (variable.type === TEMPLATE_VARIABLE_TYPES.MODEL &&
           variable.harness && invalidHarnesses.has(variable.harness) &&
-          Object.hasOwn(values, variable.name)) {
+          Object.prototype.hasOwnProperty.call(values, variable.name)) {
         delete valid[variable.name];
         issues.push({
           scope,

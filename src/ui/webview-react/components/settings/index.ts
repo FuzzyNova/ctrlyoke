@@ -1,4 +1,5 @@
 export { GeneralSection } from "./GeneralSection";
+export { TemplatesSection } from "./TemplatesSection";
 export { WorkflowDefaultsSection } from "./WorkflowDefaultsSection";
 export { HarnessesSection } from "./HarnessesSection";
 export { AdvancedPermissionsSection } from "./AdvancedPermissionsSection";

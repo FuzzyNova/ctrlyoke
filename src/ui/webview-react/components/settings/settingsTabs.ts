@@ -22,6 +22,11 @@ export const ALL_TABS = [
     label: "Workflow Defaults",
     icon: "codicon-globe",
   },
+  {
+    id: GLOBAL_SETTINGS_TABS.TEMPLATES,
+    label: "Templates",
+    icon: "codicon-file-code",
+  },
   // Execution
   {
     id: GLOBAL_SETTINGS_TABS.EXECUTION,
