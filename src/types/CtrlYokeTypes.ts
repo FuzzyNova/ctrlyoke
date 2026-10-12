@@ -155,6 +155,12 @@ export interface UserHookConfig {
   timeoutSec?: number;
 }
 
+/** Runtime metadata passed to OpenCode's hook plugin for scoped environments. */
+export interface OpenCodeUserHookConfig extends UserHookConfig {
+  envFile?: string;
+  envId?: string;
+}
+
 /**
  * Per-workflow/prompt tool permission overrides.
  * Follows three-tier precedence: prompt > workflow > global VS Code settings.

@@ -739,7 +739,7 @@ export class CopilotCliProvider implements ICliProvider {
     }
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      ""
+      [""]
     ).trim();
     const snapshotDirectory = path.join(
       workspaceRoot,

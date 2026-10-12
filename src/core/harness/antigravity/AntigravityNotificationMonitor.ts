@@ -14,6 +14,7 @@ import {
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 
 type AntigravityHookKey =
@@ -91,8 +92,8 @@ export class AntigravityNotificationMonitor
     // NOTE: this means paths containing spaces are unsupported by agy hooks.
     const baseCommand = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      notifyDir,
-      false
+      [notifyDir],
+      CliNotificationMonitor.shouldQuoteNodeCommand(HARNESS_IDS.ANTIGRAVITY_CLI)
     );
     const selectedEvents = new Set<HookEvent>(ctrlyokeEvents ?? ["stop"]);
 

@@ -967,7 +967,7 @@ export class ClaudeCliProvider implements ICliProvider {
     }
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      ""
+      [""]
     ).trim();
     const snapshotDirectory = path.join(
       workspaceRoot,

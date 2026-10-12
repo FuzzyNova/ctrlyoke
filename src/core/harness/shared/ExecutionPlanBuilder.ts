@@ -33,7 +33,10 @@ import {
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 import { CliProviderUtils } from "./CliProviderUtils";
-import { prepareUserHookEnvironments } from "./UserHookEnvironment";
+import {
+  hasUserHookEnvironment,
+  prepareUserHookEnvironments,
+} from "./UserHookEnvironment";
 
 export interface ExecutionPlanBuilderDeps {
   readonly provider: ICliProvider;
@@ -160,7 +163,7 @@ export class ExecutionPlanBuilder {
       const workingFilePath = session.workflowContext?.workingFilePath;
       let hookEnvironmentMutation: PreparedMutation | undefined;
 
-      if (userHooks?.some((hook) => Object.keys(hook.env ?? {}).length > 0)) {
+      if (userHooks && hasUserHookEnvironment(originalUserHooks)) {
         const notifyDir = this.deps.provider.notificationMonitor
           ?.getNotificationDirectory(workspaceRoot);
         if (!notifyDir) {

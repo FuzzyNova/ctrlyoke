@@ -856,8 +856,8 @@ export class AntigravityCliProvider implements ICliProvider {
     // gives the exact `node <script>` command from the wrapper contract.
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      "",
-      false
+      [""],
+      CliNotificationMonitor.shouldQuoteNodeCommand(HARNESS_IDS.ANTIGRAVITY_CLI)
     ).trim();
     const snapshotDirectory = path.join(
       workspaceRoot,

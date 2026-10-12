@@ -1,14 +1,23 @@
 import * as crypto from "crypto";
 import * as path from "path";
-import type { UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type {
+  OpenCodeUserHookConfig,
+  UserHookConfig,
+} from "../../../types/CtrlYokeTypes";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
-import { escapeCmdArgument } from "./WindowsCmdEscaping";
+import { CliNotificationMonitor } from "./CliNotificationMonitor";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
 
 export interface PreparedUserHookEnvironments {
-  readonly hooks: UserHookConfig[] | undefined;
+  readonly hooks: OpenCodeUserHookConfig[] | undefined;
   readonly tempFilePath?: string;
   readonly mutation?: PreparedMutation;
+}
+
+export function hasUserHookEnvironment(
+  hooks: UserHookConfig[] | undefined
+): boolean {
+  return Boolean(hooks?.some((hook) => Object.keys(hook.env ?? {}).length > 0));
 }
 
 /**
@@ -23,7 +32,7 @@ export function prepareUserHookEnvironments(params: {
   promptIndex: number;
 }): PreparedUserHookEnvironments {
   const { hooks } = params;
-  if (!hooks?.some((hook) => Object.keys(hook.env ?? {}).length > 0)) {
+  if (!hooks || !hasUserHookEnvironment(hooks)) {
     return { hooks };
   }
 
@@ -44,7 +53,7 @@ export function prepareUserHookEnvironments(params: {
     const hookId = `hook-${index}`;
     envByHookId[hookId] = env;
     if (params.harnessId === HARNESS_IDS.OPENCODE_CLI) {
-      return { ...hook, env: undefined, envFile: tempFilePath, envId: hookId } as UserHookConfig;
+      return { ...hook, env: undefined, envFile: tempFilePath, envId: hookId };
     }
 
     const encodedCommand = Buffer.from(hook.command, "utf8").toString("base64");
@@ -52,7 +61,8 @@ export function prepareUserHookEnvironments(params: {
       launcherPath,
       tempFilePath,
       hookId,
-      encodedCommand
+      encodedCommand,
+      CliNotificationMonitor.shouldQuoteNodeCommand(params.harnessId)
     );
     return { ...hook, command: launcherCommand, env: undefined };
   });
@@ -83,18 +93,12 @@ function buildLauncherCommand(
   launcherPath: string,
   envFilePath: string,
   hookId: string,
-  encodedCommand: string
+  encodedCommand: string,
+  quoted: boolean
 ): string {
-  if (process.platform === "win32") {
-    return ["node", launcherPath, envFilePath, hookId, encodedCommand]
-      .map((argument) => escapeCmdArgument(argument, false))
-      .join(" ");
-  }
-  return ["node", launcherPath, envFilePath, hookId, encodedCommand]
-    .map(quotePosixShellArgument)
-    .join(" ");
-}
-
-function quotePosixShellArgument(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
+  return CliNotificationMonitor.buildNodeCommand(
+    launcherPath,
+    [envFilePath, hookId, encodedCommand],
+    quoted
+  );
 }

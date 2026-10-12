@@ -14,6 +14,7 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   HOOK_EVENT_NAMES,
+  HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 
 /**
@@ -114,8 +115,8 @@ export class QwenNotificationMonitor
     // Windows as long as they contain no spaces. Paths with spaces are a known limitation.
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      notifyDir,
-      false
+      [notifyDir],
+      CliNotificationMonitor.shouldQuoteNodeCommand(HARNESS_IDS.QWEN_CLI)
     );
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
 

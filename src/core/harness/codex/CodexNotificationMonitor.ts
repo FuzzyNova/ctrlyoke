@@ -120,7 +120,7 @@ export class CodexNotificationMonitor
   ): HookConfig {
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      notifyDir
+      [notifyDir]
     );
     const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
