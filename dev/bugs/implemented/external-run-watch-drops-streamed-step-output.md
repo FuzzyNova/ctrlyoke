@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude while writing `docs/guide/history.md`
 - **Area:** `src/core/orchestration/ExternalRunWatchCoordinator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

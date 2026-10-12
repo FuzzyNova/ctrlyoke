@@ -15,6 +15,7 @@ import type { FileWatcher, FileWatcherFactory } from "../../core/HostPorts";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import type {
   QueueState,
+  RunRef,
   RunnerHostIdentity,
   WorkflowKey,
   WorkflowSummary,
@@ -76,16 +77,36 @@ class TestBroadcast implements ExternalRunWatchBroadcast {
   }> = [];
   readonly restoredCalls: Array<unknown[]> = [];
   readonly updatedSummaries: WorkflowSummary[] = [];
+  readonly cliOutputs: Array<{
+    workflowId: string;
+    stepIndex: number;
+    response: string;
+    isStreaming: boolean;
+  }> = [];
+  readonly notificationOrder: string[] = [];
   dismissed = false;
 
   notifyWorkflowAdded(): void {}
   notifyWorkflowDismissed(): void {
     this.dismissed = true;
+    this.notificationOrder.push("dismissed");
   }
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
     this.updatedSummaries.push(summary);
   }
-  notifyCliWatchOutput(): void {}
+  notifyCliWatchOutput(
+    workflowId: string,
+    stepIndex: number,
+    output: import("../../types/WebviewMessageTypes").CliOutput
+  ): void {
+    this.cliOutputs.push({
+      workflowId,
+      stepIndex,
+      response: output.response,
+      isStreaming: output.isStreaming,
+    });
+    this.notificationOrder.push(`output:${output.response}`);
+  }
   notifyCliPromptsExtended(): void {}
   updateStepStatus(
     index: number,
@@ -166,9 +187,9 @@ async function createLiveRun(
   name: string,
   executionState: ExecutionState = EXECUTION_STATES.RUNNING,
   hostInstanceId = `${name}-host`
-): Promise<{ workflowKey: WorkflowKey; filePath: string }> {
+): Promise<{ workflowKey: WorkflowKey; runRef: RunRef; filePath: string }> {
   const workflowKey = `${name}-workflow` as WorkflowKey;
-  const runRef = "run-2026-08-25T00-00-00-000Z" as never;
+  const runRef = "run-2026-08-25T00-00-00-000Z" as RunRef;
   const filePath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(
@@ -197,7 +218,7 @@ async function createLiveRun(
     }),
     "utf8"
   );
-  return { workflowKey, filePath };
+  return { workflowKey, runRef, filePath };
 }
 
 function fakeInstance(
@@ -218,6 +239,160 @@ function fakeInstance(
 }
 
 suite("ExternalRunWatchCoordinator dashboard state", () => {
+  test("broadcasts streamed changes and the completed aggregate for one attempt", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-streaming-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.CLI,
+        "external-streaming"
+      );
+      const { coordinator, host } = createCoordinator(workspace);
+      assert.strictEqual(
+        await coordinator.startExternalRunWatchSessionIfExternal(
+          run.filePath,
+          workspace
+        ),
+        true
+      );
+      const session = coordinator.getEntry(run.workflowKey)!.session;
+      const historyPath = session.getActiveHistoryFilePath();
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      const history = host.getOutputHistoryManager();
+      await history.initializeRunAt(
+        run.workflowKey,
+        run.runRef,
+        path.dirname(historyPath),
+        1,
+        Date.now()
+      );
+
+      await history.startStreamingExecutionOutput(historyPath, target, {
+        response: "",
+        elapsed: 0,
+        isStreaming: true,
+        timestampMs: Date.now(),
+        runIndex: 0,
+        attemptIndex: 0,
+      });
+      await history.appendStreamingChunk(historyPath, target, 0, 0, "first ");
+      await history.flushPendingWrites(historyPath);
+      coordinator.handleExternalRunWatchOutput(run.workflowKey, historyPath);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      await history.appendStreamingChunk(historyPath, target, 0, 0, "second");
+      await history.flushPendingWrites(historyPath);
+      coordinator.handleExternalRunWatchOutput(run.workflowKey, historyPath);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      await history.startStreamingExecutionOutput(historyPath, target, {
+        response: "first second",
+        elapsed: 1,
+        isStreaming: false,
+        timestampMs: Date.now(),
+        runIndex: 0,
+        attemptIndex: 0,
+      });
+      coordinator.handleExternalRunWatchOutput(run.workflowKey, historyPath);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      assert.deepStrictEqual(
+        host.broadcast.cliOutputs.map(({ response, isStreaming }) => ({
+          response,
+          isStreaming,
+        })),
+        [
+          { response: "first ", isStreaming: true },
+          { response: "first second", isStreaming: true },
+          { response: "first second", isStreaming: false },
+        ]
+      );
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("delivers output written immediately before finish before dismissing", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-finish-output-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.CLI,
+        "external-finish-output"
+      );
+      const { coordinator, host } = createCoordinator(workspace);
+      assert.strictEqual(
+        await coordinator.startExternalRunWatchSessionIfExternal(
+          run.filePath,
+          workspace
+        ),
+        true
+      );
+      const historyPath = coordinator
+        .getEntry(run.workflowKey)!
+        .session.getActiveHistoryFilePath();
+      await host.getOutputHistoryManager().initializeRunAt(
+        run.workflowKey,
+        run.runRef,
+        path.dirname(historyPath),
+        1,
+        Date.now()
+      );
+      await host.getOutputHistoryManager().startStreamingExecutionOutput(
+        historyPath,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          response: "final tail",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: Date.now(),
+          runIndex: 0,
+          attemptIndex: 0,
+        }
+      );
+      await fs.writeFile(
+        run.filePath,
+        JSON.stringify({
+          workflowName: "external-finish-output",
+          startedAt: Date.now(),
+          steps: [{ prompt: "live" }],
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.COMPLETED,
+          },
+        }),
+        "utf8"
+      );
+
+      await coordinator.handleExternalRunFinished(
+        run.workflowKey,
+        run.filePath,
+        "terminal-working-file"
+      );
+
+      assert.deepStrictEqual(
+        host.broadcast.cliOutputs.map(({ response }) => response),
+        ["final tail"]
+      );
+      assert.deepStrictEqual(host.broadcast.notificationOrder, [
+        "output:final tail",
+        "dismissed",
+      ]);
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("reports final-step state in live and finished external summaries", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-coordinator-final-step-")

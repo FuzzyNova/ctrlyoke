@@ -60,8 +60,8 @@ export class ExternalRunWatchSession implements Disposable {
   private disposables: Disposable[] = [];
   private heartbeatPollInterval: ReturnType<typeof setInterval> | undefined;
   private finished = false;
-  /** stepIndex → last number of outputs sent to the dashboard for that step */
-  private lastKnownOutputByStep: Record<number, number> = {};
+  /** One compact content signature per logical CLI attempt already sent. */
+  private readonly lastSentOutputSignatures = new Map<string, string>();
   private readonly manifestPath: string;
   private workingFileChangeThrottleTimer:
     ReturnType<typeof setTimeout> | undefined;
@@ -385,14 +385,13 @@ export class ExternalRunWatchSession implements Disposable {
     return this.inspection.lock.ownerToken;
   }
 
-  /** Returns and updates the last-known output count for a step (used for diffing). */
-  getAndUpdateLastKnownOutputCount(
-    stepIndex: number,
-    newCount: number
-  ): number {
-    const last = this.lastKnownOutputByStep[stepIndex] ?? 0;
-    this.lastKnownOutputByStep[stepIndex] = newCount;
-    return last;
+  /** Returns whether a logical CLI attempt changed since its last broadcast. */
+  shouldBroadcastOutput(entryKey: string, signature: string): boolean {
+    if (this.lastSentOutputSignatures.get(entryKey) === signature) {
+      return false;
+    }
+    this.lastSentOutputSignatures.set(entryKey, signature);
+    return true;
   }
 }
 
