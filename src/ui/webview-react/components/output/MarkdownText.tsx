@@ -57,7 +57,17 @@ const MARKDOWN_NODE_TYPES = {
   LINK: "link",
   TEXT: "text",
   HTML: "html",
+  BLOCKQUOTE: "blockquote",
 } as const;
+
+/** Custom element {@link remarkBlockquoteCopySource} puts first in a blockquote. */
+const BLOCKQUOTE_COPY_TAG = "blockquote-copy";
+
+/**
+ * Prop the `pre` renderer sets on its `code` child. A fence with no language
+ * has no `language-*` class, so this is what tells it apart from inline code.
+ */
+const CODE_BLOCK_MARKER = "data-block";
 
 /** Key of the remark-gfm entry in streamdown's `defaultRemarkPlugins`. */
 const STREAMDOWN_GFM_PLUGIN_KEY = "gfm";
@@ -248,15 +258,59 @@ function shieldReferenceEmphasis(markdown: string): string {
   return chars.join("");
 }
 
+/** Undo {@link shieldReferenceEmphasis}'s sentinels in a piece of text. */
+function restoreReferenceSentinels(text: string): string {
+  return text
+    .split(REFERENCE_UNDERSCORE_SENTINEL)
+    .join("_")
+    .split(REFERENCE_ASTERISK_SENTINEL)
+    .join("*");
+}
+
 /** Restore markers after Markdown has identified emphasis nodes. */
 function remarkRestoreReferenceEmphasis() {
   return (tree: Root): undefined => {
     visit(tree, MARKDOWN_NODE_TYPES.TEXT, (node) => {
-      node.value = node.value
-        .split(REFERENCE_UNDERSCORE_SENTINEL)
-        .join("_")
-        .split(REFERENCE_ASTERISK_SENTINEL)
-        .join("*");
+      node.value = restoreReferenceSentinels(node.value);
+    });
+  };
+}
+
+/**
+ * Remark plugin that gives every outermost blockquote a copy button by
+ * prepending a `<blockquote-copy>` element carrying the quote's own Markdown
+ * with one level of `>` markers removed. Agents asked to "draft a reply I can
+ * copy" answer in a blockquote, so what the button copies is that draft as
+ * written, formatting included. The text rides on the element because the
+ * source is only reachable here (see the offset note on
+ * {@link remarkContextReferences}); offsets index `file.value`, which is the
+ * current block in streaming mode and the whole reply in static mode.
+ */
+function remarkBlockquoteCopySource() {
+  return (tree: Root, file?: { value?: unknown }): undefined => {
+    const source = typeof file?.value === "string" ? file.value : "";
+    if (!source) return;
+    visitParents(tree, MARKDOWN_NODE_TYPES.BLOCKQUOTE, (node, ancestors) => {
+      if (
+        ancestors.some(
+          (ancestor) => ancestor.type === MARKDOWN_NODE_TYPES.BLOCKQUOTE
+        )
+      ) {
+        return;
+      }
+      const start = node.position?.start.offset;
+      const end = node.position?.end.offset;
+      if (start === undefined || end === undefined) return;
+      const text = restoreReferenceSentinels(source.slice(start, end))
+        .split("\n")
+        .map((line) => line.replace(/^[ \t]*> ?/, ""))
+        .join("\n")
+        .trim();
+      if (!text) return;
+      node.children.unshift({
+        type: MARKDOWN_NODE_TYPES.HTML,
+        value: `<${BLOCKQUOTE_COPY_TAG} data-copy-source="${encodeURIComponent(text)}"></${BLOCKQUOTE_COPY_TAG}>`,
+      } as (typeof node.children)[number]);
     });
   };
 }
@@ -281,11 +335,7 @@ function remarkRestoreReferenceEmphasis() {
 function remarkContextReferences() {
   return (tree: Root, file?: { value?: unknown }): undefined => {
     const source = typeof file?.value === "string" ? file.value : "";
-    const sourceForSearch = source
-      .split(REFERENCE_UNDERSCORE_SENTINEL)
-      .join("_")
-      .split(REFERENCE_ASTERISK_SENTINEL)
-      .join("*");
+    const sourceForSearch = restoreReferenceSentinels(source);
     visitParents(tree, MARKDOWN_NODE_TYPES.TEXT, (node, ancestors) => {
       if (
         ancestors.some((ancestor) => ancestor.type === MARKDOWN_NODE_TYPES.LINK)
@@ -924,6 +974,7 @@ const REMARK_PLUGINS = [
   // scans (extensions are disjoint, but order keeps the intent explicit).
   remarkImageRefs,
   remarkFileLinks,
+  remarkBlockquoteCopySource,
 ];
 
 // Output replies additionally link ctrlyoke context references, ahead of the
@@ -935,6 +986,7 @@ const REPLY_REMARK_PLUGINS = [
   remarkContextReferences,
   remarkImageRefs,
   remarkFileLinks,
+  remarkBlockquoteCopySource,
 ];
 
 // Initialise mermaid once at module load. Theme matched to VS Code body class
@@ -954,11 +1006,13 @@ let mermaidIdCounter = 0;
 const MERMAID_HEADER_BTN_CLASS =
   "inline-flex items-center justify-center rounded-sm px-1.5 py-0.5 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed";
 
-// Always visible, like the table and mermaid controls. Floated into the
-// fence's top-right corner (rather than absolutely positioned) so the first
-// lines of code wrap around it instead of running underneath.
-const CODE_BLOCK_COPY_BUTTON_CLASS =
-  "float-right -mr-1.5 -mt-1.5 ml-2 inline-flex items-center justify-center rounded-sm p-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
+// Copy buttons for code fences and blockquotes. Floated into the block's
+// top-right corner (rather than absolutely positioned) so the first lines wrap
+// around it instead of running underneath. Devices that can hover reveal it
+// on hover or keyboard focus; touch devices always show it.
+const BLOCK_COPY_GROUP_CLASS = "group/block-copy";
+const BLOCK_COPY_BUTTON_CLASS =
+  "float-right ml-2 mb-1 inline-flex items-center justify-center rounded-sm p-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover transition-opacity [@media(hover:hover)]:opacity-0 group-hover/block-copy:opacity-100 focus-visible:opacity-100";
 
 // Module-level cache of rendered SVG keyed by diagram source. Mermaid blocks
 // unmount when virtualized out of view; caching lets a re-realized block show
@@ -1152,8 +1206,9 @@ function MermaidBlock({ code }: { code: string }) {
 }
 
 // Extends rehype-sanitize's allowlist so it keeps <file-ref path="…">,
-// <context-ref …> and <mark data-find-active="…"> nodes produced by
-// remarkFileLinks / remarkContextReferences / remarkHighlightMatches.
+// <context-ref …>, <blockquote-copy …> and <mark data-find-active="…"> nodes
+// produced by remarkFileLinks / remarkContextReferences /
+// remarkBlockquoteCopySource / remarkHighlightMatches.
 const FILE_REF_ALLOWED_TAGS = {
   "file-ref": [
     "path",
@@ -1164,6 +1219,7 @@ const FILE_REF_ALLOWED_TAGS = {
   ],
   "context-ref": ["dataRefSource", "dataRefStart", "dataRefEnd"],
   "image-ref": ["path", "dataRefStart", "dataRefEnd"],
+  [BLOCKQUOTE_COPY_TAG]: ["dataCopySource"],
   mark: ["dataFindActive"],
 };
 
@@ -1460,24 +1516,44 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
 
       // ── Blockquote ─────────────────────────────────────────────────────
       blockquote: ({ children: c }: React.HTMLAttributes<HTMLQuoteElement>) => (
-        <blockquote className="border-l-2 border-link-fg pl-3 my-2 text-description-fg italic">
+        <blockquote
+          className={`${BLOCK_COPY_GROUP_CLASS} border-l-2 border-link-fg pl-3 my-2 text-description-fg italic`}
+        >
           {c}
         </blockquote>
       ),
 
+      // Copy button remarkBlockquoteCopySource prepends to each blockquote.
+      [BLOCKQUOTE_COPY_TAG]: (props: Record<string, unknown>) => {
+        const encoded = props["data-copy-source"] as string | undefined;
+        if (!encoded) return null;
+        return (
+          <CodeBlockCopyButton
+            code={decodeURIComponent(encoded)}
+            className={BLOCK_COPY_BUTTON_CLASS}
+            aria-label="Copy quote"
+            title="Copy quote"
+          />
+        );
+      },
+
       // ── Inline code ────────────────────────────────────────────────────
-      // When inside a fenced block the `code` node carries a `language-*`
-      // class; inline backtick code has no class. We differentiate here:
-      //   • No language class → styled inline span with a warm VS Code tint
-      //   • Language class    → syntax-highlighted block via refractor
+      // `pre` below marks its child `code` with `data-block`, the same marker
+      // streamdown's own `pre` sets; only inline backtick code lacks it.
+      //   • No `data-block` → styled inline span with a warm VS Code tint
+      //   • `data-block`    → block, syntax-highlighted via refractor when
+      //                       the fence names a language
       code: ({
         children: codeChildren,
         className: langClass,
-      }: React.HTMLAttributes<HTMLElement>) => {
+        ...codeProps
+      }: React.HTMLAttributes<HTMLElement> & {
+        [CODE_BLOCK_MARKER]?: string;
+      }) => {
         const language = langClass?.replace(/^language-/, "");
 
-        // Inline code (single backtick, no language)
-        if (!language) {
+        // Inline code (single backtick)
+        if (!(CODE_BLOCK_MARKER in codeProps)) {
           return (
             <code className="bg-code-block text-code-inline-fg rounded-sm px-1 py-0.5 font-mono">
               {codeFindHighlight
@@ -1517,14 +1593,21 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
           React.isValidElement<{ className?: string }>(preChildren) &&
           preChildren.props.className === "language-mermaid";
         return (
-          <pre className="bg-editor-bg border border-panel-border rounded-sm p-3 my-2 font-mono whitespace-pre-wrap wrap-anywhere">
+          <pre
+            className={`${BLOCK_COPY_GROUP_CLASS} bg-editor-bg border border-panel-border rounded-sm p-3 my-2 font-mono whitespace-pre-wrap wrap-anywhere`}
+          >
             {!isMermaid && (
               <CodeBlockCopyButton
                 code={getNodeText(preChildren).replace(/\n$/, "")}
-                className={CODE_BLOCK_COPY_BUTTON_CLASS}
+                className={BLOCK_COPY_BUTTON_CLASS}
               />
             )}
-            {preChildren}
+            {React.isValidElement(preChildren)
+              ? React.cloneElement(
+                  preChildren as React.ReactElement<Record<string, unknown>>,
+                  { [CODE_BLOCK_MARKER]: "true" }
+                )
+              : preChildren}
           </pre>
         );
       },

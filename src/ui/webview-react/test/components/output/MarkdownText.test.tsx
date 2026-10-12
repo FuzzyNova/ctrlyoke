@@ -432,6 +432,45 @@ describe("MarkdownText", () => {
       screen.queryByRole("button", { name: /copy code/i })
     ).not.toBeInTheDocument();
   });
+
+  it("renders a fence without a language as block code, not inline code", () => {
+    const { container } = render(
+      <MarkdownText>{"Use `npm test`.\n\n```\nplain fence\n```"}</MarkdownText>
+    );
+
+    const fenced = container.querySelector("pre code");
+    expect(fenced).toHaveClass("block");
+    expect(fenced).not.toHaveClass("bg-code-block");
+    expect(screen.getByText("npm test")).toHaveClass("bg-code-block");
+  });
+
+  it("copies a blockquote's Markdown without its quote markers", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    render(
+      <MarkdownText contextReferences>
+        {
+          "Draft:\n\n> Thanks for **the report**.\n>\n> See @src/app_main.ts and\n> > an earlier note"
+        }
+      </MarkdownText>
+    );
+
+    const buttons = await screen.findAllByRole("button", {
+      name: /copy quote/i,
+    });
+    // Only the outermost quote gets a button.
+    expect(buttons).toHaveLength(1);
+    await user.click(buttons[0]);
+
+    expect(writeText).toHaveBeenCalledWith(
+      "Thanks for **the report**.\n\nSee @src/app_main.ts and\n> an earlier note"
+    );
+  });
 });
 
 describe("MarkdownText context references in replies", () => {
