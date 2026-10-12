@@ -666,7 +666,7 @@ export class CodexCliProvider implements ICliProvider {
       if (!nativeEvent) continue;
       if (!section[nativeEvent]) section[nativeEvent] = [];
       section[nativeEvent].push(
-        createCodexCommandHookGroup(nativeEvent, uh.command)
+        createCodexCommandHookGroup(nativeEvent, uh.command, uh)
       );
     }
     return section;

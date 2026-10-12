@@ -9,7 +9,10 @@ import {
   MODEL_OPTION_VALUES,
   STATUS_LINE_HARNESS_IDS,
 } from "../../../types/DashboardConstants";
-import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
+import {
+  INotificationMonitor,
+  timeoutSecToNative,
+} from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   PermissionContext,
@@ -699,7 +702,20 @@ export class QwenCliProvider implements ICliProvider {
         section[nativeEvent] = [];
       }
       section[nativeEvent].push({
-        hooks: [{ type: "command", command: uh.command }],
+        hooks: [
+          {
+            type: "command",
+            command: uh.command,
+            ...(timeoutSecToNative(uh.timeoutSec, "milliseconds") !== undefined
+              ? {
+                  timeout: timeoutSecToNative(
+                    uh.timeoutSec,
+                    "milliseconds"
+                  ),
+                }
+              : {}),
+          },
+        ],
       });
     }
     return section;

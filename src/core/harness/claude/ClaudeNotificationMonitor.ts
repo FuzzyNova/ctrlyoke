@@ -2,6 +2,7 @@ import {
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
+  timeoutSecToNative,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
@@ -73,7 +74,15 @@ export class ClaudeNotificationMonitor
       if (!nativeEvent) continue;
       if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
       hooks[nativeEvent].push({
-        hooks: [{ type: "command", command: uh.command }],
+        hooks: [
+          {
+            type: "command",
+            command: uh.command,
+            ...(timeoutSecToNative(uh.timeoutSec) !== undefined
+              ? { timeout: timeoutSecToNative(uh.timeoutSec) }
+              : {}),
+          },
+        ],
       });
     }
     return JSON.stringify({ hooks });

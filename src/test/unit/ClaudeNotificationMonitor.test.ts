@@ -38,4 +38,26 @@ suite("ClaudeNotificationMonitor", () => {
       "node user.js"
     );
   });
+
+  test("applies timeoutSec to native Claude hook timeout in seconds", () => {
+    const userHook = {
+      event: "stop" as const,
+      command: "node slow.js",
+      timeoutSec: 7,
+    };
+    const config = JSON.parse(
+      ClaudeNotificationMonitor.buildUserOnlyConfig([userHook])
+    );
+    assert.strictEqual(config.hooks.Stop[0].hooks[0].timeout, 7);
+
+    const combined = new ClaudeNotificationMonitor().buildHookConfig(
+      "script.js",
+      "notify-dir",
+      "workspace",
+      [userHook],
+      []
+    );
+    const hooks = JSON.parse((combined as { config: string }).config).hooks;
+    assert.strictEqual(hooks.Stop[0].hooks[0].timeout, 7);
+  });
 });

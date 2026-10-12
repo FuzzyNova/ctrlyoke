@@ -860,7 +860,7 @@ Environment map consumed by the hook process. Secret references are allowed only
 - **Type:** `integer`
 - **Constraints:** minimum 1
 
-Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
+Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.
 
 ## MCP server entry {#mcp-server-entry}
 

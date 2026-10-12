@@ -20,7 +20,7 @@
 // the prompt through OpenCode's server once the plugin has loaded.
 //
 // User hooks are loaded at startup from CTRLYOKE_OPENCODE_HOOKS.
-// Format: [{ "event": "stop"|"sessionStart"|..., "command": "node ..." }, ...]
+// Format: [{ "event": "stop"|"sessionStart"|"error"|"permissionRequest"|..., "command": "node ...", "timeoutSec": 30 }, ...]
 //
 // Plugin behaviour:
 //  - Tracks CHILD sessions (with parentID) via session.created to avoid false stops
@@ -45,7 +45,7 @@
 //  - Logs written to .ctrlyoke/logs/ctrlyoke-opencode-plugin-debug.log
 
 import { writeFileSync, mkdirSync, appendFileSync } from "fs";
-import { execSync, spawnSync } from "child_process";
+import { spawnSync } from "child_process";
 import path from "path";
 
 const OPENCODE_BOOLEAN_TRUE = "true" as const;
@@ -123,10 +123,11 @@ function _parseModel(
 }
 
 // Load user hooks from the process-local JSON environment value.
-// Format: [{ event: "stop"|"sessionStart"|"preToolUse"|"postToolUse"|"userPromptSubmit", command: string }]
+// Format: [{ event: "stop"|"sessionStart"|"error"|"permissionRequest"|..., command: string, timeoutSec?: number }]
 interface UserHook {
   event: string;
   command: string;
+  timeoutSec?: number;
 }
 let _userHooks: UserHook[] = [];
 try {
@@ -138,11 +139,24 @@ try {
   /* malformed env = no user hooks, safe to ignore */
 }
 
-function _runUserHooks(event: string): void {
+/**
+ * Hook stdin has a stable shape: hook_event_name and session_id when known,
+ * plus tool_name, tool_input, and tool_output for tool hooks. Native event
+ * properties are preserved for additional context.
+ */
+function _runUserHooks(event: string, payload: Record<string, unknown>): void {
   for (const hook of _userHooks) {
     if (hook.event === event) {
       try {
-        execSync(hook.command, { stdio: "inherit", cwd: workspaceRoot });
+        spawnSync(hook.command, {
+          input: JSON.stringify(payload),
+          shell: true,
+          stdio: ["pipe", "inherit", "inherit"],
+          cwd: workspaceRoot,
+          ...(hook.timeoutSec !== undefined
+            ? { timeout: hook.timeoutSec * 1000 }
+            : {}),
+        });
       } catch (_e) {}
     }
   }
@@ -168,6 +182,9 @@ function _runDecisionUserHook(
           encoding: "utf-8",
           shell: true,
           cwd: workspaceRoot,
+          ...(hook.timeoutSec !== undefined
+            ? { timeout: hook.timeoutSec * 1000 }
+            : {}),
         });
         _debugLog("🔐 _runDecisionUserHook: ran", {
           event,
@@ -467,7 +484,11 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
           _writeHookArtifact("sessionStart", "session.created", session, {
             sessionId: session.id,
           });
-          _runUserHooks("sessionStart");
+          _runUserHooks("sessionStart", {
+            ...session,
+            hook_event_name: "sessionStart",
+            session_id: session.id,
+          });
         }
       }
 
@@ -526,7 +547,11 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
               event.properties,
               { sessionId: sessionID }
             );
-            _runUserHooks("userPromptSubmit");
+            _runUserHooks("userPromptSubmit", {
+              ...event.properties,
+              hook_event_name: "userPromptSubmit",
+              session_id: sessionID,
+            });
           } else if (status.type === "idle") {
             _debugLog("🛑 session.status idle (main)", { sessionID });
             _writeHookArtifact(
@@ -558,7 +583,11 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
                 });
               }
             }
-            _runUserHooks("stop");
+            _runUserHooks("stop", {
+              ...event.properties,
+              hook_event_name: "stop",
+              session_id: sessionID,
+            });
           }
         }
       }
@@ -582,7 +611,11 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         });
         _writeErrorFile(sessionId, "session.error", event.properties);
 
-        _runUserHooks("error");
+        _runUserHooks("error", {
+          ...event.properties,
+          hook_event_name: "error",
+          session_id: sessionId,
+        });
       }
     },
 
@@ -596,9 +629,18 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
     "permission.asked": async (_input: unknown) => {
       _debugLog("🔐 permission.asked", { input: _input });
       _writeHookArtifact("permissionRequest", "permission.asked", _input);
+      const decisionInput =
+        _input && typeof _input === "object"
+          ? (_input as Record<string, unknown>)
+          : {};
+      const decisionPayload = {
+        ...decisionInput,
+        hook_event_name: "permissionRequest",
+        session_id: _resolveSessionId(decisionInput),
+      };
       const decision = _runDecisionUserHook(
         "permissionRequest",
-        JSON.stringify(_input)
+        JSON.stringify(decisionPayload)
       );
       if (decision !== undefined) {
         _debugLog("🔐 permission.asked: returning user decision", { decision });
@@ -623,7 +665,13 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         sessionId: _input.sessionID,
         toolName: _input.tool,
       });
-      _runUserHooks("preToolUse");
+      _runUserHooks("preToolUse", {
+        ..._input,
+        hook_event_name: "preToolUse",
+        session_id: _input.sessionID,
+        tool_name: _input.tool,
+        tool_input: _output.args,
+      });
     },
 
     "tool.execute.after": async (
@@ -643,7 +691,14 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         sessionId: _input.sessionID,
         toolName: _input.tool,
       });
-      _runUserHooks("postToolUse");
+      _runUserHooks("postToolUse", {
+        ..._input,
+        hook_event_name: "postToolUse",
+        session_id: _input.sessionID,
+        tool_name: _input.tool,
+        tool_input: _input.args,
+        tool_output: _output,
+      });
     },
   };
 };

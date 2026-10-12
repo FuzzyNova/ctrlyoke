@@ -31,6 +31,14 @@ function parseMcpConfig(args: string[]): Record<string, unknown> {
 // ============================================================================
 
 suite("QwenCliProvider", () => {
+  test("converts user hook timeout seconds to native milliseconds", () => {
+    const provider = new QwenCliProvider();
+    const hooks = (provider as any).buildUserHooksSection([
+      { event: "stop", command: "node slow.js", timeoutSec: 2.5 },
+    ]);
+    assert.strictEqual(hooks.Stop[0].hooks[0].timeout, 2500);
+  });
+
   suite("hook registration", () => {
     test("registers workspace hooks with the hooks tracker lock owner", async () => {
       const workspaceRoot = await createTempWorkspace();

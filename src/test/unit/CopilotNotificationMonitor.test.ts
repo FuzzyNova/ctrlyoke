@@ -38,4 +38,12 @@ suite("CopilotNotificationMonitor", () => {
       "node user.js"
     );
   });
+
+  test("preserves per-hook timeoutSec in seconds", () => {
+    const config = CopilotNotificationMonitor.buildUserOnlyConfig([
+      { event: "stop", command: "node slow.js", timeoutSec: 13 },
+    ]);
+    const hooks = config.hooks as Record<string, Array<{ timeoutSec: number }>>;
+    assert.strictEqual(hooks.agentStop[0].timeoutSec, 13);
+  });
 });

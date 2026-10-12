@@ -13,6 +13,15 @@ import type {
   UserHookConfig,
 } from "../../../../types/CtrlYokeTypes";
 
+/** Convert workflow timeout seconds to a harness hook's native unit. */
+export function timeoutSecToNative(
+  timeoutSec: number | undefined,
+  unit: "seconds" | "milliseconds" = "seconds"
+): number | undefined {
+  if (timeoutSec === undefined) return undefined;
+  return unit === "milliseconds" ? timeoutSec * 1000 : timeoutSec;
+}
+
 /**
  * Notification monitoring configuration
  */
@@ -586,9 +595,18 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     encodedDecisionHook: string | undefined,
     buildHookGroup: (
       nativeEvent: string,
-      command: string
-    ) => Record<string, unknown> = (_nativeEvent, cmd) => ({
-      hooks: [{ type: "command", command: cmd }],
+      command: string,
+      userHook?: UserHookConfig
+    ) => Record<string, unknown> = (_nativeEvent, hookCommand, userHook) => ({
+      hooks: [
+        {
+          type: "command",
+          command: hookCommand,
+          ...(timeoutSecToNative(userHook?.timeoutSec) !== undefined
+            ? { timeout: timeoutSecToNative(userHook?.timeoutSec) }
+            : {}),
+        },
+      ],
     })
   ): Record<string, unknown[]> {
     const hooks: Record<string, unknown[]> = {};
@@ -600,7 +618,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
           ? `${command} "${encodedDecisionHook}"`
           : command;
-      hooks[nativeEvent] = [buildHookGroup(nativeEvent, eventCommand)];
+      hooks[nativeEvent] = [
+        buildHookGroup(nativeEvent, eventCommand),
+      ];
     }
 
     if (userHooks) {
@@ -614,7 +634,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         const nativeEvent = eventMap[uh.event];
         if (!nativeEvent) continue;
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-        hooks[nativeEvent].push(buildHookGroup(nativeEvent, uh.command));
+        hooks[nativeEvent].push(
+          buildHookGroup(nativeEvent, uh.command, uh)
+        );
       }
     }
 

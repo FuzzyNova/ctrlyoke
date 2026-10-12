@@ -880,7 +880,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "timeoutSec": {
         "valueKind": "number",
-        "description": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts."
+        "description": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit."
       }
     },
     "forbiddenKeys": []

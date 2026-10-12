@@ -61,7 +61,7 @@ Each hook has an `event` and a `command`, plus two optional fields:
 | `event`      | One of the eight events above.                                                                                                                     |
 | `command`    | The command to run. Use a path relative to the workspace root, as in the examples.                                                                 |
 | `env`        | Environment variables for the hook. Values may use `{{var}}` [variables](/workflows/variables) and `${secret:NAME}` [secrets](/workflows/secrets). |
-| `timeoutSec` | Timeout in seconds. Only Copilot honors it (its default is 10 seconds); other harnesses use their own timeout.                                     |
+| `timeoutSec` | Maximum hook runtime in seconds. Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode honor it when set; other harnesses use their own timeout. |
 
 `{{var}}` placeholders work in `command` too.
 
@@ -95,8 +95,10 @@ value applies.
 **Input.** Most harnesses pipe their own JSON description of the event to the
 hook on stdin: the session ID, the tool name and arguments, and so on. The
 shape is the harness's, not ctrlyoke's, so read the harness's hooks
-documentation for the fields. OpenCode is the exception: its hooks get no
-input, except `permissionRequest`.
+documentation for the fields. OpenCode sends a stable JSON object with
+`hook_event_name` and `session_id`; tool hooks also include `tool_name`,
+`tool_input`, and, after execution, `tool_output`. Other native event fields
+are included when available.
 
 **Environment.** The hook inherits the harness's environment, which includes
 the `env` of every hook on the step, and these variables from ctrlyoke:

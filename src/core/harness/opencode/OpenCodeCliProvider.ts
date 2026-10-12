@@ -906,6 +906,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       supportedHooks.map((hook) => ({
         event: hook.event,
         command: hook.command,
+        ...(hook.timeoutSec !== undefined ? { timeoutSec: hook.timeoutSec } : {}),
       }))
     );
   }

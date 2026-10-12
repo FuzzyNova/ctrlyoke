@@ -3,6 +3,7 @@ import {
   HookConfig,
   INotificationMonitor,
   NotificationMonitorBase,
+  timeoutSecToNative,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
@@ -105,13 +106,23 @@ export class AntigravityNotificationMonitor
 
     const pushHandler = (
       eventKey: AntigravityHookKey,
-      handlerCommand: string
+      handlerCommand: string,
+      userHook?: UserHookConfig
     ) => {
       group[eventKey] ??= [];
       group[eventKey]!.push({
         type: "command",
         command: handlerCommand,
-        timeout: 0,
+        ...(userHook
+          ? userHook.timeoutSec === undefined
+            ? {}
+            : {
+                timeout: timeoutSecToNative(
+                  userHook.timeoutSec,
+                  "milliseconds"
+                ),
+              }
+          : { timeout: 0 }),
       });
     };
 
@@ -145,7 +156,7 @@ export class AntigravityNotificationMonitor
       }
       // User-supplied commands are run verbatim (not our script), so they get
       // no injected event-name arg.
-      pushHandler(nativeEvent, hook.command);
+      pushHandler(nativeEvent, hook.command, hook);
     }
 
     return {

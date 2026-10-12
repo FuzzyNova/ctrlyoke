@@ -23,6 +23,14 @@ function makeWorkflowContext(resumeSession?: boolean): {
 // ============================================================================
 
 suite("CodexCliProvider", () => {
+  test("emits user hook timeout in native seconds", () => {
+    const provider = new CodexCliProvider();
+    const hooks = (provider as any).buildUserHooksSection([
+      { event: "stop", command: "node slow.js", timeoutSec: 9 },
+    ]);
+    assert.strictEqual(hooks.Stop[0].hooks[0].timeout, 9);
+  });
+
   test("preserves backslashes in user MCP args and environment values", async () => {
     const provider = new CodexCliProvider();
     const args = ["server.js", String.raw`\\d+`];

@@ -3,6 +3,7 @@ import {
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
+  timeoutSecToNative,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
@@ -76,7 +77,7 @@ export class CopilotNotificationMonitor
         type: "command",
         bash: uh.command,
         powershell: uh.command,
-        timeoutSec: uh.timeoutSec ?? 10,
+        timeoutSec: timeoutSecToNative(uh.timeoutSec) ?? 10,
       });
     }
     return { version: 1, hooks };
@@ -165,7 +166,7 @@ export class CopilotNotificationMonitor
           type: "command",
           bash: uh.command,
           powershell: uh.command,
-          timeoutSec: uh.timeoutSec ?? 10,
+          timeoutSec: timeoutSecToNative(uh.timeoutSec) ?? 10,
         });
       }
     }

@@ -576,7 +576,7 @@ suite("OpenCodeCliProvider", () => {
       "ctrlyoke-opencode-plugin.ts"
     );
     const hooks = [
-      { event: "stop", command: "node ./stop-hook.js" },
+      { event: "stop", command: "node ./stop-hook.js", timeoutSec: 12 },
       { event: "permissionRequest", command: "node ./permission-hook.js" },
       { event: "notification", command: "node ./notification-hook.js" },
     ];

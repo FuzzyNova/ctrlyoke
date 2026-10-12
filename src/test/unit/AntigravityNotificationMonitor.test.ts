@@ -126,6 +126,24 @@ suite("AntigravityNotificationMonitor", () => {
     assert.strictEqual(group.PostInvocation, null);
   });
 
+  test("uses millisecond timeout for configured user hooks and keeps internal timeout", () => {
+    const monitor = new AntigravityNotificationMonitor();
+    const config = monitor.buildHookConfig(
+      "script.js",
+      "notify-dir",
+      "workspace",
+      [
+        { event: "stop", command: "node slow.js", timeoutSec: 4 },
+        { event: "preToolUse", command: "node default.js" },
+      ],
+      ["stop"]
+    );
+    const group = (config as { config: Record<string, any> }).config.ctrlyoke;
+    assert.strictEqual(group.Stop[0].timeout, 0);
+    assert.strictEqual(group.Stop[1].timeout, 4000);
+    assert.strictEqual("timeout" in group.PreToolUse[0], false);
+  });
+
   test("silently skips notification as an unsupported event", () => {
     const monitor = new AntigravityNotificationMonitor();
     const config = monitor.buildHookConfig(
