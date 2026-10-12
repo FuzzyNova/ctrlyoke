@@ -1,4 +1,5 @@
 import { Icon } from "../shared/Icon";
+import { LucideIcon } from "../shared/LucideIcon";
 import type { SettingsTab } from "../settings/settingsTabs";
 interface Tab extends SettingsTab {
   indicator?: boolean;
@@ -47,7 +48,11 @@ export function GlobalSettingsVerticalTabBar({
             }`}
         >
           <span className="relative shrink-0">
-            <Icon name={tab.icon} className="text-base" />
+            {typeof tab.icon === "string" ? (
+              <Icon name={tab.icon} className="text-base" />
+            ) : (
+              <LucideIcon icon={tab.icon} />
+            )}
             {iconOnly && tab.matchCount !== undefined ? (
               <span className="absolute -right-2 -top-2 flex min-w-4 h-4 items-center justify-center rounded-full bg-badge-bg px-1 text-[9px] leading-none text-badge-fg">
                 {tab.matchCount}

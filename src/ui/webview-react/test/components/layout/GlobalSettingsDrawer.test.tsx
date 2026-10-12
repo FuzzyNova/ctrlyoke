@@ -47,6 +47,19 @@ describe("GlobalSettingsDrawer", () => {
     expect(screen.getByText("Statusline Tracking")).toBeInTheDocument();
   });
 
+  it("draws the Templates tab with the From template Lucide glyph", () => {
+    render(<GlobalSettingsDrawer />);
+
+    const tab = screen.getByRole("button", { name: "Templates" });
+    expect(tab.querySelector("svg.lucide-notepad-text-dashed")).not.toBeNull();
+    expect(tab.querySelector(".codicon")).toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: "General" })
+        .querySelector(".codicon-settings")
+    ).not.toBeNull();
+  });
+
   it("lets the MCP Manager use the full settings content width", () => {
     useUiStore.setState({ globalSettingsActiveTab: "mcpmanager" });
 

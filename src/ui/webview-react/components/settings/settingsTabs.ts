@@ -1,3 +1,4 @@
+import { NotepadTextDashed, type LucideIcon } from "lucide-react";
 import {
   GLOBAL_SETTINGS_TABS,
   type GlobalSettingsTab,
@@ -6,7 +7,8 @@ import {
 export interface SettingsTab {
   id: GlobalSettingsTab;
   label: string;
-  icon: string;
+  /** A codicon name, or a Lucide component where the tab shares a Lucide glyph used elsewhere. */
+  icon: string | LucideIcon;
   devOnly?: boolean;
 }
 
@@ -25,7 +27,8 @@ export const ALL_TABS = [
   {
     id: GLOBAL_SETTINGS_TABS.TEMPLATES,
     label: "Templates",
-    icon: "codicon-file-code",
+    // Same glyph as New → "From template" in WorkflowControls.
+    icon: NotepadTextDashed,
   },
   // Execution
   {
