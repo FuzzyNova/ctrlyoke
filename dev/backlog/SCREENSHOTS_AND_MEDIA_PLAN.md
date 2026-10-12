@@ -5,9 +5,13 @@
 - `images/screenshots/secrets-tab-828x440.png` — recapture after the Actions column
   template is changed to fit the settings card. The demo's `DEMO_API_KEY` also needs
   a managed value before capturing.
-- `images/screenshots/template-modal-full-feature-840x1123.png` — recapture after
-  plain text variable inputs fill the modal; use Full Feature Pipeline's default
-  `planDocument` value (`.ctrlyoke/plans/plan.md`).
+- `images/screenshots/template-modal-full-feature-840x1123.png` — recapture: plain
+  text variable inputs now fill the modal, and since 42d325220 **Set as Default**
+  sits on the Template label row (the footer is only Cancel, Create and Create &
+  Run), with **Save as default** on each changed variable's label row and
+  harness/model pairs boxed. Use Full Feature Pipeline's default `planDocument`
+  value (`.ctrlyoke/plans/plan.md`), and update the image's alt text in
+  `docs/workflows/templates.md`, which still describes Set as Default in the footer.
 
 **Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
 
