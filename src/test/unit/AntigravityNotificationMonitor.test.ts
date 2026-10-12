@@ -126,7 +126,7 @@ suite("AntigravityNotificationMonitor", () => {
     assert.strictEqual(group.PostInvocation, null);
   });
 
-  test("uses millisecond timeout for configured user hooks and keeps internal timeout", () => {
+  test("uses second timeout for configured user hooks and defaults the rest to 0", () => {
     const monitor = new AntigravityNotificationMonitor();
     const config = monitor.buildHookConfig(
       "script.js",
@@ -140,8 +140,8 @@ suite("AntigravityNotificationMonitor", () => {
     );
     const group = (config as { config: Record<string, any> }).config.ctrlyoke;
     assert.strictEqual(group.Stop[0].timeout, 0);
-    assert.strictEqual(group.Stop[1].timeout, 4000);
-    assert.strictEqual("timeout" in group.PreToolUse[0], false);
+    assert.strictEqual(group.Stop[1].timeout, 4);
+    assert.strictEqual(group.PreToolUse[0].timeout, 0);
   });
 
   test("silently skips notification as an unsupported event", () => {

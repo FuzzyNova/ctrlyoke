@@ -113,16 +113,8 @@ export class AntigravityNotificationMonitor
       group[eventKey]!.push({
         type: "command",
         command: handlerCommand,
-        ...(userHook
-          ? userHook.timeoutSec === undefined
-            ? {}
-            : {
-                timeout: timeoutSecToNative(
-                  userHook.timeoutSec,
-                  "milliseconds"
-                ),
-              }
-          : { timeout: 0 }),
+        // agy's per-handler `timeout` is in seconds; 0 means its default.
+        timeout: timeoutSecToNative(userHook?.timeoutSec) ?? 0,
       });
     };
 
