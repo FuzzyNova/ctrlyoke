@@ -539,18 +539,16 @@ export const Header: React.FC<{
               ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
               : `${slot1NarrowVisible ? "flex" : HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
-          onClick={() => handleSlotAction(slot1.action)}
+          onClick={() => {
+            if (!slot1Enabled) return;
+            handleSlotAction(slot1.action);
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             openRunDryRunMenu(event.clientX, event.clientY);
           }}
           {...runSlotLongPressHandlers}
-          disabled={
-            !slot1.enabled ||
-            isExternallyManaged ||
-            isLineageReadOnly ||
-            workflowExternalRootsApprovalRequired
-          }
+          aria-disabled={!slot1Enabled}
           title={
             externalManagementLabel
               ? `Workflow is running via ${externalManagementLabel}`

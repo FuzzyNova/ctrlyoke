@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude while re-capturing `secrets-tab-828x440.png` in the hosted dashboard
 - **Area:** `src/ui/webview-react/components/settings/SecretsSection.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

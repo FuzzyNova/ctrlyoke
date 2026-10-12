@@ -35,6 +35,8 @@ interface SecretDialogState {
 }
 
 const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+const SECRET_GRID_COLUMNS =
+  "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,auto)]";
 // Names are restricted to this shape so a declaration is always a legal env var name and so
 // the `!NAME` prompt-completion trigger never fires on ordinary lowercase prose or Markdown
 // `![alt]` image syntax after a `!` (see SECRETS_AND_REDACTION_PLAN.md).
@@ -118,7 +120,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
 
   return (
     <div
-      className={`grid gap-3 rounded-sm border px-3 py-2 md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_minmax(9rem,auto)] ${rowClass}`}
+      className={`grid gap-3 rounded-sm border px-3 py-2 ${SECRET_GRID_COLUMNS} ${rowClass}`}
       data-testid={`secret-row-${entry.name}`}
     >
       <div className="min-w-0">
@@ -129,19 +131,21 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
           </p>
         )}
       </div>
-      <div className={`text-xs ${stateClass(entry.state)}`}>
+      <div className={`min-w-0 text-xs ${stateClass(entry.state)}`}>
         {isMissing && <Icon name="warning" className="mr-1" />}
         {stateLabel(entry)}
       </div>
-      <SecretUsage entry={entry} />
-      <div className="flex items-start justify-end md:justify-start">
+      <div className="min-w-0">
+        <SecretUsage entry={entry} />
+      </div>
+      <div className="flex min-w-0 items-start justify-end md:justify-start">
         {entry.state === SECRET_REGISTRY_STATES.MANAGED_AND_SET && (
-          <div className="grid grid-cols-1 gap-1">
+          <div className="grid min-w-0 grid-cols-1 gap-1">
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border whitespace-nowrap"
+              className="min-w-0 whitespace-normal border border-btn-border text-center"
               onClick={() => onReplace(entry.name)}
             >
               Replace
@@ -150,7 +154,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="danger"
               size="sm"
-              className="whitespace-nowrap"
+              className="min-w-0 whitespace-normal text-center"
               onClick={() => onDelete(entry.name)}
             >
               Delete
@@ -159,12 +163,12 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
         )}
         {entry.state ===
           SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED && (
-          <div className="grid grid-cols-1 gap-1">
+          <div className="grid min-w-0 grid-cols-1 gap-1">
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border whitespace-nowrap"
+              className="min-w-0 whitespace-normal border border-btn-border text-center"
               onClick={() => onSet(entry.name)}
             >
               Convert to managed
@@ -173,7 +177,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border whitespace-nowrap"
+              className="min-w-0 whitespace-normal border border-btn-border text-center"
               onClick={() => onDelete(entry.name)}
             >
               Remove declaration
@@ -182,12 +186,12 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
         )}
         {entry.state ===
           SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_NOT_FOUND && (
-          <div className="grid grid-cols-1 gap-1">
+          <div className="grid min-w-0 grid-cols-1 gap-1">
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border whitespace-nowrap"
+              className="min-w-0 whitespace-normal border border-btn-border text-center"
               onClick={() => onSet(entry.name)}
             >
               Set value
@@ -196,7 +200,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
-              className="border border-btn-border whitespace-nowrap"
+              className="min-w-0 whitespace-normal border border-btn-border text-center"
               onClick={() => onDelete(entry.name)}
             >
               Remove declaration
@@ -512,7 +516,7 @@ export function SecretsSection({
           </p>
         ) : (
           <div className="space-y-2">
-            <div className="hidden gap-3 px-3 text-xxs font-semibold uppercase tracking-wide text-description-fg md:grid md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_minmax(9rem,auto)]">
+            <div className={`hidden gap-3 px-3 text-xxs font-semibold uppercase tracking-wide text-description-fg md:grid ${SECRET_GRID_COLUMNS}`}>
               <span>Name</span>
               <span>State</span>
               <span>Used by</span>

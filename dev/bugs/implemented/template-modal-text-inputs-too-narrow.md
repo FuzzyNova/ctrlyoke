@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude while capturing the D25 template-modal screenshot
 - **Area:** `src/ui/webview-react/components/workflow/TemplateModal.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -130,4 +130,24 @@ describe("template model variables", () => {
 
     expect(screen.getByRole("textbox", { name: "model" })).toHaveValue("opus");
   });
+
+  it("renders a plain text variable input at full width", () => {
+    openWithTemplate({
+      id: "text-input",
+      name: "Text input",
+      description: "",
+      isBuiltIn: true,
+      variables: [
+        {
+          name: "planDocument",
+          type: "text",
+          default: ".ctrlyoke/plans/plan.md",
+        },
+      ],
+    });
+
+    expect(screen.getByRole("textbox", { name: "planDocument" })).toHaveClass(
+      "w-full"
+    );
+  });
 });

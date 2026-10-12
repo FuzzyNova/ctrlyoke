@@ -109,14 +109,21 @@ describe("SecretsSection", () => {
       missing.getByRole("button", { name: "Remove declaration" })
     ).toBeInTheDocument();
     expect(missing.getByRole("button", { name: "Set value" })).toHaveClass(
-      "whitespace-nowrap"
+      "whitespace-normal"
     );
     expect(
       missing.getByRole("button", { name: "Remove declaration" })
-    ).toHaveClass("whitespace-nowrap");
-    expect(screen.getByTestId("secret-row-STRIPE_KEY")).toHaveClass(
-      "md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_minmax(11rem,1.2fr)_minmax(9rem,auto)]"
+    ).toHaveClass("whitespace-normal");
+    const rowTemplate = screen
+      .getByTestId("secret-row-STRIPE_KEY")
+      .className.match(/md:grid-cols-\[[^\]]+\]/)?.[0];
+    const headerTemplate = screen
+      .getByText("Actions")
+      .parentElement?.className.match(/md:grid-cols-\[[^\]]+\]/)?.[0];
+    expect(rowTemplate).toBe(
+      "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,auto)]"
     );
+    expect(headerTemplate).toBe(rowTemplate);
   });
 
   it("shows MCP and workflow usage without showing a value", async () => {

@@ -1,11 +1,13 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
-**Recapture needed:** `images/screenshots/secrets-tab-828x440.png` — the action
-buttons now stay on one line and the Actions column has a minimum width. Blocked
-2026-10-11: at 1280 CSS px the new column minimums overflow each row's card
-(`dev/bugs/backlog/secrets-tab-actions-overflow-card.md`). Fix that first, then re-capture at
-828×440. The demo's `DEMO_API_KEY` also no longer has a managed value, so set one again before
-capturing.
+**Recapture needed:**
+
+- `images/screenshots/secrets-tab-828x440.png` — recapture after the Actions column
+  template is changed to fit the settings card. The demo's `DEMO_API_KEY` also needs
+  a managed value before capturing.
+- `images/screenshots/template-modal-full-feature-840x1123.png` — recapture after
+  plain text variable inputs fill the modal; use Full Feature Pipeline's default
+  `planDocument` value (`.ctrlyoke/plans/plan.md`).
 
 **Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-11 by Claude while writing `docs/guide/dry-run.md`
 - **Area:** `src/ui/webview-react/components/layout/Header.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

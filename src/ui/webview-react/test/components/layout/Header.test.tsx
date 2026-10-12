@@ -293,7 +293,7 @@ describe("Header execution controls", () => {
     });
 
     const runButton = screen.getByRole("button", { name: "Run" });
-    expect(runButton).toBeDisabled();
+    expect(runButton).toHaveAttribute("aria-disabled", "true");
     expect(runButton.className).toContain("flex bg-btn-secondary-bg");
     expect(runButton.className).not.toContain("hidden");
     const [saveButton] = screen.getAllByRole("button", {
@@ -320,6 +320,41 @@ describe("Header execution controls", () => {
     for (const divider of dividers) {
       expect(divider.className).toContain("hidden xs:block");
     }
+  });
+
+  it("opens Dry Run from a disabled Run button without running the workflow", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-b" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+      executionRunRef: null,
+      pendingRewind: null,
+      runSummaries: [],
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "new-workflow.ctrlyoke.json",
+      workflowName: "New workflow",
+      steps: [],
+      executionState: EXECUTION_STATES.IDLE,
+    });
+
+    render(<Header />);
+
+    const runButton = screen.getByRole("button", { name: "Run" });
+    expect(runButton).toHaveAttribute("aria-disabled", "true");
+    fireEvent.contextMenu(runButton, { clientX: 120, clientY: 80 });
+
+    expect(
+      within(document.querySelector(".step-context-menu")!).getByRole(
+        "button",
+        { name: "Dry Run" }
+      )
+    ).toBeInTheDocument();
+    fireEvent.click(runButton);
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.EXECUTE_DRAFT })
+    );
   });
 
   it("offers Re-run immediately when navigation addresses a completed run", () => {
@@ -702,7 +737,7 @@ describe("Header execution controls", () => {
     });
     expect(
       within(controls).getByRole("button", { name: "Re-run" })
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
     expect(
       within(controls).getByRole("button", { name: "Stop" })
     ).toHaveAttribute("title", "Stop run in another ctrlyoke window");
@@ -742,7 +777,7 @@ describe("Header execution controls", () => {
     });
     expect(
       within(controls).getByRole("button", { name: "Re-run" })
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
     expect(
       within(controls).getByRole("button", { name: "Stop" })
     ).toHaveAttribute("title", "Stop CLI run");
@@ -846,7 +881,7 @@ describe("Header deleted-workflow banner", () => {
     });
     expect(
       within(executionControls).getByRole("button", { name: "Run" })
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("re-enables controls once the view navigates to a different workflow", () => {

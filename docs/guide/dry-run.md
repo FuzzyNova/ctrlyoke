@@ -17,7 +17,7 @@ reads **Definition changed** with a **Refresh** button.
 | From                                                                                                                  | Previews                                                                                                           |
 | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | **Dry Run** (the telescope button) in the dashboard header                                                            | The whole workflow                                                                                                 |
-| Right-click or long-press the header's first run button (**Run** or **Re-run**) while it is enabled, then **Dry Run** | The whole workflow                                                                                                 |
+| Right-click or long-press the header's first run button (**Run** or **Re-run**), then **Dry Run** | The whole workflow                                                                                                 |
 | Right-click a step (or long-press it) and choose **Dry Run Step**                                                     | That step                                                                                                          |
 | The telescope button on the **Validation** tab of the prompt properties drawer                                        | The step in the prompt editor. A new, unqueued prompt is previewed as if it were added to the end of the workflow. |
 

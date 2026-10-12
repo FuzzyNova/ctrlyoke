@@ -718,7 +718,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               const isMultiline =
                 !!variable.multiline && !isPicker && !isSelect && !isHarness;
               const inputClass =
-                "flex-1 px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border focus:outline-hidden focus:border-focus-border font-mono text-xs";
+                "w-full min-w-0 px-2 py-1.5 rounded-sm bg-input-bg text-input-fg border border-input-border focus:outline-hidden focus:border-focus-border font-mono text-xs";
               const selectClass =
                 "w-full px-2 py-1.5 rounded-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-hidden focus:border-focus-border";
               const field = (
@@ -803,7 +803,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                                 ? "path/to/spec.md"
                                 : `Enter ${variable.name}`
                           }
-                          className={inputClass}
+                          className={`${inputClass}${isPicker ? " flex-1" : ""}`}
                         />
                       )}
                       {isPicker && (
