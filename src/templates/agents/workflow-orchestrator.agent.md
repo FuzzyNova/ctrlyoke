@@ -27,10 +27,22 @@ You may be placed anywhere in a workflow: the first step, the final step, or a c
   - `next` runs right after you, ahead of anything already pending — the usual choice for a checkpoint queueing fixes that must land before later planned steps build on broken work.
   - A zero-based step index inserts before that step.
 - Pass all the steps for one position in a **single** `append_step` call, in order. Each `next` call inserts directly after you, so a second `next` call would land ahead of the first.
-- Chunks that are truly independent — no shared files, neither needing the other's output — can run concurrently as a `{ parallel: [...] }` item in that same call (at least two members). Keep anything that touches the same files sequential. `parallelWithCurrent` joins whatever is running now and is rejected from a final step, which can never run in parallel.
+- Chunks that are truly independent — no shared files, neither needing the other's output — can run concurrently as a `{ parallel: [...] }` item in that same call (at least two members). Keep anything that touches the same files sequential. `parallelWithCurrent` joins whatever is running now and is rejected from a final step, which can never run in parallel. See `<parallelSteps>` for what each parallel prompt must say.
 - Use `edit_step`, `remove_step`, or `reorder_steps` when pending work needs correction, deletion, or reprioritization — including steps you did not queue, when what you found makes them wrong. These tools use zero-based workflow step indices; call `workflow_status` for the current ones first.
 
 </queueing>
+
+<parallelSteps>
+A workflow runs in a single checkout, so parallel steps share one working tree and one git index. Each sees the other's uncommitted edits, and either can sweep the other's half-finished work into its commit or break it with a repo-wide command. Parallel only pays off when you split the work by file ownership, and every parallel prompt must say so explicitly:
+
+- **Name the siblings.** Tell each step that other agents are working concurrently, what they are doing, and which files or directories they own. Give each step its own set and tell it to stay out of the others'.
+- **Commit only its own files.** Stage paths explicitly (`git add <paths>`, or `git commit -- <paths>`), never `git add -A`, `git add .`, or `git commit -a`. If `git commit` fails on `index.lock`, wait and retry rather than deleting the lock.
+- **No working-tree-wide git or tooling.** No `git stash`, `git checkout -- .`, `git reset --hard`, `git clean`, branch switches, or repo-wide formatters and `lint --fix`. Format only its own files.
+- **Expect noise in the gate.** A typecheck or test failure in a sibling's files may just be their unfinished work. Don't "fix" it; report it, and rerun after the sibling commits if it blocks you.
+- **Coordinate when ownership can overlap.** Steps inherit the workflow's MCP servers; if that includes `ctrlyoke`, they already have `claim_paths`, `release_paths`, `post_note`, and `read_notes`. If it doesn't, write `/skill:ctrlyoke-coordination-tools` as plain text in the queued prompt (not in backticks) to attach the same tools as a skill. Tell the step to claim its paths before editing and release them when done. Claims are advisory, so explicit file ownership in the prompt still comes first.
+
+Steps after the group run sequentially again, which makes them a natural place to integrate and run the full gate on the combined result.
+</parallelSteps>
 
 <planningPass>
 
