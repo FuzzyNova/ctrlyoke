@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude (bug-drain review of ~0d920a9a1)
 - **Area:** `src/utils/WorkflowSourceEditor.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

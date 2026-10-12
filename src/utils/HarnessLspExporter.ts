@@ -5,7 +5,6 @@ import {
   applyEdits,
   modify,
   parse,
-  type FormattingOptions,
 } from "jsonc-parser";
 import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
 import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
@@ -23,6 +22,7 @@ import {
   getOpenCodeWorkspaceLspConfigPath,
   getQwenWorkspaceLspConfigPath,
 } from "./LspConfigPaths";
+import { detectFormattingOptions } from "./WorkflowSourceEditor";
 
 type JsonObject = Record<string, unknown>;
 export interface HarnessLspExportResult {
@@ -32,14 +32,6 @@ export interface HarnessLspExportResult {
 
 function isObject(value: unknown): value is JsonObject {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-function formatting(text: string): FormattingOptions {
-  const match = text.match(/\n([ \t]+)/);
-  return {
-    insertSpaces: Boolean(match && match[1]![0] !== "\t"),
-    tabSize: match && match[1]![0] !== "\t" ? match[1]!.length : 2,
-    eol: text.includes("\r\n") ? "\r\n" : "\n",
-  };
 }
 async function read(pathname: string): Promise<string> {
   try {
@@ -203,7 +195,7 @@ export class HarnessLspExporter {
   ): Promise<HarnessLspExportResult> {
     const filePath = resolvePath(targetId, scope, this.workspaceRoot);
     let text = await read(filePath);
-    const options = formatting(text);
+    const options = detectFormattingOptions(text, 2);
     const catalogMap = LANGUAGE_SERVER_CATALOG.find(
       (entry) => entry.id === id
     )?.extensionToLanguage;
