@@ -1,6 +1,6 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phases 0 and 1 complete; Phase 2 steps 1–3 complete (chunks 2a–2b); Phase 2 steps 4–6 and Phase 3 remain.
+> **Status:** Phases 0 and 1 complete; Phase 2 steps 1–4 complete (chunks 2a–2c); Phase 2 steps 5–6 and Phase 3 remain.
 > Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
@@ -646,16 +646,16 @@ session. Each one leaves `npm test` green, updates this plan's status, and commi
      reach the summary's text-only tail.
    - **Uneven event kinds.** Not every harness emits every kind (no `FILE_DELETE` from opencode,
      qwen, or Claude; no `WEB_SEARCH` from codex or opencode), so each element is optional.
-   **Chunk 1a complete:** both pure modules, constants, the Claude progress marker, and focused
-   tests are in place. The consumer and renderer work remains in chunks 1b–1c.
+     **Chunk 1a complete:** both pure modules, constants, the Claude progress marker, and focused
+     tests are in place. The consumer and renderer work remains in chunks 1b–1c.
 2. `RunOutputResolver.resolvePriorContextItems`:
    - build `transcript` from `value.output.structured.events` for prompt and `finalStep` items,
      keeping `text` only as the D5 fallback;
    - add the `finalStep` prompt and script branch (D1b);
    - collect `filesChanged` for earlier attempts through the new projection-options argument
      (D4), threaded from `createPriorContextResolver` and `PriorContextPreviewBuilder`.
-   **Chunk 1b complete:** structured prior-context projection, final-step prompts/scripts,
-   earlier-attempt file changes, and the shared full-form XML renderer are implemented.
+     **Chunk 1b complete:** structured prior-context projection, final-step prompts/scripts,
+     earlier-attempt file changes, and the shared full-form XML renderer are implemented.
 3. `buildPriorContextXmlFromItems`: render the transcript entries (D1 table) and
    `<earlierAttempts>`. Queue script rendering is unchanged.
 4. Remove `general.includeFullDiffsInPriorContext`: `schemas/settings-schema.json`,
@@ -705,7 +705,7 @@ waits for step 5.
    - an interrupted attempt has text;
    - script search finds stdout;
    - the commit-message fallback ignores failure text and diff bodies.
-4. **Dashboard readers and the full-output path** (the dashboard rows of D8c, plus D9a):
+4. **Complete (chunk 2c): Dashboard readers and the full-output path** (the dashboard rows of D8c, plus D9a):
    - fallback rows and Markdown export read `scriptOutput`;
    - every Copy Output site goes through one helper, using `ASSISTANT` text (decision 7);
    - close the Export Output gaps and make its `switch` exhaustive;
@@ -715,7 +715,7 @@ waits for step 5.
    - one export fixture per event kind, including `FILE_WRITE` content, questions, user
      steers, search results, and the terminal tail;
    - Copy Full Output equals the single-step export.
-     Docs: the dashboard page that lists the output context menu items.
+     Docs: the dashboard page that lists the output context menu items (`docs/guide/output.md` and `docs/guide/dashboard.md`).
 5. **Stop writing, and bump the format** (D8e). Delete `extractTextFromEvents`,
    `CliResponseTextExtractor.ts`, `CliResult.response`, the `onResponseComplete` payload,
    `ResolvedRunAttemptValue.responseText`, the webview's `joinCliTextEvents` and follow-up merge,

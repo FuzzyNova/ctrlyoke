@@ -124,6 +124,7 @@ describe("useStepContextMenu", () => {
       "Copy Step",
       "Copy Prompt",
       "Copy Output",
+      "Copy Full Output",
       "Copy Metadata",
       "Reply to Step",
       "Hide output",

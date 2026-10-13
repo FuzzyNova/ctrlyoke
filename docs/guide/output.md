@@ -96,10 +96,13 @@ marker popup or the step menu, to bring the output back.
 
 ## Copying and exporting {#copying-and-exporting}
 
-- **Copy output** at the end of each step copies that step's output.
-- Right-click the output for **Copy** (the selected text), **Copy All** and
-  **Copy Step Output** (the step under the pointer). **Copy All** leaves out
-  hidden steps and says how many it skipped.
+- **Copy output** at the end of each step copies the assistant's text for that
+  step. The step menu also offers **Copy Full Output**, which includes thinking,
+  tool calls and results, diffs, commands, and terminal output.
+- Right-click the output for **Copy** (the selected text), **Copy All**,
+  **Copy Step Output** (the step under the pointer), and **Copy Full Output**
+  for that step. **Copy All** leaves out hidden steps and says how many it
+  skipped.
 - **Export output to markdown** opens **Export Output**, with these options:
   - **Include CLI command**: the command each prompt step ran.
   - **Include metadata**: step headings, token stats, session IDs and

@@ -18,6 +18,8 @@ import type {
   ToolResultData,
   TextData,
   ThinkingBlock,
+  AskUserQuestionData,
+  UserSteerData,
   CliOutput as CliOutputType,
 } from "../types/cliEvents";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
@@ -58,6 +60,9 @@ import { isScriptOutput } from "./outputRenderUtils";
 import { formatTokenCount } from "@root/utils/TokenFormatting";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { formatCreatedFileDiff } from "@root/utils/CliEventDiff";
+import { getScriptOutputText } from "@root/utils/StepOutputText";
+import type { OutputMessageTarget } from "./outputProjection";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -248,6 +253,10 @@ function renderStructuredEventsToMarkdown(
           lines.push(
             `● Wrote ${data.path}${data.content ? ` (${data.content.length} bytes)` : ""}`
           );
+          if (data.content !== undefined) {
+            lines.push("");
+            lines.push(fenceLiteral(formatCreatedFileDiff(data), "diff"));
+          }
         }
         lines.push("");
         break;
@@ -290,6 +299,32 @@ function renderStructuredEventsToMarkdown(
       case CLI_EVENT_TYPES.WEB_SEARCH: {
         const data = event.data as WebSearchData;
         lines.push(`● Web search: "${data.query}"`);
+        for (const result of data.results ?? []) {
+          lines.push(`- [${result.title}](${result.url})`);
+          if (result.snippet) lines.push(`  ${result.snippet}`);
+        }
+        if (data.error) lines.push(`  Error: ${data.error}`);
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+        const data = event.data as AskUserQuestionData;
+        for (const question of data.questions) {
+          lines.push(`● Question: ${question.question}`);
+          if (question.answer) lines.push(`  Answer: ${question.answer}`);
+          if (question.notes) lines.push(`  Notes: ${question.notes}`);
+        }
+        if (data.declined?.feedback) {
+          lines.push(`  Feedback: ${data.declined.feedback}`);
+        }
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.USER_STEER: {
+        const data = event.data as UserSteerData;
+        lines.push(`● User steer: ${data.text}`);
         lines.push("");
         break;
       }
@@ -319,6 +354,18 @@ function renderStructuredEventsToMarkdown(
           lines.push("");
         }
         break;
+      }
+
+      // Timeline markers with no standalone user-facing export representation.
+      case CLI_EVENT_TYPES.COMPACTION:
+      case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED:
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD:
+      case CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC:
+        break;
+
+      default: {
+        const exhaustive = event.type satisfies never;
+        throw new Error(`Unhandled CLI event type: ${exhaustive}`);
       }
     }
   }
@@ -443,6 +490,7 @@ export function generateMarkdownExport(
           events: Array<{ type: string; data: unknown }>;
           metadata?: { sessionId?: string; harness?: string };
         };
+        scriptOutput?: CliOutputType["scriptOutput"];
       };
 
       if (includeMetadata) {
@@ -496,6 +544,11 @@ export function generateMarkdownExport(
           output.structured.events as CliEvent[],
           lines
         );
+      } else if (output.scriptOutput) {
+        if (includeMetadata) lines.push("### Response");
+        lines.push("");
+        lines.push(fenceLiteral(getScriptOutputText(output.scriptOutput)));
+        lines.push("");
       } else if (output.response) {
         if (includeMetadata) lines.push("### Response");
         lines.push("");
@@ -555,4 +608,23 @@ export function generateMarkdownExport(
   });
 
   return redactExportText(lines.join("\n"));
+}
+
+/** Generate the complete, metadata-free export for one step/pass. */
+export function generateSingleStepMarkdownExport(
+  output: CliOutputType,
+  target: OutputMessageTarget
+): string {
+  return generateMarkdownExport(
+    [
+      {
+        type: OUTPUT_MESSAGE_TYPES.CLI,
+        target,
+        timestamp: output.timestampMs ?? 0,
+        data: output,
+      },
+    ],
+    { fileName: "", executionState: "", currentStep: 0, totalSteps: 0 },
+    { exportOptions: { stepRange: [1], includeMetadata: false } }
+  );
 }

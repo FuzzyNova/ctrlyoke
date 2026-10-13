@@ -44,6 +44,7 @@ import type {
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import { getBackgroundTaskLabel } from "@root/utils/BackgroundWorkHoldText";
+import { getScriptOutputText } from "@root/utils/StepOutputText";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
 import { computePromptChangeSummary } from "./promptUndo";
@@ -1490,11 +1491,16 @@ function estimateStructuredTextHeight(
     }
     case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
       const data = row.event.data as { text?: string };
-      return estimateTextBlockHeight(data.text ?? "", fullContentWidth, outputFontSize, {
-        charWidthMultiplier: 0.6,
-        lineHeightMultiplier: 1.5,
-        verticalChrome: 32,
-      });
+      return estimateTextBlockHeight(
+        data.text ?? "",
+        fullContentWidth,
+        outputFontSize,
+        {
+          charWidthMultiplier: 0.6,
+          lineHeightMultiplier: 1.5,
+          verticalChrome: 32,
+        }
+      );
     }
     case CLI_EVENT_TYPES.BASH_COMMAND:
       return estimateBashOutputHeight(
@@ -2616,11 +2622,12 @@ export function buildOutputRows(
         }
       : {};
 
+    let activityText: string | undefined;
     if (message.isActivity) {
       const activityEvents = message.activityEvents ?? [];
+      activityText = message.activityText;
       const activityOutput: CliOutputType = {
         ...output,
-        response: message.activityText ?? "",
         structured: {
           ...output.structured,
           events: activityEvents,
@@ -2868,13 +2875,23 @@ export function buildOutputRows(
             estimateSize: 120,
           });
         }
-      } else if (!output.isStreaming && output.response) {
+      } else if (
+        !output.isStreaming &&
+        (message.isActivity
+          ? activityText
+          : output.response || output.scriptOutput)
+      ) {
+        const responseText = message.isActivity
+          ? activityText
+          : output.response;
         if (isScriptOutput(output)) {
           pushScriptOutputRows({
             rows,
             baseKey: `${attemptKey}:response`,
             target,
-            text: output.response,
+            text: output.scriptOutput
+              ? getScriptOutputText(output.scriptOutput)
+              : (responseText ?? ""),
             capToTail: false,
             expansionState: input.scriptOutputExpansionState,
           });
@@ -2883,7 +2900,7 @@ export function buildOutputRows(
             key: `${attemptKey}:response`,
             rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
             target,
-            text: output.response,
+            text: responseText ?? "",
             rawTextOutput,
             animated: false,
             ...activityMeta,

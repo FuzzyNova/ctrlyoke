@@ -9,6 +9,8 @@ import type { CliOutput as CliOutputType, TextData } from "../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import { OUTPUT_TOOL_BADGE_LABELS } from "@root/types/DashboardConstants";
 import { joinResponseText } from "@root/utils/ResponseTextJoin";
+import { getStepOutputText } from "@root/utils/StepOutputText";
+import { StepOutputTextMode } from "@root/types/DashboardConstants";
 
 const OUTPUT_TOOL_NAMES = {
   GREP: "grep",
@@ -119,15 +121,15 @@ export function joinCliTextEvents(
  * and the store appends it live (`mergeResumedActivityIntoOutput`), so it must
  * not be folded in again here.
  */
-export function extractCliOutputText(
+export function getStepAssistantTextForCopy(
   output: CliOutputType
 ): string | undefined {
-  if (typeof output.response === "string" && output.response.trim()) {
-    return output.response;
-  }
-  const text = joinCliTextEvents(output.structured?.events ?? []);
+  const text = getStepOutputText({ output }, StepOutputTextMode.ASSISTANT);
   return text || undefined;
 }
+
+/** @deprecated Use getStepAssistantTextForCopy. */
+export const extractCliOutputText = getStepAssistantTextForCopy;
 
 /**
  * Detects user-initiated stop/cancel messages that should render as warnings

@@ -8,6 +8,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import { generateSingleStepMarkdownExport } from "@utils/markdownExport";
 
 type OutputTarget = Extract<OrderedHistoryEntry, { target: unknown }>["target"];
 
@@ -115,6 +116,7 @@ describe("useFinalStepContextMenu", () => {
       "Copy Step",
       "Copy Prompt",
       "Copy Output",
+      "Copy Full Output",
       "Copy Metadata",
       "Reply to Step",
       "Hide output",
@@ -293,6 +295,39 @@ describe("useFinalStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy Output" }));
 
     expect(writeText).toHaveBeenCalledWith("final output text");
+  });
+
+  it("copies the full single-step export from Copy Full Output", () => {
+    const latestOutput: CliOutput = {
+      prompt: "final prompt",
+      response: "answer",
+      elapsed: 1,
+      isStreaming: false,
+      structured: {
+        events: [
+          {
+            type: "bashCommand",
+            data: { command: "echo hi", status: "completed", output: "hi" },
+          },
+        ],
+        metadata: {},
+      },
+    };
+    render(
+      <TestHarness
+        finalStep={{ prompt: "Final prompt" }}
+        outputText="answer"
+        latestOutput={latestOutput}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+    expect(writeText).toHaveBeenCalledWith(
+      generateSingleStepMarkdownExport(latestOutput, {
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        index: 0,
+      })
+    );
   });
 
   it("shows only the enable/disable toggle when there is no final step configured", () => {

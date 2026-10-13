@@ -74,6 +74,7 @@ import {
 import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
+import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -573,7 +574,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
             isCurrentStep,
             isExecutionTargetLocked,
             direction: index < currentStep ? "rewind" : "forward",
-            outputText: getLatestOutput(index)?.response as string | undefined,
+            outputText: getLatestOutput(index)
+              ? getStepAssistantTextForCopy(getLatestOutput(index)!)
+              : undefined,
             latestOutput: getLatestOutput(index),
             runtimeMeta: !isScriptWorkflowStep(prompt)
               ? prompt._runtime
@@ -685,8 +688,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
         ? finalStep._runtime
         : undefined,
   });
-  const finalStepOutputText = finalStepLatestOutput?.response as
-    string | undefined;
+  const finalStepOutputText = finalStepLatestOutput
+    ? getStepAssistantTextForCopy(finalStepLatestOutput)
+    : undefined;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({

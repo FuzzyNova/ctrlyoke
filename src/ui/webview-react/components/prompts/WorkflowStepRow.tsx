@@ -24,6 +24,7 @@ import type { StepColorMode } from "@root/types/DashboardConstants";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
 import { type WorkflowStepDragHandleProps } from "@utils/dndKit";
+import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 
 export type WorkflowStepComponentProps = React.ComponentProps<
   typeof WorkflowStepItem
@@ -147,7 +148,9 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         : "Workflow continued after this step failed.";
     }
 
-    const outputText = latestOutput?.response as string | undefined;
+    const outputText = latestOutput
+      ? getStepAssistantTextForCopy(latestOutput)
+      : undefined;
     const handleContextMenu = useCallback(
       (x: number, y: number) =>
         onOpenContextMenu(x, y, {
