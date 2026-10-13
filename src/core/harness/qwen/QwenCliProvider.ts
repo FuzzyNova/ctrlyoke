@@ -9,7 +9,11 @@ import {
   MODEL_OPTION_VALUES,
   STATUS_LINE_HARNESS_IDS,
 } from "../../../types/DashboardConstants";
-import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
+import {
+  INotificationMonitor,
+  buildHookTimeoutOptions,
+  HOOK_TIMEOUT_UNITS,
+} from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   PermissionContext,
@@ -382,10 +386,9 @@ export class QwenCliProvider implements ICliProvider {
       );
       return { kind: "no-op", captured: false };
     }
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      ""
-    ).trim();
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
+      "",
+    ]).trim();
     const snapshotDirectory = path.join(
       workspaceRoot,
       PATH_CONSTANTS.CTRLYOKE_DIR,
@@ -699,7 +702,16 @@ export class QwenCliProvider implements ICliProvider {
         section[nativeEvent] = [];
       }
       section[nativeEvent].push({
-        hooks: [{ type: "command", command: uh.command }],
+        hooks: [
+          {
+            type: "command",
+            command: uh.command,
+            ...buildHookTimeoutOptions(
+              uh.timeoutSec,
+              HOOK_TIMEOUT_UNITS.MILLISECONDS
+            ),
+          },
+        ],
       });
     }
     return section;

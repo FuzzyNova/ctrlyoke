@@ -67,15 +67,13 @@ export class ClaudeNotificationMonitor
    * Used for headless mode where completion detection is process-exit based.
    */
   static buildUserOnlyConfig(userHooks: UserHookConfig[]): string {
-    const hooks: Record<string, unknown[]> = {};
-    for (const uh of userHooks) {
-      const nativeEvent = ClaudeNotificationMonitor.EVENT_MAP[uh.event];
-      if (!nativeEvent) continue;
-      if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-      hooks[nativeEvent].push({
-        hooks: [{ type: "command", command: uh.command }],
-      });
-    }
+    const hooks = new ClaudeNotificationMonitor().buildCommandHooks(
+      "",
+      ClaudeNotificationMonitor.EVENT_MAP,
+      [],
+      userHooks,
+      undefined
+    );
     return JSON.stringify({ hooks });
   }
 
@@ -97,10 +95,9 @@ export class ClaudeNotificationMonitor
     userHooks?: UserHookConfig[],
     ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      notifyDir
-    );
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
+      notifyDir,
+    ]);
     const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop", "error"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(

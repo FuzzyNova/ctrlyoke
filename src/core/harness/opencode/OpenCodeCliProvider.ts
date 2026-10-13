@@ -29,6 +29,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
+  OpenCodeUserHookConfig,
   HookEvent,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -903,10 +904,18 @@ export class OpenCodeCliProvider implements ICliProvider {
       return undefined;
     }
     return JSON.stringify(
-      supportedHooks.map((hook) => ({
-        event: hook.event,
-        command: hook.command,
-      }))
+      supportedHooks.map((hook) => {
+        const scopedHook: OpenCodeUserHookConfig = hook;
+        return {
+          event: hook.event,
+          command: hook.command,
+          ...(hook.timeoutSec !== undefined
+            ? { timeoutSec: hook.timeoutSec }
+            : {}),
+          ...(scopedHook.envFile ? { envFile: scopedHook.envFile } : {}),
+          ...(scopedHook.envId ? { envId: scopedHook.envId } : {}),
+        };
+      })
     );
   }
 

@@ -202,11 +202,17 @@ suite("McpServerNormalizer", () => {
   });
 
   test("drops unknown IDs without throwing", async () => {
-    const normalized = await McpServerNormalizer.apply(
+    const result = await McpServerNormalizer.applyWithDiagnostics(
       createProperties(["missing"]),
       MANAGED_SERVERS
     );
-    assert.deepStrictEqual(normalized.mcpServers, []);
+    assert.deepStrictEqual(result.properties.mcpServers, []);
+    assert.strictEqual(result.diagnostics.length, 1);
+    assert.strictEqual(
+      result.diagnostics[0].code,
+      PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE
+    );
+    assert.match(result.diagnostics[0].message, /listed in mcpServers/u);
   });
 
   test("keeps an unknown inline MCP reference and emits a diagnostic", async () => {

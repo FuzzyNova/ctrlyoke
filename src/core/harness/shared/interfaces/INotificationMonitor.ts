@@ -13,6 +13,26 @@ import type {
   UserHookConfig,
 } from "../../../../types/CtrlYokeTypes";
 
+export const HOOK_TIMEOUT_UNITS = {
+  SECONDS: "seconds",
+  MILLISECONDS: "milliseconds",
+} as const;
+
+export type HookTimeoutUnit =
+  (typeof HOOK_TIMEOUT_UNITS)[keyof typeof HOOK_TIMEOUT_UNITS];
+
+/** Convert workflow timeout seconds to a native `{ timeout }` option. */
+export function buildHookTimeoutOptions(
+  timeoutSec: number | undefined,
+  unit: HookTimeoutUnit = HOOK_TIMEOUT_UNITS.SECONDS
+): { timeout: number } | Record<string, never> {
+  if (timeoutSec === undefined) return {};
+  return {
+    timeout:
+      unit === HOOK_TIMEOUT_UNITS.MILLISECONDS ? timeoutSec * 1000 : timeoutSec,
+  };
+}
+
 /**
  * Notification monitoring configuration
  */
@@ -586,9 +606,16 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     encodedDecisionHook: string | undefined,
     buildHookGroup: (
       nativeEvent: string,
-      command: string
-    ) => Record<string, unknown> = (_nativeEvent, cmd) => ({
-      hooks: [{ type: "command", command: cmd }],
+      command: string,
+      userHook?: UserHookConfig
+    ) => Record<string, unknown> = (_nativeEvent, hookCommand, userHook) => ({
+      hooks: [
+        {
+          type: "command",
+          command: hookCommand,
+          ...buildHookTimeoutOptions(userHook?.timeoutSec),
+        },
+      ],
     })
   ): Record<string, unknown[]> {
     const hooks: Record<string, unknown[]> = {};
@@ -614,7 +641,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         const nativeEvent = eventMap[uh.event];
         if (!nativeEvent) continue;
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-        hooks[nativeEvent].push(buildHookGroup(nativeEvent, uh.command));
+        hooks[nativeEvent].push(buildHookGroup(nativeEvent, uh.command, uh));
       }
     }
 

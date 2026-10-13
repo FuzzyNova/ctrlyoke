@@ -153,10 +153,10 @@ steps:
     mcpServers: null
 ```
 
-A `/mcp:` name that isn't in the registry shows a warning when the step starts.
-Set [`execution.contextResolutionFailure`](/reference/settings#execution-contextresolutionfailure)
-to `fail` to stop the step instead. A registry ID in an `mcpServers` list that
-isn't in the registry is skipped.
+A `/mcp:` name or registry ID in an `mcpServers` list that isn't in the registry
+shows a warning when the step starts and is skipped. Set
+[`execution.contextResolutionFailure`](/reference/settings#execution-contextresolutionfailure)
+to `fail` to stop the step instead.
 
 ## The built-in `ctrlyoke` server {#the-built-in-ctrlyoke-server}
 

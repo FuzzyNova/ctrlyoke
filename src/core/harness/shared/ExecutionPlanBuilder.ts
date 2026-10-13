@@ -33,6 +33,11 @@ import {
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 import { CliProviderUtils } from "./CliProviderUtils";
+import { projectStateRoot } from "../../../utils/ProjectStatePaths";
+import {
+  hasUserHookEnvironment,
+  prepareUserHookEnvironments,
+} from "./UserHookEnvironment";
 
 export interface ExecutionPlanBuilderDeps {
   readonly provider: ICliProvider;
@@ -62,6 +67,9 @@ export interface ExecutionPlan {
   readonly effectiveToolPermissions:
     ResolvedProperties["toolPermissions"] | undefined;
   readonly diagnostics: CliProviderPreparation["diagnostics"];
+  readonly tempFilePaths: string[];
+  /** Hook environment files stay available for the lifetime of their hook config. */
+  readonly deferredHookEnvironmentFilePaths: string[];
 }
 
 type ProviderWorkflowContext = {
@@ -142,16 +150,41 @@ export class ExecutionPlanBuilder {
     }
     const mutations = [...providerPreparation.mutations];
     const hookPreparations: CliProviderPreparation[] = [];
+    const tempFilePaths: string[] = [];
+    const deferredHookEnvironmentFilePaths: string[] = [];
 
     if (workspaceRoot) {
       const resolvedHooks = session.workflowContext?.resolvedProperties?.hooks;
       const hooksExplicitlyDisabled = resolvedHooks === null;
-      const userHooks = resolvedHooks ?? undefined;
+      const originalUserHooks = resolvedHooks ?? undefined;
+      const userHooks = originalUserHooks ? [...originalUserHooks] : undefined;
       const enabledNotificationHookEvents = hooksExplicitlyDisabled
         ? []
         : this.deps.getEnabledHookNotificationEvents();
       const promptIndex = session.workflowContext?.promptIndex ?? 0;
       const workingFilePath = session.workflowContext?.workingFilePath;
+      let hookEnvironmentMutation: PreparedMutation | undefined;
+
+      if (userHooks && hasUserHookEnvironment(originalUserHooks)) {
+        const stateRoot = this.deps.getStateRoot?.() ?? workspaceRoot;
+        const hookTempDirectory = path.join(
+          projectStateRoot(stateRoot, "user"),
+          "temp",
+          "hook-environments"
+        );
+        const hookEnvironment = prepareUserHookEnvironments({
+          hooks: userHooks,
+          harnessId: this.deps.provider.config.harnessId,
+          extensionPath,
+          hookTempDirectory,
+          promptIndex,
+        });
+        userHooks.splice(0, userHooks.length, ...(hookEnvironment.hooks ?? []));
+        if (hookEnvironment.tempFilePath) {
+          deferredHookEnvironmentFilePaths.push(hookEnvironment.tempFilePath);
+        }
+        hookEnvironmentMutation = hookEnvironment.mutation;
+      }
 
       if (
         !hooksExplicitlyDisabled &&
@@ -167,6 +200,9 @@ export class ExecutionPlanBuilder {
           apply: async () =>
             this.deps.provider.cleanupPreviousPromptHooks!(workspaceRoot),
         });
+      }
+      if (hookEnvironmentMutation) {
+        mutations.push(hookEnvironmentMutation);
       }
 
       const hookPreparation = isInteractive
@@ -303,6 +339,8 @@ export class ExecutionPlanBuilder {
         ...hookPreparations.flatMap((application) => application.diagnostics),
         ...permissionApplication.diagnostics,
       ],
+      tempFilePaths,
+      deferredHookEnvironmentFilePaths,
     };
   }
 

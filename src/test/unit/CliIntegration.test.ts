@@ -1210,11 +1210,16 @@ suite("CliIntegration", () => {
     integration.dispose();
   });
 
-  test("starts and stops the execution sidecar around an injected turn", async () => {
+  test("keeps hook env files through an injected turn", async () => {
     configService.setCliOverlay({
       defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
     });
     const lifecycle: string[] = [];
+    const envFilePath = path.join(
+      os.tmpdir(),
+      `ctrlyoke-injected-hook-env-${Date.now()}.json`
+    );
+    fs.writeFileSync(envFilePath, "{}");
     const integration = createTestIntegration({
       startExecutionSidecar: () => {
         lifecycle.push("start");
@@ -1227,6 +1232,7 @@ suite("CliIntegration", () => {
       resolvedProperties: createResolvedProperties(),
       resolvedSessionId: "session-existing",
     });
+    (integration as any).deferredHookEnvironmentFilePaths.add(envFilePath);
     (integration as any).shouldUseInjectMode = () => true;
     (integration as any).executionRunner.executeInteractiveInject =
       async () => {
@@ -1239,7 +1245,33 @@ suite("CliIntegration", () => {
       true
     );
     assert.deepStrictEqual(lifecycle, ["start", "execute", "stop"]);
+    assert.ok(fs.existsSync(envFilePath));
     integration.dispose();
+    await integration.waitForProcessShutdown();
+    assert.ok(!fs.existsSync(envFilePath));
+  });
+
+  test("cleans the prior hook env file when the next step plans hooks", async () => {
+    const integration = createTestIntegration();
+    const envFilePath = path.join(
+      os.tmpdir(),
+      `ctrlyoke-next-hook-env-${Date.now()}.json`
+    );
+    fs.writeFileSync(envFilePath, "{}");
+    (integration as any).deferredHookEnvironmentFilePaths.add(envFilePath);
+    try {
+      await sendInteractiveWithLivePty(
+        integration,
+        createResolvedProperties({ hooks: [] }),
+        undefined,
+        []
+      );
+      assert.ok(!fs.existsSync(envFilePath));
+    } finally {
+      integration.dispose();
+      await integration.waitForProcessShutdown();
+      fs.rmSync(envFilePath, { force: true });
+    }
   });
 
   test("should skip inject mode for a headless session", async () => {
@@ -1570,6 +1602,7 @@ suite("CliIntegration", () => {
       mcpApplication: { cliArgs: [], mutations: [], diagnostics: [] },
       effectiveToolPermissions: undefined,
       diagnostics: [],
+      tempFilePaths: [],
     });
     (integration as any).executionPlanBuilder.apply = async () => {};
     (integration as any).executionRunner.executeInteractive = async () => {

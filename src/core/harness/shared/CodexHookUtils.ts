@@ -1,3 +1,6 @@
+import type { UserHookConfig } from "../../../types/CtrlYokeTypes";
+import { buildHookTimeoutOptions } from "./interfaces/INotificationMonitor";
+
 const CODEX_EVENTS_WITH_MATCHERS = new Set([
   "PreToolUse",
   "PermissionRequest",
@@ -16,11 +19,18 @@ export function normalizeCodexHookMatcher(
 
 export function createCodexCommandHookGroup(
   eventName: string,
-  command: string
+  command: string,
+  userHook?: UserHookConfig
 ): Record<string, unknown> {
   const matcher = normalizeCodexHookMatcher(eventName, "");
   return {
     ...(matcher !== undefined ? { matcher } : {}),
-    hooks: [{ type: "command", command }],
+    hooks: [
+      {
+        type: "command",
+        command,
+        ...buildHookTimeoutOptions(userHook?.timeoutSec),
+      },
+    ],
   };
 }

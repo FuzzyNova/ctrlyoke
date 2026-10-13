@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude while writing `docs/workflows/hooks.md`
 - **Area:** `src/core/harness/shared/interfaces/INotificationMonitor.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

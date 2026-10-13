@@ -155,6 +155,17 @@ export interface UserHookConfig {
   timeoutSec?: number;
 }
 
+/** Runtime-only hook launcher metadata prepared by the CLI execution planner. */
+export interface PreparedUserHookConfig extends UserHookConfig {
+  envFile?: string;
+  envId?: string;
+  bashCommand?: string;
+  powershellCommand?: string;
+}
+
+/** Runtime metadata passed to OpenCode's hook plugin for scoped environments. */
+export type OpenCodeUserHookConfig = PreparedUserHookConfig;
+
 /**
  * Per-workflow/prompt tool permission overrides.
  * Follows three-tier precedence: prompt > workflow > global VS Code settings.

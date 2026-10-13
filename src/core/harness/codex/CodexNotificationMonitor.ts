@@ -118,10 +118,9 @@ export class CodexNotificationMonitor
     userHooks?: UserHookConfig[],
     ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      notifyDir
-    );
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
+      notifyDir,
+    ]);
     const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(
@@ -130,7 +129,8 @@ export class CodexNotificationMonitor
       selectedEvents,
       undefined, // user hooks are merged by CodexCliProvider via SettingsJsonHooksTracker, not here
       encodedDecisionHook,
-      createCodexCommandHookGroup
+      (nativeEvent, command, userHook) =>
+        createCodexCommandHookGroup(nativeEvent, command, userHook)
     );
 
     return {

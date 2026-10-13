@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude while writing `docs/workflows/permissions.md`
 - **Area:** `src/ui/ExternalRootsApproval.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

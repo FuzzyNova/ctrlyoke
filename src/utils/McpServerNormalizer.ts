@@ -140,6 +140,9 @@ export class McpServerNormalizer {
     }
 
     for (const unknownId of unknownIds) {
+      diagnostics.push(
+        this.createUnknownReferenceDiagnostic(properties, unknownId, true)
+      );
       Log.warn(
         `[McpServerNormalizer] MCP server ID "${unknownId}" was not found in the ctrlyoke registry; dropping it`
       );
@@ -178,7 +181,8 @@ export class McpServerNormalizer {
 
   private static createUnknownReferenceDiagnostic(
     properties: ResolvedProperties,
-    name: string
+    name: string,
+    fromMcpServersList = false
   ): CompatibilityDiagnostic {
     return {
       code: PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE,
@@ -190,7 +194,9 @@ export class McpServerNormalizer {
         mechanism: CAPABILITY_MECHANISMS.NONE,
         verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
       },
-      message: `MCP server "${name}" referenced by /mcp:${name} was not found in the ctrlyoke registry.`,
+      message: fromMcpServersList
+        ? `MCP server "${name}" listed in mcpServers was not found in the ctrlyoke registry.`
+        : `MCP server "${name}" referenced by /mcp:${name} was not found in the ctrlyoke registry.`,
     };
   }
 }

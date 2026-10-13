@@ -105,6 +105,7 @@ function createRunner(options?: {
     sessionId?: string;
   };
   headlessError?: Error;
+  cleanupTempFiles?: (paths: string[]) => Promise<void>;
 }) {
   const failureTracker = new CliFailureTracker();
   let failureReason: string | undefined;
@@ -143,17 +144,21 @@ function createRunner(options?: {
         embeddedPtyStarts++;
         failureTracker.capturePtyExit(0, []);
       },
-      executeHeadless: async (_args, _prompt, _tempFiles, callback, env) => {
+      executeHeadless: async (_args, _prompt, tempFiles, callback, env) => {
         observedHeadlessEnv = env;
-        if (options?.headlessError) {
-          throw options.headlessError;
+        try {
+          if (options?.headlessError) {
+            throw options.headlessError;
+          }
+          return await callback({
+            stdout: "",
+            stderr: options?.collectedHeadlessResponse?.error ?? "",
+            exitCode:
+              options?.collectedHeadlessResponse?.success === false ? 1 : 0,
+          });
+        } finally {
+          await options?.cleanupTempFiles?.(tempFiles);
         }
-        return callback({
-          stdout: "",
-          stderr: options?.collectedHeadlessResponse?.error ?? "",
-          exitCode:
-            options?.collectedHeadlessResponse?.success === false ? 1 : 0,
-        });
       },
       writeToCurrentPtySession:
         options?.writeToCurrentPtySession ?? (() => false),
@@ -185,7 +190,7 @@ function createRunner(options?: {
           },
         }),
       }),
-      cleanupTempFiles: async () => {},
+      cleanupTempFiles: options?.cleanupTempFiles ?? (async () => {}),
     },
     runtimeState: {
       getWorkspaceRoot: () => process.cwd(),
@@ -217,6 +222,85 @@ function createRunner(options?: {
 }
 
 suite("CliExecutionRunner", () => {
+  test("keeps deferred hook env files available after a turn", async () => {
+    const tempPath = require("path").join(
+      require("os").tmpdir(),
+      `ctrlyoke-hook-env-cleanup-${Date.now()}.json`
+    ) as string;
+    const fs = require("fs/promises") as typeof import("fs/promises");
+    await fs.writeFile(tempPath, "{}");
+    const counters = createRunner({
+      cleanupTempFiles: async (paths) => {
+        await Promise.all(
+          paths.map((filePath) => fs.rm(filePath, { force: true }))
+        );
+      },
+    });
+    const session = new CliExecutionSession({ prompt: { prompt: "cleanup" } });
+    session.addDeferredHookEnvironmentFilePath(tempPath);
+
+    await counters.runner.executeHeadless(session, []);
+    await fs.access(tempPath);
+    await fs.rm(tempPath, { force: true });
+  });
+
+  test("keeps hook env files until the user Stop hook can run", async () => {
+    const fs = require("fs/promises") as typeof import("fs/promises");
+    const tempPath = require("path").join(
+      require("os").tmpdir(),
+      `ctrlyoke-hook-env-stop-${Date.now()}.json`
+    ) as string;
+    await fs.writeFile(tempPath, "{}");
+    const counters = createRunner({
+      writeToCurrentPtySession: () => true,
+    });
+    (counters.runner as any).lastInteractiveContext = {
+      logPath: "test.log",
+      sessionId: "test-session",
+    };
+    (counters.runner as any).monitorLogFile = async () => ({ success: true });
+    const session = new CliExecutionSession({ prompt: { prompt: "stop" } });
+    session.addDeferredHookEnvironmentFilePath(tempPath);
+
+    try {
+      assert.deepStrictEqual(
+        await counters.runner.executeInteractiveInject(session),
+        { injected: true, success: true }
+      );
+      await fs.access(tempPath);
+    } finally {
+      await fs.rm(tempPath, { force: true });
+    }
+  });
+
+  test("does not add user hook environment values to the harness process", async () => {
+    const counters = createRunner();
+    const session = new CliExecutionSession({
+      prompt: { prompt: "env isolation" },
+      resolvedProperties: {
+        harness: "claude-cli",
+        model: "model-x",
+        executionMode: "headless",
+        resumeSession: false,
+        mcpServers: null,
+        hooks: [
+          {
+            event: "stop",
+            command: "node hook.js",
+            env: { PRIVATE_HOOK_VALUE: "secret" },
+          },
+        ],
+        toolPermissions: null,
+      },
+    });
+
+    await counters.runner.executeHeadless(session, []);
+    assert.strictEqual(
+      counters.getHeadlessEnv()?.PRIVATE_HOOK_VALUE,
+      undefined
+    );
+  });
+
   test("selects the interactive path from the host capability", async () => {
     for (const [interactiveTerminal, expectedPath] of [
       [INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY, "pty"],

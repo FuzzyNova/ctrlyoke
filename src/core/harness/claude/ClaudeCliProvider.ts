@@ -965,10 +965,9 @@ export class ClaudeCliProvider implements ICliProvider {
       );
       return { kind: "no-op", captured: false };
     }
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      ""
-    ).trim();
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
+      "",
+    ]).trim();
     const snapshotDirectory = path.join(
       workspaceRoot,
       PATH_CONSTANTS.CTRLYOKE_DIR,

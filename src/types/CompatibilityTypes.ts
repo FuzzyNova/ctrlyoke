@@ -188,6 +188,7 @@ export interface CompatibilityDiagnosticMessageContext {
 export const PERMISSION_CAVEAT_CODES = {
   SANDBOX_APPROVAL_MODES: "permissions.sandboxApprovalModes",
   COARSE_PERMISSION_MODES: "permissions.coarsePermissionModes",
+  CLAUDE_PREAPPROVED_SETTINGS: "permissions.claudePreapprovedSettings",
 } as const;
 
 export const MCP_CAVEAT_CODES = {
@@ -232,6 +233,8 @@ export function getCompatibilityCaveatMessage(
       return "because this harness uses sandbox/approval modes instead of individual tool patterns";
     case PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES:
       return "because this harness uses coarse permission modes instead of individual tool patterns";
+    case PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS:
+      return "because Claude's existing settings allow rules also count as pre-approved in headless mode";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT:

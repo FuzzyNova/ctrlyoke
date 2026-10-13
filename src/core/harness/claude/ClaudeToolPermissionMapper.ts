@@ -5,7 +5,10 @@ import {
   ToolPermissionMapperBase,
   ToolPermissionApplication,
 } from "../shared/interfaces/IToolPermissionMapper";
-import type { PermissionCapabilityDescriptor } from "../../../types/CompatibilityTypes";
+import {
+  PERMISSION_CAVEAT_CODES,
+  type PermissionCapabilityDescriptor,
+} from "../../../types/CompatibilityTypes";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
 import {
@@ -28,9 +31,10 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
     verification: CLAUDE_PERMISSION_VERIFICATION,
   },
   allowedTools: {
-    fidelity: "exact",
+    fidelity: "partial",
     mechanism: "translated-cli",
     verification: CLAUDE_PERMISSION_VERIFICATION,
+    caveatCode: PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS,
   },
   deniedTools: {
     fidelity: "exact",
@@ -48,7 +52,8 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
  * Permission modes:
  * - dangerouslyAllowAll: --dangerously-skip-permissions (bypasses ALL checks)
  * - allowAll: --permission-mode bypassPermissions --tools "default" (respects deny list)
- * - custom: --permission-mode bypassPermissions --allowedTools [...] (specific tools + deny list)
+ * - custom: headless uses --permission-mode dontAsk; interactive uses the default mode.
+ *   Both apply --allowedTools and --disallowedTools.
  *
  * Tool name conversion:
  * - Copilot format: shell(git:*), write
@@ -57,7 +62,9 @@ const CLAUDE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
  * - MCP tools pass through unchanged
  *
  * Claude CLI specifics:
- * - Uses --permission-mode bypassPermissions to auto-grant permissions
+ * - Uses --permission-mode bypassPermissions for allowAll
+ * - Uses --permission-mode dontAsk for headless custom runs, which deny tools
+ *   that are not pre-approved; interactive custom runs keep the default mode
  * - Uses --tools "default" for all default tools
  * - Uses --allowedTools for specific tools
  * - Uses --disallowedTools for deny patterns
@@ -77,7 +84,7 @@ export class ClaudeToolPermissionMapper
    */
   async prepare(
     config: ToolPermissionConfig,
-    _context: PermissionContext
+    context: PermissionContext
   ): Promise<ToolPermissionApplication> {
     if (config.mode === PERMISSION_MODES.NONE) {
       return { cliArgs: [], diagnostics: [] };
@@ -86,12 +93,14 @@ export class ClaudeToolPermissionMapper
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       args = ["--dangerously-skip-permissions"];
     } else {
-      // Both allowAll and custom modes use --permission-mode bypassPermissions
-      args = ["--permission-mode", "bypassPermissions"];
-
       if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
+        // Keep allowAll behavior unchanged.
+        args = ["--permission-mode", "bypassPermissions"];
         args.push("--tools", "default");
       } else {
+        // In headless mode dontAsk auto-denies tools that are not pre-approved.
+        // Interactive mode keeps Claude's default prompting behavior.
+        args = context.isInteractive ? [] : ["--permission-mode", "dontAsk"];
         const convertedAllowTools = this.convertUnique(
           config.allowedTools,
           (t) => this.convertToClaudeFormat(t)

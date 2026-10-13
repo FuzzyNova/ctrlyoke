@@ -1039,6 +1039,9 @@ describe("WorkflowPropertiesPanel undo/redo sequences", () => {
    * the pre-condition": several edits to the same nested condition object in a
    * row must each be independently undoable, in reverse order.
    */
+  // This interaction traverses the full properties panel repeatedly; under
+  // `npm test` the UI workers share the machine with six extension hosts, and
+  // the default 20s budget expired under that load despite passing alone.
   it("unwinds a run of pre-condition edits one step at a time", () => {
     useSettingsStore
       .getState()
@@ -1087,7 +1090,7 @@ describe("WorkflowPropertiesPanel undo/redo sequences", () => {
         checkpoints[i]
       );
     }
-  });
+  }, 60000);
 
   /**
    * Committing one field while a second control is activated in the same tick

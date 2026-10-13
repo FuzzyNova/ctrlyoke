@@ -183,7 +183,7 @@ User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supporte
 
 Accepted forms:
 
-- array of [Hook entry](#hook-entry) — User-defined hooks. Per-event override: events present replace the tier below for that event; absent events inherit.
+- array of [Hook entry](#hook-entry) — User-defined hooks. A step's hooks replace the workflow's hooks for each event it defines; other workflow events inherit. A workflow's hooks array replaces defaults.hooks from settings entirely.
 - `null` — Explicitly disables all hooks for this prompt/workflow.
 
 ### `sessionId` {#execution-properties-sessionid}
@@ -840,7 +840,7 @@ One user-defined hook in a `hooks` array.
 - **Type:** `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest" | "notification" | "error"`
 - **Required:** yes
 
-Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
+Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
 
 ### `command` {#hook-entry-command}
 
@@ -853,14 +853,14 @@ Command to execute. Resolved relative to workspace root if not absolute.
 
 - **Type:** map of `string`
 
-Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.
+Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.
 
 ### `timeoutSec` {#hook-entry-timeoutsec}
 
 - **Type:** `integer`
 - **Constraints:** minimum 1
 
-Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
+Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.
 
 ## MCP server entry {#mcp-server-entry}
 

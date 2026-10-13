@@ -13,6 +13,7 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  EXECUTION_PHASES,
   EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   FINAL_STEP_PHASES,
@@ -120,6 +121,10 @@ export interface ExternalRunWatchEntry {
   summary: WorkflowSummary;
   /** Last per-step statuses broadcast for this run. */
   lastStepStatuses: StepStatus[];
+  /** Serializes history snapshots so older reads cannot replace newer output. */
+  historyLoadPromise: Promise<void>;
+  /** Prevents watcher callbacks from queuing reads after the final snapshot. */
+  finishing?: boolean;
 }
 
 export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunWatchPort {
@@ -597,7 +602,11 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         this.handleExternalRunWatchOutput(workflowId, historyFilePath);
       },
       (reason) => {
-        this.handleExternalRunFinished(workflowId, workingFilePath, reason);
+        void this.handleExternalRunFinished(
+          workflowId,
+          workingFilePath,
+          reason
+        );
       },
       this.host.fileWatcherFactory
     );
@@ -612,6 +621,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         undefined,
         workingFile._runtime?.finalStep?.phase
       ),
+      historyLoadPromise: Promise.resolve(),
     });
     await session.start();
     const activeEntry = this.externalRunSessions.get(workflowId);
@@ -760,46 +770,22 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
   ): Promise<void> {
     const entry = this.externalRunSessions.get(workflowId);
     if (!entry) return;
-    try {
-      const history = await this.host
-        .getOutputHistoryManager()
-        .loadHistory(historyFilePath);
-      const cliOutputsByStep = new Map<number, unknown[]>();
-      for (const historyEntry of history.orderedEntries) {
-        if (
-          historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          const stepIndex = (
-            historyEntry.target as {
-              kind: typeof FINAL_STEP_PHASES.QUEUE;
-              stepIndex: number;
-            }
-          ).stepIndex;
-          const arr = cliOutputsByStep.get(stepIndex) ?? [];
-          arr.push(historyEntry.cliOutput);
-          cliOutputsByStep.set(stepIndex, arr);
-        }
-      }
-      for (const [stepIndex, outputs] of cliOutputsByStep) {
-        entry.session.getAndUpdateLastKnownOutputCount(
-          stepIndex,
-          outputs.length
+    const load = entry.historyLoadPromise.then(async () => {
+      if (this.externalRunSessions.get(workflowId) !== entry) return;
+      try {
+        const history = await this.host
+          .getOutputHistoryManager()
+          .loadHistory(historyFilePath);
+        this.broadcastChangedCliWatchOutputs(workflowId, entry, history);
+      } catch (err) {
+        Log.warn(
+          `[WorkflowOrchestrator] replayExternalWatchHistoryFile: failed to read history file:`,
+          err
         );
-        for (const output of outputs) {
-          this.host.broadcast.notifyCliWatchOutput(
-            workflowId,
-            stepIndex,
-            output as CliOutput
-          );
-        }
       }
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] replayExternalWatchHistoryFile: failed to read history file:`,
-        err
-      );
-    }
+    });
+    entry.historyLoadPromise = load;
+    await load;
   }
 
   handleExternalRunWatchOutput(
@@ -807,60 +793,64 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     historyFilePath: string
   ): void {
     const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) return;
-    this.host
-      .getOutputHistoryManager()
-      .loadHistory(historyFilePath)
-      .then((history) => {
-        const cliOutputsByStep = new Map<number, unknown[]>();
-        for (const historyEntry of history.orderedEntries) {
-          if (
-            historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-            historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
-          ) {
-            const stepIndex = (
-              historyEntry.target as {
-                kind: typeof FINAL_STEP_PHASES.QUEUE;
-                stepIndex: number;
-              }
-            ).stepIndex;
-            const arr = cliOutputsByStep.get(stepIndex) ?? [];
-            arr.push(historyEntry.cliOutput);
-            cliOutputsByStep.set(stepIndex, arr);
-          }
-        }
-        for (const [stepIndex, outputs] of cliOutputsByStep) {
-          const lastKnown = entry.session.getAndUpdateLastKnownOutputCount(
-            stepIndex,
-            outputs.length
-          );
-          for (let i = lastKnown; i < outputs.length; i++) {
-            this.host.broadcast.notifyCliWatchOutput(
-              workflowId,
-              stepIndex,
-              outputs[i] as CliOutput
-            );
-          }
-        }
-      })
-      .catch((err: unknown) => {
+    if (!entry || entry.finishing) return;
+    void this.replayExternalWatchHistoryFile(workflowId, historyFilePath).catch(
+      (err: unknown) => {
         Log.warn(
           `[WorkflowOrchestrator] handleExternalRunWatchOutput: failed to read history file:`,
           err
         );
-      });
+      }
+    );
   }
 
-  handleExternalRunFinished(
+  private broadcastChangedCliWatchOutputs(
+    workflowId: string,
+    entry: ExternalRunWatchEntry,
+    history: Awaited<ReturnType<OutputHistoryManager["loadHistory"]>>
+  ): void {
+    for (const historyEntry of history.orderedEntries) {
+      if (this.externalRunSessions.get(workflowId) !== entry) return;
+      if (
+        historyEntry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
+        historyEntry.target.kind !== FINAL_STEP_PHASES.QUEUE
+      ) {
+        continue;
+      }
+      const stepIndex = historyEntry.target.stepIndex;
+      const output = historyEntry.cliOutput as CliOutput;
+      const entryKey = [
+        `queue:${stepIndex}`,
+        `run:${historyEntry.runIndex ?? output.runIndex ?? 0}`,
+        `attempt:${historyEntry.attemptIndex ?? output.attemptIndex ?? 0}`,
+        `phase:${historyEntry.phase ?? EXECUTION_PHASES.PROMPT}`,
+      ].join(":");
+      const signature = getCliOutputSignature(output);
+      if (!entry.session.shouldBroadcastOutput(entryKey, signature)) continue;
+      if (this.externalRunSessions.get(workflowId) !== entry) return;
+      this.host.broadcast.notifyCliWatchOutput(workflowId, stepIndex, output);
+    }
+  }
+
+  async handleExternalRunFinished(
     workflowId: string,
     workingFilePath: string,
     reason: ExternalRunWatchFinishReason
-  ): void {
+  ): Promise<void> {
     const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) return;
+    if (!entry || entry.finishing) return;
+    entry.finishing = true;
     Log.info(
       `[WorkflowOrchestrator] external run session finished for "${workflowId}" (reason=${reason})`
     );
+    // The terminal working-file notification can beat the final manifest
+    // rewrite. Read history once more while the session is still registered,
+    // and finish only after that tail has reached the dashboard.
+    await this.replayExternalWatchHistoryFile(
+      workflowId,
+      entry.session.getActiveHistoryFilePath()
+    );
+    if (this.externalRunSessions.get(workflowId) !== entry) return;
     entry.session.dispose();
     this.externalRunSessions.delete(workflowId);
 
@@ -884,77 +874,75 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       return;
     }
 
-    fs.promises
-      .readFile(workingFilePath, "utf8")
-      .then(async (content) => {
-        const workingFile = JSON.parse(content) as {
-          _runtime?: {
-            executionState?: string;
-            currentIndex?: number;
-            tokenTotals?: WorkflowSummary["tokenTotals"];
-            finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
-          };
-          steps?: StepWithRuntimeStatus[];
-          finalStep?: WorkingFile["finalStep"];
-          workflowName?: string;
-          startedAt?: number;
+    try {
+      const content = await fs.promises.readFile(workingFilePath, "utf8");
+      const workingFile = JSON.parse(content) as {
+        _runtime?: {
+          executionState?: string;
+          currentIndex?: number;
+          tokenTotals?: WorkflowSummary["tokenTotals"];
+          finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
         };
-        let finalState =
-          workingFile._runtime?.executionState ?? EXECUTION_STATES.STOPPED;
-        if (finalState === EXECUTION_STATES.RUNNING) {
-          finalState = EXECUTION_STATES.STOPPED;
-          if (workingFile._runtime) {
-            workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
-          }
-          try {
-            // A newer ctrlyoke's run is displayed as stopped but never rewritten.
-            assertWritableSchema(
-              PERSISTED_STORES.RUN_FILE,
-              workingFile._runtime,
-              workingFilePath
-            );
-            await WorkingFileManager.writeWorkingFileAtomic(
-              workingFilePath,
-              workingFile as WorkingFile
-            );
-          } catch (writeErr) {
-            Log.warn(
-              `[WorkflowOrchestrator] handleExternalRunFinished: failed to normalize working file:`,
-              writeErr
-            );
-          }
+        steps?: StepWithRuntimeStatus[];
+        finalStep?: WorkingFile["finalStep"];
+        workflowName?: string;
+        startedAt?: number;
+      };
+      let finalState =
+        workingFile._runtime?.executionState ?? EXECUTION_STATES.STOPPED;
+      if (finalState === EXECUTION_STATES.RUNNING) {
+        finalState = EXECUTION_STATES.STOPPED;
+        if (workingFile._runtime) {
+          workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
         }
-        const finalSummary: WorkflowSummary = {
-          ...entry.summary,
-          executionState: finalState as WorkflowSummary["executionState"],
-          currentStep:
-            workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
-          totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
-          externalOwner: undefined,
-          tokenTotals: workingFile._runtime?.tokenTotals,
-          ...deriveWorkflowFinalStepSummary(
-            workingFile.finalStep,
-            workingFile._runtime?.finalStep
-          ),
-          finalStepRunning: false,
-        };
-        this.broadcastExternalRunStepStatuses(
-          workflowId,
-          entry,
-          workingFile.steps ?? [],
-          finalSummary
-        );
-        this.host.broadcast.notifyWorkflowSummaryUpdated(finalSummary);
-        this.host.broadcast.notifyWorkflowDismissed(workflowId);
-        void this.host.saveState();
-      })
-      .catch((err) => {
-        Log.warn(
-          `[WorkflowOrchestrator] handleExternalRunFinished: failed to read working file:`,
-          err
-        );
-        this.host.broadcast.notifyWorkflowDismissed(workflowId);
-      });
+        try {
+          // A newer ctrlyoke's run is displayed as stopped but never rewritten.
+          assertWritableSchema(
+            PERSISTED_STORES.RUN_FILE,
+            workingFile._runtime,
+            workingFilePath
+          );
+          await WorkingFileManager.writeWorkingFileAtomic(
+            workingFilePath,
+            workingFile as WorkingFile
+          );
+        } catch (writeErr) {
+          Log.warn(
+            `[WorkflowOrchestrator] handleExternalRunFinished: failed to normalize working file:`,
+            writeErr
+          );
+        }
+      }
+      const finalSummary: WorkflowSummary = {
+        ...entry.summary,
+        executionState: finalState as WorkflowSummary["executionState"],
+        currentStep:
+          workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
+        totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
+        externalOwner: undefined,
+        tokenTotals: workingFile._runtime?.tokenTotals,
+        ...deriveWorkflowFinalStepSummary(
+          workingFile.finalStep,
+          workingFile._runtime?.finalStep
+        ),
+        finalStepRunning: false,
+      };
+      this.broadcastExternalRunStepStatuses(
+        workflowId,
+        entry,
+        workingFile.steps ?? [],
+        finalSummary
+      );
+      this.host.broadcast.notifyWorkflowSummaryUpdated(finalSummary);
+      this.host.broadcast.notifyWorkflowDismissed(workflowId);
+      void this.host.saveState();
+    } catch (err) {
+      Log.warn(
+        `[WorkflowOrchestrator] handleExternalRunFinished: failed to read working file:`,
+        err
+      );
+      this.host.broadcast.notifyWorkflowDismissed(workflowId);
+    }
   }
 
   async restartExternalRunWatchSession(
@@ -1149,4 +1137,14 @@ function isExecutionOwnerState(status: QueueState["status"]): boolean {
     status === EXECUTION_STATES.PAUSED ||
     status === EXECUTION_STATES.CANCELLING
   );
+}
+
+function getCliOutputSignature(output: CliOutput): string {
+  const content = JSON.stringify(output);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < content.length; index++) {
+    hash ^= content.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${content.length}:${hash >>> 0}`;
 }

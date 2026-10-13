@@ -175,6 +175,9 @@ export class CliIntegration extends HarnessIntegration {
   private lastResolvedSessionId?: string;
   /** Temp prompt files held until the live PTY exits after a steer. */
   private deferredSteerTempFilePaths: string[] = [];
+  /** Hook env files live as long as the PTY configuration that references them. */
+  private deferredHookEnvironmentFilePaths = new Set<string>();
+  private deferredHookEnvironmentCleanup?: Promise<void>;
 
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
@@ -1251,6 +1254,17 @@ export class CliIntegration extends HarnessIntegration {
     await this.retireConflictingSiblingPty(session);
 
     const executionPlan = await this.executionPlanBuilder.plan(session);
+    if (session.resolvedProperties?.hooks !== null) {
+      await this.cleanupDeferredHookEnvironmentFiles();
+    }
+    for (const tempFilePath of executionPlan.deferredHookEnvironmentFilePaths ??
+      []) {
+      session.addDeferredHookEnvironmentFilePath(tempFilePath);
+      this.deferredHookEnvironmentFilePaths.add(tempFilePath);
+    }
+    for (const tempFilePath of executionPlan.tempFilePaths) {
+      session.addTempFilePath(tempFilePath);
+    }
     const routedDiagnostics =
       executionPlan.permissionApplication.diagnostics.map((diagnostic) => {
         const workflowContext = session.workflowContext;
@@ -1625,6 +1639,17 @@ export class CliIntegration extends HarnessIntegration {
     );
   }
 
+  private async cleanupDeferredHookEnvironmentFiles(): Promise<void> {
+    const filePaths = [...this.deferredHookEnvironmentFilePaths];
+    if (filePaths.length === 0) {
+      return;
+    }
+    this.deferredHookEnvironmentFilePaths.clear();
+    await Promise.all(
+      filePaths.map((filePath) => fs.promises.unlink(filePath).catch(() => {}))
+    );
+  }
+
   /** Keep steer prompt files available until the live PTY has consumed them. */
   private registerDeferredSteerTempFiles(tempFilePaths: string[]): void {
     this.deferredSteerTempFilePaths.push(...tempFilePaths);
@@ -1986,6 +2011,8 @@ export class CliIntegration extends HarnessIntegration {
    */
   dispose(): void {
     super.dispose();
+    this.deferredHookEnvironmentCleanup =
+      this.cleanupDeferredHookEnvironmentFiles();
     this.sessionActivityWatcher?.stop();
     this.sessionActivityWatcher = undefined;
     this.transportCoordinator.dispose(
@@ -1995,6 +2022,7 @@ export class CliIntegration extends HarnessIntegration {
 
   override async waitForProcessShutdown(): Promise<void> {
     await this.processManager.disposeAsync();
+    await this.deferredHookEnvironmentCleanup;
   }
 
   /**

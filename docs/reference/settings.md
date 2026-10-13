@@ -308,10 +308,10 @@ User-defined hooks to run at various execution lifecycle points. A workspace-sco
 
 Fields:
 
-- `event` · `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest" | "notification" | "error"` · required — Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
+- `event` · `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest" | "notification" | "error"` · required — Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
 - `command` · `string` · required — Command to execute. Resolved relative to workspace root if not absolute.
-- `env` · map of `string` — Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.
-- `timeoutSec` · `integer` — Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
+- `env` · map of `string` — Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.
+- `timeoutSec` · `integer` — Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.
 
 ### `defaults.errorBehavior` {#defaults-errorbehavior}
 

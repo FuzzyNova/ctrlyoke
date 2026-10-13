@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude while writing `docs/workflows/mcp-servers.md`
 - **Area:** `src/utils/McpServerNormalizer.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

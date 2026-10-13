@@ -1,5 +1,6 @@
 import * as path from "path";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import { HARNESS_IDS } from "../../../types/DashboardConstants";
 
 /**
  * Shared hook/notification file monitoring utilities
@@ -10,6 +11,13 @@ import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
  * - Codex CLI: Notify hook (writes thread-{id}.json on agent-turn-complete)
  */
 export class CliNotificationMonitor {
+  /** Qwen and Antigravity pass commands through without shell quote parsing. */
+  static shouldQuoteNodeCommand(harnessId: string | undefined): boolean {
+    return (
+      harnessId !== HARNESS_IDS.QWEN_CLI &&
+      harnessId !== HARNESS_IDS.ANTIGRAVITY_CLI
+    );
+  }
   /**
    * Get workspace-specific notification directory
    *
@@ -33,10 +41,10 @@ export class CliNotificationMonitor {
   }
 
   /**
-   * Normalize paths to forward slashes and build a `node <script> <dir>` command.
+   * Normalize paths to forward slashes and build a `node <script> ...args` command.
    *
    * @param scriptPath Path to the notification hook script
-   * @param notifyDir Notification directory path
+   * @param args Arguments appended after the script path
    * @param quoted Whether to wrap paths in double-quotes (default true).
    *   Pass false for harnesses whose hook runners parse the command via spawn
    *   with shell: false — quotes would become literal characters in argv.
@@ -44,12 +52,15 @@ export class CliNotificationMonitor {
    */
   static buildNodeCommand(
     scriptPath: string,
-    notifyDir: string,
+    args: string[] = [],
     quoted = true
   ): string {
-    const s = scriptPath.replace(/\\/g, "/");
-    const d = notifyDir.replace(/\\/g, "/");
-    return quoted ? `node "${s}" "${d}"` : `node ${s} ${d}`;
+    const normalizedArgs = [scriptPath, ...args].map((arg) =>
+      arg.replace(/\\/g, "/")
+    );
+    return quoted
+      ? `node ${normalizedArgs.map((arg) => `"${arg}"`).join(" ")}`
+      : `node ${normalizedArgs.join(" ")}`;
   }
 
   // Harness-specific hook config builders moved to:

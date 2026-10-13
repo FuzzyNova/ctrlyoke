@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { parseDocument } from "yaml";
 import { afterEach, suite, test } from "mocha";
 import {
   confirmExternalFileTrust,
@@ -217,5 +218,49 @@ suite("ExternalFileTrustPrompt", () => {
       existingRoot,
       path.dirname(candidate),
     ]);
+  });
+
+  test("preserves YAML source when adding workflow-scoped trust", async () => {
+    ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks = () => true;
+    const existingRoot = path.join(os.tmpdir(), "existing-workflow-root");
+    ConfigurationUtils.getEffectiveApprovedExternalFileRoots = () => [
+      existingRoot,
+    ];
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-trust-workflow-yaml-")
+    );
+    tempPaths.push(workspaceRoot);
+    const sourcePath = path.join(workspaceRoot, "workflow.ctrlyoke.yaml");
+    const source = [
+      "# Keep the author's comment.",
+      "defaults: &defaults",
+      "  model: fast-model",
+      "  prompt: |",
+      "    This long prompt line should remain byte-for-byte the same after trusting a folder.",
+      "steps:",
+      "  - <<: *defaults",
+      "    prompt: Run this workflow.",
+      "",
+    ].join("\n");
+    await fs.writeFile(sourcePath, source, "utf8");
+    const candidate = path.join(workspaceRoot, "external", "file.txt");
+    const roots = [existingRoot, path.dirname(candidate)];
+
+    await confirmExternalFileTrust(
+      candidate,
+      context(
+        new FakeInteractionPort(EXTERNAL_FILE_TRUST_SCOPES.WORKFLOW),
+        workspaceRoot,
+        sourcePath,
+        new RecordingTrustStore()
+      )
+    );
+
+    const written = await fs.readFile(sourcePath, "utf8");
+    assert.ok(written.startsWith(source));
+    const parsed = parseDocument(written, { merge: true }).toJS() as {
+      trustedExternalRoots: string[];
+    };
+    assert.deepStrictEqual(parsed.trustedExternalRoots, roots);
   });
 });

@@ -3,6 +3,7 @@ import {
   HookConfig,
   INotificationMonitor,
   NotificationMonitorBase,
+  buildHookTimeoutOptions,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
@@ -13,6 +14,7 @@ import {
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 
 type AntigravityHookKey =
@@ -90,8 +92,8 @@ export class AntigravityNotificationMonitor
     // NOTE: this means paths containing spaces are unsupported by agy hooks.
     const baseCommand = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      notifyDir,
-      false
+      [notifyDir],
+      CliNotificationMonitor.shouldQuoteNodeCommand(HARNESS_IDS.ANTIGRAVITY_CLI)
     );
     const selectedEvents = new Set<HookEvent>(ctrlyokeEvents ?? ["stop"]);
 
@@ -105,13 +107,15 @@ export class AntigravityNotificationMonitor
 
     const pushHandler = (
       eventKey: AntigravityHookKey,
-      handlerCommand: string
+      handlerCommand: string,
+      userHook?: UserHookConfig
     ) => {
       group[eventKey] ??= [];
       group[eventKey]!.push({
         type: "command",
         command: handlerCommand,
-        timeout: 0,
+        // agy's per-handler `timeout` is in seconds; 0 means its default.
+        timeout: buildHookTimeoutOptions(userHook?.timeoutSec).timeout ?? 0,
       });
     };
 
@@ -145,7 +149,7 @@ export class AntigravityNotificationMonitor
       }
       // User-supplied commands are run verbatim (not our script), so they get
       // no injected event-name arg.
-      pushHandler(nativeEvent, hook.command);
+      pushHandler(nativeEvent, hook.command, hook);
     }
 
     return {

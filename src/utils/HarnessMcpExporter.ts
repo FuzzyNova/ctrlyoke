@@ -1,11 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import {
-  modify,
-  applyEdits,
-  parse,
-  type FormattingOptions,
-} from "jsonc-parser";
+import { modify, applyEdits, parse } from "jsonc-parser";
 import type {
   AnyTargetId,
   SettingWriteScope,
@@ -34,6 +29,7 @@ import {
   getVscodeUserMcpConfigPath,
   getVscodeWorkspaceMcpConfigPath,
 } from "./McpConfigPaths";
+import { detectFormattingOptions } from "./WorkflowSourceEditor";
 
 type JsonObject = Record<string, unknown>;
 
@@ -66,19 +62,6 @@ async function readTextFile(filePath: string): Promise<string> {
   } catch {
     return "";
   }
-}
-
-function detectFormattingOptions(text: string): FormattingOptions {
-  const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const firstIndentMatch = text.match(/\n([ \t]+)/);
-  if (firstIndentMatch) {
-    const indent = firstIndentMatch[1]!;
-    if (indent[0] === "\t") {
-      return { insertSpaces: false, tabSize: 4, eol };
-    }
-    return { insertSpaces: true, tabSize: indent.length, eol };
-  }
-  return { insertSpaces: false, tabSize: 4, eol };
 }
 
 async function writeTextFileAtomic(

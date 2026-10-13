@@ -1,6 +1,5 @@
 import * as path from "path";
 import * as fs from "fs/promises";
-import * as yaml from "js-yaml";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import {
   ExternalRootsTrustStore,
@@ -14,6 +13,10 @@ import type { ChoiceRequest, UserInteractionPort } from "./UserInteractionPort";
 import { NullUserInteractionPort } from "./UserInteractionPort";
 import { Log } from "../utils/Log";
 import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
+import {
+  parseWorkflowSourceJson,
+  setWorkflowSourceTopLevelKey,
+} from "../utils/WorkflowSourceEditor";
 
 export interface ExternalFileTrustContext {
   port: UserInteractionPort;
@@ -268,7 +271,7 @@ async function readWorkflowTrustState(
     const raw = await fs.readFile(sourcePath, "utf8");
     const parsed =
       extension === ".json"
-        ? JSON.parse(raw)
+        ? parseWorkflowSourceJson(raw)
         : loadYamlDocument(raw, { schema: WORKFLOW_YAML_SCHEMA });
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return undefined;
@@ -300,19 +303,11 @@ async function writeWorkflowTrustState(
 ): Promise<void> {
   const extension = path.extname(sourcePath).toLowerCase();
   const raw = await fs.readFile(sourcePath, "utf8");
-  const parsed =
-    extension === ".json"
-      ? JSON.parse(raw)
-      : loadYamlDocument(raw, { schema: WORKFLOW_YAML_SCHEMA });
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("The active workflow file has an invalid root object.");
-  }
-  (
-    parsed as { trustedExternalRoots?: readonly string[] }
-  ).trustedExternalRoots = roots;
-  const serialized =
-    extension === ".json"
-      ? JSON.stringify(parsed, null, 2) + "\n"
-      : yaml.dump(parsed);
+  const serialized = setWorkflowSourceTopLevelKey(
+    raw,
+    extension === ".json" ? "json" : "yaml",
+    "trustedExternalRoots",
+    roots
+  );
   await fs.writeFile(sourcePath, serialized, "utf8");
 }

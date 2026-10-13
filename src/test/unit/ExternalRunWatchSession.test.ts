@@ -75,7 +75,7 @@ suite("ExternalRunWatchSession", () => {
     );
   });
 
-  test("tracks last-known output count per step independently", () => {
+  test("tracks changed CLI output signatures independently per entry", () => {
     const workspaceFolderPath = "C:\\dev\\some-workspace";
     const workflowKey = "my-workflow-2026-07-20T10-30-00" as WorkflowKey;
     const runRef = "run-2026-07-20T10-30-00-000Z" as RunRef;
@@ -92,9 +92,10 @@ suite("ExternalRunWatchSession", () => {
       new NodeFileWatcherFactory()
     );
 
-    assert.strictEqual(session.getAndUpdateLastKnownOutputCount(0, 3), 0);
-    assert.strictEqual(session.getAndUpdateLastKnownOutputCount(0, 5), 3);
-    assert.strictEqual(session.getAndUpdateLastKnownOutputCount(1, 1), 0);
+    assert.strictEqual(session.shouldBroadcastOutput("queue:0:run:0", "a"), true);
+    assert.strictEqual(session.shouldBroadcastOutput("queue:0:run:0", "a"), false);
+    assert.strictEqual(session.shouldBroadcastOutput("queue:0:run:0", "b"), true);
+    assert.strictEqual(session.shouldBroadcastOutput("queue:1:run:0", "a"), true);
   });
 
   test("forwards the persisted token aggregate through working-file updates", async () => {
