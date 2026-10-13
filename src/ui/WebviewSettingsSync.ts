@@ -1320,8 +1320,12 @@ export class WebviewSettingsSync {
       path as (typeof REMOTE_TLS_SETTING_KEYS)[number]
     );
     const isBindAddressSetting = path === CONFIG_KEYS.SERVER_BIND_ADDRESS;
+    // Clearing the public hostname is always allowed, like a loopback bind.
+    const isPublicHostnameWrite =
+      path === CONFIG_KEYS.SERVER_PUBLIC_HOSTNAME && value !== "";
     const isRemoteAccessWrite =
       isRemoteAccessSetting ||
+      isPublicHostnameWrite ||
       (isBindAddressSetting &&
         (typeof value !== "string" || !isLoopbackBindAddress(value)));
     if (

@@ -254,6 +254,8 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
   const lanIps = runtime.server.getAvailableIps();
   // LAN addresses are reported only when the server really listens on all
   // interfaces, which is also the only case where the public hostname applies.
+  // The server falls back to localhost without Pro or a trial, so this also
+  // keeps the public hostname behind the remote-access license gate.
   const publicUrl =
     initial.publicHostname && lanIps.length > 0
       ? withUrlHostname(runtime.url, initial.publicHostname)

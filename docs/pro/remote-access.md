@@ -144,7 +144,8 @@ Select **Regenerate token** on the Server tab if the link is ever exposed.
 your phone uses to reach your computer from elsewhere: a Tailscale MagicDNS
 name, a dynamic DNS name, or a public IPv4 address. Enter just the name, with
 no `https://`, port or path. The field appears when **Bind address** is **All
-interfaces**.
+interfaces**. Like that bind address, it needs Pro or the remote-access trial;
+without one, a saved name is ignored.
 
 When it's set:
 

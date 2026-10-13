@@ -165,6 +165,42 @@ describe("ServerSection", () => {
     ).toHaveTextContent("my-pc.example.ts.net (public hostname)");
   });
 
+  it("ignores a stored public hostname and disables the field without remote access", () => {
+    const settings = createSettings("0.0.0.0");
+    settings.settings.server = {
+      ...settings.settings.server,
+      publicHostname: "my-pc.example.ts.net",
+    };
+    useSettingsStore.setState({
+      licenseAccess: {
+        isPro: false,
+        hasRemoteAccess: false,
+        trialEndsAt: null,
+      },
+      bindAddressFallback: null,
+      serverUrl: "http://192.168.55.25:4747/?token=test",
+      availableIps: ["192.168.55.25"],
+    });
+    render(
+      <ServerSection
+        settings={settings}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: "http://192.168.55.25:4747/?token=test",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /my-pc\.example\.ts\.net/ })
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Public hostname/)).toBeDisabled();
+  });
+
   it("saves a normalized public hostname and rejects a URL", () => {
     const onUpdate = vi.fn();
     useSettingsStore.setState({

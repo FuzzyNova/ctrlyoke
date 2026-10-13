@@ -153,8 +153,11 @@ export function ServerSection({
   // The addresses a phone can use, offered under "Connect via". Detected LAN
   // addresses are reported only while the server really listens on all
   // interfaces, which is also the only case where the public hostname applies,
-  // so it is offered (first, as the default) only alongside them.
-  const publicHostname = normalizePublicHostname(server.publicHostname);
+  // so it is offered (first, as the default) only alongside them. The public
+  // hostname is part of remote access, so it is ignored without Pro or a trial.
+  const publicHostname = licenseAccess.hasRemoteAccess
+    ? normalizePublicHostname(server.publicHostname)
+    : null;
   const connectAddresses = useMemo(
     () =>
       publicHostname && availableIps.length > 0
@@ -495,18 +498,10 @@ export function ServerSection({
               </button>
             </div>
             {!licenseAccess.hasRemoteAccess && (
-              <p className="mt-1 text-xs text-description-fg">
+              <ProUpsellNote className="mt-1">
                 QR-to-phone is available during the remote-access trial and with
-                Pro.{" "}
-                <a
-                  href={LICENSE_UI.PRICING_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-link-fg hover:underline"
-                >
-                  View Pro pricing
-                </a>
-              </p>
+                Pro.
+              </ProUpsellNote>
             )}
 
             <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -621,17 +616,9 @@ export function ServerSection({
               />
             </SettingInputRow>
             {!licenseAccess.hasRemoteAccess && (
-              <p className="mt-1 text-xs text-description-fg">
-                {LICENSE_UI.REMOTE_ACCESS_UPSELL}{" "}
-                <a
-                  href={LICENSE_UI.PRICING_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-link-fg hover:underline"
-                >
-                  View Pro pricing
-                </a>
-              </p>
+              <ProUpsellNote className="mt-1">
+                {LICENSE_UI.REMOTE_ACCESS_UPSELL}
+              </ProUpsellNote>
             )}
             {bindAddressFallbackForCurrentSetting && (
               <p className="mt-1 flex items-baseline gap-1 text-xs text-error-fg">
@@ -648,7 +635,10 @@ export function ServerSection({
 
         {/* Public hostname — only meaningful for an all-interfaces server */}
         {!isStandalone && listensOnAllInterfaces && (
-          <div>
+          <div className="relative rounded-sm border border-pro-brand px-3 pb-3 pt-2">
+            <span className="absolute -top-2 right-2 bg-panel-bg px-1 text-xxs text-pro-brand">
+              Pro Feature
+            </span>
             <SettingInputRow
               settingKey="server.publicHostname"
               id="server-public-hostname"
@@ -673,6 +663,11 @@ export function ServerSection({
                   my-pc.example.ts.net, without https://, a port, or a path.
                 </span>
               </p>
+            )}
+            {!licenseAccess.hasRemoteAccess && (
+              <ProUpsellNote className="mt-1">
+                {LICENSE_UI.REMOTE_ACCESS_UPSELL}
+              </ProUpsellNote>
             )}
           </div>
         )}
@@ -748,17 +743,9 @@ export function ServerSection({
           &lt; 26 homescreen) use the colors saved at the last settings update.
         </p>
         {!customIconEnabled && (
-          <p className="mt-1 text-xs text-description-fg">
-            {LICENSE_UI.CUSTOM_ICON_UPSELL}{" "}
-            <a
-              href={LICENSE_UI.PRICING_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="text-link-fg hover:underline"
-            >
-              View Pro pricing
-            </a>
-          </p>
+          <ProUpsellNote className="mt-1">
+            {LICENSE_UI.CUSTOM_ICON_UPSELL}
+          </ProUpsellNote>
         )}
       </div>
 
@@ -775,17 +762,9 @@ export function ServerSection({
             HTTPS / TLS
           </h3>
           {!licenseAccess.hasRemoteAccess && (
-            <p className="mb-2 text-xs text-description-fg not-italic">
-              {LICENSE_UI.REMOTE_ACCESS_UPSELL}{" "}
-              <a
-                href={LICENSE_UI.PRICING_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="text-link-fg hover:underline"
-              >
-                View Pro pricing
-              </a>
-            </p>
+            <ProUpsellNote className="mb-2 not-italic">
+              {LICENSE_UI.REMOTE_ACCESS_UPSELL}
+            </ProUpsellNote>
           )}
 
           <SettingToggleRow
@@ -946,22 +925,37 @@ export function ServerSection({
             title="Download the server certificate to install on this device"
           />
           {!licenseAccess.hasRemoteAccess && (
-            <p className="mt-2 text-xs text-description-fg">
-              {LICENSE_UI.REMOTE_ACCESS_UPSELL}{" "}
-              <a
-                href={LICENSE_UI.PRICING_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="text-link-fg hover:underline"
-              >
-                View Pro pricing
-              </a>
-            </p>
+            <ProUpsellNote className="mt-2">
+              {LICENSE_UI.REMOTE_ACCESS_UPSELL}
+            </ProUpsellNote>
           )}
           <CertInstallHelp onDevice className="mt-2" />
         </div>
       )}
     </div>
+  );
+}
+
+/** A gated feature's upsell message followed by the Pro pricing link. */
+function ProUpsellNote({
+  className,
+  children,
+}: {
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <p className={`text-xs text-description-fg ${className}`}>
+      {children}{" "}
+      <a
+        href={LICENSE_UI.PRICING_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="text-link-fg hover:underline"
+      >
+        View Pro pricing
+      </a>
+    </p>
   );
 }
 

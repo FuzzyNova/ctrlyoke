@@ -163,6 +163,7 @@ export const CONFIG_KEYS = {
   EXECUTION_MODE: "defaults.executionMode",
   SERVER_AUTO_START: SETTING_PATHS.SERVER_AUTO_START,
   SERVER_BIND_ADDRESS: "server.bindAddress",
+  SERVER_PUBLIC_HOSTNAME: SETTING_PATHS.SERVER_PUBLIC_HOSTNAME,
   SERVER_TLS_ENABLED: "server.tls.enabled",
   SERVER_TLS_CERT_PATH: "server.tls.certPath",
   SERVER_TLS_KEY_PATH: "server.tls.keyPath",

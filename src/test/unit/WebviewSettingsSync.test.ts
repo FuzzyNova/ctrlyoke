@@ -2392,6 +2392,62 @@ suite("WebviewSettingsSync bind-address licensing gate", () => {
       configService.set = originalSet;
     }
   });
+
+  test("only permits setting a public hostname with remote access", async () => {
+    const originalSet = configService.set;
+    const writes: Array<{ key: string; value: unknown }> = [];
+
+    try {
+      configService.set = (async (key, value) => {
+        writes.push({ key, value });
+      }) as typeof configService.set;
+
+      const cases = [
+        {
+          value: "my-pc.example.ts.net",
+          hasRemoteAccess: false,
+          shouldWrite: false,
+        },
+        {
+          value: "my-pc.example.ts.net",
+          hasRemoteAccess: true,
+          shouldWrite: true,
+        },
+        { value: "", hasRemoteAccess: false, shouldWrite: true },
+      ];
+
+      for (const testCase of cases) {
+        const sync = new WebviewSettingsSync(
+          () => undefined,
+          () => undefined,
+          undefined,
+          undefined,
+          async () => ({
+            isPro: false,
+            hasRemoteAccess: testCase.hasRemoteAccess,
+            trialEndsAt: null,
+          })
+        );
+        sync.handleGlobalSettingsLoadRequest = async () => {};
+
+        const writesBefore = writes.length;
+        await sync.handleUpdateGlobalSetting(
+          CONFIG_KEYS.SERVER_PUBLIC_HOSTNAME,
+          testCase.value,
+          "user",
+          () => undefined
+        );
+
+        assert.strictEqual(
+          writes.length > writesBefore,
+          testCase.shouldWrite,
+          `unexpected write result for "${testCase.value}" with remote access=${testCase.hasRemoteAccess}`
+        );
+      }
+    } finally {
+      configService.set = originalSet;
+    }
+  });
 });
 
 suite("WebviewSettingsSync external root decisions", () => {
