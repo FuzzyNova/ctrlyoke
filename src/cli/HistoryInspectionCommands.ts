@@ -93,7 +93,7 @@ import { getLineageLastModifiedAt } from "../utils/WorkingFileMetadata";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import type { CliEvent } from "../types/CliOutputTypes";
 import { secretRedactionService } from "../utils/SecretRedactionService";
-import { getStepOutputText, getScriptOutputText } from "../utils/StepOutputText";
+import { getStepOutputText } from "../utils/StepOutputText";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import {
   assertStepIndex,
@@ -960,18 +960,16 @@ function projectHistoryAttempt(
   const { prompt, output, scriptOutput, ...identity } = attempt;
   let projectedOutput: CliOutput | undefined;
   if (output) {
+    // Version 1 timeline lines may still contain the removed aggregate fields.
+    // History projections expose prompt/output through the attempt model only.
+    const { prompt: _legacyPrompt, response: _legacyResponse, ...outputFields } =
+      output as CliOutput & { prompt?: string; response?: string };
     projectedOutput = {
-      ...output,
-      // `response` is required on CliOutput, so an excluded one is emptied;
-      // the include flags keep it out of every surface that emits it.
-      response: includeResponse
-        ? getStepOutputText(attempt, StepOutputTextMode.TRANSCRIPT)
-        : "",
+      ...outputFields,
       ...(output.structured
         ? { structured: { ...output.structured, events: matchingEvents } }
         : {}),
     };
-    if (!includePrompt) delete projectedOutput.prompt;
   }
   return {
     includePrompt,
@@ -1037,8 +1035,7 @@ function writeHistoryAttemptJson(
   io: HistoryInspectionCommandIo
 ): void {
   const { attempt } = projection;
-  // Each text is emitted once: the top-level `prompt` and `responseText`
-  // are authoritative, so their `output.prompt`/`output.response` copies go.
+  // Each text is emitted once in the top-level prompt/responseText fields.
   const prompt =
     !page && projection.includePrompt
       ? historyRecordedPrompt(attempt) || undefined
@@ -1109,8 +1106,6 @@ function writeHistoryAttemptJson(
     ...(output
       ? {
           output: withoutOutputText(output, {
-            prompt: true,
-            response: true,
             structured: page !== undefined,
           }),
         }
@@ -1137,11 +1132,13 @@ function writeHistoryAttemptJson(
 
 function withoutOutputText(
   output: CliOutput,
-  omit: { prompt?: boolean; response?: boolean; structured?: boolean }
+  omit: { structured?: boolean }
 ): Partial<CliOutput> {
-  const copy: Partial<CliOutput> = { ...output };
-  if (omit.prompt) delete copy.prompt;
-  if (omit.response) delete copy.response;
+  const {
+    prompt: _legacyPrompt,
+    response: _legacyResponse,
+    ...copy
+  } = output as CliOutput & { prompt?: string; response?: string };
   if (omit.structured) delete copy.structured;
   return copy;
 }
@@ -1858,7 +1855,7 @@ function historyAttemptPrompt(attempt: ResolvedRunAttemptValue): string {
 
 /** The prompt actually recorded for the attempt. */
 function historyRecordedPrompt(attempt: ResolvedRunAttemptValue): string {
-  return attempt.prompt ?? attempt.output?.prompt ?? "";
+  return attempt.prompt ?? "";
 }
 
 /** The attempt's text, projected from script records or transcript events. */
@@ -1901,7 +1898,6 @@ function historyScriptOutput(attempt: ResolvedRunAttemptValue): CliOutput {
   const scriptOutput = attempt.scriptOutput;
   return {
     ...(output ?? {}),
-    response: scriptOutput ? getScriptOutputText(scriptOutput) : "",
     elapsed: output?.elapsed ?? 0,
     isStreaming: false,
     source: historyScriptSource(attempt) ?? SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,

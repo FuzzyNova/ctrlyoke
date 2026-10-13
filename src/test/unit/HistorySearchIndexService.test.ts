@@ -2017,8 +2017,6 @@ suite("HistorySearchIndexService", () => {
       attemptIndex,
       payload: {
         cliOutput: {
-          prompt: "",
-          response,
           elapsed: 1,
           isStreaming: false,
           structured: {

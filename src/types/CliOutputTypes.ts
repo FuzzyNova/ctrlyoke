@@ -528,7 +528,6 @@ export interface WebSearchData {
  */
 export interface CliResult {
   success: boolean;
-  response: string;
   statistics: string;
   error?: string;
   exitCode?: number;

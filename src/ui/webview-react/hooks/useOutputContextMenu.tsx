@@ -50,7 +50,7 @@ function buildCopyAllText(
       ? formatFinalPassLabel(target.index + 1)
       : `Step ${queueStepNum}`;
 
-    const promptText = (output.prompt ?? output.cliCommand)?.trim();
+    const promptText = output.cliCommand?.trim();
     const outputText = getStepAssistantTextForCopy(output);
 
     if (promptText || outputText) {

@@ -113,8 +113,8 @@ function buildStatsRow(tokens: TokenStats): OutputRenderRow {
     estimateSize: 24,
     rowKind: OUTPUT_ROW_KINDS.STATS,
     output: {
-      prompt: "prompt",
-      response: "response",
+
+      structured: { events: [{ type: "text", data: { text: "response" } }], metadata: {} },
       elapsed: 1,
       isStreaming: false,
       tokens,
@@ -960,8 +960,6 @@ describe("OutputRow auto-expand on hidden active match", () => {
       estimateSize: 44,
       rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
       output: {
-        prompt: "",
-        response: "",
         cliCommand: "npm test",
         elapsed: 0,
         isStreaming: true,
@@ -989,8 +987,6 @@ describe("OutputRow auto-expand on hidden active match", () => {
       estimateSize: 44,
       rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
       output: {
-        prompt: "Edit files",
-        response: "done",
         elapsed: 0,
         isStreaming: false,
       },
@@ -1042,8 +1038,6 @@ describe("OutputRow auto-expand on hidden active match", () => {
       estimateSize: 44,
       rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
       output: {
-        prompt: "Edit files",
-        response: "done",
         elapsed: 0,
         isStreaming: false,
       },

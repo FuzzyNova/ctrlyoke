@@ -10,7 +10,7 @@ import type { FailureKind } from "../../../types/CtrlYokeTypes";
 import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";
-import { extractTextFromEvents } from "./CliResponseTextExtractor";
+import { getTranscriptText } from "../../../utils/StepOutputText";
 import { secretRedactionService } from "../../../utils/SecretRedactionService";
 import {
   resolveHeadlessSourceMode,
@@ -65,7 +65,7 @@ export interface CliResponseCollectorDeps {
   >;
   hostCallbacks: {
     logResponse: (response: string, statistics?: string) => void;
-    onResponseComplete: (response: string) => void;
+    onResponseComplete: () => void;
   };
 }
 
@@ -138,7 +138,7 @@ export class CliResponseCollector {
     // independently at its own edge, so removing this pass does not weaken
     // that protection.
 
-    const responseText = extractTextFromEvents(parsedOutput);
+    const responseText = getTranscriptText(parsedOutput.events);
     const statistics = CliOutputFormatter.formatStatistics(
       parsedOutput.metadata
     );
@@ -148,7 +148,6 @@ export class CliResponseCollector {
 
     const cliResult: CliResult = {
       success: succeeded,
-      response: resultResponse,
       statistics,
       exitCode: params.exitCode,
       error: failure?.message,
@@ -178,7 +177,7 @@ export class CliResponseCollector {
     }
 
     this.deps.hostCallbacks.logResponse(resultResponse, statistics);
-    this.deps.hostCallbacks.onResponseComplete(resultResponse);
+    this.deps.hostCallbacks.onResponseComplete();
 
     return {
       success: succeeded,

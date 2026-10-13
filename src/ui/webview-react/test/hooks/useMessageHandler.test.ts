@@ -1,3 +1,5 @@
+import { getStepOutputText } from "../../../../utils/StepOutputText";
+import { StepOutputTextMode } from "../../../../types/DashboardConstants";
 /**
  * Tests for useMessageHandler — the single entry point for all messages
  * from the VS Code extension into the webview.
@@ -1483,7 +1485,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
         ...persistedEntry,
         cliOutput: {
           ...persistedEntry.cliOutput,
-          response: "newer buffered output",
+          structured: { events: [{ type: "text", data: { text: "newer buffered output" } }], metadata: {} },
         },
         timestampMs: 1100,
       });
@@ -1510,7 +1512,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     const [liveEntry] = useWorkflowStore.getState().liveOrderedEntries;
     expect(
       liveEntry && "cliOutput" in liveEntry
-        ? liveEntry.cliOutput.response
+        ? getStepOutputText({ output: liveEntry.cliOutput }, StepOutputTextMode.TRANSCRIPT)
         : null
     ).toBe("newer buffered output");
   });
@@ -1910,7 +1912,7 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
     expect(workflow.liveOrderedEntries[0]).toEqual(earlierPersistedEntry);
     expect(
       "cliOutput" in workflow.liveOrderedEntries[1]
-        ? workflow.liveOrderedEntries[1].cliOutput.response
+        ? getStepOutputText({ output: workflow.liveOrderedEntries[1].cliOutput }, StepOutputTextMode.TRANSCRIPT)
         : null
     ).toBe("newer buffered output");
     expect(useUiStore.getState().isViewingHistory).toBe(false);

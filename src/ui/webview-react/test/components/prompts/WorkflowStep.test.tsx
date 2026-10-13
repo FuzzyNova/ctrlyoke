@@ -12,8 +12,8 @@ function buildOutput(
   contextWindowUsed = 10000
 ): CliOutput {
   return {
-    prompt: "Review the changes",
-    response: "Done",
+
+    structured: { events: [{ type: "text", data: { text: "Done" } }], metadata: {} },
     elapsed: 1,
     isStreaming: false,
     tokens: {

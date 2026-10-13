@@ -2,53 +2,17 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
-import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
-import { CodexLogParser } from "../../core/harness/codex/CodexLogParser";
-import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
-import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
-import { QwenLogParser } from "../../core/harness/qwen/QwenLogParser";
-import { extractTextFromEvents } from "../../core/harness/shared/CliResponseTextExtractor";
-import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import type { ScriptRuntimeOutput } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, StepOutputTextMode } from "../../types/DashboardConstants";
 import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
-import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import {
   getAssistantText,
   getScriptOutputText,
   getStepOutputText,
-  getTranscriptText,
 } from "../../utils/StepOutputText";
 
-const fixtureRoot = path.resolve(__dirname, "../../../src/test/fixtures");
-const harnessFixtures = [
-  [new ClaudeLogParser(), "claude/headless-golden.session.jsonl"],
-  [new CopilotLogParser(), "copilot/headless-golden.session.jsonl"],
-  [new CodexLogParser(), "codex/headless-golden.session.jsonl"],
-  [new AntigravityLogParser(), "antigravity/transcript-rich.jsonl"],
-  [new OpenCodeLogParser(() => 200_000), "opencode/failed-tool-events.stdout.jsonl"],
-  [new QwenLogParser(), "qwen/headless-golden.session.jsonl"],
-] as const;
-
 suite("StepOutputText", () => {
-  test("transcript projection exactly matches today's extractor for each harness fixture", () => {
-    for (const [parser, fixture] of harnessFixtures) {
-      const rawEvents = fs
-        .readFileSync(path.join(fixtureRoot, fixture), "utf8")
-        .trim()
-        .split(/\r?\n/)
-        .map((line) => JSON.parse(line) as BaseCliEvent);
-      const events = parser.extractResponse(rawEvents).events;
-      assert.strictEqual(
-        getTranscriptText(events),
-        extractTextFromEvents({ events: normalizeCliEvents(events) }),
-        fixture
-      );
-    }
-  });
-
   test("assistant projection includes TEXT events only", () => {
     const events: CliEvent[] = [
       { type: CLI_EVENT_TYPES.TEXT, data: { text: "answer" } },
@@ -79,6 +43,30 @@ suite("StepOutputText", () => {
     assert.strictEqual(
       getStepOutputText({ output: { response: "legacy", elapsed: 0, isStreaming: false } }, StepOutputTextMode.ASSISTANT),
       "legacy"
+    );
+  });
+
+  test("timeline-v1 AI, script, and PTY-tail records retain their legacy text", () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../src/test/fixtures/formats/timeline/v1/events.jsonl"
+    );
+    const records = fs
+      .readFileSync(fixturePath, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as { payload: { cliOutput: { response?: string; prompt?: string; elapsed: number; isStreaming: boolean; structured?: { events: CliEvent[]; metadata: object } } } });
+    assert.strictEqual(
+      getStepOutputText({ output: records[0].payload.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      "AI legacy text"
+    );
+    assert.strictEqual(
+      getStepOutputText({ output: records[1].payload.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      "script legacy text"
+    );
+    assert.strictEqual(
+      getStepOutputText({ output: records[2].payload.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      "process failed\nterminal tail"
     );
   });
 });

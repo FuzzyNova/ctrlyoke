@@ -18,8 +18,8 @@ function cliEntry(target: OutputTarget, sequence: number): OrderedHistoryEntry {
     target,
     attemptIndex: 0,
     cliOutput: {
-      prompt: "p",
-      response: "r",
+
+      structured: { events: [{ type: "text", data: { text: "r" } }], metadata: {} },
       elapsed: 1,
       timestampMs: sequence,
       attemptIndex: 0,
@@ -270,7 +270,7 @@ describe("useFinalStepContextMenu", () => {
         finalStep={{ prompt: "Final prompt" }}
         outputText="final output"
         latestOutput={{
-          response: "final output",
+          structured: { events: [{ type: "text", data: { text: "final output" } }], metadata: {} },
           elapsed: 1.2,
           isStreaming: false,
         }}
@@ -299,8 +299,8 @@ describe("useFinalStepContextMenu", () => {
 
   it("copies the full single-step export from Copy Full Output", () => {
     const latestOutput: CliOutput = {
-      prompt: "final prompt",
-      response: "answer",
+
+
       elapsed: 1,
       isStreaming: false,
       structured: {

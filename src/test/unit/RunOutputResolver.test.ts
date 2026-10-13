@@ -13,6 +13,7 @@ import {
   EXECUTION_STATES,
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
+  PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
   CLI_EVENT_TYPES,
   StepOutputTextMode,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
@@ -27,6 +28,8 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 
 suite("RunOutputResolver", () => {
+  const getPriorText = (item: { text?: string; transcript?: Array<{ kind: string; text?: string }> }) =>
+    item.text ?? item.transcript?.filter((entry) => entry.kind === PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT).map((entry) => entry.text ?? "").join("");
   let workspaceRoot: string;
   let runDirectory: string;
   let manifestPath: string;
@@ -89,6 +92,97 @@ suite("RunOutputResolver", () => {
     await fs.rm(approvedExternalRoot, { recursive: true, force: true });
   });
 
+  test("continues a v1 run with v2 output while resolving both record formats", async () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../src/test/fixtures/formats/timeline/v1/events.jsonl"
+    );
+    const legacyLine = (await fs.readFile(fixturePath, "utf8"))
+      .trim()
+      .split(/\r?\n/)[0]
+      .replace('"fixture-workflow"', '"resolver-workflow"');
+    await fs.writeFile(
+      TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
+      `${legacyLine}\n`,
+      "utf8"
+    );
+    const legacyManifest = await recorder.readManifest(manifestPath);
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        ...legacyManifest,
+        schemaVersion: 1,
+        eventCount: 1,
+        nextSequence: 2,
+      }),
+      "utf8"
+    );
+
+    const resolver = new RunOutputResolver(recorder);
+    const legacyAttempt = await resolver.resolveAttempt(
+      manifestPath,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      0,
+      0
+    );
+    assert.strictEqual(
+      getStepOutputText({ output: legacyAttempt?.output }, StepOutputTextMode.TRANSCRIPT),
+      "AI legacy text"
+    );
+
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            structured: {
+              events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "v2 text" } }],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+    ]);
+
+    const mixedAttempts = await resolver.resolveLatestAttempts(manifestPath, [
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+    ]);
+    assert.strictEqual(
+      getStepOutputText(
+        { output: mixedAttempts.get("queue:0")?.output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "AI legacy text"
+    );
+    assert.strictEqual(
+      getStepOutputText(
+        { output: mixedAttempts.get("queue:1")?.output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "v2 text"
+    );
+    assert.strictEqual(
+      (await recorder.readManifest(manifestPath)).schemaVersion,
+      2
+    );
+    const storedEvents = await recorder.readEvents(manifestPath);
+    const appendedOutput = storedEvents[1];
+    assert.ok(appendedOutput?.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED);
+    if (appendedOutput?.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED) {
+      assert.ok(!("response" in appendedOutput.payload.cliOutput));
+      assert.ok(!("prompt" in appendedOutput.payload.cliOutput));
+    }
+  });
+
   test("reconstructs runtime response, prior-context, preview, script, retry, resumed, and terminal values", async () => {
     const queueZero = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const queueScript = {
@@ -125,8 +219,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "original queue prompt",
-            response: "original response",
+
+            structured: { events: [{ type: "text", data: { text: "original response" } }], metadata: {} },
             elapsed: 1,
             isStreaming: false,
           },
@@ -226,8 +320,8 @@ suite("RunOutputResolver", () => {
         responseKind: "script",
         payload: {
           cliOutput: {
-            prompt: "npm test -- --runInBand",
-            response: "pass",
+
+            structured: { events: [{ type: "text", data: { text: "pass" } }], metadata: {} },
             elapsed: 1,
             isStreaming: false,
             source: "script",
@@ -310,8 +404,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "retry with diagnostics",
-            response: "partial retry response",
+
+            structured: { events: [{ type: "text", data: { text: "partial retry response" } }], metadata: {} },
             elapsed: 1,
             isStreaming: false,
           },
@@ -349,8 +443,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "revised final step",
-            response: "first response",
+
+            structured: { events: [{ type: "text", data: { text: "first response" } }], metadata: {} },
             elapsed: 1,
             isStreaming: false,
           },
@@ -384,8 +478,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "revised final step",
-            response: finalResponse,
+
+            structured: { events: [{ type: "text", data: { text: finalResponse } }], metadata: {} },
             elapsed: 2,
             isStreaming: false,
           },
@@ -434,7 +528,7 @@ suite("RunOutputResolver", () => {
       0,
       0
     );
-    assert.strictEqual(original?.output?.response, "original response");
+    assert.strictEqual(getStepOutputText({ output: original?.output }, StepOutputTextMode.TRANSCRIPT), "original response");
     assert.strictEqual(original?.definition?.definitionRevision, 1);
     assert.strictEqual(
       (original?.definition?.step as { prompt?: string }).prompt,
@@ -461,13 +555,13 @@ suite("RunOutputResolver", () => {
       stderr: "",
       exitCode: 0,
     });
-    assert.strictEqual(script?.output?.response, "pass");
+    assert.strictEqual(getStepOutputText({ output: script?.output }, StepOutputTextMode.TRANSCRIPT), "pass");
     assert.strictEqual(script?.terminalState, "failed");
 
     const retry = await resolver.resolveAttempt(manifestPath, queueZero, 1, 1);
     assert.strictEqual(retry?.prompt, "retry with diagnostics");
     assert.strictEqual(retry?.startReason, "retry");
-    assert.strictEqual(retry?.output?.response, "partial retry response");
+    assert.strictEqual(getStepOutputText({ output: retry?.output }, StepOutputTextMode.TRANSCRIPT), "partial retry response");
     assert.strictEqual(retry?.terminalState, "stopped");
 
     const resumedFinal = await resolver.resolveAttempt(
@@ -477,8 +571,8 @@ suite("RunOutputResolver", () => {
       0
     );
     assert.strictEqual(resumedFinal?.startReason, "resumed");
-    assert.strictEqual(resumedFinal?.output?.response, finalResponse);
-    assert.strictEqual(resumedFinal?.output?.response, finalResponse);
+    assert.strictEqual(getStepOutputText({ output: resumedFinal?.output }, StepOutputTextMode.TRANSCRIPT), finalResponse);
+    assert.strictEqual(getStepOutputText({ output: resumedFinal?.output }, StepOutputTextMode.TRANSCRIPT), finalResponse);
     assert.strictEqual(resumedFinal?.terminalState, "cancelled");
     assert.strictEqual(resumedFinal?.definition?.definitionRevision, 2);
     assert.strictEqual(
@@ -502,7 +596,7 @@ suite("RunOutputResolver", () => {
       queueScript,
     ]);
     assert.strictEqual(
-      latest.get("queue:0")?.output?.response,
+      getStepOutputText({ output: latest.get("queue:0")?.output }, StepOutputTextMode.TRANSCRIPT),
       "partial retry response",
       "read-output and active restore use the latest run/attempt for a target"
     );
@@ -514,7 +608,7 @@ suite("RunOutputResolver", () => {
       { workspaceRoot }
     );
     assert.deepStrictEqual(
-      priorItems.map((item) => item.text),
+      priorItems.map(getPriorText),
       ["partial retry response", "pass\n0", finalResponse],
       "prior context is resolved from timeline attempts, including scripts and final loops"
     );
@@ -531,7 +625,7 @@ suite("RunOutputResolver", () => {
       { workspaceRoot }
     );
     assert.deepStrictEqual(
-      lastOneItems.map((item) => item.text),
+      lastOneItems.map(getPriorText),
       ["pass\n0"],
       "{ previous: 1 } selects the same output as the previous keyword"
     );
@@ -543,7 +637,7 @@ suite("RunOutputResolver", () => {
       { workspaceRoot }
     );
     assert.deepStrictEqual(
-      lastNItems.map((item) => item.text),
+      lastNItems.map(getPriorText),
       ["partial retry response", "pass\n0"],
       "previous selectors merge to the largest N, capped at what exists, oldest first"
     );
@@ -569,7 +663,7 @@ suite("RunOutputResolver", () => {
       { workspaceRoot }
     );
     assert.deepStrictEqual(
-      groupBoundaryItems.map((item) => item.text),
+      groupBoundaryItems.map(getPriorText),
       ["partial retry response"],
       "previous/all stop at the group start and numeric same-group references are excluded"
     );
@@ -602,7 +696,7 @@ suite("RunOutputResolver", () => {
       attemptIndex,
       definitionRevision: 1,
       responseKind: "ai",
-      payload: { cliOutput: { response: "legacy flattened body", elapsed: 1, isStreaming: false, structured: { events, metadata: {} } } },
+      payload: { cliOutput: {  elapsed: 1, isStreaming: false, structured: { events, metadata: {} } } },
     });
     await recorder.appendEvents(manifestPath, [
       start(0, "first prompt"),
@@ -646,7 +740,7 @@ suite("RunOutputResolver", () => {
         attemptIndex: 0,
         definitionRevision: 1,
         responseKind: "ai",
-        payload: { cliOutput: { response: "final response", elapsed: 1, isStreaming: false } },
+        payload: { cliOutput: { structured: { events: [{ type: "text", data: { text: "final response" } }], metadata: {} }, elapsed: 1, isStreaming: false } },
       },
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 3, target: promptTarget, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "completed" } },
     ]);
@@ -672,21 +766,21 @@ suite("RunOutputResolver", () => {
     const interruptedTarget = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
     await recorder.appendEvents(manifestPath, [
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED, timestampMs: 1, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { kind: "ai", startReason: "initial", prompt: "appended to old run" } },
-      { eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED, timestampMs: 2, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, responseKind: "ai", payload: { cliOutput: { response: "older run output", elapsed: 1, isStreaming: false } } },
+      { eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED, timestampMs: 2, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, responseKind: "ai", payload: { cliOutput: { structured: { events: [{ type: "text", data: { text: "older run output" } }], metadata: {} }, elapsed: 1, isStreaming: false } } },
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 3, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "completed" } },
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED, timestampMs: 4, target: interruptedTarget, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { kind: "ai", startReason: "initial", prompt: "interrupted" } },
     ]);
     const resolver = new RunOutputResolver(recorder);
-    assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, ["previous"], revisionOne.steps, 2, { workspaceRoot }).then(items => items.map(item => item.text)), ["older run output"]);
+    assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, ["previous"], revisionOne.steps, 2, { workspaceRoot }).then(items => items.map(getPriorText)), ["older run output"]);
     assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, [[2]], revisionOne.steps, 2, { workspaceRoot }), []);
     const otherRunDir = path.join(workspaceRoot, "run-newer");
     const otherManifest = await recorder.initializeRunAt(otherRunDir, "resolver-workflow", 2, 1, EXECUTION_STATES.RUNNING, 1, revisionOne);
     await recorder.appendEvents(otherManifest, [
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED, timestampMs: 1, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { kind: "ai", startReason: "initial", prompt: "newer run" } },
-      { eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED, timestampMs: 2, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, responseKind: "ai", payload: { cliOutput: { response: "newer run output", elapsed: 1, isStreaming: false } } },
+      { eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED, timestampMs: 2, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, responseKind: "ai", payload: { cliOutput: { structured: { events: [{ type: "text", data: { text: "newer run output" } }], metadata: {} }, elapsed: 1, isStreaming: false } } },
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 3, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "completed" } },
     ]);
-    assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, ["previous"], revisionOne.steps, 2, { workspaceRoot }).then(items => items.map(item => item.text)), ["older run output"]);
+    assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, ["previous"], revisionOne.steps, 2, { workspaceRoot }).then(items => items.map(getPriorText)), ["older run output"]);
   });
 
   test("does not resolve a skipped step's pre-condition output as its response", async () => {
@@ -717,8 +811,8 @@ suite("RunOutputResolver", () => {
         responseKind: "condition",
         payload: {
           cliOutput: {
-            prompt: "check whether to run",
-            response: "checking before skip",
+
+            structured: { events: [{ type: "text", data: { text: "checking before skip" } }], metadata: {} },
             elapsed: 1,
             isStreaming: false,
           },
@@ -733,7 +827,7 @@ suite("RunOutputResolver", () => {
         attempts.push(event.attempt);
       }
     }
-    assert.strictEqual(attempts[0]?.output?.response, "checking before skip");
+    assert.strictEqual(getStepOutputText({ output: attempts[0]?.output }, StepOutputTextMode.TRANSCRIPT), "checking before skip");
     assert.strictEqual(attempts[0]?.kind, "condition");
     assert.strictEqual(
       await resolver.resolveAttempt(manifestPath, target, 0, 0),
@@ -788,8 +882,8 @@ suite("RunOutputResolver", () => {
         responseKind: "condition",
         payload: {
           cliOutput: {
-            prompt: "check before step",
-            response: "condition output",
+
+            structured: { events: [{ type: "text", data: { text: "condition output" } }], metadata: {} },
             elapsed: 1,
             isStreaming: false,
           },
@@ -818,8 +912,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "the actual step prompt",
-            response: "partial step response",
+
+            structured: { events: [{ type: "text", data: { text: "partial step response" } }], metadata: {} },
             elapsed: 1,
             isStreaming: true,
           },
@@ -830,12 +924,12 @@ suite("RunOutputResolver", () => {
     const resolver = new RunOutputResolver(recorder);
     const latest = await resolver.resolveLatestAttempts(manifestPath, [target]);
     assert.strictEqual(
-      latest.get("queue:0")?.output?.response,
+      getStepOutputText({ output: latest.get("queue:0")?.output }, StepOutputTextMode.TRANSCRIPT),
       "partial step response"
     );
     assert.strictEqual(latest.get("queue:0")?.prompt, "the actual step prompt");
     assert.strictEqual(
-      (await resolver.resolveAttempt(manifestPath, target, 0, 0))?.output?.response,
+      getStepOutputText({ output: (await resolver.resolveAttempt(manifestPath, target, 0, 0))?.output }, StepOutputTextMode.TRANSCRIPT),
       "partial step response"
     );
     const items = await resolver.resolvePriorContextItems(
@@ -846,7 +940,7 @@ suite("RunOutputResolver", () => {
       { workspaceRoot }
     );
     assert.deepStrictEqual(
-      items.map((item) => item.text),
+      items.map(getPriorText),
       ["partial step response"]
     );
   });
@@ -877,8 +971,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "fold this",
-            response: "",
+
+            structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
             elapsed: 0,
             isStreaming: true,
           },
@@ -910,8 +1004,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "fold this",
-            response: "the answer",
+
+            structured: { events: [{ type: "text", data: { text: "the answer" } }], metadata: {} },
             elapsed: 1,
             isStreaming: false,
           },
@@ -938,9 +1032,9 @@ suite("RunOutputResolver", () => {
     }
 
     assert.strictEqual(settled.length, 1);
-    assert.strictEqual(settled[0].attempt.output?.response, "the answer");
+    assert.strictEqual(getStepOutputText({ output: settled[0].attempt.output }, StepOutputTextMode.TRANSCRIPT), "the answer");
     assert.strictEqual(
-      settled[0].attempt.output?.response.split("the answer").length,
+      getStepOutputText({ output: settled[0].attempt.output }, StepOutputTextMode.TRANSCRIPT).split("the answer").length,
       2,
       "the aggregate must supersede the earlier deltas rather than append them"
     );
@@ -973,8 +1067,8 @@ suite("RunOutputResolver", () => {
         responseKind: "ai",
         payload: {
           cliOutput: {
-            prompt: "interrupted",
-            response: "",
+
+            structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
             elapsed: 0,
             isStreaming: true,
           },
@@ -1044,8 +1138,8 @@ suite("RunOutputResolver", () => {
           ...(responseKind ? { responseKind } : {}),
           payload: {
             cliOutput: {
-              prompt: `step ${stepIndex}`,
-              response: `output ${stepIndex}`,
+
+              structured: { events: [{ type: "text", data: { text: `output ${stepIndex}` } }], metadata: {} },
               elapsed: 1,
               isStreaming: false,
               ...(stepIndex === 3 ? { source: "script" } : {}),
@@ -1091,8 +1185,7 @@ suite("RunOutputResolver", () => {
       responseKind: "ai",
       payload: {
         cliOutput: {
-          prompt: "run it",
-          response,
+          structured: { events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: response } }], metadata: {} },
           elapsed: 1,
           isStreaming: false,
         },
@@ -1151,12 +1244,12 @@ suite("RunOutputResolver", () => {
     const latest = (
       await resolver.resolveLatestAttempts(manifestPath, [target])
     ).get("queue:0");
-    assert.strictEqual(latest?.output?.response, expected);
+    assert.strictEqual(getStepOutputText({ output: latest?.output }, StepOutputTextMode.TRANSCRIPT), expected);
     assert.strictEqual(latest?.prompt, "run it");
     assert.strictEqual(latest?.terminalState, "completed");
 
     const single = await resolver.resolveAttempt(manifestPath, target, 0, 0);
-    assert.strictEqual(single?.output?.response, expected);
+    assert.strictEqual(getStepOutputText({ output: single?.output }, StepOutputTextMode.TRANSCRIPT), expected);
     assert.strictEqual(single?.prompt, "run it");
 
     const priorItems = await resolver.resolvePriorContextItems(
@@ -1167,7 +1260,7 @@ suite("RunOutputResolver", () => {
       { workspaceRoot }
     );
     assert.deepStrictEqual(
-      priorItems.map((item) => item.text),
+      priorItems.map(getPriorText),
       [expected]
     );
   });
@@ -1194,8 +1287,7 @@ suite("RunOutputResolver", () => {
       payload: { kind: "ai", startReason: "initial", prompt },
     });
     const output = (
-      target: typeof firstTarget | typeof secondTarget,
-      prompt: string
+      target: typeof firstTarget | typeof secondTarget
     ): WorkflowTimelineEventDraft => ({
       eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
       timestampMs: 2,
@@ -1206,8 +1298,6 @@ suite("RunOutputResolver", () => {
       responseKind: "ai",
       payload: {
         cliOutput: {
-          prompt,
-          response: "",
           elapsed: 0,
           isStreaming: true,
         },
@@ -1240,9 +1330,9 @@ suite("RunOutputResolver", () => {
     await recorder.appendEvents(manifestPath, [
       start(firstTarget, "first"),
       start(secondTarget, "second"),
-      output(firstTarget, "first"),
+      output(firstTarget),
       chunk(firstTarget, "first output"),
-      output(secondTarget, "second"),
+      output(secondTarget),
       chunk(secondTarget, "second output"),
       terminate(secondTarget, 4),
       chunk(firstTarget, " plus more"),
@@ -1263,7 +1353,7 @@ suite("RunOutputResolver", () => {
       [secondTarget, firstTarget]
     );
     assert.deepStrictEqual(
-      settled.map((event) => event.attempt.output?.response),
+      settled.map((event) => getStepOutputText({ output: event.attempt.output }, StepOutputTextMode.TRANSCRIPT)),
       ["second output", "first output plus more"]
     );
     assert.strictEqual(
@@ -1337,7 +1427,7 @@ suite("RunOutputResolver", () => {
     );
 
     const resolved = await resolver.resolveAttempt(manifestPath, target, 0, 0);
-    const resolvedResponse = resolved?.output?.response;
+    const resolvedResponse = getStepOutputText({ output: resolved?.output }, StepOutputTextMode.TRANSCRIPT);
     assert.strictEqual(resolvedResponse?.length, response.length);
     assert.strictEqual(resolvedResponse, response);
   });
@@ -1372,8 +1462,8 @@ suite("RunOutputResolver", () => {
           responseKind: "ai",
           payload: {
             cliOutput: {
-              prompt: "recover",
-              response: "initial",
+
+              structured: { events: [{ type: "text", data: { text: "initial" } }], metadata: {} },
               elapsed: 1,
               isStreaming: false,
             },
@@ -1418,8 +1508,8 @@ suite("RunOutputResolver", () => {
           responseKind: "ai",
           payload: {
             cliOutput: {
-              prompt: "recover",
-              response: "initial follow-up",
+
+              structured: { events: [{ type: "text", data: { text: "initial follow-up" } }], metadata: {} },
               elapsed: 2,
               isStreaming: false,
             },
@@ -1440,7 +1530,10 @@ suite("RunOutputResolver", () => {
         0,
         0
       );
-      assert.strictEqual(restored?.output?.response, boundary.response);
+      assert.strictEqual(
+        getStepOutputText({ output: restored?.output }, StepOutputTextMode.TRANSCRIPT),
+        boundary.response ?? ""
+      );
       assert.strictEqual(restored?.terminalState, boundary.terminal);
     }
   });

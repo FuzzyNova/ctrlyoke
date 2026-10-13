@@ -58,7 +58,14 @@ export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
   ],
   [PERSISTED_STORES.LINEAGE_DESCRIPTOR]: [],
   [PERSISTED_STORES.RUNNER_LOCK]: [],
-  [PERSISTED_STORES.TIMELINE]: [],
+  [PERSISTED_STORES.TIMELINE]: [
+    {
+      store: PERSISTED_STORES.TIMELINE,
+      from: 1,
+      describe: "Stamp timeline manifest format v2",
+      migrate: (doc) => doc,
+    },
+  ],
   [PERSISTED_STORES.PROJECT_METADATA]: [],
   [PERSISTED_STORES.EXTERNAL_ROOTS_TRUST]: [],
   [PERSISTED_STORES.SECRET_GRANTS_TRUST]: [],

@@ -64,10 +64,12 @@ suite("HistorySearchService", () => {
         1100,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "first prompt",
-          response: "older needle response",
           elapsed: 1,
           isStreaming: false,
+          structured: {
+            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "older needle response" } }],
+            metadata: {},
+          },
         }
       ),
     ]);
@@ -125,8 +127,6 @@ suite("HistorySearchService", () => {
         3100,
         { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
         {
-          prompt: "final prompt",
-          response: "final response",
           elapsed: 1,
           isStreaming: false,
           structured: {
@@ -215,10 +215,12 @@ suite("HistorySearchService", () => {
     // A retried first pass is attempt 2 of pass 1. The context used to be
     // built from the attempt index here, and pass 1 had no number at all.
     const finalOutput = (term: string) => ({
-      prompt: "final prompt",
-      response: `${term} response`,
       elapsed: 1,
       isStreaming: false,
+      structured: {
+        events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: `${term} response` } }],
+        metadata: {},
+      },
     });
     await createRun("final-pass-labels-2026-06-09T17-30-00", 1, 4000, [
       createCliOutputDraft(
@@ -398,10 +400,12 @@ suite("HistorySearchService", () => {
         1800,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: `${"a".repeat(80)}snippet-width-term${"b".repeat(90)}`,
           elapsed: 1,
           isStreaming: false,
+          structured: {
+            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: `${"a".repeat(80)}snippet-width-term${"b".repeat(90)}` } }],
+            metadata: {},
+          },
         }
       ),
     ]);
@@ -448,8 +452,6 @@ suite("HistorySearchService", () => {
         4100,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: "",
           elapsed: 1,
           isStreaming: false,
           structured: {
@@ -647,8 +649,6 @@ suite("HistorySearchService", () => {
         3510,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: "",
           elapsed: 1,
           isStreaming: true,
           structured: {
@@ -661,8 +661,6 @@ suite("HistorySearchService", () => {
         3520,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: "",
           elapsed: 1,
           isStreaming: false,
           structured: {
@@ -885,8 +883,6 @@ suite("HistorySearchService", () => {
       | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
       | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number },
     cliOutput: {
-      prompt: string;
-      response: string;
       cliCommand?: string;
       source?: (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES];
       elapsed: number;
@@ -901,19 +897,7 @@ suite("HistorySearchService", () => {
       target,
       attemptIndex,
       payload: {
-        cliOutput: {
-          ...cliOutput,
-          ...(!cliOutput.source && !cliOutput.structured && cliOutput.response
-            ? {
-                structured: {
-                  events: [
-                    { type: CLI_EVENT_TYPES.TEXT, data: { text: cliOutput.response } },
-                  ],
-                  metadata: {},
-                },
-              }
-            : {}),
-        },
+        cliOutput,
       },
     };
   }

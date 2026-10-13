@@ -80,11 +80,6 @@ export class HistoryCandidateExtractor {
       : undefined;
     const candidates: MatchCandidate[] = [
       ...this.toCandidate(
-        scriptEventKind ?? HISTORY_EVENT_KINDS.PROMPT,
-        HISTORY_MATCH_FIELDS.CONTENT,
-        cliOutput.prompt
-      ),
-      ...this.toCandidate(
         scriptEventKind ?? HISTORY_EVENT_KINDS.CLI_COMMAND,
         HISTORY_MATCH_FIELDS.COMMAND,
         cliOutput.cliCommand
@@ -119,6 +114,14 @@ export class HistoryCandidateExtractor {
       HISTORY_EVENT_KINDS.STATUS,
       HISTORY_MATCH_FIELDS.CONTENT,
       message
+    );
+  }
+
+  collectPromptCandidates(prompt: string): MatchCandidate[] {
+    return this.toCandidate(
+      HISTORY_EVENT_KINDS.PROMPT,
+      HISTORY_MATCH_FIELDS.CONTENT,
+      prompt
     );
   }
 

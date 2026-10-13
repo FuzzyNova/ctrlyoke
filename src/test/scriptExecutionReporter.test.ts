@@ -156,7 +156,7 @@ suite("ScriptExecutionReporter", () => {
         () => undefined
       ),
       onScriptOutput: (_target, output) => {
-        if (output.response) streamed.push(output.response);
+        if (output.scriptOutput?.stdout) streamed.push(output.scriptOutput.stdout);
       },
       onScriptCompletedOutput: (_target, output) => completed.push(output),
     };
@@ -196,8 +196,12 @@ suite("ScriptExecutionReporter", () => {
       );
       assert.ok(!streamed.join("").includes("secret-value"));
       assert.strictEqual(
-        completed[0]?.response,
-        `visible ${REDACTION_MARKER} tail sec\nstderr ${REDACTION_MARKER}`
+        completed[0]?.scriptOutput?.stdout,
+        `visible ${REDACTION_MARKER} tail sec`
+      );
+      assert.strictEqual(
+        completed[0]?.scriptOutput?.stderr,
+        `stderr ${REDACTION_MARKER}`
       );
       assert.strictEqual(
         report.evaluationResult.stderr,
@@ -235,8 +239,8 @@ suite("ScriptExecutionReporter", () => {
         () => undefined
       ),
       onScriptOutput: (_target, output) => {
-        if (output.isStreaming && output.response)
-          streamed.push(output.response);
+        if (output.isStreaming && output.scriptOutput?.stdout)
+          streamed.push(output.scriptOutput.stdout);
       },
     };
 
@@ -369,7 +373,7 @@ suite("ScriptExecutionReporter", () => {
     assert.strictEqual(streamed.length, 2);
     assert.strictEqual(streamed[0].cliCommand, "check.sh");
     assert.strictEqual(streamed[0].isStreaming, true);
-    assert.strictEqual(streamed[1].response, "chunk");
+    assert.strictEqual(streamed[1].scriptOutput?.stdout, "chunk");
     assert.strictEqual(streamed[1].isStreaming, true);
     assert.strictEqual(completed.length, 1);
     assert.strictEqual(completed[0].scriptVerdict?.outcome, "passed");

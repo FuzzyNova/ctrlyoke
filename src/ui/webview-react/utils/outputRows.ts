@@ -44,7 +44,8 @@ import type {
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import { getBackgroundTaskLabel } from "@root/utils/BackgroundWorkHoldText";
-import { getScriptOutputText } from "@root/utils/StepOutputText";
+import { getScriptOutputText, getStepOutputText } from "@root/utils/StepOutputText";
+import { StepOutputTextMode } from "@root/types/DashboardConstants";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
 import { computePromptChangeSummary } from "./promptUndo";
@@ -2640,16 +2641,6 @@ export function buildOutputRows(
       output = activityOutput;
     }
 
-    if (emitsLeadingChrome && output.prompt && !scriptish) {
-      rows.push({
-        key: `${attemptRowKeyBase}:prompt`,
-        rowKind: OUTPUT_ROW_KINDS.PROMPT,
-        target,
-        text: output.prompt,
-        estimateSize: 36,
-      });
-    }
-
     if (emitsLeadingChrome && output.cliCommand) {
       rows.push({
         key: `${attemptRowKeyBase}:command`,
@@ -2879,11 +2870,11 @@ export function buildOutputRows(
         !output.isStreaming &&
         (message.isActivity
           ? activityText
-          : output.response || output.scriptOutput)
+          : getStepOutputText({ output, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT))
       ) {
         const responseText = message.isActivity
           ? activityText
-          : output.response;
+          : getStepOutputText({ output, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT);
         if (isScriptOutput(output)) {
           pushScriptOutputRows({
             rows,

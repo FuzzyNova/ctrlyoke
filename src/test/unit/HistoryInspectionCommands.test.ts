@@ -1174,8 +1174,8 @@ suite("CLI history inspection command handlers", () => {
           responseKind: "ai",
           payload: {
             cliOutput: {
-              prompt: "Review",
-              response: largeOutput,
+
+              structured: { events: [{ type: "text", data: { text: largeOutput } }], metadata: {} },
               elapsed: 1,
               isStreaming: false,
             },
@@ -2554,10 +2554,15 @@ suite("CLI history inspection command handlers", () => {
         {
           kind: "script",
           output: {
-            response: `${source} output`,
             elapsed: 1,
             isStreaming: false,
             source,
+          },
+          scriptOutput: {
+            command: `${source} command`,
+            stdout: `${source} output`,
+            stderr: "",
+            exitCode: 0,
           },
         }
       );
@@ -3694,8 +3699,8 @@ async function createDeepSearchRun(
       attemptIndex: 0,
       payload: {
         cliOutput: {
-          prompt: "prompt",
-          response: `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}`,
+
+
           elapsed: 1,
           isStreaming: false,
           structured: {

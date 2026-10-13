@@ -5,6 +5,7 @@ import {
 } from "../types/DashboardConstants";
 import type { CliEvent, FileEditData } from "../types/CliOutputTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
+import type { LegacyCliOutputV1 } from "../types/WorkflowTimelineTypes";
 import { normalizeCliEvents } from "./CliEventNormalizer";
 import { countStructuredPatchChanges } from "./CliEventDiff";
 import { joinResponseText } from "./ResponseTextJoin";
@@ -12,7 +13,7 @@ import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
 
 /** Input projection shared by the resolver and webview without importing core. */
 export interface StepOutputSource {
-  output?: CliOutput;
+  output?: CliOutput | LegacyCliOutputV1 | null;
   scriptOutput?: ScriptRuntimeOutput;
 }
 
@@ -45,6 +46,11 @@ export function getTranscriptText(events: readonly CliEvent[]): string {
         : `\n[Edited: ${edit.path}]`);
     } else if (event.type === CLI_EVENT_TYPES.FILE_DELETE && "path" in event.data) {
       parts.push(`\n[Deleted: ${event.data.path}]`);
+    } else if (
+      event.type === CLI_EVENT_TYPES.TERMINAL_OUTPUT &&
+      "text" in event.data
+    ) {
+      parts.push(sanitizeTerminalOutput(event.data.text));
     }
   }
   return joinResponseText(parts);
@@ -69,5 +75,8 @@ export function getStepOutputText(
       ? getAssistantText(events)
       : getTranscriptText(events);
   }
-  return source.output?.response ?? "";
+  if (source.output && "response" in source.output) {
+    return source.output.response ?? "";
+  }
+  return "";
 }

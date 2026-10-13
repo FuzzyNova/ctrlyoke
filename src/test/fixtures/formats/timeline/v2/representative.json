@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "storageKind": "timeline",
+  "workflowId": "fixture-workflow",
+  "runId": 1,
+  "startedAt": 1,
+  "executionState": "completed",
+  "definitionRevision": 1,
+  "initialDefinition": { "name": "Fixture workflow", "steps": [] },
+  "stepCount": 1,
+  "eventCount": 1,
+  "nextSequence": 2,
+  "lastUpdatedAt": 2
+}

@@ -24,7 +24,7 @@ user-scope run history somewhere other than `~/.ctrlyoke`, set the
 | `draft/workflow.ctrlyoke.json`           | The workflow definition before its first run.                                                                          |
 | `run-<timestamp>/workflow.ctrlyoke.json` | The run's working copy, described on this page.                                                                        |
 | `run-<timestamp>/manifest.json`          | Run summary: state, timestamps, step count, and token totals.                                                          |
-| `run-<timestamp>/events.jsonl`           | The run's event log, one JSON event per line. AI responses and script output are stored here, not in the working copy. |
+| `run-<timestamp>/events.jsonl`           | The run's event log, one JSON event per line. AI output is derived from structured events; script output is stored in script execution records. Timeline format v2 omits the duplicate flattened response and prompt from output records. Existing v1 lines remain readable, including in runs continued with v2 writes. |
 
 ctrlyoke treats a `runner.json` lock as stale, and reclaims it, when its owning
 process has exited or its heartbeat has been silent for 30 seconds. Deleting it

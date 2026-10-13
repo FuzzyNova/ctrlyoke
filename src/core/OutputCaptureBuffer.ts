@@ -473,15 +473,17 @@ export class OutputCaptureBuffer {
   }
 
   private createBufferedOutput(buffer: StepOutputBufferEntry): CliOutput {
-    const events =
-      buffer.accumulatedEvents.length > 0
-        ? normalizeCliEvents(buffer.accumulatedEvents)
-        : buffer.rawTextOutput && buffer.accumulatedText
-          ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: buffer.accumulatedText } }]
-          : [];
+    const events = normalizeCliEvents(buffer.accumulatedEvents);
+    if (
+      buffer.accumulatedText &&
+      !events.some((event) => event.type === CLI_EVENT_TYPES.TEXT)
+    ) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: buffer.accumulatedText },
+      });
+    }
     return {
-      prompt: buffer.prompt,
-      response: buffer.accumulatedText,
       structured: events.length > 0 ? { events, metadata: {} } : undefined,
       elapsed: 0,
       tokens: undefined,
@@ -609,8 +611,6 @@ export class OutputCaptureBuffer {
         }
 
         dashboardSink.updateCliOutput(stepIndex, {
-          prompt: buffer.prompt,
-          response: "",
           elapsed: 0,
           tokens: undefined,
           isStreaming: true,
@@ -664,18 +664,20 @@ export class OutputCaptureBuffer {
       const loopIndex = finalRuntime.loopCount;
       const buffer = this.finalStepOutputBuffer.get(loopIndex);
       if (buffer) {
-        const events =
-          buffer.accumulatedEvents.length > 0
-            ? normalizeCliEvents(buffer.accumulatedEvents)
-            : buffer.rawTextOutput && buffer.accumulatedText
-              ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: buffer.accumulatedText } }]
-              : [];
+        const events = normalizeCliEvents(buffer.accumulatedEvents);
+        if (
+          buffer.accumulatedText &&
+          !events.some((event) => event.type === CLI_EVENT_TYPES.TEXT)
+        ) {
+          events.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            data: { text: buffer.accumulatedText },
+          });
+        }
         Log.trace(
           `${instanceTag} replayFullStateTo: replaying finalStep loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
         );
         dashboardSink.updateFinalStepOutput(loopIndex, {
-          prompt: buffer.prompt,
-          response: buffer.accumulatedText,
           structured: events.length > 0 ? { events, metadata: {} } : undefined,
           elapsed: 0,
           tokens: undefined,

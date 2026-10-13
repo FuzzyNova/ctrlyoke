@@ -17,6 +17,7 @@ import type {
   OutputExecutionTarget,
 } from "../../types/OutputHistoryTypes";
 import type { WorkflowAttemptTarget } from "../../types/CtrlYokeTypes";
+import type { LegacyCliOutputV1 } from "../../types/WorkflowTimelineTypes";
 import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
@@ -24,7 +25,6 @@ import {
 import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
 import { getTranscriptText } from "../../utils/StepOutputText";
 import { Log } from "../../utils/Log";
-import { appendResponseText } from "../../utils/ResponseTextJoin";
 
 export interface SessionActivityRecorderPort {
   readonly id: string;
@@ -68,6 +68,8 @@ export class SessionActivityRecorder {
   private readonly pendingSessionActivityEvents = new Map<string, CliEvent[]>();
   /** Per-attempt tail of follow-up persistence. */
   private readonly followUpPersistQueue = new Map<string, Promise<void>>();
+  /** Keeps the one-time follow-up divider unique while bursts are queued. */
+  private readonly followUpDividerKeys = new Set<string>();
   private readonly pendingSessionActivityIntegrations = new Map<
     string,
     { integration: HarnessIntegration; sessionId: string | undefined }
@@ -83,6 +85,7 @@ export class SessionActivityRecorder {
     this.pendingSessionActivityEvents.clear();
     this.pendingSessionActivityIntegrations.clear();
     this.followUpPersistQueue.clear();
+    this.followUpDividerKeys.clear();
   }
 
   getActivityIntegrationId(integration?: HarnessIntegration): string {
@@ -291,14 +294,14 @@ export class SessionActivityRecorder {
     contextWindow: { used: number; size: number } | undefined
   ): Promise<void> {
     const historyFilePath = this.port.resolveHistoryFilePath();
-    let existingOutput: CliOutput | undefined;
+    let existingOutput: CliOutput | LegacyCliOutputV1 | undefined;
     if (historyFilePath) {
       try {
         existingOutput = (
           await this.port.outputHistoryManager
             .getRunOutputResolver()
             .resolveAttempt(historyFilePath, target, runIndex, attemptIndex)
-        )?.output;
+        )?.output ?? undefined;
       } catch (error) {
         Log.warn(
           `[inst:${this.port.id.slice(0, 8)}] Failed to resolve attempt for resumed session activity:`,
@@ -308,9 +311,10 @@ export class SessionActivityRecorder {
     }
 
     const existingEvents = existingOutput?.structured?.events ?? [];
+    const entryKey = getCliEntryKey(target, runIndex, attemptIndex);
     const hasFollowUpDivider = existingEvents.some(
       (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-    );
+    ) || this.followUpDividerKeys.has(entryKey);
     const eventsToAppend: CliEvent[] =
       contentEvents.length > 0 && existingOutput && !hasFollowUpDivider
         ? [
@@ -322,6 +326,9 @@ export class SessionActivityRecorder {
             ...contentEvents,
           ]
         : contentEvents;
+    if (eventsToAppend.some((event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED)) {
+      this.followUpDividerKeys.add(entryKey);
+    }
 
     this.port.onResumedActivityEvents(target, eventsToAppend);
 
@@ -343,44 +350,6 @@ export class SessionActivityRecorder {
           error
         );
       }
-    }
-    if (!historyFilePath || !existingOutput) {
-      return;
-    }
-    try {
-      const merged: CliOutput = {
-        ...existingOutput,
-        response: appendResponseText(existingOutput.response, followUpText),
-        structured: eventsToAppend.length
-          ? {
-              ...(existingOutput.structured ?? { metadata: {} }),
-              events: [...existingEvents, ...eventsToAppend],
-            }
-          : existingOutput.structured,
-        tokens:
-          contextWindow && existingOutput.tokens
-            ? {
-                ...existingOutput.tokens,
-                contextWindowUsed: contextWindow.used,
-                contextWindowSize: contextWindow.size,
-              }
-            : existingOutput.tokens,
-        elapsed:
-          existingOutput.timestampMs != null
-            ? (Date.now() - existingOutput.timestampMs) / 1000
-            : existingOutput.elapsed,
-      };
-      await this.port.outputHistoryManager.saveExecutionOutput(
-        historyFilePath,
-        target,
-        [merged],
-        this.port.getDefinitionRevisionContext()
-      );
-    } catch (error) {
-      Log.warn(
-        `[inst:${this.port.id.slice(0, 8)}] Failed to persist resumed session activity to history:`,
-        error
-      );
     }
   }
 

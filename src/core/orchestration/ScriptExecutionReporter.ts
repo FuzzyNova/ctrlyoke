@@ -231,7 +231,6 @@ export class ScriptExecutionReporter {
     const history = context.outputHistoryManager;
     const targetForHistory = target;
     const initOutput: CliOutput = {
-      response: "",
       elapsed: 0,
       isStreaming: true,
       source,
@@ -296,7 +295,11 @@ export class ScriptExecutionReporter {
       context.onScriptOutput?.(targetForHistory, {
         ...initOutput,
         cliCommand: undefined,
-        response: sanitizedChunk,
+        scriptOutput: {
+          command: properties.script,
+          stdout: sanitizedChunk,
+          stderr: "",
+        },
       });
     };
 
@@ -361,7 +364,6 @@ export class ScriptExecutionReporter {
     const verdict = this.createVerdict(request, safeEvaluationResult);
     const finalOutput: CliOutput = {
       ...initOutput,
-      response: outputText,
       scriptOutput,
       elapsed: safeEvaluationResult.duration / 1000,
       isStreaming: false,

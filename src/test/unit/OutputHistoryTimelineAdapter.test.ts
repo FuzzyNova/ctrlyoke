@@ -12,6 +12,8 @@ import {
 } from "../../types/DashboardConstants";
 import type { WorkflowOutputHistory } from "../../types/OutputHistoryTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
+import { getStepOutputText } from "../../utils/StepOutputText";
+import { StepOutputTextMode } from "../../types/DashboardConstants";
 import {
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_EVENT_TYPES,
@@ -33,8 +35,10 @@ const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
 function output(response: string): CliOutput {
   return {
-    prompt: response,
-    response,
+    structured: {
+      events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: response } }],
+      metadata: {},
+    },
     elapsed: 0,
     isStreaming: false,
   };
@@ -161,13 +165,13 @@ suite("OutputHistoryTimelineAdapter", () => {
     assert.strictEqual(cliEntries.length, 2);
     assert.strictEqual(
       cliEntries[0].kind === OUTPUT_HISTORY_KINDS.CLI &&
-        cliEntries[0].cliOutput.response,
+        getStepOutputText({ output: cliEntries[0].cliOutput }, StepOutputTextMode.TRANSCRIPT),
       "prompt output",
       "dashboard history retains the AI response as a normal CLI timeline entry"
     );
     assert.strictEqual(
       cliEntries[1].kind === OUTPUT_HISTORY_KINDS.CLI &&
-        cliEntries[1].cliOutput.response,
+        getStepOutputText({ output: cliEntries[1].cliOutput }, StepOutputTextMode.TRANSCRIPT),
       "condition output",
       "history retains condition output on its own phase-tagged attempt"
     );
@@ -336,12 +340,15 @@ suite("OutputHistoryTimelineAdapter", () => {
       (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(entry.cliOutput.response, "hello world");
+    assert.strictEqual(
+      getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      "hello world\n[Thinking]\nfirst\n[/Thinking]\n[Thinking]\nsecond\n[/Thinking]"
+    );
     assert.deepStrictEqual(
       entry.cliOutput.structured?.events.map(
         (cli) => (cli.data as { text?: string }).text
       ),
-      ["first", "second"]
+      ["hello world", "first", "second"]
     );
   });
 
@@ -368,8 +375,10 @@ suite("OutputHistoryTimelineAdapter", () => {
       (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(entry.cliOutput.response, "final response");
-    assert.strictEqual(entry.cliOutput.structured, undefined);
+    assert.strictEqual(getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT), "final response");
+    assert.deepStrictEqual(entry.cliOutput.structured?.events, [
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "final response" } },
+    ]);
   });
 
   // A paused-while-running step keeps streaming until it finishes. Sealing it

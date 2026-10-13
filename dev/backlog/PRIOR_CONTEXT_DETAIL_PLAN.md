@@ -1,6 +1,6 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phases 0 and 1 complete; Phase 2 steps 1–4 complete (chunks 2a–2c); Phase 2 steps 5–6 and Phase 3 remain.
+> **Status:** Phases 0–2 complete (chunks 2a–2d); Phase 3 remains.
 > Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
@@ -716,7 +716,7 @@ waits for step 5.
      steers, search results, and the terminal tail;
    - Copy Full Output equals the single-step export.
      Docs: the dashboard page that lists the output context menu items (`docs/guide/output.md` and `docs/guide/dashboard.md`).
-5. **Stop writing, and bump the format** (D8e). Delete `extractTextFromEvents`,
+5. **Complete (chunk 2d): Stop writing, and bump the format** (D8e). Delete `extractTextFromEvents`,
    `CliResponseTextExtractor.ts`, `CliResult.response`, the `onResponseComplete` payload,
    `ResolvedRunAttemptValue.responseText`, the webview's `joinCliTextEvents` and follow-up merge,
    and the `SessionActivityRecorder` text append. Remove `response` and `prompt` from
@@ -728,7 +728,7 @@ waits for step 5.
      Update the webview tests that assert on `response` (`outputUtils`, `workflowStore`,
      `useLatestStepOutput`, `useMessageHandler`, `outputProjectionEquivalence`, `outputRows`, and
      the context-menu hooks) and the fixture-only uses.
-6. Docs: `run-files.md` (record shape), `mcp-tools.md` (`responseText` is derived; cursors are
+6. **Complete (chunk 2d):** Docs: `run-files.md` (record shape), `mcp-tools.md` (`responseText` is derived; cursors are
    opaque), `docs/cli/ctrlyoke.md` (`history show` text no longer repeats thinking), and
    `CHANGELOG.md` (format v2; Copy Output vs Copy Full Output; script search).
 

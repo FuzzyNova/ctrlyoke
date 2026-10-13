@@ -1324,7 +1324,7 @@ const CliHeaderRowView: React.FC<{
   const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
   const stepDisplayName =
-    row.stepName?.trim() ?? getFirstWords(output.prompt, 4);
+      row.stepName?.trim() ?? "";
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
   );

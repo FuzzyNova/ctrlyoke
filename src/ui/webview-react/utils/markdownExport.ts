@@ -61,7 +61,8 @@ import { formatTokenCount } from "@root/utils/TokenFormatting";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { formatCreatedFileDiff } from "@root/utils/CliEventDiff";
-import { getScriptOutputText } from "@root/utils/StepOutputText";
+import { getScriptOutputText, getStepOutputText } from "@root/utils/StepOutputText";
+import { StepOutputTextMode } from "@root/types/DashboardConstants";
 import type { OutputMessageTarget } from "./outputProjection";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
@@ -506,18 +507,11 @@ export function generateMarkdownExport(
           item.stepName ||
           (isScript
             ? getFirstWords(output.cliCommand, 3)
-            : getFirstWords(output.prompt, 4));
+            : "");
         const stepLabel = isFinalStep
           ? `${formatFinalPassLabel(stepNum)}${item.stepName ? `: ${item.stepName}` : ""}`
           : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
         lines.push(`## ${stepLabel} — ${executionLabel}`);
-        lines.push("");
-      }
-
-      if (output.prompt && !isScriptOutput(output)) {
-        if (includeMetadata) lines.push("### Prompt");
-        lines.push("");
-        lines.push(fenceLiteral(output.prompt));
         lines.push("");
       }
 
@@ -549,10 +543,10 @@ export function generateMarkdownExport(
         lines.push("");
         lines.push(fenceLiteral(getScriptOutputText(output.scriptOutput)));
         lines.push("");
-      } else if (output.response) {
+      } else if (getStepOutputText({ output: output as CliOutputType, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT)) {
         if (includeMetadata) lines.push("### Response");
         lines.push("");
-        lines.push(fenceLiteral(output.response));
+        lines.push(fenceLiteral(getStepOutputText({ output: output as CliOutputType, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT)));
         lines.push("");
       }
 

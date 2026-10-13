@@ -861,9 +861,7 @@ export class CliTerminalFormatter {
       CliTerminalFormatter._scriptHeaders.add(headerKey);
     }
     let state = CliTerminalFormatter._scriptStreaming.get(key);
-    const outputText = scriptOutput
-      ? getScriptOutputText(scriptOutput)
-      : output.response;
+    const outputText = scriptOutput ? getScriptOutputText(scriptOutput) : "";
 
     if (output.isStreaming) {
       CliTerminalFormatter.flushStreamingBuffer(target);
@@ -878,20 +876,6 @@ export class CliTerminalFormatter {
           )}`
         );
         console.log();
-      }
-      if (output.response) {
-        if (!state) {
-          state = {
-            shownChars: 0,
-            shownLines: 0,
-            totalChars: 0,
-            totalLines: 0,
-            endsWithNewline: true,
-          };
-          CliTerminalFormatter._scriptStreaming.set(key, state);
-          console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
-        }
-        CliTerminalFormatter.writeBoundedScriptChunk(output.response, state);
       }
       return;
     }

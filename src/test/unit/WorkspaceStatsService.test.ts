@@ -61,7 +61,7 @@ suite("WorkspaceStatsService", () => {
       recursive: true,
     });
     const manifest: WorkflowRunManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       storageKind: "timeline",
       workflowId: workflowKey,
       runId: 1,

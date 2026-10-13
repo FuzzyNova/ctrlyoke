@@ -332,7 +332,7 @@ export abstract class HarnessIntegration {
   protected statusChangeEmitter = new TypedEmitter<HarnessStatus>();
   public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
-  protected responseCompleteEmitter = new TypedEmitter<string>();
+  protected responseCompleteEmitter = new TypedEmitter<undefined>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
 
   /** Await host-owned child cleanup when a Node host is shutting down. */

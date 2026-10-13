@@ -183,8 +183,6 @@ suite("HistoryRunDeepScanner", () => {
 
   function createCliOutput(response: string): CliOutput {
     return {
-      prompt: "prompt",
-      response,
       elapsed: 1,
       isStreaming: false,
       structured: {

@@ -1,3 +1,5 @@
+import { getStepOutputText } from "../../../../utils/StepOutputText";
+import { StepOutputTextMode } from "../../../../types/DashboardConstants";
 /**
  * Tests for non-temporal workflowStore behaviour.
  * Temporal (undo/redo) behaviour is covered in workflowStore.temporal.test.ts.
@@ -37,8 +39,8 @@ function makePrompt(overrides: Partial<PromptStep> = {}): PromptStep {
 
 function makeOutput(overrides: Partial<CliOutput> = {}): CliOutput {
   return {
-    prompt: "hello",
-    response: "world",
+
+    structured: { events: [{ type: "text", data: { text: "world" } }], metadata: {} },
     elapsed: 100,
     timestampMs: Date.now(),
     attemptIndex: 0,
@@ -204,12 +206,12 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "first" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "first" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 1,
     });
     expect(store().getStepOutputs(0)).toHaveLength(1);
-    expect(store().getStepOutputs(0)[0].response).toBe("first");
+    expect(getStepOutputText({ output: store().getStepOutputs(0)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("first");
   });
 
   it("replaces a streaming entry for the same attemptIndex", () => {
@@ -218,7 +220,7 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "streaming", isStreaming: true }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "streaming" } }], metadata: {} }, isStreaming: true }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -226,13 +228,13 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "final", isStreaming: false }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "final" } }], metadata: {} }, isStreaming: false }),
       timestampMs: Date.now(),
       sequence: 2,
     });
     // Final replaces streaming entry
     expect(store().getStepOutputs(0)).toHaveLength(1);
-    expect(store().getStepOutputs(0)[0].response).toBe("final");
+    expect(getStepOutputText({ output: store().getStepOutputs(0)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("final");
   });
 
   it("appends entries for different steps independently", () => {
@@ -244,7 +246,7 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "step0" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "step0" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -252,12 +254,12 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "step1" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "step1" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 2,
     });
-    expect(store().getStepOutputs(0)[0].response).toBe("step0");
-    expect(store().getStepOutputs(1)[0].response).toBe("step1");
+    expect(getStepOutputText({ output: store().getStepOutputs(0)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("step0");
+    expect(getStepOutputText({ output: store().getStepOutputs(1)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("step1");
   });
 });
 
@@ -477,7 +479,7 @@ describe("appendStreamingEvents", () => {
       runIndex: 0,
       attemptIndex: 0,
       phase: EXECUTION_PHASES.PRE_CONDITION,
-      cliOutput: makeOutput({ prompt: "npm test", response: "1 failing" }),
+      cliOutput: makeOutput({  structured: { events: [{ type: "text", data: { text: "1 failing" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 0,
     };
@@ -495,7 +497,9 @@ describe("appendStreamingEvents", () => {
     expect(entries).toHaveLength(2);
     const [preCondition, prompt] = entries;
     expect(preCondition.phase).toBe(EXECUTION_PHASES.PRE_CONDITION);
-    expect(preCondition.cliOutput.structured?.events).toBeUndefined();
+    expect(preCondition.cliOutput.structured?.events).toMatchObject([
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "1 failing" } },
+    ]);
     expect(prompt.phase ?? EXECUTION_PHASES.PROMPT).toBe(
       EXECUTION_PHASES.PROMPT
     );
@@ -554,7 +558,7 @@ describe("appendStreamingEvents", () => {
       runIndex: 0,
       attemptIndex: 0,
       cliOutput: makeOutput({
-        response: "done.",
+
         structured: {
           events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done." } }],
           metadata: {},
@@ -570,7 +574,7 @@ describe("appendStreamingEvents", () => {
     ]);
 
     const entry = store().liveOrderedEntries[0] as OrderedCliHistoryEntry;
-    expect(entry.cliOutput.response).toBe("done.\n\nCommitted.");
+    expect(getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT)).toBe("done.\n\nCommitted.");
   });
 
   it("updates the rendered history snapshot when follow-up activity arrives for a retired run", () => {
@@ -967,7 +971,7 @@ describe("loadHistoryRun", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
         cliOutput: makeOutput({
-          response: "history output",
+          structured: { events: [{ type: "text", data: { text: "history output" } }], metadata: {} },
           timestampMs: 120,
         }),
         timestampMs: 120,
@@ -998,7 +1002,7 @@ describe("hydrateLiveRunHistory", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       runIndex: 0,
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "persisted" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "persisted" } }], metadata: {} } }),
       timestampMs: 120,
       sequence: 4,
     };
@@ -1038,15 +1042,17 @@ describe("hydrateLiveRunHistory", () => {
 
     store().appendLiveEntry({
       ...persistedEntry,
-      cliOutput: makeOutput({ response: "buffered replacement" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "buffered replacement" } }], metadata: {} } }),
       timestampMs: 140,
       sequence: store().liveSequence,
     });
 
     expect(store().liveOrderedEntries).toHaveLength(1);
     expect(
-      (store().liveOrderedEntries[0] as OrderedCliHistoryEntry).cliOutput
-        .response
+      getStepOutputText(
+        { output: (store().liveOrderedEntries[0] as OrderedCliHistoryEntry).cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      )
     ).toBe("buffered replacement");
     expect(store().liveOrderedEntries[0]?.sequence).toBe(4);
     expect(store().liveSequence).toBe(6);
@@ -1157,7 +1163,7 @@ describe("snapshot replay structural sharing", () => {
           target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
           runIndex: 0,
           attemptIndex: 0,
-          cliOutput: makeOutput({ response: "persisted", timestampMs: 120 }),
+          cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "persisted" } }], metadata: {} }, timestampMs: 120 }),
           timestampMs: 120,
           sequence: 4,
         },
@@ -1186,7 +1192,7 @@ describe("snapshot replay structural sharing", () => {
           kind: OUTPUT_HISTORY_KINDS.CLI,
           target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
           attemptIndex: 0,
-          cliOutput: makeOutput({ response: "done", timestampMs: 120 }),
+          cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "done" } }], metadata: {} }, timestampMs: 120 }),
           timestampMs: 120,
           sequence: 2,
         },
@@ -1303,11 +1309,11 @@ describe("getLatestOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "first" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "first" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 1,
     });
-    expect(store().getLatestOutput(0)?.response).toBe("first");
+    expect(getStepOutputText({ output: store().getLatestOutput(0) }, StepOutputTextMode.TRANSCRIPT)).toBe("first");
   });
 
   it("returns null when no outputs", () => {
@@ -1320,7 +1326,7 @@ describe("getLatestOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ response: "ai output" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "ai output" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -1329,11 +1335,11 @@ describe("getLatestOutput", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       phase: EXECUTION_PHASES.END_CONDITION,
-      cliOutput: makeOutput({ response: "npm test output" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "npm test output" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 2,
     });
-    expect(store().getLatestOutput(0)?.response).toBe("ai output");
+    expect(getStepOutputText({ output: store().getLatestOutput(0) }, StepOutputTextMode.TRANSCRIPT)).toBe("ai output");
   });
 });
 

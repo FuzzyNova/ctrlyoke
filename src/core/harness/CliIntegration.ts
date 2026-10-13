@@ -743,8 +743,8 @@ export class CliIntegration extends HarnessIntegration {
     this.contextWindowUpdateEmitter.fire({ used, size });
   }
 
-  private emitResponseComplete(response: string): void {
-    this.responseCompleteEmitter.fire(response);
+  private emitResponseComplete(): void {
+    this.responseCompleteEmitter.fire(undefined);
   }
 
   private emitSessionActivityResumed(events: CliEvent[]): void {
@@ -889,7 +889,7 @@ export class CliIntegration extends HarnessIntegration {
       hostCallbacks: {
         logResponse: (response, statistics) =>
           this.logResponse(response, statistics),
-        onResponseComplete: (response) => this.emitResponseComplete(response),
+        onResponseComplete: () => this.emitResponseComplete(),
       },
     });
   }
@@ -1002,7 +1002,7 @@ export class CliIntegration extends HarnessIntegration {
         onCommandPrepared: (params) => this.handleCommandPrepared(params),
         onStreamingChunk: (chunk) => this.emitStreamingChunk(chunk),
         onStreamingEvents: (events) => this.emitStreamingEvents(events),
-        onResponseComplete: (response) => this.emitResponseComplete(response),
+        onResponseComplete: () => this.emitResponseComplete(),
         onPtyExit: (session, exitCode) => this.handlePtyExit(session, exitCode),
         cleanupTempFiles: (tempFilePaths) =>
           this.cleanupTempFiles(tempFilePaths),
@@ -1051,7 +1051,7 @@ export class CliIntegration extends HarnessIntegration {
       },
       hostCallbacks: {
         onStreamingEvents: (events) => this.emitStreamingEvents(events),
-        onResponseComplete: (response) => this.emitResponseComplete(response),
+        onResponseComplete: () => this.emitResponseComplete(),
         logResponse: (response, statistics) =>
           this.logResponse(response, statistics),
         onContextWindowUpdate: (used, size) =>
@@ -1771,16 +1771,7 @@ export class CliIntegration extends HarnessIntegration {
     if (ptyTail) {
       return ptyTail;
     }
-    // Fall back to partial response captured from the log (user-cancelled stop case).
-    // The log monitor flushes accumulated events on cancel and stores them on the
-    // session; applyExecutionSession() copies them to lastExecutionSnapshot before
-    // sendPrompt() returns, so the partial text is available here.
-    const lastResult = this.lastExecutionSnapshot?.result;
-    const partialResponse =
-      lastResult?.response && lastResult.response !== lastResult.error
-        ? lastResult.response
-        : undefined;
-    return partialResponse || undefined;
+    return undefined;
   }
 
   // ============================================================
@@ -1983,7 +1974,7 @@ export class CliIntegration extends HarnessIntegration {
         "[CliIntegration] No active process/execution - firing responseComplete immediately"
       );
       this.lastFailureReason = "Stopped by user";
-      this.responseCompleteEmitter.fire("Cancelled before process started");
+      this.responseCompleteEmitter.fire(undefined);
       return;
     }
 

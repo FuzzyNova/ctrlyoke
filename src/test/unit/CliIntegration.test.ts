@@ -23,6 +23,7 @@ import {
   PROMPT_DIAGNOSTIC_CODES,
 } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
+import { getTranscriptText } from "../../utils/StepOutputText";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import type {
   BaseCliEvent,
@@ -524,7 +525,7 @@ suite("CliIntegration", () => {
 
     assert.strictEqual(success, true);
     assert.strictEqual(
-      integration.getLastResult()?.response,
+      getTranscriptText(integration.getLastParsedOutput()?.events ?? []),
       "headless response"
     );
     assert.strictEqual(
@@ -583,14 +584,14 @@ suite("CliIntegration", () => {
     });
     const integration = new CliIntegration(provider, platform, false);
     const streamed: string[] = [];
-    const completed: string[] = [];
+    let completed = 0;
     const streamingDisposable = integration.onStreamingEvents((events) => {
       streamed.push(
         ...events.map((event) => (event.data as { text: string }).text)
       );
     });
-    const completeDisposable = integration.onResponseComplete((response) => {
-      completed.push(response);
+    const completeDisposable = integration.onResponseComplete(() => {
+      completed++;
     });
 
     try {
@@ -610,7 +611,7 @@ suite("CliIntegration", () => {
 
       assert.strictEqual(success, true);
       assert.deepStrictEqual(streamed, ["standalone log response"]);
-      assert.deepStrictEqual(completed, ["standalone log response"]);
+      assert.strictEqual(completed, 1);
       assert.strictEqual(
         (integration as any).provider.logParser,
         parser,

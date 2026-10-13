@@ -260,8 +260,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           responseKind: "ai",
           payload: {
             cliOutput: {
-              prompt: options.prompt ?? `prompt-${suffix}`,
-              response: options.responseText ?? `output-${suffix}`,
+
+              structured: { events: [{ type: "text", data: { text: options.responseText ?? `output-${suffix}` } }], metadata: {} },
               elapsed: 1,
               isStreaming: options.isStreaming ?? false,
             },

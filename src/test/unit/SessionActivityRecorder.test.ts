@@ -16,12 +16,14 @@ import {
   HARNESS_IDS,
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
+  StepOutputTextMode,
   type HarnessId,
   INTERACTIVE_TERMINAL_MODES,
 } from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
 import type { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { getStepOutputText } from "../../utils/StepOutputText";
 
 async function initTestRun(
   manager: OutputHistoryManager,
@@ -226,8 +228,6 @@ suite("WorkflowInstance session activity forwarding", () => {
         target,
         [
           {
-            prompt: "do the thing",
-            response: "done",
             structured: {
               events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
               metadata: {},
@@ -287,38 +287,25 @@ suite("WorkflowInstance session activity forwarding", () => {
       assert.ok(entry, "expected a persisted CLI history entry for step 0");
 
       const events = entry.cliOutput.structured?.events ?? [];
-      assert.deepStrictEqual(
-        events.map((e: any) => e.type),
-        [
-          CLI_EVENT_TYPES.TEXT,
-          CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
-          CLI_EVENT_TYPES.USER_STEER,
-          CLI_EVENT_TYPES.TEXT,
-          CLI_EVENT_TYPES.USER_STEER,
-        ]
+      assert.deepStrictEqual(events.map((e: any) => e.type), [CLI_EVENT_TYPES.TEXT]);
+      assert.strictEqual(
+        getStepOutputText(
+          { output: entry.cliOutput },
+          StepOutputTextMode.TRANSCRIPT
+        ),
+        "done"
       );
-      // The persisted response text (what $previous/$all/$step:N read via
-      // RunOutputResolver.resolvePriorContextItems) must include follow-up
-      // activity, not just the pre-follow-up response.
-      assert.strictEqual(entry.cliOutput.response, "done\n\n and did more.");
       assert.deepStrictEqual(entry.cliOutput.tokens, {
         prompt: 10,
         completion: 5,
-        contextWindowUsed: 4000,
-        contextWindowSize: 200000,
       });
       assert.ok(
         entry.cliOutput.elapsed >= 5,
         `expected elapsed to be refreshed to at least the original 5s, got ${entry.cliOutput.elapsed}`
       );
 
-      // The merged aggregate alone is not enough to render a follow-up on
-      // reload: `mapOrderedHistoryEntriesToMessages` renders an attempt from
-      // its activity entries whenever any exist and drops the aggregate they
-      // stand in for. A follow-up recorded only into `structured.events`
-      // therefore rendered live and then disappeared on the next history load,
-      // so each burst must also persist a replayable streamed-events batch —
-      // carrying the same one-time divider the aggregate merge decided on.
+      // Follow-up events remain append-only timeline activity. The attempt's
+      // aggregate keeps only the original response.
       const followUpActivity = (history.activityEntries ?? []).filter(
         (activity: any) =>
           activity.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
@@ -393,8 +380,6 @@ suite("WorkflowInstance session activity forwarding", () => {
         target,
         [
           {
-            prompt: "do the thing",
-            response: "done",
             structured: {
               events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
               metadata: {},
@@ -414,10 +399,7 @@ suite("WorkflowInstance session activity forwarding", () => {
         attemptIndex: 0,
       };
 
-      // Every caller invokes this handler fire-and-forget, so two bursts can be
-      // in flight at once. Persisting one is a read-modify-write over the
-      // stored aggregate, so without serialization both merge onto the same
-      // pre-burst aggregate and the later save drops the earlier burst.
+      // Both bursts append independently to the same attempt timeline.
       await Promise.all([
         (instance as any).handleSessionActivityResumed([
           {
@@ -449,24 +431,21 @@ suite("WorkflowInstance session activity forwarding", () => {
 
       assert.deepStrictEqual(
         (entry.cliOutput.structured?.events ?? []).map((e: any) => e.type),
-        [
-          CLI_EVENT_TYPES.TEXT,
-          CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
-          CLI_EVENT_TYPES.TEXT,
-          CLI_EVENT_TYPES.TEXT,
-        ]
+        [CLI_EVENT_TYPES.TEXT]
       );
       assert.strictEqual(
-        entry.cliOutput.response,
-        "done\n\n first.\n\n second."
+        getStepOutputText(
+          { output: entry.cliOutput },
+          StepOutputTextMode.TRANSCRIPT
+        ),
+        "done"
       );
-      // Exactly one divider, even though both bursts read the aggregate.
-      assert.strictEqual(
-        (entry.cliOutput.structured?.events ?? []).filter(
-          (e: any) => e.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-        ).length,
-        1
-      );
+      const followUpEvents = (history.activityEntries ?? []).flatMap((activity: any) => activity.events ?? []);
+      assert.deepStrictEqual(followUpEvents.map((event: any) => event.type), [
+        CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+        CLI_EVENT_TYPES.TEXT,
+        CLI_EVENT_TYPES.TEXT,
+      ]);
     } finally {
       await instance?.outputHistoryManager.flushPendingIndexRefresh();
       await fs.rm(tempWorkspace, { recursive: true, force: true });
@@ -486,17 +465,17 @@ suite("WorkflowInstance session activity forwarding", () => {
     );
 
     try {
-      let response: string | undefined;
-      const disposable = instance.onResponseComplete((value) => {
-        response = value;
+      let completed = false;
+      const disposable = instance.onResponseComplete(() => {
+        completed = true;
       });
       const integration = (instance as any).createIntegrationForMode(
         HARNESS_IDS.COPILOT_CLI
       ) as MockHarnessIntegration;
 
-      (integration as any).responseCompleteEmitter.fire("generated message");
+      (integration as any).responseCompleteEmitter.fire();
 
-      assert.strictEqual(response, "generated message");
+      assert.strictEqual(completed, true);
       disposable.dispose();
     } finally {
       instance.dispose();
@@ -560,12 +539,10 @@ suite("WorkflowInstance session activity forwarding", () => {
       const output = history.orderedEntries.find(
         (entry: any) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
       ) as any;
-      assert.ok(output?.cliOutput?.structured);
-      assert.ok(
-        output.cliOutput.structured.events.some(
-          (event: any) => event.type === CLI_EVENT_TYPES.TEXT && event.data.text === " and after."
-        )
-      );
+      assert.strictEqual(output?.cliOutput?.structured, undefined);
+      assert.ok((history.activityEntries ?? []).some((activity: any) =>
+        activity.events?.some((event: any) => event.type === CLI_EVENT_TYPES.TEXT && event.data.text === " and after.")
+      ));
     } finally {
       instance.dispose();
       await fs.rm(tempWorkspace, { recursive: true, force: true });

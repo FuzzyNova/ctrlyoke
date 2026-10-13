@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
+import { getTranscriptText } from "../../utils/StepOutputText";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import type {
   BaseCliEvent,
@@ -354,7 +355,7 @@ suite("CliLogMonitor", () => {
       );
 
       assert.strictEqual(result.success, true);
-      assert.strictEqual(result.cliResult?.response, "done");
+      assert.strictEqual(getTranscriptText(result.parsedOutput?.events ?? []), "done");
       assert.strictEqual(result.sessionId, "sess-1");
     });
   });
@@ -629,7 +630,7 @@ suite("CliLogMonitor", () => {
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(notificationCallCount, 2);
-      assert.strictEqual(result.cliResult?.response, "Tests pass.");
+      assert.strictEqual(getTranscriptText(result.parsedOutput?.events ?? []), "Tests pass.");
     });
   });
 
@@ -789,7 +790,7 @@ suite("CliLogMonitor", () => {
         const result = await monitorPromise;
 
         assert.strictEqual(result.success, true);
-        assert.strictEqual(result.cliResult?.response, "All good.");
+        assert.strictEqual(getTranscriptText(result.parsedOutput?.events ?? []), "All good.");
         assert.ok(
           notificationCallCount >= 2,
           "expected the hold to have started waiting on a further Stop"
@@ -1075,7 +1076,7 @@ suite("CliLogMonitor", () => {
           "a third Stop must not be required once the resumed turn has closed"
         );
         assert.strictEqual(
-          result.cliResult?.response,
+          getTranscriptText(result.parsedOutput?.events ?? []),
           "Both background tasks finished."
         );
       } finally {
@@ -1225,7 +1226,7 @@ suite("CliLogMonitor", () => {
         assert.strictEqual(result.success, true);
         assert.strictEqual(notificationCallCount, 1);
         assert.strictEqual(
-          result.cliResult?.response,
+          getTranscriptText(result.parsedOutput?.events ?? []),
           "I will wait for the task.\n\nThe background task finished."
         );
       } finally {

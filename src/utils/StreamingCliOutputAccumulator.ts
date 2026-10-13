@@ -1,6 +1,7 @@
 import type { CliEvent } from "../types/CliOutputTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { normalizeCliEvents } from "./CliEventNormalizer";
+import { CLI_EVENT_TYPES } from "../types/DashboardConstants";
 
 interface PendingStreamingDeltas {
   chunks: string[];
@@ -9,7 +10,8 @@ interface PendingStreamingDeltas {
 
 /**
  * Buffers a run's streamed CLI deltas per attempt and folds them into that
- * attempt's `CliOutput` exactly once.
+ * attempt's `CliOutput` exactly once. AI text becomes a TEXT event; script
+ * chunks stay in the separate script output record.
  *
  * Replaying a persisted run means walking every `cliOutputChunkAppended` /
  * `cliOutputEventsAppended` event it ever wrote. Applying each delta eagerly —
@@ -59,10 +61,39 @@ export class StreamingCliOutputAccumulator {
 
     let result = output;
     if (deltas.chunks.length > 0) {
-      result = {
-        ...result,
-        response: result.response + deltas.chunks.join(""),
-      };
+      if (result.source) {
+        const existingScriptOutput = result.scriptOutput;
+        result = {
+          ...result,
+          scriptOutput: {
+            command: existingScriptOutput?.command ?? result.cliCommand ?? "",
+            stdout: `${existingScriptOutput?.stdout ?? ""}${deltas.chunks.join("")}`,
+            stderr: existingScriptOutput?.stderr ?? "",
+            ...(existingScriptOutput?.exitCode !== undefined
+              ? { exitCode: existingScriptOutput.exitCode }
+              : {}),
+          },
+        };
+      } else {
+        result = {
+          ...result,
+          structured: {
+            ...result.structured,
+            events: normalizeCliEvents([
+              ...(result.structured?.events ?? []).filter(
+                (event) =>
+                  event.type !== CLI_EVENT_TYPES.TEXT ||
+                  Boolean((event.data as { text?: string }).text)
+              ),
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: deltas.chunks.join("") },
+              },
+            ]),
+            metadata: result.structured?.metadata ?? {},
+          },
+        };
+      }
     }
     if (deltas.events.length > 0) {
       result = {
@@ -70,7 +101,11 @@ export class StreamingCliOutputAccumulator {
         structured: {
           ...result.structured,
           events: normalizeCliEvents([
-            ...(result.structured?.events ?? []),
+            ...(result.structured?.events ?? []).filter(
+              (event) =>
+                event.type !== CLI_EVENT_TYPES.TEXT ||
+                Boolean((event.data as { text?: string }).text)
+            ),
             ...deltas.events,
           ]),
           metadata: result.structured?.metadata ?? {},

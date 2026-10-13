@@ -14,8 +14,8 @@ import type { CliOutput } from "@/types/messages";
 
 function makeOutput(overrides: Partial<CliOutput> = {}): CliOutput {
   return {
-    prompt: "hello",
-    response: "world",
+
+    structured: { events: [{ type: "text", data: { text: "world" } }], metadata: {} },
     elapsed: 12.5,
     timestampMs: Date.now(),
     attemptIndex: 0,
@@ -59,7 +59,7 @@ describe("useContextPct", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       phase: EXECUTION_PHASES.END_CONDITION,
-      cliOutput: makeOutput({ response: "npm test output" }),
+      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "npm test output" } }], metadata: {} } }),
       timestampMs: Date.now(),
       sequence: 2,
     });

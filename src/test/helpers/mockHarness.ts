@@ -88,9 +88,10 @@ export class MockHarnessIntegration extends HarnessIntegration {
       return false;
     }
 
-    this.responseCompleteEmitter.fire(
-      outcome.responseText ?? `ok:${sentPrompt}`
-    );
+    if (outcome.responseText) {
+      this.streamingChunkEmitter.fire(outcome.responseText);
+    }
+    this.responseCompleteEmitter.fire(undefined);
     if (outcome.afterResponse) {
       await outcome.afterResponse();
     }

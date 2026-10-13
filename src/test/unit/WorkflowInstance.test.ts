@@ -15,6 +15,7 @@ import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { WorkflowStartupPipeline } from "../../core/orchestration/WorkflowStartupPipeline";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
+  CLI_EVENT_TYPES,
   ACTION_TYPES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
@@ -45,6 +46,7 @@ import {
   PtySession,
 } from "../../core/harness/PtyProcessManager";
 import { spawnIdentityHash } from "../../types/ExecutionSpawnIdentity";
+import type { CliEvent } from "../../types/CliOutputTypes";
 
 function createResolvedProperties(
   overrides: Partial<ResolvedProperties> = {}
@@ -769,8 +771,10 @@ suite("WorkflowInstance finalStep replay", () => {
     (instance as any).outputCaptureBuffer.finalStepCompletedOutputs.set(0, {
       outputs: [
         {
-          prompt: "final-loop",
-          response: "completed-final-output",
+          structured: {
+            events: [{ type: "text", data: { text: "completed-final-output" } }],
+            metadata: {},
+          },
           elapsed: 1.2,
           isStreaming: false,
           attemptIndex: 0,
@@ -784,12 +788,12 @@ suite("WorkflowInstance finalStep replay", () => {
       workingDirectory: process.cwd(),
       timestampMs: Date.now(),
       attemptIndex: 0,
-      accumulatedText: "streaming-final-output",
+          accumulatedText: "streaming-final-output",
       accumulatedEvents: [
         {
           type: "text",
           timestamp: new Date().toISOString(),
-          data: { text: "streamed event" },
+          data: { text: "streaming-final-output" },
         },
       ],
       rawTextOutput: true,
@@ -822,7 +826,12 @@ suite("WorkflowInstance finalStep replay", () => {
       finalStepOutputCalls.some(
         (c) =>
           c.loopIndex === 0 &&
-          c.output.response === "completed-final-output" &&
+          c.output.structured?.events?.some(
+            (event: CliEvent) =>
+              event.type === CLI_EVENT_TYPES.TEXT &&
+              "text" in event.data &&
+              event.data.text === "completed-final-output"
+          ) &&
           c.output.isStreaming === false
       )
     );
@@ -830,7 +839,12 @@ suite("WorkflowInstance finalStep replay", () => {
       finalStepOutputCalls.some(
         (c) =>
           c.loopIndex === 0 &&
-          c.output.response === "streaming-final-output" &&
+          c.output.structured?.events?.some(
+            (event: CliEvent) =>
+              event.type === CLI_EVENT_TYPES.TEXT &&
+              "text" in event.data &&
+              event.data.text === "streaming-final-output"
+          ) &&
           c.output.isStreaming === true
       )
     );

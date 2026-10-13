@@ -60,7 +60,7 @@ interface CliTransportCoordinatorHostCallbacks {
   onCommandPrepared: (info: CliTransportCoordinatorCommandInfo) => void;
   onStreamingChunk: (chunk: string) => void;
   onStreamingEvents: (events: CliEvent[]) => void;
-  onResponseComplete: (response: string) => void;
+  onResponseComplete: () => void;
   onPtyExit: (session: PtySession, exitCode: number) => void;
   cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
 }

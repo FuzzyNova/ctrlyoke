@@ -1,3 +1,5 @@
+import { getStepOutputText } from "../../../../utils/StepOutputText";
+import { StepOutputTextMode } from "../../../../types/DashboardConstants";
 import { describe, expect, it } from "vitest";
 import type { CliEvent } from "@root/types/CliOutputTypes";
 import type {
@@ -5,7 +7,10 @@ import type {
   OutputActivityEntry,
   WorkflowOutputHistory,
 } from "@root/types/OutputHistoryTypes";
-import { OUTPUT_HISTORY_KINDS } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_HISTORY_KINDS,
+  OUTPUT_ROW_KINDS,
+} from "@root/types/DashboardConstants";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   mapOrderedHistoryEntriesToMessages,
@@ -74,8 +79,8 @@ function makeStructuredFixture(): WorkflowOutputHistory {
       attemptIndex,
       phase,
       cliOutput: {
-        prompt: `step ${stepIndex} attempt ${attemptIndex}`,
-        response: "",
+
+
         structured: { events: normalizedEvents, metadata: {} },
         elapsed: 1,
         isStreaming: false,
@@ -153,8 +158,8 @@ function makeStructuredFixture(): WorkflowOutputHistory {
     runIndex: 0,
     attemptIndex: 0,
     cliOutput: {
-      prompt: "final",
-      response: "",
+
+
       structured: { events: finalNormalized, metadata: {} },
       elapsed: 1,
       isStreaming: false,
@@ -378,7 +383,7 @@ function mapAggregateEventsToMessages(
         aggregate: outputForRows,
       });
     }
-    const hasResponse = entry.cliOutput.response.length > 0;
+    const hasResponse = getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT).length > 0;
     if (hasResponse) {
       messages.push({
         type: "cli",
@@ -398,7 +403,7 @@ function mapAggregateEventsToMessages(
         isActivity: true,
         activityKey: `${identity}:${OUTPUT_ACTIVITY_KINDS.TEXT}:${entry.sequence}`,
         activityKind: OUTPUT_ACTIVITY_KINDS.TEXT,
-        activityText: entry.cliOutput.response,
+        activityText: getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT),
         aggregate: outputForRows,
       });
     }
@@ -482,7 +487,7 @@ function buildRows(
 }
 
 describe("activity-free output projection equivalence", () => {
-  it("reconstructs structured interleaving across slices, retries, phases, and a parallel group", () => {
+  it("preserves structured event order across slices, retries, phases, and a parallel group", () => {
     const history = makeStructuredFixture();
     const currentMessages = mapOrderedHistoryEntriesToMessages(
       history.orderedEntries,
@@ -493,12 +498,21 @@ describe("activity-free output projection equivalence", () => {
       candidateHistory.orderedEntries
     );
 
-    expect(
-      buildRows(
-        removeCandidateOrderMetadata(candidateHistory),
-        candidateMessages
-      ).rows
-    ).toEqual(buildRows(history, currentMessages).rows);
+    const currentRows = buildRows(history, currentMessages).rows;
+    const candidateRows = buildRows(
+      removeCandidateOrderMetadata(candidateHistory),
+      candidateMessages
+    ).rows;
+    const structuredEventTypes = (rows: typeof currentRows) =>
+      rows
+        .filter((row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT)
+        .map((row) => row.event.type);
+    expect(structuredEventTypes(candidateRows)).toEqual(
+      structuredEventTypes(currentRows)
+    );
+    // Live text chunks retain their own sequence and row identity, while a
+    // rebuilt aggregate exposes the same text through its structured events.
+    expect(candidateRows).not.toEqual(currentRows);
   });
 
   it("cannot reproduce interleaved plain-text chunks from structured aggregate events", () => {
@@ -516,8 +530,8 @@ describe("activity-free output projection equivalence", () => {
           runIndex: 0,
           attemptIndex: 0,
           cliOutput: {
-            prompt: "inspect",
-            response: "before tool after tool",
+
+
             structured: {
               events: [
                 {
@@ -608,7 +622,7 @@ describe("activity-free output projection equivalence", () => {
       candidateMessages.map(
         (message) => message.activityText ?? message.activityKind
       )
-    ).toEqual(["before tool after tool", OUTPUT_ACTIVITY_KINDS.STRUCTURED]);
+    ).toEqual([OUTPUT_ACTIVITY_KINDS.STRUCTURED]);
     expect(
       history.activityEntries?.map((activity) => activity.text).filter(Boolean)
     ).toEqual(["before tool ", "after tool"]);

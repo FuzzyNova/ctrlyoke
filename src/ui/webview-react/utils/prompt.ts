@@ -65,7 +65,6 @@ export interface RawPrompt {
  */
 export interface PromptDetails {
   output?: string;
-  response?: string;
   error?: string;
   elapsed?: number;
   tokens?: { prompt: number; completion: number };

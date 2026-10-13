@@ -244,7 +244,7 @@ export class TimelineRecorder {
           workflowId: manifest.workflowId,
           runId: manifest.runId,
           sequence: nextSequence++,
-        }));
+        }) as WorkflowTimelineEvent);
         const redactedEvents = secretRedactionService.redactValue(events);
 
         await fs.promises.appendFile(
@@ -411,11 +411,6 @@ function truncateHistorySearchEvent(
 ): WorkflowTimelineEvent {
   if (event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED) {
     const cliOutput = event.payload.cliOutput;
-    cliOutput.prompt = truncateString(
-      cliOutput.prompt,
-      maxTextLength,
-      onStringTruncated
-    );
     cliOutput.cliCommand = truncateString(
       cliOutput.cliCommand,
       maxTextLength,

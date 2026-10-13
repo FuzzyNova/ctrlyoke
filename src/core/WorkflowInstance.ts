@@ -482,8 +482,8 @@ export class WorkflowInstance
   public readonly onTargetScriptOutput =
     this._targetedScriptOutputEmitter.event;
 
-  private readonly _responseCompleteEmitter = new TypedEmitter<string>();
-  /** Fires the final plain-text response from the active execution integration. */
+  private readonly _responseCompleteEmitter = new TypedEmitter<undefined>();
+  /** Signals completion of the active execution integration's response. */
   public readonly onResponseComplete = this._responseCompleteEmitter.event;
 
   private readonly _promptCompleteEmitter =
@@ -4116,8 +4116,8 @@ export class WorkflowInstance
     integration.onStreamingChunk((chunk) =>
       this._streamingChunkEmitter.fire(chunk)
     );
-    integration.onResponseComplete((response) =>
-      this._responseCompleteEmitter.fire(response)
+    integration.onResponseComplete(() =>
+      this._responseCompleteEmitter.fire(undefined)
     );
     integration.onNotificationEvent((event) =>
       this.dashboardSink?.notifyNotificationEvent?.(event)

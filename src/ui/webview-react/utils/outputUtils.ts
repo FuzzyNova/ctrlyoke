@@ -5,10 +5,8 @@
  * Diff computation lives in diffUtils.ts; markdown export in markdownExport.ts.
  */
 import { truncate } from "./string";
-import type { CliOutput as CliOutputType, TextData } from "../types/cliEvents";
-import { CLI_EVENT_TYPES } from "../types/cliEvents";
+import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { OUTPUT_TOOL_BADGE_LABELS } from "@root/types/DashboardConstants";
-import { joinResponseText } from "@root/utils/ResponseTextJoin";
 import { getStepOutputText } from "@root/utils/StepOutputText";
 import { StepOutputTextMode } from "@root/types/DashboardConstants";
 
@@ -100,26 +98,9 @@ export function buildDiffAnchorPrefix(
   return `cy-diff-${kindSlug}-${stepIndex}-r${runIndex}-a${attemptIndex}`;
 }
 
-/** Joins the text of every TEXT event, in order, as separate messages. */
-export function joinCliTextEvents(
-  events: readonly { type: string; data?: unknown }[]
-): string {
-  return joinResponseText(
-    events
-      .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
-      .map((e) => (e.data as TextData | undefined)?.text ?? "")
-  );
-}
-
 /**
- * Extracts the plain-text response from a CLI output — checks `response`
- * first, then falls back to concatenating TEXT events from structured output.
+ * Extracts assistant-authored text from a CLI output's structured events.
  * Returns undefined when there is no text content.
- *
- * `response` already carries post-completion follow-up text: the extension
- * appends it when persisting (`SessionActivityRecorder.persistResumedSessionActivity`)
- * and the store appends it live (`mergeResumedActivityIntoOutput`), so it must
- * not be folded in again here.
  */
 export function getStepAssistantTextForCopy(
   output: CliOutputType

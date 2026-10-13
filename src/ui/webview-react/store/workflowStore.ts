@@ -22,8 +22,6 @@ import {
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
-import { joinCliTextEvents } from "../utils/outputUtils";
-import { appendResponseText } from "@root/utils/ResponseTextJoin";
 import type {
   WorktreeRunProjection,
   CoordinationScopeSnapshot,
@@ -207,10 +205,8 @@ function computeStreamingEventsToMerge(
 }
 
 /**
- * Merge an incoming batch of streamed events into an existing CliOutput. When
- * the batch is post-completion follow-up activity, also appends its text to
- * `response` (mirroring what `SessionActivityRecorder` persists, so copy reads
- * the same thing live and after a reload) and refreshes the stats footer
+ * Merge an incoming batch of streamed events into an existing CliOutput and
+ * refresh the stats footer
  * (elapsed/context window) so it doesn't go stale while resumed activity
  * streams in — otherwise this is an ordinary incremental append.
  */
@@ -228,13 +224,8 @@ function mergeResumedActivityIntoOutput(
   const existingEvents = existingStructured?.events || [];
   const eventsToMerge = computeStreamingEventsToMerge(existing, incomingEvents);
 
-  const followUpText = isFollowUp ? joinCliTextEvents(eventsToMerge) : "";
-
   return {
     ...existing,
-    response: followUpText
-      ? appendResponseText(existing.response ?? "", followUpText)
-      : existing.response,
     structured: {
       ...existingStructured,
       events: mergeStreamingEvents(existingEvents, eventsToMerge),
@@ -865,8 +856,6 @@ function appendStreamingEventsToOutputState(
   if (!liveMerge.matchedEntry) {
     const historyEntry = historyMerge?.matchedEntry;
     const cliOutput: CliOutput = historyEntry?.cliOutput ?? {
-      prompt: "",
-      response: "",
       structured: {
         events: mergeStreamingEvents([], events),
         metadata: {},

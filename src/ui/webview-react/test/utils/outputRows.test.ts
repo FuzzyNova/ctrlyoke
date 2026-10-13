@@ -56,9 +56,9 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-              prompt: "npm test",
+
               cliCommand: "npm test",
-              response: "",
+              structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
               elapsed: 0,
               isStreaming: false,
               ...(source ? { source } : {}),
@@ -102,7 +102,7 @@ describe("outputRows", () => {
             row.rowKind.includes("command")
         )
         .map((row) => row.rowKind)
-    ).toEqual([OUTPUT_ROW_KINDS.PROMPT, OUTPUT_ROW_KINDS.CLI_COMMAND]);
+    ).toEqual([OUTPUT_ROW_KINDS.CLI_COMMAND]);
   });
 
   it("collapses retry attempts into an explicitly labelled aggregate", () => {
@@ -173,8 +173,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "First step",
-          response: "first",
+
+          structured: { events: [{ type: "text", data: { text: "first" } }], metadata: {} },
           elapsed: 1,
           isStreaming: false,
         },
@@ -678,12 +678,10 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: `Step ${index + 1}`,
-          response: "done",
           elapsed: 1,
           isStreaming: false,
           workingDirectory: "/repo",
-          structured: { events: [fileEvent(`src/file-${index}.ts`)] },
+          structured: { events: [fileEvent(`src/file-${index}.ts`)], metadata: {} },
         },
       })) as OutputMessage[],
       steps: [{ name: "auth" }, { name: "database" }] as WorkflowStep[],
@@ -835,8 +833,8 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-            prompt: "Inspect output",
-            response: "",
+
+
             elapsed: 0,
             isStreaming: false,
             structured: {
@@ -926,8 +924,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Call MCP tool",
-          response: "",
+
+
           elapsed: 0,
           isStreaming: false,
           structured: {
@@ -1020,8 +1018,8 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-            prompt: "Post a note",
-            response: "",
+
+
             elapsed: 0,
             isStreaming: false,
             structured: {
@@ -1098,9 +1096,9 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-            prompt: "Run the condition",
+
             cliCommand: "npm test",
-            response: "PASS",
+            scriptOutput: { command: "npm test", stdout: "PASS", stderr: "" },
             elapsed: 1.2,
             isStreaming: false,
             source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
@@ -1168,8 +1166,8 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-              prompt: "Run the suite",
-              response: "",
+
+
               elapsed: 0,
               isStreaming: true,
               structured: {
@@ -1231,9 +1229,9 @@ describe("outputRows", () => {
         timestamp: 1000,
         phase: EXECUTION_PHASES.PRE_CONDITION,
         data: {
-          prompt: "pre",
+
           cliCommand: "npm run pre",
-          response: "",
+          scriptOutput: { command: "npm run pre", stdout: "", stderr: "" },
           elapsed: 0,
           isStreaming: true,
           source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
@@ -1245,9 +1243,9 @@ describe("outputRows", () => {
         timestamp: 1001,
         phase: EXECUTION_PHASES.END_CONDITION,
         data: {
-          prompt: "end",
+
           cliCommand: "npm run end",
-          response: "",
+          scriptOutput: { command: "npm run end", stdout: "", stderr: "" },
           elapsed: 0,
           isStreaming: true,
           source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
@@ -1293,9 +1291,9 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Analyze code",
+
           cliCommand: "copilot -p",
-          response: "Done.",
+          structured: { events: [{ type: "text", data: { text: "Done." } }], metadata: {} },
           elapsed: 1.2,
           isStreaming: false,
           tokens: { prompt: 10, completion: 5 },
@@ -1325,9 +1323,8 @@ describe("outputRows", () => {
     expect(result.rows.map((row) => row.rowKind)).toEqual([
       OUTPUT_ROW_KINDS.STEP_ANCHOR,
       OUTPUT_ROW_KINDS.CLI_HEADER,
-      OUTPUT_ROW_KINDS.PROMPT,
       OUTPUT_ROW_KINDS.CLI_COMMAND,
-      OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+      OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
       OUTPUT_ROW_KINDS.STATS,
     ]);
     expect(result.firstRowIndexByTarget.get("queue:0")).toBe(0);
@@ -1344,10 +1341,10 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-            prompt: "Use inject mode",
+
             cliCommand: "Actual injected prompt text",
             cliCommandWasInjected: true,
-            response: "",
+            structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
             elapsed: 0,
             isStreaming: false,
           },
@@ -1388,8 +1385,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Edit file",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1422,8 +1419,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Stream text",
-          response: "",
+
+          structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
           elapsed: 0,
           isStreaming: true,
         },
@@ -1478,8 +1475,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Edit file",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1552,8 +1549,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Edit file",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1643,8 +1640,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Expand diff",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1684,8 +1681,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Call tool",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1940,11 +1937,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Explain result",
-          response:
-            "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
           elapsed: 0.5,
-          isStreaming: false,
+          isStreaming: true,
         },
       },
     ];
@@ -1953,7 +1947,9 @@ describe("outputRows", () => {
       allMessages,
       steps,
       finalStep: null,
-      streamingChunks: {},
+      streamingChunks: {
+        [getStreamingChunkKey(0)]: "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
+      },
       finalStepStreamingChunks: {},
       isExecutionActive: false,
       allowUndoActions: false,
@@ -1972,7 +1968,9 @@ describe("outputRows", () => {
       allMessages,
       steps,
       finalStep: null,
-      streamingChunks: {},
+      streamingChunks: {
+        [getStreamingChunkKey(0)]: "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
+      },
       finalStepStreamingChunks: {},
       isExecutionActive: false,
       allowUndoActions: false,
@@ -2079,8 +2077,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Run command",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2153,8 +2151,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Run command",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2220,8 +2218,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Run command",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2298,8 +2296,8 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-              prompt: "Run command",
-              response: "",
+
+
               elapsed: 0.5,
               isStreaming: false,
               structured: {
@@ -2364,8 +2362,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Read file",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2457,8 +2455,8 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-          prompt: "Apply wide diff",
-          response: "",
+
+
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2562,8 +2560,8 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-              prompt: "Apply edit",
-              response: "",
+
+
               elapsed: 0.5,
               isStreaming: false,
               structured: {
@@ -2649,8 +2647,8 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-            prompt: "Summarize",
-            response: "done",
+
+            structured: { events: [{ type: "text", data: { text: "done" } }], metadata: {} },
             elapsed: 0.5,
             isStreaming: false,
           },
@@ -2837,16 +2835,14 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-              prompt: "Explain",
-              response: tallText,
               elapsed: 1,
-              isStreaming: false,
+              isStreaming: true,
             },
           },
         ],
         steps,
         finalStep: null,
-        streamingChunks: {},
+        streamingChunks: { [getStreamingChunkKey(0)]: tallText },
         finalStepStreamingChunks: {},
         isExecutionActive: false,
         allowUndoActions: false,
@@ -2908,9 +2904,23 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-              prompt: "Run the condition",
+
               cliCommand: "npm test",
-              response: options.response ?? "",
+              ...(options.response !== undefined
+                ? {
+                    scriptOutput: {
+                      command: "npm test",
+                      stdout: options.response,
+                      stderr: "",
+                    },
+                  }
+                : {
+                    scriptOutput: {
+                      command: "npm test",
+                      stdout: "",
+                      stderr: "",
+                    },
+                  }),
               elapsed: 0,
               isStreaming: options.streaming !== undefined,
               source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
@@ -3069,7 +3079,7 @@ describe("outputRows", () => {
       expect(combined).toBeLessThan(single[0].estimateSize * 2);
     });
 
-    it("leaves non-script responses as a single row", () => {
+    it("leaves non-script text events as a single structured row", () => {
       const result = buildOutputRows({
         allMessages: [
           {
@@ -3079,8 +3089,8 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-              prompt: "Explain",
-              response: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 2),
+
+              structured: { events: [{ type: "text", data: { text: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 2) } }], metadata: {} },
               elapsed: 1,
               isStreaming: false,
             },
@@ -3106,7 +3116,7 @@ describe("outputRows", () => {
       expect(scriptRows(result)).toHaveLength(0);
       expect(
         result.rows.filter(
-          (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
+          (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
         )
       ).toHaveLength(1);
     });
