@@ -972,6 +972,11 @@ public**.
     GitHub's private advisory form.
 - [ ] After the flip, open a throwaway PR from a fork (or another account) and
       confirm `fast-checks` runs after approval and is required.
+- [ ] After the flip, upload the ctrlyoke social preview image (Settings →
+      General → Social preview → Edit; 1280×640 PNG under 1 MB). GitHub hides
+      this option on private repos. Repos have no avatar of their own, so this
+      image is what a shared `FuzzyNova/ctrlyoke` link shows instead of the
+      Fuzzy Nova org avatar.
 
 ---
 
