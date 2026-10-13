@@ -58,7 +58,9 @@ export function prepareUserHookEnvironments(params: {
     }
 
     const encodedCommand = Buffer.from(hook.command, "utf8").toString("base64");
-    const quoted = CliNotificationMonitor.shouldQuoteNodeCommand(params.harnessId);
+    const quoted = CliNotificationMonitor.shouldQuoteNodeCommand(
+      params.harnessId
+    );
     const shell = resolveHookShell(params.harnessId);
     const bashCommand =
       params.harnessId === HARNESS_IDS.COPILOT_CLI

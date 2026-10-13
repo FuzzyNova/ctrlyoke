@@ -60,10 +60,9 @@ if (!envFile || !hookId || !shellName || !encodedCommand) {
 
 function killWindowsProcessTree(child) {
   if (!child.pid) return;
-  const killer = spawn(
-    "taskkill",
-    ["/PID", String(child.pid), "/T", "/F"],
-    { stdio: "ignore", windowsHide: true }
-  );
+  const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
   killer.once("error", () => child.kill("SIGKILL"));
 }

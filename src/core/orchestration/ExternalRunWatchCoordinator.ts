@@ -602,7 +602,11 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         this.handleExternalRunWatchOutput(workflowId, historyFilePath);
       },
       (reason) => {
-        void this.handleExternalRunFinished(workflowId, workingFilePath, reason);
+        void this.handleExternalRunFinished(
+          workflowId,
+          workingFilePath,
+          reason
+        );
       },
       this.host.fileWatcherFactory
     );

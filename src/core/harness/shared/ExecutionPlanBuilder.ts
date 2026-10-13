@@ -157,9 +157,7 @@ export class ExecutionPlanBuilder {
       const resolvedHooks = session.workflowContext?.resolvedProperties?.hooks;
       const hooksExplicitlyDisabled = resolvedHooks === null;
       const originalUserHooks = resolvedHooks ?? undefined;
-      const userHooks = originalUserHooks
-        ? [...originalUserHooks]
-        : undefined;
+      const userHooks = originalUserHooks ? [...originalUserHooks] : undefined;
       const enabledNotificationHookEvents = hooksExplicitlyDisabled
         ? []
         : this.deps.getEnabledHookNotificationEvents();

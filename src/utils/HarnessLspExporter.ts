@@ -1,11 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
-import {
-  applyEdits,
-  modify,
-  parse,
-} from "jsonc-parser";
+import { applyEdits, modify, parse } from "jsonc-parser";
 import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
 import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
 import {

@@ -1,10 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import {
-  modify,
-  applyEdits,
-  parse,
-} from "jsonc-parser";
+import { modify, applyEdits, parse } from "jsonc-parser";
 import type {
   AnyTargetId,
   SettingWriteScope,

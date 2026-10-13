@@ -627,9 +627,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
           ? `${command} "${encodedDecisionHook}"`
           : command;
-      hooks[nativeEvent] = [
-        buildHookGroup(nativeEvent, eventCommand),
-      ];
+      hooks[nativeEvent] = [buildHookGroup(nativeEvent, eventCommand)];
     }
 
     if (userHooks) {
@@ -643,9 +641,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         const nativeEvent = eventMap[uh.event];
         if (!nativeEvent) continue;
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-        hooks[nativeEvent].push(
-          buildHookGroup(nativeEvent, uh.command, uh)
-        );
+        hooks[nativeEvent].push(buildHookGroup(nativeEvent, uh.command, uh));
       }
     }
 

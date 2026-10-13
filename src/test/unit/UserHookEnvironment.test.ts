@@ -14,7 +14,10 @@ import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSessi
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 
 const extensionPath = path.resolve(__dirname, "../../..");
-const launcherPath = path.resolve(__dirname, "../../scripts/ctrlyoke-hook-run.js");
+const launcherPath = path.resolve(
+  __dirname,
+  "../../scripts/ctrlyoke-hook-run.js"
+);
 
 suite("UserHookEnvironment", () => {
   test("plans per-user env files and wires them to the session outside the workspace", async () => {
@@ -28,7 +31,13 @@ suite("UserHookEnvironment", () => {
         executionMode: "interactive" as const,
         resumeSession: false,
         mcpServers: null,
-        hooks: [{ event: "stop" as const, command: "node stop.js", env: { TOKEN: "value" } }],
+        hooks: [
+          {
+            event: "stop" as const,
+            command: "node stop.js",
+            env: { TOKEN: "value" },
+          },
+        ],
         toolPermissions: null,
       };
       const session = new CliExecutionSession({
@@ -60,7 +69,9 @@ suite("UserHookEnvironment", () => {
       for (const filePath of plan.deferredHookEnvironmentFilePaths) {
         session.addDeferredHookEnvironmentFilePath(filePath);
       }
-      assert.deepStrictEqual(session.deferredHookEnvironmentFilePaths, [envFilePath]);
+      assert.deepStrictEqual(session.deferredHookEnvironmentFilePaths, [
+        envFilePath,
+      ]);
       assert.deepStrictEqual(session.tempFilePaths, []);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
@@ -72,15 +83,24 @@ suite("UserHookEnvironment", () => {
       path.join(os.tmpdir(), "ctrlyoke-hook-env-")
     );
     try {
-      const printTokenCommand = "node -e \"process.stdout.write(process.env.TOKEN)\"";
+      const printTokenCommand =
+        'node -e "process.stdout.write(process.env.TOKEN)"';
       const prepared = prepareUserHookEnvironments({
         harnessId: HARNESS_IDS.CODEX_CLI,
         extensionPath,
         hookTempDirectory: tempDirectory,
         promptIndex: 3,
         hooks: [
-          { event: "stop", command: printTokenCommand, env: { TOKEN: "first" } },
-          { event: "stop", command: printTokenCommand, env: { TOKEN: "second" } },
+          {
+            event: "stop",
+            command: printTokenCommand,
+            env: { TOKEN: "first" },
+          },
+          {
+            event: "stop",
+            command: printTokenCommand,
+            env: { TOKEN: "second" },
+          },
         ],
       });
       assert.ok(prepared.tempFilePath);
@@ -118,17 +138,25 @@ suite("UserHookEnvironment", () => {
   });
 
   test("uses unquoted commands for Qwen and Antigravity", () => {
-    for (const harnessId of [HARNESS_IDS.QWEN_CLI, HARNESS_IDS.ANTIGRAVITY_CLI]) {
+    for (const harnessId of [
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+    ]) {
       const prepared = prepareUserHookEnvironments({
         harnessId,
         extensionPath,
         hookTempDirectory: os.tmpdir(),
         promptIndex: 0,
-        hooks: [{ event: "stop", command: "echo hook", env: { TOKEN: "value" } }],
+        hooks: [
+          { event: "stop", command: "echo hook", env: { TOKEN: "value" } },
+        ],
       });
       const command = prepared.hooks?.[0].command ?? "";
       assert.ok(command.includes("ctrlyoke-hook-run.js"));
-      assert.ok(!/[\"']/.test(command), `${harnessId} command should be unquoted`);
+      assert.ok(
+        !/[\"']/.test(command),
+        `${harnessId} command should be unquoted`
+      );
     }
   });
 
@@ -140,10 +168,13 @@ suite("UserHookEnvironment", () => {
     try {
       await fs.writeFile(
         envFile,
-        JSON.stringify({ "hook-0": { HOOK_TOKEN: "first" }, "hook-1": { HOOK_TOKEN: "second" } })
+        JSON.stringify({
+          "hook-0": { HOOK_TOKEN: "first" },
+          "hook-1": { HOOK_TOKEN: "second" },
+        })
       );
       const command =
-        'node -e "process.stdin.pipe(process.stdout); process.exitCode = process.env.HOOK_TOKEN === \'first\' ? 7 : 8"';
+        "node -e \"process.stdin.pipe(process.stdout); process.exitCode = process.env.HOOK_TOKEN === 'first' ? 7 : 8\"";
       const result = spawnSync(
         process.execPath,
         [
@@ -170,7 +201,10 @@ suite("UserHookEnvironment", () => {
     );
     const envFile = path.join(tempDirectory, "env.json");
     try {
-      await fs.writeFile(envFile, JSON.stringify({ "hook-0": { HOOK_TOKEN: "value" } }));
+      await fs.writeFile(
+        envFile,
+        JSON.stringify({ "hook-0": { HOOK_TOKEN: "value" } })
+      );
       const command = "Write-Output $env:HOOK_TOKEN";
       const result = spawnSync(
         process.execPath,
@@ -209,7 +243,10 @@ suite("UserHookEnvironment", () => {
         "default",
         Buffer.from(command, "utf8").toString("base64"),
       ],
-      { env: { ...process.env, HOOK_CHILD_PID_FILE: childPidPath }, stdio: "ignore" }
+      {
+        env: { ...process.env, HOOK_CHILD_PID_FILE: childPidPath },
+        stdio: "ignore",
+      }
     );
     try {
       const childPid = await waitForChildPid(childPidPath);
@@ -244,7 +281,8 @@ suite("UserHookEnvironment", () => {
       pid: 123,
       exitCode: undefined as number | undefined,
       cwd: () => os.tmpdir(),
-      on: (signal: string, handler: () => void) => handlers.set(signal, handler),
+      on: (signal: string, handler: () => void) =>
+        handlers.set(signal, handler),
       removeListener: () => undefined,
     };
     vm.runInNewContext(fsSync.readFileSync(launcherPath, "utf8"), {
@@ -268,10 +306,12 @@ suite("UserHookEnvironment", () => {
     handlers.get("SIGINT")?.();
 
     assert.strictEqual(spawnCalls[1].command, "taskkill");
-    assert.deepStrictEqual(
-      Array.from(spawnCalls[1].args),
-      ["/PID", "4321", "/T", "/F"]
-    );
+    assert.deepStrictEqual(Array.from(spawnCalls[1].args), [
+      "/PID",
+      "4321",
+      "/T",
+      "/F",
+    ]);
   });
 });
 

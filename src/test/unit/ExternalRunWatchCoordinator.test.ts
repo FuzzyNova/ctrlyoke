@@ -355,13 +355,15 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
       const historyPath = coordinator
         .getEntry(run.workflowKey)!
         .session.getActiveHistoryFilePath();
-      await host.getOutputHistoryManager().initializeRunAt(
-        run.workflowKey,
-        run.runRef,
-        path.dirname(historyPath),
-        1,
-        Date.now()
-      );
+      await host
+        .getOutputHistoryManager()
+        .initializeRunAt(
+          run.workflowKey,
+          run.runRef,
+          path.dirname(historyPath),
+          1,
+          Date.now()
+        );
       await host.getOutputHistoryManager().startStreamingExecutionOutput(
         historyPath,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
@@ -501,8 +503,9 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
         .getEntry(run.workflowKey)!
         .session.getActiveHistoryFilePath();
       coordinator.handleExternalRunWatchOutput(run.workflowKey, historyPath);
-      const pendingLoad =
-        coordinator.getEntry(run.workflowKey)!.historyLoadPromise;
+      const pendingLoad = coordinator.getEntry(
+        run.workflowKey
+      )!.historyLoadPromise;
       await Promise.resolve();
       coordinator.dispose();
       resolveHistory(historyWithCliOutput("too late"));

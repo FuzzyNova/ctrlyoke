@@ -95,10 +95,9 @@ export class ClaudeNotificationMonitor
     userHooks?: UserHookConfig[],
     ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      [notifyDir]
-    );
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, [
+      notifyDir,
+    ]);
     const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop", "error"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(

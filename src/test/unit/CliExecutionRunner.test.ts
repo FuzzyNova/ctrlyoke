@@ -231,7 +231,9 @@ suite("CliExecutionRunner", () => {
     await fs.writeFile(tempPath, "{}");
     const counters = createRunner({
       cleanupTempFiles: async (paths) => {
-        await Promise.all(paths.map((filePath) => fs.rm(filePath, { force: true })));
+        await Promise.all(
+          paths.map((filePath) => fs.rm(filePath, { force: true }))
+        );
       },
     });
     const session = new CliExecutionSession({ prompt: { prompt: "cleanup" } });
@@ -282,14 +284,21 @@ suite("CliExecutionRunner", () => {
         resumeSession: false,
         mcpServers: null,
         hooks: [
-          { event: "stop", command: "node hook.js", env: { PRIVATE_HOOK_VALUE: "secret" } },
+          {
+            event: "stop",
+            command: "node hook.js",
+            env: { PRIVATE_HOOK_VALUE: "secret" },
+          },
         ],
         toolPermissions: null,
       },
     });
 
     await counters.runner.executeHeadless(session, []);
-    assert.strictEqual(counters.getHeadlessEnv()?.PRIVATE_HOOK_VALUE, undefined);
+    assert.strictEqual(
+      counters.getHeadlessEnv()?.PRIVATE_HOOK_VALUE,
+      undefined
+    );
   });
 
   test("selects the interactive path from the host capability", async () => {

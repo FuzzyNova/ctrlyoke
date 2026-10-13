@@ -909,7 +909,9 @@ export class OpenCodeCliProvider implements ICliProvider {
         return {
           event: hook.event,
           command: hook.command,
-          ...(hook.timeoutSec !== undefined ? { timeoutSec: hook.timeoutSec } : {}),
+          ...(hook.timeoutSec !== undefined
+            ? { timeoutSec: hook.timeoutSec }
+            : {}),
           ...(scopedHook.envFile ? { envFile: scopedHook.envFile } : {}),
           ...(scopedHook.envId ? { envId: scopedHook.envId } : {}),
         };

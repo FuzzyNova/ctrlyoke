@@ -1257,7 +1257,8 @@ export class CliIntegration extends HarnessIntegration {
     if (session.resolvedProperties?.hooks !== null) {
       await this.cleanupDeferredHookEnvironmentFiles();
     }
-    for (const tempFilePath of executionPlan.deferredHookEnvironmentFilePaths ?? []) {
+    for (const tempFilePath of executionPlan.deferredHookEnvironmentFilePaths ??
+      []) {
       session.addDeferredHookEnvironmentFilePath(tempFilePath);
       this.deferredHookEnvironmentFilePaths.add(tempFilePath);
     }
@@ -2010,7 +2011,8 @@ export class CliIntegration extends HarnessIntegration {
    */
   dispose(): void {
     super.dispose();
-    this.deferredHookEnvironmentCleanup = this.cleanupDeferredHookEnvironmentFiles();
+    this.deferredHookEnvironmentCleanup =
+      this.cleanupDeferredHookEnvironmentFiles();
     this.sessionActivityWatcher?.stop();
     this.sessionActivityWatcher = undefined;
     this.transportCoordinator.dispose(

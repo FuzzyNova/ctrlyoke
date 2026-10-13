@@ -1028,7 +1028,10 @@ suite("ExecutionPreviewService", () => {
     ConfigurationUtils.getDefaultRetryPrompt = () => "";
     ConfigurationUtils.getDefaultPassRetryPrompt = () => "";
     try {
-      const cases: Array<{ endCondition: PromptStep["endCondition"]; expected: number }> = [
+      const cases: Array<{
+        endCondition: PromptStep["endCondition"];
+        expected: number;
+      }> = [
         { endCondition: { script: "check", maxRetries: 3 }, expected: 1 },
         {
           endCondition: {
@@ -1066,7 +1069,10 @@ suite("ExecutionPreviewService", () => {
         const preview = await createService().build({
           workflow: { steps: [{ prompt: "retry preview", endCondition }] },
         });
-        assert.strictEqual(preview.steps[0].conditions.retry.maxAttempts, expected);
+        assert.strictEqual(
+          preview.steps[0].conditions.retry.maxAttempts,
+          expected
+        );
       }
     } finally {
       ConfigurationUtils.getDefaultMaxRetries = originalMaxRetries;
