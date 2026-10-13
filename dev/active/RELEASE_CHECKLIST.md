@@ -711,7 +711,7 @@ Choose on what each is actually good at:**
 | Check                                                                     | Where                                                             | Why                                                                                                                                                                                             |
 | ------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `typecheck`, `lint`, `test:ui` (vitest), `test:packaging` (`node --test`) | **Local pre-push hook**                                           | Fast, no Electron and no display needed. Local feedback beats waiting on a queued runner, and this catches nearly everything.                                                                   |
-| Full suite including `test:extension` (`@vscode/test-electron`)           | **Actions — `workflow_dispatch`**, optionally a weekly `schedule` | Needs a display; `test:headless` (`xvfb-run -a …`) already exists for exactly this. Run it before cutting a release, or after extension-host changes.                                           |
+| Full suite including `test:extension` (`@vscode/test-electron`)           | **Actions — `workflow_dispatch`**, optionally a weekly `schedule` | Needs a display; the workflow runs the extension suite under `xvfb-run -a`. Run it before cutting a release, or after extension-host changes.                                                   |
 | Release build + Marketplace publish                                       | **Actions — on the `v*` tag**                                     | The one build where a clean checkout _is_ the point: an uncommitted file, stale `node_modules`, or a local-only env var becomes a shipping bug. Never publish a VSIX built from a working tree. |
 
 **Decision (Nathan, September 7, 2026):** accepted as written — local pre-push
@@ -741,12 +741,13 @@ ships is what makes the bypassable one safe to have.
       a local config, not something a commit can propagate to other clones.
 - [x] **Full-suite workflow on `workflow_dispatch`** — ✅ Built September 7,
       2026: `.github/workflows/full-suite.yml`, `workflow_dispatch` plus a
-      weekly `schedule` (Monday 13:00 UTC). Runs `npm run test:headless`
-      (already `xvfb-run`-wrapped) on `ubuntu-latest`. **Verified live
-      (2026-10-10):** the scheduled runs reach and execute the extension-host
-      tests under `xvfb-run`, so Xvfb is present. However, every scheduled run
-      since 2026-09-14 (four as of 2026-10-05) has ended in **failure**. The CI
-      suite is red and needs triage before it can gate a release.
+      weekly `schedule` (Monday 13:00 UTC). Runs the extension suite (under
+      `xvfb-run`), the UI suite split into two `--shard` jobs, and the
+      packaging suite as parallel jobs on `ubuntu-latest`. **Triaged
+      (2026-10-13):** the extension suite's missing-harness failure was fixed in
+      `6f19a8191`, and the remaining red came from UI tests hitting Vitest's 20s
+      timeout on the 2-vCPU private-repo runner (now 60s). Confirm a green
+      run before relying on it as a release gate.
 - [x] **`release.yml` on `push: tags: ["v*"]`** — ✅ Built September 7, 2026:
       `.github/workflows/release.yml`. Runs the version/tag guard, `npm run
 package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
