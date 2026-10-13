@@ -4,12 +4,15 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
+import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
 import { PriorContextPreviewBuilder } from "../../utils/PriorContextPreviewBuilder";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import type { CliEvent } from "../../types/CliOutputTypes";
 import {
   EXECUTION_STATES,
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
+  CLI_EVENT_TYPES,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
 } from "../../types/DashboardConstants";
 import {
@@ -505,7 +508,8 @@ suite("RunOutputResolver", () => {
       manifestPath,
       ["all", "finalStepAll"],
       revisionTwo.steps,
-      2
+      2,
+      { workspaceRoot }
     );
     assert.deepStrictEqual(
       priorItems.map((item) => item.text),
@@ -521,7 +525,8 @@ suite("RunOutputResolver", () => {
       manifestPath,
       [{ previous: 1 }],
       revisionTwo.steps,
-      2
+      2,
+      { workspaceRoot }
     );
     assert.deepStrictEqual(
       lastOneItems.map((item) => item.text),
@@ -532,7 +537,8 @@ suite("RunOutputResolver", () => {
       manifestPath,
       ["previous", { previous: 5 }],
       revisionTwo.steps,
-      2
+      2,
+      { workspaceRoot }
     );
     assert.deepStrictEqual(
       lastNItems.map((item) => item.text),
@@ -544,7 +550,8 @@ suite("RunOutputResolver", () => {
       2,
       revisionTwo.steps,
       resolver,
-      manifestPath
+      manifestPath,
+      { workspaceRoot }
     );
     assert.match(preview, /partial retry response/);
     assert.match(preview, /<stdout>\npass\n<\/stdout>/);
@@ -556,7 +563,8 @@ suite("RunOutputResolver", () => {
       manifestPath,
       ["previous", "all", [2]],
       revisionTwo.steps,
-      1
+      1,
+      { workspaceRoot }
     );
     assert.deepStrictEqual(
       groupBoundaryItems.map((item) => item.text),
@@ -567,9 +575,116 @@ suite("RunOutputResolver", () => {
       manifestPath,
       ["previous", "all", [1]],
       revisionTwo.steps,
-      0
+      0,
+      { workspaceRoot }
     );
     assert.deepStrictEqual(indexZeroItems, []);
+  });
+
+  test("projects structured transcripts and earlier-attempt file changes into injection and preview", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const start = (attemptIndex: number, prompt: string): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+      timestampMs: 10 + attemptIndex,
+      target,
+      runIndex: 0,
+      attemptIndex,
+      definitionRevision: 1,
+      payload: { kind: "ai", startReason: attemptIndex ? "retry" : "initial", prompt },
+    });
+    const output = (attemptIndex: number, events: CliEvent[]): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs: 20 + attemptIndex,
+      target,
+      runIndex: 0,
+      attemptIndex,
+      definitionRevision: 1,
+      responseKind: "ai",
+      payload: { cliOutput: { response: "legacy flattened body", elapsed: 1, isStreaming: false, structured: { events, metadata: {} } } },
+    });
+    await recorder.appendEvents(manifestPath, [
+      start(0, "first prompt"),
+      output(0, [{ type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: "src/old.ts", oldContent: "one\n", newContent: "two\nthree\n" } }]),
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 30, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "failed" } },
+      start(1, "latest prompt"),
+      output(1, [{ type: CLI_EVENT_TYPES.THINKING, data: { text: "reasoning" } }, { type: CLI_EVENT_TYPES.TEXT, data: { text: "latest answer" } }]),
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 40, target, runIndex: 0, attemptIndex: 1, definitionRevision: 1, payload: { terminalState: "completed" } },
+    ]);
+    const resolver = new RunOutputResolver(recorder);
+    const items = await resolver.resolvePriorContextItems(manifestPath, [[1]], revisionOne.steps, 1, { workspaceRoot });
+    assert.deepStrictEqual(items[0].transcript?.map((entry) => entry.kind), ["thinking", "text"]);
+    assert.strictEqual(items[0].text, undefined, "structured records use transcript entries instead of responseText");
+    assert.deepStrictEqual(items[0].earlierAttempts, {
+      count: 1,
+      filesChanged: [{ path: "src/old.ts", operation: "modified", added: 2, removed: 1 }],
+    });
+    const injected = buildPriorContextXmlFromItems(items);
+    assert.match(injected, /<earlierAttempts count="1">[\s\S]*Edited src\/old\.ts \+2 -1[\s\S]*<\/earlierAttempts>/);
+    const preview = await PriorContextPreviewBuilder.buildPreview("step:1", 1, revisionOne.steps, resolver, manifestPath, { workspaceRoot });
+    assert.strictEqual(preview, injected);
+  });
+
+  test("uses finalStep definition prompts and renders script passes from script output", async () => {
+    const promptTarget = { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 } as const;
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        target: promptTarget,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: { kind: "ai", startReason: "initial", prompt: "the authored final prompt" },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        target: promptTarget,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: { cliOutput: { response: "final response", elapsed: 1, isStreaming: false } },
+      },
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 3, target: promptTarget, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "completed" } },
+    ]);
+    const resolver = new RunOutputResolver(recorder);
+    const promptItems = await resolver.resolvePriorContextItems(manifestPath, ["finalStepPrevious"], revisionOne.steps, 1, { workspaceRoot });
+    assert.strictEqual(promptItems[0].prompt, "original final step");
+
+    const scriptDefinition: WorkflowDefinitionSnapshot = { ...revisionOne, finalStep: { type: "script", script: "node verify.js" } };
+    await recorder.appendEvents(manifestPath, [
+      { eventType: TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED, timestampMs: 4, payload: { definitionRevision: 2, priorDefinitionRevision: 1, definition: scriptDefinition } },
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED, timestampMs: 5, target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 }, runIndex: 0, attemptIndex: 0, definitionRevision: 2, payload: { kind: "script", startReason: "initial", prompt: "node verify.js" } },
+      { eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED, timestampMs: 6, target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 }, runIndex: 0, attemptIndex: 0, definitionRevision: 2, payload: { command: "node verify.js", stdout: "verified", stderr: "", exitCode: 0 } },
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 7, target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 }, runIndex: 0, attemptIndex: 0, definitionRevision: 2, payload: { terminalState: "completed" } },
+    ]);
+    const scriptItems = await resolver.resolvePriorContextItems(manifestPath, ["finalStepAll"], revisionOne.steps, 1, { workspaceRoot });
+    assert.strictEqual(scriptItems[1].scriptOutput?.stdout, "verified");
+    assert.ok(buildPriorContextXmlFromItems(scriptItems).includes("<command>\nnode verify.js\n</command>"));
+    assert.ok(buildPriorContextXmlFromItems(scriptItems).includes('<step index="2" type="finalStep">'));
+  });
+
+  test("uses only the addressed run and skips an interrupted-only attempt", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const interruptedTarget = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+    await recorder.appendEvents(manifestPath, [
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED, timestampMs: 1, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { kind: "ai", startReason: "initial", prompt: "appended to old run" } },
+      { eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED, timestampMs: 2, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, responseKind: "ai", payload: { cliOutput: { response: "older run output", elapsed: 1, isStreaming: false } } },
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 3, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "completed" } },
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED, timestampMs: 4, target: interruptedTarget, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { kind: "ai", startReason: "initial", prompt: "interrupted" } },
+    ]);
+    const resolver = new RunOutputResolver(recorder);
+    assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, ["previous"], revisionOne.steps, 2, { workspaceRoot }).then(items => items.map(item => item.text)), ["older run output"]);
+    assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, [[2]], revisionOne.steps, 2, { workspaceRoot }), []);
+    const otherRunDir = path.join(workspaceRoot, "run-newer");
+    const otherManifest = await recorder.initializeRunAt(otherRunDir, "resolver-workflow", 2, 1, EXECUTION_STATES.RUNNING, 1, revisionOne);
+    await recorder.appendEvents(otherManifest, [
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED, timestampMs: 1, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { kind: "ai", startReason: "initial", prompt: "newer run" } },
+      { eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED, timestampMs: 2, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, responseKind: "ai", payload: { cliOutput: { response: "newer run output", elapsed: 1, isStreaming: false } } },
+      { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 3, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "completed" } },
+    ]);
+    assert.deepStrictEqual(await resolver.resolvePriorContextItems(manifestPath, ["previous"], revisionOne.steps, 2, { workspaceRoot }).then(items => items.map(item => item.text)), ["older run output"]);
   });
 
   test("does not resolve a skipped step's pre-condition output as its response", async () => {
@@ -635,7 +750,8 @@ suite("RunOutputResolver", () => {
         manifestPath,
         [[1]],
         [{ prompt: "the step prompt" }],
-        1
+        1,
+        { workspaceRoot }
       ),
       [],
       "a step that never started has no prior-context response"
@@ -724,7 +840,8 @@ suite("RunOutputResolver", () => {
       manifestPath,
       [[1]],
       [{ prompt: "the actual step prompt" }],
-      1
+      1,
+      { workspaceRoot }
     );
     assert.deepStrictEqual(
       items.map((item) => item.text),
@@ -1040,7 +1157,8 @@ suite("RunOutputResolver", () => {
       manifestPath,
       [[1]],
       [{ prompt: "run it" }],
-      1
+      1,
+      { workspaceRoot }
     );
     assert.deepStrictEqual(
       priorItems.map((item) => item.text),

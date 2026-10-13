@@ -1,6 +1,6 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phase 0 and Phase 1 chunk 1a complete; Phase 1 chunks 1b–1c and Phases 2–3 remain.
+> **Status:** Phase 0 and Phase 1 chunks 1a–1b complete; Phase 1 chunk 1c and Phases 2–3 remain.
 > Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
@@ -650,6 +650,8 @@ session. Each one leaves `npm test` green, updates this plan's status, and commi
    - add the `finalStep` prompt and script branch (D1b);
    - collect `filesChanged` for earlier attempts through the new projection-options argument
      (D4), threaded from `createPriorContextResolver` and `PriorContextPreviewBuilder`.
+   **Chunk 1b complete:** structured prior-context projection, final-step prompts/scripts,
+   earlier-attempt file changes, and the shared full-form XML renderer are implemented.
 3. `buildPriorContextXmlFromItems`: render the transcript entries (D1 table) and
    `<earlierAttempts>`. Queue script rendering is unchanged.
 4. Remove `general.includeFullDiffsInPriorContext`: `schemas/settings-schema.json`,

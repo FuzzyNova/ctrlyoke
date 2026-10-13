@@ -6,6 +6,7 @@ import {
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
   PRIOR_CONTEXT_ITEM_TYPES,
+  PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
   SCRIPT_OPERATORS,
   SCRIPT_VERDICT_OUTCOMES,
 } from "../../types/DashboardConstants";
@@ -14,11 +15,12 @@ import { inlinePriorContextRefToPriorContext } from "../../utils/PriorContextMer
 suite("prior-context XML", () => {
   test("formats queue, script, and final-loop values supplied by the resolver", () => {
     const xml = buildPriorContextXmlFromItems([
-      { index: 0, name: "plan", prompt: "plan it", text: "answer" },
+      { index: 0, name: "plan", prompt: "plan it", text: "answer", detail: "full" },
       {
         index: 1,
         name: "test",
         text: "pass\n0",
+        detail: "full",
         scriptOutput: {
           command: "npm test",
           stdout: "pass",
@@ -29,6 +31,7 @@ suite("prior-context XML", () => {
       {
         index: 2,
         text: "final answer",
+        detail: "full",
         type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
       },
     ]);
@@ -66,6 +69,7 @@ suite("prior-context XML", () => {
       {
         index: 0,
         text: "3 failing\n1",
+        detail: "full",
         scriptOutput,
         scriptVerdict: verdict({
           actual: "1",
@@ -89,6 +93,7 @@ suite("prior-context XML", () => {
       {
         index: 0,
         text: "3 failing\n1",
+        detail: "full",
         scriptOutput,
         scriptVerdict: verdict({
           compareSource: COMPARE_SOURCES.STDOUT,
@@ -115,6 +120,7 @@ suite("prior-context XML", () => {
         index: 0,
         text: "3 failing\n1",
         scriptOutput,
+        detail: "full",
         scriptVerdict: verdict({
           compareSource: COMPARE_SOURCES.STDOUT,
           operator: SCRIPT_OPERATORS.MATCHES,
@@ -140,6 +146,7 @@ suite("prior-context XML", () => {
       {
         index: 0,
         text: "ok",
+        detail: "full",
         type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
         scriptVerdict: verdict({}),
       },
@@ -155,14 +162,48 @@ suite("prior-context XML", () => {
 
   test("leaves steps without a verdict unchanged", () => {
     const xml = buildPriorContextXmlFromItems([
-      { index: 0, prompt: "plan it", text: "answer" },
-      { index: 1, text: "3 failing\n1", scriptOutput },
+      { index: 0, prompt: "plan it", text: "answer", detail: "full" },
+      { index: 1, text: "3 failing\n1", scriptOutput, detail: "full" },
     ]);
 
     assert.strictEqual(
       xml,
       '<priorContext>\n<step index="1">\n<prompt>\nplan it\n</prompt>\n<response>\nanswer\n</response>\n</step>\n<step index="2" type="script">\n<command>\nnpm test\n</command>\n<stdout>\n3 failing\n</stdout>\n<exitCode>1</exitCode>\n</step>\n</priorContext>'
     );
+  });
+
+  test("renders every full transcript entry and escapes event attributes", () => {
+    const xml = buildPriorContextXmlFromItems([{
+      index: 0,
+      detail: "full",
+      transcript: [
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING, text: "consider" },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.EDIT, path: 'src/a&".ts', added: 2, removed: 1, diff: { text: "--- a/a\n+++ b/a\n@@ -1 +1,2 @@\n-old\n+new\n+line", omitted: "end", omittedBytes: 22 } },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE, path: "src/new.ts", added: 1, diff: { text: "+new" } },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE, path: "src/old.ts", failed: true },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND, command: "npm test", exitCode: 1, output: { text: "failed", omitted: "start", omittedBytes: 90 }, failed: true },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ, path: "src/a.ts", lineStart: 3, lineEnd: 8 },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL, name: "server/tool", arguments: { text: "{\"x\":1}" }, result: { text: "done" } },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH, query: "A & B", results: [{ title: "Result", url: "https://example.test" }] },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION, questions: [{ question: "Continue?", options: [] }] },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER, text: "Keep going" },
+      ],
+      earlierAttempts: { count: 2, filesChanged: [{ path: "src/old.ts", operation: "deleted", added: 0, removed: 0 }] },
+    }]);
+
+    for (const fragment of [
+      '<thinking>\nconsider\n</thinking>',
+      '<edit path="src/a&amp;&quot;.ts" added="2" removed="1" omitted="end" omittedBytes="22">',
+      '<create path="src/new.ts" added="1">',
+      '<delete path="src/old.ts" failed="true"/>',
+      '<command exitCode="1" failed="true" omitted="start" omittedBytes="90">',
+      '<read path="src/a.ts" lines="3-8"/>',
+      '<tool name="server/tool">',
+      '<search query="A &amp; B">',
+      '<question>',
+      '<userSteer>\nKeep going\n</userSteer>',
+      '<earlierAttempts count="2">\n<filesChanged>\nRemoved src/old.ts +0 -0',
+    ]) assert.ok(xml.includes(fragment), `missing ${fragment}: ${xml}`);
   });
 
   test("maps inline references to the resolver's canonical context selectors", () => {

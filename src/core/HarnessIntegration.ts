@@ -32,11 +32,14 @@ import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   COMPARE_SOURCES,
+  DIFF_CHANGE_TYPES,
   DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
   PriorContextItemType,
+  PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
   type TerminalEndReason,
 } from "../types/DashboardConstants";
+import type { PriorContextTranscriptEntry, PriorContextText } from "./PriorContextTranscript";
 import { operatorTakesNoValue } from "../utils/ScriptComparison";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
@@ -48,9 +51,14 @@ import type { DisposableRegistry } from "./HostPorts";
 export type PriorContextItem = {
   index: number;
   name?: string;
-  /** The prompt text that was sent for this step. Absent for finalStep loop items and script steps. */
+  /** The authored prompt. */
   prompt?: string;
-  text: string;
+  detail: PriorContextDetail;
+  transcript?: PriorContextTranscriptEntry[];
+  /** Legacy fallback for timeline records without structured events. */
+  text?: string;
+  filesChanged?: PriorContextFileChange[];
+  earlierAttempts?: { count: number; filesChanged: PriorContextFileChange[] };
   /** Discriminant set when the item originates from a finalStep/finalStep loop (not a queue prompt). */
   type?: PriorContextItemType;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
@@ -58,6 +66,19 @@ export type PriorContextItem = {
   /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
   scriptVerdict?: ScriptVerdict;
 };
+
+export const PRIOR_CONTEXT_DETAIL = { FULL: "full" } as const;
+export type PriorContextDetail = (typeof PRIOR_CONTEXT_DETAIL)[keyof typeof PRIOR_CONTEXT_DETAIL];
+
+export interface PriorContextFileChange {
+  path: string;
+  operation:
+    | typeof DIFF_CHANGE_TYPES.CREATED
+    | typeof DIFF_CHANGE_TYPES.MODIFIED
+    | typeof DIFF_CHANGE_TYPES.DELETED;
+  added: number;
+  removed: number;
+}
 
 function escapeXmlAttribute(value: string): string {
   return value
@@ -168,13 +189,19 @@ export function buildPriorContextXmlFromItems(
   const sortedItems = [...contextItems].sort((a, b) => a.index - b.index);
   const steps = sortedItems
     .map((item) => {
-      const nameAttr = item.name ? ` name="${item.name}"` : "";
+      const nameAttr = item.name ? ` name="${escapeXmlAttribute(item.name)}"` : "";
       // A script finalStep has a verdict but no scriptOutput, so this is
       // rendered in both arms below.
       const verdictSection = item.scriptVerdict
         ? buildScriptVerdictXml(item.scriptVerdict)
         : "";
+      const earlierAttempts = item.earlierAttempts
+        ? `<earlierAttempts count="${item.earlierAttempts.count}">\n${renderFilesChanged(item.earlierAttempts.filesChanged)}\n</earlierAttempts>\n`
+        : "";
       if (item.scriptOutput) {
+        const scriptTypeAttr = item.type
+          ? ` type="${escapeXmlAttribute(item.type)}"`
+          : ` type="${STEP_TYPES.SCRIPT}"`;
         const commandSection = `<command>\n${item.scriptOutput.command.trim()}\n</command>\n`;
         const stdoutSection = item.scriptOutput.stdout.trim()
           ? `<stdout>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
@@ -186,18 +213,76 @@ export function buildPriorContextXmlFromItems(
           item.scriptOutput.exitCode !== undefined
             ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
             : "";
-        return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}</step>`;
+        return `<step index="${item.index + 1}"${scriptTypeAttr}${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${earlierAttempts}</step>`;
       }
-      const typeAttr = item.type ? ` type="${item.type}"` : "";
+      const typeAttr = item.type ? ` type="${escapeXmlAttribute(item.type)}"` : "";
       const promptSection = item.prompt
         ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
         : "";
-      const responseSection = `<response>\n${item.text.trim()}\n</response>\n`;
-      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}${verdictSection}</step>`;
+      const transcript = item.transcript
+        ? item.transcript.map(renderPriorContextEntry).join("\n")
+        : item.text !== undefined
+          ? item.text.trim()
+          : "";
+      const filesChanged = item.filesChanged
+        ? renderFilesChanged(item.filesChanged)
+        : "";
+      const responseSection = `<response>\n${transcript}\n</response>\n`;
+      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
     })
     .join("\n");
 
   return `<priorContext>\n${steps}\n</priorContext>`;
+}
+
+function renderFilesChanged(changes: PriorContextFileChange[] | undefined): string {
+  if (!changes?.length) return "<filesChanged/>";
+  const lines = changes.map(({ path, operation, added, removed }) => {
+    const verb = operation === DIFF_CHANGE_TYPES.CREATED
+      ? "Added"
+      : operation === DIFF_CHANGE_TYPES.DELETED
+        ? "Removed"
+        : "Edited";
+    return `${verb} ${path} +${added} -${removed}`;
+  });
+  return `<filesChanged>\n${lines.join("\n")}\n</filesChanged>`;
+}
+
+function omittedAttributes(value: PriorContextText): string {
+  return value.omitted
+    ? ` omitted="${value.omitted}" omittedBytes="${value.omittedBytes ?? 0}"`
+    : "";
+}
+
+function failedAttribute(entry: { failed?: true }): string {
+  return entry.failed ? ' failed="true"' : "";
+}
+
+function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
+  const failed = failedAttribute(entry);
+  switch (entry.kind) {
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT: return entry.text;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING: return `<thinking${failed}>\n${entry.text}\n</thinking>`;
+    case "edit": {
+      const diff = entry.diff ? `\n\`\`\`diff\n${entry.diff.text}\n\`\`\`` : "";
+      const omitted = entry.diff ? omittedAttributes(entry.diff) : "";
+      return `<edit path="${escapeXmlAttribute(entry.path)}" added="${entry.added}" removed="${entry.removed}"${failed}${omitted}>${diff}\n</edit>`;
+    }
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE:
+      return `<create path="${escapeXmlAttribute(entry.path)}" added="${entry.added}"${failed}${omittedAttributes(entry.diff)}>\n\`\`\`diff\n${entry.diff.text}\n\`\`\`\n</create>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE: return `<delete path="${escapeXmlAttribute(entry.path)}"${failed}/>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND:
+      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}${omittedAttributes(entry.output)}>\n${entry.command}\n<output>\n${entry.output.text}\n</output>\n</command>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ:
+      return `<read path="${escapeXmlAttribute(entry.path)}"${entry.lineStart === undefined ? "" : ` lines="${entry.lineStart}-${entry.lineEnd ?? entry.lineStart}"`}${failed}/>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL:
+      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}${omittedAttributes(entry.arguments)}>\n${entry.arguments.text}\n<output${omittedAttributes(entry.result)}>\n${entry.result.text}\n</output>\n</tool>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH:
+      return `<search query="${escapeXmlAttribute(entry.query)}"${failed}>\n${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:
+      return `<question${failed}>\n${JSON.stringify({ questions: entry.questions, declined: entry.declined })}\n</question>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER: return `<userSteer${failed}>\n${entry.text}\n</userSteer>`;
+  }
 }
 
 /**

@@ -1,6 +1,7 @@
 import { buildPriorContextXmlFromItems } from "../core/HarnessIntegration";
 import { type WorkflowStep } from "../types/CtrlYokeTypes";
 import { RunOutputResolver } from "../core/orchestration/RunOutputResolver";
+import type { RunOutputProjectionOptions } from "../core/orchestration/RunOutputResolver";
 import { parseInlinePriorContextBody } from "./FileReferenceParser";
 import {
   inlinePriorContextRefToPriorContext,
@@ -30,7 +31,8 @@ export class PriorContextPreviewBuilder {
     stepCount: number,
     steps: readonly WorkflowStep[],
     resolver: RunOutputResolver,
-    manifestPath: string
+    manifestPath: string,
+    projectionOptions: RunOutputProjectionOptions
   ): Promise<string> {
     const mergedContexts = parseMergedPriorContextBody(ref);
     const parsed = parseInlinePriorContextBody(ref);
@@ -43,7 +45,8 @@ export class PriorContextPreviewBuilder {
             manifestPath,
             contexts,
             steps,
-            stepCount
+            stepCount,
+            projectionOptions
           )
         : [];
 

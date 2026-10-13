@@ -8,12 +8,13 @@ import {
 } from "../../types/CtrlYokeTypes";
 import type { PriorContextItem } from "../HarnessIntegration";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { RunOutputResolver } from "./RunOutputResolver";
+import { RunOutputResolver, type RunOutputProjectionOptions } from "./RunOutputResolver";
 
 export interface PriorContextResolverOptions {
   readonly workspaceRoot?: string;
   readonly historyFilePath?: string;
   readonly outputResolver: RunOutputResolver;
+  readonly projectionOptions?: Omit<RunOutputProjectionOptions, "workspaceRoot">;
 }
 
 /**
@@ -25,6 +26,7 @@ export function createPriorContextResolver({
   workspaceRoot,
   historyFilePath,
   outputResolver,
+  projectionOptions,
 }: PriorContextResolverOptions): (
   contexts: readonly PriorContext[],
   allPrompts: readonly WorkflowStep[],
@@ -36,13 +38,15 @@ export function createPriorContextResolver({
     }
     return new AddressedPriorContextResolver(
       workspaceRoot,
-      outputResolver
+      outputResolver,
+      { workspaceRoot, ...projectionOptions }
     ).resolve(contexts, (sameRunContexts) =>
       outputResolver.resolvePriorContextItems(
         historyFilePath,
         sameRunContexts,
         allPrompts,
-        groupStartBoundary
+        groupStartBoundary,
+        { workspaceRoot, ...projectionOptions }
       )
     );
   };
@@ -56,7 +60,8 @@ export function createPriorContextResolver({
 export class AddressedPriorContextResolver {
   constructor(
     private readonly workspaceRoot: string,
-    private readonly outputResolver: RunOutputResolver
+    private readonly outputResolver: RunOutputResolver,
+    private readonly projectionOptions: RunOutputProjectionOptions = { workspaceRoot }
   ) {}
 
   async resolve(
@@ -81,7 +86,8 @@ export class AddressedPriorContextResolver {
             this.workspaceRoot,
             address.workflowKey,
             address.runRef
-          )
+          ),
+          this.projectionOptions
         ))
       );
     }

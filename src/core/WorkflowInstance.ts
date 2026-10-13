@@ -2085,6 +2085,12 @@ export class WorkflowInstance
         createPriorContextResolver({
           workspaceRoot:
             this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+          projectionOptions: {
+            workspaceRoots: this.platform.getWorkspaceRoots(),
+            approvedExternalRoots: this.platform.getApprovedExternalFileRoots?.(
+              this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()
+            ),
+          },
           historyFilePath,
           outputResolver: this.outputHistoryManager.getRunOutputResolver(),
         }),
