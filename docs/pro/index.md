@@ -22,7 +22,7 @@ authoritative text. This page is a plain-language summary, not legal advice.
 
 ## What Pro includes
 
-- Remote and LAN dashboard access, including QR-to-phone connections,
+- Browser dashboard access from other devices, over your LAN or a VPN, including QR-to-phone connections,
   [installing ctrlyoke as an app on your phone](./mobile-setup.md), and
   [connecting from anywhere](./remote-access.md) over Tailscale or your own
   VPN.
@@ -37,6 +37,16 @@ Workflow execution, notifications inside the local app, custom hooks, the MCP
 manager and integration, the agent and skills manager, AI commit messages, the
 CLI, and the complete local/localhost dashboard remain free. All six supported
 harnesses are included, with no workflow-step or workflow-count cap.
+
+## Remote desktop is free
+
+Operating your own computer through remote desktop, screen sharing, or SSH is
+free. The dashboard runs and displays on that computer, and only its screen or
+terminal output travels over the network. Pro applies when a browser or phone
+on a different device loads ctrlyoke's browser dashboard, however it reaches
+your computer: the server's bind address, a VPN, port forwarding, a reverse
+proxy, or a tunnel. The dashboard panel inside VS Code is not the browser
+dashboard, so it stays free in VS Code remote development.
 
 ## Try remote access free
 

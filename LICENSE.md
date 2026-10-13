@@ -2,8 +2,8 @@
 
 **Licensor:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code Extension and companion binaries
-**Effective Date:** September 17, 2026
-**Version:** 2.1
+**Effective Date:** October 13, 2026
+**Version:** 2.2
 
 ## 0. Acceptance
 
@@ -19,9 +19,17 @@ You accept this License by affirmatively clicking or selecting an acceptance con
 
 **"Free Tier"** means the capabilities available without a Pro License, as described in the current documentation and the VS Code Marketplace listing.
 
+**"Host Machine"** means the single physical or virtual computer on which a given installation of the Software is running.
+
+**"Hosted Dashboard"** means the browser-based dashboard served by the Software's built-in web server, whether started from the VS Code extension or the companion CLI (for example, through `ctrlyoke server`). It does not include the dashboard panel displayed inside Visual Studio Code itself.
+
+**"Remote Dashboard Access"** means loading or interacting with the Hosted Dashboard from a browser, application, or other client running on any device other than the Host Machine, by any means, including binding the Software's server to a network interface, a virtual private network, port forwarding, a reverse proxy, or a tunnel or other mechanism that relays the Hosted Dashboard's network traffic to another device.
+
+**"Remote Session"** means operating the Host Machine from another device through a remote desktop, screen-sharing, or remote command-line session (for example, Windows Remote Desktop, VNC, macOS Screen Sharing, or SSH), in which the Software, and any browser displaying the Hosted Dashboard, run on the Host Machine, and only that machine's display, input, or terminal output is transmitted to the other device. A Remote Session is not Remote Dashboard Access.
+
 **"Pro License"** means a license key or signed license file issued by Licensor through its authorized licensing system that unlocks Pro Tier capabilities.
 
-**"Pro Tier"** means the capabilities available only to holders of a valid Pro License, or available during an Evaluation Trial to the extent stated in Section 2(d). Pro Tier capabilities currently include remote and LAN dashboard access, HTTPS and self-signed certificate generation for remote connections, browser and mobile push notifications, air-gapped activation from a signed license file, and custom icon colors, together with any future capabilities designated as Pro by Licensor. Capabilities not designated as Pro remain available under the Free Tier, including workflow execution, custom execution hooks, the MCP and agent managers, the companion CLI and MCP server binaries, and the local and `localhost` dashboard.
+**"Pro Tier"** means the capabilities available only to holders of a valid Pro License, or available during an Evaluation Trial to the extent stated in Section 2(d). Pro Tier capabilities currently include Remote Dashboard Access, HTTPS and self-signed certificate generation for remote connections, browser and mobile push notifications, air-gapped activation from a signed license file, and custom icon colors, together with any future capabilities designated as Pro by Licensor. Capabilities not designated as Pro remain available under the Free Tier, including workflow execution, custom execution hooks, the MCP and agent managers, the companion CLI and MCP server binaries, and the dashboard and Hosted Dashboard when viewed on the Host Machine, including on the Host Machine during a Remote Session.
 
 **"You"** or **"Your"** means the individual or legal entity exercising rights under this License.
 
@@ -39,7 +47,7 @@ Subject to the terms and conditions of this License, Licensor grants You a limit
 
 (c) **Access Pro Tier capabilities** if and only if You hold a valid, unrevoked Pro License for each authorized user using Pro Tier capabilities, subject to any machine activation limits stated at purchase; and
 
-(d) **Evaluate Pro Tier capabilities during an Evaluation Trial.** Each new installation of the Software includes a one-time, fourteen (14) day evaluation trial of remote dashboard access (an **Evaluation Trial**), beginning when that capability is first used on that installation. No purchase, payment method, or account registration is required. An Evaluation Trial is offered at Licensor's discretion, extends only to the capabilities Licensor designates for trial, is limited to one trial per installation, and may be modified or discontinued for future installations. Use of Pro Tier capabilities during a valid Evaluation Trial is permitted under Sections 2(c) and 4(c). When an Evaluation Trial ends, Free Tier rights continue and any further use of Pro Tier capabilities requires a valid Pro License. **AN EVALUATION TRIAL IS PROVIDED "AS IS" AND WITHOUT WARRANTY OF ANY KIND, AS FURTHER STATED IN SECTION 12.**
+(d) **Evaluate Pro Tier capabilities during an Evaluation Trial.** Each new installation of the Software includes a one-time, fourteen (14) day evaluation trial of Remote Dashboard Access (an **Evaluation Trial**), beginning when that capability is first used on that installation. No purchase, payment method, or account registration is required. An Evaluation Trial is offered at Licensor's discretion, extends only to the capabilities Licensor designates for trial, is limited to one trial per installation, and may be modified or discontinued for future installations. Use of Pro Tier capabilities during a valid Evaluation Trial is permitted under Sections 2(c) and 4(c). When an Evaluation Trial ends, Free Tier rights continue and any further use of Pro Tier capabilities requires a valid Pro License. **AN EVALUATION TRIAL IS PROVIDED "AS IS" AND WITHOUT WARRANTY OF ANY KIND, AS FURTHER STATED IN SECTION 12.**
 
 ## 3. Free Tier Eligibility
 
@@ -85,11 +93,11 @@ Use the Software or any material portion of its source code to Compete with the 
 
 ### (c) Circumvent licensing
 
-Circumvent, disable, or defeat the Software's license verification mechanisms, or use Pro Tier capabilities without either a valid, unrevoked Pro License or an active Evaluation Trial. You may not restart, extend, or obtain more than one Evaluation Trial for the same installation, user, or machine.
+Circumvent, disable, or defeat the Software's license verification mechanisms, or use Pro Tier capabilities without either a valid, unrevoked Pro License or an active Evaluation Trial. For clarity, Remote Dashboard Access obtained by relaying the Hosted Dashboard to another device through a proxy, tunnel, port forward, or similar mechanism, rather than through the Software's own settings, is use of a Pro Tier capability. You may not restart, extend, or obtain more than one Evaluation Trial for the same installation, user, or machine.
 
 ### (d) Offer as a hosted service
 
-Offer the Software's workflow orchestration capabilities as a hosted, managed, or multi-tenant service to third parties. For clarity, using the Software locally, or on Your own private devices or private network, to automate Your own development workflows is permitted, including use in LAN-accessible setups for Your own internal access, so long as it is not offered to third parties as a service.
+Offer the Software's workflow orchestration capabilities as a hosted, managed, or multi-tenant service to third parties. For clarity, using the Software locally, or on Your own private devices or private network, to automate Your own development workflows is permitted, including Remote Sessions and, subject to Section 2(c) or 2(d), Remote Dashboard Access for Your own internal access, so long as it is not offered to third parties as a service.
 
 ### (e) Misrepresent license status
 

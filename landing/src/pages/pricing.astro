@@ -21,7 +21,7 @@ const freeTier = [
 
 const proTier = [
   { text: "Everything in Free", highlight: false },
-  { text: "Remote & LAN browser dashboard — code from anywhere", highlight: true },
+  { text: "Browser dashboard on your phone or another device, over LAN or VPN", highlight: true },
   { text: "LAN IP binding & QR-to-phone access", highlight: true },
   { text: "HTTPS with custom TLS certificates", highlight: true },
   { text: "Push notifications (browser + mobile)", highlight: true },
@@ -46,7 +46,11 @@ const faq = [
   },
   {
     q: "Is there a trial?",
-    a: "Yes — two layers. The free tier is fully functional forever with no time limit. On top of that, every new install gets a 14-day free trial of remote access (the Pro-only feature). No credit card required for either.",
+    a: "Yes — two layers. The free tier is fully functional forever with no time limit. On top of that, every new install gets a 14-day free trial of the browser dashboard on other devices (the Pro-only feature). No credit card required for either.",
+  },
+  {
+    q: "Can I use remote desktop with the free tier?",
+    a: "Yes. Remote desktop into your own computer remains free for eligible users: the dashboard runs and displays on that computer, and only its screen travels over the network. Pro covers opening ctrlyoke's browser dashboard from a different device, including through a VPN, port forward, reverse proxy, or tunnel.",
   },
   {
     q: "I work at a large company. Do I need an enterprise license?",
@@ -139,7 +143,7 @@ const faq = [
           Buy Pro — $59
         </Cta>
         <p class="mb-6 text-center text-xs text-slate-500">
-          14-day free trial of remote access included — no card required to start.
+          14-day free trial of the browser dashboard on other devices included — no card required to start.
           <br />30-day money-back guarantee.
         </p>
         <ul class="flex flex-col gap-3">

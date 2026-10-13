@@ -5,7 +5,10 @@ another computer opens a page that your computer serves, so it can only connect
 while your computer is running ctrlyoke and can be reached over the network.
 This page covers keeping it reachable, at home and away from home.
 
-Remote access needs [Pro or the remote-access trial](/pro/). Start with
+Remote access needs [Pro or the remote-access trial](/pro/). Remote desktop
+into your own computer stays free; Pro covers opening the browser dashboard
+from another device, including through a tunnel, port forward, or reverse
+proxy you set up yourself. Start with
 [Browser dashboard](/guide/remote-dashboard) if you haven't started the server
 yet, and [Use ctrlyoke on your phone](/pro/mobile-setup) for certificates and
 installing the app.
