@@ -17,6 +17,22 @@ function event(type: CliEvent["type"], data: unknown, extra: Partial<CliEvent> =
 }
 
 suite("PriorContextTranscript", () => {
+  test("projects terminal tails with their failure reason", () => {
+    assert.deepStrictEqual(
+      projectPriorContextTranscript([
+        event(CLI_EVENT_TYPES.TERMINAL_OUTPUT, {
+          text: "process crashed",
+          reason: "exit code 1",
+        }),
+      ]),
+      [{
+        kind: KINDS.TERMINAL_OUTPUT,
+        text: "process crashed",
+        reason: "exit code 1",
+      }]
+    );
+  });
+
   test("projects every transcript event kind and drops display-only event kinds", () => {
     const entries = projectPriorContextTranscript([
       event(CLI_EVENT_TYPES.TEXT, { text: "answer" }),

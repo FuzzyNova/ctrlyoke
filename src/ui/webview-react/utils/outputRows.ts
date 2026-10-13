@@ -1488,6 +1488,14 @@ function estimateStructuredTextHeight(
         THINKING_LABEL_HEIGHT + contentHeight + THINKING_OUTER_VERTICAL_CHROME
       );
     }
+    case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
+      const data = row.event.data as { text?: string };
+      return estimateTextBlockHeight(data.text ?? "", fullContentWidth, outputFontSize, {
+        charWidthMultiplier: 0.6,
+        lineHeightMultiplier: 1.5,
+        verticalChrome: 32,
+      });
+    }
     case CLI_EVENT_TYPES.BASH_COMMAND:
       return estimateBashOutputHeight(
         row.event,

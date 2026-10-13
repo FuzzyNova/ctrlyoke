@@ -4008,6 +4008,7 @@ export const RETRY_PROMPT_PLACEHOLDERS = {
 export const CLI_EVENT_TYPES = {
   TEXT: "text",
   THINKING: "thinking",
+  TERMINAL_OUTPUT: "terminalOutput",
 
   // Operation-specific tool events (normalized from harness formats)
   BASH_COMMAND: "bashCommand",
@@ -4054,6 +4055,12 @@ export const CLI_EVENT_TYPES = {
   CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
 
+/** Text projection used when copying or displaying a step's output. */
+export const StepOutputTextMode = {
+  ASSISTANT: "assistant",
+  TRANSCRIPT: "transcript",
+} as const;
+
 export const PRIOR_CONTEXT_LIMITS = {
   // full form
   COMMAND_OUTPUT_TAIL_BYTES: 2048,
@@ -4085,6 +4092,7 @@ export const PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS = {
   SEARCH: "search",
   QUESTION: "question",
   USER_STEER: "userSteer",
+  TERMINAL_OUTPUT: "terminalOutput",
 } as const;
 
 export type PriorContextTranscriptEntryKind =

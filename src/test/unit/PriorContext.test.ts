@@ -187,6 +187,7 @@ suite("prior-context XML", () => {
         { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH, query: "A & B", results: [{ title: "Result", url: "https://example.test" }] },
         { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION, questions: [{ question: "Continue?", options: [] }] },
         { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER, text: "Keep going" },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT, text: "crashed", reason: "exit & failed" },
       ],
       earlierAttempts: { count: 2, filesChanged: [{ path: "src/old.ts", operation: "deleted", added: 0, removed: 0 }] },
     }]);
@@ -202,6 +203,7 @@ suite("prior-context XML", () => {
       '<search query="A &amp; B">',
       '<question>',
       '<userSteer>\nKeep going\n</userSteer>',
+      '<terminalOutput reason="exit &amp; failed">\ncrashed\n</terminalOutput>',
       '<earlierAttempts count="2">\n<filesChanged>\nRemoved src/old.ts +0 -0',
     ]) assert.ok(xml.includes(fragment), `missing ${fragment}: ${xml}`);
   });

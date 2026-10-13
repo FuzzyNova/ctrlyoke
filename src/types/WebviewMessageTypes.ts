@@ -60,6 +60,7 @@ import {
   type HarnessStatusString,
   type CtrlYokeFileKind,
 } from "./DashboardConstants";
+import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
 import type { LanguageServerDefinition } from "./CtrlYokeSettings";
 import type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCatalog";
@@ -249,6 +250,8 @@ export interface CliOutput {
   prompt?: string;
   /** Plain text response (streaming or complete) */
   response: string;
+  /** Wire-only display source for script completions; never persisted in the timeline. */
+  scriptOutput?: ScriptRuntimeOutput;
   /** Structured output with tool calls, thinking blocks, and metadata (CLI only) */
   structured?: StructuredOutput;
   /** Execution time in seconds */

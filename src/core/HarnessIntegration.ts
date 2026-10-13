@@ -282,6 +282,7 @@ function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:
       return `<question${failed}>\n${JSON.stringify({ questions: entry.questions, declined: entry.declined })}\n</question>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER: return `<userSteer${failed}>\n${entry.text}\n</userSteer>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT: return `<terminalOutput reason="${escapeXmlAttribute(entry.reason)}">\n${entry.text}\n</terminalOutput>`;
   }
 }
 

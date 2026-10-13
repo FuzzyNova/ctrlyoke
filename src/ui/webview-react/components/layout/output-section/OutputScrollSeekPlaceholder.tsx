@@ -87,7 +87,8 @@ export function shouldRenderScrollSeekPlaceholder(
         case CLI_EVENT_TYPES.TOOL_RESULT:
           return true;
         case CLI_EVENT_TYPES.TEXT:
-        case CLI_EVENT_TYPES.THINKING: {
+        case CLI_EVENT_TYPES.THINKING:
+        case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
           const data = row.event.data as { text?: string };
           return (
             (data.text?.length ?? 0) >=

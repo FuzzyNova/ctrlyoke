@@ -25,6 +25,7 @@ import type {
   FileWriteData,
 } from "../../types/CliOutputTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
+import type { StepOutputSource } from "../../utils/StepOutputText";
 import {
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_EVENT_TYPES,
@@ -78,13 +79,12 @@ interface ResolvedRunAttemptOutput extends ResolvedRunAttempt {
   kind: TimelineAttemptKind;
 }
 
-export interface ResolvedRunAttemptValue extends ResolvedRunAttempt {
+export interface ResolvedRunAttemptValue
+  extends ResolvedRunAttempt, StepOutputSource {
   prompt?: string;
   kind?: TimelineAttemptKind;
   startReason?: TimelineAttemptStartReason;
   responseText?: string;
-  output?: CliOutput;
-  scriptOutput?: ScriptRuntimeOutput;
   terminalState?: TimelineAttemptTerminalState;
   terminalReason?: string;
 }

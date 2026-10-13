@@ -114,6 +114,40 @@ const MANIFEST: WorkflowRunManifest = {
 };
 
 suite("OutputHistoryTimelineAdapter", () => {
+  test("joins script execution records into the completed dashboard output payload", () => {
+    const script: ScriptExecutionRecordedEvent = {
+      eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+      workflowId: "workflow",
+      runId: 1,
+      sequence: 1,
+      timestampMs: 1,
+      target: TARGET,
+      runIndex: 0,
+      attemptIndex: 0,
+      definitionRevision: 1,
+      payload: {
+        command: "npm test",
+        stdout: "passed",
+        stderr: "",
+        exitCode: 0,
+      },
+    };
+    const history = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+      cliEvent(0, EXECUTION_PHASES.PROMPT, "passed"),
+      script,
+    ]);
+    const entry = history.orderedEntries.find(
+      (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.deepStrictEqual(entry.cliOutput.scriptOutput, {
+      command: "npm test",
+      stdout: "passed",
+      stderr: "",
+      exitCode: 0,
+    });
+  });
+
   test("deduplicates CLI entries by execution phase while preserving prompt keys", () => {
     const adapter = new OutputHistoryTimelineAdapter();
     const history = adapter.project(MANIFEST, [

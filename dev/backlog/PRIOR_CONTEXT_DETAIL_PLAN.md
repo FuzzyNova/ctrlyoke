@@ -1,6 +1,6 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phase 0 and Phase 1 complete; Phases 2–3 remain.
+> **Status:** Phases 0 and 1 complete; Phase 2 steps 1–2 complete (chunk 2a); Phase 2 steps 3–6 and Phase 3 remain.
 > Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
@@ -690,10 +690,10 @@ Steps 3 and 4 move **readers only**. `response` is still written until step 5, s
 moves early keeps working, and a v1 record still reads through the legacy branch. Every deletion
 waits for step 5.
 
-1. `src/utils/StepOutputText.ts` (D8b), with tests that pin today's text exactly: for each harness
+1. **Complete (chunk 2a):** `src/utils/StepOutputText.ts` (D8b), with tests that pin today's text exactly: for each harness
    fixture, `getTranscriptText(events)` equals the `false`-mode `extractTextFromEvents` output,
    and `getScriptOutputText` equals the script `response` written today.
-2. Give the four response-only kinds of content their homes (D8a):
+2. **Complete (chunk 2a):** Give the four response-only kinds of content their homes (D8a):
    - add `TERMINAL_OUTPUT` to `CLI_EVENT_TYPES`, `CliOutputTypes.ts`, and the dashboard row and
      prior-context renderers;
    - switch the raw-stdout AI path to `TEXT` events;

@@ -62,6 +62,7 @@ export class OutputHistoryTimelineAdapter {
     history: WorkflowOutputHistory
   ): Promise<void> {
     const outputs = new Map<string, CliOutput>();
+    const scriptOutputs = new Map<string, NonNullable<CliOutput["scriptOutput"]>>();
     // Deltas are buffered rather than folded in per batch; see
     // `StreamingCliOutputAccumulator` for why that matters on a large run.
     const deltas = new StreamingCliOutputAccumulator();
@@ -80,6 +81,16 @@ export class OutputHistoryTimelineAdapter {
         // delta buffered before it is superseded.
         deltas.discard(key);
         outputs.set(key, event.attempt.output);
+      } else if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION) {
+        scriptOutputs.set(
+          getCliEntryKey(
+            event.attempt.target,
+            event.attempt.runIndex,
+            event.attempt.attemptIndex,
+            event.attempt.phase
+          ),
+          event.scriptOutput
+        );
       } else if (
         event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK
       ) {
@@ -125,6 +136,17 @@ export class OutputHistoryTimelineAdapter {
         )
       );
       if (output) entry.cliOutput = output;
+      const scriptOutput = scriptOutputs.get(
+        getCliEntryKey(
+          entry.target,
+          entry.runIndex ?? 0,
+          entry.attemptIndex,
+          entry.phase
+        )
+      );
+      if (scriptOutput && output) {
+        entry.cliOutput = { ...output, scriptOutput };
+      }
       if (
         output &&
         !IN_FLIGHT_EXECUTION_STATES.has(history.executionState) &&
@@ -152,6 +174,7 @@ export class OutputHistoryTimelineAdapter {
     const orderedEntries: OrderedHistoryEntry[] = [];
     const activityEntries: OutputActivityEntry[] = [];
     const cliEntriesByKey = new Map<string, OrderedCliHistoryEntry>();
+    const scriptOutputs = new Map<string, NonNullable<CliOutput["scriptOutput"]>>();
     /**
      * Attempts whose completed aggregate has already been projected. The final
      * `cliOutputRecorded` carries the attempt's *start* timestamp, so it sorts
@@ -274,13 +297,20 @@ export class OutputHistoryTimelineAdapter {
             sequence: event.sequence,
           });
           break;
-        // SCRIPT_EXECUTION_RECORDED is a lossless stdout/stderr record consumed
-        // by RunOutputResolver for prior-context/verdict purposes. It carries
-        // the same text every CLI_OUTPUT_CHUNK_APPENDED delta for this attempt
-        // already streamed — the unified ScriptExecutionReporter pipeline
-        // always streams before recording it — so projecting it into
-        // activityEntries as well duplicated the script's own output on every
-        // history reload (each stayed a separate, non-coalescing activity kind).
+        case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED:
+          scriptOutputs.set(
+            getCliEntryKey(
+              event.target,
+              event.runIndex,
+              event.attemptIndex,
+              event.phase
+            ),
+            event.payload
+          );
+          break;
+        // SCRIPT_EXECUTION_RECORDED carries display output on read but is not
+        // projected into activityEntries: the same text was already streamed
+        // as chunk deltas, which would duplicate it on every history reload.
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED:
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED:
           this.ensureStepOutput(history, event.target).workspaceSnapshot =
@@ -297,6 +327,10 @@ export class OutputHistoryTimelineAdapter {
 
     for (const [key, entry] of cliEntriesByKey) {
       entry.cliOutput = deltas.flush(key, entry.cliOutput);
+      const scriptOutput = scriptOutputs.get(key);
+      if (scriptOutput) {
+        entry.cliOutput = { ...entry.cliOutput, scriptOutput };
+      }
     }
 
     history.orderedEntries = [

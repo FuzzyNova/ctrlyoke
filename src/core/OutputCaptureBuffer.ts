@@ -6,6 +6,7 @@ import type {
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
+  CLI_EVENT_TYPES,
   IN_FLIGHT_EXECUTION_STATES,
   type ExecutionState,
   type HarnessId,
@@ -472,16 +473,16 @@ export class OutputCaptureBuffer {
   }
 
   private createBufferedOutput(buffer: StepOutputBufferEntry): CliOutput {
+    const events =
+      buffer.accumulatedEvents.length > 0
+        ? normalizeCliEvents(buffer.accumulatedEvents)
+        : buffer.rawTextOutput && buffer.accumulatedText
+          ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: buffer.accumulatedText } }]
+          : [];
     return {
       prompt: buffer.prompt,
       response: buffer.accumulatedText,
-      structured:
-        buffer.accumulatedEvents.length > 0
-          ? {
-              events: normalizeCliEvents(buffer.accumulatedEvents),
-              metadata: {},
-            }
-          : undefined,
+      structured: events.length > 0 ? { events, metadata: {} } : undefined,
       elapsed: 0,
       tokens: undefined,
       isStreaming: false,
@@ -663,19 +664,19 @@ export class OutputCaptureBuffer {
       const loopIndex = finalRuntime.loopCount;
       const buffer = this.finalStepOutputBuffer.get(loopIndex);
       if (buffer) {
+        const events =
+          buffer.accumulatedEvents.length > 0
+            ? normalizeCliEvents(buffer.accumulatedEvents)
+            : buffer.rawTextOutput && buffer.accumulatedText
+              ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: buffer.accumulatedText } }]
+              : [];
         Log.trace(
           `${instanceTag} replayFullStateTo: replaying finalStep loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
         );
         dashboardSink.updateFinalStepOutput(loopIndex, {
           prompt: buffer.prompt,
           response: buffer.accumulatedText,
-          structured:
-            buffer.accumulatedEvents.length > 0
-              ? {
-                  events: normalizeCliEvents(buffer.accumulatedEvents),
-                  metadata: {},
-                }
-              : undefined,
+          structured: events.length > 0 ? { events, metadata: {} } : undefined,
           elapsed: 0,
           tokens: undefined,
           isStreaming: true,

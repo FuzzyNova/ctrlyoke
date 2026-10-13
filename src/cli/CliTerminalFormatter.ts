@@ -1704,6 +1704,15 @@ export class CliTerminalFormatter {
         break;
       }
 
+      case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
+        CliTerminalFormatter.beginEventOutput(target);
+        const data = event.data as { text: string; reason: string };
+        writeEventLine(chalk.yellow(`● Terminal output (${data.reason})`), chalk.yellow);
+        writeBoundedEventDetail(data.text, MAX_PREVIEW_LINES, "  ");
+        console.log();
+        break;
+      }
+
       case CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC:
         break;
 

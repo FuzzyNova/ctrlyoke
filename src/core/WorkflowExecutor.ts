@@ -39,6 +39,7 @@ import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
+  CLI_EVENT_TYPES,
   PARALLEL_GROUP_ADMISSION,
   CONDITION_ACTIONS,
   STEP_TYPES,
@@ -3858,6 +3859,28 @@ export class WorkflowExecutor {
     }
 
     const tokens = this.resolveTokenCounts(parsedOutput);
+    const ptyTail = integration.getLastFailureOutput?.();
+    const terminalEvent = ptyTail
+      ? [{
+          type: CLI_EVENT_TYPES.TERMINAL_OUTPUT,
+          data: {
+            text: ptyTail,
+            reason:
+              errorMessage ??
+              "Harness process exited",
+          },
+        }]
+      : [];
+    const structuredEvents = [
+      ...(structured?.events ?? []),
+      ...(!structured?.events?.length && bufferedOutput?.rawTextOutput && bufferedOutput.response
+        ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: bufferedOutput.response } }]
+        : []),
+      ...terminalEvent,
+    ];
+    if (structuredEvents.length) {
+      structured = { ...(structured ?? { metadata: {} }), events: structuredEvents };
+    }
 
     return {
       prompt: prompt.prompt,

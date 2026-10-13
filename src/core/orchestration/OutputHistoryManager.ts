@@ -408,7 +408,7 @@ export class OutputHistoryManager {
       await this.saveTimelineExecutionOutput(
         historyFilePath,
         target,
-        cliOutputs,
+        cliOutputs.map(({ scriptOutput: _scriptOutput, ...output }) => output),
         definitionContext?.definitionRevision,
         phase
       );

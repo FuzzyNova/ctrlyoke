@@ -163,6 +163,35 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await fs.rm(tempWorkspace, { recursive: true, force: true });
   });
 
+  test("strips wire-only scriptOutput before persisting the CLI aggregate", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wire-only-script-output"
+    );
+    await manager.saveExecutionOutput(
+      filePath,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      [{
+        response: "script result",
+        scriptOutput: {
+          command: "npm test",
+          stdout: "script result",
+          stderr: "",
+          exitCode: 0,
+        },
+        elapsed: 0,
+        isStreaming: false,
+      }]
+    );
+    const events = await recorder.readEvents(filePath);
+    const recorded = events.find(
+      (event) => event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+    );
+    assert.ok(recorded && recorded.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED);
+    assert.ok(!("scriptOutput" in recorded.payload.cliOutput));
+  });
+
   test("run summaries expose working-file step count while a manifest is still empty", async () => {
     const { filePath, workflowKey, runRef } = await initTestRun(
       manager,

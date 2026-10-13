@@ -1152,6 +1152,12 @@ suite("ManagedLanguageServerBackend", () => {
     } finally {
       proxy?.dispose();
       await host.dispose();
+      // Remove the junction itself before recursively deleting the workspace;
+      // recursive removal can otherwise follow it and delete the repo's TS install.
+      await fs.promises.rm(
+        path.join(workspaceRoot, "node_modules", "typescript"),
+        { force: true }
+      );
       removeTempDir(workspaceRoot);
     }
   });

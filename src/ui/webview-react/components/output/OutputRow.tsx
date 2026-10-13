@@ -879,6 +879,15 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           />
         );
       }
+      case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
+        const data = event.data as { text: string; reason: string };
+        return (
+          <div className="rounded border border-panel-border bg-input-bg px-3 py-2 font-mono text-xs">
+            <div className="mb-1 text-description-fg">Terminal output · {data.reason}</div>
+            <pre className="whitespace-pre-wrap wrap-break-word">{data.text}</pre>
+          </div>
+        );
+      }
       case CLI_EVENT_TYPES.USER_STEER: {
         const data = event.data as UserSteerData;
         if (!data.text) return null;

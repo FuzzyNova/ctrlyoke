@@ -10,6 +10,7 @@ import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvide
 import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import {
   HARNESS_IDS,
+  CLI_EVENT_TYPES,
   HEADLESS_SOURCE_MODES,
   FAILURE_KINDS,
   MESSAGE_TYPES,
@@ -433,8 +434,11 @@ suite("CliTransportCoordinator", () => {
           preparedCommand = info;
         },
         onStreamingChunk: (chunk) => streamedChunks.push(chunk),
-        onStreamingEvents: () => {
-          throw new Error("expected plain-text streaming path");
+        onStreamingEvents: (events) => {
+          for (const event of events) {
+            assert.strictEqual(event.type, CLI_EVENT_TYPES.TEXT);
+            streamedChunks.push((event.data as { text: string }).text);
+          }
         },
         onResponseComplete: () => {},
         onPtyExit: () => {},

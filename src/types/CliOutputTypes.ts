@@ -57,7 +57,14 @@ export type CliEventData =
   | FollowUpResumedData
   | BackgroundWorkHoldData
   | ContextWindowSyncData
-  | AskUserQuestionData;
+  | AskUserQuestionData
+  | TerminalOutputData;
+
+/** The sanitized tail retained when a harness process exits unexpectedly. */
+export interface TerminalOutputData {
+  text: string;
+  reason: string;
+}
 
 /**
  * Data for a text event (AI response text).

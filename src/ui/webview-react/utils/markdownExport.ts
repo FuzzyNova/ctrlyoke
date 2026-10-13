@@ -168,6 +168,15 @@ function renderStructuredEventsToMarkdown(
         break;
       }
 
+      case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
+        const data = event.data as { text: string; reason: string };
+        lines.push(`● Terminal output (${data.reason})`);
+        lines.push("");
+        lines.push(fenceLiteral(data.text.trim()));
+        lines.push("");
+        break;
+      }
+
       case CLI_EVENT_TYPES.BASH_COMMAND: {
         const data = event.data as BashCommandData;
         lines.push(`● ${data.command}`);

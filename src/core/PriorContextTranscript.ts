@@ -10,6 +10,7 @@ import type {
   ToolCall,
   ToolResult,
   UserSteerData,
+  TerminalOutputData,
   WebSearchData,
 } from "../types/CliOutputTypes";
 import {
@@ -98,6 +99,11 @@ export type PriorContextTranscriptEntry =
   | (EntryBase & {
       kind: typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER;
       text: string;
+    })
+  | (EntryBase & {
+      kind: typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT;
+      text: string;
+      reason: string;
     });
 
 const encoder = new TextEncoder();
@@ -345,6 +351,14 @@ function projectEvent(event: CliEvent): PriorContextTranscriptEntry | undefined 
         kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER,
         text: (event.data as UserSteerData).text,
       };
+    case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
+      const data = event.data as TerminalOutputData;
+      return {
+        kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT,
+        text: data.text,
+        reason: data.reason,
+      };
+    }
     case CLI_EVENT_TYPES.TOOL_RESULT:
     case CLI_EVENT_TYPES.COMPACTION:
     case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED:
