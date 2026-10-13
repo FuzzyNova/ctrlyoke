@@ -44,6 +44,9 @@ export interface TemplateVariableFieldProps {
    * the box that groups the pair, since it applies to the whole pair.
    */
   labelAction?: React.ReactNode;
+  error?: string;
+  pairedModelErrors?: Record<string, string>;
+  onBlur?: (name: string) => void;
 }
 
 /** Shared typed control for one template variable and any models paired to its harness. */
@@ -65,6 +68,9 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
   onKeyDown,
   idPrefix = "var",
   labelAction,
+  error,
+  pairedModelErrors = {},
+  onBlur,
 }) => {
   const id = `${idPrefix}-${variable.name}`;
   // Leaving a text field commits only an edit made since it gained focus, so
@@ -102,10 +108,17 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
       <div key={model.name} className="form-group min-w-0">
         <FieldLabelRow htmlFor={`${idPrefix}-${model.name}`}>
           {model.name}
+          {model.required && (
+            <span aria-hidden="true" className="ml-1 text-error-fg">
+              *
+            </span>
+          )}
         </FieldLabelRow>
         <CustomSelect
           id={`${idPrefix}-${model.name}`}
           triggerAriaLabel={model.name}
+          ariaRequired={model.required}
+          onBlur={() => onBlur?.(model.name)}
           value={modelValue}
           onChange={(next) => {
             onChange(model.name, next);
@@ -125,6 +138,11 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
           onUnhideOption={(next) => onUnhideOption?.(namespace, next)}
           warning={modelWarning(modelValue, harness, models) ?? undefined}
         />
+        {pairedModelErrors[model.name] && (
+          <p className="mt-1 text-xs text-error-fg">
+            {pairedModelErrors[model.name]}
+          </p>
+        )}
         {model.description && (
           <p className="mt-1 text-xs text-description-fg">
             {model.description}
@@ -143,6 +161,8 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
         onChange(variable.name, event.target.value);
         onCommit?.(variable.name, event.target.value);
       }}
+      onBlur={() => onBlur?.(variable.name)}
+      aria-required={variable.required || undefined}
       className={selectClass}
     >
       {(variable.options ?? []).map((option) => (
@@ -155,6 +175,8 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
     <HarnessDropdown
       id={id}
       schemaPath={`vars.${variable.name}`}
+      ariaRequired={variable.required}
+      onBlur={() => onBlur?.(variable.name)}
       value={value}
       onChange={(next) => {
         onChange(variable.name, next);
@@ -174,7 +196,11 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
       value={value}
       onChange={(event) => onChange(variable.name, event.target.value)}
       onFocus={trackFocus}
-      onBlur={commitTextIfEdited}
+      onBlur={() => {
+        commitTextIfEdited?.();
+        onBlur?.(variable.name);
+      }}
+      aria-required={variable.required || undefined}
       onKeyDown={onKeyDown}
       placeholder={`Enter ${variable.name}`}
       rows={3}
@@ -188,7 +214,11 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
       value={value}
       onChange={(event) => onChange(variable.name, event.target.value)}
       onFocus={trackFocus}
-      onBlur={commitTextIfEdited}
+      onBlur={() => {
+        commitTextIfEdited?.();
+        onBlur?.(variable.name);
+      }}
+      aria-required={variable.required || undefined}
       onKeyDown={(event) => {
         onKeyDown?.(event);
         if (event.key === KEYBOARD_KEYS.ENTER && commitTextOnBlur) commitText();
@@ -222,6 +252,11 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
     <div className="form-group min-w-0">
       <FieldLabelRow htmlFor={id} action={paired ? undefined : labelAction}>
         {variable.name}
+        {variable.required && (
+          <span aria-hidden="true" className="ml-1 text-error-fg">
+            *
+          </span>
+        )}
         {isPicker && (
           <span className="ml-1 text-xs text-description-fg">
             ({isDirectory ? "directory" : "file path"})
@@ -234,6 +269,7 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
           {variable.description}
         </p>
       )}
+      {error && <p className="mt-1 text-xs text-error-fg">{error}</p>}
     </div>
   );
 

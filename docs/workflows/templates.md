@@ -18,7 +18,8 @@ Open the **Create Workflow from Template** dialog in any of these ways:
    your default template.
 2. Read the description under the picker, then fill in the **Variables**. Each
    field's helper text comes from the template, and fields with a `default`
-   start filled in. The control depends on the variable's type:
+   start filled in. Required fields have a `*`; **Create** stays disabled
+   until each has a non-blank value. The control depends on the variable's type:
 
    | Type                   | Control                                                                                                                                                                                  |
    | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -132,7 +133,7 @@ steps:
 | `default`          | any             | Pre-fills the input; substituted when the field is left blank.                                                         |
 | `description`      | any             | Helper text shown under the input.                                                                                     |
 | `multiline`        | text            | Renders a resizable textarea instead of a single-line input.                                                           |
-| `required`         | any             | Requires a non-blank value before a workflow can be created. A default pre-fills the required field.                  |
+| `required`         | any             | Requires a non-blank value before a workflow can be created. A default pre-fills the required field.                   |
 | `fileFilter`       | file            | Glob patterns for the file picker (e.g. `["**/*.md"]`).                                                                |
 | `autoFillFilename` | file, directory | Seeds the new workflow's filename from the picked file/folder basename. Only the first variable that declares it wins. |
 

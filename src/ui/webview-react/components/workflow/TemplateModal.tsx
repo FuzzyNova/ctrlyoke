@@ -47,6 +47,11 @@ import { TemplateVariableField } from "./TemplateVariableField";
 
 /** Below this content width the header's scope toggle drops its labels. */
 const TEMPLATE_MODAL_NARROW_PX = 480;
+const REQUIRED_VARIABLE_ERROR = "This field is required";
+
+function isSatisfiedRequiredValue(value: string | undefined): boolean {
+  return Boolean(value?.trim());
+}
 
 interface TemplateModalProps {
   isOpen: boolean;
@@ -176,6 +181,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [filename, setFilename] = useState("");
   const [filenameError, setFilenameError] = useState<string | null>(null);
+  const [variableErrors, setVariableErrors] = useState<Record<string, string>>(
+    {}
+  );
   const [selectedScope, setSelectedScope] = useState<SettingWriteScope>(
     lastSavedTemplateScope
   );
@@ -215,6 +223,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setSelectedTemplateId(initId);
       setFilename("");
       setFilenameError(null);
+      setVariableErrors({});
       setSelectedScope(lastSavedTemplateScope);
       setShowCreateTemplateForm(openCreateTemplateForm);
       setNewTemplateName("");
@@ -247,6 +256,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
     const savedNames = new Set(templateVariableDefaultsSaved.variableNames);
     const refreshedDefaults = seedVariableDefaults(currentTemplate);
+    setVariableErrors({});
     setVariables((previous) => {
       const next = { ...previous };
       for (const name of savedNames) {
@@ -278,6 +288,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const applyPickedPath = useCallback(
     (variable: string, path: string) => {
       setVariables((prev) => ({ ...prev, [variable]: path }));
+      if (isSatisfiedRequiredValue(path)) {
+        setVariableErrors((previous) => {
+          if (!previous[variable]) return previous;
+          const next = { ...previous };
+          delete next[variable];
+          return next;
+        });
+      }
 
       const meta = currentTemplate?.variables?.find((v) => v.name === variable);
       if (meta?.autoFillFilename && !filename) {
@@ -310,6 +328,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       // Update currentTemplate directly from the local list (no round-trip needed)
       const template = templates.find((t) => t.id === templateId) ?? null;
       setVariables(seedVariableDefaults(template));
+      setVariableErrors({});
       setCurrentTemplate(template);
     },
     [templates, setCurrentTemplate]
@@ -366,6 +385,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           ) ?? null;
         setSelectedTemplateId(customTemplateCreated.templateId);
         setVariables(seedVariableDefaults(created));
+        setVariableErrors({});
         setCurrentTemplate(created);
       }
       setShowCreateTemplateForm(false);
@@ -390,6 +410,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // it; the effect below then picks the new harness's default model.
   const handleVariableChange = useCallback(
     (variable: string, value: string) => {
+      if (isSatisfiedRequiredValue(value)) {
+        setVariableErrors((previous) => {
+          if (!previous[variable]) return previous;
+          const next = { ...previous };
+          delete next[variable];
+          return next;
+        });
+      }
       setVariables((prev) => {
         const next = { ...prev, [variable]: value };
         if (prev[variable] !== value) {
@@ -460,6 +488,43 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     return !error;
   }, []);
 
+  const requiredVariables = useMemo(
+    () =>
+      (currentTemplate?.variables ?? []).filter(
+        (variable) => variable.required
+      ),
+    [currentTemplate]
+  );
+  const hasUnsatisfiedRequired = useMemo(
+    () =>
+      requiredVariables.some(
+        (variable) => !isSatisfiedRequiredValue(variables[variable.name])
+      ),
+    [requiredVariables, variables]
+  );
+
+  const validateRequiredVariable = useCallback(
+    (name: string, value = variables[name] ?? "") => {
+      const variable = requiredVariables.find(
+        (candidate) => candidate.name === name
+      );
+      if (!variable) return true;
+      const satisfied = isSatisfiedRequiredValue(value);
+      setVariableErrors((previous) => {
+        if (satisfied) {
+          if (!previous[name]) return previous;
+          const next = { ...previous };
+          delete next[name];
+          return next;
+        }
+        if (previous[name] === REQUIRED_VARIABLE_ERROR) return previous;
+        return { ...previous, [name]: REQUIRED_VARIABLE_ERROR };
+      });
+      return satisfied;
+    },
+    [requiredVariables, variables]
+  );
+
   // Handle filename change
   const handleFilenameChange = useCallback(
     (value: string) => {
@@ -525,7 +590,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // Submit workflow creation
   const handleSubmit = useCallback(
     (runAfter: boolean) => {
-      if (!validateFilename(filename)) return;
+      const filenameIsValid = validateFilename(filename);
+      let requiredVariablesAreValid = true;
+      for (const variable of requiredVariables) {
+        if (!validateRequiredVariable(variable.name)) {
+          requiredVariablesAreValid = false;
+        }
+      }
+      if (!filenameIsValid || !requiredVariablesAreValid) return;
 
       vscode.postMessage({
         type: MESSAGE_TYPES.CREATE_WORKFLOW,
@@ -535,7 +607,15 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         runAfter,
       });
     },
-    [vscode, selectedTemplateId, variables, filename, validateFilename]
+    [
+      vscode,
+      selectedTemplateId,
+      variables,
+      filename,
+      validateFilename,
+      requiredVariables,
+      validateRequiredVariable,
+    ]
   );
 
   // Keyboard handling
@@ -660,14 +740,18 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             <Button
               variant="secondary"
               onClick={() => handleSubmit(false)}
-              disabled={!filename.trim() || !!filenameError}
+              disabled={
+                !filename.trim() || !!filenameError || hasUnsatisfiedRequired
+              }
             >
               Create
             </Button>
             <Button
               variant="primary"
               onClick={() => handleSubmit(true)}
-              disabled={!filename.trim() || !!filenameError}
+              disabled={
+                !filename.trim() || !!filenameError || hasUnsatisfiedRequired
+              }
             >
               Create & Run
             </Button>
@@ -852,6 +936,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                     value={variables[variable.name] ?? ""}
                     values={variables}
                     onChange={handleVariableChange}
+                    error={variableErrors[variable.name]}
+                    pairedModelErrors={Object.fromEntries(
+                      paired.map((model) => [
+                        model.name,
+                        variableErrors[model.name],
+                      ])
+                    )}
+                    onBlur={validateRequiredVariable}
                     pairedModels={paired}
                     modelOptions={modelOptions}
                     harnessStatus={harnessStatus}

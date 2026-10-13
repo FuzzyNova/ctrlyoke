@@ -226,6 +226,8 @@ export interface HarnessDropdownProps {
   value: string;
   onChange: (value: string) => void;
   triggerAriaLabel?: string;
+  ariaRequired?: boolean;
+  onBlur?: () => void;
   triggerTitle?: string;
   /** Schema property represented by this harness selector. */
   schemaPath?: string;
@@ -258,6 +260,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   value,
   onChange,
   triggerAriaLabel,
+  ariaRequired,
+  onBlur,
   triggerTitle,
   schemaPath = "harness",
   showDefault = false,
@@ -508,8 +512,9 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-controls={listboxId}
+          onBlur={onBlur}
           aria-label={schemaAriaLabel(
-            triggerAriaLabel ?? triggerLabel,
+            `${triggerAriaLabel ?? triggerLabel}${ariaRequired ? " (required)" : ""}`,
             schemaPath,
             triggerSchemaValue
           )}

@@ -108,7 +108,7 @@ untouched, so no wire change is needed once both interfaces carry the field.
 
 **Done:** Core/API contract implemented: `required` metadata is parsed and merged through defaults,
 the webview variable type mirrors it, and `createWorkflow` rejects missing/blank required values.
-The modal-specific touchpoints remain for the next step.
+The modal validation, required indicators, and UI tests are implemented.
 
 ### Modal specifics
 
