@@ -962,8 +962,11 @@ function projectHistoryAttempt(
   if (output) {
     // Version 1 timeline lines may still contain the removed aggregate fields.
     // History projections expose prompt/output through the attempt model only.
-    const { prompt: _legacyPrompt, response: _legacyResponse, ...outputFields } =
-      output as CliOutput & { prompt?: string; response?: string };
+    const {
+      prompt: _legacyPrompt,
+      response: _legacyResponse,
+      ...outputFields
+    } = output as CliOutput & { prompt?: string; response?: string };
     projectedOutput = {
       ...outputFields,
       ...(output.structured
@@ -1015,7 +1018,8 @@ function buildHistoryPageText(
     if (
       event.type === CLI_EVENT_TYPES.TEXT ||
       (projection.includeResponse && event.type === CLI_EVENT_TYPES.THINKING)
-    ) continue;
+    )
+      continue;
     parts.push(
       extractor
         .collectStructuredEventsCandidates([event])
@@ -1042,7 +1046,7 @@ function writeHistoryAttemptJson(
       : undefined;
   const responseText = page
     ? page.text
-      : projection.includeResponse
+    : projection.includeResponse
       ? historyAttemptResponseText(attempt)
       : undefined;
   const nextCursor = page?.nextCursor;

@@ -82,7 +82,10 @@ export function getParallelSiblingReferenceErrors(
       for (const match of scanInlinePriorContextRefs(step.prompt)) {
         if (match.ref.kind !== PRIOR_CONTEXT_REFERENCE_KINDS.STEP) continue;
         for (const reference of match.ref.indices) {
-          if (memberNumbers.includes(reference) && reference !== stepIndex + 1) {
+          if (
+            memberNumbers.includes(reference) &&
+            reference !== stepIndex + 1
+          ) {
             errors.push(
               `Step ${stepIndex + 1}: Inline priorContext reference ${reference} cannot target a sibling in parallel group (steps ${memberNumberText})`
             );

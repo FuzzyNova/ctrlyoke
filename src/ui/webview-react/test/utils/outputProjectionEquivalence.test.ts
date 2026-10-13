@@ -79,8 +79,6 @@ function makeStructuredFixture(): WorkflowOutputHistory {
       attemptIndex,
       phase,
       cliOutput: {
-
-
         structured: { events: normalizedEvents, metadata: {} },
         elapsed: 1,
         isStreaming: false,
@@ -158,8 +156,6 @@ function makeStructuredFixture(): WorkflowOutputHistory {
     runIndex: 0,
     attemptIndex: 0,
     cliOutput: {
-
-
       structured: { events: finalNormalized, metadata: {} },
       elapsed: 1,
       isStreaming: false,
@@ -383,7 +379,11 @@ function mapAggregateEventsToMessages(
         aggregate: outputForRows,
       });
     }
-    const hasResponse = getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT).length > 0;
+    const hasResponse =
+      getStepOutputText(
+        { output: entry.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ).length > 0;
     if (hasResponse) {
       messages.push({
         type: "cli",
@@ -403,7 +403,10 @@ function mapAggregateEventsToMessages(
         isActivity: true,
         activityKey: `${identity}:${OUTPUT_ACTIVITY_KINDS.TEXT}:${entry.sequence}`,
         activityKind: OUTPUT_ACTIVITY_KINDS.TEXT,
-        activityText: getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+        activityText: getStepOutputText(
+          { output: entry.cliOutput },
+          StepOutputTextMode.TRANSCRIPT
+        ),
         aggregate: outputForRows,
       });
     }
@@ -530,8 +533,6 @@ describe("activity-free output projection equivalence", () => {
           runIndex: 0,
           attemptIndex: 0,
           cliOutput: {
-
-
             structured: {
               events: [
                 {

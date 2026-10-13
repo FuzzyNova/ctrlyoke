@@ -287,7 +287,10 @@ suite("WorkflowInstance session activity forwarding", () => {
       assert.ok(entry, "expected a persisted CLI history entry for step 0");
 
       const events = entry.cliOutput.structured?.events ?? [];
-      assert.deepStrictEqual(events.map((e: any) => e.type), [CLI_EVENT_TYPES.TEXT]);
+      assert.deepStrictEqual(
+        events.map((e: any) => e.type),
+        [CLI_EVENT_TYPES.TEXT]
+      );
       assert.strictEqual(
         getStepOutputText(
           { output: entry.cliOutput },
@@ -440,12 +443,17 @@ suite("WorkflowInstance session activity forwarding", () => {
         ),
         "done"
       );
-      const followUpEvents = (history.activityEntries ?? []).flatMap((activity: any) => activity.events ?? []);
-      assert.deepStrictEqual(followUpEvents.map((event: any) => event.type), [
-        CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
-        CLI_EVENT_TYPES.TEXT,
-        CLI_EVENT_TYPES.TEXT,
-      ]);
+      const followUpEvents = (history.activityEntries ?? []).flatMap(
+        (activity: any) => activity.events ?? []
+      );
+      assert.deepStrictEqual(
+        followUpEvents.map((event: any) => event.type),
+        [
+          CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+          CLI_EVENT_TYPES.TEXT,
+          CLI_EVENT_TYPES.TEXT,
+        ]
+      );
     } finally {
       await instance?.outputHistoryManager.flushPendingIndexRefresh();
       await fs.rm(tempWorkspace, { recursive: true, force: true });
@@ -540,9 +548,15 @@ suite("WorkflowInstance session activity forwarding", () => {
         (entry: any) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
       ) as any;
       assert.strictEqual(output?.cliOutput?.structured, undefined);
-      assert.ok((history.activityEntries ?? []).some((activity: any) =>
-        activity.events?.some((event: any) => event.type === CLI_EVENT_TYPES.TEXT && event.data.text === " and after.")
-      ));
+      assert.ok(
+        (history.activityEntries ?? []).some((activity: any) =>
+          activity.events?.some(
+            (event: any) =>
+              event.type === CLI_EVENT_TYPES.TEXT &&
+              event.data.text === " and after."
+          )
+        )
+      );
     } finally {
       instance.dispose();
       await fs.rm(tempWorkspace, { recursive: true, force: true });

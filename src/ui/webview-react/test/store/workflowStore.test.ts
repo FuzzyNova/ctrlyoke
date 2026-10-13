@@ -39,8 +39,10 @@ function makePrompt(overrides: Partial<PromptStep> = {}): PromptStep {
 
 function makeOutput(overrides: Partial<CliOutput> = {}): CliOutput {
   return {
-
-    structured: { events: [{ type: "text", data: { text: "world" } }], metadata: {} },
+    structured: {
+      events: [{ type: "text", data: { text: "world" } }],
+      metadata: {},
+    },
     elapsed: 100,
     timestampMs: Date.now(),
     attemptIndex: 0,
@@ -206,12 +208,22 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "first" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "first" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
     expect(store().getStepOutputs(0)).toHaveLength(1);
-    expect(getStepOutputText({ output: store().getStepOutputs(0)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("first");
+    expect(
+      getStepOutputText(
+        { output: store().getStepOutputs(0)[0] },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("first");
   });
 
   it("replaces a streaming entry for the same attemptIndex", () => {
@@ -220,7 +232,13 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "streaming" } }], metadata: {} }, isStreaming: true }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "streaming" } }],
+          metadata: {},
+        },
+        isStreaming: true,
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -228,13 +246,24 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "final" } }], metadata: {} }, isStreaming: false }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "final" } }],
+          metadata: {},
+        },
+        isStreaming: false,
+      }),
       timestampMs: Date.now(),
       sequence: 2,
     });
     // Final replaces streaming entry
     expect(store().getStepOutputs(0)).toHaveLength(1);
-    expect(getStepOutputText({ output: store().getStepOutputs(0)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("final");
+    expect(
+      getStepOutputText(
+        { output: store().getStepOutputs(0)[0] },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("final");
   });
 
   it("appends entries for different steps independently", () => {
@@ -246,7 +275,12 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "step0" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "step0" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -254,12 +288,27 @@ describe("appendLiveEntry (cli)", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "step1" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "step1" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 2,
     });
-    expect(getStepOutputText({ output: store().getStepOutputs(0)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("step0");
-    expect(getStepOutputText({ output: store().getStepOutputs(1)[0] }, StepOutputTextMode.TRANSCRIPT)).toBe("step1");
+    expect(
+      getStepOutputText(
+        { output: store().getStepOutputs(0)[0] },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("step0");
+    expect(
+      getStepOutputText(
+        { output: store().getStepOutputs(1)[0] },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("step1");
   });
 });
 
@@ -479,7 +528,12 @@ describe("appendStreamingEvents", () => {
       runIndex: 0,
       attemptIndex: 0,
       phase: EXECUTION_PHASES.PRE_CONDITION,
-      cliOutput: makeOutput({  structured: { events: [{ type: "text", data: { text: "1 failing" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "1 failing" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 0,
     };
@@ -558,7 +612,6 @@ describe("appendStreamingEvents", () => {
       runIndex: 0,
       attemptIndex: 0,
       cliOutput: makeOutput({
-
         structured: {
           events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done." } }],
           metadata: {},
@@ -574,7 +627,12 @@ describe("appendStreamingEvents", () => {
     ]);
 
     const entry = store().liveOrderedEntries[0] as OrderedCliHistoryEntry;
-    expect(getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT)).toBe("done.\n\nCommitted.");
+    expect(
+      getStepOutputText(
+        { output: entry.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("done.\n\nCommitted.");
   });
 
   it("updates the rendered history snapshot when follow-up activity arrives for a retired run", () => {
@@ -971,7 +1029,10 @@ describe("loadHistoryRun", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
         cliOutput: makeOutput({
-          structured: { events: [{ type: "text", data: { text: "history output" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "history output" } }],
+            metadata: {},
+          },
           timestampMs: 120,
         }),
         timestampMs: 120,
@@ -1002,7 +1063,12 @@ describe("hydrateLiveRunHistory", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       runIndex: 0,
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "persisted" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "persisted" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: 120,
       sequence: 4,
     };
@@ -1042,7 +1108,12 @@ describe("hydrateLiveRunHistory", () => {
 
     store().appendLiveEntry({
       ...persistedEntry,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "buffered replacement" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "buffered replacement" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: 140,
       sequence: store().liveSequence,
     });
@@ -1050,7 +1121,10 @@ describe("hydrateLiveRunHistory", () => {
     expect(store().liveOrderedEntries).toHaveLength(1);
     expect(
       getStepOutputText(
-        { output: (store().liveOrderedEntries[0] as OrderedCliHistoryEntry).cliOutput },
+        {
+          output: (store().liveOrderedEntries[0] as OrderedCliHistoryEntry)
+            .cliOutput,
+        },
         StepOutputTextMode.TRANSCRIPT
       )
     ).toBe("buffered replacement");
@@ -1163,7 +1237,13 @@ describe("snapshot replay structural sharing", () => {
           target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
           runIndex: 0,
           attemptIndex: 0,
-          cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "persisted" } }], metadata: {} }, timestampMs: 120 }),
+          cliOutput: makeOutput({
+            structured: {
+              events: [{ type: "text", data: { text: "persisted" } }],
+              metadata: {},
+            },
+            timestampMs: 120,
+          }),
           timestampMs: 120,
           sequence: 4,
         },
@@ -1192,7 +1272,13 @@ describe("snapshot replay structural sharing", () => {
           kind: OUTPUT_HISTORY_KINDS.CLI,
           target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
           attemptIndex: 0,
-          cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "done" } }], metadata: {} }, timestampMs: 120 }),
+          cliOutput: makeOutput({
+            structured: {
+              events: [{ type: "text", data: { text: "done" } }],
+              metadata: {},
+            },
+            timestampMs: 120,
+          }),
           timestampMs: 120,
           sequence: 2,
         },
@@ -1309,11 +1395,21 @@ describe("getLatestOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "first" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "first" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
-    expect(getStepOutputText({ output: store().getLatestOutput(0) }, StepOutputTextMode.TRANSCRIPT)).toBe("first");
+    expect(
+      getStepOutputText(
+        { output: store().getLatestOutput(0) },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("first");
   });
 
   it("returns null when no outputs", () => {
@@ -1326,7 +1422,12 @@ describe("getLatestOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "ai output" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "ai output" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -1335,11 +1436,21 @@ describe("getLatestOutput", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       phase: EXECUTION_PHASES.END_CONDITION,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "npm test output" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "npm test output" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 2,
     });
-    expect(getStepOutputText({ output: store().getLatestOutput(0) }, StepOutputTextMode.TRANSCRIPT)).toBe("ai output");
+    expect(
+      getStepOutputText(
+        { output: store().getLatestOutput(0) },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("ai output");
   });
 });
 

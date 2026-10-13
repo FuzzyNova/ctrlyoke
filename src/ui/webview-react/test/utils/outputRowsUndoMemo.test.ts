@@ -47,8 +47,6 @@ describe("buildOutputRows undo-action memoization", () => {
           runIndex: 0,
           attemptIndex: 0,
           cliOutput: {
-
-
             elapsed: 1,
             isStreaming: false,
             workingDirectory: "/repo",

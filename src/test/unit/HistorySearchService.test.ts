@@ -67,7 +67,12 @@ suite("HistorySearchService", () => {
           elapsed: 1,
           isStreaming: false,
           structured: {
-            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "older needle response" } }],
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "older needle response" },
+              },
+            ],
             metadata: {},
           },
         }
@@ -218,7 +223,9 @@ suite("HistorySearchService", () => {
       elapsed: 1,
       isStreaming: false,
       structured: {
-        events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: `${term} response` } }],
+        events: [
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: `${term} response` } },
+        ],
         metadata: {},
       },
     });
@@ -403,7 +410,14 @@ suite("HistorySearchService", () => {
           elapsed: 1,
           isStreaming: false,
           structured: {
-            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: `${"a".repeat(80)}snippet-width-term${"b".repeat(90)}` } }],
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: {
+                  text: `${"a".repeat(80)}snippet-width-term${"b".repeat(90)}`,
+                },
+              },
+            ],
             metadata: {},
           },
         }
@@ -565,7 +579,11 @@ suite("HistorySearchService", () => {
       stdoutResults.map((result) => result.eventKind).sort(),
       ["endCondition", "preCondition", "script"]
     );
-    assert.ok(stdoutResults.every((result) => result.matchField === HISTORY_MATCH_FIELDS.OUTPUT));
+    assert.ok(
+      stdoutResults.every(
+        (result) => result.matchField === HISTORY_MATCH_FIELDS.OUTPUT
+      )
+    );
     assert.ok(stdoutResults.every((result) => result.eventKind !== "response"));
   });
 

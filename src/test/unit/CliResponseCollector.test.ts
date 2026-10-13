@@ -39,7 +39,7 @@ suite("CliResponseCollector", () => {
   test("should build cli result and prefer session ID from parsed output", async () => {
     const loggedResponses: Array<{ response: string; statistics?: string }> =
       [];
-      let completedResponses = 0;
+    let completedResponses = 0;
     const debugMessages: string[] = [];
     const originalDebug = Log.debug;
     (Log as unknown as { debug(message: string): void }).debug = (message) =>
@@ -73,7 +73,10 @@ suite("CliResponseCollector", () => {
       });
 
       assert.strictEqual(result.success, true);
-      assert.strictEqual(getTranscriptText(result.parsedOutput.events), "hello world");
+      assert.strictEqual(
+        getTranscriptText(result.parsedOutput.events),
+        "hello world"
+      );
       assert.strictEqual(
         result.cliResult.statistics,
         "Session: session- | Tokens: 1 in / 2 out"
@@ -166,7 +169,7 @@ suite("CliResponseCollector", () => {
 
     const loggedResponses: Array<{ response: string; statistics?: string }> =
       [];
-      let completedResponses = 0;
+    let completedResponses = 0;
     const result = await new CliResponseCollector({
       provider,
       hostCallbacks: {
@@ -375,7 +378,10 @@ suite("CliResponseCollector", () => {
       executionStartTime: new Date(),
     });
 
-    assert.strictEqual(getTranscriptText(result.parsedOutput.events), responseText);
+    assert.strictEqual(
+      getTranscriptText(result.parsedOutput.events),
+      responseText
+    );
   });
 
   test("should preserve stderr for providers with no redaction hook", async () => {

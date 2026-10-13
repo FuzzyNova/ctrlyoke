@@ -8,21 +8,20 @@
 > [Sequencing](#sequencing) (decided 2026-10-13; tracked in
 > [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md)).
 >
-> - Phase 0 is done: the resolver excludes condition attempts from step output
->   while preserving their history records.
-> - Phase 1 chunk 1a is done: the pure diff helper and transcript projection are implemented
->   with tests; no prior-context consumer uses them yet.
-> - Phase 1 chunk 1b is done: prior context renders from structured events, including file changes
->   from earlier attempts, with a shared full-form XML renderer.
-> - Phase 1 chunk 1c is done: the machine-specific diff setting is removed, the interim response
->   extractor emits compact annotations, and the docs describe full prior context.
-> - Truncation detail settled in chunk 1a: an unbroken line larger than its byte cap is cut at
->   a UTF-8 code-point boundary because no line-boundary cut can satisfy the cap.
-> - Phase 1 changes the prompt text that existing `$previous`/`priorContext` workflows send.
-> - Phase 2 changes the persisted timeline format.
-> - Phase 3 adds `$summary:`.
+> - Phase 0: the resolver excludes condition attempts from step output while preserving their
+>   history records.
+> - Phase 1: prior context renders from structured events (`src/core/PriorContextTranscript.ts`,
+>   `src/utils/CliEventDiff.ts`), including earlier attempts' file changes; the
+>   `includeFullDiffsInPriorContext` setting is removed.
+> - Phase 2: `CliOutput.response`/`prompt` are gone; every reader derives text through
+>   `src/utils/StepOutputText.ts`; timeline format is v2 with a v1 legacy read path; the
+>   dashboard has Copy Full Output.
+> - Phase 3: `$summary:` selectors and `priorContextDetail` are live in the parser, schema,
+>   editor, dashboard, docs, and templates.
+> - Detail settled during implementation: an unbroken line larger than its byte cap is cut at a
+>   UTF-8 code-point boundary, because no line-boundary cut can satisfy the cap.
 >
-> Every decision is settled and there are no open questions.
+> The file and line citations below describe the code as it was before implementation.
 >
 > The plan has two parts:
 >

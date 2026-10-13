@@ -118,8 +118,6 @@ suite("HistoryRunDocumentBuilder", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const structuredEvents: CliEvent[] = [];
     const cliOutput: CliOutput = {
-
-
       elapsed: 1,
       isStreaming: false,
       structured: {

@@ -174,23 +174,31 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await manager.saveExecutionOutput(
       filePath,
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-      [{
-        structured: { events: [{ type: "text", data: { text: "script result" } }], metadata: {} },
-        scriptOutput: {
-          command: "npm test",
-          stdout: "script result",
-          stderr: "",
-          exitCode: 0,
+      [
+        {
+          structured: {
+            events: [{ type: "text", data: { text: "script result" } }],
+            metadata: {},
+          },
+          scriptOutput: {
+            command: "npm test",
+            stdout: "script result",
+            stderr: "",
+            exitCode: 0,
+          },
+          elapsed: 0,
+          isStreaming: false,
         },
-        elapsed: 0,
-        isStreaming: false,
-      }]
+      ]
     );
     const events = await recorder.readEvents(filePath);
     const recorded = events.find(
       (event) => event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
     );
-    assert.ok(recorded && recorded.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED);
+    assert.ok(
+      recorded &&
+        recorded.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+    );
     assert.ok(!("scriptOutput" in recorded.payload.cliOutput));
   });
 
@@ -436,8 +444,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     await manager.startStreamingExecutionOutput(filePath, target, {
-
-
       elapsed: 0,
       isStreaming: false,
       timestampMs: 100,
@@ -598,8 +604,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       queueTarget,
       {
-
-        structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: 90,
@@ -651,8 +659,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       target,
       {
-
-        structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: 100,
@@ -675,8 +685,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       target,
       {
-
-        structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: 110,
@@ -838,8 +850,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "draft" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "draft" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 100,
@@ -853,8 +867,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "final" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "final" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 120,
@@ -884,8 +900,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "final-ok" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "final-ok" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 200,
@@ -972,7 +990,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     if (loaded.orderedEntries[1]?.kind !== OUTPUT_HISTORY_KINDS.CLI) {
       assert.fail("expected second ordered entry to be cli output");
     }
-    assert.strictEqual(getStepOutputText({ output: loaded.orderedEntries[1].cliOutput }, StepOutputTextMode.TRANSCRIPT), "final");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: loaded.orderedEntries[1].cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "final"
+    );
     assert.strictEqual(loaded.orderedEntries[1].sequence, 3);
 
     const events = await recorder.readEvents(historyFilePath);
@@ -1007,8 +1031,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-
-      structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: 100,
@@ -1031,7 +1057,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(interruptedOutput?.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(getStepOutputText({ output: interruptedOutput.cliOutput }, StepOutputTextMode.TRANSCRIPT), "raw \n\nparsed");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: interruptedOutput.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "raw \n\nparsed"
+    );
     assert.deepStrictEqual(interruptedOutput.cliOutput.structured?.events, [
       {
         type: CLI_EVENT_TYPES.TEXT,
@@ -1066,8 +1098,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-
-      structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: 100,
@@ -1118,8 +1152,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     manager.setOutputActivityHandler((entry) => liveActivities.push(entry));
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-
-      structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: 100,
@@ -1147,8 +1183,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.saveExecutionOutput(filePath, target, [
       {
-
-
         elapsed: 10,
         isStreaming: false,
         timestampMs: 100,
@@ -1172,7 +1206,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(completedOutput?.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(getStepOutputText({ output: completedOutput.cliOutput }, StepOutputTextMode.TRANSCRIPT), "A1");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: completedOutput.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "A1"
+    );
   });
 
   test("does not re-append streamed deltas once the completed aggregate lands", async () => {
@@ -1187,8 +1227,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const attemptStartedAt = 100;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-
-      structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: attemptStartedAt,
@@ -1202,8 +1244,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     ]);
     await manager.saveExecutionOutput(filePath, target, [
       {
-
-
         elapsed: 30,
         isStreaming: false,
         timestampMs: attemptStartedAt,
@@ -1227,7 +1267,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(output?.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(getStepOutputText({ output: output.cliOutput }, StepOutputTextMode.TRANSCRIPT), "Hello world");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: output.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "Hello world"
+    );
     assert.deepStrictEqual(output.cliOutput.structured?.events, [
       {
         type: CLI_EVENT_TYPES.TEXT,
@@ -1326,8 +1372,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       {
-
-        structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         attemptIndex: 0,
@@ -1376,8 +1424,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         attemptIndex: 0,
         payload: {
           cliOutput: {
-
-            structured: { events: [{ type: "text", data: { text: "draft" } }], metadata: {} },
+            structured: {
+              events: [{ type: "text", data: { text: "draft" } }],
+              metadata: {},
+            },
             elapsed: 1,
             isStreaming: false,
             timestampMs: 100,
@@ -1392,8 +1442,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         attemptIndex: 0,
         payload: {
           cliOutput: {
-
-            structured: { events: [{ type: "text", data: { text: "final" } }], metadata: {} },
+            structured: {
+              events: [{ type: "text", data: { text: "final" } }],
+              metadata: {},
+            },
             elapsed: 1,
             isStreaming: false,
             timestampMs: 100,
@@ -1433,8 +1485,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "ok" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "ok" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 110,
@@ -1498,8 +1552,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "ok" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "ok" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 110,
@@ -1641,8 +1697,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-
-
           structured: {
             events: [
               {
@@ -2249,8 +2303,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "first" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "first" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 100,
@@ -2276,8 +2332,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "second" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "second" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 200,
@@ -2293,8 +2351,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "third" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "third" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 300,
@@ -2413,8 +2473,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-
-          structured: { events: [{ type: "text", data: { text: "first output" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "first output" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 200,

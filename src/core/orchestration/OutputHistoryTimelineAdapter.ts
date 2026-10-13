@@ -62,7 +62,10 @@ export class OutputHistoryTimelineAdapter {
     history: WorkflowOutputHistory
   ): Promise<void> {
     const outputs = new Map<string, CliOutput>();
-    const scriptOutputs = new Map<string, NonNullable<CliOutput["scriptOutput"]>>();
+    const scriptOutputs = new Map<
+      string,
+      NonNullable<CliOutput["scriptOutput"]>
+    >();
     // Deltas are buffered rather than folded in per batch; see
     // `StreamingCliOutputAccumulator` for why that matters on a large run.
     const deltas = new StreamingCliOutputAccumulator();
@@ -81,7 +84,9 @@ export class OutputHistoryTimelineAdapter {
         // delta buffered before it is superseded.
         deltas.discard(key);
         outputs.set(key, event.attempt.output);
-      } else if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION) {
+      } else if (
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION
+      ) {
         scriptOutputs.set(
           getCliEntryKey(
             event.attempt.target,
@@ -174,7 +179,10 @@ export class OutputHistoryTimelineAdapter {
     const orderedEntries: OrderedHistoryEntry[] = [];
     const activityEntries: OutputActivityEntry[] = [];
     const cliEntriesByKey = new Map<string, OrderedCliHistoryEntry>();
-    const scriptOutputs = new Map<string, NonNullable<CliOutput["scriptOutput"]>>();
+    const scriptOutputs = new Map<
+      string,
+      NonNullable<CliOutput["scriptOutput"]>
+    >();
     /**
      * Attempts whose completed aggregate has already been projected. The final
      * `cliOutputRecorded` carries the attempt's *start* timestamp, so it sorts

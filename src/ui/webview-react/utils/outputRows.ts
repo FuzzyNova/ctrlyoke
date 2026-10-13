@@ -44,7 +44,10 @@ import type {
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import { getBackgroundTaskLabel } from "@root/utils/BackgroundWorkHoldText";
-import { getScriptOutputText, getStepOutputText } from "@root/utils/StepOutputText";
+import {
+  getScriptOutputText,
+  getStepOutputText,
+} from "@root/utils/StepOutputText";
 import { StepOutputTextMode } from "@root/types/DashboardConstants";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
@@ -2870,11 +2873,17 @@ export function buildOutputRows(
         !output.isStreaming &&
         (message.isActivity
           ? activityText
-          : getStepOutputText({ output, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT))
+          : getStepOutputText(
+              { output, scriptOutput: output.scriptOutput },
+              StepOutputTextMode.TRANSCRIPT
+            ))
       ) {
         const responseText = message.isActivity
           ? activityText
-          : getStepOutputText({ output, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT);
+          : getStepOutputText(
+              { output, scriptOutput: output.scriptOutput },
+              StepOutputTextMode.TRANSCRIPT
+            );
         if (isScriptOutput(output)) {
           pushScriptOutputRows({
             rows,

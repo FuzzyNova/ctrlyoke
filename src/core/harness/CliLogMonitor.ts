@@ -391,10 +391,7 @@ export class CliLogMonitor {
           sessionId: response.metadata.sessionId || sessionId || undefined,
         };
 
-        this.deps.hostCallbacks.logResponse(
-          responseText,
-          cliResult.statistics
-        );
+        this.deps.hostCallbacks.logResponse(responseText, cliResult.statistics);
 
         watcher?.close();
         if (timeoutHandle) {

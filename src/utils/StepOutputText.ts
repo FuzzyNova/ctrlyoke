@@ -21,7 +21,7 @@ export interface StepOutputSource {
 export function getAssistantText(events: readonly CliEvent[]): string {
   const parts = normalizeCliEvents([...events])
     .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
-    .map((event) => "text" in event.data ? event.data.text : "");
+    .map((event) => ("text" in event.data ? event.data.text : ""));
   return joinResponseText(parts);
 }
 
@@ -31,20 +31,34 @@ export function getTranscriptText(events: readonly CliEvent[]): string {
   for (const event of normalizeCliEvents([...events])) {
     if (event.type === CLI_EVENT_TYPES.TEXT && "text" in event.data) {
       parts.push(event.data.text);
-    } else if (event.type === CLI_EVENT_TYPES.THINKING && "text" in event.data) {
+    } else if (
+      event.type === CLI_EVENT_TYPES.THINKING &&
+      "text" in event.data
+    ) {
       const text = event.data.text.trim();
       if (text) parts.push(`\n[Thinking]\n${text}\n[/Thinking]`);
-    } else if (event.type === CLI_EVENT_TYPES.FILE_WRITE && "path" in event.data) {
+    } else if (
+      event.type === CLI_EVENT_TYPES.FILE_WRITE &&
+      "path" in event.data
+    ) {
       parts.push(`\n[Created: ${event.data.path}]`);
-    } else if (event.type === CLI_EVENT_TYPES.FILE_EDIT && "path" in event.data) {
+    } else if (
+      event.type === CLI_EVENT_TYPES.FILE_EDIT &&
+      "path" in event.data
+    ) {
       const edit = event.data as FileEditData;
       const changes = edit.structuredPatch?.length
         ? countStructuredPatchChanges(edit.structuredPatch)
         : undefined;
-      parts.push(changes
-        ? `\n[Edited: ${edit.path} (+${changes.added}, -${changes.removed})]`
-        : `\n[Edited: ${edit.path}]`);
-    } else if (event.type === CLI_EVENT_TYPES.FILE_DELETE && "path" in event.data) {
+      parts.push(
+        changes
+          ? `\n[Edited: ${edit.path} (+${changes.added}, -${changes.removed})]`
+          : `\n[Edited: ${edit.path}]`
+      );
+    } else if (
+      event.type === CLI_EVENT_TYPES.FILE_DELETE &&
+      "path" in event.data
+    ) {
       parts.push(`\n[Deleted: ${event.data.path}]`);
     } else if (
       event.type === CLI_EVENT_TYPES.TERMINAL_OUTPUT &&

@@ -225,8 +225,6 @@ describe("output pane width bucketing", () => {
         runIndex: 0,
         attemptIndex: 0,
         cliOutput: {
-
-
           elapsed: 1,
           isStreaming: false,
           structured: {

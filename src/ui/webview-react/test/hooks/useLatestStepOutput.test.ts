@@ -17,8 +17,10 @@ import type { CliOutput } from "@/types/messages";
 
 function makeOutput(overrides: Partial<CliOutput> = {}): CliOutput {
   return {
-
-    structured: { events: [{ type: "text", data: { text: "world" } }], metadata: {} },
+    structured: {
+      events: [{ type: "text", data: { text: "world" } }],
+      metadata: {},
+    },
     elapsed: 12.5,
     timestampMs: Date.now(),
     attemptIndex: 0,
@@ -53,7 +55,10 @@ describe("useLatestStepOutput", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput({
-        structured: { events: [{ type: "text", data: { text: "ai output" } }], metadata: {} },
+        structured: {
+          events: [{ type: "text", data: { text: "ai output" } }],
+          metadata: {},
+        },
         elapsed: 138.4,
         tokens: AI_TOKENS,
       }),
@@ -67,7 +72,13 @@ describe("useLatestStepOutput", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       phase: EXECUTION_PHASES.END_CONDITION,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "npm test output" } }], metadata: {} }, elapsed: 0.094 }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "npm test output" } }],
+          metadata: {},
+        },
+        elapsed: 0.094,
+      }),
       timestampMs: Date.now(),
       sequence: 2,
     });
@@ -75,7 +86,12 @@ describe("useLatestStepOutput", () => {
     const { result } = renderHook(() => useLatestStepOutput());
     const latest = result.current(0);
 
-    expect(getStepOutputText({ output: latest ?? undefined }, StepOutputTextMode.TRANSCRIPT)).toBe("ai output");
+    expect(
+      getStepOutputText(
+        { output: latest ?? undefined },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("ai output");
     expect(latest?.elapsed).toBe(138.4);
     expect(latest?.tokens?.contextWindowSize).toBe(1000000);
   });
@@ -90,7 +106,12 @@ describe("useLatestStepOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "attempt 1" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "attempt 1" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -99,7 +120,12 @@ describe("useLatestStepOutput", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       phase: EXECUTION_PHASES.END_CONDITION,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "failed check" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "failed check" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 2,
     });
@@ -107,13 +133,24 @@ describe("useLatestStepOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 1,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "attempt 2" } }], metadata: {} }, attemptIndex: 1 }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "attempt 2" } }],
+          metadata: {},
+        },
+        attemptIndex: 1,
+      }),
       timestampMs: Date.now(),
       sequence: 3,
     });
 
     const { result } = renderHook(() => useLatestStepOutput());
-    expect(getStepOutputText({ output: result.current(0) }, StepOutputTextMode.TRANSCRIPT)).toBe("attempt 2");
+    expect(
+      getStepOutputText(
+        { output: result.current(0) },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("attempt 2");
   });
 });
 
@@ -128,7 +165,13 @@ describe("useFinalStepLatestOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "final ai output" } }], metadata: {} }, tokens: AI_TOKENS }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "final ai output" } }],
+          metadata: {},
+        },
+        tokens: AI_TOKENS,
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -137,13 +180,23 @@ describe("useFinalStepLatestOutput", () => {
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       attemptIndex: 0,
       phase: EXECUTION_PHASES.END_CONDITION,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "npm test output" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "npm test output" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 2,
     });
 
     const { result } = renderHook(() => useFinalStepLatestOutput());
-    expect(getStepOutputText({ output: result.current }, StepOutputTextMode.TRANSCRIPT)).toBe("final ai output");
+    expect(
+      getStepOutputText(
+        { output: result.current },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("final ai output");
     expect(result.current?.tokens?.contextWindowSize).toBe(1000000);
   });
 
@@ -157,7 +210,13 @@ describe("useFinalStepLatestOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "pass 1 output" } }], metadata: {} }, tokens: AI_TOKENS }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "pass 1 output" } }],
+          metadata: {},
+        },
+        tokens: AI_TOKENS,
+      }),
       timestampMs: Date.now(),
       sequence: 1,
     });
@@ -165,18 +224,33 @@ describe("useFinalStepLatestOutput", () => {
     useWorkflowStore.setState({ finalStepLoopCount: 1 });
 
     const { result, rerender } = renderHook(() => useFinalStepLatestOutput());
-    expect(getStepOutputText({ output: result.current }, StepOutputTextMode.TRANSCRIPT)).toBe("pass 1 output");
+    expect(
+      getStepOutputText(
+        { output: result.current },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("pass 1 output");
     expect(result.current?.tokens?.contextWindowSize).toBe(1000000);
 
     store.appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
       attemptIndex: 0,
-      cliOutput: makeOutput({ structured: { events: [{ type: "text", data: { text: "pass 2 output" } }], metadata: {} } }),
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: "text", data: { text: "pass 2 output" } }],
+          metadata: {},
+        },
+      }),
       timestampMs: Date.now(),
       sequence: 2,
     });
     rerender();
-    expect(getStepOutputText({ output: result.current }, StepOutputTextMode.TRANSCRIPT)).toBe("pass 2 output");
+    expect(
+      getStepOutputText(
+        { output: result.current },
+        StepOutputTextMode.TRANSCRIPT
+      )
+    ).toBe("pass 2 output");
   });
 });

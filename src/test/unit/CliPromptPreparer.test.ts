@@ -1376,7 +1376,9 @@ suite("CliPromptPreparer", () => {
         workflowName: "test-workflow",
         promptIndex: 0,
         allPrompts: [{ prompt: "please inspect files" } as PromptStep],
-        resolvePriorContextItems: async () => [{ index: 0, text: "hello", detail: "full" }],
+        resolvePriorContextItems: async () => [
+          { index: 0, text: "hello", detail: "full" },
+        ],
       } as WorkflowContext,
       { priorContext: "allPrevious" } as any,
       undefined
@@ -1524,7 +1526,9 @@ suite("CliPromptPreparer", () => {
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => false,
       buildPriorContextXmlFromItems: (items) => {
-        assert.deepStrictEqual(items, [{ index: 0, text: "prior output", detail: "full" }]);
+        assert.deepStrictEqual(items, [
+          { index: 0, text: "prior output", detail: "full" },
+        ]);
         return priorContextXml;
       },
       getWorkspaceRoot: () => process.cwd(),

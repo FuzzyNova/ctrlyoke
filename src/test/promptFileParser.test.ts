@@ -595,10 +595,7 @@ suite("PromptFileParser Tests", () => {
         workflow: {
           steps: [
             {
-              parallel: [
-                { prompt: "one $summary:step:2" },
-                { prompt: "two" },
-              ],
+              parallel: [{ prompt: "one $summary:step:2" }, { prompt: "two" }],
             },
           ],
         },

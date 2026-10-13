@@ -165,13 +165,19 @@ suite("OutputHistoryTimelineAdapter", () => {
     assert.strictEqual(cliEntries.length, 2);
     assert.strictEqual(
       cliEntries[0].kind === OUTPUT_HISTORY_KINDS.CLI &&
-        getStepOutputText({ output: cliEntries[0].cliOutput }, StepOutputTextMode.TRANSCRIPT),
+        getStepOutputText(
+          { output: cliEntries[0].cliOutput },
+          StepOutputTextMode.TRANSCRIPT
+        ),
       "prompt output",
       "dashboard history retains the AI response as a normal CLI timeline entry"
     );
     assert.strictEqual(
       cliEntries[1].kind === OUTPUT_HISTORY_KINDS.CLI &&
-        getStepOutputText({ output: cliEntries[1].cliOutput }, StepOutputTextMode.TRANSCRIPT),
+        getStepOutputText(
+          { output: cliEntries[1].cliOutput },
+          StepOutputTextMode.TRANSCRIPT
+        ),
       "condition output",
       "history retains condition output on its own phase-tagged attempt"
     );
@@ -341,7 +347,10 @@ suite("OutputHistoryTimelineAdapter", () => {
     );
     assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
     assert.strictEqual(
-      getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: entry.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       "hello world\n[Thinking]\nfirst\n[/Thinking]\n[Thinking]\nsecond\n[/Thinking]"
     );
     assert.deepStrictEqual(
@@ -375,7 +384,13 @@ suite("OutputHistoryTimelineAdapter", () => {
       (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT), "final response");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: entry.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "final response"
+    );
     assert.deepStrictEqual(entry.cliOutput.structured?.events, [
       { type: CLI_EVENT_TYPES.TEXT, data: { text: "final response" } },
     ]);

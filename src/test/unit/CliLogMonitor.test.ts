@@ -355,7 +355,10 @@ suite("CliLogMonitor", () => {
       );
 
       assert.strictEqual(result.success, true);
-      assert.strictEqual(getTranscriptText(result.parsedOutput?.events ?? []), "done");
+      assert.strictEqual(
+        getTranscriptText(result.parsedOutput?.events ?? []),
+        "done"
+      );
       assert.strictEqual(result.sessionId, "sess-1");
     });
   });
@@ -630,7 +633,10 @@ suite("CliLogMonitor", () => {
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(notificationCallCount, 2);
-      assert.strictEqual(getTranscriptText(result.parsedOutput?.events ?? []), "Tests pass.");
+      assert.strictEqual(
+        getTranscriptText(result.parsedOutput?.events ?? []),
+        "Tests pass."
+      );
     });
   });
 
@@ -790,7 +796,10 @@ suite("CliLogMonitor", () => {
         const result = await monitorPromise;
 
         assert.strictEqual(result.success, true);
-        assert.strictEqual(getTranscriptText(result.parsedOutput?.events ?? []), "All good.");
+        assert.strictEqual(
+          getTranscriptText(result.parsedOutput?.events ?? []),
+          "All good."
+        );
         assert.ok(
           notificationCallCount >= 2,
           "expected the hold to have started waiting on a further Stop"

@@ -28,15 +28,21 @@ suite("CliEventDiff", () => {
     );
     assert.ok(formatEditDiff(structured)?.includes("+after"));
     assert.ok(
-      formatEditDiff({ path: "a.txt", oldContent: "old", newContent: "new" })?.includes(
-        "+new"
-      )
+      formatEditDiff({
+        path: "a.txt",
+        oldContent: "old",
+        newContent: "new",
+      })?.includes("+new")
     );
     assert.strictEqual(formatEditDiff({ path: "a.txt" }), undefined);
   });
 
   test("formats created files and counts added and removed patch lines", () => {
-    assert.ok(formatCreatedFileDiff({ path: "new.txt", content: "one\ntwo" }).includes("/dev/null"));
+    assert.ok(
+      formatCreatedFileDiff({ path: "new.txt", content: "one\ntwo" }).includes(
+        "/dev/null"
+      )
+    );
     assert.deepStrictEqual(
       countStructuredPatchChanges([
         {

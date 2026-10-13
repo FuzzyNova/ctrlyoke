@@ -156,7 +156,8 @@ suite("ScriptExecutionReporter", () => {
         () => undefined
       ),
       onScriptOutput: (_target, output) => {
-        if (output.scriptOutput?.stdout) streamed.push(output.scriptOutput.stdout);
+        if (output.scriptOutput?.stdout)
+          streamed.push(output.scriptOutput.stdout);
       },
       onScriptCompletedOutput: (_target, output) => completed.push(output),
     };

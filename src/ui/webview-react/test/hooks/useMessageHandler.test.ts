@@ -1485,7 +1485,10 @@ describe("OUTPUT_HISTORY_LOADED", () => {
         ...persistedEntry,
         cliOutput: {
           ...persistedEntry.cliOutput,
-          structured: { events: [{ type: "text", data: { text: "newer buffered output" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "newer buffered output" } }],
+            metadata: {},
+          },
         },
         timestampMs: 1100,
       });
@@ -1512,7 +1515,10 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     const [liveEntry] = useWorkflowStore.getState().liveOrderedEntries;
     expect(
       liveEntry && "cliOutput" in liveEntry
-        ? getStepOutputText({ output: liveEntry.cliOutput }, StepOutputTextMode.TRANSCRIPT)
+        ? getStepOutputText(
+            { output: liveEntry.cliOutput },
+            StepOutputTextMode.TRANSCRIPT
+          )
         : null
     ).toBe("newer buffered output");
   });
@@ -1912,7 +1918,10 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
     expect(workflow.liveOrderedEntries[0]).toEqual(earlierPersistedEntry);
     expect(
       "cliOutput" in workflow.liveOrderedEntries[1]
-        ? getStepOutputText({ output: workflow.liveOrderedEntries[1].cliOutput }, StepOutputTextMode.TRANSCRIPT)
+        ? getStepOutputText(
+            { output: workflow.liveOrderedEntries[1].cliOutput },
+            StepOutputTextMode.TRANSCRIPT
+          )
         : null
     ).toBe("newer buffered output");
     expect(useUiStore.getState().isViewingHistory).toBe(false);

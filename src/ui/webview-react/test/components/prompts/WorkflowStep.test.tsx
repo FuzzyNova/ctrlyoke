@@ -12,8 +12,10 @@ function buildOutput(
   contextWindowUsed = 10000
 ): CliOutput {
   return {
-
-    structured: { events: [{ type: "text", data: { text: "Done" } }], metadata: {} },
+    structured: {
+      events: [{ type: "text", data: { text: "Done" } }],
+      metadata: {},
+    },
     elapsed: 1,
     isStreaming: false,
     tokens: {

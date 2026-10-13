@@ -151,7 +151,8 @@ suite("PromptDiagnosticRules", () => {
     });
 
     test("accepts summary selectors and diagnoses an unknown summary body", () => {
-      const text = "Merge $summary:step:1,2, then $summary:previous; $summary:nope; $summary.";
+      const text =
+        "Merge $summary:step:1,2, then $summary:previous; $summary:nope; $summary.";
       assert.deepStrictEqual(
         summarize(text, getPriorContextDiagnostics(text, baseContext)),
         ["$summary:nope", "$summary"].map((token) => ({

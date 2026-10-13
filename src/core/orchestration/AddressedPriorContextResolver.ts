@@ -9,13 +9,19 @@ import {
 import type { PriorContextItem } from "../HarnessIntegration";
 import type { PriorContextRequest } from "../../utils/PriorContextMerge";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { RunOutputResolver, type RunOutputProjectionOptions } from "./RunOutputResolver";
+import {
+  RunOutputResolver,
+  type RunOutputProjectionOptions,
+} from "./RunOutputResolver";
 
 export interface PriorContextResolverOptions {
   readonly workspaceRoot?: string;
   readonly historyFilePath?: string;
   readonly outputResolver: RunOutputResolver;
-  readonly projectionOptions?: Omit<RunOutputProjectionOptions, "workspaceRoot">;
+  readonly projectionOptions?: Omit<
+    RunOutputProjectionOptions,
+    "workspaceRoot"
+  >;
 }
 
 /**
@@ -37,11 +43,10 @@ export function createPriorContextResolver({
     if (!workspaceRoot || !historyFilePath) {
       return [];
     }
-    return new AddressedPriorContextResolver(
+    return new AddressedPriorContextResolver(workspaceRoot, outputResolver, {
       workspaceRoot,
-      outputResolver,
-      { workspaceRoot, ...projectionOptions }
-    ).resolve(contexts, (sameRunContexts) =>
+      ...projectionOptions,
+    }).resolve(contexts, (sameRunContexts) =>
       outputResolver.resolvePriorContextItems(
         historyFilePath,
         sameRunContexts,
@@ -62,7 +67,9 @@ export class AddressedPriorContextResolver {
   constructor(
     private readonly workspaceRoot: string,
     private readonly outputResolver: RunOutputResolver,
-    private readonly projectionOptions: RunOutputProjectionOptions = { workspaceRoot }
+    private readonly projectionOptions: RunOutputProjectionOptions = {
+      workspaceRoot,
+    }
   ) {}
 
   async resolve(
@@ -72,12 +79,21 @@ export class AddressedPriorContextResolver {
     ) => Promise<PriorContextItem[]>
   ): Promise<PriorContextItem[]> {
     const local: PriorContextRequest[] = [];
-    const addressed: { address: WorkflowRunAddress; detail: "full" | "summary" }[] = [];
+    const addressed: {
+      address: WorkflowRunAddress;
+      detail: "full" | "summary";
+    }[] = [];
     for (const request of contexts) {
-      const selection = typeof request === "object" && !Array.isArray(request) && "context" in request ? request : undefined;
-      const context = selection ? selection.context : request as PriorContext;
+      const selection =
+        typeof request === "object" &&
+        !Array.isArray(request) &&
+        "context" in request
+          ? request
+          : undefined;
+      const context = selection ? selection.context : (request as PriorContext);
       const detail = selection?.detail ?? "full";
-      if (isWorkflowRunAddress(context)) addressed.push({ address: context, detail });
+      if (isWorkflowRunAddress(context))
+        addressed.push({ address: context, detail });
       else local.push(request);
     }
 

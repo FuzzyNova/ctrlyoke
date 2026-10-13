@@ -61,7 +61,10 @@ import { formatTokenCount } from "@root/utils/TokenFormatting";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 import { formatCreatedFileDiff } from "@root/utils/CliEventDiff";
-import { getScriptOutputText, getStepOutputText } from "@root/utils/StepOutputText";
+import {
+  getScriptOutputText,
+  getStepOutputText,
+} from "@root/utils/StepOutputText";
 import { StepOutputTextMode } from "@root/types/DashboardConstants";
 import type { OutputMessageTarget } from "./outputProjection";
 
@@ -505,9 +508,7 @@ export function generateMarkdownExport(
         const isScript = isScriptOutput(output);
         const stepDisplayName =
           item.stepName ||
-          (isScript
-            ? getFirstWords(output.cliCommand, 3)
-            : "");
+          (isScript ? getFirstWords(output.cliCommand, 3) : "");
         const stepLabel = isFinalStep
           ? `${formatFinalPassLabel(stepNum)}${item.stepName ? `: ${item.stepName}` : ""}`
           : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
@@ -543,10 +544,28 @@ export function generateMarkdownExport(
         lines.push("");
         lines.push(fenceLiteral(getScriptOutputText(output.scriptOutput)));
         lines.push("");
-      } else if (getStepOutputText({ output: output as CliOutputType, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT)) {
+      } else if (
+        getStepOutputText(
+          {
+            output: output as CliOutputType,
+            scriptOutput: output.scriptOutput,
+          },
+          StepOutputTextMode.TRANSCRIPT
+        )
+      ) {
         if (includeMetadata) lines.push("### Response");
         lines.push("");
-        lines.push(fenceLiteral(getStepOutputText({ output: output as CliOutputType, scriptOutput: output.scriptOutput }, StepOutputTextMode.TRANSCRIPT)));
+        lines.push(
+          fenceLiteral(
+            getStepOutputText(
+              {
+                output: output as CliOutputType,
+                scriptOutput: output.scriptOutput,
+              },
+              StepOutputTextMode.TRANSCRIPT
+            )
+          )
+        );
         lines.push("");
       }
 

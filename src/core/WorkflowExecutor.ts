@@ -3827,22 +3827,22 @@ export class WorkflowExecutor {
     const tokens = this.resolveTokenCounts(parsedOutput);
     const ptyTail = integration.getLastFailureOutput?.();
     const terminalEvent = ptyTail
-      ? [{
-          type: CLI_EVENT_TYPES.TERMINAL_OUTPUT,
-          data: {
-            text: ptyTail,
-            reason:
-              errorMessage ??
-              "Harness process exited",
+      ? [
+          {
+            type: CLI_EVENT_TYPES.TERMINAL_OUTPUT,
+            data: {
+              text: ptyTail,
+              reason: errorMessage ?? "Harness process exited",
+            },
           },
-        }]
+        ]
       : [];
-    const structuredEvents = [
-      ...(structured?.events ?? []),
-      ...terminalEvent,
-    ];
+    const structuredEvents = [...(structured?.events ?? []), ...terminalEvent];
     if (structuredEvents.length) {
-      structured = { ...(structured ?? { metadata: {} }), events: structuredEvents };
+      structured = {
+        ...(structured ?? { metadata: {} }),
+        events: structuredEvents,
+      };
     }
 
     return {
@@ -4178,11 +4178,9 @@ export class WorkflowExecutor {
         resolve(completed);
       };
 
-      const disposable = integration.onResponseComplete(
-        () => {
-          finish(true);
-        }
-      );
+      const disposable = integration.onResponseComplete(() => {
+        finish(true);
+      });
 
       if (abortSignal) {
         abortListener = () => finish(false);

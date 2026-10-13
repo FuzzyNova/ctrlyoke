@@ -308,10 +308,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         >
           <span className="text-xxs text-description-fg">Detail</span>
           {(
-            [
-              PRIOR_CONTEXT_DETAILS.FULL,
-              PRIOR_CONTEXT_DETAILS.SUMMARY,
-            ] as const
+            [PRIOR_CONTEXT_DETAILS.FULL, PRIOR_CONTEXT_DETAILS.SUMMARY] as const
           ).map((option) => (
             <button
               key={option}

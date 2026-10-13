@@ -1,6 +1,9 @@
 import { isScriptStep, type WorkflowStep } from "../types/CtrlYokeTypes";
 import { hasStarted } from "../utils/StepStatusDerivation";
-import { formatInlinePriorContextBody, scanInlinePriorContextRefs } from "../utils/FileReferenceParser";
+import {
+  formatInlinePriorContextBody,
+  scanInlinePriorContextRefs,
+} from "../utils/FileReferenceParser";
 import { PRIOR_CONTEXT_REFERENCE_KINDS } from "../types/DashboardConstants";
 
 export interface StepReferenceRenumberingResult {
@@ -79,7 +82,9 @@ export function renumberStepReferences(
       });
     }
 
-    const renumberInlineReferences = (text: string | undefined): string | undefined => {
+    const renumberInlineReferences = (
+      text: string | undefined
+    ): string | undefined => {
       if (typeof text !== "string") return text;
       let rewritten = text;
       const matches = scanInlinePriorContextRefs(text).filter(
@@ -104,7 +109,9 @@ export function renumberStepReferences(
             }
             return [];
           }
-          return [targetNewIndex === undefined ? reference : targetNewIndex + 1];
+          return [
+            targetNewIndex === undefined ? reference : targetNewIndex + 1,
+          ];
         });
         const body = formatInlinePriorContextBody({ ...match.ref, indices });
         rewritten = `${rewritten.slice(0, match.startOffset)}$${body}${rewritten.slice(match.endOffset)}`;
@@ -115,10 +122,18 @@ export function renumberStepReferences(
     const endCondition = step.endCondition && {
       ...step.endCondition,
       ...(step.endCondition.retryPrompt !== undefined
-        ? { retryPrompt: renumberInlineReferences(step.endCondition.retryPrompt) }
+        ? {
+            retryPrompt: renumberInlineReferences(
+              step.endCondition.retryPrompt
+            ),
+          }
         : {}),
       ...(step.endCondition.passRetryPrompt !== undefined
-        ? { passRetryPrompt: renumberInlineReferences(step.endCondition.passRetryPrompt) }
+        ? {
+            passRetryPrompt: renumberInlineReferences(
+              step.endCondition.passRetryPrompt
+            ),
+          }
         : {}),
     };
 

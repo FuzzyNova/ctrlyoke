@@ -1700,7 +1700,10 @@ export class CliTerminalFormatter {
       case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
         CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as { text: string; reason: string };
-        writeEventLine(chalk.yellow(`● Terminal output (${data.reason})`), chalk.yellow);
+        writeEventLine(
+          chalk.yellow(`● Terminal output (${data.reason})`),
+          chalk.yellow
+        );
         writeBoundedEventDetail(data.text, MAX_PREVIEW_LINES, "  ");
         console.log();
         break;

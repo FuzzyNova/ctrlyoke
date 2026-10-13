@@ -772,7 +772,9 @@ suite("WorkflowInstance finalStep replay", () => {
       outputs: [
         {
           structured: {
-            events: [{ type: "text", data: { text: "completed-final-output" } }],
+            events: [
+              { type: "text", data: { text: "completed-final-output" } },
+            ],
             metadata: {},
           },
           elapsed: 1.2,
@@ -788,7 +790,7 @@ suite("WorkflowInstance finalStep replay", () => {
       workingDirectory: process.cwd(),
       timestampMs: Date.now(),
       attemptIndex: 0,
-          accumulatedText: "streaming-final-output",
+      accumulatedText: "streaming-final-output",
       accumulatedEvents: [
         {
           type: "text",

@@ -17,8 +17,10 @@ describe("outputProjection", () => {
         target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
         attemptIndex: 0,
         cliOutput: {
-
-          structured: { events: [{ type: "text", data: { text: "final response" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "final response" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1000,
@@ -54,8 +56,10 @@ describe("outputProjection", () => {
         runIndex: 2,
         attemptIndex: 0,
         cliOutput: {
-
-          structured: { events: [{ type: "text", data: { text: "explicit run" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "explicit run" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1000,
@@ -68,8 +72,10 @@ describe("outputProjection", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 1,
         cliOutput: {
-
-          structured: { events: [{ type: "text", data: { text: "fallback run" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "fallback run" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1001,
@@ -92,7 +98,10 @@ describe("outputProjection", () => {
         attemptIndex: 0,
         phase: "worktreeSetup",
         cliOutput: {
-          structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: true,
           source: "worktreeSetup",
@@ -110,7 +119,10 @@ describe("outputProjection", () => {
         attemptIndex: 0,
         phase: "worktreeSetup",
         cliOutput: {
-          structured: { events: [{ type: "text", data: { text: "installed packages" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "installed packages" } }],
+            metadata: {},
+          },
           elapsed: 22,
           isStreaming: false,
           source: "worktreeSetup",
@@ -132,7 +144,10 @@ describe("outputProjection", () => {
         isStreaming: false,
         structured: {
           events: [
-            { type: CLI_EVENT_TYPES.TEXT, data: { text: "installed packages" } },
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "installed packages" },
+            },
           ],
           metadata: {},
         },
@@ -279,8 +294,10 @@ describe("outputProjection", () => {
           runIndex: 0,
           attemptIndex: 0,
           cliOutput: {
-
-            structured: { events: [{ type: "text", data: { text: "done" } }], metadata: {} },
+            structured: {
+              events: [{ type: "text", data: { text: "done" } }],
+              metadata: {},
+            },
             elapsed: 12,
             isStreaming: false,
             timestampMs: 1000,
@@ -295,7 +312,10 @@ describe("outputProjection", () => {
           attemptIndex: 0,
           phase: EXECUTION_PHASES.END_CONDITION,
           cliOutput: {
-            structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+            structured: {
+              events: [{ type: "text", data: { text: "" } }],
+              metadata: {},
+            },
             elapsed: 0.2,
             isStreaming: false,
             cliCommand: "npm test",
@@ -445,9 +465,11 @@ describe("outputProjection", () => {
           runIndex: 0,
           attemptIndex: 0,
           cliOutput: {
-
             cliCommand: "claude -p ...",
-            structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+            structured: {
+              events: [{ type: "text", data: { text: "" } }],
+              metadata: {},
+            },
             elapsed: 0,
             isStreaming: false,
             timestampMs: 1000,

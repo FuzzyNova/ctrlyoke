@@ -224,8 +224,17 @@ export function getInvalidPriorContextSummaryDiagnostics(
 ): PromptDiagnostic[] {
   const codeRanges = findCodeRanges(text);
   const diagnostics: PromptDiagnostic[] = [];
-  for (const match of text.matchAll(createInlinePriorContextReferencePattern())) {
-    if (!(match[1] === PRIOR_CONTEXT_DETAILS.SUMMARY || match[1].startsWith(PRIOR_CONTEXT_SUMMARY_PREFIX)) || parseInlinePriorContextBody(match[1])) continue;
+  for (const match of text.matchAll(
+    createInlinePriorContextReferencePattern()
+  )) {
+    if (
+      !(
+        match[1] === PRIOR_CONTEXT_DETAILS.SUMMARY ||
+        match[1].startsWith(PRIOR_CONTEXT_SUMMARY_PREFIX)
+      ) ||
+      parseInlinePriorContextBody(match[1])
+    )
+      continue;
     const from = match.index;
     const to = from + match[0].length;
     if (isInCodeRange(from, to, codeRanges)) continue;

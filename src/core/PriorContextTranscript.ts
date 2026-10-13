@@ -112,7 +112,11 @@ function utf8Bytes(text: string): number {
   return encoder.encode(text).byteLength;
 }
 
-function codePointSlice(text: string, maxBytes: number, keepEnd: boolean): string {
+function codePointSlice(
+  text: string,
+  maxBytes: number,
+  keepEnd: boolean
+): string {
   const points = Array.from(text);
   const selected: string[] = [];
   let bytes = 0;
@@ -132,8 +136,7 @@ export function boundPriorContextText(
   text: string,
   maxBytes: number,
   keep:
-    | typeof PRIOR_CONTEXT_TRUNCATION.HEAD
-    | typeof PRIOR_CONTEXT_TRUNCATION.TAIL
+    typeof PRIOR_CONTEXT_TRUNCATION.HEAD | typeof PRIOR_CONTEXT_TRUNCATION.TAIL
 ): PriorContextText {
   const totalBytes = utf8Bytes(text);
   if (totalBytes <= maxBytes) return { text };
@@ -148,7 +151,11 @@ export function boundPriorContextText(
     if (keptBytes + lineBytes > maxBytes) {
       const remaining = maxBytes - keptBytes;
       if (remaining > 0) {
-        const partial = codePointSlice(line, remaining, keep === PRIOR_CONTEXT_TRUNCATION.TAIL);
+        const partial = codePointSlice(
+          line,
+          remaining,
+          keep === PRIOR_CONTEXT_TRUNCATION.TAIL
+        );
         kept.push(partial);
         keptBytes += utf8Bytes(partial);
       }
@@ -160,8 +167,9 @@ export function boundPriorContextText(
 
   let keptText: string;
   if (kept.length > 0) {
-    keptText =
-      (keep === PRIOR_CONTEXT_TRUNCATION.HEAD ? kept : kept.reverse()).join("");
+    keptText = (
+      keep === PRIOR_CONTEXT_TRUNCATION.HEAD ? kept : kept.reverse()
+    ).join("");
   } else {
     // A single overlong line has no possible line-boundary cut within the cap.
     keptText = codePointSlice(
@@ -182,7 +190,11 @@ export function boundPriorContextText(
   };
 }
 
-function isFailed(data: { status?: string; success?: boolean; error?: string }): boolean {
+function isFailed(data: {
+  status?: string;
+  success?: boolean;
+  error?: string;
+}): boolean {
   return (
     data.status === OPERATION_STATUS.FAILED ||
     data.success === false ||
@@ -211,18 +223,28 @@ function diffLineCounts(diff: string): { added: number; removed: number } {
       oldLines: 0,
       newStart: 0,
       newLines: 0,
-      lines: lines.filter((line) => !line.startsWith("---") && !line.startsWith("+++")),
+      lines: lines.filter(
+        (line) => !line.startsWith("---") && !line.startsWith("+++")
+      ),
     },
   ]);
 }
 
-function projectEvent(event: CliEvent): PriorContextTranscriptEntry | undefined {
+function projectEvent(
+  event: CliEvent
+): PriorContextTranscriptEntry | undefined {
   if (event.priorContextExcluded) return undefined;
   switch (event.type) {
     case CLI_EVENT_TYPES.TEXT:
-      return { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT, text: (event.data as { text: string }).text };
+      return {
+        kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT,
+        text: (event.data as { text: string }).text,
+      };
     case CLI_EVENT_TYPES.THINKING:
-      return { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING, text: (event.data as { text: string }).text };
+      return {
+        kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING,
+        text: (event.data as { text: string }).text,
+      };
     case CLI_EVENT_TYPES.FILE_EDIT: {
       const data = event.data as FileEditData;
       const diff = isFailed(data) ? undefined : formatEditDiff(data);
@@ -284,7 +306,8 @@ function projectEvent(event: CliEvent): PriorContextTranscriptEntry | undefined 
           PRIOR_CONTEXT_LIMITS.COMMAND_OUTPUT_TAIL_BYTES,
           PRIOR_CONTEXT_TRUNCATION.TAIL
         ),
-        ...(isFailed(data) || (data.exitCode !== undefined && data.exitCode !== 0)
+        ...(isFailed(data) ||
+        (data.exitCode !== undefined && data.exitCode !== 0)
           ? { failed: true }
           : {}),
       };
@@ -385,5 +408,7 @@ export function projectPriorContextTranscript(
 ): PriorContextTranscriptEntry[] {
   return normalizeCliEvents(events)
     .map(projectEvent)
-    .filter((entry): entry is PriorContextTranscriptEntry => entry !== undefined);
+    .filter(
+      (entry): entry is PriorContextTranscriptEntry => entry !== undefined
+    );
 }

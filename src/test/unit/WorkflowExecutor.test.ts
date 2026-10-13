@@ -4241,7 +4241,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.ok(state.steps[0]?._runtime?.completedAt);
     assert.deepStrictEqual(integration.sentPrompts, ["pause-after-me"]);
     assert.strictEqual(
-      getStepOutputText({ output: completedOutput }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: completedOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       "done:pause-after-me"
     );
     assert.strictEqual(typeof completedOutput?.elapsed, "number");
@@ -4392,7 +4395,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(captureCalls.length, 1);
     assert.strictEqual(captureCalls[0].stepIndex, 0);
     assert.strictEqual(
-      getStepOutputText({ output: captureCalls[0].output }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: captureCalls[0].output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       "partial response before stop"
     );
     assert.strictEqual(captureCalls[0].output.errorMessage, undefined);
@@ -4780,7 +4786,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       "CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)"
     );
     assert.match(
-      getStepOutputText({ output: captureCalls[0].output }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: captureCalls[0].output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       /unknown option '--poopy'/
     );
     assert.strictEqual(captureCalls[0].output.rawTextOutput, true);
@@ -4806,7 +4815,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     });
     assert.strictEqual(historySaves[0].cliOutputs.length, 1);
     assert.match(
-      getStepOutputText({ output: historySaves[0].cliOutputs[0] }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: historySaves[0].cliOutputs[0] },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       /unknown option '--poopy'/
     );
   });

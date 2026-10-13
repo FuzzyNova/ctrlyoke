@@ -98,7 +98,9 @@ function getZeroHeightStructuredEventReason(
         ? null
         : "missing-thinking-text";
     case CLI_EVENT_TYPES.TERMINAL_OUTPUT:
-      return (row.event.data as { text?: string }).text ? null : "missing-terminal-output";
+      return (row.event.data as { text?: string }).text
+        ? null
+        : "missing-terminal-output";
     case CLI_EVENT_TYPES.FILE_EDIT:
     case CLI_EVENT_TYPES.FILE_WRITE:
     case CLI_EVENT_TYPES.FILE_READ:

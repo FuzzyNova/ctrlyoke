@@ -92,7 +92,10 @@ suite("StreamingCliOutputAccumulator", () => {
     accumulator.discard(KEY);
 
     assert.deepStrictEqual([...accumulator.keys()], [other]);
-    assert.strictEqual(accumulator.flush(KEY, streamingOutput()).scriptOutput?.stdout, "");
+    assert.strictEqual(
+      accumulator.flush(KEY, streamingOutput()).scriptOutput?.stdout,
+      ""
+    );
     assert.strictEqual(
       accumulator.flush(other, streamingOutput()).scriptOutput?.stdout,
       "kept"

@@ -99,13 +99,19 @@ export function mergePriorContextReferences(
   const detailByQueueIndex = new Map<number, PriorContextDetail>();
 
   const setFullWins = (index: number, detail: PriorContextDetail) => {
-    if (detail === PRIOR_CONTEXT_DETAILS.FULL || !detailByQueueIndex.has(index)) {
+    if (
+      detail === PRIOR_CONTEXT_DETAILS.FULL ||
+      !detailByQueueIndex.has(index)
+    ) {
       detailByQueueIndex.set(index, detail);
     }
   };
   for (const request of requests) {
-    const wrapped = typeof request === "object" && !Array.isArray(request) && "context" in request;
-    const context = wrapped ? request.context : request as PriorContext;
+    const wrapped =
+      typeof request === "object" &&
+      !Array.isArray(request) &&
+      "context" in request;
+    const context = wrapped ? request.context : (request as PriorContext);
     const detail = wrapped ? request.detail : PRIOR_CONTEXT_DETAILS.FULL;
     const requestedPrevious =
       context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS
@@ -116,16 +122,20 @@ export function mergePriorContextReferences(
 
     if (context === PRIOR_CONTEXT_KEYWORDS.ALL) {
       includeAllQueue = true;
-      if (detail === PRIOR_CONTEXT_DETAILS.FULL) allQueueDetail = PRIOR_CONTEXT_DETAILS.FULL;
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        allQueueDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (requestedPrevious > 0) {
       previousCount = Math.max(previousCount, requestedPrevious);
-      if (detail === PRIOR_CONTEXT_DETAILS.FULL) previousDetail = PRIOR_CONTEXT_DETAILS.FULL;
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        previousDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
       includeAllFinalSteps = true;
-      if (detail === PRIOR_CONTEXT_DETAILS.FULL) allFinalStepsDetail = PRIOR_CONTEXT_DETAILS.FULL;
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        allFinalStepsDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
       includePreviousFinalStep = true;
-      if (detail === PRIOR_CONTEXT_DETAILS.FULL) finalStepDetail = PRIOR_CONTEXT_DETAILS.FULL;
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        finalStepDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (Array.isArray(context)) {
       for (const oneBasedIndex of context) {
         const index = oneBasedIndex - 1;

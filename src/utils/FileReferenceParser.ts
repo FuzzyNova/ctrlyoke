@@ -653,11 +653,28 @@ export interface FileReference {
 
 export type InlinePriorContextRef =
   /** `$previous` (no count) or `$previous:N` (the last N outputs). */
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS; count?: number; detail?: PriorContextDetail }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL; detail?: PriorContextDetail }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP; detail?: PriorContextDetail }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP; detail?: PriorContextDetail }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.STEP; indices: number[]; detail?: PriorContextDetail };
+  | {
+      kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS;
+      count?: number;
+      detail?: PriorContextDetail;
+    }
+  | {
+      kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL;
+      detail?: PriorContextDetail;
+    }
+  | {
+      kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP;
+      detail?: PriorContextDetail;
+    }
+  | {
+      kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP;
+      detail?: PriorContextDetail;
+    }
+  | {
+      kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.STEP;
+      indices: number[];
+      detail?: PriorContextDetail;
+    };
 
 export interface InlinePriorContextMatch {
   ref: InlinePriorContextRef;
@@ -904,8 +921,12 @@ export function parseInlinePriorContextBody(
   body: string
 ): { ref: InlinePriorContextRef; length: number } | null {
   const summary = body.startsWith(PRIOR_CONTEXT_SUMMARY_PREFIX);
-  const selector = summary ? body.slice(PRIOR_CONTEXT_SUMMARY_PREFIX.length) : body;
-  const detail = summary ? PRIOR_CONTEXT_DETAILS.SUMMARY : PRIOR_CONTEXT_DETAILS.FULL;
+  const selector = summary
+    ? body.slice(PRIOR_CONTEXT_SUMMARY_PREFIX.length)
+    : body;
+  const detail = summary
+    ? PRIOR_CONTEXT_DETAILS.SUMMARY
+    : PRIOR_CONTEXT_DETAILS.FULL;
   switch (selector) {
     case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
     case PRIOR_CONTEXT_REFERENCE_KINDS.ALL:
@@ -937,7 +958,10 @@ export function parseInlinePriorContextBody(
     }
     return {
       ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices, detail },
-      length: (summary ? PRIOR_CONTEXT_SUMMARY_PREFIX.length : 0) + stepPrefix.length + rangeText.length,
+      length:
+        (summary ? PRIOR_CONTEXT_SUMMARY_PREFIX.length : 0) +
+        stepPrefix.length +
+        rangeText.length,
     };
   }
 
@@ -952,7 +976,10 @@ export function parseInlinePriorContextBody(
 export function formatInlinePriorContextBody(
   ref: InlinePriorContextRef
 ): string {
-  const prefix = ref.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? PRIOR_CONTEXT_SUMMARY_PREFIX : "";
+  const prefix =
+    ref.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+      ? PRIOR_CONTEXT_SUMMARY_PREFIX
+      : "";
   switch (ref.kind) {
     case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
       return `${prefix}${ref.count === undefined ? ref.kind : `${ref.kind}:${ref.count}`}`;

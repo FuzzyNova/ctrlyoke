@@ -509,10 +509,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                     ? liveOutputRedactor.push(chunk)
                     : chunk;
                   if (safeChunk) {
-                    this.deps.hostCallbacks.onStreamingEvents([{
-                      type: CLI_EVENT_TYPES.TEXT,
-                      data: { text: safeChunk },
-                    }]);
+                    this.deps.hostCallbacks.onStreamingEvents([
+                      {
+                        type: CLI_EVENT_TYPES.TEXT,
+                        data: { text: safeChunk },
+                      },
+                    ]);
                   }
                 }
               }
@@ -521,10 +523,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       } finally {
         const tail = liveOutputRedactor?.flush();
         if (tail) {
-          this.deps.hostCallbacks.onStreamingEvents([{
-            type: CLI_EVENT_TYPES.TEXT,
-            data: { text: tail },
-          }]);
+          this.deps.hostCallbacks.onStreamingEvents([
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: tail },
+            },
+          ]);
         }
       }
 

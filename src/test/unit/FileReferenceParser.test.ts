@@ -803,7 +803,11 @@ suite("FileReferenceParser", () => {
     test("skips invalid step ranges", () => {
       const refs = parseInlinePriorContextRefs("$step:abc $step:3-1 $step:2");
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [2], detail: "full" });
+      assert.deepStrictEqual(refs[0].ref, {
+        kind: "step",
+        indices: [2],
+        detail: "full",
+      });
     });
 
     test("allows punctuation after keyword tokens", () => {
@@ -837,7 +841,11 @@ suite("FileReferenceParser", () => {
         "First review $step:1,4, then tell me which design you think is better"
       );
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [1, 4], detail: "full" });
+      assert.deepStrictEqual(refs[0].ref, {
+        kind: "step",
+        indices: [1, 4],
+        detail: "full",
+      });
       assert.strictEqual(refs[0].token, "$step:1,4");
     });
 
@@ -850,7 +858,11 @@ suite("FileReferenceParser", () => {
       const text = "Look at $previous:3, then fix it";
       const refs = parseInlinePriorContextRefs(text);
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "previous", count: 3, detail: "full" });
+      assert.deepStrictEqual(refs[0].ref, {
+        kind: "previous",
+        count: 3,
+        detail: "full",
+      });
       assert.strictEqual(refs[0].token, "$previous:3");
       assert.strictEqual(
         text.slice(refs[0].startOffset, refs[0].endOffset),
@@ -906,7 +918,11 @@ suite("FileReferenceParser", () => {
         "step:1,2,3,5"
       );
       assert.strictEqual(
-        formatInlinePriorContextBody({ kind: "step", indices: [1, 4, 5], detail: "summary" }),
+        formatInlinePriorContextBody({
+          kind: "step",
+          indices: [1, 4, 5],
+          detail: "summary",
+        }),
         "summary:step:1,4,5"
       );
     });
@@ -919,7 +935,14 @@ suite("FileReferenceParser", () => {
     });
 
     test("rejects unknown and malformed bodies", () => {
-      for (const body of ["previously", "previous:", "previous:-1", "step:", "summary:", "summary:nope"]) {
+      for (const body of [
+        "previously",
+        "previous:",
+        "previous:-1",
+        "step:",
+        "summary:",
+        "summary:nope",
+      ]) {
         assert.strictEqual(parseInlinePriorContextBody(body), null, body);
       }
     });

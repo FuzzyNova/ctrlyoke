@@ -8,7 +8,10 @@ import {
   type TargetAttemptCompleteData,
 } from "../../core/OutputCaptureBuffer";
 import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
-import { CLI_EVENT_TYPES, FINAL_STEP_PHASES } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  FINAL_STEP_PHASES,
+} from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
@@ -280,10 +283,10 @@ suite("OutputCaptureBuffer", () => {
       assert.ok(chunkCall);
       assert.strictEqual(chunkCall!.args[1], "partial response");
       const events = buffer.getBufferedOutput(0)?.structured?.events ?? [];
-      assert.deepStrictEqual(events.map((event) => event.type), [
-        "tool_call",
-        CLI_EVENT_TYPES.TEXT,
-      ]);
+      assert.deepStrictEqual(
+        events.map((event) => event.type),
+        ["tool_call", CLI_EVENT_TYPES.TEXT]
+      );
     });
 
     test("should reset accumulated output for a new attempt or run", () => {
@@ -1066,7 +1069,9 @@ suite("OutputCaptureBuffer", () => {
       assert.strictEqual(fpCall!.args[1].isStreaming, true);
       assert.ok(
         fpCall!.args[1].structured?.events?.some(
-          (event: any) => event.type === CLI_EVENT_TYPES.TEXT && event.data?.text === "fp response"
+          (event: any) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            event.data?.text === "fp response"
         )
       );
       assert.ok(

@@ -16,7 +16,13 @@ import { inlinePriorContextRefToPriorContext } from "../../utils/PriorContextMer
 suite("prior-context XML", () => {
   test("formats queue, script, and final-loop values supplied by the resolver", () => {
     const xml = buildPriorContextXmlFromItems([
-      { index: 0, name: "plan", prompt: "plan it", text: "answer", detail: "full" },
+      {
+        index: 0,
+        name: "plan",
+        prompt: "plan it",
+        text: "answer",
+        detail: "full",
+      },
       {
         index: 1,
         name: "test",
@@ -174,27 +180,86 @@ suite("prior-context XML", () => {
   });
 
   test("renders every full transcript entry and escapes event attributes", () => {
-    const xml = buildPriorContextXmlFromItems([{
-      index: 0,
-      detail: "full",
-      transcript: [
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING, text: "consider" },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.EDIT, path: 'src/a&".ts', added: 2, removed: 1, diff: { text: "--- a/a\n+++ b/a\n@@ -1 +1,2 @@\n-old\n+new\n+line", omitted: "end", omittedBytes: 22 } },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE, path: "src/new.ts", added: 1, diff: { text: "+new" } },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE, path: "src/old.ts", failed: true },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND, command: "npm test", exitCode: 1, output: { text: "failed", omitted: "start", omittedBytes: 90 }, failed: true },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ, path: "src/a.ts", lineStart: 3, lineEnd: 8 },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL, name: "server/tool", arguments: { text: "{\"x\":1}" }, result: { text: "done" } },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH, query: "A & B", results: [{ title: "Result", url: "https://example.test" }] },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION, questions: [{ question: "Continue?", options: [] }] },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER, text: "Keep going" },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT, text: "crashed", reason: "exit & failed" },
-      ],
-      earlierAttempts: { count: 2, filesChanged: [{ path: "src/old.ts", operation: "deleted", added: 0, removed: 0 }] },
-    }]);
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        detail: "full",
+        transcript: [
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING,
+            text: "consider",
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.EDIT,
+            path: 'src/a&".ts',
+            added: 2,
+            removed: 1,
+            diff: {
+              text: "--- a/a\n+++ b/a\n@@ -1 +1,2 @@\n-old\n+new\n+line",
+              omitted: "end",
+              omittedBytes: 22,
+            },
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE,
+            path: "src/new.ts",
+            added: 1,
+            diff: { text: "+new" },
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE,
+            path: "src/old.ts",
+            failed: true,
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND,
+            command: "npm test",
+            exitCode: 1,
+            output: { text: "failed", omitted: "start", omittedBytes: 90 },
+            failed: true,
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ,
+            path: "src/a.ts",
+            lineStart: 3,
+            lineEnd: 8,
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL,
+            name: "server/tool",
+            arguments: { text: '{"x":1}' },
+            result: { text: "done" },
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH,
+            query: "A & B",
+            results: [{ title: "Result", url: "https://example.test" }],
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION,
+            questions: [{ question: "Continue?", options: [] }],
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER,
+            text: "Keep going",
+          },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT,
+            text: "crashed",
+            reason: "exit & failed",
+          },
+        ],
+        earlierAttempts: {
+          count: 2,
+          filesChanged: [
+            { path: "src/old.ts", operation: "deleted", added: 0, removed: 0 },
+          ],
+        },
+      },
+    ]);
 
     for (const fragment of [
-      '<thinking>\nconsider\n</thinking>',
+      "<thinking>\nconsider\n</thinking>",
       '<edit path="src/a&amp;&quot;.ts" added="2" removed="1" omitted="end" omittedBytes="22">',
       '<create path="src/new.ts" added="1">',
       '<delete path="src/old.ts" failed="true"/>',
@@ -202,33 +267,54 @@ suite("prior-context XML", () => {
       '<read path="src/a.ts" lines="3-8"/>',
       '<tool name="server/tool">',
       '<search query="A &amp; B">',
-      '<question>',
-      '<userSteer>\nKeep going\n</userSteer>',
+      "<question>",
+      "<userSteer>\nKeep going\n</userSteer>",
       '<terminalOutput reason="exit &amp; failed">\ncrashed\n</terminalOutput>',
-      '<earlierAttempts count="2">\n<filesChanged>\nRemoved src/old.ts +0 -0',
-    ]) assert.ok(xml.includes(fragment), `missing ${fragment}: ${xml}`);
+      '<earlierAttempts count="2">\n<filesChanged>\nRemoved src/old.ts',
+    ])
+      assert.ok(xml.includes(fragment), `missing ${fragment}: ${xml}`);
   });
 
   test("renders summary as a bounded text projection with prompt head and net files", () => {
     const prompt = `head\n${"p".repeat(PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES + 32)}`;
     const response = `${"r".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES + 24)}\nconclusion`;
-    const xml = buildPriorContextXmlFromItems([{
-      index: 0,
-      detail: "summary",
-      prompt,
-      transcript: [
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING, text: "omit thinking" },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT, text: response },
-        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND, command: "omit command", exitCode: 0, output: { text: "omit output" } },
-      ],
-      filesChanged: [{ path: "src/added.ts", operation: "created", added: 2, removed: 0 }],
-    }]);
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        detail: "summary",
+        prompt,
+        transcript: [
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING,
+            text: "omit thinking",
+          },
+          { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT, text: response },
+          {
+            kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND,
+            command: "omit command",
+            exitCode: 0,
+            output: { text: "omit output" },
+          },
+        ],
+        filesChanged: [
+          { path: "src/added.ts", operation: "created", added: 2, removed: 0 },
+        ],
+      },
+    ]);
 
     assert.ok(xml.includes('<step index="1" detail="summary">'));
-    assert.ok(xml.includes(`<prompt omitted="end" omittedBytes="${Buffer.byteLength(prompt) - PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES}">`));
-    assert.ok(xml.includes(`<response omitted="start" omittedBytes="${Buffer.byteLength(response) - PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES}">`));
+    assert.ok(
+      xml.includes(
+        `<prompt omitted="end" omittedBytes="${Buffer.byteLength(prompt) - PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES}">`
+      )
+    );
+    assert.ok(
+      xml.includes(
+        `<response omitted="start" omittedBytes="${Buffer.byteLength(response) - PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES}">`
+      )
+    );
     assert.ok(xml.includes("conclusion"));
-    assert.ok(xml.includes("Added src/added.ts +2 -0"));
+    assert.ok(xml.includes("Added src/added.ts +2\n"), xml);
     assert.ok(!xml.includes("omit thinking"));
     assert.ok(!xml.includes("omit command"));
   });

@@ -505,7 +505,10 @@ describe("useStepContextMenu", () => {
       <TestHarness
         step={{ prompt: "Original prompt" }}
         latestOutput={{
-          structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "" } }],
+            metadata: {},
+          },
           elapsed: 4.2,
           isStreaming: true,
           tokens: {

@@ -260,8 +260,15 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           responseKind: "ai",
           payload: {
             cliOutput: {
-
-              structured: { events: [{ type: "text", data: { text: options.responseText ?? `output-${suffix}` } }], metadata: {} },
+              structured: {
+                events: [
+                  {
+                    type: "text",
+                    data: { text: options.responseText ?? `output-${suffix}` },
+                  },
+                ],
+                metadata: {},
+              },
               elapsed: 1,
               isStreaming: options.isStreaming ?? false,
             },
@@ -1122,10 +1129,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("reads an interrupted attempt's text from streamed events", async () => {
     const server = await setup();
-    const run = await createRun("interrupted-output", "2026-01-01T00-00-00-000Z", {
-      responseText: "",
-      isStreaming: true,
-    });
+    const run = await createRun(
+      "interrupted-output",
+      "2026-01-01T00-00-00-000Z",
+      {
+        responseText: "",
+        isStreaming: true,
+      }
+    );
     const recorder = new TimelineRecorder();
     await recorder.appendEvents(
       WorkflowPaths.manifestPath(workspaceRoot, run.workflowKey, run.runRef),

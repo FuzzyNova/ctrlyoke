@@ -297,11 +297,12 @@ export class SessionActivityRecorder {
     let existingOutput: CliOutput | LegacyCliOutputV1 | undefined;
     if (historyFilePath) {
       try {
-        existingOutput = (
-          await this.port.outputHistoryManager
-            .getRunOutputResolver()
-            .resolveAttempt(historyFilePath, target, runIndex, attemptIndex)
-        )?.output ?? undefined;
+        existingOutput =
+          (
+            await this.port.outputHistoryManager
+              .getRunOutputResolver()
+              .resolveAttempt(historyFilePath, target, runIndex, attemptIndex)
+          )?.output ?? undefined;
       } catch (error) {
         Log.warn(
           `[inst:${this.port.id.slice(0, 8)}] Failed to resolve attempt for resumed session activity:`,
@@ -312,9 +313,10 @@ export class SessionActivityRecorder {
 
     const existingEvents = existingOutput?.structured?.events ?? [];
     const entryKey = getCliEntryKey(target, runIndex, attemptIndex);
-    const hasFollowUpDivider = existingEvents.some(
-      (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-    ) || this.followUpDividerKeys.has(entryKey);
+    const hasFollowUpDivider =
+      existingEvents.some(
+        (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+      ) || this.followUpDividerKeys.has(entryKey);
     const eventsToAppend: CliEvent[] =
       contentEvents.length > 0 && existingOutput && !hasFollowUpDivider
         ? [
@@ -326,7 +328,11 @@ export class SessionActivityRecorder {
             ...contentEvents,
           ]
         : contentEvents;
-    if (eventsToAppend.some((event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED)) {
+    if (
+      eventsToAppend.some(
+        (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+      )
+    ) {
       this.followUpDividerKeys.add(entryKey);
     }
 

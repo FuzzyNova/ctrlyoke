@@ -113,8 +113,10 @@ function buildStatsRow(tokens: TokenStats): OutputRenderRow {
     estimateSize: 24,
     rowKind: OUTPUT_ROW_KINDS.STATS,
     output: {
-
-      structured: { events: [{ type: "text", data: { text: "response" } }], metadata: {} },
+      structured: {
+        events: [{ type: "text", data: { text: "response" } }],
+        metadata: {},
+      },
       elapsed: 1,
       isStreaming: false,
       tokens,

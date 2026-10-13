@@ -409,7 +409,14 @@ export class CliPromptPreparer {
             [
               ...(resolvedPriorContext &&
               resolvedPriorContext !== PRIOR_CONTEXT_KEYWORDS.NONE
-                ? [{ context: resolvedPriorContext, detail: workflowContext?.resolvedProperties?.priorContextDetail ?? "full" }]
+                ? [
+                    {
+                      context: resolvedPriorContext,
+                      detail:
+                        workflowContext?.resolvedProperties
+                          ?.priorContextDetail ?? "full",
+                    },
+                  ]
                 : []),
               ...inlineRefs.map((ref) => inlinePriorContextRefToSelection(ref)),
             ],

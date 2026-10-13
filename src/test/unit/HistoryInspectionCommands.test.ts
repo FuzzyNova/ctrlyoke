@@ -1174,8 +1174,10 @@ suite("CLI history inspection command handlers", () => {
           responseKind: "ai",
           payload: {
             cliOutput: {
-
-              structured: { events: [{ type: "text", data: { text: largeOutput } }], metadata: {} },
+              structured: {
+                events: [{ type: "text", data: { text: largeOutput } }],
+                metadata: {},
+              },
               elapsed: 1,
               isStreaming: false,
             },
@@ -2833,7 +2835,14 @@ suite("CLI history inspection command handlers", () => {
     );
     const io = new TestIo();
     await showHistoryCommand(
-      { workflow: key, run: "3", step: "0", json: true, summary: true, limit: "200" },
+      {
+        workflow: key,
+        run: "3",
+        step: "0",
+        json: true,
+        summary: true,
+        limit: "200",
+      },
       io,
       dependencies(
         new TestLineageRepository([key], new Map(), new Map()),
@@ -2842,7 +2851,10 @@ suite("CLI history inspection command handlers", () => {
       )
     );
     const record = JSON.parse(io.output[0]) as { responseText: string };
-    assert.strictEqual(record.responseText, "answer\n[Thinking]\nreasoning\n[/Thinking]");
+    assert.strictEqual(
+      record.responseText,
+      "answer\n[Thinking]\nreasoning\n[/Thinking]"
+    );
     assert.strictEqual(record.responseText.match(/\[Thinking\]/g)?.length, 1);
   });
 
@@ -3699,15 +3711,15 @@ async function createDeepSearchRun(
       attemptIndex: 0,
       payload: {
         cliOutput: {
-
-
           elapsed: 1,
           isStreaming: false,
           structured: {
             events: [
               {
                 type: CLI_EVENT_TYPES.TEXT,
-                data: { text: `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}` },
+                data: {
+                  text: `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}`,
+                },
               },
             ],
             metadata: {},

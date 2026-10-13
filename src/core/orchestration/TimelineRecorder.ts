@@ -239,12 +239,15 @@ export class TimelineRecorder {
         assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
         let nextSequence = manifest.nextSequence;
 
-        const events: WorkflowTimelineEvent[] = drafts.map((draft) => ({
-          ...draft,
-          workflowId: manifest.workflowId,
-          runId: manifest.runId,
-          sequence: nextSequence++,
-        }) as WorkflowTimelineEvent);
+        const events: WorkflowTimelineEvent[] = drafts.map(
+          (draft) =>
+            ({
+              ...draft,
+              workflowId: manifest.workflowId,
+              runId: manifest.runId,
+              sequence: nextSequence++,
+            }) as WorkflowTimelineEvent
+        );
         const redactedEvents = secretRedactionService.redactValue(events);
 
         await fs.promises.appendFile(

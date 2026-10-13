@@ -883,8 +883,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         const data = event.data as { text: string; reason: string };
         return (
           <div className="rounded border border-panel-border bg-input-bg px-3 py-2 font-mono text-xs">
-            <div className="mb-1 text-description-fg">Terminal output · {data.reason}</div>
-            <pre className="whitespace-pre-wrap wrap-break-word">{data.text}</pre>
+            <div className="mb-1 text-description-fg">
+              Terminal output · {data.reason}
+            </div>
+            <pre className="whitespace-pre-wrap wrap-break-word">
+              {data.text}
+            </pre>
           </div>
         );
       }
@@ -1323,8 +1327,7 @@ const CliHeaderRowView: React.FC<{
     : null;
   const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
-  const stepDisplayName =
-      row.stepName?.trim() ?? "";
+  const stepDisplayName = row.stepName?.trim() ?? "";
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
   );

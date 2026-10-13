@@ -29,20 +29,29 @@ suite("AddressedPriorContextResolver", () => {
     let addressedDetail: string | undefined;
     const resolver = {
       getManifest: async () => ({ completedAt: 1 }),
-      resolveAllPriorContextItems: async (_manifest: string, _options: unknown, detail: string) => {
+      resolveAllPriorContextItems: async (
+        _manifest: string,
+        _options: unknown,
+        detail: string
+      ) => {
         addressedDetail = detail;
         return [
-        { index: 0, prompt: "source", text: "source output", detail: "full" },
+          { index: 0, prompt: "source", text: "source output", detail: "full" },
         ];
       },
     } as unknown as RunOutputResolver;
     const result = await new AddressedPriorContextResolver(
       workspaceRoot,
       resolver
-    ).resolve(["previous", { context: { workflowKey, runRef }, detail: "summary" }], async (local) => {
-      assert.deepStrictEqual(local, ["previous"]);
-      return [{ index: 0, prompt: "local", text: "local output", detail: "full" }];
-    });
+    ).resolve(
+      ["previous", { context: { workflowKey, runRef }, detail: "summary" }],
+      async (local) => {
+        assert.deepStrictEqual(local, ["previous"]);
+        return [
+          { index: 0, prompt: "local", text: "local output", detail: "full" },
+        ];
+      }
+    );
 
     assert.deepStrictEqual(
       result.map((item) => item.text),
@@ -63,7 +72,9 @@ suite("AddressedPriorContextResolver", () => {
       resolver
     ).resolve([{ previous: 3 }], async (local) => {
       assert.deepStrictEqual(local, [{ previous: 3 }]);
-      return [{ index: 0, prompt: "local", text: "local output", detail: "full" }];
+      return [
+        { index: 0, prompt: "local", text: "local output", detail: "full" },
+      ];
     });
 
     assert.deepStrictEqual(

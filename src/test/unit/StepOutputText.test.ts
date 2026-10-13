@@ -4,7 +4,10 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import type { ScriptRuntimeOutput } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, StepOutputTextMode } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  StepOutputTextMode,
+} from "../../types/DashboardConstants";
 import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
 import {
   getAssistantText,
@@ -17,7 +20,10 @@ suite("StepOutputText", () => {
     const events: CliEvent[] = [
       { type: CLI_EVENT_TYPES.TEXT, data: { text: "answer" } },
       { type: CLI_EVENT_TYPES.THINKING, data: { text: "reasoning" } },
-      { type: CLI_EVENT_TYPES.TERMINAL_OUTPUT, data: { text: "tail", reason: "exit" } },
+      {
+        type: CLI_EVENT_TYPES.TERMINAL_OUTPUT,
+        data: { text: "tail", reason: "exit" },
+      },
     ];
     assert.strictEqual(getAssistantText(events), "answer");
   });
@@ -30,7 +36,10 @@ suite("StepOutputText", () => {
       exitCode: 0,
     };
     const expected = sanitizeTerminalOutput(
-      [scriptOutput.stdout, scriptOutput.stderr].filter(Boolean).join("\n").trim()
+      [scriptOutput.stdout, scriptOutput.stderr]
+        .filter(Boolean)
+        .join("\n")
+        .trim()
     );
     assert.strictEqual(getScriptOutputText(scriptOutput), expected);
     assert.strictEqual(
@@ -41,7 +50,10 @@ suite("StepOutputText", () => {
 
   test("legacy output remains a fallback when no events or script record exist", () => {
     assert.strictEqual(
-      getStepOutputText({ output: { response: "legacy", elapsed: 0, isStreaming: false } }, StepOutputTextMode.ASSISTANT),
+      getStepOutputText(
+        { output: { response: "legacy", elapsed: 0, isStreaming: false } },
+        StepOutputTextMode.ASSISTANT
+      ),
       "legacy"
     );
   });
@@ -55,17 +67,39 @@ suite("StepOutputText", () => {
       .readFileSync(fixturePath, "utf8")
       .trim()
       .split(/\r?\n/)
-      .map((line) => JSON.parse(line) as { payload: { cliOutput: { response?: string; prompt?: string; elapsed: number; isStreaming: boolean; structured?: { events: CliEvent[]; metadata: object } } } });
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            payload: {
+              cliOutput: {
+                response?: string;
+                prompt?: string;
+                elapsed: number;
+                isStreaming: boolean;
+                structured?: { events: CliEvent[]; metadata: object };
+              };
+            };
+          }
+      );
     assert.strictEqual(
-      getStepOutputText({ output: records[0].payload.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: records[0].payload.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       "AI legacy text"
     );
     assert.strictEqual(
-      getStepOutputText({ output: records[1].payload.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: records[1].payload.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       "script legacy text"
     );
     assert.strictEqual(
-      getStepOutputText({ output: records[2].payload.cliOutput }, StepOutputTextMode.TRANSCRIPT),
+      getStepOutputText(
+        { output: records[2].payload.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       "process failed\nterminal tail"
     );
   });

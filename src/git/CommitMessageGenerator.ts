@@ -114,9 +114,7 @@ async function writeCommitMessageLineageKey(
 export function resolveCommitMessageFallback(
   attempt: ResolvedRunAttemptValue | undefined
 ): string | undefined {
-  if (
-    attempt?.terminalState !== TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
-  ) {
+  if (attempt?.terminalState !== TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED) {
     return undefined;
   }
   const assistantText = getAssistantText(
@@ -753,14 +751,18 @@ export class CommitMessageGenerator {
         );
       }
 
-      const attempts = workflowKey && runRef
-        ? await instance.outputHistoryManager
-            .getRunOutputResolver()
-            .resolveLatestAttempts(
-              instance.outputHistoryManager.getHistoryFilePath(workflowKey, runRef),
-              [{ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }]
-            )
-        : new Map();
+      const attempts =
+        workflowKey && runRef
+          ? await instance.outputHistoryManager
+              .getRunOutputResolver()
+              .resolveLatestAttempts(
+                instance.outputHistoryManager.getHistoryFilePath(
+                  workflowKey,
+                  runRef
+                ),
+                [{ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }]
+              )
+          : new Map();
       const firstAttempt = attempts.get("queue:0");
       const responseText = resolveCommitMessageFallback(firstAttempt);
       if (responseText === undefined) {

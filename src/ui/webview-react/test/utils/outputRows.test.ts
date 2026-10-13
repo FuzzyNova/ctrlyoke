@@ -56,9 +56,11 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-
               cliCommand: "npm test",
-              structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+              structured: {
+                events: [{ type: "text", data: { text: "" } }],
+                metadata: {},
+              },
               elapsed: 0,
               isStreaming: false,
               ...(source ? { source } : {}),
@@ -173,8 +175,10 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-          structured: { events: [{ type: "text", data: { text: "first" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "first" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
         },
@@ -681,7 +685,10 @@ describe("outputRows", () => {
           elapsed: 1,
           isStreaming: false,
           workingDirectory: "/repo",
-          structured: { events: [fileEvent(`src/file-${index}.ts`)], metadata: {} },
+          structured: {
+            events: [fileEvent(`src/file-${index}.ts`)],
+            metadata: {},
+          },
         },
       })) as OutputMessage[],
       steps: [{ name: "auth" }, { name: "database" }] as WorkflowStep[],
@@ -833,8 +840,6 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-
-
             elapsed: 0,
             isStreaming: false,
             structured: {
@@ -924,8 +929,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0,
           isStreaming: false,
           structured: {
@@ -1018,8 +1021,6 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-
-
             elapsed: 0,
             isStreaming: false,
             structured: {
@@ -1096,7 +1097,6 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-
             cliCommand: "npm test",
             scriptOutput: { command: "npm test", stdout: "PASS", stderr: "" },
             elapsed: 1.2,
@@ -1166,8 +1166,6 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-
-
               elapsed: 0,
               isStreaming: true,
               structured: {
@@ -1229,7 +1227,6 @@ describe("outputRows", () => {
         timestamp: 1000,
         phase: EXECUTION_PHASES.PRE_CONDITION,
         data: {
-
           cliCommand: "npm run pre",
           scriptOutput: { command: "npm run pre", stdout: "", stderr: "" },
           elapsed: 0,
@@ -1243,7 +1240,6 @@ describe("outputRows", () => {
         timestamp: 1001,
         phase: EXECUTION_PHASES.END_CONDITION,
         data: {
-
           cliCommand: "npm run end",
           scriptOutput: { command: "npm run end", stdout: "", stderr: "" },
           elapsed: 0,
@@ -1291,9 +1287,11 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
           cliCommand: "copilot -p",
-          structured: { events: [{ type: "text", data: { text: "Done." } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "Done." } }],
+            metadata: {},
+          },
           elapsed: 1.2,
           isStreaming: false,
           tokens: { prompt: 10, completion: 5 },
@@ -1341,10 +1339,12 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-
             cliCommand: "Actual injected prompt text",
             cliCommandWasInjected: true,
-            structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+            structured: {
+              events: [{ type: "text", data: { text: "" } }],
+              metadata: {},
+            },
             elapsed: 0,
             isStreaming: false,
           },
@@ -1385,8 +1385,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1419,8 +1417,10 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-          structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: true,
         },
@@ -1475,8 +1475,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1549,8 +1547,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1640,8 +1636,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1681,8 +1675,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -1948,7 +1940,8 @@ describe("outputRows", () => {
       steps,
       finalStep: null,
       streamingChunks: {
-        [getStreamingChunkKey(0)]: "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
+        [getStreamingChunkKey(0)]:
+          "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
       },
       finalStepStreamingChunks: {},
       isExecutionActive: false,
@@ -1969,7 +1962,8 @@ describe("outputRows", () => {
       steps,
       finalStep: null,
       streamingChunks: {
-        [getStreamingChunkKey(0)]: "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
+        [getStreamingChunkKey(0)]:
+          "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
       },
       finalStepStreamingChunks: {},
       isExecutionActive: false,
@@ -2077,8 +2071,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2151,8 +2143,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2218,8 +2208,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2296,8 +2284,6 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-
-
               elapsed: 0.5,
               isStreaming: false,
               structured: {
@@ -2362,8 +2348,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2455,8 +2439,6 @@ describe("outputRows", () => {
         attemptIndex: 0,
         runIndex: 0,
         data: {
-
-
           elapsed: 0.5,
           isStreaming: false,
           structured: {
@@ -2560,8 +2542,6 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-
-
               elapsed: 0.5,
               isStreaming: false,
               structured: {
@@ -2647,8 +2627,10 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-
-            structured: { events: [{ type: "text", data: { text: "done" } }], metadata: {} },
+            structured: {
+              events: [{ type: "text", data: { text: "done" } }],
+              metadata: {},
+            },
             elapsed: 0.5,
             isStreaming: false,
           },
@@ -2904,7 +2886,6 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-
               cliCommand: "npm test",
               ...(options.response !== undefined
                 ? {
@@ -3089,8 +3070,17 @@ describe("outputRows", () => {
             attemptIndex: 0,
             runIndex: 0,
             data: {
-
-              structured: { events: [{ type: "text", data: { text: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 2) } }], metadata: {} },
+              structured: {
+                events: [
+                  {
+                    type: "text",
+                    data: {
+                      text: scriptLines(SCRIPT_OUTPUT_LINES_PER_ROW * 2),
+                    },
+                  },
+                ],
+                metadata: {},
+              },
               elapsed: 1,
               isStreaming: false,
             },

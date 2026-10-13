@@ -96,7 +96,7 @@ suite("FormatMigrations", () => {
             const loadedSettings = new FileConfigBackend(fixturePath).getAll();
             const hasRetiredPriorContextSetting = Boolean(
               loadedSettings.general &&
-                "includeFullDiffsInPriorContext" in loadedSettings.general
+              "includeFullDiffsInPriorContext" in loadedSettings.general
             );
             assert.strictEqual(
               validateSettings(loadedSettings),

@@ -682,7 +682,10 @@ suite("CliExecutionRunner", () => {
         logPath: "session.jsonl",
         dispatchedPromptText: session.promptArgument,
       });
-      assert.strictEqual(getTranscriptText(session.parsedOutput?.events ?? []), "the real answer");
+      assert.strictEqual(
+        getTranscriptText(session.parsedOutput?.events ?? []),
+        "the real answer"
+      );
       assert.deepStrictEqual(session.parsedOutput, parsedOutput);
       assert.strictEqual(session.effectiveSessionId, "session-1");
       // The OpenCode completion plugin reads its notification directory from

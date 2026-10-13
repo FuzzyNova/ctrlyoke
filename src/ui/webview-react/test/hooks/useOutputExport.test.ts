@@ -16,8 +16,10 @@ function makeCliMessage(
     target: { kind: FINAL_STEP_PHASES.QUEUE, index },
     timestamp,
     data: {
-
-      structured: { events: [{ type: "text", data: { text: response } }], metadata: {} },
+      structured: {
+        events: [{ type: "text", data: { text: response } }],
+        metadata: {},
+      },
       elapsed: 1,
       isStreaming: false,
     },

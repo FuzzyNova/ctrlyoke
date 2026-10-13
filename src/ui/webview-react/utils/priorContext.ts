@@ -26,8 +26,7 @@ export function formatPriorContextLabel(
   value: PriorContext,
   detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL
 ): string {
-  const suffix =
-    detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? " · summary" : "";
+  const suffix = detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? " · summary" : "";
   if (isPreviousStepsPriorContext(value)) {
     return `${PRIOR_CONTEXT_SELECT_OPTIONS_META.previous.label} ${value.previous}${suffix}`;
   }

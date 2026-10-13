@@ -84,8 +84,6 @@ function output(
   } = {}
 ): CliOutputRecordedEvent {
   const cliOutput: CliOutput = {
-
-
     elapsed: 0,
     isStreaming: sequence < 100,
     timestampMs: options.timestampMs ?? sequence,

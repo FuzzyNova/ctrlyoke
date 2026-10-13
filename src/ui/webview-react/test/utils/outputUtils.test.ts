@@ -403,7 +403,12 @@ describe("generateMarkdownExport", () => {
         attemptIndex: 0,
         data: {
           structured: {
-            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "Here is my analysis..." } }],
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "Here is my analysis..." },
+              },
+            ],
             metadata: {},
           },
         },
@@ -830,14 +835,24 @@ describe("generateMarkdownExport", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
         timestamp: 3000,
         attemptIndex: 0,
-        data: { structured: { events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "second" } }], metadata: {} } },
+        data: {
+          structured: {
+            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "second" } }],
+            metadata: {},
+          },
+        },
       },
       {
         type: "cli" as const,
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
-        data: { structured: { events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "first" } }], metadata: {} } },
+        data: {
+          structured: {
+            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "first" } }],
+            metadata: {},
+          },
+        },
       },
     ];
     const md = generateMarkdownExport(outputs, metadata);
@@ -864,7 +879,12 @@ describe("generateMarkdownExport", () => {
         attemptIndex: 0,
         data: {
           structured: {
-            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "error: unknown option '--poopy'" } }],
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "error: unknown option '--poopy'" },
+              },
+            ],
             metadata: {},
           },
         },
@@ -889,7 +909,9 @@ describe("generateMarkdownExport", () => {
         attemptIndex: 0,
         data: {
           structured: {
-            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "final response" } }],
+            events: [
+              { type: CLI_EVENT_TYPES.TEXT, data: { text: "final response" } },
+            ],
             metadata: {},
           },
         },
@@ -920,14 +942,34 @@ describe("generateMarkdownExport", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
         timestamp: 3000,
         attemptIndex: 0,
-        data: { structured: { events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "legacy queue second" } }], metadata: {} } },
+        data: {
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "legacy queue second" },
+              },
+            ],
+            metadata: {},
+          },
+        },
       },
       {
         type: "cli" as const,
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
-        data: { structured: { events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "legacy queue first" } }], metadata: {} } },
+        data: {
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "legacy queue first" },
+              },
+            ],
+            metadata: {},
+          },
+        },
       },
     ];
     const orderedEntries: OrderedHistoryEntry[] = [
@@ -947,8 +989,10 @@ describe("generateMarkdownExport", () => {
         target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
         attemptIndex: 0,
         cliOutput: {
-
-          structured: { events: [{ type: "text", data: { text: "canonical final" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "canonical final" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1000,
@@ -986,7 +1030,12 @@ describe("generateMarkdownExport redaction", () => {
       attemptIndex: 0,
       data: {
         structured: {
-          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "export API_TOKEN=abcdef0123456789" } }],
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "export API_TOKEN=abcdef0123456789" },
+            },
+          ],
           metadata: {},
         },
       },

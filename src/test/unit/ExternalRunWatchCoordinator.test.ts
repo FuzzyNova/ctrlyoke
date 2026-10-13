@@ -105,10 +105,15 @@ class TestBroadcast implements ExternalRunWatchBroadcast {
     this.cliOutputs.push({
       workflowId,
       stepIndex,
-      response: getStepOutputText({ output: output }, StepOutputTextMode.TRANSCRIPT),
+      response: getStepOutputText(
+        { output: output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       isStreaming: output.isStreaming,
     });
-    this.notificationOrder.push(`output:${getStepOutputText({ output: output }, StepOutputTextMode.TRANSCRIPT)}`);
+    this.notificationOrder.push(
+      `output:${getStepOutputText({ output: output }, StepOutputTextMode.TRANSCRIPT)}`
+    );
   }
   notifyCliPromptsExtended(): void {}
   updateStepStatus(
@@ -296,7 +301,10 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
       );
 
       await history.startStreamingExecutionOutput(historyPath, target, {
-        structured: { events: [{ type: "text", data: { text: "" } }], metadata: {} },
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: Date.now(),
@@ -314,7 +322,10 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       await history.startStreamingExecutionOutput(historyPath, target, {
-        structured: { events: [{ type: "text", data: { text: "first second" } }], metadata: {} },
+        structured: {
+          events: [{ type: "text", data: { text: "first second" } }],
+          metadata: {},
+        },
         elapsed: 1,
         isStreaming: false,
         timestampMs: Date.now(),
@@ -377,7 +388,10 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
         historyPath,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          structured: { events: [{ type: "text", data: { text: "final tail" } }], metadata: {} },
+          structured: {
+            events: [{ type: "text", data: { text: "final tail" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: Date.now(),
