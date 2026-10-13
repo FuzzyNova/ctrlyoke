@@ -27,3 +27,21 @@ Settings, override it per workflow, or pick a different harness for each step in
 All harnesses use the same workflow schema and share the core runtime: interactive terminal mode, headless execution, per-harness `additionalArgs`, CLI session IDs, MCP server attachment, and portable agents and skills. What differs is enforcement of tool permission lists, which hook events fire, per-server MCP tool filtering, and image attachments — check the [compatibility matrix](/harnesses/compatibility) before relying on one of those.
 
 See the per-harness pages for setup notes and tradeoffs.
+
+## How ctrlyoke talks to a harness
+
+ctrlyoke doesn't bundle, replace, or impersonate any harness. You install each CLI yourself and
+sign in with that CLI's own login flow, and ctrlyoke calls it for you:
+
+- **It runs the vendor's own executable.** ctrlyoke starts the CLI you installed (`claude`,
+  `codex`, `copilot`, and so on) with the arguments that harness expects. The CLI does the model
+  calls, under your account, the same way it would if you typed the command yourself.
+- **It never signs in for you.** ctrlyoke has no login for any AI provider, and it never reads
+  or stores a harness's sign-in tokens. You sign in once, in that CLI's own terminal, with its
+  own login flow.
+- **It never calls a model provider directly.** Your prompts and code travel from the harness to
+  its provider, not through ctrlyoke. See [Privacy and telemetry](/guide/privacy).
+
+What ctrlyoke takes off your hands is everything around the call: each harness's flags, session
+resume, permission modes, MCP server and hook configuration, and its output format. Your use of
+each harness stays subject to that provider's own terms.

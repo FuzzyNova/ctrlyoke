@@ -8,6 +8,10 @@ The extension does, but the standalone `ctrlyoke` CLI does not.
 
 Any one of the six supported harnesses: GitHub Copilot CLI (`copilot-cli`), Claude Code CLI (`claude-cli`), Codex CLI (`codex-cli`), OpenCode CLI (`opencode-cli`), Qwen Code CLI (`qwen-cli`), or Antigravity CLI (`antigravity-cli`). Use whichever you already have. If you have not picked one, ctrlyoke uses the first installed harness in alphabetical order; choose one explicitly with the `defaults.harness` setting, a workflow's `harness`, or `ctrlyoke run --harness`, and mix harnesses across steps if you like.
 
+## Does ctrlyoke use my Claude, ChatGPT, GitHub, or Google account?
+
+No. ctrlyoke starts the harness CLI you installed, and that CLI uses whatever sign-in you gave it. ctrlyoke never signs in for you, never reads or stores a harness's login, and never calls a model provider itself. You pay each provider directly, and your use of each CLI stays under that provider's terms. See [How ctrlyoke talks to a harness](/harnesses/#how-ctrlyoke-talks-to-a-harness) and [Privacy and telemetry](/guide/privacy).
+
 ## Can I run workflows in CI?
 
 Yes. Use `ctrlyoke run <file> --headless --json`, check the [exit code](/cli/ctrlyoke#exit-codes), and provide secrets as environment variables. Tool permissions resolve the same way in headless mode as anywhere else (step, workflow, then settings), so make sure the resolved mode will not stop to ask for approval. You can set it in the workflow, in the CI workspace's settings, or with `--permission-mode` for one run; the flag sets the workflow value and a step's own value still takes precedence. Add `--force permission-mode` to apply it to every step. See [Tool permissions](/cli/ctrlyoke#tool-permissions). The harness CLI must be installed and authenticated on the CI machine.

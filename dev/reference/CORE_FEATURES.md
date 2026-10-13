@@ -35,6 +35,29 @@ The supporting line replaces **"The better way to prompt, steer, automate, and r
 
 **Switch harnesses, not habits** is the preferred campaign line and the strongest alternative to the main tagline. **Take control of every AI coding harness** is the preferred brand-forward option: it evokes the control-yoke name without becoming too literal. The two pilot/yoke options are useful for playful brand moments, but both require more explanation and should not lead general product positioning. **Automate your favorite AI coding harness** is direct and searchable, but narrower than the product; it works best as campaign copy or the heading of a workflow-focused section. These alternates still use "harness" rather than "CLI" — that's fine for campaign moments and body copy per the guardrail below; only the primary hero tagline needed the more literal, scope-accurate word.
 
+## Relationship to harness vendors
+
+ctrlyoke is a tool that **calls** the coding-agent CLIs a user has already installed and signed in to. It is not an alternative agent client, it does not ship or replace any harness, and it never signs in to a model provider on the user's behalf. That distinction matters commercially as well as legally: several vendors' terms forbid third-party clients from using a consumer subscription's credentials, and ctrlyoke must never read as one.
+
+**Category neighbours:** IDEs and IDE extensions, agent dashboards and boards (the Vibe Kanban space), and CI tools that invoke workflows. Not "a third-party Claude Code" or "an agent that uses your subscription."
+
+**Facts the copy can state (verified against the code on 2026-10-12):**
+
+- ctrlyoke spawns the vendor's own executable (`claude`, `codex`, `copilot`, …) with arguments; the CLI makes every model call under the user's own account.
+- ctrlyoke has no provider login, and does not read or store a harness's sign-in tokens or config-file credentials.
+- No harness is bundled; the user installs, signs in to, and pays for each one (see LICENSE §3(f)).
+- The one nuance: managed secrets (`!NAME` grants) can pass a value the user chose, such as an API key, into a step's environment. Say "never signs in for you" or "never reads your harness login", not "never handles any credentials."
+
+**Primary copy (landing page, under the harness deck):**
+
+> **Your CLI. Your account. ctrlyoke just calls it.** ctrlyoke doesn't replace Claude Code, Codex, or Copilot CLI. It launches the copy you installed, signed in the way you signed it in.
+
+**Supporting line, when space allows:**
+
+> ctrlyoke knows how to call your favorite coding-agent CLI for you, so you don't have to remember each harness's flags, resume commands, or permission modes. Use it inside VS Code, or in the browser with the ctrlyoke CLI and `ctrlyoke server`.
+
+**Where this message lives:** the landing page's "Your CLI. Your account." strip and harness-section subtitle, the pricing feature list and FAQ, the docs home page, `docs/harnesses/index.md#how-ctrlyoke-talks-to-a-harness`, the FAQ entry on accounts, and the README's first paragraph. Keep them saying the same thing.
+
 ## Elevator pitch
 
 ### Short version
@@ -295,14 +318,15 @@ These are important supporting benefits even when they do not lead the page:
 2. **Hero:** One workflow engine for every CLI coding agent.
 3. **Subhead:** Prompt, steer, automate, and revisit every AI coding session — one message or a whole workflow.
 4. **Harness strip:** Show the supported harnesses early as proof of breadth.
-5. **Three primary promises:** One prompt language; one rich output view; one reusable toolkit.
-6. **Everyday use:** Demonstrate a single prompt with file, selection, image, Git, and prior-context references plus the expanded-context token estimate.
-7. **Visual authoring:** Build and rearrange a workflow in the dashboard, then reveal the clean YAML file underneath.
-8. **Native terminal, structured control:** Show the real CLI terminal beside the normalized output timeline.
-9. **Control and safety:** Show the output minimap, diffs, history search/replay, and undo/redo.
-10. **Automation:** Introduce mixed prompt/script steps, per-step harness choice, parallel workflows, validation, retries, and dynamic final-step loops.
-11. **Anywhere:** Show the CLI/CI path and the mobile browser's workspace, source control, output, and terminal surfaces.
-12. **Closing CTA:** Start with one prompt. Build visually. Automate when you are ready.
+5. **Bring your own CLI:** Immediately after the strip, state that ctrlyoke calls the CLI the user installed and signed in to, and never signs in for them (see [Relationship to harness vendors](#relationship-to-harness-vendors)).
+6. **Three primary promises:** One prompt language; one rich output view; one reusable toolkit.
+7. **Everyday use:** Demonstrate a single prompt with file, selection, image, Git, and prior-context references plus the expanded-context token estimate.
+8. **Visual authoring:** Build and rearrange a workflow in the dashboard, then reveal the clean YAML file underneath.
+9. **Native terminal, structured control:** Show the real CLI terminal beside the normalized output timeline.
+10. **Control and safety:** Show the output minimap, diffs, history search/replay, and undo/redo.
+11. **Automation:** Introduce mixed prompt/script steps, per-step harness choice, parallel workflows, validation, retries, and dynamic final-step loops.
+12. **Anywhere:** Show the CLI/CI path and the mobile browser's workspace, source control, output, and terminal surfaces.
+13. **Closing CTA:** Start with one prompt. Build visually. Automate when you are ready.
 
 This order corrects the impression that users must first become YAML workflow authors before ctrlyoke becomes useful.
 
@@ -318,6 +342,8 @@ This order corrects the impression that users must first become YAML workflow au
 - Qualify remote claims with **“when hosted access is configured.”** Network reachability depends on the selected bind address, TLS, and the user's LAN or remote-access setup.
 - Avoid unverified exclusivity claims such as **“the only tool”** or **“no other VS Code extension.”** The spell-check joke can keep its personality without making an absolute competitive claim.
 - Use **harness** for the AI execution strategy. Reserve **provider** for VS Code API concepts.
+- **Never position ctrlyoke as using the user's AI account.** Say "calls / launches / drives the CLI you installed", "your CLI, your account", "the IDE layer around your coding agent", or "works with". Never say "uses your Claude/ChatGPT/Copilot subscription", "connect / sign in with your account", "powered by Claude", "includes Claude Code", or anything implying ctrlyoke talks to a model provider itself. List supported CLIs as things ctrlyoke _works with_, never as things it _includes_. See [Relationship to harness vendors](#relationship-to-harness-vendors).
+- Avoid **"IDE"** as a headline claim for `ctrlyoke server`; "browser dashboard" or "browser workspace" is accurate. "IDE space" is fine in positioning discussions.
 - **CLI vs. harness:** Use **"CLI coding agent"** in the primary hero tagline and other headline-scale copy where scope precision matters most — it makes the CLI-only, no-GUI-harness boundary explicit without extra qualification. Use **"harness"** everywhere else (body copy, feature descriptions, campaign lines) — it is the established, more specific product term and is still accurate since every current harness is a CLI. Do not treat this as a wholesale terminology swap; only the tagline changed. Where a public page first moves from "coding agent" to "harness", bridge the two with **"Each CLI coding agent you run through ctrlyoke is a harness."** Avoid phrasings like "ctrlyoke calls them harnesses", which make the term sound like a renaming rather than a definition.
 
 ## Product evidence map

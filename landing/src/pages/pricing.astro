@@ -4,7 +4,7 @@ import Cta from "../components/Cta.astro";
 import { MARKETPLACE_URL, CHECKOUT_URL } from "../config";
 
 const freeTier = [
-  "All 6 harnesses (Copilot, Claude, Codex, OpenCode, Qwen, Antigravity)",
+  "Works with all 6 supported CLIs: Copilot, Claude Code, Codex, OpenCode, Qwen, Antigravity (installed separately)",
   "YAML / JSON / Markdown workflows — unlimited steps",
   "End conditions, pre-conditions & error / retry behavior",
   "Custom execution hooks",
@@ -32,6 +32,10 @@ const proTier = [
 ];
 
 const faq = [
+  {
+    q: "Does ctrlyoke include Claude Code, Copilot, or Codex?",
+    a: "No. You install the coding-agent CLIs you want, sign in to them, and pay their providers directly. ctrlyoke calls the CLI you already have. It never signs in for you, never reads or stores your harness login, and your use of each CLI stays under that provider's own terms.",
+  },
   {
     q: "What is a perpetual license?",
     a: "A one-time purchase that never expires. You own the license forever and it includes all future Pro features in the same tier — no subscription required.",

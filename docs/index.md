@@ -31,6 +31,8 @@ features:
 
 ctrlyoke gives you a better way to write prompts for any harness and to run them. You type a prompt in the dashboard's editor, and completions help you [reference the context it needs](/workflows/context-files): files, folders, symbols, editor selections, Git changes and earlier steps' output. ctrlyoke expands those references, sends the prompt to the harness you pick, and keeps the output, file changes and session history together.
 
+ctrlyoke is not an AI agent and doesn't include one. It calls the harness CLIs you've installed and signed in to, and those keep talking to their own providers under your account. See [How ctrlyoke talks to a harness](/harnesses/#how-ctrlyoke-talks-to-a-harness).
+
 It works the same way however much you send:
 
 - **A single prompt**, the way you would use the harness on its own.

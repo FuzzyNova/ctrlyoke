@@ -54,6 +54,21 @@ const features = [
   },
 ];
 
+const byoCli = [
+  {
+    title: "You install it and sign in to it",
+    body: "ctrlyoke never signs in for you, and never reads or stores your harness login.",
+  },
+  {
+    title: "ctrlyoke remembers the flags",
+    body: "Each CLI's invocation, session resume, permission modes, and MCP and hook config are handled for you.",
+  },
+  {
+    title: "Their terms, their models, your subscription",
+    body: "ctrlyoke is the IDE layer around the agent, not a substitute for it.",
+  },
+];
+
 const steps = [
   {
     number: "1",
@@ -80,7 +95,7 @@ const steps = [
 
 <Layout
   title="ctrlyoke — One workflow engine for every CLI coding agent"
-  description="The VS Code extension that runs Claude Code, Codex, Copilot CLI, and more as one designed, validated, and monitored workflow."
+  description="The VS Code extension that drives the Claude Code, Codex, Copilot CLI, and other coding-agent CLIs you already use as one designed, validated, and monitored workflow."
 >
 
   <!-- Hero -->
@@ -151,11 +166,32 @@ const steps = [
       <div class="mb-10 text-center">
         <h2 class="text-3xl font-bold text-white md:text-4xl">One dashboard, six harnesses</h2>
         <p class="mt-3 text-slate-400">
-          Each CLI coding agent you run through ctrlyoke is a <em>harness</em>.
-          Change harnesses, not habits.
+          Each CLI coding agent you install and run through ctrlyoke is a <em>harness</em>.
+          ctrlyoke calls it for you, so you can change harnesses, not habits.
         </p>
       </div>
       <HarnessDeck />
+    </div>
+  </section>
+
+  <!-- Bring your own CLI -->
+  <section class="border-b border-white/5 px-6 py-20">
+    <div class="mx-auto max-w-4xl">
+      <div class="mb-10 text-center">
+        <h2 class="text-3xl font-bold text-white md:text-4xl">Your CLI. Your account. ctrlyoke just calls it.</h2>
+        <p class="mx-auto mt-3 max-w-2xl text-slate-400">
+          ctrlyoke doesn't replace Claude Code, Codex, or Copilot CLI. It launches the copy you
+          installed, signed in the way you signed it in.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {byoCli.map((item) => (
+          <div class="rounded-xl border border-white/8 bg-brand-900/40 p-6">
+            <h3 class="mb-2 font-semibold text-white">{item.title}</h3>
+            <p class="text-sm leading-relaxed text-slate-400">{item.body}</p>
+          </div>
+        ))}
+      </div>
     </div>
   </section>
 
@@ -331,6 +367,10 @@ const steps = [
               <div class="rounded-lg border border-white/8 bg-brand-900 px-6 py-3 font-mono text-sm text-slate-300">
                 npm install -g ctrlyoke
               </div>
+              <p class="max-w-md text-sm text-slate-500">
+                No VS Code? <code class="font-mono text-slate-400">ctrlyoke server</code> opens the
+                same dashboard in your browser.
+              </p>
             </>
           )
         }
