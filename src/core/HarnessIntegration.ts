@@ -358,7 +358,7 @@ function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
       return entry.text;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING:
       return `<thinking${failed}>\n${entry.text}\n</thinking>`;
-    case "edit": {
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.EDIT: {
       const diff = entry.diff ? `\n\`\`\`diff\n${entry.diff.text}\n\`\`\`` : "";
       const omitted = entry.diff ? omittedAttributes(entry.diff) : "";
       return `<edit path="${escapeXmlAttribute(entry.path)}" added="${entry.added}" removed="${entry.removed}"${failed}${omitted}>${diff}\n</edit>`;
@@ -368,11 +368,11 @@ function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE:
       return `<delete path="${escapeXmlAttribute(entry.path)}"${failed}/>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND:
-      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}${omittedAttributes(entry.output)}>\n${entry.command}\n<output>\n${entry.output.text}\n</output>\n</command>`;
+      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}>\n${entry.command}\n<output${omittedAttributes(entry.output)}>\n${entry.output.text}\n</output>\n</command>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ:
       return `<read path="${escapeXmlAttribute(entry.path)}"${entry.lineStart === undefined ? "" : ` lines="${entry.lineStart}-${entry.lineEnd ?? entry.lineStart}"`}${failed}/>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL:
-      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}${omittedAttributes(entry.arguments)}>\n${entry.arguments.text}\n<output${omittedAttributes(entry.result)}>\n${entry.result.text}\n</output>\n</tool>`;
+      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}>\n<arguments${omittedAttributes(entry.arguments)}>\n${entry.arguments.text}\n</arguments>\n<output${omittedAttributes(entry.result)}>\n${entry.result.text}\n</output>\n</tool>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH:
       return `<search query="${escapeXmlAttribute(entry.query)}"${failed}>\n${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:

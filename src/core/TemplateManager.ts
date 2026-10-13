@@ -586,7 +586,9 @@ export class TemplateManager {
       (placeholder, _typePrefix, name: string, offset: number) => {
         const value = variables[name];
         if (value === undefined) return placeholder;
-        return content[offset - 1] === "@" ? quoteReferencePath(value) : value;
+        return content[offset - 1] === "@" && value !== ""
+          ? quoteReferencePath(value)
+          : value;
       }
     );
   }
@@ -648,18 +650,14 @@ export class TemplateManager {
     const withDefaults: Record<string, string> = { ...variables };
     for (const variable of declared) {
       const provided = withDefaults[variable.name];
-      if (
-        (provided === undefined || provided === "") &&
-        variable.default !== undefined
-      ) {
+      if (!provided?.trim() && variable.default !== undefined) {
         withDefaults[variable.name] = variable.default;
       }
     }
 
     const missingRequired = declared
       .filter(
-        (variable) =>
-          variable.required && !withDefaults[variable.name]?.trim()
+        (variable) => variable.required && !withDefaults[variable.name]?.trim()
       )
       .map((variable) => variable.name);
     if (missingRequired.length > 0) {

@@ -57,6 +57,20 @@ describe("TemplateVariableField", () => {
     expect(screen.getByText("*")).toHaveAttribute("aria-hidden", "true");
   });
 
+  it("links a field error to its control", () => {
+    render(
+      <TemplateVariableField
+        variable={{ name: "topic", type: "text", required: true }}
+        value=""
+        onChange={change}
+        error="This field is required"
+      />
+    );
+    const input = screen.getByRole("textbox", { name: "topic" });
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription("This field is required");
+  });
+
   it.each([
     ["file", "Browse for file"],
     ["directory", "Browse for folder"],

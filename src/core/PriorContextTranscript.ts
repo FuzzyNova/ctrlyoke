@@ -22,6 +22,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   countStructuredPatchChanges,
+  countUnifiedDiffChanges,
   formatCreatedFileDiff,
   formatEditDiff,
 } from "../utils/CliEventDiff";
@@ -131,7 +132,10 @@ function codePointSlice(
   return selected.join("");
 }
 
-/** Bounds text by UTF-8 bytes, preferring complete lines and never splitting code points. */
+/**
+ * Bounds text by UTF-8 bytes. Whole lines are kept first, then the remaining
+ * budget is filled from the next line; code points are never split.
+ */
 export function boundPriorContextText(
   text: string,
   maxBytes: number,
@@ -149,6 +153,9 @@ export function boundPriorContextText(
   for (const line of orderedLines) {
     const lineBytes = utf8Bytes(line);
     if (keptBytes + lineBytes > maxBytes) {
+      // Fill the rest of the budget from the next line rather than wasting
+      // it: model text often has paragraph-long lines, and a strict
+      // line-boundary cut could keep little more than one short line.
       const remaining = maxBytes - keptBytes;
       if (remaining > 0) {
         const partial = codePointSlice(
@@ -215,21 +222,6 @@ function compactJson(value: unknown): string {
   }
 }
 
-function diffLineCounts(diff: string): { added: number; removed: number } {
-  const lines = diff.split("\n");
-  return countStructuredPatchChanges([
-    {
-      oldStart: 0,
-      oldLines: 0,
-      newStart: 0,
-      newLines: 0,
-      lines: lines.filter(
-        (line) => !line.startsWith("---") && !line.startsWith("+++")
-      ),
-    },
-  ]);
-}
-
 function projectEvent(
   event: CliEvent
 ): PriorContextTranscriptEntry | undefined {
@@ -251,7 +243,7 @@ function projectEvent(
       const counts = data.structuredPatch?.length
         ? countStructuredPatchChanges(data.structuredPatch)
         : diff
-          ? diffLineCounts(diff)
+          ? countUnifiedDiffChanges(diff)
           : { added: 0, removed: 0 };
       return {
         kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.EDIT,
@@ -273,7 +265,7 @@ function projectEvent(
       const data = event.data as FileWriteData;
       const failed = isFailed(data);
       const diff = failed ? "" : formatCreatedFileDiff(data);
-      const added = diff ? diffLineCounts(diff).added : 0;
+      const added = diff ? countUnifiedDiffChanges(diff).added : 0;
       return {
         kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE,
         path: data.path,

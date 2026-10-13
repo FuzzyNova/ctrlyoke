@@ -16,6 +16,7 @@ import {
   MCP_SKILL_NAMES,
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
+  PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_KEYWORDS,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
@@ -414,7 +415,7 @@ export class CliPromptPreparer {
                       context: resolvedPriorContext,
                       detail:
                         workflowContext?.resolvedProperties
-                          ?.priorContextDetail ?? "full",
+                          ?.priorContextDetail ?? PRIOR_CONTEXT_DETAILS.FULL,
                     },
                   ]
                 : []),

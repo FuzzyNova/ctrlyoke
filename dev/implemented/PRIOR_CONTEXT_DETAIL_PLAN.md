@@ -18,8 +18,24 @@
 >   dashboard has Copy Full Output.
 > - Phase 3: `$summary:` selectors and `priorContextDetail` are live in the parser, schema,
 >   editor, dashboard, docs, and templates.
-> - Detail settled during implementation: an unbroken line larger than its byte cap is cut at a
->   UTF-8 code-point boundary, because no line-boundary cut can satisfy the cap.
+> - Detail settled during implementation, which supersedes D1a's "cuts land on line boundaries":
+>   whole lines are kept first, then the rest of the byte budget is filled from the next line,
+>   cut at a UTF-8 code-point boundary. Model text often has paragraph-long lines, so a strict
+>   line cut could waste most of the budget (confirmed in the 2026-10-13 review).
+> - Post-implementation review (2026-10-13), fixed:
+>   - `$summary:previous:3` with `$previous` now renders only the latest step in full, not all
+>     three;
+>   - `$finalStep` with `$allFinalStep` returns every pass instead of only the last;
+>   - the editor's token count keeps each reference's detail level;
+>   - truncation markers sit on the element whose text was cut (`<output>`, and the new
+>     `<arguments>` inside `<tool>`);
+>   - `<earlierAttempts>` appears only when earlier attempts changed files;
+>   - one diff line counter (`countUnifiedDiffChanges`);
+>   - inline renumbering skips code spans and leaves untouched tokens as written;
+>   - the step-8 template audit is done: `bug-drain-loop` and `bug-hunt-loop` hand off with
+>     `priorContextDetail: summary`.
+>     Still open:
+>     [`inline-step-reference-renumbered-to-empty-token.md`](../bugs/backlog/inline-step-reference-renumbered-to-empty-token.md).
 >
 > The file and line citations below describe the code as it was before implementation.
 >
@@ -655,9 +671,9 @@ session. Each one leaves `npm test` green, updates this plan's status, and commi
      (D4), threaded from `createPriorContextResolver` and `PriorContextPreviewBuilder`.
      **Chunk 1b complete:** structured prior-context projection, final-step prompts/scripts,
      earlier-attempt file changes, and the shared full-form XML renderer are implemented.
-3. `buildPriorContextXmlFromItems`: render the transcript entries (D1 table) and
+3. **Complete:** `buildPriorContextXmlFromItems`: render the transcript entries (D1 table) and
    `<earlierAttempts>`. Queue script rendering is unchanged.
-4. Remove `general.includeFullDiffsInPriorContext`: `schemas/settings-schema.json`,
+4. **Complete:** Remove `general.includeFullDiffsInPriorContext`: `schemas/settings-schema.json`,
    `CtrlYokeSettings.ts` (type and default), `ConfigurationUtils.ts:162` and
    `shouldIncludeFullDiffsInPriorContext` (`:1428`), `settingsCatalog.ts:235`,
    `GeneralSection.tsx:304`, the v1 settings fixture
@@ -665,8 +681,8 @@ session. Each one leaves `npm test` green, updates this plan's status, and commi
    Pre-release, so no `schema:bump` (`CONTRIBUTING.md`, "Changing the schemas"). The settings
    schema has `additionalProperties: false`, so confirm that a `settings.json` still carrying
    the key loads (ignored, editor warning only) rather than failing, and add a test for it.
-5. `extractTextFromEvents`: fixed `false` behavior; delete the option (D5).
-6. Tests:
+5. **Complete:** `extractTextFromEvents`: fixed `false` behavior; delete the option (D5).
+6. **Complete:** Tests:
    - the transcript projection per event type, including the harness differences above (one
      fixture per harness where they differ);
    - caps and markers at line and code-point boundaries;
@@ -675,7 +691,7 @@ session. Each one leaves `npm test` green, updates this plan's status, and commi
    - a step appended to a non-latest run reads only that run (D4);
    - preview = injection.
      Update `CliResponseTextExtractor.test.ts` and the `RunOutputResolver` prior-context tests.
-7. Docs:
+7. **Complete:** Docs:
    - `docs/workflows/context-files.md` ("Prior output references") says what the full form
      contains and that command output is tail-truncated;
    - `src/templates/skills/ctrlyoke-syntax/SKILL.md` (the `$previous` row);
@@ -697,7 +713,7 @@ waits for step 5.
      prior-context renderers;
    - switch the raw-stdout AI path to `TEXT` events;
    - give the script completion payload a typed `scriptOutput`.
-3. **Backend readers** (the non-dashboard rows of D8c): prior context, `read_output`,
+3. **Complete (chunk 2b): Backend readers** (the non-dashboard rows of D8c): prior context, `read_output`,
    `history show`, `CommitMessageGenerator`, history search, `CliTerminalFormatter`, and the
    `onResponseComplete` callers (they stop _using_ the payload). Delete the dead `PromptQueue`
    caches. Move the commit-message bug doc to `dev/bugs/implemented/`. Tests:
@@ -741,15 +757,15 @@ waits for step 5.
    `npm run schema:update`.
 3. **Complete:** `mergePriorContextReferences` / `PriorContextMerge.ts`: per-index detail, full wins.
 4. **Complete:** `summarizePriorContextItem` + `<filesChanged>` (D2), reusing the projection's file changes.
-5. Editor: completions (`PriorContextCompletions.ts`, detail text "deterministic excerpt: head of
+5. **Complete:** Editor: completions (`PriorContextCompletions.ts`, detail text "deterministic excerpt: head of
    prompt, files changed, tail of text; no AI call"), diagnostics, `StepReferenceRenumbering`,
    `PriorContextPreviewBuilder` (pass the detail through), and the inline-reference chip pattern.
-6. Dashboard: a Full / Summary toggle bound to `priorContextDetail` in `PriorContextSelect.tsx`
+6. **Complete:** Dashboard: a Full / Summary toggle bound to `priorContextDetail` in `PriorContextSelect.tsx`
    and `PropertiesDrawer.tsx`; `formatPriorContextLabel`
    (`src/ui/webview-react/utils/priorContext.ts`) appends the detail ("Previous step · summary").
-7. Docs and agent-facing references: `context-files.md`, `src/templates/skills/ctrlyoke-syntax/SKILL.md`,
+7. **Complete:** Docs and agent-facing references: `context-files.md`, `src/templates/skills/ctrlyoke-syntax/SKILL.md`,
    `src/templates/agents/ctrlyoke-tech-support.agent.md`.
-8. Templates: audit built-in templates' `$previous`/`priorContext` uses and switch hand-off and
+8. **Complete (post-implementation review):** Templates: audit built-in templates' `$previous`/`priorContext` uses and switch hand-off and
    commit-style steps to `$summary:` where the full transcript is noise.
 9. **Complete:** Tests: grammar, merge precedence, renumbering, summary caps and markers, `<filesChanged>`
    aggregation (multiple edits, create+edit, create+delete, failed, external path), preview =

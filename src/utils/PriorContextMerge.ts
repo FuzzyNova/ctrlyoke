@@ -29,7 +29,11 @@ export interface PriorContextMerge {
   /** Canonical contexts that preserve the merged request semantics. */
   contexts: PriorContext[];
   detailByQueueIndex: Map<number, PriorContextDetail>;
-  previousDetail: PriorContextDetail;
+  /**
+   * Largest `previous` count requested at full detail. Only those most recent
+   * steps render in full; the rest of `previousCount` renders as a summary.
+   */
+  fullPreviousCount: number;
   allQueueDetail: PriorContextDetail;
   finalStepDetail: PriorContextDetail;
   allFinalStepsDetail: PriorContextDetail;
@@ -92,7 +96,7 @@ export function mergePriorContextReferences(
   let includeAllQueue = false;
   let includeAllFinalSteps = false;
   let includePreviousFinalStep = false;
-  let previousDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
+  let fullPreviousCount = 0;
   let allQueueDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
   let finalStepDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
   let allFinalStepsDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
@@ -127,7 +131,7 @@ export function mergePriorContextReferences(
     } else if (requestedPrevious > 0) {
       previousCount = Math.max(previousCount, requestedPrevious);
       if (detail === PRIOR_CONTEXT_DETAILS.FULL)
-        previousDetail = PRIOR_CONTEXT_DETAILS.FULL;
+        fullPreviousCount = Math.max(fullPreviousCount, requestedPrevious);
     } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
       includeAllFinalSteps = true;
       if (detail === PRIOR_CONTEXT_DETAILS.FULL)
@@ -180,7 +184,7 @@ export function mergePriorContextReferences(
     includePreviousFinalStep,
     contexts: mergedContexts,
     detailByQueueIndex,
-    previousDetail,
+    fullPreviousCount,
     allQueueDetail,
     finalStepDetail,
     allFinalStepsDetail,
@@ -189,27 +193,50 @@ export function mergePriorContextReferences(
 
 const MERGED_PRIOR_CONTEXT_PREFIX = "merged:";
 
-/** Encode merged contexts inside the existing opaque token-count reference. */
+/**
+ * Encode one prompt's prior-context selections inside the existing opaque
+ * token-count reference. Each selection keeps its detail level; the resolver
+ * merges them with {@link mergePriorContextReferences}, so full-wins
+ * precedence has one implementation.
+ */
 export function formatMergedPriorContextBody(
-  contexts: readonly PriorContext[]
+  selections: readonly PriorContextSelection[]
 ): string {
-  return `${MERGED_PRIOR_CONTEXT_PREFIX}${encodeURIComponent(JSON.stringify(contexts))}`;
+  const unique = [
+    ...new Map(
+      selections.map((selection) => [JSON.stringify(selection), selection])
+    ).values(),
+  ];
+  return `${MERGED_PRIOR_CONTEXT_PREFIX}${encodeURIComponent(JSON.stringify(unique))}`;
 }
 
 /** Decode only bodies produced by {@link formatMergedPriorContextBody}. */
 export function parseMergedPriorContextBody(
   body: string
-): PriorContext[] | null {
+): PriorContextSelection[] | null {
   if (!body.startsWith(MERGED_PRIOR_CONTEXT_PREFIX)) return null;
   try {
     const value: unknown = JSON.parse(
       decodeURIComponent(body.slice(MERGED_PRIOR_CONTEXT_PREFIX.length))
     );
     if (!Array.isArray(value)) return null;
-    return value.every(isPriorContextShape) ? (value as PriorContext[]) : null;
+    return value.every(isPriorContextSelectionShape)
+      ? (value as PriorContextSelection[])
+      : null;
   } catch {
     return null;
   }
+}
+
+function isPriorContextSelectionShape(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || !("context" in value))
+    return false;
+  const { context, detail } = value as { context: unknown; detail: unknown };
+  return (
+    Object.values(PRIOR_CONTEXT_DETAILS).includes(
+      detail as PriorContextDetail
+    ) && isPriorContextShape(context)
+  );
 }
 
 function isPriorContextShape(value: unknown): boolean {

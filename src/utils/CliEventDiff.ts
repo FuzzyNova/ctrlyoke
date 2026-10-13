@@ -62,3 +62,26 @@ export function countStructuredPatchChanges(
   }
   return { added, removed };
 }
+
+/**
+ * Counts added and removed lines in a single-file unified diff. Only lines
+ * after the first `@@` hunk header count, so the `---`/`+++` file headers are
+ * skipped while a removed `-- comment` or an added `++i` line is not.
+ */
+export function countUnifiedDiffChanges(diff: string): {
+  added: number;
+  removed: number;
+} {
+  const lines = diff.split("\n");
+  const firstHunk = lines.findIndex((line) => line.startsWith("@@"));
+  if (firstHunk < 0) return { added: 0, removed: 0 };
+  return countStructuredPatchChanges([
+    {
+      oldStart: 0,
+      oldLines: 0,
+      newStart: 0,
+      newLines: 0,
+      lines: lines.slice(firstHunk).filter((line) => !line.startsWith("@@")),
+    },
+  ]);
+}

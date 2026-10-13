@@ -890,6 +890,9 @@ run from there, per the "single binary, not a project dependency" note above):
       `33105e4d7`; the path doesn't exist in `HEAD`).
 - [x] **`trufflehog git file://. --results=verified`** — 78,802 chunks / 54.25 MB
       scanned: **0 verified secrets, 0 unverified secrets.**
+- [x] **Re-scan, October 13, 2026** — Nathan re-ran both `gitleaks` and
+      `trufflehog` over full history right before the flip decision: no issues
+      found. That covers every commit made since the September 7 scan.
 - [x] **Skim closed Issues/PRs and tags** — done manually by Nathan (September 7,
       2026); nothing found. No tool-assisted pass was possible in this
       environment (no `gh`/GitHub auth available), so this was a direct manual
@@ -1015,9 +1018,9 @@ later version at no compatibility cost.
   - **Done 2026-10-13.** `PriorContextItem.scriptVerdict` is resolved from the script step's own
     completed output (queue steps and script `finalStep` passes) and rendered by
     `buildPriorContextXmlFromItems` as a trailing `<verdict/>` element (outcome, compare source,
-    operator, expected, and an exit-code actual). `$summary:` is reserved by a
-    `prompt.prior-context.reserved-prefix` editor warning; the runtime still sends it as literal
-    text. Documented in
+    operator, expected, and an exit-code actual). `$summary:` has since become a real selector
+    prefix (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phase 3), replacing the reserved-prefix warning.
+    Documented in
     `docs/workflows/script-steps.md` and `context-files.md`.
   - **Cost if late:** it appends the script's pass/fail, `expected`, and `actual` to the prior-context
     rendering of _every_ script step, not only steps inside workflows. Landing it after launch
@@ -1039,7 +1042,7 @@ later version at no compatibility cost.
     context changes on upgrade, and so do the stored settings files that still carry the key.
   - **Decided 2026-10-13: Phases 0–3 before launch.**
     - Phase 0: stop condition-script output from being read as a step's own output
-      ([bug](../bugs/backlog/prior-context-resolves-condition-output-as-step-output.md)).
+      ([bug](../bugs/implemented/prior-context-resolves-condition-output-as-step-output.md)).
     - Phase 1: render the full form from structured events and remove the setting.
     - Phase 2: delete the duplicated `CliOutput.response`; bump the timeline format to v2, the
       first exercise of the persisted-format bump path; close the Export Output gaps; add Copy
@@ -1066,12 +1069,13 @@ later version at no compatibility cost.
 
 ### Worth a decision, low cost either way
 
-- [ ] **Template optional variables substitute to empty** —
-      [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md) Phase 2.
-      A blank optional template variable currently leaves a literal `{token}`. Changing that alters
-      what a template generates, but not workflows that were already created, because
-      `_templateMeta` is stripped before validation. Fine to do later; do it now only if it's
-      convenient.
+- [x] **Template optional variables substitute to empty** —
+      [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../implemented/TEMPLATE_REQUIRED_VARIABLES_PLAN.md) Phase 2.
+      **Done 2026-10-13.** Every declared variable the caller leaves blank now substitutes to empty
+      text instead of leaving a literal `{token}`; declared defaults still win. The same plan added
+      `required: true` template variables (enforced in the New Workflow modal and in
+      `TemplateManager.createWorkflow`) and the `feature-driven-loop` built-in template. Only Phase
+      4 (a reserved `{workflowName}` token) is deferred, and it is additive.
 
 ### Reviewed and cleared (additive — no compatibility reason to rush)
 
@@ -1119,9 +1123,9 @@ already-versioned lineage descriptor).
 | Marketplace publish                                                        | OPEN — unblocked      | Phase 9 — `v0.1.2` already published by `release.yml` to the listing, which is still private/unpublished; making it public plus the post-publish checks remain, behind Phase 8 packaging/screenshots, not a legal or licensing gate anymore                                                                                                                                                                                                                                                                                                       |
 | GitHub release                                                             | AUTOMATED             | Phase 10 — `release.yml` created `v0.1.1`/`v0.1.2` Releases on the private repo; the public launch release follows the same path                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | CLI distribution (VSIX + npm)                                              | DONE (0.1.2 on npm)   | Phase 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; first real tag push done (`v0.1.2` green 2026-09-25); `full-suite.yml` runs weekly but has failed every run since 2026-09-14 and needs triage                                                                                                                                                                                                                                                                                                   |
+| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; first real tag push done (`v0.1.2` green 2026-09-25); `full-suite.yml` is green again (manual run 2026-10-13, after a failing streak from 2026-09-14)                                                                                                                                                                                                                                                                                           |
 | Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here                                                                                                                                                                                                                                                                                                                                                                  |
-| Pre-release compatibility window                                           | READY — REVIEW        | Prior-context rework (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 0–3) is complete; everything else is done. See the section above                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Pre-release compatibility window                                           | DONE                  | Every item is landed, including the prior-context rework (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 0–3) and blank optional template variables (`TEMPLATE_REQUIRED_VARIABLES_PLAN.md` Phase 2), both 2026-10-13. See the section above                                                                                                                                                                                                                                                                                                                |
 | Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---

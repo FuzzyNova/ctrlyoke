@@ -31,6 +31,7 @@ import {
   type SettingWriteScope,
   type StepColorMode,
   type ToastLevelMode,
+  type PriorContextDetail,
 } from "@root/types/DashboardConstants";
 import type {
   CommitMessageGenerationRecord,
@@ -182,7 +183,7 @@ export interface WorkflowProperties {
   endCondition?: EndCondition | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext;
-  priorContextDetail?: "full" | "summary";
+  priorContextDetail?: PriorContextDetail;
   additionalArgs?: string | null;
   toolPermissions?: {
     mode?: ToolPermissionMode;

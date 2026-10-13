@@ -73,6 +73,10 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
   onBlur,
 }) => {
   const id = `${idPrefix}-${variable.name}`;
+  const errorId = `${id}-error`;
+  const errorAria = error
+    ? { "aria-invalid": true, "aria-describedby": errorId }
+    : {};
   // Leaving a text field commits only an edit made since it gained focus, so
   // tabbing through (or away from a freshly pre-filled row) never writes.
   const focusValueRef = React.useRef(value);
@@ -163,6 +167,7 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
       }}
       onBlur={() => onBlur?.(variable.name)}
       aria-required={variable.required || undefined}
+      {...errorAria}
       className={selectClass}
     >
       {(variable.options ?? []).map((option) => (
@@ -201,6 +206,7 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
         onBlur?.(variable.name);
       }}
       aria-required={variable.required || undefined}
+      {...errorAria}
       onKeyDown={onKeyDown}
       placeholder={`Enter ${variable.name}`}
       rows={3}
@@ -219,6 +225,7 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
         onBlur?.(variable.name);
       }}
       aria-required={variable.required || undefined}
+      {...errorAria}
       onKeyDown={(event) => {
         onKeyDown?.(event);
         if (event.key === KEYBOARD_KEYS.ENTER && commitTextOnBlur) commitText();
@@ -269,7 +276,11 @@ export const TemplateVariableField: React.FC<TemplateVariableFieldProps> = ({
           {variable.description}
         </p>
       )}
-      {error && <p className="mt-1 text-xs text-error-fg">{error}</p>}
+      {error && (
+        <p id={errorId} className="mt-1 text-xs text-error-fg">
+          {error}
+        </p>
+      )}
     </div>
   );
 

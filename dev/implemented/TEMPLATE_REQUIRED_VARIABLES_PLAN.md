@@ -2,6 +2,16 @@
 
 **Status:** Implemented (Phase 4 deferred)
 
+> **2026-10-13 post-implementation review:** fixed three gaps:
+>
+> - a blank optional `@{file:x}` produced `@""` (the empty value went through
+>   `quoteReferencePath`), so it now leaves the documented bare `@`;
+> - a whitespace-only value now falls back to a declared `default`;
+> - field errors are linked to their control (`aria-invalid` and `aria-describedby`).
+>
+> `template-starter`'s `specFile` (`@{file:specFile}`) is now `required: true`, following this
+> plan's own advice for optional file variables.
+
 > **2026-10-10 audit:** Nothing here has landed — `TemplateVariable` has no `required`, there is no
 > `feature-driven-loop` template, and untouched optional variables without a default still leave a
 > literal `{token}`. Refreshed every stale line reference. Substitution now runs per scalar value

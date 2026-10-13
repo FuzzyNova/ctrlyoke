@@ -13,7 +13,6 @@ import { countTokens } from "../utils/tokenizer";
 import { sendMessage } from "./useMessageHandler";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
-import type { PriorContext } from "@root/types/CtrlYokeTypes";
 import { decodePriorContextTokenRef } from "@root/utils/FileReferenceParser";
 import {
   parseAtReferences,
@@ -25,8 +24,9 @@ import {
 } from "@root/utils/FileReferenceParser";
 import {
   formatMergedPriorContextBody,
-  inlinePriorContextRefToPriorContext,
+  inlinePriorContextRefToSelection,
   mergePriorContextReferences,
+  type PriorContextSelection,
 } from "@root/utils/PriorContextMerge";
 
 // ============================================================================
@@ -99,7 +99,7 @@ function ensureGlobalListener(): void {
  */
 function extractRawReferences(promptText: string, stepCount: number): string[] {
   const refs: string[] = [];
-  const priorContexts: PriorContext[] = [];
+  const priorContexts: PriorContextSelection[] = [];
 
   for (const ref of parseAtReferences(promptText)) {
     if (ref.startOffset !== undefined && ref.endOffset !== undefined) {
@@ -126,18 +126,18 @@ function extractRawReferences(promptText: string, stepCount: number): string[] {
   }
 
   for (const match of parseInlinePriorContextRefs(promptText)) {
-    priorContexts.push(inlinePriorContextRefToPriorContext(match.ref));
+    priorContexts.push(inlinePriorContextRefToSelection(match.ref));
   }
-  if (priorContexts.length > 0) {
-    const merged = mergePriorContextReferences(priorContexts, stepCount);
-    if (merged.contexts.length > 0) {
-      refs.push(
-        encodePriorContextTokenRef(
-          formatMergedPriorContextBody(merged.contexts),
-          stepCount
-        )
-      );
-    }
+  if (
+    priorContexts.length > 0 &&
+    mergePriorContextReferences(priorContexts, stepCount).contexts.length > 0
+  ) {
+    refs.push(
+      encodePriorContextTokenRef(
+        formatMergedPriorContextBody(priorContexts),
+        stepCount
+      )
+    );
   }
 
   // Deduplicate while preserving order

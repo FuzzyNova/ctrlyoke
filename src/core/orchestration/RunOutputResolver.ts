@@ -46,6 +46,7 @@ import {
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 import {
   countStructuredPatchChanges,
+  countUnifiedDiffChanges,
   formatCreatedFileDiff,
   formatEditDiff,
 } from "../../utils/CliEventDiff";
@@ -993,9 +994,12 @@ export class RunOutputResolver {
           ({ added, removed } = countStructuredPatchChanges(
             edit.structuredPatch
           ));
-        else ({ added, removed } = countDiffLines(formatEditDiff(edit) ?? ""));
+        else
+          ({ added, removed } = countUnifiedDiffChanges(
+            formatEditDiff(edit) ?? ""
+          ));
       } else if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
-        ({ added } = countDiffLines(
+        ({ added } = countUnifiedDiffChanges(
           formatCreatedFileDiff(data as FileWriteData)
         ));
       }
@@ -1131,7 +1135,8 @@ export class RunOutputResolver {
       fileHistory.set(key, prior);
     }
     for (const [key, history] of fileHistory) {
-      if (history.attemptCount > 1)
+      // D4: earlier attempts are listed only when they changed files.
+      if (history.attemptCount > 1 && history.earlier.size > 0)
         earlierAttempts.set(key, {
           count: history.attemptCount - 1,
           filesChanged: [...history.earlier.values()],
@@ -1225,10 +1230,7 @@ export class RunOutputResolver {
                 name: step.name,
                 prompt: step.prompt,
                 detail:
-                  merged.detailByQueueIndex.get(index) ??
-                  (merged.previousCount > 0
-                    ? merged.previousDetail
-                    : merged.allQueueDetail),
+                  merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
                 filesChanged:
                   allAttemptFileChanges.get(
                     getTargetKey({
@@ -1268,23 +1270,20 @@ export class RunOutputResolver {
     const queueItems = resolvedQueueItems.filter((item) =>
       selectedQueueIndices.has(item.index)
     );
-    const queueDetailForIndex = (index: number): PriorContextDetail => {
-      const selectedDetails = [
-        ...(merged.includeAllQueue ? [merged.allQueueDetail] : []),
-        ...(merged.detailByQueueIndex.has(index)
-          ? [merged.detailByQueueIndex.get(index)!]
-          : []),
-        ...(merged.previousCount > 0 &&
-        resolvedQueueItems
-          .slice(-merged.previousCount)
-          .some((item) => item.index === index)
-          ? [merged.previousDetail]
-          : []),
-      ];
-      return selectedDetails.includes(PRIOR_CONTEXT_DETAILS.FULL)
+    const fullPreviousIndices = new Set(
+      merged.fullPreviousCount > 0
+        ? resolvedQueueItems
+            .slice(-merged.fullPreviousCount)
+            .map((item) => item.index)
+        : []
+    );
+    const queueDetailForIndex = (index: number): PriorContextDetail =>
+      (merged.includeAllQueue &&
+        merged.allQueueDetail === PRIOR_CONTEXT_DETAILS.FULL) ||
+      merged.detailByQueueIndex.get(index) === PRIOR_CONTEXT_DETAILS.FULL ||
+      fullPreviousIndices.has(index)
         ? PRIOR_CONTEXT_DETAILS.FULL
         : PRIOR_CONTEXT_DETAILS.SUMMARY;
-    };
     for (const item of resolvedQueueItems)
       item.detail = queueDetailForIndex(item.index);
     const finalItems = [...resolved.values()]
@@ -1299,17 +1298,11 @@ export class RunOutputResolver {
         const scriptVerdict = scriptVerdicts.get(getAttemptKey(value));
         const step = value.definition?.step;
         const targetKey = getTargetKey(value.target);
-        const selectedDetails = [
-          ...(merged.includePreviousFinalStep ? [merged.finalStepDetail] : []),
-          ...(merged.includeAllFinalSteps ? [merged.allFinalStepsDetail] : []),
-        ];
-        const detail = selectedDetails.includes(PRIOR_CONTEXT_DETAILS.FULL)
-          ? PRIOR_CONTEXT_DETAILS.FULL
-          : PRIOR_CONTEXT_DETAILS.SUMMARY;
         const common = {
           index,
           type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
-          detail,
+          // Set below, once the latest pass with output is known.
+          detail: merged.allFinalStepsDetail,
           filesChanged: allAttemptFileChanges.get(targetKey) ?? [],
           ...(earlierAttempts.has(targetKey)
             ? { earlierAttempts: earlierAttempts.get(targetKey) }
@@ -1332,10 +1325,22 @@ export class RunOutputResolver {
             ]
           : [];
       });
-    const selectedFinalItems = merged.includePreviousFinalStep
-      ? finalItems.slice(-1)
-      : merged.includeAllFinalSteps
-        ? finalItems
+    // `$allFinalStep` selects every pass and `$finalStep` only the latest, so
+    // the latest pass is full when either selector asks for full.
+    finalItems.forEach((item, position) => {
+      const isLatest = position === finalItems.length - 1;
+      item.detail =
+        merged.allFinalStepsDetail === PRIOR_CONTEXT_DETAILS.FULL ||
+        (isLatest &&
+          merged.includePreviousFinalStep &&
+          merged.finalStepDetail === PRIOR_CONTEXT_DETAILS.FULL)
+          ? PRIOR_CONTEXT_DETAILS.FULL
+          : PRIOR_CONTEXT_DETAILS.SUMMARY;
+    });
+    const selectedFinalItems = merged.includeAllFinalSteps
+      ? finalItems
+      : merged.includePreviousFinalStep
+        ? finalItems.slice(-1)
         : [];
     return deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]);
   }
@@ -1602,20 +1607,6 @@ function getFileChangeOperation(
     default:
       return undefined;
   }
-}
-
-function countDiffLines(diff: string): { added: number; removed: number } {
-  return countStructuredPatchChanges([
-    {
-      oldStart: 0,
-      oldLines: 0,
-      newStart: 0,
-      newLines: 0,
-      lines: diff
-        .split("\n")
-        .filter((line) => !line.startsWith("---") && !line.startsWith("+++")),
-    },
-  ]);
 }
 
 function netFileOperation(

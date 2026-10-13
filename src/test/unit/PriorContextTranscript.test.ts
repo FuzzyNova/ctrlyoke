@@ -244,12 +244,19 @@ suite("PriorContextTranscript", () => {
     }
   });
 
-  test("prefers line boundaries while respecting UTF-8 code point boundaries", () => {
+  test("keeps whole lines, fills the rest of the budget, and never splits code points", () => {
     const lineBounded = boundPriorContextText("one\nββ\nend", 5, "tail");
     assert.deepStrictEqual(lineBounded, {
       text: "\nend",
       omitted: "start",
       omittedBytes: 8,
+    });
+
+    const filled = boundPriorContextText("aaaa\nbb\ncc\n", 7, "head");
+    assert.deepStrictEqual(filled, {
+      text: "aaaa\nbb",
+      omitted: "end",
+      omittedBytes: 4,
     });
 
     const longCodePointLine = boundPriorContextText("a😀b", 5, "tail");

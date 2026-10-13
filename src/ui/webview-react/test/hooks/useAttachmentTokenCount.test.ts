@@ -94,7 +94,25 @@ describe("useAttachmentTokenCount", () => {
     const decoded = decodePriorContextTokenRef(request.references[0]);
     expect(decoded).not.toBeNull();
     expect(parseMergedPriorContextBody(decoded!.body)).toEqual([
-      { previous: 3 },
+      { context: "previous", detail: "full" },
+      { context: { previous: 3 }, detail: "full" },
+    ]);
+  });
+
+  it("keeps each reference's summary detail in the preview request", () => {
+    renderHook(() =>
+      useAttachmentTokenCount("$summary:previous:3 $summary:previous:3", 5)
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+
+    const request = (getVsCodeApi().postMessage as ReturnType<typeof vi.fn>)
+      .mock.calls[0][0] as { references: string[] };
+    const decoded = decodePriorContextTokenRef(request.references[0]);
+    expect(parseMergedPriorContextBody(decoded!.body)).toEqual([
+      { context: { previous: 3 }, detail: "summary" },
     ]);
   });
 });

@@ -812,8 +812,11 @@ suite("TemplateManager variable metadata", () => {
       assert.ok(featureTemplate);
       assert.deepStrictEqual(
         featureTemplate.variables.map(
-          (variable: { name: string; required?: boolean; default?: string }) =>
-            [variable.name, variable.required, variable.default]
+          (variable: {
+            name: string;
+            required?: boolean;
+            default?: string;
+          }) => [variable.name, variable.required, variable.default]
         ),
         [
           ["featureDescription", true, undefined],
@@ -843,8 +846,12 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(workflow.steps?.[1].name, "plan");
       assert.strictEqual(workflow.finalStep?.name, "review");
       assert.strictEqual(workflow.finalStep?.sessionId, 2);
-      assert.ok(workflow.steps?.[1].prompt.includes("@.ctrlyoke/plans/plan.md"));
-      assert.ok(workflow.finalStep?.prompt.includes("@.ctrlyoke/plans/plan.md"));
+      assert.ok(
+        workflow.steps?.[1].prompt.includes("@.ctrlyoke/plans/plan.md")
+      );
+      assert.ok(
+        workflow.finalStep?.prompt.includes("@.ctrlyoke/plans/plan.md")
+      );
 
       await assert.rejects(
         tm.createWorkflow("feature-driven-loop", {}),
@@ -905,6 +912,20 @@ suite("TemplateManager variable metadata", () => {
 
       const workflow = await tm.createWorkflow("custom:test", {});
       assert.strictEqual(workflow.steps![0].prompt, "Build the feature");
+
+      const whitespace = await tm.createWorkflow("custom:test", {
+        featureDescription: "  ",
+      });
+      assert.strictEqual(whitespace.steps![0].prompt, "Build the feature");
+    });
+
+    test("leaves a bare @ for a blank optional file variable", async () => {
+      const tm = makeManager();
+      tm.getTemplateContent = async () =>
+        ["steps:", "  - prompt: 'Spec: @{file:specFile}'"].join("\n");
+
+      const workflow = await tm.createWorkflow("custom:test", {});
+      assert.strictEqual(workflow.steps![0].prompt, "Spec: @");
     });
 
     test("fills absent optional variables while preserving defaults and retry placeholders", async () => {

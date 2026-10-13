@@ -9,6 +9,8 @@ _templateMeta:
         - "**/*.md"
         - "**/*.txt"
       autoFillFilename: true
+      required: true
+      description: The spec to plan from (required).
     constraints:
       type: text
       default: Follow existing patterns; keep changes minimal.

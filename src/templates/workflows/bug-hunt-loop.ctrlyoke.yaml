@@ -59,16 +59,18 @@ finalStep:
   model: "{hunterModel}"
   mcpServers:
     - ctrlyoke
-  # Each pass is a fresh session. The previous pass's output is attached so it
-  # can hunt somewhere new or follow up on the last round of fixes.
+  # Each pass is a fresh session. A summary of the previous pass (its files
+  # changed and closing text) is attached so it can hunt somewhere new or follow
+  # up on the last round of fixes; read_output has the full record.
   resumeSession: false
   priorContext: finalStepPrevious
+  priorContextDetail: summary
   prompt: |
     Your goal is to review the bugs fixed since the previous pass, then find and file at
     least two new bugs in this project and queue their fixes.
 
     You run as this workflow's final step. Every pass is a new session, so you have no
-    memory of earlier passes; the previous pass's output (if any) is attached above. Use
+    memory of earlier passes; a summary of the previous pass (if any) is attached above. Use
     it to hunt in a different part of the codebase, or to queue follow-up work if the last
     round of fixes needs it. Use workflow_status and read_output for more detail.
 

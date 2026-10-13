@@ -2,7 +2,7 @@ import { isScriptStep, type WorkflowStep } from "../types/CtrlYokeTypes";
 import { hasStarted } from "../utils/StepStatusDerivation";
 import {
   formatInlinePriorContextBody,
-  scanInlinePriorContextRefs,
+  parseInlinePriorContextRefs,
 } from "../utils/FileReferenceParser";
 import { PRIOR_CONTEXT_REFERENCE_KINDS } from "../types/DashboardConstants";
 
@@ -87,7 +87,9 @@ export function renumberStepReferences(
     ): string | undefined => {
       if (typeof text !== "string") return text;
       let rewritten = text;
-      const matches = scanInlinePriorContextRefs(text).filter(
+      // Code spans are masked offset-preserving, so references written
+      // literally inside them are never rewritten.
+      const matches = parseInlinePriorContextRefs(text).filter(
         (match) => match.ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
       );
       for (const match of [...matches].reverse()) {
@@ -113,6 +115,13 @@ export function renumberStepReferences(
             targetNewIndex === undefined ? reference : targetNewIndex + 1,
           ];
         });
+        // Leave an unaffected token exactly as written (e.g. keep `1-3`).
+        const original = match.ref.indices;
+        if (
+          indices.length === original.length &&
+          indices.every((index, position) => index === original[position])
+        )
+          continue;
         const body = formatInlinePriorContextBody({ ...match.ref, indices });
         rewritten = `${rewritten.slice(0, match.startOffset)}$${body}${rewritten.slice(match.endOffset)}`;
       }

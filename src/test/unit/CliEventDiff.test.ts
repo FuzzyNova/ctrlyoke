@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   countStructuredPatchChanges,
+  countUnifiedDiffChanges,
   formatCreatedFileDiff,
   formatEditDiff,
   formatStructuredPatch,
@@ -55,5 +56,32 @@ suite("CliEventDiff", () => {
       ]),
       { added: 1, removed: 1 }
     );
+  });
+
+  test("counts unified diff lines that look like file headers inside hunks", () => {
+    assert.deepStrictEqual(
+      countUnifiedDiffChanges(
+        formatStructuredPatch("query.sql", [
+          {
+            oldStart: 1,
+            oldLines: 2,
+            newStart: 1,
+            newLines: 2,
+            lines: ["--- old comment", "+++i;", " keep"],
+          },
+        ])
+      ),
+      { added: 1, removed: 1 }
+    );
+    assert.deepStrictEqual(
+      countUnifiedDiffChanges(
+        formatCreatedFileDiff({ path: "new.txt", content: "one\ntwo\n" })
+      ),
+      { added: 2, removed: 0 }
+    );
+    assert.deepStrictEqual(countUnifiedDiffChanges(""), {
+      added: 0,
+      removed: 0,
+    });
   });
 });

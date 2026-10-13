@@ -59,7 +59,11 @@ Field details: [`worktree`](/reference/workflow-schema#worktree).
   fresh. Leave the session field blank to auto-resume, or enter a session ID or a
   prompt number. See [Session management](/workflows/session-management).
 - **Prior Context** — inject earlier step outputs into each prompt. The field
-  below the selector takes specific prompt numbers, such as `1,2,4-10`.
+  below the selector takes specific prompt numbers, such as `1,2,4-10`. The
+  **Full** / **Summary** toggle sets `priorContextDetail`: **Full** sends each
+  step's complete record, and **Summary** sends a bounded excerpt (the start of
+  the prompt, the files changed, and the end of the reply). See
+  [Prior output references](/workflows/context-files#prior-output-references).
 - **Variables** — workflow-level <code v-pre>{{name}}</code> values. Use **Bulk
   edit** to paste several `name=value` lines at once.
 

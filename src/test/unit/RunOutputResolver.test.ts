@@ -1068,6 +1068,109 @@ suite("RunOutputResolver", () => {
         '<step index="2" type="finalStep">'
       )
     );
+
+    const mixedItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [
+        { context: "finalStepAll", detail: "summary" },
+        { context: "finalStepPrevious", detail: "full" },
+      ],
+      revisionOne.steps,
+      1,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(
+      mixedItems.map((item) => [item.index, item.detail]),
+      [
+        [0, "summary"],
+        [1, "full"],
+      ],
+      "every pass is selected, and only the latest one is upgraded to full"
+    );
+  });
+
+  test("renders only the steps a full previous selector chose in full", async () => {
+    const steps = [
+      { prompt: "first" },
+      { prompt: "second" },
+      { prompt: "third" },
+    ];
+    const promptRunManifest = await recorder.initializeRunAt(
+      path.join(workspaceRoot, "run-2026-07-21T00-00-00-000Z"),
+      "resolver-workflow",
+      1,
+      1,
+      EXECUTION_STATES.RUNNING,
+      1,
+      { workflowName: "three prompts", steps }
+    );
+    await recorder.appendEvents(
+      promptRunManifest,
+      steps.flatMap((step, stepIndex) => {
+        const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex } as const;
+        const common = {
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+        };
+        return [
+          {
+            ...common,
+            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+            timestampMs: stepIndex * 3 + 1,
+            payload: {
+              kind: "ai" as const,
+              startReason: "initial" as const,
+              prompt: step.prompt,
+            },
+          },
+          {
+            ...common,
+            eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+            timestampMs: stepIndex * 3 + 2,
+            responseKind: "ai" as const,
+            payload: {
+              cliOutput: {
+                structured: {
+                  events: [
+                    { type: "text", data: { text: `${step.prompt} output` } },
+                  ],
+                  metadata: {},
+                },
+                elapsed: 1,
+                isStreaming: false,
+              },
+            },
+          },
+          {
+            ...common,
+            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+            timestampMs: stepIndex * 3 + 3,
+            payload: { terminalState: "completed" as const },
+          },
+        ];
+      })
+    );
+    const resolver = new RunOutputResolver(recorder);
+    const items = await resolver.resolvePriorContextItems(
+      promptRunManifest,
+      [
+        { context: { previous: 3 }, detail: "summary" },
+        { context: "previous", detail: "full" },
+      ],
+      steps,
+      3,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(
+      items.map((item) => [item.index, item.detail]),
+      [
+        [0, "summary"],
+        [1, "summary"],
+        [2, "full"],
+      ]
+    );
   });
 
   test("uses only the addressed run and skips an interrupted-only attempt", async () => {

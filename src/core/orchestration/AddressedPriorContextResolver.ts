@@ -8,6 +8,10 @@ import {
 } from "../../types/CtrlYokeTypes";
 import type { PriorContextItem } from "../HarnessIntegration";
 import type { PriorContextRequest } from "../../utils/PriorContextMerge";
+import {
+  PRIOR_CONTEXT_DETAILS,
+  type PriorContextDetail,
+} from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
   RunOutputResolver,
@@ -81,7 +85,7 @@ export class AddressedPriorContextResolver {
     const local: PriorContextRequest[] = [];
     const addressed: {
       address: WorkflowRunAddress;
-      detail: "full" | "summary";
+      detail: PriorContextDetail;
     }[] = [];
     for (const request of contexts) {
       const selection =
@@ -91,7 +95,7 @@ export class AddressedPriorContextResolver {
           ? request
           : undefined;
       const context = selection ? selection.context : (request as PriorContext);
-      const detail = selection?.detail ?? "full";
+      const detail = selection?.detail ?? PRIOR_CONTEXT_DETAILS.FULL;
       if (isWorkflowRunAddress(context))
         addressed.push({ address: context, detail });
       else local.push(request);

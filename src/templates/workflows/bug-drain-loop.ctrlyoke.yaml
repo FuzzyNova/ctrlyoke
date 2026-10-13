@@ -57,16 +57,18 @@ finalStep:
   agent: workflow-orchestrator
   mcpServers:
     - ctrlyoke
-  # Each pass is a fresh session. The previous pass's output is attached so it
-  # can see what was queued last time.
+  # Each pass is a fresh session. A summary of the previous pass (its files
+  # changed and closing text) is attached so it can see what was queued last
+  # time; read_output has the full record.
   resumeSession: false
   priorContext: finalStepPrevious
+  priorContextDetail: summary
   prompt: |
     Your goal is to review the bug fixes from previous steps, then use append_step to
     queue fixes for the bug reports currently in {bugBacklogDir}.
 
     You run as this workflow's final step. Every pass is a new session, so you have no
-    memory of earlier passes; the previous pass's output (if any) is attached above. Use
+    memory of earlier passes; a summary of the previous pass (if any) is attached above. Use
     workflow_status and read_output for more detail.
 
     ## 1. Review the last round of fixes

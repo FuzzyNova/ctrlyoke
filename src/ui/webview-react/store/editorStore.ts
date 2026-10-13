@@ -21,6 +21,7 @@ import {
   STEP_TYPES,
   type ExecutionMode,
   type HarnessId,
+  type PriorContextDetail,
 } from "@root/types/DashboardConstants";
 import type {
   PromptEditorInsertRequest,
@@ -87,7 +88,7 @@ export interface PropertyValues {
   endCondition?: EndConditionConfig | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext; // undefined = inherit/default
-  priorContextDetail?: "full" | "summary";
+  priorContextDetail?: PriorContextDetail;
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
 }

@@ -66,6 +66,33 @@ suite("StepReferenceRenumbering", () => {
     );
   });
 
+  test("leaves inline step ranges untouched when none of their targets move", () => {
+    const oldSteps = ensureStepIds([
+      { prompt: "first" },
+      { prompt: "second" },
+      { prompt: "reference $step:1-2" },
+    ] as WorkflowStep[]);
+    const appended = ensureStepIds([...oldSteps, { prompt: "new" }], oldSteps);
+    const result = renumberStepReferences(oldSteps, appended);
+    assert.strictEqual(
+      (result.steps[2] as PromptStep).prompt,
+      "reference $step:1-2"
+    );
+  });
+
+  test("does not renumber step references written inside code spans", () => {
+    const oldSteps = ensureStepIds([
+      { prompt: "first" },
+      { prompt: "reference $step:1 but not `$step:1`" },
+    ] as WorkflowStep[]);
+    const inserted = ensureStepIds([{ prompt: "new" }, ...oldSteps], oldSteps);
+    const result = renumberStepReferences(oldSteps, inserted);
+    assert.strictEqual(
+      (result.steps[2] as PromptStep).prompt,
+      "reference $step:2 but not `$step:1`"
+    );
+  });
+
   test("refuses removing a referenced target while the referencing step is unstarted", () => {
     const oldSteps = ensureStepIds([
       { prompt: "target" },

@@ -9,6 +9,7 @@ import {
   type HarnessId,
   type CtrlYokeMcpMode,
   PRIOR_CONTEXT_DETAILS,
+  type PriorContextDetail,
 } from "./DashboardConstants";
 import type {
   EndCondition,
@@ -56,7 +57,7 @@ export interface ExecutionPropertyDefaults {
   endCondition?: EndCondition | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext;
-  priorContextDetail?: "full" | "summary";
+  priorContextDetail?: PriorContextDetail;
   toolPermissions?: ToolPermissionsOverride | null;
   errorBehavior?: ErrorBehavior | null;
 }

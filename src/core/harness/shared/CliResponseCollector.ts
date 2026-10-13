@@ -126,10 +126,10 @@ export class CliResponseCollector {
     if (this.deps.provider.augmentParsedOutput) {
       parsedOutput = await this.deps.provider.augmentParsedOutput(parsedOutput);
     }
-    // Deliberately not redacted here: `parsedOutput`/`responseText` become the
-    // harness's canonical response — reused verbatim as `$prior-context`/
-    // `$step:N` in a later prompt (see PromptQueue/CliPromptPreparer) and as
-    // commit-message text (CommitMessageGenerator). Redacting the harness's
+    // Deliberately not redacted here: `parsedOutput.events` become the
+    // harness's canonical record — rendered verbatim as `$previous`/`$step:N`
+    // in a later prompt (PriorContextTranscript) and read for commit-message
+    // text (CommitMessageGenerator). Redacting the harness's
     // own output at this choke point corrupted legitimate values the model
     // needs to see again (e.g. a real token printed while debugging auth
     // code), the same failure mode as redacting the standalone shim's own

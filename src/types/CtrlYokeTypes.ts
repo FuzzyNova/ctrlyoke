@@ -42,6 +42,7 @@ import {
   type ParallelGroupAdmission,
   type WorkflowValidationWarningCode,
   type GuardrailStopCode,
+  type PriorContextDetail,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
@@ -313,7 +314,7 @@ export interface ExecutionProperties {
   /** Controls injection of prior prompt outputs into this prompt's text.
    *  See PriorContext type for valid values. Omitting the field = no injection. */
   priorContext?: PriorContext;
-  priorContextDetail?: "full" | "summary";
+  priorContextDetail?: PriorContextDetail;
 
   /** Extra CLI flags appended to ctrlyoke's standard argument set.
    * ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally.

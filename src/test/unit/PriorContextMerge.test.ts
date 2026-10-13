@@ -28,7 +28,19 @@ suite("PriorContextMerge", () => {
       3
     );
     assert.strictEqual(merged.detailByQueueIndex.get(1), "full");
-    assert.strictEqual(merged.previousDetail, "summary");
+    assert.strictEqual(merged.fullPreviousCount, 0);
+  });
+
+  test("limits full previous detail to the count requested at full", () => {
+    const merged = mergePriorContextReferences(
+      [
+        { context: { previous: 3 }, detail: "summary" },
+        { context: "previous", detail: "full" },
+      ],
+      4
+    );
+    assert.strictEqual(merged.previousCount, 3);
+    assert.strictEqual(merged.fullPreviousCount, 1);
   });
 
   test("deduplicates queue and final-step items by their distinct identities", () => {
