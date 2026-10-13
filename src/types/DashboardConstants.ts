@@ -493,6 +493,7 @@ export const MESSAGE_TYPES = {
   STEP_COLOR_UPDATED: "stepColorUpdated", // Extension -> Webview: Confirm a step color update
   GET_RECENT_WORKFLOWS: "getRecentWorkflows", // Webview -> Extension: Request workflow history
   RECENT_WORKFLOWS: "recentWorkflows", // Extension -> Webview: Send workflow history
+  RECENT_WORKFLOW_UPDATED: "recentWorkflowUpdated", // Extension -> Webview (broadcast): one lineage's dropdown row changed
   LOAD_WORKFLOW: "loadWorkflow", // Webview -> Extension: Load specific workflow
   CLEAR_WORKFLOW_HISTORY: "clearWorkflowHistory", // Webview -> Extension: Move every non-live lineage to Recently deleted; requires { confirmation: CLEAR_HISTORY_CONFIRMATION_PHRASE }
   HISTORY_CLEAR_PREVIEW_REQUEST: "historyClearPreviewRequest", // Webview -> Extension: { requestId } count what Clear all history would move

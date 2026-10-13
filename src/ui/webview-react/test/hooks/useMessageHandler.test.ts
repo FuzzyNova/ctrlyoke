@@ -1093,7 +1093,7 @@ describe("STARTUP_COMPLETE", () => {
     });
   });
 
-  it("does not re-request recent workflows on a reconnect after they loaded", () => {
+  it("re-requests recent workflows on a reconnect, since pushes sent while disconnected are lost", () => {
     const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
       typeof vi.fn
     >;
@@ -1106,9 +1106,32 @@ describe("STARTUP_COMPLETE", () => {
       dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
     });
 
-    expect(postMessageMock).not.toHaveBeenCalledWith({
+    expect(postMessageMock).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS,
     });
+  });
+
+  it("applies a pushed recent-workflow row", () => {
+    useUiStore.getState().setRecentWorkflows([], 100);
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECENT_WORKFLOW_UPDATED, {
+        workflow: {
+          address: {
+            workflowKey: "wf-new",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
+          workflowName: "Brand new",
+          executionState: EXECUTION_STATES.IDLE,
+        },
+        seq: 200,
+      });
+    });
+
+    expect(
+      useUiStore.getState().recentWorkflows.map((w) => w.workflowName)
+    ).toEqual(["Brand new"]);
   });
 
   it("does not request CLEAR_WORKFLOW when a persisted workflow path is pending", () => {

@@ -1225,6 +1225,69 @@ describe("updateRecentWorkflowFromSummary", () => {
   });
 });
 
+describe("recent-workflow list and row sequencing", () => {
+  const row = (workflowKey: string, executionState: string) => ({
+    address: {
+      workflowKey: workflowKey as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    },
+    workflowName: workflowKey,
+    executionState,
+  });
+  const states = () =>
+    Object.fromEntries(
+      store().recentWorkflows.map((w) => [
+        w.address.workflowKey,
+        w.executionState,
+      ])
+    );
+
+  it("keeps a row pushed after a slow list began scanning", () => {
+    store().setRecentWorkflows([row("wf-a", "running")], 100);
+    // Pushed while the next scan (seq 200) was still reading "running".
+    store().upsertRecentWorkflow(row("wf-a", "completed"), 250);
+    store().upsertRecentWorkflow(row("wf-new", "idle"), 260);
+
+    store().setRecentWorkflows(
+      [row("wf-a", "running"), row("wf-b", "idle")],
+      200
+    );
+
+    expect(states()).toEqual({
+      "wf-a": "completed",
+      "wf-b": "idle",
+      "wf-new": "idle",
+    });
+  });
+
+  it("lets a newer list replace rows pushed before it began", () => {
+    store().setRecentWorkflows([row("wf-a", "running")], 100);
+    store().upsertRecentWorkflow(row("wf-a", "completed"), 150);
+
+    store().setRecentWorkflows([row("wf-a", "stopped")], 200);
+    // A row older than the list now applied is stale.
+    store().upsertRecentWorkflow(row("wf-a", "running"), 180);
+
+    expect(states()).toEqual({ "wf-a": "stopped" });
+    expect(store().recentWorkflowRowSeqs).toEqual({});
+  });
+
+  it("drops a list older than the one already applied", () => {
+    store().setRecentWorkflows([row("wf-a", "completed")], 200);
+    store().setRecentWorkflows([row("wf-a", "running")], 100);
+
+    expect(states()).toEqual({ "wf-a": "completed" });
+  });
+
+  it("ignores a pushed row older than one already applied for that lineage", () => {
+    store().setRecentWorkflows([], 100);
+    store().upsertRecentWorkflow(row("wf-a", "completed"), 300);
+    store().upsertRecentWorkflow(row("wf-a", "running"), 200);
+
+    expect(states()).toEqual({ "wf-a": "completed" });
+  });
+});
+
 describe("toggleRecentWorkflowsDropdown", () => {
   it("flips recentWorkflowsDropdownOpen", () => {
     expect(store().recentWorkflowsDropdownOpen).toBe(false);

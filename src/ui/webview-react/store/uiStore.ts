@@ -736,6 +736,13 @@ interface UiState {
    * list scans every lineage, which takes seconds on a large history.
    */
   recentWorkflowsLoaded: boolean;
+  /** `seq` of the last full list applied; older lists and rows are dropped. */
+  recentWorkflowsListSeq: number;
+  /**
+   * `seq` of each row pushed since that list, by workflow key. A full list
+   * that began scanning before a row was pushed must not overwrite that row.
+   */
+  recentWorkflowRowSeqs: Record<string, number>;
   recentWorkflowsDropdownOpen: boolean;
 
   // Multi-workflow support
@@ -1004,7 +1011,14 @@ interface UiActions {
   ) => void;
 
   // Recent workflows
-  setRecentWorkflows: (workflows: RecentWorkflow[]) => void;
+  /**
+   * Replaces the list. With the host's `seq`, rows pushed after that list
+   * began scanning survive it, and a list older than the last one is dropped.
+   * Without one (local optimistic edits) it replaces outright.
+   */
+  setRecentWorkflows: (workflows: RecentWorkflow[], seq?: number) => void;
+  /** Applies one pushed row (`RECENT_WORKFLOW_UPDATED`) unless something newer already landed. */
+  upsertRecentWorkflow: (workflow: RecentWorkflow, seq: number) => void;
   /**
    * Patches the recent-workflow entry sharing this summary's lineage
    * (execution state, step count, token totals, worktree) in place. Recent
@@ -1243,6 +1257,8 @@ const initialState: UiState = {
   customTemplateCreated: null,
   recentWorkflows: [],
   recentWorkflowsLoaded: false,
+  recentWorkflowsListSeq: 0,
+  recentWorkflowRowSeqs: {},
   recentWorkflowsDropdownOpen: false,
   loadedWorkflows: [],
   observedRunningWorkflowIds: new Set<string>(),
@@ -1800,8 +1816,64 @@ export const useUiStore = create<UiState & UiActions>()(
       // RECENT WORKFLOWS
       // ============================================================================
 
-      setRecentWorkflows: (workflows) =>
-        set({ recentWorkflows: workflows, recentWorkflowsLoaded: true }),
+      setRecentWorkflows: (workflows, seq) =>
+        set((state) => {
+          if (seq === undefined) {
+            return { recentWorkflows: workflows, recentWorkflowsLoaded: true };
+          }
+          if (seq < state.recentWorkflowsListSeq) {
+            return state;
+          }
+          const newerRows = state.recentWorkflows.filter(
+            (workflow) =>
+              (state.recentWorkflowRowSeqs[workflow.address.workflowKey] ?? 0) >
+              seq
+          );
+          const newerKeys = new Set(
+            newerRows.map((workflow) => workflow.address.workflowKey)
+          );
+          return {
+            recentWorkflows: [
+              ...workflows.filter(
+                (workflow) => !newerKeys.has(workflow.address.workflowKey)
+              ),
+              ...newerRows,
+            ],
+            recentWorkflowsLoaded: true,
+            recentWorkflowsListSeq: seq,
+            recentWorkflowRowSeqs: Object.fromEntries(
+              Object.entries(state.recentWorkflowRowSeqs).filter(
+                ([, rowSeq]) => rowSeq > seq
+              )
+            ),
+          };
+        }),
+
+      upsertRecentWorkflow: (workflow, seq) =>
+        set((state) => {
+          const workflowKey = workflow.address.workflowKey;
+          if (
+            seq <= state.recentWorkflowsListSeq ||
+            seq <= (state.recentWorkflowRowSeqs[workflowKey] ?? 0)
+          ) {
+            return state;
+          }
+          const index = state.recentWorkflows.findIndex(
+            (existing) => existing.address.workflowKey === workflowKey
+          );
+          return {
+            recentWorkflows:
+              index === -1
+                ? [...state.recentWorkflows, workflow]
+                : state.recentWorkflows.map((existing, i) =>
+                    i === index ? workflow : existing
+                  ),
+            recentWorkflowRowSeqs: {
+              ...state.recentWorkflowRowSeqs,
+              [workflowKey]: seq,
+            },
+          };
+        }),
 
       updateRecentWorkflowFromSummary: (summary) =>
         set((state) => {
@@ -2503,6 +2575,8 @@ export const useUiStore = create<UiState & UiActions>()(
           workflowVariableRevealRequest: null,
           recentWorkflows: [],
           recentWorkflowsLoaded: false,
+          recentWorkflowsListSeq: 0,
+          recentWorkflowRowSeqs: {},
           recentWorkflowsDropdownOpen: false,
           workspaceWorktreeOwnership: null,
           isLoading: false,

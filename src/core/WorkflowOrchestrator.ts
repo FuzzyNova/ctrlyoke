@@ -86,6 +86,10 @@ import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import {
+  RecentWorkflowCatalog,
+  RecentWorkflowPublisher,
+} from "./orchestration/RecentWorkflowCatalog";
 import { DefinitionAuthorLedger } from "./orchestration/DefinitionAuthorLedger";
 import {
   assertDefinitionRevision,
@@ -568,6 +572,20 @@ export class WorkflowOrchestrator {
   // Cross-cutting concerns
   // ─────────────────────────────────────────────────────────────────────────
   private readonly dashboardBroadcastHub = new DashboardBroadcastHub();
+  private recentWorkflowHistoryManager?: OutputHistoryManager;
+  private readonly recentWorkflowPublisher = new RecentWorkflowPublisher(
+    new RecentWorkflowCatalog(this.lineageRepository, {
+      getWorkflowSummaries: () => this.getWorkflowSummaries(),
+      ensureExternalRunWatchSession: (filePath) =>
+        this.ensureExternalRunWatchSession(filePath),
+      getOutputHistoryManager: (workspaceRoot) =>
+        (this.recentWorkflowHistoryManager ??= new OutputHistoryManager(
+          workspaceRoot
+        )),
+    }),
+    () => this.currentWorkspaceFolderPath,
+    (message) => this.dashboardBroadcastHub.postMessage(message)
+  );
   private readonly harnessUsageService?: HarnessUsageService;
   private readonly workspaceStatsService?: WorkspaceStatsService;
   private readonly integrationFactory: IntegrationFactory;
@@ -663,6 +681,9 @@ export class WorkflowOrchestrator {
     if (dependencies.dashboardProvider) {
       this.dashboardBroadcastHub.addClient(dependencies.dashboardProvider);
     }
+    this.dashboardBroadcastHub.onWorkflowSummaryUpdated((summary) =>
+      this.recentWorkflowPublisher.observe(summary)
+    );
     // Workspace — the folder matching the resolved `.ctrlyoke` root
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolderPath =
@@ -1388,7 +1409,7 @@ export class WorkflowOrchestrator {
    * Ensure an external-run watch session exists for the given working file if its lock
    * belongs to a live CLI or sibling VS Code instance.
    *
-   * Called by WorkflowSerializer.handleGetRecentWorkflows to bridge the timing gap between
+   * Called by RecentWorkflowCatalog (the dropdown's recent list) to bridge the timing gap between
    * CLI lock file creation and the runnerJsonCreateWatcher firing (VS Code file-watcher
    * latency on Windows can be several hundred milliseconds).
    *
@@ -4735,6 +4756,7 @@ export class WorkflowOrchestrator {
     this.activeQueueStateChangedEmitter?.dispose();
     this.activeQueueStateChangedEmitter = undefined;
     this.workflowActivityTracker?.dispose();
+    this.recentWorkflowPublisher.dispose();
 
     // Dispose all retired instances (completed/stopped, not in main map)
     if (disposeInstances) {

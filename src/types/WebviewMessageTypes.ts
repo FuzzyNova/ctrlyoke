@@ -1163,29 +1163,51 @@ export interface CreateCustomTemplateMessage {
   baseTemplateId: string;
 }
 
+/** One lineage's row in the workflow dropdown, as `RecentWorkflowCatalog` builds it. */
+export interface RecentWorkflowEntry {
+  address: WorkflowViewAddress;
+  runDirectory?: string;
+  workflowName: string;
+  executionState: QueueState["status"];
+  stopReason?: WorkflowStopReason;
+  lastModifiedAt?: number;
+  startedAt?: number;
+  isFavorite?: boolean;
+  totalSteps?: number;
+  harness?: HarnessId;
+  /** The primary address is a run prepared but never executed (`isUnstartedRun`). */
+  unstarted?: boolean;
+  runNav?: WorkflowRunNavigationSummary;
+  tokenTotals?: WorkflowTokenTotals;
+  /** Primary run's pause-aware run time, once its clock has stopped (`frozenActiveExecutionMs`). */
+  activeExecutionMs?: number;
+  worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
+}
+
 /**
  * Recent workflows message (extension -> webview)
  */
 export interface RecentWorkflowsMessage {
   type: typeof MESSAGE_TYPES.RECENT_WORKFLOWS;
-  workflows: Array<{
-    address: WorkflowViewAddress;
-    runDirectory?: string;
-    workflowName: string;
-    executionState: QueueState["status"];
-    lastModifiedAt?: number;
-    startedAt?: number;
-    isFavorite?: boolean;
-    totalSteps?: number;
-    harness?: HarnessId;
-    /** The primary address is a run prepared but never executed (`isUnstartedRun`). */
-    unstarted?: boolean;
-    runNav?: WorkflowRunNavigationSummary;
-    tokenTotals?: WorkflowTokenTotals;
-    /** Primary run's pause-aware run time, once its clock has stopped (`frozenActiveExecutionMs`). */
-    activeExecutionMs?: number;
-    worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
-  }>;
+  workflows: RecentWorkflowEntry[];
+  /**
+   * `nextRecentWorkflowsSequence()` taken before the scan read anything. A
+   * `RECENT_WORKFLOW_UPDATED` with a higher sequence is newer than this list's
+   * row for that lineage, however late the list arrives.
+   */
+  seq?: number;
+}
+
+/**
+ * One lineage's dropdown row changed (extension -> webview, broadcast).
+ * Pushed so a new or changed lineage shows without the full multi-second
+ * `GET_RECENT_WORKFLOWS` rescan.
+ */
+export interface RecentWorkflowUpdatedMessage {
+  type: typeof MESSAGE_TYPES.RECENT_WORKFLOW_UPDATED;
+  workflow: RecentWorkflowEntry;
+  /** `nextRecentWorkflowsSequence()` taken before the row was read. */
+  seq: number;
 }
 
 /**
@@ -3184,6 +3206,7 @@ export type IncomingMessage =
       definitionRevision?: number;
     }
   | RecentWorkflowsMessage
+  | RecentWorkflowUpdatedMessage
   | RunSummariesLoadedMessage
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }
   | TemplateCatalogLoadedMessage

@@ -3,7 +3,6 @@ import * as fs from "fs/promises";
 import * as yaml from "js-yaml";
 import {
   MESSAGE_TYPES,
-  EXECUTION_STATES,
   WORKFLOW_PROPERTY_KEYS,
   PROMPT_PROPERTIES,
   PANEL_CLIENT_ID,
@@ -43,6 +42,10 @@ import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import {
+  RecentWorkflowCatalog,
+  nextRecentWorkflowsSequence,
+} from "../core/orchestration/RecentWorkflowCatalog";
+import {
   HistoryTrashRepository,
   toHistoryTrashedMessage,
 } from "../core/orchestration/HistoryTrashRepository";
@@ -50,24 +53,13 @@ import {
   describeRestoreResult,
   TRASH_ENTRY_GONE_MESSAGE,
 } from "../utils/HistoryTrashDescriptions";
-import {
-  getLineageLastModifiedAt,
-  stripLegacyWorkingFileLineageMetadata,
-} from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import {
-  isScriptStep,
   EXECUTION_PROPERTY_KEYS,
-  frozenActiveExecutionMs,
-  type PromptStep,
-  type WorkingFile,
   type WorkflowViewAddress,
-  type WorkflowRunNavigationSummary,
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
-import { PropertyResolver } from "../utils/PropertyResolver";
-import { isUnstartedRunFile } from "../utils/StepStatusDerivation";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
@@ -105,6 +97,19 @@ const NO_WORKFLOW_KEYS: ReadonlySet<WorkflowKey> = new Set();
 
 export class WorkflowSerializer {
   private readonly lineageRepository = new WorkflowLineageRepository();
+  private readonly recentWorkflowCatalog = new RecentWorkflowCatalog(
+    this.lineageRepository,
+    {
+      getWorkflowSummaries: () =>
+        this.getManager()?.getWorkflowSummaries() ?? [],
+      ensureExternalRunWatchSession: async (filePath) =>
+        (await this.getManager()?.ensureExternalRunWatchSession(filePath)) ??
+        false,
+      getOutputHistoryManager: (workspaceRoot) =>
+        this.getOutputHistoryManager() ??
+        new OutputHistoryManager(workspaceRoot),
+    }
+  );
 
   private readonly hostActions: Pick<
     DashboardHostActions,
@@ -1378,215 +1383,27 @@ export class WorkflowSerializer {
   // Recent Workflows
   // ============================================================================
 
+  /**
+   * @param joinInFlight Share a scan already under way (a client asking). A
+   * resend after this serializer's own history mutation leaves it false: a
+   * scan begun before that write would put the deleted row back.
+   */
   async handleGetRecentWorkflows(
-    replyPostMessage?: PostMessageFn
+    replyPostMessage?: PostMessageFn,
+    joinInFlight = false
   ): Promise<void> {
     const pm = replyPostMessage ?? this.postMessage;
     try {
       const workspaceRoot = this.workspaceRoot;
-      if (!workspaceRoot) {
-        pm({
-          type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-          workflows: [],
-        });
-        return;
-      }
-
-      const workflowKeys =
-        await this.lineageRepository.listLineageKeys(workspaceRoot);
-      if (workflowKeys.length === 0) {
-        pm({
-          type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-          workflows: [],
-        });
-        return;
-      }
-
-      // Build a fast lookup set of working file paths that are currently active
-      // in memory. Used below to normalize stale active states from disk.
-      const manager = this.getManager();
-      const activeWorkingFilePaths = new Set<string>(
-        (manager?.getWorkflowSummaries() ?? [])
-          .filter(
-            (s) =>
-              s.executionState === EXECUTION_STATES.RUNNING ||
-              s.executionState === EXECUTION_STATES.PAUSING ||
-              s.executionState === EXECUTION_STATES.PAUSED
-          )
-          .map((s) => s.workingFilePath)
-          .filter((p): p is string => p !== undefined)
-      );
-
-      const workflows = await Promise.all(
-        workflowKeys.map(async (workflowKey) => {
-          let address: WorkflowViewAddress;
-          let descriptor;
-          try {
-            descriptor = await this.lineageRepository.readDescriptor(
-              workspaceRoot,
-              workflowKey
-            );
-            address = descriptor.latestRunRef
-              ? {
-                  workflowKey,
-                  kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-                  runRef: descriptor.latestRunRef,
-                }
-              : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
-          } catch (error) {
-            Log.warn(
-              `[WorkflowSerializer] Failed to read lineage descriptor ${workflowKey}:`,
-              error
-            );
-            return null;
-          }
-
-          const filePath =
-            address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-              ? WorkflowPaths.runFilePath(
-                  workspaceRoot,
-                  address.workflowKey,
-                  address.runRef
-                )
-              : WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey);
-          const runDirectory =
-            address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-              ? WorkflowPaths.runDir(
-                  workspaceRoot,
-                  address.workflowKey,
-                  address.runRef
-                )
-              : WorkflowPaths.draftDir(workspaceRoot, address.workflowKey);
-
-          try {
-            const workingFile = stripLegacyWorkingFileLineageMetadata(
-              (await readJsonFile(filePath)) as WorkingFile
-            );
-            const historyManager =
-              this.getOutputHistoryManager() ??
-              new OutputHistoryManager(workspaceRoot);
-            const { runCount, primaryRunId } =
-              await historyManager.getRunNavigationSummary(workflowKey);
-            const hasDraft =
-              !descriptor.latestRunRef ||
-              descriptor.pendingEdit?.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT;
-            const runNav: WorkflowRunNavigationSummary = {
-              primaryAddress: address,
-              primaryRunId,
-              runCount,
-              hasDraft,
-              ...(hasDraft
-                ? {
-                    draftDirectory: WorkflowPaths.draftDir(
-                      workspaceRoot,
-                      workflowKey
-                    ),
-                  }
-                : {}),
-            };
-
-            const lastModified = await getLineageLastModifiedAt(
-              workspaceRoot,
-              workflowKey,
-              descriptor.lastModifiedAt
-            );
-
-            let executionState: string =
-              workingFile._runtime?.executionState || EXECUTION_STATES.IDLE;
-
-            // Normalize stale active state: if the disk says "running" or
-            // "pausing" but no in-memory workflow is actually executing this
-            // file, show STOPPED.
-            // This guards against race windows before normalizeStaleLocks finishes.
-            // HOWEVER: first check whether the lock file says the CLI is actively
-            // running it — this bridges the timing gap where the runner.json
-            // file-watcher hasn't fired yet (common on Windows due to watcher latency).
-            if (
-              (executionState === EXECUTION_STATES.RUNNING ||
-                executionState === EXECUTION_STATES.PAUSING) &&
-              !activeWorkingFilePaths.has(filePath)
-            ) {
-              const registeredExternalWatch =
-                (await manager?.ensureExternalRunWatchSession(filePath)) ??
-                false;
-              if (registeredExternalWatch) {
-                Log.trace(
-                  `[WorkflowSerializer] getRecentWorkflows: "${workflowKey}" has an active external lock — keeping running state (ExternalRunWatchSession registered)`
-                );
-                // executionState stays "running"; the session is now in externalRunSessions
-                // so the next GET_WORKFLOWS_LIST will move it to the Running section.
-              } else {
-                Log.trace(
-                  `[WorkflowSerializer] getRecentWorkflows: normalizing "${workflowKey}" runningstopped (not in activeWorkingFilePaths: [${[...activeWorkingFilePaths].map((p) => path.basename(p)).join(", ") || "none"}])`
-                );
-                executionState = EXECUTION_STATES.STOPPED;
-              }
-            }
-
-            const steps = Array.isArray(workingFile.steps)
-              ? workingFile.steps
-              : [];
-            const firstAiStepHarness = steps.find(
-              (s): s is PromptStep => !isScriptStep(s)
-            )?.harness;
-            const harness = PropertyResolver.resolveHarnessValue(
-              firstAiStepHarness,
-              workingFile.harness
-            );
-
-            return {
-              address,
-              runDirectory,
-              workflowName: descriptor.workflowName || workflowKey,
-              executionState,
-              stopReason: workingFile._runtime?.stopReason,
-              startedAt: workingFile.startedAt || 0,
-              lastModifiedAt: lastModified,
-              isFavorite: descriptor.isFavorite,
-              totalSteps: steps.length,
-              harness,
-              // A draft is unstarted by definition and already shows Run; the
-              // flag distinguishes a prepared run from an ordinary idle one.
-              ...(address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-              isUnstartedRunFile(workingFile)
-                ? { unstarted: true }
-                : {}),
-              tokenTotals: workingFile._runtime?.tokenTotals,
-              activeExecutionMs: frozenActiveExecutionMs(
-                workingFile._runtime ?? {}
-              ),
-              worktree: workingFile._runtime?.worktree
-                ? {
-                    branchName: workingFile._runtime.worktree.branchName,
-                    worktreePath: workingFile._runtime.worktree.worktreePath,
-                  }
-                : undefined,
-              runNav,
-            };
-          } catch (error) {
-            Log.warn(
-              `[WorkflowSerializer] Failed to parse workflow file ${workflowKey}:`,
-              error
-            );
-            return null;
-          }
-        })
-      );
-
-      const validWorkflows = workflows
-        .filter((w) => w !== null)
-        .sort((a, b) => b!.lastModifiedAt - a!.lastModifiedAt);
-
-      pm({
-        type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-        workflows: validWorkflows,
-      });
+      const list = workspaceRoot
+        ? await this.recentWorkflowCatalog.list(workspaceRoot, {
+            fresh: !joinInFlight,
+          })
+        : { workflows: [], seq: nextRecentWorkflowsSequence() };
+      pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, ...list });
     } catch (error) {
       Log.error("[WorkflowSerializer] Failed to get recent workflows:", error);
-      pm({
-        type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-        workflows: [],
-      });
+      pm({ type: MESSAGE_TYPES.RECENT_WORKFLOWS, workflows: [] });
     }
   }
 

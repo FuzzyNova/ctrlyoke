@@ -44,6 +44,8 @@ export class DashboardBroadcastHub
   implements IDashboardProvider, IDashboardSink
 {
   private readonly clients: DashboardClient[] = [];
+  private readonly summaryListeners: Array<(summary: WorkflowSummary) => void> =
+    [];
 
   addClient(client: DashboardClient): void {
     if (!this.clients.includes(client)) {
@@ -74,6 +76,17 @@ export class DashboardBroadcastHub
     for (const client of this.clients) {
       client.notifyWorkflowSummaryUpdated(summary);
     }
+    for (const listener of this.summaryListeners) {
+      listener(summary);
+    }
+  }
+
+  /**
+   * Host-side observer of every summary this hub broadcasts — instance and
+   * external-run alike, since both reach clients only through here.
+   */
+  onWorkflowSummaryUpdated(listener: (summary: WorkflowSummary) => void): void {
+    this.summaryListeners.push(listener);
   }
 
   /** No-op: ACTIVE_WORKFLOW_CHANGED is sent per-client via replayWorkflowStateTo, never broadcast. */

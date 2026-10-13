@@ -28,8 +28,24 @@ times over.
 
 ## 1. Make the recent-workflows list cheap to build and to resend
 
-`WorkflowSerializer.handleGetRecentWorkflows` builds the dropdown's history
-list from scratch on every request. For each lineage it:
+**Partly done (2026-10-13).** The list is now built by
+`RecentWorkflowCatalog` (`src/core/orchestration/`), and:
+
+- concurrent client requests share one in-flight scan (step 1 below);
+  resends after the serializer's own delete/restore still start a fresh one;
+- `RecentWorkflowPublisher` pushes a single rebuilt row
+  (`RECENT_WORKFLOW_UPDATED`) whenever a loaded lineage's run, state, name or
+  step count changes, so new and finished workflows no longer wait for a
+  rescan;
+- lists and rows carry a sequence taken before their reads, so a slow list
+  can no longer overwrite a newer pushed row on the client;
+- the client re-requests the list on every reconnect, because pushes sent
+  while a phone's socket was down are lost (this costs one scan per
+  reconnect, which is what makes steps 2–4 below more pressing).
+
+The dropdown still re-requests the full list on every open. Steps 2–5 remain.
+
+The original analysis follows. A full scan reads, for each lineage:
 
 - reads the descriptor
 - reads and parses the current working file
@@ -49,8 +65,7 @@ request took about 4 s to answer while a workflow was running.
 
 Suggested order:
 
-1. **Coalesce in-flight builds.** One build at a time per workspace; concurrent
-   requests share its result.
+1. ~~**Coalesce in-flight builds.**~~ Done: `RecentWorkflowCatalog.list`.
 2. **Cache per-lineage entries.** Use the stamp-validated pattern of
    `RunSummaryCache`: key on descriptor plus working-file `mtime`/`size`, and
    write through at the single writers. Note that
@@ -60,10 +75,12 @@ Suggested order:
 3. **Bound concurrency** for cold builds, as `getLineageLastModifiedAt` already
    does with its batch size.
 4. **Stop resending unchanged lists.** The client already patches rows in place
-   from `WORKFLOW_SUMMARY_UPDATED` (`updateRecentWorkflowFromSummary`). Add a
-   list revision so a dropdown open can ask "changed since N?" and get either a
-   no-op or a delta (lineages added, removed, renamed or re-favorited), instead
-   of the full list.
+   from `WORKFLOW_SUMMARY_UPDATED` (`updateRecentWorkflowFromSummary`) and
+   from pushed rows. The `seq` on lists and rows is a starting point: a
+   dropdown open could ask "changed since N?" and get either a no-op or a
+   delta. Pushes cover only lineages loaded in this host, so a delta still
+   has to find lineages changed by other processes (CLI, MCP, other windows)
+   and removals and re-favorites, which are not pushed.
 5. **Slim each entry.** Absolute `runDirectory`/`draftDirectory` paths repeat
    the same state-root prefix on every row.
 

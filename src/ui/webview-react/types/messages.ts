@@ -152,6 +152,8 @@ export {
   type OpenNewWorkflowModalMessage,
   type CreateCustomTemplateMessage,
   type RecentWorkflowsMessage,
+  type RecentWorkflowEntry,
+  type RecentWorkflowUpdatedMessage,
   type ActiveTerminalWorkflowRef,
   type ActiveTerminalWorkflowsMessage,
   type TerminalStartedMessage,

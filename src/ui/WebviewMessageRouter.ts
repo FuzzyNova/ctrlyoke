@@ -2089,7 +2089,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.GET_RECENT_WORKFLOWS, (_message, ctx) => {
-      this.serializer.handleGetRecentWorkflows(ctx.postMessage);
+      this.serializer.handleGetRecentWorkflows(ctx.postMessage, true);
     });
 
     table.set(MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE, async (message) => {

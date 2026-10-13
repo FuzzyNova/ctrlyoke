@@ -666,7 +666,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.emitStateChange();
 
       // Persist forced STOPPED state to disk immediately so subsequent
-      // handleGetRecentWorkflows reads see the correct state, not "running".
+      // RecentWorkflowCatalog reads see the correct state, not "running".
       if (recoveredIdsAdded || forcedToStopped || activeParallelGroupChanged) {
         await this.updateWorkingFile(recoveredIdsAdded).catch((err) =>
           Log.warn(

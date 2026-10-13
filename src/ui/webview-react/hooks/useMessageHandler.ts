@@ -1851,7 +1851,12 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RECENT_WORKFLOWS] = (message) => {
     const uiStore = useUiStore.getState();
-    uiStore.setRecentWorkflows(message.workflows || []);
+    uiStore.setRecentWorkflows(message.workflows || [], message.seq);
+  };
+
+  // RECENT_WORKFLOW_UPDATED - one lineage's row, pushed when it changes
+  handlers[MESSAGE_TYPES.RECENT_WORKFLOW_UPDATED] = (message) => {
+    useUiStore.getState().upsertRecentWorkflow(message.workflow, message.seq);
   };
 
   // WORKFLOW_VARIANT_CREATED - create and navigate only the requesting client
@@ -2252,9 +2257,11 @@ export function createMessageHandlers(
     // outbound messages), which left the dropdown showing only running
     // workflows. Asking here also keeps the multi-second lineage scan from
     // competing with the replay that delivers the workflow on screen.
-    if (!useUiStore.getState().recentWorkflowsLoaded) {
-      getVsCodeApi().postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
-    }
+    // Ask on every reconnect too, not just the first: row pushes and summary
+    // updates sent while the socket was down (a phone with the page
+    // suspended) are gone, and the replay doesn't resend them — a run that
+    // finished meanwhile kept its running badge in the dropdown.
+    getVsCodeApi().postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
     // If startup completed with no session and no persisted target workflow,
     // auto-create a blank workflow so the user lands on "New Workflow" rather
     // than the "No workflow loaded" empty state.
