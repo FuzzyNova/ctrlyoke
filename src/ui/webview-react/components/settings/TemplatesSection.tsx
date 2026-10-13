@@ -6,6 +6,7 @@ import {
   type SettingWriteScope,
 } from "@/types/messages";
 import {
+  DASHBOARD_HOST_CAPABILITIES,
   TEMPLATE_VARIABLE_TYPES,
   TEMPLATE_SOURCES,
   WORKSPACE_ENTRY_KINDS,
@@ -375,7 +376,9 @@ function TemplateDefaultsPage({
 
   function browse(template: TemplateInfo, variable: TemplateVariable) {
     const selectFolder = variable.type === WORKSPACE_ENTRY_KINDS.DIRECTORY;
-    const canUseNative = hostCapabilities.includes("selectWorkspacePath");
+    const canUseNative = hostCapabilities.includes(
+      DASHBOARD_HOST_CAPABILITIES.selectWorkspacePath
+    );
     if (canUseNative) {
       pendingBrowse.current = {
         templateId: template.id,

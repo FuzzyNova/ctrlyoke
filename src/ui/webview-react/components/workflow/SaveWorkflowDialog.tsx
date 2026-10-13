@@ -67,7 +67,8 @@ function joinSavePath(
  * into a new custom template and replies with WORKFLOW_SAVED_AS_TEMPLATE or
  * (reused) WORKFLOW_SAVE_FAILED.
  *
- * Location's Browse button branches on isStandalone like TemplateModal's
+ * Location's Browse button branches on the selectWorkspacePath host
+ * capability (advertised only to the VS Code panel) like TemplateModal's
  * variable pickers: VS Code panel → native OS folder dialog
  * (BROWSE_SAVE_LOCATION / SAVE_LOCATION_SELECTED); hosted browser → the
  * shared web FileBrowserModal (uiStore.openFileBrowser), since a native

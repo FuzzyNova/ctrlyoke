@@ -10,10 +10,7 @@ import {
   getProfilerState,
   setProfilingEnabled,
 } from "@utils/performanceProfiler";
-import {
-  DASHBOARD_HOST_CAPABILITIES,
-  USER_FEEDBACK_SEVERITY,
-} from "@root/types/DashboardConstants";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 import { notifyUser } from "@utils/notifyUser";
 
 const TERMINATION_WARNING =
@@ -38,9 +35,6 @@ export function DeveloperSection() {
   const [profilerState, setProfilerState] = useState(() => getProfilerState());
   const dev = useSettingsStore((state) => state.dev);
   const devBuild = useSettingsStore((state) => state.devBuild);
-  const canReloadHost = useUiStore((state) =>
-    state.hostCapabilities.includes(DASHBOARD_HOST_CAPABILITIES.reloadHost)
-  );
   const clearDevBuildOutput = useSettingsStore(
     (state) => state.clearDevBuildOutput
   );
@@ -76,7 +70,7 @@ export function DeveloperSection() {
       label: "Rebuild UI",
       messageType: MESSAGE_TYPES.DEV_BUILD_WEBVIEW,
     },
-    ...(canReloadHost && dev.commands.reloadWindow
+    ...(dev.commands.reloadWindow
       ? [
           {
             label: "Rebuild UI & Reload Window",
@@ -99,7 +93,7 @@ export function DeveloperSection() {
       messageType: MESSAGE_TYPES.DEV_BUILD_ALL_AND_RELOAD,
       disabled: !dev.commands.restartExtensionHost,
     },
-    ...(canReloadHost && dev.commands.reloadWindow
+    ...(dev.commands.reloadWindow
       ? [
           {
             label: "Reload Window",

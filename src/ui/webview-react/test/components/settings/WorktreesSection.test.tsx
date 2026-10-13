@@ -94,6 +94,53 @@ describe("WorktreesSection", () => {
       screen.getByRole("button", { name: "Open owning workspace" })
     ).toBeInTheDocument();
   });
+  it("keeps Retry for an in-use worktree when the host can't open its owner", () => {
+    useUiStore.setState({ hostCapabilities: [] });
+    window.vscodeApi = {
+      postMessage: vi.fn(),
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        {
+          worktreePath: "C:/worktrees/live",
+          headCommit: "b",
+          branchName: "ctrlyoke/live",
+          ownership: "managed",
+          branchState: "present",
+          inUse: true,
+          leaseOwners: [
+            {
+              lease: { workflowKey: "wf", runRef: "run", stateRoot: "C:/repo" },
+              ageMs: 1000,
+            },
+          ],
+          stale: false,
+          branchCleanupEligible: false,
+        },
+      ],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open owning workspace" })
+    ).not.toBeInTheDocument();
+  });
   it("offers Sync only for a live, non-stale named worktree, not the source checkout itself", () => {
     const postMessage = vi.fn();
     window.vscodeApi = {

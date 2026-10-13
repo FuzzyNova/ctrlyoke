@@ -105,12 +105,38 @@ export const DASHBOARD_HOST_CAPABILITIES = {
 
 export type DashboardHostCapability = OptionalDashboardHostAction;
 
-/** Derive advertised capabilities from the methods on the actual host object. */
+/**
+ * Capabilities whose effect appears on the host machine's own screen (a native
+ * dialog, a VS Code window or view, the OS file manager). Only the VS Code panel
+ * shares that screen; a hosted browser client — possibly a phone — would never
+ * see the result, so these are withheld from it and the dashboard falls back to
+ * its web-native equivalent (e.g. FileBrowserModal instead of a native picker).
+ */
+const HOST_SCREEN_CAPABILITIES: ReadonlySet<DashboardHostCapability> = new Set([
+  DASHBOARD_HOST_CAPABILITIES.selectWorkspacePath,
+  DASHBOARD_HOST_CAPABILITIES.revealOutput,
+  DASHBOARD_HOST_CAPABILITIES.focusDashboard,
+  DASHBOARD_HOST_CAPABILITIES.openFolderWindow,
+  DASHBOARD_HOST_CAPABILITIES.openGitDiff,
+  DASHBOARD_HOST_CAPABILITIES.revealInOs,
+  DASHBOARD_HOST_CAPABILITIES.browseMcpGallery,
+  DASHBOARD_HOST_CAPABILITIES.reloadHost,
+]);
+
+/**
+ * Derive the capabilities advertised to one client from the methods on the
+ * actual host object. Clients other than the VS Code panel never receive
+ * host-screen capabilities, even when the host implements them.
+ */
 export function getDashboardHostCapabilities(
-  actions: Partial<Record<DashboardHostCapability, unknown>>
+  actions: Partial<Record<DashboardHostCapability, unknown>>,
+  clientId: string = PANEL_CLIENT_ID
 ): DashboardHostCapability[] {
+  const sharesHostScreen = clientId === PANEL_CLIENT_ID;
   return Object.values(DASHBOARD_HOST_CAPABILITIES).filter(
-    (capability) => typeof actions[capability] === "function"
+    (capability) =>
+      typeof actions[capability] === "function" &&
+      (sharesHostScreen || !HOST_SCREEN_CAPABILITIES.has(capability))
   );
 }
 

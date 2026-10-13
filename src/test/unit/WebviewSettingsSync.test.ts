@@ -917,6 +917,35 @@ suite("WebviewSettingsSync", () => {
       );
     });
 
+    test("withholds host-screen actions from a hosted browser client of the VS Code host", async () => {
+      const messages: any[] = [];
+      const postMessage = (message: any) => messages.push(message);
+      const sync = new WebviewSettingsSync(
+        postMessage,
+        () => makeViewOrchestrator({}),
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(
+          process.cwd(),
+          undefined,
+          new VsCodeDashboardHostActions()
+        )
+      );
+
+      // A phone connected through the hosted server can't see a native file
+      // dialog or VS Code window opened on the host, so it must fall back to
+      // the dashboard's web-native pickers and views.
+      await sync.sendInitialState(postMessage, "browser:1");
+
+      const init = messages.find(
+        (message) => message.type === MESSAGE_TYPES.INIT
+      );
+      assert.deepStrictEqual(init.data.hostCapabilities, [
+        DASHBOARD_HOST_CAPABILITIES.openContentPreview,
+      ]);
+    });
+
     test("still describes the panel's lazily created instance for an unbound panel", async () => {
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);

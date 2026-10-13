@@ -286,7 +286,8 @@ export class WebviewSettingsSync {
         data: {
           ...workflowState,
           hostCapabilities: getDashboardHostCapabilities(
-            this.host.actions ?? {}
+            this.host.actions ?? {},
+            clientId
           ),
           globalSettings,
           workflowProperties: {},

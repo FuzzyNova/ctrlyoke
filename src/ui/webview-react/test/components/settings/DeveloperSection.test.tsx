@@ -58,3 +58,32 @@ describe("DeveloperSection profiler feedback", () => {
     }
   );
 });
+
+describe("DeveloperSection reload actions", () => {
+  it("offers window reloads from a client without the reloadHost capability", async () => {
+    // A hosted browser never receives reloadHost, but the dev reload actions
+    // run a VS Code command on the host, so dev status alone decides them.
+    vi.resetModules();
+    const [{ DeveloperSection }, { useSettingsStore }, { useUiStore }] =
+      await Promise.all([
+        import("@components/settings/DeveloperSection"),
+        import("@store/settingsStore"),
+        import("@store/uiStore"),
+      ]);
+    useSettingsStore.getState().setDevStatus({
+      enabled: true,
+      buildDate: "2026-08-17T00:00:00.000Z",
+      commands: { reloadWindow: true, restartExtensionHost: true },
+    });
+    useUiStore.setState({ hostCapabilities: [] });
+
+    render(<DeveloperSection />);
+
+    expect(
+      screen.getByRole("button", { name: "Reload Window" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Rebuild UI & Reload Window" })
+    ).toBeInTheDocument();
+  });
+});

@@ -788,7 +788,7 @@ function WorktreeRow({
         </div>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
-        {canOpenWorktreeOwner && entry.inUse && entry.leaseOwners[0] && (
+        {entry.inUse && entry.leaseOwners[0] && (
           <>
             <ActionButton
               label="Retry"
@@ -797,18 +797,20 @@ function WorktreeRow({
               feedback={feedback.getFeedback(rowKey("retry"))}
               onClick={retry}
             />
-            <button
-              type="button"
-              className="cy-select-trigger text-xs"
-              onClick={() =>
-                vscode.postMessage({
-                  type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER,
-                  stateRoot: entry.leaseOwners[0].lease.stateRoot,
-                })
-              }
-            >
-              Open owning workspace
-            </button>
+            {canOpenWorktreeOwner && (
+              <button
+                type="button"
+                className="cy-select-trigger text-xs"
+                onClick={() =>
+                  vscode.postMessage({
+                    type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER,
+                    stateRoot: entry.leaseOwners[0].lease.stateRoot,
+                  })
+                }
+              >
+                Open owning workspace
+              </button>
+            )}
           </>
         )}
         {canSync && (
