@@ -428,7 +428,6 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "general.autoLoadRecentSession": "Automatically load the most recent session on startup.",
   "general.defaultFormat": "Default file format for new workflows.",
   "general.defaultTemplate": "Default template to use for new workflows.",
-  "general.includeFullDiffsInPriorContext": "Include full file diffs in captured AI responses so later prior-context attachments contain the actual changes instead of edit summaries.",
   "general.omitPreviouslyAttachedAgentsSkillsOnResume": "When resuming an existing session, omit only agent/skill declarations that were already attached earlier in that same session.",
   "harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
   "hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",

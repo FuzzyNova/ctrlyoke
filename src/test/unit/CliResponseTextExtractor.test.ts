@@ -9,7 +9,7 @@ function output(events: UniversalCliOutput["events"]): UniversalCliOutput {
 }
 
 suite("CliResponseTextExtractor", () => {
-  test("omits redacted reasoning that has no summary", () => {
+  test("keeps text and non-empty thinking summaries", () => {
     const result = extractTextFromEvents(
       output([
         {
@@ -17,27 +17,16 @@ suite("CliResponseTextExtractor", () => {
           data: { text: "", redacted: true, reasoningTokens: 453 },
         },
         { type: CLI_EVENT_TYPES.TEXT, data: { text: "Useful answer" } },
-      ]),
-      { includeFullDiffs: false }
-    );
-
-    assert.strictEqual(result, "Useful answer");
-  });
-
-  test("keeps the summary of redacted reasoning", () => {
-    const result = extractTextFromEvents(
-      output([
         {
           type: CLI_EVENT_TYPES.THINKING,
           data: { text: "**Counting primes**", redacted: true },
         },
-      ]),
-      { includeFullDiffs: false }
+      ])
     );
 
     assert.strictEqual(
       result,
-      "\n[Thinking]\n**Counting primes**\n[/Thinking]"
+      "Useful answer\n[Thinking]\n**Counting primes**\n[/Thinking]"
     );
   });
 
@@ -48,8 +37,7 @@ suite("CliResponseTextExtractor", () => {
           type: CLI_EVENT_TYPES.THINKING,
           data: { text: "Checking the lifecycle" },
         },
-      ]),
-      { includeFullDiffs: false }
+      ])
     );
 
     assert.strictEqual(
@@ -58,35 +46,7 @@ suite("CliResponseTextExtractor", () => {
     );
   });
 
-  test("includes a full structured patch when enabled", () => {
-    const result = extractTextFromEvents(
-      output([
-        {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          data: {
-            path: "src/example.ts",
-            structuredPatch: [
-              {
-                oldStart: 1,
-                oldLines: 1,
-                newStart: 1,
-                newLines: 1,
-                lines: ["-const oldValue = 1;", "+const newValue = 2;"],
-              },
-            ],
-          },
-        },
-      ]),
-      { includeFullDiffs: true }
-    );
-
-    assert.ok(result.includes("[Edited: src/example.ts]"));
-    assert.ok(result.includes("--- a/src/example.ts"));
-    assert.ok(result.includes("@@ -1,1 +1,1 @@"));
-    assert.ok(result.includes("+const newValue = 2;"));
-  });
-
-  test("uses the compact edit summary when full diffs are disabled", () => {
+  test("always emits one-line file operation annotations", () => {
     const result = extractTextFromEvents(
       output([
         {
@@ -104,11 +64,26 @@ suite("CliResponseTextExtractor", () => {
             ],
           },
         },
-      ]),
-      { includeFullDiffs: false }
+        {
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          data: {
+            path: "src/new.ts",
+            content: "new content",
+          },
+        },
+        {
+          type: CLI_EVENT_TYPES.FILE_DELETE,
+          data: { path: "src/old.ts" },
+        },
+      ])
     );
 
-    assert.strictEqual(result, "\n[Edited: src/example.ts (+1, -1)]");
+    assert.strictEqual(
+      result,
+      "\n[Edited: src/example.ts (+1, -1)]\n[Created: src/new.ts]\n[Deleted: src/old.ts]"
+    );
+    assert.ok(!result.includes("```diff"));
+    assert.ok(!result.includes("+new"));
   });
 
   test("separates consecutive text messages with a paragraph break", () => {
@@ -121,8 +96,7 @@ suite("CliResponseTextExtractor", () => {
           data: { path: "old.ts" },
         },
         { type: CLI_EVENT_TYPES.TEXT, data: { text: "Done." } },
-      ]),
-      { includeFullDiffs: false }
+      ])
     );
 
     assert.strictEqual(

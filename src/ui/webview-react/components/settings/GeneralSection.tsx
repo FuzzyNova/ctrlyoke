@@ -298,19 +298,6 @@ export function GeneralSection({
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Prior Context
-        </h3>
-        <SettingToggleRow
-          settingKey="general.includeFullDiffsInPriorContext"
-          checked={general.includeFullDiffsInPriorContext}
-          onChange={(v) =>
-            onUpdate("general.includeFullDiffsInPriorContext", v)
-          }
-          {...rowProps}
-        />
-      </div>
-      <div className="pt-3 border-t border-panel-border mt-3">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           File Management
         </h3>
         <SettingToggleRow

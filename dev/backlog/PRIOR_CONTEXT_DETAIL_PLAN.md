@@ -1,6 +1,6 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phase 0 and Phase 1 chunks 1a–1b complete; Phase 1 chunk 1c and Phases 2–3 remain.
+> **Status:** Phase 0 and Phase 1 complete; Phases 2–3 remain.
 > Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
@@ -12,6 +12,10 @@
 >   while preserving their history records.
 > - Phase 1 chunk 1a is done: the pure diff helper and transcript projection are implemented
 >   with tests; no prior-context consumer uses them yet.
+> - Phase 1 chunk 1b is done: prior context renders from structured events, including file changes
+>   from earlier attempts, with a shared full-form XML renderer.
+> - Phase 1 chunk 1c is done: the machine-specific diff setting is removed, the interim response
+>   extractor emits compact annotations, and the docs describe full prior context.
 > - Truncation detail settled in chunk 1a: an unbroken line larger than its byte cap is cut at
 >   a UTF-8 code-point boundary because no line-boundary cut can satisfy the cap.
 > - Phase 1 changes the prompt text that existing `$previous`/`priorContext` workflows send.

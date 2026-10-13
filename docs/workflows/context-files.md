@@ -79,6 +79,13 @@ They are the inline form of the `priorContext` step property
 (`previous`, `{ previous: 3 }`, `all`, `finalStepPrevious`, `finalStepAll`, or an
 array such as `[1, 3]`).
 
+Prior output is rendered from the step's structured event history. The full form includes the
+authored prompt, text and thinking, file edits and creations with their diffs, deletions,
+commands with their output, file reads as path and line range, tool calls and results, web search
+results, questions and answers, user steering, and earlier attempts. Command output is
+tail-truncated to keep large logs bounded. File reads include only the path and line range, never
+the captured file contents. Failed file operations are marked as failed and do not include a diff.
+
 A script step's output includes its pass/fail verdict; see
 [Using script output in later prompts](/workflows/script-steps#using-script-output-in-later-prompts).
 

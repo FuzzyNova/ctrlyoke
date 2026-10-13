@@ -232,14 +232,6 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker.",
   },
-  "general.includeFullDiffsInPriorContext": {
-    id: "general.includeFullDiffsInPriorContext",
-    path: "general.includeFullDiffsInPriorContext",
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "Include full file diffs",
-    description:
-      "Include actual file changes in captured responses used by later prior-context attachments. Disable for smaller response-only context.",
-  },
   "execution.autoDeleteTempFiles": {
     id: "execution.autoDeleteTempFiles",
     path: "execution.autoDeleteTempFiles",

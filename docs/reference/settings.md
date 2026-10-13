@@ -136,13 +136,6 @@ Automatically load the most recent session on startup.
 
 When resuming an existing session, omit only agent/skill declarations that were already attached earlier in that same session.
 
-### `general.includeFullDiffsInPriorContext` {#general-includefulldiffsinpriorcontext}
-
-- **Type:** `boolean`
-- **Default:** `true`
-
-Include full file diffs in captured AI responses so later prior-context attachments contain the actual changes instead of edit summaries.
-
 ## `templates` {#templates}
 
 Template-specific settings.

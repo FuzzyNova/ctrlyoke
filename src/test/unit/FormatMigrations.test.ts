@@ -94,11 +94,26 @@ suite("FormatMigrations", () => {
             );
           } else if (store === PERSISTED_STORES.SETTINGS) {
             const loadedSettings = new FileConfigBackend(fixturePath).getAll();
+            const hasRetiredPriorContextSetting = Boolean(
+              loadedSettings.general &&
+                "includeFullDiffsInPriorContext" in loadedSettings.general
+            );
             assert.strictEqual(
               validateSettings(loadedSettings),
-              true,
+              !hasRetiredPriorContextSetting,
               JSON.stringify(validateSettings.errors)
             );
+            if (hasRetiredPriorContextSetting) {
+              assert.ok(
+                validateSettings.errors?.some(
+                  (error) =>
+                    error.keyword === "additionalProperties" &&
+                    error.params.additionalProperty ===
+                      "includeFullDiffsInPriorContext"
+                ),
+                "retired setting should produce an editor schema warning"
+              );
+            }
             assert.deepStrictEqual(loadedSettings, migrated);
           }
 

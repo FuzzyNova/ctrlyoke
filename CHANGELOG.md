@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Prior output references now include commands, tool calls and results, search results, file
+  changes, and other structured events consistently across machines. Command output is
+  tail-truncated and file reads include only their path and line range. The
+  `general.includeFullDiffsInPriorContext` setting has been removed.
+
 ## [0.1.2] - 2026-09-25
 
 ### Added

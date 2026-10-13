@@ -31,6 +31,8 @@ A related problem is on the same path. A headless failure with no text fires
 
 ## Suggested Fix
 
+The full-diff leak path is gone after Phase 1; captured response text now uses one-line file operation annotations.
+
 [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../../backlog/PRIOR_CONTEXT_DETAIL_PLAN.md) D5 removes the
 setting, and `extractTextFromEvents` then always emits the one-line form, which this regex
 matches. Phase 2 of that plan (D8c) fixes both problems properly: the generator reads only the

@@ -5,29 +5,12 @@ import type {
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
-import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import {
-  countStructuredPatchChanges,
-  formatCreatedFileDiff,
-  formatEditDiff,
-} from "../../../utils/CliEventDiff";
+import { countStructuredPatchChanges } from "../../../utils/CliEventDiff";
 import { joinResponseText } from "../../../utils/ResponseTextJoin";
 
-export interface ResponseTextExtractionOptions {
-  includeFullDiffs?: boolean;
-}
-
-function wrapDiff(label: string, diff: string): string {
-  return `\n[${label}]\n\`\`\`diff\n${diff}\n\`\`\``;
-}
-
 export function extractTextFromEvents(
-  output: Pick<UniversalCliOutput, "events">,
-  options: ResponseTextExtractionOptions = {}
+  output: Pick<UniversalCliOutput, "events">
 ): string {
-  const includeFullDiffs =
-    options.includeFullDiffs ??
-    ConfigurationUtils.shouldIncludeFullDiffsInPriorContext();
   const textParts: string[] = [];
   for (const event of output.events) {
     if (!event.data) {
@@ -50,24 +33,12 @@ export function extractTextFromEvents(
       "path" in event.data
     ) {
       const writeData = event.data as FileWriteData;
-      textParts.push(
-        includeFullDiffs
-          ? wrapDiff(
-              `Created: ${writeData.path}`,
-              formatCreatedFileDiff(writeData)
-            )
-          : `\n[Created: ${writeData.path}]`
-      );
+      textParts.push(`\n[Created: ${writeData.path}]`);
     } else if (
       event.type === CLI_EVENT_TYPES.FILE_EDIT &&
       "path" in event.data
     ) {
       const editData = event.data as FileEditData;
-      const fullDiff = includeFullDiffs ? formatEditDiff(editData) : undefined;
-      if (fullDiff) {
-        textParts.push(wrapDiff(`Edited: ${editData.path}`, fullDiff));
-        continue;
-      }
       if (editData.structuredPatch && editData.structuredPatch.length > 0) {
         const { added, removed } = countStructuredPatchChanges(
           editData.structuredPatch
