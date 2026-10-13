@@ -1022,6 +1022,15 @@ suite("ManagedLanguageServerBackend", () => {
       }),
       "utf8"
     );
+    // typescript-language-server exits unless it can resolve a `typescript`
+    // package from the workspace, and a global install of the server does not
+    // bring one. Link the repo's own so the test needs only the server.
+    await fs.promises.mkdir(path.join(workspaceRoot, "node_modules"));
+    await fs.promises.symlink(
+      path.dirname(require.resolve("typescript/package.json")),
+      path.join(workspaceRoot, "node_modules", "typescript"),
+      "junction"
+    );
     const backend = new ManagedLanguageServerBackend({
       workspaceRoot,
       userSettings: () => ({

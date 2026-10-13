@@ -206,6 +206,17 @@ suite("Node hosted server composition", function () {
         }
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
+      // The compatibility preflight probes the real `copilot` binary, not the
+      // faked integration; on a machine without it (CI) the run errors before
+      // any integration is created.
+      const registry = runtime.orchestrator.getCompatibilityRegistry();
+      const detectInstalled = registry.getInstalledCapabilities.bind(registry);
+      registry.getInstalledCapabilities = async (harnessId) => {
+        const installed = await detectInstalled(harnessId);
+        return harnessId === HARNESS_IDS.COPILOT_CLI
+          ? { ...installed, available: true }
+          : installed;
+      };
       await runtime.orchestrator.runInNewWorkflowForClient(
         "complete Node host workflow",
         { harness: HARNESS_IDS.COPILOT_CLI },

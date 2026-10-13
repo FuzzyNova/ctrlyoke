@@ -160,10 +160,10 @@ const copyTemplatesPlugin = {
       const srcTemplates = path.join(__dirname, "src", "templates");
       const outTemplates = path.join(__dirname, "out", "templates");
 
-      // Create output templates directory if it doesn't exist
-      if (!fs.existsSync(outTemplates)) {
-        fs.mkdirSync(outTemplates, { recursive: true });
-      }
+      // Mirror rather than overlay: a template renamed or deleted in src must
+      // not survive in out/, where discovery would still find it.
+      fs.rmSync(outTemplates, { recursive: true, force: true });
+      fs.mkdirSync(outTemplates, { recursive: true });
 
       // Copy all template files and subdirectories
       if (fs.existsSync(srcTemplates)) {
