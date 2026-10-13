@@ -1,6 +1,8 @@
-# Dynamic queue
+# Dynamic workflows
 
-Dynamic queue extension lets a workflow add and adjust its own work while it is running.
+A dynamic workflow adds and adjusts its own steps while it is running: the harness can append
+follow-up steps, edit or reorder steps that haven't started, and keep going until the work is
+done.
 
 ## Enable it
 
@@ -26,17 +28,17 @@ The built-in server lets the harness:
 
 See [MCP tools](/reference/mcp-tools) for parameters and responses.
 
-Queue changes are only accepted while the run is executing (running, pausing, paused, or
+Step changes are only accepted while the run is executing (running, pausing, paused, or
 cancelling). A harness session left open after its workflow finished cannot add steps that would
 never run; the tool refuses instead. The run is capped by the effective `maxSteps` value: the
 workflow's `maxSteps` when present, otherwise `queue.maxSteps` (100 by default). A workflow
 value of `-1` means Unlimited and overrides a numeric global cap. The count covers every entry
-in the run's `steps` array, whether authored or queued later, including parallel members and
+in the run's `steps` array, whether authored or appended later, including parallel members and
 disabled steps; it does not count `finalStep` iterations or retries.
 
 ## Typical pattern
 
-Use `ctrlyoke` in the `finalStep` so the harness can review the current run and append follow-up tasks. After the queue finishes, the final step runs; if it appended new steps, those run and the final step runs again. The loop ends when a final step appends nothing.
+Use `ctrlyoke` in the `finalStep` so the harness can review the current run and append follow-up tasks. After the workflow's steps finish, the final step runs; if it appended new steps, those run and the final step runs again. The loop ends when a final step appends nothing.
 
 ```yaml
 steps: []
@@ -47,17 +49,17 @@ finalStep:
     - ctrlyoke
 ```
 
-A workflow can even start with an empty `steps` list and let the `finalStep` build the whole queue.
+A workflow can even start with an empty `steps` list and let the `finalStep` build the whole workflow.
 
 ## Parallel groups
 
 Parallel-group members may use the built-in `ctrlyoke` server. A member can:
 
-- append a future parallel group with `position: "end"`, `"next"`, or an index — `"next"` always queues after the running group, never inside it
+- append a future parallel group with `position: "end"`, `"next"`, or an index — `"next"` always lands after the running group, never inside it
 - join the running group with `position: "parallelWithCurrent"` (flat steps only), subject to the `queue.maxParallelSteps` limit
 - read output only from steps before the group started
 
-To let members read state but not change the queue, deny the mutation tools:
+To let members read state but not change the workflow's steps, deny the mutation tools:
 
 ```yaml
 mcpServers:

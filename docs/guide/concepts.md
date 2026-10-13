@@ -87,7 +87,7 @@ settled output. See [Parallel steps](/workflows/parallel-steps).
 
 ## Final step
 
-`finalStep` runs after the queue completes. It is useful for review passes, post-processing, or dynamic queue extension loops.
+`finalStep` runs after the queue completes. It is useful for review passes, post-processing, or [dynamic workflows](/workflows/dynamic-workflows) that append their own follow-up steps.
 
 If the final step has `mcpServers: ["ctrlyoke"]` and appends more prompts, ctrlyoke runs the new queue items and then executes the final step again.
 

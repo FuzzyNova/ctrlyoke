@@ -133,7 +133,7 @@ every parameter, and **Show full output** to see the whole result.
 
 Calls to ctrlyoke's own MCP server, such as appending a step or reading another
 step's output, are shown as a summary of what happened. Click **Raw** on one to
-see the underlying call and its result. See [Dynamic queue](/workflows/dynamic-queue)
+see the underlying call and its result. See [Dynamic workflows](/workflows/dynamic-workflows)
 and [MCP tools](/reference/mcp-tools).
 
 ## Diffs

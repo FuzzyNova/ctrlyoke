@@ -93,7 +93,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers."
+        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers."
       },
       "hooks": {
         "valueKind": "oneOf",
@@ -368,7 +368,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "array",
           "null"
         ],
-        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers."
+        "description": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers."
       },
       "hooks": {
         "valueKind": "oneOf",

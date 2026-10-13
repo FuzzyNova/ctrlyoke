@@ -1,6 +1,6 @@
 # MCP tools
 
-ctrlyoke's built-in MCP server gives a harness tools to inspect and adjust the run it belongs to. Enable it with `mcpServers: ["ctrlyoke"]` on a workflow or step — see [Dynamic queue](/workflows/dynamic-queue).
+ctrlyoke's built-in MCP server gives a harness tools to inspect and adjust the run it belongs to. Enable it with `mcpServers: ["ctrlyoke"]` on a workflow or step — see [Dynamic workflows](/workflows/dynamic-workflows).
 
 ## How the server is scoped
 

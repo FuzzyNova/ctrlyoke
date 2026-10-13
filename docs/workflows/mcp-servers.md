@@ -163,7 +163,7 @@ to `fail` to stop the step instead.
 `ctrlyoke` in `mcpServers` attaches ctrlyoke's own server. It is not in the
 registry. Its tools let the harness read the run's status and earlier output,
 add and change pending steps, and coordinate with other workflows in the
-workspace. See [Dynamic queue](/workflows/dynamic-queue) for what that enables
+workspace. See [Dynamic workflows](/workflows/dynamic-workflows) for what that enables
 and [MCP tools](/reference/mcp-tools) for every tool.
 
 To switch off some of its tools, use the object form:
@@ -183,7 +183,7 @@ organization policy. Set
 then attaches built-in skills instead of its server, and the harness calls the
 same tools as shell commands. This only affects ctrlyoke's own server; other
 servers are attached as usual. See
-[Dynamic queue: skill mode](/workflows/dynamic-queue#skill-mode).
+[Dynamic workflows: skill mode](/workflows/dynamic-workflows#skill-mode).
 
 ## Servers from shared workspace files
 

@@ -127,7 +127,7 @@ export default defineConfig({
             { text: "MCP servers", link: "/workflows/mcp-servers" },
             { text: "Hooks", link: "/workflows/hooks" },
             { text: "Worktrees", link: "/workflows/worktrees" },
-            { text: "Dynamic queue", link: "/workflows/dynamic-queue" },
+            { text: "Dynamic workflows", link: "/workflows/dynamic-workflows" },
           ],
         },
       ],

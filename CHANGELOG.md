@@ -69,7 +69,7 @@ Initial release.
 - Parallel workflow execution with independent pause, resume, and cancel per workflow
 - React dashboard with CodeMirror 6 prompt editor, live output viewer, and embedded terminal
 - Script-based end conditions with retry logic, timeout protection, and template variable substitution
-- Dynamic queue extension via MCP tools — AI can autonomously extend a running workflow at runtime
+- Dynamic workflows via MCP tools — the AI can append steps to a running workflow at runtime
 - Agent injection via `.agent.md` files and per-prompt `agent:` field
 - Skills injection with per-prompt `skills:` field
 - IntelliSense completions for `@file`, `#file:`, and `#sym:` references with gitignore-aware filtering

@@ -15,7 +15,7 @@ ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Cl
 - **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; ctrlyoke sends them one at a time, waits for each to finish, and advances automatically
 - **Script-based validation** — attach an end condition script to any prompt; by default the step passes when the script exits 0, and you can instead compare its stdout/stderr with an explicit operator. Otherwise the AI retries with a configurable retry prompt
 - **Harness-agnostic** — switch between six AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
-- **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to let the AI extend the workflow queue with ctrlyoke's [MCP tools](https://ctrlyoke.dev/docs/reference/mcp-tools)
+- **Dynamic workflows** — include `"ctrlyoke"` in `mcpServers` to let the AI append steps to the running workflow with ctrlyoke's [MCP tools](https://ctrlyoke.dev/docs/reference/mcp-tools)
 - **User-defined hooks** — attach shell commands to harness lifecycle events (`sessionStart`, `userPromptSubmit`, `preToolUse`, `postToolUse`, `permissionRequest`, `notification`, `stop`, `error`) per prompt, per workflow, or globally in settings
 - **Universal agents and skills** — define agent instruction files once; ctrlyoke discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.ctrlyoke/agents/`) and injects content into prompts regardless of harness
 - **Dashboard with embedded terminal** — a secondary side bar UI with a CodeMirror prompt editor, live xterm.js terminal running the AI CLI directly, streaming output with tool-call visualization, file diff views, undo/redo for workspace changes, and per-run output history
@@ -167,7 +167,7 @@ steps:
 
 ```yaml
 steps:
-  # Enable dynamic queue extension (AI can append prompts via MCP tools).
+  # Make the workflow dynamic (AI can append steps via MCP tools).
   - prompt: "Implement the requested work."
     mcpServers: [ctrlyoke]
 
@@ -319,7 +319,7 @@ The full documentation is at [ctrlyoke.dev/docs](https://ctrlyoke.dev/docs/).
 | ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | [Quick start](https://ctrlyoke.dev/docs/guide/quick-start)                   | Five-minute setup walkthrough                                   |
 | [Workflow schema](https://ctrlyoke.dev/docs/reference/workflow-schema)       | Full workflow property reference                                |
-| [Dynamic queue](https://ctrlyoke.dev/docs/workflows/dynamic-queue)           | Dynamic queue extension and `finalStep` loop behavior           |
+| [Dynamic workflows](https://ctrlyoke.dev/docs/workflows/dynamic-workflows)   | Harness-appended steps and `finalStep` loop behavior            |
 | [Session management](https://ctrlyoke.dev/docs/workflows/session-management) | Session resumption across prompts and harnesses                 |
 | [Hooks](https://ctrlyoke.dev/docs/workflows/hooks)                           | User-defined hooks                                              |
 | [MCP servers](https://ctrlyoke.dev/docs/workflows/mcp-servers)               | Attaching MCP servers to a workflow or step                     |

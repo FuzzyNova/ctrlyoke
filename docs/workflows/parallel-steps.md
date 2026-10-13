@@ -58,11 +58,11 @@ Groups cannot be nested, cannot contain a `worktree` or
 
 ## Changing the queue from a member
 
-Members may enable the built-in `ctrlyoke` dynamic-queue MCP server. A member can
+Members may enable the built-in `ctrlyoke` MCP server that makes a workflow dynamic. A member can
 edit, remove, or append steps that have not started yet, but a step that has
 already started cannot be changed. A member can also join the running group, and
 it can only read output from steps that finished before the group started. See
-[Dynamic queue: parallel groups](/workflows/dynamic-queue#parallel-groups) for
+[Dynamic workflows: parallel groups](/workflows/dynamic-workflows#parallel-groups) for
 the details.
 
 ## See also

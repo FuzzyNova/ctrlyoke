@@ -24,7 +24,7 @@ features:
   - title: Validation and retries
     details: Gate prompts with end conditions, pre-conditions, and script steps so workflows can stop, continue, or retry based on real project output.
   - title: Stateful execution
-    details: Resume sessions across steps, inject prior context, and let final steps extend the queue through the built-in ctrlyoke MCP server.
+    details: Resume sessions across steps, inject prior context, and let final steps append more steps through the built-in ctrlyoke MCP server.
 ---
 
 ## What ctrlyoke is for
@@ -37,7 +37,7 @@ It works the same way however much you send:
 
 - **A single prompt**, the way you would use the harness on its own.
 - **A workflow**: prompt and script steps run in order, each on any harness, with [end conditions](/workflows/end-conditions) that check the result before moving on.
-- **A dynamic workflow**: a final step reviews the run and [queues more steps](/workflows/dynamic-queue) until the work is done, for example a plan–implement–review loop or a bug hunt that keeps going.
+- **A dynamic workflow**: a final step reviews the run and [appends more steps](/workflows/dynamic-workflows) until the work is done, for example a plan–implement–review loop or a bug hunt that keeps going.
 
 Save any of them as a YAML, JSON or Markdown file to run again, share, or run in CI.
 
@@ -48,7 +48,7 @@ It ships in two forms:
 | VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code                                                             |
 | `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job, and [`ctrlyoke server`](/cli/server), which opens the same dashboard in a browser without VS Code |
 
-Both include a built-in MCP server, [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp), and a set of built-in skills. A step that enables `ctrlyoke-mcp` can work on its own run: it can read earlier steps' output, [queue more steps](/workflows/dynamic-queue) (this is how a final step keeps a review or bug-hunt loop going), and coordinate with the other steps in its [parallel group](/workflows/parallel-steps).
+Both include a built-in MCP server, [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp), and a set of built-in skills. A step that enables `ctrlyoke-mcp` can work on its own run: it can read earlier steps' output, [append more steps](/workflows/dynamic-workflows) (this is how a final step keeps a review or bug-hunt loop going), and coordinate with the other steps in its [parallel group](/workflows/parallel-steps).
 
 ## Where to start
 

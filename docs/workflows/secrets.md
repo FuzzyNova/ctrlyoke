@@ -177,7 +177,7 @@ ctrlyoke trust-secret-grants deploy.ctrlyoke.yaml
 them. See [`ctrlyoke trust-secret-grants`](/cli/ctrlyoke#ctrlyoke-trust-secret-grants).
 
 Steps appended while a run is in progress (for example through the
-[dynamic queue](/workflows/dynamic-queue)) never see the start-of-run prompt.
+[dynamic workflow](/workflows/dynamic-workflows)) never see the start-of-run prompt.
 If such a step grants an unapproved name that has a value, the step fails when
 it starts.
 

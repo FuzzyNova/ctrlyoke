@@ -67,6 +67,6 @@ Group members share one workspace and, when configured, one managed or named
 worktree for the run. They are intended for independent work; v1 has no
 per-member isolation or automatic merge. `queue.maxParallelSteps` bounds the
 group width, while `1` preserves sequential execution. Group members may enable
-the built-in `ctrlyoke` dynamic-queue MCP server. See
+the built-in `ctrlyoke` MCP server that makes a workflow dynamic. See
 [Parallel steps](/workflows/parallel-steps#rules) for the full list of group
 rules.

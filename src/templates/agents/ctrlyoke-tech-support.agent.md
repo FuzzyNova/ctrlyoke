@@ -180,7 +180,7 @@ Skills:
 MCP:
 
 - Add `mcpServers: [ctrlyoke]` to give the model ctrlyoke queue tools such as queue status and append queue.
-- Use this on a final step for spec-driven/dynamic queue loops.
+- Use this on a final step for spec-driven/dynamic workflow loops.
 - Global Settings -> MCP Manager can manage local registry entries, scan local configs, import registry entries, and export servers to supported harness config locations.
 
 Agent & Skills Manager:

@@ -97,7 +97,7 @@ not installed) or a timeout is an error, not a failed condition, and it is handl
 timeout (`timeoutSec` on the condition, or the `execution.scriptTimeoutSec` setting). A script file that
 is missing usually makes its interpreter exit non-zero, which counts as a failed condition instead.
 
-## Dynamic queue did nothing
+## Dynamic workflow did nothing {#dynamic-queue-did-nothing}
 
 Confirm that the step includes:
 
@@ -106,7 +106,7 @@ mcpServers:
   - ctrlyoke
 ```
 
-Without the built-in server, the harness cannot call the queue tools. The built-in server is
+Without the built-in server, the harness cannot call the tools that append steps. The built-in server is
 allowed on parallel-group members.
 
 ## Step limit reached
@@ -114,7 +114,7 @@ allowed on parallel-group members.
 An append can be refused with a message such as `Step limit reached: this run has 30/30 steps
 (workflow maxSteps: 30). Do not retry; finish without appending.` The effective cap is the
 workflow's `maxSteps` when set, otherwise the global `queue.maxSteps` setting. Raise the
-effective cap if the run needs more queued steps, or set workflow `maxSteps: -1` to remove the
+effective cap if the run needs more steps, or set workflow `maxSteps: -1` to remove the
 cap for that workflow. The count includes appended steps, parallel members, and disabled steps;
 it does not include `finalStep` iterations or end-condition retries.
 

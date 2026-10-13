@@ -90,8 +90,8 @@ option.
 ![MCP tab: the built-in ctrlyoke server with 11 of 12 tools enabled (Remove step unticked), and two installed servers, cclsp off and playwright on and expanded](/screenshots/mcp-tab-800x1600.png){.panel-shot}
 
 The MCP tab picks which MCP servers are attached to the harness. The built-in
-**ctrlyoke** server lets the AI read workflow status and extend the queue (see
-[Dynamic queue](/workflows/dynamic-queue)), and each of its tools can be switched
+**ctrlyoke** server lets the AI read workflow status and append steps (see
+[Dynamic workflows](/workflows/dynamic-workflows)), and each of its tools can be switched
 off individually. **Installed Servers** lists the servers registered with
 ctrlyoke; **Manage MCP Servers** opens the MCP manager in Settings to add, edit,
 or remove them. See [MCP servers](/workflows/mcp-servers).

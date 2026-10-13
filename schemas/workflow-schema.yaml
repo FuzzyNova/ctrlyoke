@@ -627,6 +627,9 @@ $defs:
           - gemini-3.8-flash-high
           - gemini-3.8-flash-low
           - gemini-3.8-flash-medium
+          - gemini-4-argon-high
+          - gemini-4-argon-low
+          - gemini-4-argon-medium
           - gpt-5-mini
           - gpt-5.3-codex
           - gpt-5.4
@@ -692,15 +695,15 @@ $defs:
               $ref: '#/$defs/mcpServerEntry'
             description: >-
               MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry;
-              include "ctrlyoke" to enable dynamic queue extension.
+              include "ctrlyoke" to let the harness append steps (a dynamic workflow).
           - type: 'null'
             description: Explicitly disable inherited MCP servers.
         description: >-
           MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve
-          against ctrlyoke's managed MCP registry. Include "ctrlyoke" to enable dynamic queue
-          extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a
-          managed server; an inline reference wins over null, which otherwise explicitly disables
-          inherited servers.
+          against ctrlyoke's managed MCP registry. Include "ctrlyoke" to let the harness append
+          steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the
+          prompt to force-attach a managed server; an inline reference wins over null, which
+          otherwise explicitly disables inherited servers.
         title: MCP Servers
       hooks:
         oneOf:
@@ -2216,7 +2219,7 @@ $defs:
       to disable (for example, ["append_step"]).
     oneOf:
       - type: string
-        description: A well-known MCP server ID (e.g., "ctrlyoke" to enable dynamic queue extension).
+        description: A well-known MCP server ID (e.g., "ctrlyoke" to make the workflow dynamic).
       - type: object
         description: >-
           Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare

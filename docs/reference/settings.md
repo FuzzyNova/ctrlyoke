@@ -773,7 +773,7 @@ not isolate members from each other or merge their work.
 - **Type:** `-1` or `integer`
 - **Default:** `100`
 
-Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after queue extensions; retries and final-step passes do not add entries. A workflow's own `maxSteps` replaces this value for that workflow, so a workflow `maxSteps: -1` lifts this cap. Dashboard appends, MCP `append_step`, and run continuation enforce the same resolved limit. `-1` disables the queue-size limit.
+Maximum number of entries in the run's steps array, including disabled steps and each member of a parallel group. Checked before execution starts and after steps are appended; retries and final-step passes do not add entries. A workflow's own `maxSteps` replaces this value for that workflow, so a workflow `maxSteps: -1` lifts this cap. Dashboard appends, MCP `append_step`, and run continuation enforce the same resolved limit. `-1` disables the queue-size limit.
 
 ### `queue.maxParallelSteps` {#queue-maxparallelsteps}
 

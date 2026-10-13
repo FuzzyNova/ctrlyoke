@@ -294,5 +294,5 @@ unsupported: PIDs and file locks are machine-local and cannot coordinate across 
 
 - `docs/harnesses/index.md` — supported harnesses
 - `docs/workflows/session-management.md` — session ID resolution and reuse
-- `docs/workflows/dynamic-queue.md` — queue extension details
+- `docs/workflows/dynamic-workflows.md` — dynamic workflows (letting the harness append steps)
 - `docs/workflows/end-conditions.md` — end condition configuration and examples

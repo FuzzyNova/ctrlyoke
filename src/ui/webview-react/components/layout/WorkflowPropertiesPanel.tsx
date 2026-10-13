@@ -280,7 +280,7 @@ const FormField: React.FC<{
  *
  * Collapsible panel for configuring:
  * - Harness settings (harness, model, agent)
- * - Workflow properties (execution mode, resume session, dynamic queue)
+ * - Workflow properties (execution mode, resume session, dynamic workflow)
  * - End condition configuration
  * - Quick access to VS Code settings
  */
@@ -2378,7 +2378,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <FormField
                 label="MCP Servers"
                 schemaPath="mcpServers"
-                description="MCP servers to attach to the harness for this workflow. Include ctrlyoke to enable dynamic queue extension. Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
+                description="MCP servers to attach to the harness for this workflow. Include ctrlyoke to let the harness append steps (a dynamic workflow). Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
                 className="flex-1 min-h-0"
                 setAsDefaultButton={
                   <SetAsDefaultButton

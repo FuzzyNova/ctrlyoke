@@ -163,11 +163,11 @@ Whether to resume the existing chat session for this prompt. When omitted, defau
 - **Type:** array of (`string` or `{ id: "ctrlyoke", deniedTools? }` or [MCP server entry](#mcp-server-entry)) or `null`
 - **Settings default:** [`defaults.mcpServers`](/reference/settings#defaults-mcpservers)
 
-MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include "ctrlyoke" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:&lt;server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.
+MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include "ctrlyoke" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:&lt;server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.
 
 Accepted forms:
 
-- array of (`string` or `{ id: "ctrlyoke", deniedTools? }` or [MCP server entry](#mcp-server-entry)) — MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry; include "ctrlyoke" to enable dynamic queue extension.
+- array of (`string` or `{ id: "ctrlyoke", deniedTools? }` or [MCP server entry](#mcp-server-entry)) — MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry; include "ctrlyoke" to let the harness append steps (a dynamic workflow).
 - `null` — Explicitly disable inherited MCP servers.
 
 Fields:
@@ -469,7 +469,7 @@ steps:
     failFast: true
 ```
 
-See [Dynamic queue: parallel groups](/workflows/dynamic-queue#parallel-groups) for what a
+See [Dynamic workflows: parallel groups](/workflows/dynamic-workflows#parallel-groups) for what a
 member can do through the `ctrlyoke` MCP server.
 
 ### `parallel` {#parallel-group-parallel}

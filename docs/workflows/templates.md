@@ -60,7 +60,7 @@ visible until cleared, so stale settings can be cleaned up.
 
 ## Bug Hunt Loop and Bug Drain Loop {#bug-loops}
 
-Both templates are [dynamic-queue](/workflows/dynamic-queue) loops that keep bug reports as Markdown files in your repo, one file per bug, rather than in an issue tracker. They have no steps up front. Their final step reviews the fixes that landed since its previous pass, then queues new fix steps; the loop ends on the first pass that queues nothing.
+Both templates are [dynamic workflow](/workflows/dynamic-workflows) loops that keep bug reports as Markdown files in your repo, one file per bug, rather than in an issue tracker. They have no steps up front. Their final step reviews the fixes that landed since its previous pass, then appends new fix steps; the loop ends on the first pass that appends nothing.
 
 | Template       | Each pass                                                                                   | Ends when                                            |
 | -------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------- |

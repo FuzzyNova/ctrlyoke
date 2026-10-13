@@ -288,7 +288,7 @@ export interface ExecutionProperties {
    * - null: explicitly disable inherited MCP servers
    * - undefined: inherit from workflow/settings
    *
-   * Include "ctrlyoke" to enable dynamic queue extension via ctrlyoke's MCP server.
+   * Include "ctrlyoke" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow).
    */
   mcpServers?: (string | McpServerConfig)[] | null;
 
