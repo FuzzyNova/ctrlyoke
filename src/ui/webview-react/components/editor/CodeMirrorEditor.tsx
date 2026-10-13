@@ -84,6 +84,7 @@ import {
   checkPriorContextRefs,
   diagnoseResolvedReferences,
   getConditionOutputDiagnostics,
+  getReservedPriorContextPrefixDiagnostics,
   resolvePromptReferences,
   type ContextReferenceResolver,
   type ContextReferenceValidationResult,
@@ -2263,9 +2264,14 @@ export function createPriorContextLintExtension(
         });
       }
 
-      return checks.flatMap((check) =>
-        check.diagnostic ? [toCodeMirrorDiagnostic(check.diagnostic)] : []
-      );
+      return [
+        ...checks.flatMap((check) =>
+          check.diagnostic ? [toCodeMirrorDiagnostic(check.diagnostic)] : []
+        ),
+        ...getReservedPriorContextPrefixDiagnostics(
+          view.state.doc.toString()
+        ).map(toCodeMirrorDiagnostic),
+      ];
     },
     {
       delay: 300,

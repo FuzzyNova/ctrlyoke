@@ -226,6 +226,16 @@ suite("RunOutputResolver", () => {
             elapsed: 1,
             isStreaming: false,
             source: "script",
+            scriptVerdict: {
+              compareSource: "stdout",
+              operator: "contains",
+              expected: "pass",
+              actual: "pass",
+              exitCode: 0,
+              outcome: "passed",
+              action: "continue",
+              durationMs: 1,
+            },
           },
         },
       },
@@ -502,6 +512,11 @@ suite("RunOutputResolver", () => {
       ["partial retry response", "pass\n0", finalResponse],
       "prior context is resolved from timeline attempts, including scripts and final loops"
     );
+    assert.strictEqual(
+      priorItems[1].scriptVerdict?.outcome,
+      "passed",
+      "a script step's prior-context item carries its verdict"
+    );
     const lastOneItems = await resolver.resolvePriorContextItems(
       manifestPath,
       [{ previous: 1 }],
@@ -533,6 +548,10 @@ suite("RunOutputResolver", () => {
     );
     assert.match(preview, /partial retry response/);
     assert.match(preview, /<stdout>\npass\n<\/stdout>/);
+    assert.match(
+      preview,
+      /<verdict outcome="passed" compareSource="stdout" operator="contains" expected="pass"\/>/
+    );
     const groupBoundaryItems = await resolver.resolvePriorContextItems(
       manifestPath,
       ["previous", "all", [2]],

@@ -1,5 +1,9 @@
 # Workflow Step Plan
 
+> **2026-10-13:** The pre-release slice of D12 landed: `PriorContextItem.scriptVerdict` and its
+> `<verdict/>` rendering (D12a, for every script step), and `PRIOR_CONTEXT_SUMMARY_PREFIX`,
+> reserved by an editor warning but not yet parsed or expanded (D12b).
+>
 > **2026-10-10 audit:** Not started apart from the two prerequisite worktree bugs (fixed in
 > `87c4065e4`, `1f4a87c1e`). No `STEP_TYPES.WORKFLOW`, `subWorkflowStep`, `getStepType`,
 > `$summary:`, or `priorContextDetail` exists yet. Line references re-verified and corrected
@@ -435,9 +439,12 @@ Rejected.
 - **Missing child history** (run directory deleted): the metadata renders with a
   `<childRunUnavailable/>` marker instead of child steps. This is not an error.
 - **The script verdict is new for every script step**, not only inside workflows, so `$previous`
-  after a script reports pass/fail the same way at every level. `PriorContextItem`
-  (`HarnessIntegration.ts:44`) gains `scriptVerdict?` and `subWorkflow?: { output, children }`,
-  and `buildPriorContextXmlFromItems` (`:111`) renders both.
+  after a script reports pass/fail the same way at every level. **Implemented (2026-10-13):**
+  `PriorContextItem.scriptVerdict` comes from the script step's own `CliOutput.scriptVerdict`, and
+  `buildPriorContextXmlFromItems` renders it. The element states the rule that actually ran (a
+  missing `expected` renders as exit code `eq` `0`) and carries `actual` only for exit-code
+  comparisons, since a stdout/stderr actual repeats the whole stream. Still to do here:
+  `subWorkflow?: { output, children }` and its rendering.
 
 ```xml
 <step index="2" type="workflow" name="f1-location" workflow="waves/f1-location.ctrlyoke.yaml"
@@ -452,7 +459,7 @@ Rejected.
 <command>npm test</command>
 <stdout>…</stdout>
 <exitCode>0</exitCode>
-<verdict outcome="passed" compareSource="exitCode" expected="0" actual="0"/>
+<verdict outcome="passed" compareSource="exitCode" operator="eq" expected="0" actual="0"/>
 </step>
 </step>
 ```
@@ -814,7 +821,10 @@ the check (`mergeDiskStepsUnderLock`, fixed in `234708f1e`;
 - **Parsing.** `createInlinePriorContextReferencePattern` (`ReferencePatterns.ts:15`) accepts an
   optional `summary:` prefix before the existing body alternatives. `parseInlinePriorContextBody`
   strips it, parses the rest unchanged, and sets `detail`. `$summary` with no selector, or with an
-  unknown one, is a diagnostic, like `$step:` with no indices today.
+  unknown one, is a diagnostic, like `$step:` with no indices today. The prefix constant
+  (`PRIOR_CONTEXT_SUMMARY_PREFIX`) and a reserved-prefix warning
+  (`getReservedPriorContextPrefixDiagnostics`, `PRIOR_CONTEXT_RESERVED_PREFIX`) already exist;
+  replace that warning with real parsing and these diagnostics when this lands.
 - **Merging.** `mergePriorContextReferences` keeps a `Map<index, PriorContextDetail>` alongside
   its index sets, combining the `priorContext` property (at `priorContextDetail`) with the inline
   tokens; full wins on overlap.

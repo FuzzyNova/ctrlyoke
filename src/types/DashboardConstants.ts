@@ -1984,6 +1984,7 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   PRIOR_CONTEXT_COUNT_CAPPED: "prompt.prior-context.count-capped",
   PRIOR_CONTEXT_NO_FINAL_STEP: "prompt.prior-context.no-final-step",
   PRIOR_CONTEXT_STEP_MISSING: "prompt.prior-context.step-missing",
+  PRIOR_CONTEXT_RESERVED_PREFIX: "prompt.prior-context.reserved-prefix",
   CONDITION_NO_PRE_CONDITION: "prompt.condition.no-pre-condition",
   CONDITION_END_CONDITION_OUTSIDE_RETRY:
     "prompt.condition.end-condition-outside-retry",
@@ -3172,6 +3173,14 @@ export const PRIOR_CONTEXT_REFERENCE_KINDS = {
 
 export type PriorContextReferenceKind =
   (typeof PRIOR_CONTEXT_REFERENCE_KINDS)[keyof typeof PRIOR_CONTEXT_REFERENCE_KINDS];
+
+/**
+ * Reserved inline prior-context prefix (`$summary:previous`, `$summary:step:2`)
+ * for the planned bounded-excerpt form. It is not expanded yet, so the editor
+ * lint warns wherever it appears: text written now would otherwise change
+ * meaning once the form ships.
+ */
+export const PRIOR_CONTEXT_SUMMARY_PREFIX = "summary:";
 
 export const PRIOR_CONTEXT_SELECTION_MODES = {
   /** `{ previous: N }` — the last N outputs before the prompt. */

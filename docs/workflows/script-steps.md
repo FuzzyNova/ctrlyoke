@@ -148,10 +148,32 @@ end-condition scripts always run headless.
 
 ## Using script output in later prompts
 
-A script step's command, stdout, stderr and exit code are available to later
-prompts through the usual [context references](/workflows/context-files) such
-as `$previous` and `$step:N`, and through `priorContext`. Output is sanitized
-the same way as for comparisons.
+A script step's command, stdout, stderr, exit code and verdict are available to
+later prompts through the usual [context references](/workflows/context-files)
+such as `$previous` and `$step:N`, and through `priorContext`. Output is
+sanitized the same way as for comparisons.
+
+The verdict comes last and says whether the step passed, and against which
+rule:
+
+```xml
+<step index="2" type="script" name="Tests">
+<command>
+npm test
+</command>
+<stdout>
+3 failing
+</stdout>
+<exitCode>1</exitCode>
+<verdict outcome="failed" compareSource="exitCode" operator="eq" expected="0" actual="1"/>
+</step>
+```
+
+`outcome` is `passed`, `failed` or `errored`. A comparison with no `expected`
+is reported as the rule that actually ran, exit code `eq` `0`. `actual` appears
+only for an exit-code comparison, because a stdout or stderr value is already
+shown in full above it. A timed-out or errored script adds `timedOut="true"` or
+a `reason`.
 
 ## Errors are not failures
 

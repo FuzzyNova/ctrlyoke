@@ -2,6 +2,7 @@ import {
   PromptStep,
   ScriptRuntimeOutput,
   type FailureKind,
+  type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
@@ -30,10 +31,13 @@ import {
 import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
+  COMPARE_SOURCES,
+  DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
   PriorContextItemType,
   type TerminalEndReason,
 } from "../types/DashboardConstants";
+import { operatorTakesNoValue } from "../utils/ScriptComparison";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
@@ -51,7 +55,57 @@ export type PriorContextItem = {
   type?: PriorContextItemType;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
+  /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
+  scriptVerdict?: ScriptVerdict;
 };
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * `<verdict/>` for a script step. When `expected` is absent the comparison
+ * falls back to "exit code 0" whatever source was configured, so the element
+ * states that rule rather than the unused configured one (see
+ * `formatComparison`). A stdout/stderr `actual` is the whole trimmed stream,
+ * already rendered in its own element, so it is not repeated here.
+ */
+function buildScriptVerdictXml(verdict: ScriptVerdict): string {
+  const fallsBackToExitCode =
+    verdict.expected === undefined && !operatorTakesNoValue(verdict.operator);
+  const compareSource = fallsBackToExitCode
+    ? COMPARE_SOURCES.EXIT_CODE
+    : verdict.compareSource;
+  const operator = fallsBackToExitCode
+    ? DEFAULT_SCRIPT_OPERATOR
+    : verdict.operator;
+  const expected = fallsBackToExitCode ? "0" : verdict.expected;
+  const actual =
+    compareSource === COMPARE_SOURCES.EXIT_CODE
+      ? fallsBackToExitCode
+        ? verdict.exitCode?.toString()
+        : verdict.actual
+      : undefined;
+  const reason = verdict.error?.replace(/\s+/g, " ").trim();
+  const attributes: [string, string | undefined][] = [
+    ["outcome", verdict.outcome],
+    ["compareSource", compareSource],
+    ["operator", operator],
+    ["expected", expected],
+    ["actual", actual],
+    ["timedOut", verdict.timedOut ? "true" : undefined],
+    ["reason", reason || undefined],
+  ];
+  const rendered = attributes
+    .filter((entry): entry is [string, string] => entry[1] !== undefined)
+    .map(([name, value]) => ` ${name}="${escapeXmlAttribute(value)}"`)
+    .join("");
+  return `<verdict${rendered}/>\n`;
+}
 
 /**
  * Carry the step's ctrlyoke denials into skill generation so a denied tool is
@@ -115,6 +169,11 @@ export function buildPriorContextXmlFromItems(
   const steps = sortedItems
     .map((item) => {
       const nameAttr = item.name ? ` name="${item.name}"` : "";
+      // A script finalStep has a verdict but no scriptOutput, so this is
+      // rendered in both arms below.
+      const verdictSection = item.scriptVerdict
+        ? buildScriptVerdictXml(item.scriptVerdict)
+        : "";
       if (item.scriptOutput) {
         const commandSection = `<command>\n${item.scriptOutput.command.trim()}\n</command>\n`;
         const stdoutSection = item.scriptOutput.stdout.trim()
@@ -127,14 +186,14 @@ export function buildPriorContextXmlFromItems(
           item.scriptOutput.exitCode !== undefined
             ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
             : "";
-        return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}</step>`;
+        return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}</step>`;
       }
       const typeAttr = item.type ? ` type="${item.type}"` : "";
       const promptSection = item.prompt
         ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
         : "";
-      const responseSection = `<response>\n${item.text.trim()}\n</response>`;
-      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}\n</step>`;
+      const responseSection = `<response>\n${item.text.trim()}\n</response>\n`;
+      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}${verdictSection}</step>`;
     })
     .join("\n");
 
