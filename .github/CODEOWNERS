@@ -1,0 +1,4 @@
+# Every path needs the maintainer's review. The `main` ruleset requires
+# code-owner review (scripts/apply-github-guardrails.mjs), so this also covers
+# community-templates/ submissions (dev/backlog/COMMUNITY_TEMPLATES_PLAN.md).
+* @nhickster

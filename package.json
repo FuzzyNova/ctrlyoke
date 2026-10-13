@@ -687,6 +687,7 @@
     "compile:react-debug": "npm run compile:extension && npm run compile:webview:react-debug",
     "precompile-tests": "node scripts/clean-test-output.mjs",
     "compile-tests": "tsc -p . && node esbuild.js",
+    "check:fast": "npm-run-all typecheck lint compile-tests test:ui test:packaging",
     "typecheck": "npm-run-all typecheck:extension typecheck:webview",
     "typecheck:extension": "tsc --noEmit",
     "typecheck:webview": "tsc --noEmit -p src/ui/webview-react/tsconfig.json",

@@ -1,6 +1,8 @@
 #!/bin/sh
-# Local fast gate for `main`-as-trunk. Runs typecheck/lint/test:ui/test:packaging
-# before a push reaches the remote. Never runs test:harness (spends real money).
+# Local fast gate for `main`-as-trunk. Runs `npm run check:fast`
+# (typecheck, lint, compile-tests, test:ui, test:packaging) before a push reaches the remote --
+# the same gate .github/workflows/ci.yml runs on pull requests. Never runs
+# test:harness (spends real money).
 #
 # Installed via: git config core.hooksPath .githooks
 # (repo-shared config -- applies to every worktree, but each worktree needs its
@@ -44,19 +46,12 @@ if [ ! -e "node_modules/.bin/tsc" ]; then
 	exit 1
 fi
 
-run_step() {
-	echo "pre-push: running $1..."
-	if ! npm run "$1" --silent; then
-		echo "pre-push: '$1' failed -- push blocked. Fix the issue above and try again." >&2
-		echo "(Use --no-verify to bypass in a genuine emergency -- not routinely.)" >&2
-		exit 1
-	fi
-}
-
-run_step typecheck
-run_step lint
-run_step test:ui
-run_step test:packaging
+echo "pre-push: running check:fast..."
+if ! npm run check:fast --silent; then
+	echo "pre-push: 'check:fast' failed -- push blocked. Fix the issue above and try again." >&2
+	echo "(Use --no-verify to bypass in a genuine emergency -- not routinely.)" >&2
+	exit 1
+fi
 
 echo "pre-push: all checks passed."
 exit 0
