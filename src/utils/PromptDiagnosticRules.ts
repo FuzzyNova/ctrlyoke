@@ -13,6 +13,7 @@
 
 import {
   PRIOR_CONTEXT_REFERENCE_KINDS,
+  PRIOR_CONTEXT_SUMMARY_PREFIX,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTIC_FIELDS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -32,6 +33,7 @@ import {
   type ContextReferenceMatch,
 } from "./PromptReferenceScanner";
 import { formatRangeNotation } from "./RangeNotationParser";
+import { createReservedPriorContextPrefixPattern } from "./ReferencePatterns";
 import {
   findVariablePlaceholders,
   isVariableDefined,
@@ -211,14 +213,47 @@ export function checkPriorContextRefs(
   return checks;
 }
 
-/** Prior-context diagnostics only; see {@link checkPriorContextRefs}. */
+/**
+ * Warn on the reserved `$summary:` prefix outside code. It is sent as literal
+ * text today but will become a prior-context reference, so text written now
+ * would silently change meaning after an upgrade.
+ */
+export function getReservedPriorContextPrefixDiagnostics(
+  text: string
+): PromptDiagnostic[] {
+  const codeRanges = findCodeRanges(text);
+  const diagnostics: PromptDiagnostic[] = [];
+  for (const match of text.matchAll(
+    createReservedPriorContextPrefixPattern()
+  )) {
+    const from = match.index;
+    const to = from + match[0].length;
+    if (isInCodeRange(from, to, codeRanges)) continue;
+    diagnostics.push({
+      from,
+      to,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_RESERVED_PREFIX,
+      message: `$${PRIOR_CONTEXT_SUMMARY_PREFIX} is reserved for a future prior-context reference and is not expanded yet — it is sent as literal text. Wrap it in backticks to keep it literal.`,
+    });
+  }
+  return diagnostics;
+}
+
+/**
+ * Prior-context diagnostics only; see {@link checkPriorContextRefs} and
+ * {@link getReservedPriorContextPrefixDiagnostics}.
+ */
 export function getPriorContextDiagnostics(
   text: string,
   context: Pick<PromptDiagnosticContext, "stepCount" | "hasFinalStep">
 ): PromptDiagnostic[] {
-  return checkPriorContextRefs(text, context).flatMap((check) =>
-    check.diagnostic ? [check.diagnostic] : []
-  );
+  return [
+    ...checkPriorContextRefs(text, context).flatMap((check) =>
+      check.diagnostic ? [check.diagnostic] : []
+    ),
+    ...getReservedPriorContextPrefixDiagnostics(text),
+  ];
 }
 
 /** `$preCondition:`/`$endCondition:` refs that are unavailable or misspelled. */

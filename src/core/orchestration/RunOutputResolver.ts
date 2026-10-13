@@ -3,6 +3,7 @@ import { type ExecutionState } from "../../types/DashboardConstants";
 import type {
   PriorContext,
   ScriptRuntimeOutput,
+  ScriptVerdict,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import { isScriptStep } from "../../types/CtrlYokeTypes";
@@ -1008,7 +1009,18 @@ export class RunOutputResolver {
                 .join("\n")
                 .trim()
             : (value.responseText ?? "");
-          return text ? [{ index, name: step.name, text, scriptOutput }] : [];
+          const scriptVerdict = getStepScriptVerdict(value);
+          return text
+            ? [
+                {
+                  index,
+                  name: step.name,
+                  text,
+                  scriptOutput,
+                  ...(scriptVerdict ? { scriptVerdict } : {}),
+                },
+              ]
+            : [];
         }
         const text = value.responseText ?? "";
         return text
@@ -1035,12 +1047,14 @@ export class RunOutputResolver {
       )
       .flatMap((value): PriorContextItem[] => {
         const index = (value.target as { loopIndex: number }).loopIndex;
+        const scriptVerdict = getStepScriptVerdict(value);
         return value.responseText
           ? [
               {
                 index,
                 text: value.responseText,
                 type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
+                ...(scriptVerdict ? { scriptVerdict } : {}),
               },
             ]
           : [];
@@ -1373,6 +1387,18 @@ function getTargetKey(target: OutputExecutionTarget): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
     ? queueTargetKey(target.stepIndex)
     : `final:${target.loopIndex}`;
+}
+
+/**
+ * The script step's own verdict. Condition scripts share the step's attempt
+ * indices, so only output sourced from the script step itself counts.
+ */
+function getStepScriptVerdict(
+  value: ResolvedRunAttemptValue
+): ScriptVerdict | undefined {
+  return value.output?.source === SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP
+    ? value.output.scriptVerdict
+    : undefined;
 }
 
 function getAttemptKey(attempt: ResolvedRunAttempt): string {

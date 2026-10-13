@@ -1009,8 +1009,15 @@ later version at no compatibility cost.
   - `-1` behavior and timeout boundaries are documented; structured reasons now reach the
     persisted run state and dashboard, CLI, MCP, logs, and notifications. Dry-run output includes
     the effective global guardrails.
-- [ ] **Script verdict in `$previous`/`$step` output** —
+- [x] **Script verdict in `$previous`/`$step` output** —
       [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md) D12a.
+  - **Done 2026-10-13.** `PriorContextItem.scriptVerdict` is resolved from the script step's own
+    completed output (queue steps and script `finalStep` passes) and rendered by
+    `buildPriorContextXmlFromItems` as a trailing `<verdict/>` element (outcome, compare source,
+    operator, expected, and an exit-code actual). `$summary:` is reserved by a
+    `prompt.prior-context.reserved-prefix` editor warning; the runtime still sends it as literal
+    text. Documented in
+    `docs/workflows/script-steps.md` and `context-files.md`.
   - **Cost if late:** it appends the script's pass/fail, `expected`, and `actual` to the prior-context
     rendering of _every_ script step, not only steps inside workflows. Landing it after launch
     changes the prompt text that existing authored workflows send to the harness after an upgrade.

@@ -149,6 +149,33 @@ suite("PromptDiagnosticRules", () => {
       const [diagnostic] = getPriorContextDiagnostics(text, baseContext);
       assert.strictEqual(text.slice(diagnostic.from, diagnostic.to), "$step:9");
     });
+
+    test("warns on the reserved $summary: prefix with its selector", () => {
+      const text = "Merge $summary:step:1,3-5, then $summary:previous.";
+      assert.deepStrictEqual(
+        summarize(text, getPriorContextDiagnostics(text, baseContext)),
+        ["$summary:step:1,3-5", "$summary:previous"].map((token) => ({
+          code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_RESERVED_PREFIX,
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          text: token,
+        }))
+      );
+    });
+
+    test("does not warn on $summary: in code, mid-word, or without the colon", () => {
+      for (const text of [
+        "`$summary:previous`",
+        "```\n$summary:all\n```",
+        "price$summary:all",
+        "a $summary of the run",
+      ]) {
+        assert.deepStrictEqual(
+          getPriorContextDiagnostics(text, baseContext),
+          [],
+          text
+        );
+      }
+    });
   });
 
   suite("condition output", () => {

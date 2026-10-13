@@ -79,6 +79,13 @@ They are the inline form of the `priorContext` step property
 (`previous`, `{ previous: 3 }`, `all`, `finalStepPrevious`, `finalStepAll`, or an
 array such as `[1, 3]`).
 
+A script step's output includes its pass/fail verdict; see
+[Using script output in later prompts](/workflows/script-steps#using-script-output-in-later-prompts).
+
+`$summary:` is reserved for a planned shortened form of these references
+(`$summary:previous`, `$summary:step:2`). It is not expanded yet, so the editor
+warns wherever it appears outside code.
+
 ## Context at a parallel boundary
 
 For a member of a parallel group, `previous` and `all` are evaluated at the
