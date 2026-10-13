@@ -53,6 +53,16 @@ function isSatisfiedRequiredValue(value: string | undefined): boolean {
   return Boolean(value?.trim());
 }
 
+/** State updater that drops one variable's error, keeping identity when there is none. */
+function withoutVariableError(name: string) {
+  return (previous: Record<string, string>): Record<string, string> => {
+    if (!previous[name]) return previous;
+    const next = { ...previous };
+    delete next[name];
+    return next;
+  };
+}
+
 interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -289,12 +299,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     (variable: string, path: string) => {
       setVariables((prev) => ({ ...prev, [variable]: path }));
       if (isSatisfiedRequiredValue(path)) {
-        setVariableErrors((previous) => {
-          if (!previous[variable]) return previous;
-          const next = { ...previous };
-          delete next[variable];
-          return next;
-        });
+        setVariableErrors(withoutVariableError(variable));
       }
 
       const meta = currentTemplate?.variables?.find((v) => v.name === variable);
@@ -411,12 +416,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const handleVariableChange = useCallback(
     (variable: string, value: string) => {
       if (isSatisfiedRequiredValue(value)) {
-        setVariableErrors((previous) => {
-          if (!previous[variable]) return previous;
-          const next = { ...previous };
-          delete next[variable];
-          return next;
-        });
+        setVariableErrors(withoutVariableError(variable));
       }
       setVariables((prev) => {
         const next = { ...prev, [variable]: value };
@@ -510,16 +510,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       );
       if (!variable) return true;
       const satisfied = isSatisfiedRequiredValue(value);
-      setVariableErrors((previous) => {
-        if (satisfied) {
-          if (!previous[name]) return previous;
-          const next = { ...previous };
-          delete next[name];
-          return next;
-        }
-        if (previous[name] === REQUIRED_VARIABLE_ERROR) return previous;
-        return { ...previous, [name]: REQUIRED_VARIABLE_ERROR };
-      });
+      setVariableErrors(
+        satisfied
+          ? withoutVariableError(name)
+          : (previous) =>
+              previous[name] === REQUIRED_VARIABLE_ERROR
+                ? previous
+                : { ...previous, [name]: REQUIRED_VARIABLE_ERROR }
+      );
       return satisfied;
     },
     [requiredVariables, variables]
