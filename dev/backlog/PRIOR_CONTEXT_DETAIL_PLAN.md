@@ -3,10 +3,16 @@
 > **Status:** Not implemented. Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
-> defined here. Phases 1–3 land before launch (decided 2026-10-13; tracked in
-> [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md)). Phase 1 changes the prompt text
-> that existing `$previous`/`priorContext` workflows send, Phase 2 changes the persisted timeline
-> format, and Phase 3 adds `$summary:`.
+> defined here. Phases 0–3 land before launch, in the order given under
+> [Sequencing](#sequencing) (decided 2026-10-13; tracked in
+> [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md)).
+>
+> - Phase 0 fixes a resolver bug every later phase builds on.
+> - Phase 1 changes the prompt text that existing `$previous`/`priorContext` workflows send.
+> - Phase 2 changes the persisted timeline format.
+> - Phase 3 adds `$summary:`.
+>
+> Every decision is settled and there are no open questions.
 >
 > The plan has two parts:
 >
@@ -78,7 +84,7 @@ events the timeline already stores**, not from the capture-time `responseText` s
 
 | Event                         | Rendered as                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Authored prompt               | `<prompt>` in full (unchanged; the authored prompt, not the expanded one)                                    |
+| Authored prompt               | `<prompt>` in full (the authored prompt, not the expanded one). `finalStep` passes gain it too (D1b)         |
 | `TEXT`                        | Plain text, as today                                                                                         |
 | `THINKING`                    | `<thinking>…</thinking>` (replaces the `[Thinking]` markers); a redacted block renders its summary, as today |
 | `FILE_EDIT`                   | `<edit path="…" added="4" removed="1">` + fenced unified diff — **always**, no setting                       |
@@ -90,6 +96,7 @@ events the timeline already stores**, not from the capture-time `responseText` s
 | `WEB_SEARCH`                  | `<search query="…">` + result titles and URLs                                                                |
 | `ASK_USER_QUESTION`           | `<question>` + the questions and the user's answers (the answers shaped the step's work)                     |
 | `USER_STEER`                  | `<userSteer>` + the human's text (same reason)                                                               |
+| `TERMINAL_OUTPUT` (Phase 2)   | `<terminalOutput reason="…">` + the text (the PTY tail after a harness exit, D8a)                            |
 | `COMPACTION`, display markers | Omitted (`FOLLOW_UP_RESUMED`, background-hold markers, `CONTEXT_WINDOW_SYNC`, and other display-only events) |
 | Failed operations             | The element gains `failed="true"`; a failed edit renders no diff                                             |
 
@@ -147,7 +154,7 @@ tail of its output, capped per command.**
   byte, and the truncation marker names how to read it (`ctrlyoke history show …`, D12c of the
   workflow step plan).
 
-Caps live in one constant, alongside the summary caps:
+Caps live in one constant in `src/types/DashboardConstants.ts`, alongside the summary caps:
 
 ```ts
 export const PRIOR_CONTEXT_LIMITS = {
@@ -173,6 +180,18 @@ was removed) plus `omittedBytes`. This replaces D12b's `truncated="head" | "tail
 ambiguous about whether it named the part kept or the part removed. Cuts land on line
 boundaries, and byte counts are UTF-8 bytes, cut on a code point boundary.
 
+#### D1b. `finalStep` passes carry their prompt
+
+_Previously an open question; decided._ Today a prompt `finalStep` item has no `<prompt>`
+(`RunOutputResolver.ts:1048-1061`), so `$finalStep` reads differently from `$step:N`. Each pass
+now renders its authored prompt, taken from the attempt's definition snapshot
+(`value.definition?.step`, which `resolveStep` already resolves for a `finalStep` target). The
+`<step>` element keeps its existing `type` attribute (`PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP`) and
+its 1-based pass number. A script `finalStep`
+renders like a queue script step (`<command>`, `<stdout>`, `<stderr>`, `<exitCode>`,
+`<verdict/>`) from its `scriptOutput`. Today it reads `responseText` only; Phase 1 adds the
+missing script branch.
+
 ### D2. Summary form (`$summary:previous`, `$summary:step:1-3`, …)
 
 A bounded account of the step: what was asked, what changed, what the model said at the end.
@@ -181,7 +200,7 @@ A bounded account of the step: what was asked, what changed, what the model said
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Prompt          | First 2 KB of the authored prompt; `<filesChanged>`; last 4 KB of the step's **text only** (no thinking, commands, tool calls, or diffs)         |
 | Script          | First 2 KB of the command; last 4 KB of stdout and stderr combined; exit code and verdict in full (unchanged from D12b)                          |
-| `finalStep`     | As a prompt or script step; a prompt `finalStep` item has no `<prompt>` today (see Open questions)                                               |
+| `finalStep`     | As a prompt or script step, including the pass's authored prompt (D1b)                                                                           |
 | Workflow (D12a) | Metadata in full; each child step summarized by these rules within `WORKFLOW_BUDGET_BYTES`, earliest children elided first (unchanged from D12b) |
 
 ```xml
@@ -240,6 +259,15 @@ Removed src/core/LegacyRetry.ts
 
 ### D4. Which attempt
 
+"Latest" is per step **within the run being executed**, never across runs. Appending steps to an
+older run continues that run in its own directory (`RunLifecycleService.appendAndContinueAtRun`
+→ `WorkflowInstance.executeContinuationAtRun`, which reopens that run's `events.jsonl`). The
+prior-context resolver is bound to that history file (`WorkflowStartupPipeline.ts:473-474`). So
+`$previous` in a step appended to run 2 of five reads run 2's own last step that produced
+output. Tests must cover that case: an appended step in a non-latest run resolves `$previous`
+and `$summary:previous` from that run only. They must also cover a commit step whose only
+attempt was interrupted; today it reads as empty and is skipped (D8f).
+
 Prior context renders the **latest attempt** of each step, as today. Earlier attempts' edits are
 still on disk, though, and a retry's transcript often reads "fixed the failing assertion" with
 the real work in attempt 1. So:
@@ -248,6 +276,15 @@ the real work in attempt 1. So:
   `<earlierAttempts count="2">` element lists them in `<filesChanged>` form (no diffs).
 - **Summary:** `<filesChanged>` covers every attempt of the step. That is also what the
   dashboard's files-changed list shows.
+
+**Data source.** `resolveLatestAttempts` keeps only the latest value per target, so it can't
+supply earlier attempts' files on its own. In the same streamed pass, `resolvePriorContextItems`
+feeds each selected target's non-condition attempts into a `ProjectionAccumulator`, the class the
+dashboard projection already uses (`RunOutputResolver.ts:1237-1304`). That needs the workspace
+roots `getFileChange` uses (`:911-961`), so `resolvePriorContextItems` gains a
+`RunOutputProjectionOptions` argument. `createPriorContextResolver` already has `workspaceRoot`
+and passes it through, along with any other roots the projection options need. Condition
+attempts never count as the step's work (Phase 0).
 
 Post-completion follow-ups (harness auto-resume, TUI steering) are part of their attempt already
 (`foldSettledAttempt`), so they render in both forms with no extra work.
@@ -304,8 +341,10 @@ export type PriorContextItem = {
   summary items: it filters the transcript to `text`, applies `PRIOR_CONTEXT_LIMITS`, and sets
   the markers. The full form applies only its per-entry caps. Truncation therefore never forks
   the XML format.
-- The diff formatters (`formatStructuredPatch`, `formatEditDiff`, `formatCreatedFileDiff`) move
-  out of `CliResponseTextExtractor.ts` into a shared module the transcript projection uses.
+- The diff formatters (`formatStructuredPatch`, `formatEditDiff`, `formatCreatedFileDiff`) and the
+  `+a -r` line counter move out of `CliResponseTextExtractor.ts` into
+  **`src/utils/CliEventDiff.ts`**. It is pure (only the `diff` package), so the transcript
+  projection, `StepOutputText` (D8b), and the dashboard's Markdown export (D9a) all share it.
 - Event payloads are untrusted model output. Attribute values go through the existing
   `escapeXmlAttribute`; element bodies stay unescaped like `<response>` and `<stdout>` today.
 
@@ -318,8 +357,8 @@ before the run. Mitigations:
 - per-entry caps (D1a) bound the worst case per tool call;
 - `resolvePriorContextItems` already reads only the selected targets' latest attempts in one
   streamed pass, so retained memory stays proportional to what was asked for;
-- the transcript is projected and capped per attempt as it is settled, so a resolved value never
-  carries a full command output into the renderer.
+- each selected attempt is projected into capped transcript entries as soon as it is resolved,
+  and its raw output is dropped then, so the renderer never holds an uncapped command output.
 
 ## Part B
 
@@ -354,12 +393,12 @@ What the duplicate costs today:
 
 #### D8a. Content only `response` carries today, and where it moves
 
-| Content                                                                                                                                                                                        | Today                                                                                                                                                                                                                                         | New single home                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Script, pre-condition, end-condition, and worktree-setup output                                                                                                                                | Final record's `response` is `sanitizeTerminalOutput(stdout + "\n" + stderr)` (`ScriptExecutionReporter.ts:351-360`). It is the third copy, next to the chunk deltas and `SCRIPT_EXECUTION_RECORDED` (`:383-396`, raw redacted stdout/stderr) | **`SCRIPT_EXECUTION_RECORDED`.** Display text is `sanitizeTerminalOutput` applied on read; it is pure and deterministic. The script's `CLI_OUTPUT_RECORDED` keeps only metadata (exit code, verdict, timing). `CLI_OUTPUT_CHUNK_APPENDED` stays as the live delta stream (D8d). The dashboard's completed-output payload gains a typed `scriptOutput`, joined from that record when history is replayed. |
-| PTY tail after the process exits (last 10 ANSI-stripped lines, `CliFailureTracker.ts:37-40`, preferred by `CliIntegration.ts:1771-1773`)                                                       | Only in the failure record's `response` (`WorkflowExecutor.ts:3862-3890`)                                                                                                                                                                     | **A new `CLI_EVENT_TYPES.TERMINAL_OUTPUT` event** (`{ text, reason }`), appended to the attempt's events. It renders as a terminal block in the dashboard and as `<terminalOutput>` in prior context.                                                                                                                                                                                                    |
-| Raw stdout chunks from an AI harness with no log parser (`CliTransportCoordinator.ts:507-519`), and the stop path's fallback to them (`bufferedOutput.response`, `OutputCaptureBuffer.ts:477`) | Folded into `response`                                                                                                                                                                                                                        | **Emit `TEXT` events instead of chunks.** No built-in harness reaches this path, and after the change chunks are script-only.                                                                                                                                                                                                                                                                            |
-| Headless failure message used as the response when there's no text (`CliResponseCollector.ts:147`)                                                                                             | `CliResult.response`, and the `onResponseComplete` payload                                                                                                                                                                                    | **Dropped.** `CliOutput.errorMessage` and `ATTEMPT_TERMINATED.payload.reason` already carry it.                                                                                                                                                                                                                                                                                                          |
+| Content                                                                                                                                                                                        | Today                                                                                                                                                                                                                                         | New single home                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Script, pre-condition, end-condition, and worktree-setup output                                                                                                                                | Final record's `response` is `sanitizeTerminalOutput(stdout + "\n" + stderr)` (`ScriptExecutionReporter.ts:351-360`). It is the third copy, next to the chunk deltas and `SCRIPT_EXECUTION_RECORDED` (`:383-396`, raw redacted stdout/stderr) | **`SCRIPT_EXECUTION_RECORDED`.** Display text is `sanitizeTerminalOutput` applied on read; it is pure and deterministic. The script's `CLI_OUTPUT_RECORDED` keeps only metadata (exit code, verdict, timing). `CLI_OUTPUT_CHUNK_APPENDED` stays as the live delta stream (D8d). The dashboard's completed-output payload gains a typed **wire-only** `scriptOutput`: set on the live completion dispatch, joined from `SCRIPT_EXECUTION_RECORDED` by `OutputHistoryTimelineAdapter` when history is replayed, and stripped before `saveExecutionOutput` persists a record, so it never becomes a second stored copy. |
+| PTY tail after the process exits (last 10 ANSI-stripped lines, `CliFailureTracker.ts:37-40`, preferred by `CliIntegration.ts:1771-1773`)                                                       | Only in the failure record's `response` (`WorkflowExecutor.ts:3862-3890`)                                                                                                                                                                     | **A new `CLI_EVENT_TYPES.TERMINAL_OUTPUT` event** (`{ text, reason }`), appended to the attempt's events. It renders as a terminal block in the dashboard and as `<terminalOutput>` in prior context.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Raw stdout chunks from an AI harness with no log parser (`CliTransportCoordinator.ts:507-519`), and the stop path's fallback to them (`bufferedOutput.response`, `OutputCaptureBuffer.ts:477`) | Folded into `response`                                                                                                                                                                                                                        | **Emit `TEXT` events instead of chunks.** No built-in harness reaches this path, and after the change chunks are script-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Headless failure message used as the response when there's no text (`CliResponseCollector.ts:147`)                                                                                             | `CliResult.response`, and the `onResponseComplete` payload                                                                                                                                                                                    | **Dropped.** `CliOutput.errorMessage` and `ATTEMPT_TERMINATED.payload.reason` already carry it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 #### D8b. One derivation module
 
@@ -377,10 +416,21 @@ export function getScriptOutputText(scriptOutput: ScriptRuntimeOutput): string;
 /** Dispatch: a script attempt uses its script record; an AI attempt uses its events; a
  *  timeline-v1 record with neither uses its legacy `response` (D8e). */
 export function getStepOutputText(
-  attempt: ResolvedRunAttemptValue,
+  source: StepOutputSource,
   mode: StepOutputTextMode
 ): string;
+
+/** Structural input both the resolver and the dashboard can build. Deliberately not
+ *  `ResolvedRunAttemptValue`, which lives in `src/core/` and is not importable by the webview. */
+export interface StepOutputSource {
+  output?: CliOutput | LegacyCliOutputV1;
+  scriptOutput?: ScriptRuntimeOutput;
+}
 ```
+
+`RunOutputResolver`'s `ResolvedRunAttemptValue` declares `extends StepOutputSource`, and the
+dashboard's input type does the same. The relationship is then nominal, as the project's coding
+principles require.
 
 `StepOutputTextMode` is a `const` object (`ASSISTANT`, `TRANSCRIPT`) in `DashboardConstants.ts`.
 `extractTextFromEvents` and `CliResponseTextExtractor.ts` are deleted; their diff formatters move
@@ -460,11 +510,12 @@ string }`) lives in `WorkflowTimelineTypes.ts` and is read only by D8b's legacy 
   included), and others fall back to TEXT events only.
 - **The setting is frozen into records** (Problem 2). There is no stored copy left to freeze.
 
-**Check before building on the resolver:** `resolveLatestAttempts` (`:662-690`) has no phase
-filter, and `ATTEMPT_TERMINATED` is projected without `event.phase` (`:473-482`). So a step whose
-only attempt was a pre-condition may surface that condition's output as the step's text. This
-is reported by research and not yet verified. Confirm it, and file it in `dev/bugs/` if real,
-before Phase 2 makes the resolver the only text source.
+**Prerequisite bug (Phase 0):**
+[`prior-context-resolves-condition-output-as-step-output.md`](../bugs/backlog/prior-context-resolves-condition-output-as-step-output.md).
+`resolveLatestAttempts` doesn't skip condition-script attempts. A step that never ran because
+its pre-condition failed therefore yields the condition's stdout as its response. So does an
+interrupted step whose pre-condition ran first. This was confirmed by reading the code, not yet
+reproduced. Every phase below builds on the resolver, so it is fixed first, test first.
 
 ### D9. A full-output path on every surface
 
@@ -536,10 +587,39 @@ follow launch.
 
 ## Implementation phases
 
+### Sequencing
+
+All phases land before launch (decision 6), in this order. Each chunk below is sized for one
+session. Each one leaves `npm test` green, updates this plan's status, and commits its own work.
+
+| Order | Chunk                                                                 | Depends on | Why this order                                                                                                       |
+| ----- | --------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| 0     | Phase 0: condition-attempt resolver fix                               | —          | Every later chunk reads step output through `resolveLatestAttempts`                                                  |
+| 1a    | Phase 1 steps 1 (diff helper, transcript projection)                  | 0          | Pure modules with their own tests; nothing consumes them yet                                                         |
+| 1b    | Phase 1 steps 2–3 (resolver items, renderer, D1b, D4 data)            | 1a         | Switches `$previous` to events; the setting still exists but no longer affects prior context                         |
+| 1c    | Phase 1 steps 4–7 (remove setting, interim extractor, docs)           | 1b         | Removing the setting is safe only once prior context no longer reads `response`                                      |
+| 2a    | Phase 2 steps 1–2 (`StepOutputText`, homes for response-only content) | 1c         | New sources must exist before any consumer moves off `response`                                                      |
+| 2b    | Phase 2 step 3 (backend readers)                                      | 2a         | `response` is still written, so every reader can migrate while legacy reads keep working                             |
+| 2c    | Phase 2 step 4 (dashboard readers, full-output path)                  | 2a         | Independent of 2b; Copy Output switches to `ASSISTANT` here, in the same chunk as Copy Full Output (decision 7)      |
+| 2d    | Phase 2 steps 5–6 (stop writing, drop the fields, timeline v2, docs)  | 2b, 2c     | Last, because deleting the write side and `CliOutput.response`/`prompt` stops compiling until every reader has moved |
+| 3a    | Phase 3 steps 1–4 and 9 (grammar, schema, merge, summarizer, tests)   | 2d         | The summarizer filters the Phase 1 transcript and reuses the D4 file data                                            |
+| 3b    | Phase 3 steps 5–8 (editor, dashboard, docs, templates)                | 3a         | User-facing surfaces for an already-working grammar                                                                  |
+
+### Phase 0 — condition attempts are not the step's output
+
+1. Add the two failing resolver tests from the bug doc: a skipped step whose pre-condition
+   printed output, and an interrupted step attempt that followed a pre-condition.
+2. Make `resolveLatestAttempts` skip `TIMELINE_ATTEMPT_KINDS.CONDITION` attempts, as
+   `resolveAttemptProjection` already does (`RunOutputResolver.ts:737-740`). Check the other
+   `streamAttempts` reducers (`resolveAttempt`, `resolveLatestFinalStepAttempts`) for the same
+   gap. `read_output` and `history show` must still show condition output with the attempt it
+   belongs to (`docs/cli/ctrlyoke.md:585`); only "the step's own output" excludes it.
+3. Move the bug doc to `dev/bugs/implemented/`.
+
 ### Phase 1 — full form from events; remove the setting (pre-release)
 
-1. `src/core/PriorContextTranscript.ts`: project `CliEvent[]` → `PriorContextTranscriptEntry[]`
-   with the D1 caps. Move the diff formatters and the `+a -r` counter into a shared helper.
+1. `src/utils/CliEventDiff.ts` (D6), then `src/core/PriorContextTranscript.ts`: project
+   `CliEvent[]` → `PriorContextTranscriptEntry[]` with the D1 caps (`PRIOR_CONTEXT_LIMITS`).
    Harness differences to handle:
    - **Normalize first.** Run `normalizeCliEvents` (`CliEventNormalizer.ts:974`) before
      projecting, as the run projection already does (`RunOutputResolver.ts:823`).
@@ -556,11 +636,14 @@ follow launch.
      reach the summary's text-only tail.
    - **Uneven event kinds.** Not every harness emits every kind (no `FILE_DELETE` from opencode,
      qwen, or Claude; no `WEB_SEARCH` from codex or opencode), so each element is optional.
-2. `RunOutputResolver.resolvePriorContextItems`: build `transcript` from
-   `value.output.structured.events` for prompt and `finalStep` items; keep `text` only as the
-   D5 fallback. Add `filesChanged` for earlier attempts (D4).
-3. `buildPriorContextXmlFromItems`: render the transcript entries (D1 table). Script rendering
-   is unchanged.
+2. `RunOutputResolver.resolvePriorContextItems`:
+   - build `transcript` from `value.output.structured.events` for prompt and `finalStep` items,
+     keeping `text` only as the D5 fallback;
+   - add the `finalStep` prompt and script branch (D1b);
+   - collect `filesChanged` for earlier attempts through the new projection-options argument
+     (D4), threaded from `createPriorContextResolver` and `PriorContextPreviewBuilder`.
+3. `buildPriorContextXmlFromItems`: render the transcript entries (D1 table) and
+   `<earlierAttempts>`. Queue script rendering is unchanged.
 4. Remove `general.includeFullDiffsInPriorContext`: `schemas/settings-schema.json`,
    `CtrlYokeSettings.ts` (type and default), `ConfigurationUtils.ts:162` and
    `shouldIncludeFullDiffsInPriorContext` (`:1428`), `settingsCatalog.ts:235`,
@@ -570,16 +653,29 @@ follow launch.
    schema has `additionalProperties: false`, so confirm that a `settings.json` still carrying
    the key loads (ignored, editor warning only) rather than failing, and add a test for it.
 5. `extractTextFromEvents`: fixed `false` behavior; delete the option (D5).
-6. Tests: transcript projection per event type, caps and markers at line/code-point boundaries,
-   failed operations, the fallback, `earlierAttempts`, and preview = injection. Update
-   `CliResponseTextExtractor.test.ts` and the `RunOutputResolver` prior-context tests.
-7. Docs: `docs/workflows/context-files.md` ("Prior output references") says what the full form
-   contains and that command output is tail-truncated; `docs/reference/settings.md` regenerates.
-   `CHANGELOG.md`: the setting is removed and `$previous` now includes commands and tool calls.
+6. Tests:
+   - the transcript projection per event type, including the harness differences above (one
+     fixture per harness where they differ);
+   - caps and markers at line and code-point boundaries;
+   - failed operations, and the legacy fallback;
+   - `earlierAttempts`, and `finalStep` prompts and scripts;
+   - a step appended to a non-latest run reads only that run (D4);
+   - preview = injection.
+     Update `CliResponseTextExtractor.test.ts` and the `RunOutputResolver` prior-context tests.
+7. Docs:
+   - `docs/workflows/context-files.md` ("Prior output references") says what the full form
+     contains and that command output is tail-truncated;
+   - `src/templates/skills/ctrlyoke-syntax/SKILL.md` (the `$previous` row);
+   - `docs/reference/settings.md` regenerates;
+   - `CHANGELOG.md`: the setting is removed, and `$previous` now includes commands and tool
+     calls.
 
 ### Phase 2 — delete `CliOutput.response`; timeline v2 (pre-release)
 
-0. Verify the resolver phase-filter report (end of D8f) and fix it first if it is real.
+Steps 3 and 4 move **readers only**. `response` is still written until step 5, so a reader that
+moves early keeps working, and a v1 record still reads through the legacy branch. Every deletion
+waits for step 5.
+
 1. `src/utils/StepOutputText.ts` (D8b), with tests that pin today's text exactly: for each harness
    fixture, `getTranscriptText(events)` equals the `false`-mode `extractTextFromEvents` output,
    and `getScriptOutputText` equals the script `response` written today.
@@ -588,31 +684,39 @@ follow launch.
      prior-context renderers;
    - switch the raw-stdout AI path to `TEXT` events;
    - give the script completion payload a typed `scriptOutput`.
-3. Migrate every consumer in D8c. Delete `extractTextFromEvents`, `CliResponseTextExtractor.ts`,
-   `CliResult.response`, the `onResponseComplete` payload, `ResolvedRunAttemptValue.responseText`,
-   the `PromptQueue` caches, and the webview's `joinCliTextEvents` and follow-up merge.
-4. Remove `response` and `prompt` from `CliOutput`. Add `LegacyCliOutputV1` and the TIMELINE v2
-   bump, migration, and fixtures (D8e).
-5. Tests:
-   - legacy v1 records (AI, script, PTY tail) render the same in the dashboard, `read_output`,
-     `history show`, and prior context;
-   - a mixed v1→v2 run reads correctly;
+3. **Backend readers** (the non-dashboard rows of D8c): prior context, `read_output`,
+   `history show`, `CommitMessageGenerator`, history search, `CliTerminalFormatter`, and the
+   `onResponseComplete` callers (they stop _using_ the payload). Delete the dead `PromptQueue`
+   caches. Move the commit-message bug doc to `dev/bugs/implemented/`. Tests:
    - an interrupted attempt has text;
    - script search finds stdout;
-   - copy output is identical from every menu.
+   - the commit-message fallback ignores failure text and diff bodies.
+4. **Dashboard readers and the full-output path** (the dashboard rows of D8c, plus D9a):
+   - fallback rows and Markdown export read `scriptOutput`;
+   - every Copy Output site goes through one helper, using `ASSISTANT` text (decision 7);
+   - close the Export Output gaps and make its `switch` exhaustive;
+   - add Copy Full Output to both context menus on top of `generateMarkdownExport`.
+     Tests:
+   - copy output is identical from every menu;
+   - one export fixture per event kind, including `FILE_WRITE` content, questions, user
+     steers, search results, and the terminal tail;
+   - Copy Full Output equals the single-step export.
+     Docs: the dashboard page that lists the output context menu items.
+5. **Stop writing, and bump the format** (D8e). Delete `extractTextFromEvents`,
+   `CliResponseTextExtractor.ts`, `CliResult.response`, the `onResponseComplete` payload,
+   `ResolvedRunAttemptValue.responseText`, the webview's `joinCliTextEvents` and follow-up merge,
+   and the `SessionActivityRecorder` text append. Remove `response` and `prompt` from
+   `CliOutput`. Add `LegacyCliOutputV1`, the TIMELINE v2 bump, the migration, and fixtures.
+   Tests:
+   - legacy v1 records (AI, script, PTY tail) render the same in the dashboard, `read_output`,
+     `history show`, and prior context;
+   - a mixed v1→v2 run reads correctly.
      Update the webview tests that assert on `response` (`outputUtils`, `workflowStore`,
      `useLatestStepOutput`, `useMessageHandler`, `outputProjectionEquivalence`, `outputRows`, and
      the context-menu hooks) and the fixture-only uses.
 6. Docs: `run-files.md` (record shape), `mcp-tools.md` (`responseText` is derived; cursors are
    opaque), `docs/cli/ctrlyoke.md` (`history show` text no longer repeats thinking), and
-   `CHANGELOG.md`.
-7. Move the commit-message bug doc to `dev/bugs/implemented/`.
-8. Full-output path (D9a): close the Export Output gaps, make its `switch` exhaustive, and add
-   Copy Full Output to both context menus on top of `generateMarkdownExport`. Tests:
-   - one export fixture per event kind, including `FILE_WRITE` content, questions, user steers,
-     search results, and the terminal tail;
-   - Copy Full Output equals the single-step export.
-     Docs: the dashboard page that lists the output context menu items.
+   `CHANGELOG.md` (format v2; Copy Output vs Copy Full Output; script search).
 
 ### Phase 3 — `$summary:` and `priorContextDetail`
 
@@ -638,15 +742,18 @@ follow launch.
    aggregation (multiple edits, create+edit, create+delete, failed, external path), preview =
    injection for both levels.
 
-### Phase 4 — workflow steps
+### Not in this plan — workflow steps
 
 `WORKFLOW_STEP_PLAN.md` D12a's workflow arm renders its children through this renderer, and its
-24 KB summary budget applies to `$summary:` over a workflow step. Nothing extra here.
+24 KB summary budget (`PRIOR_CONTEXT_LIMITS.WORKFLOW_BUDGET_BYTES`, defined here but unused until
+then) applies to `$summary:` over a workflow step. That work belongs to the workflow step plan,
+not to this one.
 
 ## Decisions
 
-Items 6–8 were decided on 2026-10-13. Items 1–5 and 9 are the plan's recommendations and have
-not been challenged.
+All decisions are settled (2026-10-13). Items 6–8 were made explicitly by the project owner.
+The rest are the plan's recommendations, reviewed with the owner and not challenged; implement
+them as written.
 
 1. **Remove the setting outright** rather than keep it as an override. Recommended: a global
    override would bring back exactly the machine-dependence this plan removes.
@@ -669,9 +776,15 @@ not been challenged.
 8. **Decided: `read_output.responseText` keeps its name and changes content once** (no embedded
    diffs). The CLI keeps a full view through `history show` (D9b).
 9. **`CliOutput.prompt` is dropped in the same bump** (D8d), so the format changes once.
+10. **`finalStep` passes render their authored prompt** (D1b), so `$finalStep` reads like
+    `$step:N`.
+11. **Condition-script output is never a step's own output** (Phase 0). It stays visible with
+    its attempt in `history show` and the dashboard.
 
 ## Open questions
 
-- **`finalStep` prompts.** Prompt `finalStep` items have no `<prompt>` today
-  (`RunOutputResolver.ts:1048-1061`). Adding the pass's authored prompt would make `$finalStep`
-  consistent with `$step:N`.
+None. Out of scope, and additive after launch:
+
+- step-level cross-run addressing (`$run:…`, D9c);
+- a `read_output` `detail: "full"` argument (D9b);
+- the delta/seal and follow-up rewrite optimizations (D8d).
