@@ -4,7 +4,7 @@ layout: home
 hero:
   name: ctrlyoke
   text: One workflow engine for every CLI coding agent
-  tagline: Run structured multi-step AI workflows, validate the result with scripts, and keep working across harnesses without rewriting your prompts.
+  tagline: Prompt, steer, automate, and revisit every AI coding session — one prompt or a whole workflow.
   actions:
     - theme: brand
       text: Quick start
@@ -43,10 +43,10 @@ Save any of them as a YAML, JSON or Markdown file to run again, share, or run in
 
 It ships in two forms:
 
-| Form              | What it is                                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------------------------- |
-| VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code |
-| `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job                                        |
+| Form              | What it is                                                                                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code                                                             |
+| `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job, and [`ctrlyoke server`](/cli/server), which opens the same dashboard in a browser without VS Code |
 
 Both include a built-in MCP server, [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp), and a set of built-in skills. A step that enables `ctrlyoke-mcp` can work on its own run: it can read earlier steps' output, [queue more steps](/workflows/dynamic-queue) (this is how a final step keeps a review or bug-hunt loop going), and coordinate with the other steps in its [parallel group](/workflows/parallel-steps).
 
@@ -56,7 +56,3 @@ Both include a built-in MCP server, [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp), and a s
 - Writing workflows: [Workflow overview](/workflows/) and [YAML format](/workflows/yaml-format)
 - Choosing a harness: [Harness overview](/harnesses/)
 - Looking up fields: [Workflow schema reference](/reference/workflow-schema)
-
-## Current documentation scope
-
-These docs focus on the public surface that is most useful during setup and authoring: installation, workflow syntax, harness selection, key settings, CLI usage, and troubleshooting.

@@ -9,6 +9,8 @@ import { LAUNCHED, MARKETPLACE_URL } from "../config";
 // (older Safari); browsers fetch only the first source they can play.
 import heroAv1 from "../../../images/screenshots/hero-av1-1350x900.mp4";
 import heroH264 from "../../../images/screenshots/hero-h264-1350x900.mp4";
+// Shown while the video loads, and in place of it when autoplay is blocked.
+import heroPoster from "../../../images/screenshots/hero-poster-1350x900.webp";
 import takeControlVideo from "../../../images/screenshots/ctrlyoke-take-control-1080p.mp4";
 
 const features = [
@@ -124,6 +126,7 @@ const steps = [
         <video
           width={1350}
           height={900}
+          poster={heroPoster.src}
           autoplay
           muted
           loop
@@ -212,16 +215,17 @@ const steps = [
 
 <span class="text-sky-400">steps</span><span class="text-slate-500">:</span>
   <span class="text-slate-500">-</span> <span class="text-sky-400">prompt</span><span class="text-slate-500">:</span> <span class="text-slate-300">|</span>
-      <span class="text-slate-400">Implement the UserAuth service in src/auth.ts.</span>
-      <span class="text-slate-400">Use the interface defined in src/types/auth.ts.</span>
+      <span class="text-slate-400">Implement the UserAuth service in </span><span class="text-amber-300">@src/auth.ts</span><span class="text-slate-400">,</span>
+      <span class="text-slate-400">using the interface in </span><span class="text-amber-300">@src/types/auth.ts</span><span class="text-slate-400">.</span>
     <span class="text-sky-400">endCondition</span><span class="text-slate-500">:</span>
       <span class="text-sky-400">script</span><span class="text-slate-500">:</span> npm run typecheck <span class="text-slate-500">&&</span> npm test
 
-  <span class="text-slate-500">-</span> <span class="text-sky-400">prompt</span><span class="text-slate-500">:</span> <span class="text-slate-300">|</span>
-      <span class="text-slate-400">Write integration tests covering login, logout,</span>
-      <span class="text-slate-400">and token refresh. Aim for 90% branch coverage.</span>
+  <span class="text-slate-500">-</span> <span class="text-sky-400">harness</span><span class="text-slate-500">:</span> codex-cli
+    <span class="text-sky-400">prompt</span><span class="text-slate-500">:</span> <span class="text-slate-300">|</span>
+      <span class="text-slate-400">Review </span><span class="text-amber-300">$previous</span><span class="text-slate-400"> and write integration tests for</span>
+      <span class="text-slate-400">login, logout, and token refresh.</span>
     <span class="text-sky-400">endCondition</span><span class="text-slate-500">:</span>
-      <span class="text-sky-400">script</span><span class="text-slate-500">:</span> npm test -- --coverage --branches 90</code></pre>
+      <span class="text-sky-400">script</span><span class="text-slate-500">:</span> npx c8 <span class="text-slate-500">--branches 90 --check-coverage</span> npm test</code></pre>
       </div>
     </div>
   </section>
@@ -309,9 +313,10 @@ const steps = [
         </div>
         <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Code from anywhere</h2>
         <p class="mb-8 max-w-xl text-lg text-slate-300">
-          ctrlyoke Pro unlocks the remote dashboard — open your running workflows in any
-          browser, on any device, from anywhere on your network. Start a long task, close
-          your laptop, check in from your phone.
+          ctrlyoke Pro unlocks the remote dashboard — open the workflows running on your
+          computer from any browser or phone that can reach it: across your home or office
+          network, or from anywhere over your own VPN. Start a long task, step away from your
+          desk, and check in from your phone.
         </p>
         <div class="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[
@@ -319,7 +324,6 @@ const steps = [
             "LAN IP binding & QR-to-phone access",
             "HTTPS with custom TLS certificates",
             "Push notifications (browser + mobile)",
-            "Custom icon color",
             "Air-gapped offline activation",
             "14-day free trial — no card required",
           ].map((item) => (

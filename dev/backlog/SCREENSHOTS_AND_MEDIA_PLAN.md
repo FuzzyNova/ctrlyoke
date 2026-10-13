@@ -5,6 +5,14 @@ dummy managed value again) and `template-modal-full-feature-840x1119` (default
 `planDocument`, a changed `testCommand` showing **Save as default**), both with updated alt
 text.
 
+**README media done 2026-10-12:** `readme-demo-720x480.gif` (the first 10 s of the hero
+video, 6 fps, 64 colors, 1.9 MB) plus `output-pane-find-diff-1600x1000.png` and
+`workspace-viewer-source-control-1600x1000.png`, linked from `README.md` as absolute
+`https://ctrlyoke.dev/docs/screenshots/` URLs. `scripts/sync-docs-screenshots.mjs` now scans
+`README.md`, so those files publish with the docs site. The full 23 s hero came out at 4–5 MB
+as a GIF at any legible size, which is why the README cut is shorter. The landing hero also has
+a `hero-poster-1350x900.webp` poster frame. Everything else below is post-launch polish.
+
 **Status:** Partial. Capture is under way; slotting assets into landing and docs has started.
 
 > **2026-10-10 audit:** Done: #6 (the landing hero, now `hero-{av1,h264}-1350x900.mp4`), #1 in a different
