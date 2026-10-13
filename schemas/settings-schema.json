@@ -109,7 +109,7 @@
             },
             "antigravity-cli": {
               "type": "string",
-              "default": "gemini-3.6-flash-medium"
+              "default": "gemini-3.8-flash-medium"
             }
           },
           "additionalProperties": false

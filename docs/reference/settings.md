@@ -181,7 +181,7 @@ The default model to use for each harness for new workflows.
   "codex-cli": "gpt-6-luna",
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
-  "antigravity-cli": "gemini-3.6-flash-medium"
+  "antigravity-cli": "gemini-3.8-flash-medium"
 }
 ```
 

@@ -196,6 +196,10 @@ beforeEach(() => {
   installPagedServer();
 });
 
+// Ceiling on mounted buttons with 1,100+ entries loaded: far below the entry
+// count, with headroom for the virtualizer's overscan rounding between versions.
+const MAX_MOUNTED_BUTTONS = 60;
+
 describe("WorkspaceExplorerPane pagination", () => {
   it("does not abort the only listing when consuming an initial directory navigation", async () => {
     mocks.workspaceTree.mockImplementation(async (request) => {
@@ -333,7 +337,9 @@ describe("WorkspaceExplorerPane pagination", () => {
       expect(screen.getByText("file-0.ts")).toBeInTheDocument()
     );
 
-    expect(screen.getAllByRole("button").length).toBeLessThan(40);
+    expect(screen.getAllByRole("button").length).toBeLessThan(
+      MAX_MOUNTED_BUTTONS
+    );
     act(() => useWorkspaceViewerStore.getState().selectFile("file-1100.ts"));
     const sync = screen.getByRole("button", {
       name: "Sync explorer to open file",
@@ -352,7 +358,9 @@ describe("WorkspaceExplorerPane pagination", () => {
       anchorPath: "file-1100.ts",
     });
     expect(mocks.workspaceFile).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("button").length).toBeLessThan(40);
+    expect(screen.getAllByRole("button").length).toBeLessThan(
+      MAX_MOUNTED_BUTTONS
+    );
   });
 
   it("keeps navigation responses isolated from a stale directory", async () => {

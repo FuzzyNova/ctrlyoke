@@ -5,7 +5,7 @@ capability details and version-scoped evidence.
 
 `antigravity-cli` integrates Google's Antigravity CLI (`agy`) into ctrlyoke.
 
-![The dashboard after a three-step demo workflow ran on Antigravity with Gemini 3.6 Flash (Low)](/screenshots/rate-limiter-agy-1200x800.png)
+![The dashboard after a three-step demo workflow ran on Antigravity with Gemini 3.8 Flash (Low)](/screenshots/rate-limiter-agy-1200x800.png)
 
 ## Good fit
 
@@ -52,7 +52,7 @@ See [the Antigravity CLI docs](https://antigravity.google/docs/cli-overview) for
 
 ```yaml
 harness: antigravity-cli
-model: gemini-3.6-flash-low
+model: gemini-3.8-flash-low
 steps:
   - prompt: Update the implementation and run the focused tests.
 ```
@@ -63,8 +63,8 @@ steps:
 - Only the `preToolUse`, `postToolUse`, `sessionStart`, and `stop` hook events fire; `userPromptSubmit`, `permissionRequest`, `notification`, and `error` do not.
 - MCP servers are written to the workspace `.agents/mcp_config.json`, which `agy` discovers on its own. There is no per-prompt server scoping, so parallel workflows in one workspace share that file's servers.
 - ctrlyoke's hooks go in `~/.gemini/config/hooks.json` and are removed when the run ends. Its status line command goes in `~/.gemini/antigravity-cli/settings.json` and stays there between runs. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#antigravity-cli).
-- ctrlyoke's default Antigravity model is `gemini-3.6-flash-medium`, not `agy`'s own Claude Sonnet default.
-- Models are the IDs `agy models` prints (`gemini-3.6-flash-low`, `claude-sonnet-4-6`, …). The dashboard shows agy's friendlier labels ("Gemini 3.6 Flash (Low)"), and `agy` itself accepts either spelling, but workflow files and settings use the ID.
+- ctrlyoke's default Antigravity model is `gemini-3.8-flash-medium`, not `agy`'s own Claude Sonnet default.
+- Models are the IDs `agy models` prints (`gemini-3.8-flash-low`, `claude-sonnet-4-6`, …). The dashboard shows agy's friendlier labels ("Gemini 3.8 Flash (Low)"), and `agy` itself accepts either spelling, but workflow files and settings use the ID.
 - For manual test runs, prefer a Gemini Flash tier to avoid exhausting the much smaller Claude quota.
 - Antigravity stores some user-level config under `~/.gemini/`; those paths are expected and are not Gemini CLI support.
 

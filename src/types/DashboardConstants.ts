@@ -2669,7 +2669,7 @@ export const DEFAULT_MODELS = {
   // Gemini Flash, not agy's own Claude Sonnet default: the Sonnet tier has a
   // small individual quota that a single run can exhaust for ~28h, which would
   // block unrelated work for anyone who never picks a model explicitly.
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3.6-flash-medium",
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3.8-flash-medium",
 } as const satisfies Record<HarnessId, string>;
 
 // ============================================================================

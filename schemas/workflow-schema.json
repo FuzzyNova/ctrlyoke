@@ -608,26 +608,18 @@
             "claude-fable-5",
             "claude-fable-5.1",
             "claude-haiku-4.5",
+            "claude-haiku-5.5",
             "claude-opus-4-6-thinking",
-            "claude-opus-4.7",
             "claude-opus-4.8",
             "claude-opus-4.8-fast",
             "claude-opus-5",
+            "claude-opus-5.5",
             "claude-sonnet-4-6",
             "claude-sonnet-4.6",
             "claude-sonnet-5",
+            "claude-sonnet-5.5",
             "fable",
-            "gemini-3.1-pro-high",
-            "gemini-3.1-pro-low",
-            "gemini-3.5-flash",
-            "gemini-3.6-flash",
-            "gemini-3.6-flash-high",
-            "gemini-3.6-flash-low",
-            "gemini-3.6-flash-medium",
             "gemini-3.7-flash",
-            "gemini-3.7-flash-high",
-            "gemini-3.7-flash-low",
-            "gemini-3.7-flash-medium",
             "gemini-3.8-flash",
             "gemini-3.8-flash-high",
             "gemini-3.8-flash-low",
@@ -643,10 +635,12 @@
             "gpt-6-astra",
             "gpt-6-luna",
             "gpt-6-sol",
+            "gpt-6.1-sol",
             "gpt-oss-120b-medium",
             "grok-4.5",
+            "grok-4.6",
+            "grok-4.7",
             "haiku",
-            "kimi-k2.7-code",
             "kimi-k3",
             "mai-code-1.1-flash",
             "none",
@@ -706,7 +700,15 @@
           "description": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped."
         },
         "sessionId": {
-          "oneOf": [{ "type": "string" }, { "type": "integer", "minimum": 1 }],
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
           "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
@@ -1886,12 +1888,24 @@
         }
       },
       "oneOf": [
-        { "required": ["command"], "not": { "required": ["url"] } },
-        { "required": ["url"], "not": { "required": ["command"] } }
+        {
+          "required": ["command"],
+          "not": {
+            "required": ["url"]
+          }
+        },
+        {
+          "required": ["url"],
+          "not": {
+            "required": ["command"]
+          }
+        }
       ],
       "not": {
         "properties": {
-          "id": { "const": "ctrlyoke" }
+          "id": {
+            "const": "ctrlyoke"
+          }
         },
         "required": ["id"]
       },
@@ -2031,10 +2045,14 @@
           "type": "object",
           "description": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools.",
           "properties": {
-            "id": { "const": "ctrlyoke" },
+            "id": {
+              "const": "ctrlyoke"
+            },
             "deniedTools": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": ["id"],

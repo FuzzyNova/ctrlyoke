@@ -141,6 +141,14 @@ npm run sync-models            # auto-derives COPILOT_CLI_MODEL_LABELS, propagat
 
 Or just run `npm run chores -- --task sync-models`, which does both automatically.
 
+**Watch for a removed default.** Discovery replaces the lists wholesale, so a model that `agy`
+or `copilot` stops offering simply disappears. If it was a default, `npm run typecheck` fails
+(for example `ModelConstants.test.ts` asserting a default is still listed). The Antigravity
+default lives in `DEFAULT_MODELS` in `src/types/DashboardConstants.ts`; the same ID also appears
+in `schemas/settings-schema.json`, `docs/harnesses/antigravity-cli.md`,
+`docs/reference/settings.md`, and the Antigravity bullets in
+`.github/instructions/harness-cli-providers.instructions.md`. Update all of them together.
+
 #### 2b. Codex / Claude CLI models — inherently manual
 
 Neither has a scriptable model-list command to discover from:
@@ -232,7 +240,7 @@ Run `npm test` (`src/test/unit/ModelPricing.test.ts` and
 
 1. **Verify changes**:
    - Check `src/utils/ModelConstants.ts`
-   - Check `src/utils/generated/modelPricingRegistryData.json` if 2c was re-run
+   - Check `src/utils/generated/modelPricingRegistryData.json` if 2d was re-run
    - Check `package.json` settings
    - Check `schemas/workflow-schema.json`
    - Check `schemas/workflow-schema.yaml`
@@ -241,7 +249,7 @@ Run `npm test` (`src/test/unit/ModelPricing.test.ts` and
 
 2. **Commit all updated files**:
    ```bash
-   git add src/utils/ModelConstants.ts src/utils/ModelPricing.ts src/utils/generated/ package.json schemas/
+   git add src/utils/ModelConstants.ts src/utils/generated/ package.json schemas/
    git commit -m "chore: update model registry with latest models"
    ```
 
@@ -373,38 +381,14 @@ npm run sync-models
 
 ---
 
-### 6. Create PNG Icon for Publishing
+### 6. Marketplace PNG Icon
 
-**Frequency**: Before first release (one-time), or when updating icon
+**Frequency**: Only when the icon artwork changes
 
-ctrlyoke currently has SVG icons only. VS Code Marketplace requires a PNG icon (at least 128x128px).
-
-**Steps**:
-
-1. Check current icons:
-
-   ```bash
-   ls images/
-   ```
-
-2. Create PNG version:
-   - Use `images/icon.svg` as source
-   - Export to `images/icon.png` at 512x512px (recommended) or minimum 128x128px
-   - Tools: Inkscape, GIMP, or online SVG-to-PNG converter
-
-3. Update `package.json`:
-
-   ```json
-   {
-     "icon": "images/icon.png"
-   }
-   ```
-
-4. Verify icon appears correctly:
-   - Package extension: `vsce package`
-   - Install VSIX locally and check extension icon
-
-See [images/README.md](images/README.md) for design recommendations.
+The Marketplace icon is already in place: `package.json` has `"icon": "images/icon.png"`, a
+512x512 PNG. When the artwork changes, re-export `images/icon.png` at 512x512 from the current
+master (`images/ctrlyoke-logo-master.svg`), then verify with `vsce package` and a local VSIX
+install.
 
 ---
 
@@ -423,7 +407,7 @@ Before releasing a new version, run these tasks:
 - [ ] Format code (`npm run format`)
 - [ ] Build production package (`npm run package`)
 - [ ] Test extension manually with various workflows
-- [ ] Create PNG icon if not done (see chore #6)
+- [ ] Re-export the PNG icon if the artwork changed (see chore #6)
 - [ ] Update CHANGELOG.md with changes
 - [ ] Update version in package.json
 - [ ] Create .vscodeignore file (if first release)
