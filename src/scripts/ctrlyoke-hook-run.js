@@ -39,7 +39,9 @@ if (!envFile || !hookId || !shellName || !encodedCommand) {
       if (parentPoll) clearInterval(parentPoll);
     };
     const killChild = () => {
+      if (terminationRequested) return;
       terminationRequested = true;
+      clearWatchers();
       process.exitCode = 1;
       if (process.platform === "win32") {
         killWindowsProcessTree(child);
@@ -64,9 +66,16 @@ if (!envFile || !hookId || !shellName || !encodedCommand) {
         Math.max(0, hookEntry.timeoutSec * 1000 - 250)
       );
     }
+    // POSIX reparents an orphan to init or a subreaper, so a changed ppid
+    // also means the original parent is gone.
+    const parentPid = process.ppid;
     parentPoll = setInterval(() => {
+      if (process.ppid !== parentPid) {
+        killChild();
+        return;
+      }
       try {
-        process.kill(process.ppid, 0);
+        process.kill(parentPid, 0);
       } catch (error) {
         if (error.code === "ESRCH") killChild();
       }
