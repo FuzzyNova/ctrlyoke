@@ -4,7 +4,7 @@
 
 # ctrlyoke
 
-ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity. Each CLI coding agent you run through ctrlyoke is a _harness_. ctrlyoke doesn't bundle or replace any of these CLIs: it calls the ones you've installed and signed in to. Prompt, steer, automate, and revisit sessions with any supported harness: send a single prompt, or define a structured YAML/JSON/Markdown workflow that keeps working through its steps without you re-prompting each one.
+ctrlyoke is a workflow engine for CLI coding agents — Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity — available as a VS Code extension and as a standalone `ctrlyoke` CLI. The CLI runs workflows from a terminal or CI, and `ctrlyoke server` opens the same dashboard in a browser, no VS Code required. Each CLI coding agent you run through ctrlyoke is a _harness_. ctrlyoke doesn't bundle or replace any of these CLIs: it calls the ones you've installed and signed in to. Prompt, steer, automate, and revisit sessions with any supported harness: send a single prompt, or define a structured YAML/JSON/Markdown workflow that keeps working through its steps without you re-prompting each one.
 
 ![A six-step workflow running in the ctrlyoke dashboard, each step on a different harness, with output streaming beside the step list](https://ctrlyoke.dev/docs/screenshots/readme-demo-720x480.gif)
 
@@ -19,6 +19,13 @@ ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Cl
 - **User-defined hooks** — attach shell commands to harness lifecycle events (`sessionStart`, `userPromptSubmit`, `preToolUse`, `postToolUse`, `permissionRequest`, `notification`, `stop`, `error`) per prompt, per workflow, or globally in settings
 - **Universal agents and skills** — define agent instruction files once; ctrlyoke discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.ctrlyoke/agents/`) and injects content into prompts regardless of harness
 - **Dashboard with embedded terminal** — a secondary side bar UI with a CodeMirror prompt editor, live xterm.js terminal running the AI CLI directly, streaming output with tool-call visualization, file diff views, undo/redo for workspace changes, and per-run output history
+- **Parallel steps and worktrees** — run independent steps concurrently with a `parallel` group, and run a workflow in its own managed Git worktree so it never touches your working checkout
+- **Script steps and secrets** — run a script as a workflow step, and grant steps managed secrets as environment variables without putting values in prompts
+- **Pre-conditions and mixed harnesses** — gate a step with a script before it runs, and pick a different harness and model per step in the same run (for example plan with one, implement with another, review with a third)
+- **Searchable run history** — every run is kept and searchable (prompts, responses, shell commands, file paths and diffs, tool calls); reopen a run, export it as Markdown, or re-run its workflow
+- **Visual workflow building** — create, reorder, and edit steps in the dashboard, start from built-in or custom templates, and save the result as an ordinary YAML or JSON file
+- **Browser dashboard and workspace viewer** — serve the dashboard to a browser tab or phone to browse and edit files, review and commit changes, answer prompts, and steer the live terminal (see [Browser dashboard](#browser-dashboard))
+- **CLI and CI** — the `ctrlyoke` command runs workflows from a terminal or CI, with no VS Code required
 
 ![The output pane showing a file edit as a side-by-side diff, with find-in-output and the output minimap](https://ctrlyoke.dev/docs/screenshots/output-pane-find-diff-1600x1000.png)
 
@@ -36,14 +43,16 @@ ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Cl
 
 ## Supported Harnesses
 
-| Harness ID        | Description                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------- |
-| `copilot-cli`     | GitHub Copilot CLI — log file monitoring, session resumption                          |
-| `claude-cli`      | Anthropic Claude Code CLI — JSON streaming, hook-based completion                     |
-| `codex-cli`       | OpenAI Codex CLI — JSONL events, notify hook                                          |
-| `opencode-cli`    | OpenCode CLI — JSONL events, config-file permissions                                  |
-| `qwen-cli`        | Qwen Code CLI — JSONL events, log-based session discovery                             |
-| `antigravity-cli` | Google Antigravity CLI — plain-text output, hook-based completion, MCP config support |
+| Harness ID        | CLI                   | Setup                                                         |
+| ----------------- | --------------------- | ------------------------------------------------------------- |
+| `copilot-cli`     | GitHub Copilot CLI    | [Install](https://github.com/github/copilot-cli#installation) |
+| `claude-cli`      | Anthropic Claude Code | [Install](https://code.claude.com/docs/en/setup)              |
+| `codex-cli`       | OpenAI Codex CLI      | [Install](https://github.com/openai/codex#quickstart)         |
+| `opencode-cli`    | OpenCode              | [Install](https://opencode.ai/docs/)                          |
+| `qwen-cli`        | Qwen Code             | [Install](https://github.com/QwenLM/qwen-code#installation)   |
+| `antigravity-cli` | Google Antigravity    | [Install](https://antigravity.google/docs/cli-overview)       |
+
+See the [harness overview](https://ctrlyoke.dev/docs/harnesses/) for per-harness setup and the [compatibility matrix](https://ctrlyoke.dev/docs/harnesses/compatibility) for what each harness supports.
 
 By default ctrlyoke uses the first installed harness in alphabetical order. To pick one, set it in `.ctrlyoke/settings.json`:
 
@@ -85,11 +94,12 @@ Focus on input validation and authentication logic.
 ### 3. Run
 
 - **Panel** — load a workflow file and click Run
-- **Run with ctrlyoke submenu** — right-click any prompt file in the Explorer or editor, or
+- **Run with ctrlyoke** — right-click any prompt file in the Explorer or editor, or
   use the editor title toolbar, then choose **Run with ctrlyoke**
-- **Run with ctrlyoke submenu** — choose **Queue Steps with ctrlyoke** or **Queue Steps Next with
-  ctrlyoke** to append to an active queue; these actions appear only once the active queue
+- **Queue Steps with ctrlyoke** / **Queue Steps Next with ctrlyoke** — in the same submenu,
+  append a file's steps to an active queue; these actions appear only once the active queue
   already contains steps
+- **Terminal** — `ctrlyoke run <file>` runs a workflow from the [CLI](https://ctrlyoke.dev/docs/cli/), including in CI
 
 ---
 
@@ -108,7 +118,7 @@ All three formats validate against the same JSON Schema with full IntelliSense i
 ```yaml
 # Workflow-level defaults — overridden per prompt (three-tier: prompt > workflow > settings)
 harness: claude-cli
-model: claude-sonnet-4.5
+model: claude-sonnet-4.6
 endCondition:
   script: npm test
   compareSource: exitCode
@@ -225,7 +235,8 @@ steps:
 
 Members share one workspace and one managed or named worktree per run. The
 global `queue.maxParallelSteps` setting bounds concurrency; `1` keeps the
-group sequential. v1 has no per-member isolation or automatic merge.
+group sequential. v1 has no per-member isolation or automatic merge. See
+[Parallel steps](https://ctrlyoke.dev/docs/workflows/parallel-steps).
 
 ### Hooks
 
@@ -255,20 +266,25 @@ steps:
   - name: review
     prompt: "Review for edge cases"
     resumeSession: true
-    sessionId: 1 # resume the session from prompt index 1
+    sessionId: 1 # resume the session of step 1 (1-based)
 ```
 
 See [Session management](https://ctrlyoke.dev/docs/workflows/session-management) for full details.
 
 ### Context references in prompts
 
-The prompt editor provides IntelliSense completions triggered by three characters:
+The prompt editor provides IntelliSense completions triggered by six characters:
 
-| Trigger | Purpose                                      | Example                             |
-| ------- | -------------------------------------------- | ----------------------------------- |
-| `@`     | File or directory reference                  | `@src/utils/auth.ts`                |
-| `#`     | Current editor selection or workspace symbol | `#MyClass`, `#selection:path:10-20` |
-| `~`     | Git-changed file reference                   | `~diff`                             |
+| Trigger | Purpose                                                    | Example                                                                   |
+| ------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `@`     | File (path attached) or directory (tree listing)           | `@src/utils/auth.ts`, `@src/utils/`                                       |
+| `#`     | Line range or symbol, embedded with line numbers           | `#selection:src/app.ts:10-25`, `#sym:src/app.ts:main:10-25`               |
+| `~`     | Git diff, staged diff, stash entry, or commit              | `~diff`, `~staged`, `~stash:0`, `~3f9c2a1`                                |
+| `$`     | Output of earlier steps, final-step passes, or a script    | `$previous`, `$previous:3`, `$step:1,3-5`, `$all`, `$preCondition:stdout` |
+| `/`     | Attach a skill or enable a registered MCP server           | `/skill:commit`, `/mcp:ctrlyoke`                                          |
+| `!`     | Grant the step a managed secret as an environment variable | `!API_TOKEN`                                                              |
+
+To write a token literally without expanding it, wrap it in backticks (`` `@src/app.ts` ``) or a fenced code block. See [Context references](https://ctrlyoke.dev/docs/workflows/context-files) for every token and its options.
 
 Completions respect `.gitignore` by default. Configure `ui.respectGitignoreForCompletions` in `.ctrlyoke/settings.json`. They work inside YAML `prompt:` values, JSON `"prompt"` strings, and `.prompt.md` files.
 
@@ -293,9 +309,22 @@ The ctrlyoke panel opens in the VS Code secondary side bar (far right) by defaul
 **Prompt editor** — CodeMirror-based editor with:
 
 - Syntax highlighting and spell check
-- `@` / `#` / `~` IntelliSense completions
-- Quick pickers for harness, model, agent, and skills
-- Properties drawer for workflow-level and prompt-level configuration
+- `@` / `#` / `~` / `$` / `/` / `!` completions, with references shown as chips in the text
+- Quick pickers for harness, model, agent, skills, permissions, and session context
+- Properties drawer for workflow-level and prompt-level configuration (harness, context, validation, MCP, hooks, permissions)
+- Image pasting, and a **Dry Run Step** button to preview a step
+
+See [The prompt editor](https://ctrlyoke.dev/docs/guide/prompt-editor) for details.
+
+### Browser dashboard
+
+The same dashboard can be served to a web browser, from VS Code (**Global Settings → Server**) or without VS Code using [`ctrlyoke server`](https://ctrlyoke.dev/docs/cli/server). Alongside workflows, output, and the live terminal, it adds a **workspace viewer**:
+
+- **Explorer and Search** — browse, search, and edit workspace files
+- **Source Control** — view working, staged, stash, and commit diffs; stage, unstage, or discard changes; commit, pull, and push; browse history; check out branches or commits; and [generate commit messages](https://ctrlyoke.dev/docs/guide/commit-messages) with a harness
+- **Touch-friendly terminal controls** — Esc, Tab, arrow, Enter, and control-key buttons for steering a terminal from a phone
+
+The dashboard on `localhost` is free. Connections from other devices (LAN or VPN), HTTPS, and the QR code need [Pro](https://ctrlyoke.dev/docs/pro/) or the one-time 14-day remote-access trial. See [Browser dashboard](https://ctrlyoke.dev/docs/guide/remote-dashboard) and [Workspace viewer](https://ctrlyoke.dev/docs/guide/workspace-viewer).
 
 ---
 
@@ -322,6 +351,8 @@ The full documentation is at [ctrlyoke.dev/docs](https://ctrlyoke.dev/docs/).
 | [Dynamic workflows](https://ctrlyoke.dev/docs/workflows/dynamic-workflows)   | Harness-appended steps and `finalStep` loop behavior            |
 | [Session management](https://ctrlyoke.dev/docs/workflows/session-management) | Session resumption across prompts and harnesses                 |
 | [Hooks](https://ctrlyoke.dev/docs/workflows/hooks)                           | User-defined hooks                                              |
+| [Context references](https://ctrlyoke.dev/docs/workflows/context-files)      | Every `@`, `#`, `~`, `$`, `/` and `!` token                     |
+| [CLI](https://ctrlyoke.dev/docs/cli/)                                        | Running workflows from a terminal or CI                         |
 | [MCP servers](https://ctrlyoke.dev/docs/workflows/mcp-servers)               | Attaching MCP servers to a workflow or step                     |
 | [Harness compatibility](https://ctrlyoke.dev/docs/harnesses/compatibility)   | Which hooks, permissions and MCP features each harness supports |
 
