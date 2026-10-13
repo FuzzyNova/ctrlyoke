@@ -59,7 +59,9 @@ import {
   type EditorFontSize,
   type HarnessStatusString,
   type CtrlYokeFileKind,
+  type PriorContextDetail,
 } from "./DashboardConstants";
+import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
 import type { LanguageServerDefinition } from "./CtrlYokeSettings";
 import type { LanguageServerCatalogEntry } from "../server/lsp/LanguageServerCatalog";
@@ -242,13 +244,11 @@ export interface TokenStats {
 /**
  * CLI output for a step (unified across extension and webview)
  * May have multiple outputs for retries (stored in array by attemptIndex)
- * Single source of truth for all CLI response data
+ * Single source of truth for CLI output metadata and structured events
  */
 export interface CliOutput {
-  /** The prompt text that was sent; omitted for script execution output. */
-  prompt?: string;
-  /** Plain text response (streaming or complete) */
-  response: string;
+  /** Wire-only display source for script completions; never persisted in the timeline. */
+  scriptOutput?: ScriptRuntimeOutput;
   /** Structured output with tool calls, thinking blocks, and metadata (CLI only) */
   structured?: StructuredOutput;
   /** Execution time in seconds */
@@ -420,6 +420,7 @@ export interface PromptStep extends StepDisplayProperties {
   endCondition?: EndConditionConfig | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext;
+  priorContextDetail?: PriorContextDetail;
   additionalArgs?: string | null;
   toolPermissions?: ToolPermissionsOverride | null;
   errorBehavior?: ErrorBehavior | null;

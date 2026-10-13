@@ -20,6 +20,7 @@ import {
   GIT_CHANGE_KINDS,
   GIT_REFERENCE_ICONS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
+  PRIOR_CONTEXT_DETAILS,
   SCRIPT_OUTPUT_SOURCES,
 } from "../../../types/DashboardConstants";
 import { formatRangeNotation } from "../../../utils/RangeNotationParser";
@@ -443,15 +444,17 @@ export const PRIOR_CONTEXT_CHIP_LABELS: Record<
 
 /** Compact chip label for a prior-context ref, e.g. "previous 3", "step 1-3". */
 export function priorContextChipLabel(ref: InlinePriorContextRef): string {
+  const suffix =
+    ref.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? " · summary" : "";
   switch (ref.kind) {
     case PRIOR_CONTEXT_REFERENCE_KINDS.STEP:
-      return `step ${formatRangeNotation(ref.indices)}`;
+      return `step ${formatRangeNotation(ref.indices)}${suffix}`;
     case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
       return ref.count === undefined
-        ? PRIOR_CONTEXT_CHIP_LABELS[ref.kind]
-        : `${PRIOR_CONTEXT_CHIP_LABELS[ref.kind]} ${ref.count}`;
+        ? `${PRIOR_CONTEXT_CHIP_LABELS[ref.kind]}${suffix}`
+        : `${PRIOR_CONTEXT_CHIP_LABELS[ref.kind]} ${ref.count}${suffix}`;
     default:
-      return PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
+      return `${PRIOR_CONTEXT_CHIP_LABELS[ref.kind]}${suffix}`;
   }
 }
 

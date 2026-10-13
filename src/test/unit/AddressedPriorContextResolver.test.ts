@@ -26,24 +26,38 @@ suite("AddressedPriorContextResolver", () => {
   });
 
   test("keeps same-run defaults and resolves a terminal source only by stable address", async () => {
+    let addressedDetail: string | undefined;
     const resolver = {
       getManifest: async () => ({ completedAt: 1 }),
-      resolveAllPriorContextItems: async () => [
-        { index: 0, prompt: "source", text: "source output" },
-      ],
+      resolveAllPriorContextItems: async (
+        _manifest: string,
+        _options: unknown,
+        detail: string
+      ) => {
+        addressedDetail = detail;
+        return [
+          { index: 0, prompt: "source", text: "source output", detail: "full" },
+        ];
+      },
     } as unknown as RunOutputResolver;
     const result = await new AddressedPriorContextResolver(
       workspaceRoot,
       resolver
-    ).resolve(["previous", { workflowKey, runRef }], async (local) => {
-      assert.deepStrictEqual(local, ["previous"]);
-      return [{ index: 0, prompt: "local", text: "local output" }];
-    });
+    ).resolve(
+      ["previous", { context: { workflowKey, runRef }, detail: "summary" }],
+      async (local) => {
+        assert.deepStrictEqual(local, ["previous"]);
+        return [
+          { index: 0, prompt: "local", text: "local output", detail: "full" },
+        ];
+      }
+    );
 
     assert.deepStrictEqual(
       result.map((item) => item.text),
       ["local output", "source output"]
     );
+    assert.strictEqual(addressedDetail, "summary");
   });
 
   test("routes { previous: N } to the same run instead of treating it as an address", async () => {
@@ -58,7 +72,9 @@ suite("AddressedPriorContextResolver", () => {
       resolver
     ).resolve([{ previous: 3 }], async (local) => {
       assert.deepStrictEqual(local, [{ previous: 3 }]);
-      return [{ index: 0, prompt: "local", text: "local output" }];
+      return [
+        { index: 0, prompt: "local", text: "local output", detail: "full" },
+      ];
     });
 
     assert.deepStrictEqual(

@@ -1985,7 +1985,7 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   PRIOR_CONTEXT_COUNT_CAPPED: "prompt.prior-context.count-capped",
   PRIOR_CONTEXT_NO_FINAL_STEP: "prompt.prior-context.no-final-step",
   PRIOR_CONTEXT_STEP_MISSING: "prompt.prior-context.step-missing",
-  PRIOR_CONTEXT_RESERVED_PREFIX: "prompt.prior-context.reserved-prefix",
+  PRIOR_CONTEXT_INVALID: "prompt.prior-context.invalid",
   CONDITION_NO_PRE_CONDITION: "prompt.condition.no-pre-condition",
   CONDITION_END_CONDITION_OUTSIDE_RETRY:
     "prompt.condition.end-condition-outside-retry",
@@ -3176,13 +3176,13 @@ export const PRIOR_CONTEXT_REFERENCE_KINDS = {
 export type PriorContextReferenceKind =
   (typeof PRIOR_CONTEXT_REFERENCE_KINDS)[keyof typeof PRIOR_CONTEXT_REFERENCE_KINDS];
 
-/**
- * Reserved inline prior-context prefix (`$summary:previous`, `$summary:step:2`)
- * for the planned bounded-excerpt form. It is not expanded yet, so the editor
- * lint warns wherever it appears: text written now would otherwise change
- * meaning once the form ships.
- */
 export const PRIOR_CONTEXT_SUMMARY_PREFIX = "summary:";
+export const PRIOR_CONTEXT_DETAILS = {
+  FULL: "full",
+  SUMMARY: "summary",
+} as const;
+export type PriorContextDetail =
+  (typeof PRIOR_CONTEXT_DETAILS)[keyof typeof PRIOR_CONTEXT_DETAILS];
 
 export const PRIOR_CONTEXT_SELECTION_MODES = {
   /** `{ previous: N }` — the last N outputs before the prompt. */
@@ -3842,6 +3842,7 @@ export const PROMPT_PROPERTIES = {
 
   // Context injection
   PRIOR_CONTEXT: "priorContext",
+  PRIOR_CONTEXT_DETAIL: "priorContextDetail",
 
   // CLI overrides
   ADDITIONAL_ARGS: "additionalArgs",
@@ -3958,6 +3959,7 @@ export const WORKFLOW_PROPERTY_KEYS = [
   PROMPT_PROPERTIES.PRE_CONDITION,
   PROMPT_PROPERTIES.ERROR_BEHAVIOR,
   PROMPT_PROPERTIES.PRIOR_CONTEXT,
+  PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL,
   PROMPT_PROPERTIES.ADDITIONAL_ARGS,
   PROMPT_PROPERTIES.TOOL_PERMISSIONS,
   PROMPT_PROPERTIES.WORKTREE,
@@ -4009,6 +4011,7 @@ export const RETRY_PROMPT_PLACEHOLDERS = {
 export const CLI_EVENT_TYPES = {
   TEXT: "text",
   THINKING: "thinking",
+  TERMINAL_OUTPUT: "terminalOutput",
 
   // Operation-specific tool events (normalized from harness formats)
   BASH_COMMAND: "bashCommand",
@@ -4054,6 +4057,49 @@ export const CLI_EVENT_TYPES = {
    *  logic that refreshes a completed step's stats footer (tokens/contextWindow). */
   CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
+
+/** Text projection used when copying or displaying a step's output. */
+export const StepOutputTextMode = {
+  ASSISTANT: "assistant",
+  TRANSCRIPT: "transcript",
+} as const;
+
+export const PRIOR_CONTEXT_LIMITS = {
+  // full form
+  COMMAND_OUTPUT_TAIL_BYTES: 2048,
+  TOOL_RESULT_TAIL_BYTES: 1024,
+  TOOL_ARGUMENTS_HEAD_BYTES: 512,
+  DIFF_BYTES: 65536,
+  // summary form
+  PROMPT_HEAD_BYTES: 2048,
+  OUTPUT_TAIL_BYTES: 4096,
+  WORKFLOW_BUDGET_BYTES: 24576,
+} as const;
+
+export const PRIOR_CONTEXT_TRUNCATION = {
+  HEAD: "head",
+  TAIL: "tail",
+  OMITTED_START: "start",
+  OMITTED_END: "end",
+} as const;
+
+export const PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS = {
+  TEXT: "text",
+  THINKING: "thinking",
+  EDIT: "edit",
+  CREATE: "create",
+  DELETE: "delete",
+  COMMAND: "command",
+  READ: "read",
+  TOOL: "tool",
+  SEARCH: "search",
+  QUESTION: "question",
+  USER_STEER: "userSteer",
+  TERMINAL_OUTPUT: "terminalOutput",
+} as const;
+
+export type PriorContextTranscriptEntryKind =
+  (typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS)[keyof typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS];
 
 export const CLI_OUTPUT_METADATA_KEYS = {
   TIMESTAMP: "timestamp",

@@ -8,7 +8,10 @@ import {
   type TargetAttemptCompleteData,
 } from "../../core/OutputCaptureBuffer";
 import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
-import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  FINAL_STEP_PHASES,
+} from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
@@ -279,9 +282,10 @@ suite("OutputCaptureBuffer", () => {
       );
       assert.ok(chunkCall);
       assert.strictEqual(chunkCall!.args[1], "partial response");
-      assert.strictEqual(
-        buffer.getBufferedOutput(0)?.structured?.events.length,
-        1
+      const events = buffer.getBufferedOutput(0)?.structured?.events ?? [];
+      assert.deepStrictEqual(
+        events.map((event) => event.type),
+        ["tool_call", CLI_EVENT_TYPES.TEXT]
       );
     });
 
@@ -305,7 +309,6 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureChunk(0, "old attempt");
       buffer.captureEvents(0, [{ type: "tool_call" } as unknown as CliEvent]);
       init(1, 0);
-      assert.strictEqual(buffer.getBufferedOutput(0)?.response, "");
       assert.strictEqual(
         buffer.getBufferedOutput(0)?.structured?.events.length ?? 0,
         0
@@ -314,7 +317,6 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureChunk(0, "old run");
       buffer.captureEvents(0, [{ type: "tool_result" } as unknown as CliEvent]);
       init(1, 1);
-      assert.strictEqual(buffer.getBufferedOutput(0)?.response, "");
       assert.strictEqual(
         buffer.getBufferedOutput(0)?.structured?.events.length ?? 0,
         0
@@ -545,8 +547,6 @@ suite("OutputCaptureBuffer", () => {
       const output = buffer.getBufferedOutput(0);
 
       assert.ok(output);
-      assert.strictEqual(output.prompt, "prompt");
-      assert.strictEqual(output.response, "partial text");
       assert.strictEqual(output.isStreaming, false);
       assert.strictEqual(output.cliCommand, "codex exec");
       assert.strictEqual(output.workingDirectory, "/workspace");
@@ -691,16 +691,15 @@ suite("OutputCaptureBuffer", () => {
       ]);
       init(0, 0);
       assert.strictEqual(
-        buffer.getFinalStepBufferedOutput(0)?.response,
-        "same attempt"
+        buffer.getFinalStepBufferedOutput(0)?.structured?.events.length,
+        2
       );
       assert.strictEqual(
         buffer.getFinalStepBufferedOutput(0)?.structured?.events.length,
-        1
+        2
       );
 
       init(1, 0);
-      assert.strictEqual(buffer.getFinalStepBufferedOutput(0)?.response, "");
       assert.strictEqual(
         buffer.getFinalStepBufferedOutput(0)?.structured?.events.length ?? 0,
         0
@@ -711,7 +710,6 @@ suite("OutputCaptureBuffer", () => {
         { type: "tool_result" } as unknown as CliEvent,
       ]);
       init(1, 1);
-      assert.strictEqual(buffer.getFinalStepBufferedOutput(0)?.response, "");
       assert.strictEqual(
         buffer.getFinalStepBufferedOutput(0)?.structured?.events.length ?? 0,
         0
@@ -996,7 +994,7 @@ suite("OutputCaptureBuffer", () => {
           c.args[1]?.isStreaming
       );
       assert.ok(outputCall, "should replay streaming output init");
-      assert.strictEqual(outputCall!.args[1].prompt, "streaming prompt");
+      assert.ok(!("prompt" in outputCall!.args[1]));
       assert.strictEqual(outputCall!.args[1].rawTextOutput, true);
 
       const chunkCall = calls.find(
@@ -1069,8 +1067,19 @@ suite("OutputCaptureBuffer", () => {
       assert.ok(fpCall, "should replay finalStep streaming output");
       assert.strictEqual(fpCall!.args[0], 0); // loopIndex
       assert.strictEqual(fpCall!.args[1].isStreaming, true);
-      assert.strictEqual(fpCall!.args[1].response, "fp response");
-      assert.ok(fpCall!.args[1].structured?.events?.length === 1);
+      assert.ok(
+        fpCall!.args[1].structured?.events?.some(
+          (event: any) =>
+            event.type === CLI_EVENT_TYPES.TEXT &&
+            event.data?.text === "fp response"
+        )
+      );
+      assert.ok(
+        fpCall!.args[1].structured?.events?.some(
+          (event: any) => event.type === "tool_call"
+        )
+      );
+      assert.ok(fpCall!.args[1].structured?.events?.length === 2);
     });
 
     test("should replay the latest finalStep context-window reading", () => {

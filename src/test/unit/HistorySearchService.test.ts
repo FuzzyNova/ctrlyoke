@@ -11,6 +11,7 @@ import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   CLI_EVENT_TYPES,
+  EXECUTION_PHASES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   HISTORY_MATCH_FIELDS,
@@ -63,10 +64,17 @@ suite("HistorySearchService", () => {
         1100,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "first prompt",
-          response: "older needle response",
           elapsed: 1,
           isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "older needle response" },
+              },
+            ],
+            metadata: {},
+          },
         }
       ),
     ]);
@@ -124,8 +132,6 @@ suite("HistorySearchService", () => {
         3100,
         { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
         {
-          prompt: "final prompt",
-          response: "final response",
           elapsed: 1,
           isStreaming: false,
           structured: {
@@ -214,10 +220,14 @@ suite("HistorySearchService", () => {
     // A retried first pass is attempt 2 of pass 1. The context used to be
     // built from the attempt index here, and pass 1 had no number at all.
     const finalOutput = (term: string) => ({
-      prompt: "final prompt",
-      response: `${term} response`,
       elapsed: 1,
       isStreaming: false,
+      structured: {
+        events: [
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: `${term} response` } },
+        ],
+        metadata: {},
+      },
     });
     await createRun("final-pass-labels-2026-06-09T17-30-00", 1, 4000, [
       createCliOutputDraft(
@@ -397,10 +407,19 @@ suite("HistorySearchService", () => {
         1800,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: `${"a".repeat(80)}snippet-width-term${"b".repeat(90)}`,
           elapsed: 1,
           isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: {
+                  text: `${"a".repeat(80)}snippet-width-term${"b".repeat(90)}`,
+                },
+              },
+            ],
+            metadata: {},
+          },
         }
       ),
     ]);
@@ -447,8 +466,6 @@ suite("HistorySearchService", () => {
         4100,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: "",
           elapsed: 1,
           isStreaming: false,
           structured: {
@@ -535,41 +552,23 @@ suite("HistorySearchService", () => {
   test("indexes script output with its source kind", async () => {
     const workflowId = "script-kinds-2026-06-09T21-00-00";
     await createRun(workflowId, 1, 5000, [
-      createCliOutputDraft(
+      createScriptExecutionDraft(
         5100,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-        {
-          prompt: "",
-          response: "shared script stdout term",
-          cliCommand: "script-command-term",
-          source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
-          elapsed: 1,
-          isStreaming: false,
-        }
+        SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+        "shared script stdout term"
       ),
-      createCliOutputDraft(
+      createScriptExecutionDraft(
         5200,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
-        {
-          prompt: "",
-          response: "shared script stdout term",
-          cliCommand: "pre-condition-command-term",
-          source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-          elapsed: 1,
-          isStreaming: false,
-        }
+        SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        "shared script stdout term"
       ),
-      createCliOutputDraft(
+      createScriptExecutionDraft(
         5300,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
-        {
-          prompt: "",
-          response: "shared script stdout term",
-          cliCommand: "end-condition-command-term",
-          source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-          elapsed: 1,
-          isStreaming: false,
-        }
+        SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+        "shared script stdout term"
       ),
     ]);
 
@@ -586,13 +585,6 @@ suite("HistorySearchService", () => {
       )
     );
     assert.ok(stdoutResults.every((result) => result.eventKind !== "response"));
-
-    const commandResults = (
-      await service.search("end-condition-command-term", workspaceRoot)
-    ).results;
-    assert.strictEqual(commandResults.length, 1);
-    assert.strictEqual(commandResults[0]?.eventKind, "endCondition");
-    assert.strictEqual(commandResults[0]?.matchField, "command");
   });
 
   test("returns accurate counts and stable offset pages", async () => {
@@ -675,8 +667,6 @@ suite("HistorySearchService", () => {
         3510,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: "",
           elapsed: 1,
           isStreaming: true,
           structured: {
@@ -689,8 +679,6 @@ suite("HistorySearchService", () => {
         3520,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          prompt: "",
-          response: "",
           elapsed: 1,
           isStreaming: false,
           structured: {
@@ -913,8 +901,6 @@ suite("HistorySearchService", () => {
       | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
       | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number },
     cliOutput: {
-      prompt: string;
-      response: string;
       cliCommand?: string;
       source?: (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES];
       elapsed: number;
@@ -930,6 +916,37 @@ suite("HistorySearchService", () => {
       attemptIndex,
       payload: {
         cliOutput,
+      },
+    };
+  }
+
+  function createScriptExecutionDraft(
+    timestampMs: number,
+    target:
+      | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
+      | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number },
+    source: (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES],
+    stdout: string
+  ): WorkflowTimelineEventDraft {
+    const phase =
+      source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+        ? EXECUTION_PHASES.PRE_CONDITION
+        : source === SCRIPT_OUTPUT_SOURCES.END_CONDITION
+          ? EXECUTION_PHASES.END_CONDITION
+          : undefined;
+    return {
+      eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+      timestampMs,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      ...(phase ? { phase } : {}),
+      definitionRevision: 1,
+      payload: {
+        command: "script.sh",
+        stdout,
+        stderr: "",
+        exitCode: 0,
       },
     };
   }

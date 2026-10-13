@@ -646,8 +646,11 @@ nested ctrlyoke boxes copied from recorded tool output.
 
 Default records include the attempt's own `definition.step` and a
 `definitionRevision` number without repeating the full workflow snapshot. The
-prompt and response appear once, as top-level `prompt` and `responseText`;
-`output` keeps the remaining output fields without copies of them.
+prompt and response appear once, as top-level `prompt` and derived
+`responseText`; `output` keeps the remaining output fields. Response text comes
+from structured events or the script execution record. Thinking appears in
+`responseText` only when it is part of the transcript projection, so `--events`
+does not print the same thinking block a second time.
 `--summary` emits only the target, run and attempt indices, state, timings,
 tokens, prompt, and response text. `--events` emits one record per structured
 output event, with the attempt target and indices on every line; with paging it

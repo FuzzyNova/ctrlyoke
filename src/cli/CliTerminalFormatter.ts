@@ -44,6 +44,7 @@ import {
   type WorkflowStopReason,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
+import type { ScriptRuntimeOutput } from "../types/CtrlYokeTypes";
 import type { CliOutput, TokenStats } from "../types/WebviewMessageTypes";
 import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import { formatComparison } from "../utils/ScriptComparison";
@@ -74,6 +75,7 @@ import { formatFinalPassLabel } from "../utils/FinalStepLabels";
 import { formatThinkingLabel } from "../utils/ThinkingBlockFormat";
 import { getToolResultText } from "../utils/toolResultText";
 import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
+import { getScriptOutputText } from "../utils/StepOutputText";
 import { resolveCtrlYokeToolModel } from "../utils/ctrlyokeToolViews/registry";
 import { COORDINATION_UNTRUSTED_LABEL } from "../utils/ctrlyokeToolViews/coordinationPresentation";
 import {
@@ -840,7 +842,11 @@ export class CliTerminalFormatter {
   }
 
   /** Renders the command, bounded streamed output, and completed script verdict. */
-  static renderScriptOutput(output: CliOutput, target: CliOutputTarget): void {
+  static renderScriptOutput(
+    output: CliOutput,
+    target: CliOutputTarget,
+    scriptOutput?: ScriptRuntimeOutput
+  ): void {
     const sourceLabel = scriptOutputLabel(output);
     if (!sourceLabel) return;
 
@@ -855,6 +861,7 @@ export class CliTerminalFormatter {
       CliTerminalFormatter._scriptHeaders.add(headerKey);
     }
     let state = CliTerminalFormatter._scriptStreaming.get(key);
+    const outputText = scriptOutput ? getScriptOutputText(scriptOutput) : "";
 
     if (output.isStreaming) {
       CliTerminalFormatter.flushStreamingBuffer(target);
@@ -870,24 +877,10 @@ export class CliTerminalFormatter {
         );
         console.log();
       }
-      if (output.response) {
-        if (!state) {
-          state = {
-            shownChars: 0,
-            shownLines: 0,
-            totalChars: 0,
-            totalLines: 0,
-            endsWithNewline: true,
-          };
-          CliTerminalFormatter._scriptStreaming.set(key, state);
-          console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
-        }
-        CliTerminalFormatter.writeBoundedScriptChunk(output.response, state);
-      }
       return;
     }
 
-    if (!state && output.response) {
+    if (!state && outputText) {
       state = {
         shownChars: 0,
         shownLines: 0,
@@ -898,11 +891,11 @@ export class CliTerminalFormatter {
       CliTerminalFormatter._scriptStreaming.set(key, state);
       CliTerminalFormatter.flushStreamingBuffer(target);
       console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
-      CliTerminalFormatter.writeBoundedScriptChunk(output.response, state);
+      CliTerminalFormatter.writeBoundedScriptChunk(outputText, state);
     }
 
     if (state) {
-      const totalText = output.response;
+      const totalText = outputText;
       state.totalChars = Math.max(state.totalChars, totalText.length);
       state.totalLines = countOutputLines(totalText);
       if (!state.endsWithNewline) process.stdout.write("\n");
@@ -1699,6 +1692,18 @@ export class CliTerminalFormatter {
         CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as UserSteerData;
         writeEventLine(chalk.blue("● User message"), chalk.blue);
+        writeBoundedEventDetail(data.text, MAX_PREVIEW_LINES, "  ");
+        console.log();
+        break;
+      }
+
+      case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
+        CliTerminalFormatter.beginEventOutput(target);
+        const data = event.data as { text: string; reason: string };
+        writeEventLine(
+          chalk.yellow(`● Terminal output (${data.reason})`),
+          chalk.yellow
+        );
         writeBoundedEventDetail(data.text, MAX_PREVIEW_LINES, "  ");
         console.log();
         break;

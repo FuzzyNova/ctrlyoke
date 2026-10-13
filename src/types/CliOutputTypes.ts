@@ -32,6 +32,8 @@ export interface CliEvent {
    * produced inside a spawned sub-agent (Task tool). Omitted for non-tool events.
    */
   callerType?: CallerType | string;
+  /** Excluded from prior-context transcripts while retained in dashboard output. */
+  priorContextExcluded?: boolean;
 }
 
 /**
@@ -55,7 +57,14 @@ export type CliEventData =
   | FollowUpResumedData
   | BackgroundWorkHoldData
   | ContextWindowSyncData
-  | AskUserQuestionData;
+  | AskUserQuestionData
+  | TerminalOutputData;
+
+/** The sanitized tail retained when a harness process exits unexpectedly. */
+export interface TerminalOutputData {
+  text: string;
+  reason: string;
+}
 
 /**
  * Data for a text event (AI response text).
@@ -519,7 +528,6 @@ export interface WebSearchData {
  */
 export interface CliResult {
   success: boolean;
-  response: string;
   statistics: string;
   error?: string;
   exitCode?: number;

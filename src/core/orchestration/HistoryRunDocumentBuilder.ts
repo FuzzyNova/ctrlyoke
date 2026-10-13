@@ -64,11 +64,14 @@ export class HistoryRunDocumentBuilder {
       return [];
     }
 
-    const candidates = this.collectEventCandidates(event);
     const outputMetadata =
       event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
         ? event.payload.cliOutput.structured?.metadata
         : undefined;
+    const candidates =
+      event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED
+        ? this.candidateExtractor.collectPromptCandidates(event.payload.prompt)
+        : this.collectEventCandidates(event);
 
     return candidates.flatMap((candidate, candidateIndex) => {
       const textProjection = options.projectCandidate
@@ -108,10 +111,17 @@ export class HistoryRunDocumentBuilder {
         return this.candidateExtractor.collectStructuredEventsCandidates(
           event.payload.events
         );
+      case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED:
+        return this.candidateExtractor.collectScriptExecutionCandidates(
+          event.payload,
+          event.phase
+        );
       case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
         return this.candidateExtractor.collectStatusCandidates(
           event.payload.statusMessage.message
         );
+      case TIMELINE_EVENT_TYPES.ATTEMPT_STARTED:
+        return [];
       default:
         return [];
     }
@@ -121,6 +131,8 @@ export class HistoryRunDocumentBuilder {
     switch (event.eventType) {
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
+      case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED:
+      case TIMELINE_EVENT_TYPES.ATTEMPT_STARTED:
         return event.attemptIndex;
       default:
         return 0;

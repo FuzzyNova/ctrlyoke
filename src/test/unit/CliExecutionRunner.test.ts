@@ -17,6 +17,7 @@ import { CliTransportError } from "../../core/harness/shared/CliTransportError";
 import { CliInteractiveStartupCoordinator } from "../../core/harness/shared/CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import type { InteractiveExitResult } from "../../utils/CliProcessManager";
+import { getTranscriptText } from "../../utils/StepOutputText";
 
 function createProvider(options?: {
   supportsSessionStart?: boolean;
@@ -681,7 +682,10 @@ suite("CliExecutionRunner", () => {
         logPath: "session.jsonl",
         dispatchedPromptText: session.promptArgument,
       });
-      assert.strictEqual(session.result?.response, "the real answer");
+      assert.strictEqual(
+        getTranscriptText(session.parsedOutput?.events ?? []),
+        "the real answer"
+      );
       assert.deepStrictEqual(session.parsedOutput, parsedOutput);
       assert.strictEqual(session.effectiveSessionId, "session-1");
       // The OpenCode completion plugin reads its notification directory from

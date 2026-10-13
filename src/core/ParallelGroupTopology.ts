@@ -7,10 +7,12 @@ import type {
 import { isScriptStep } from "../types/CtrlYokeTypes";
 import { assertStartedStepPositionsPreserved } from "./StepIdentity";
 import { hasStarted } from "../utils/StepStatusDerivation";
+import { scanInlinePriorContextRefs } from "../utils/FileReferenceParser";
 import {
   PARALLEL_GROUP_INSERT_RELOCATION_KINDS,
   type ParallelGroupInsertRelocationKind,
   PROMPT_TERMINAL_STATUS,
+  PRIOR_CONTEXT_REFERENCE_KINDS,
 } from "../types/DashboardConstants";
 
 export interface ParallelGroupTopology {
@@ -74,6 +76,20 @@ export function getParallelSiblingReferenceErrors(
           errors.push(
             `Step ${stepIndex + 1}: Numeric priorContext reference ${reference} cannot target a sibling in parallel group (steps ${memberNumberText})`
           );
+        }
+      }
+
+      for (const match of scanInlinePriorContextRefs(step.prompt)) {
+        if (match.ref.kind !== PRIOR_CONTEXT_REFERENCE_KINDS.STEP) continue;
+        for (const reference of match.ref.indices) {
+          if (
+            memberNumbers.includes(reference) &&
+            reference !== stepIndex + 1
+          ) {
+            errors.push(
+              `Step ${stepIndex + 1}: Inline priorContext reference ${reference} cannot target a sibling in parallel group (steps ${memberNumberText})`
+            );
+          }
         }
       }
 

@@ -3,6 +3,7 @@ import { suite, test } from "mocha";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  SCRIPT_OUTPUT_SOURCES,
 } from "../../types/DashboardConstants";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
@@ -11,7 +12,12 @@ import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAcc
 const KEY = "queue:0:run:0:attempt:0";
 
 function streamingOutput(response = ""): CliOutput {
-  return { prompt: "p", response, elapsed: 0, isStreaming: true };
+  return {
+    elapsed: 0,
+    isStreaming: true,
+    source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+    scriptOutput: { command: "npm test", stdout: response, stderr: "" },
+  };
 }
 
 function textEvent(text: string): CliEvent {
@@ -31,7 +37,7 @@ suite("StreamingCliOutputAccumulator", () => {
     accumulator.appendChunk(KEY, "two");
 
     const merged = accumulator.flush(KEY, streamingOutput("start "));
-    assert.strictEqual(merged.response, "start one two");
+    assert.strictEqual(merged.scriptOutput?.stdout, "start one two");
     assert.strictEqual(merged.structured, undefined);
   });
 
@@ -74,7 +80,7 @@ suite("StreamingCliOutputAccumulator", () => {
     accumulator.appendChunk(KEY, "once");
 
     const first = accumulator.flush(KEY, streamingOutput());
-    assert.strictEqual(first.response, "once");
+    assert.strictEqual(first.scriptOutput?.stdout, "once");
     assert.strictEqual(accumulator.flush(KEY, first), first);
   });
 
@@ -86,9 +92,12 @@ suite("StreamingCliOutputAccumulator", () => {
     accumulator.discard(KEY);
 
     assert.deepStrictEqual([...accumulator.keys()], [other]);
-    assert.strictEqual(accumulator.flush(KEY, streamingOutput()).response, "");
     assert.strictEqual(
-      accumulator.flush(other, streamingOutput()).response,
+      accumulator.flush(KEY, streamingOutput()).scriptOutput?.stdout,
+      ""
+    );
+    assert.strictEqual(
+      accumulator.flush(other, streamingOutput()).scriptOutput?.stdout,
       "kept"
     );
   });

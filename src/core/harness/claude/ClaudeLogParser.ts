@@ -1437,6 +1437,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         events.push({
           type: CLI_EVENT_TYPES.TEXT,
           timestamp,
+          priorContextExcluded: true,
           data: { text } as TextData,
         });
       }

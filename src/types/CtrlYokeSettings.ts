@@ -151,7 +151,6 @@ export interface CtrlYokeGlobalSettings {
     defaultTemplate: string;
     autoLoadRecentSession: boolean;
     omitPreviouslyAttachedAgentsSkillsOnResume: boolean;
-    includeFullDiffsInPriorContext: boolean;
   };
 
   /** Saved per-variable defaults keyed by template id and variable name. */
@@ -468,7 +467,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     defaultTemplate: "blank",
     autoLoadRecentSession: true,
     omitPreviouslyAttachedAgentsSkillsOnResume: true,
-    includeFullDiffsInPriorContext: true,
   },
   templates: {
     variableDefaults: {},

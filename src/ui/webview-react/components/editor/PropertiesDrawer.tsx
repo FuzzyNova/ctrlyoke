@@ -20,6 +20,7 @@ import {
   INHERIT_DEFAULT_OPTION,
   NONE_OPTION,
   PROMPT_PROPERTIES,
+  PRIOR_CONTEXT_DETAILS,
   RESUME_SESSION_SELECTIONS,
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
@@ -208,6 +209,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     setProperty(PROMPT_PROPERTIES.RESUME_SESSION, undefined);
     setProperty(PROMPT_PROPERTIES.SESSION_ID, "");
     setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, undefined);
+    setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL, undefined);
     setProperty(PROMPT_PROPERTIES.MCP_SERVERS, undefined);
     setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, undefined);
     setProperty(PROMPT_PROPERTIES.HOOKS, undefined);
@@ -428,8 +430,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const resolvedPriorContext =
     workflowProperties.priorContext ??
     (globalSettings.priorContext as PriorContext);
+  const resolvedPriorContextDetail =
+    displayedProperties.priorContextDetail ??
+    workflowProperties.priorContextDetail ??
+    PRIOR_CONTEXT_DETAILS.FULL;
   const defaultPriorContextLabel = `Inherit (${formatPriorContextLabel(
-    resolvedPriorContext
+    resolvedPriorContext,
+    resolvedPriorContextDetail
   )})`;
 
   // Get models for current harness
@@ -1074,8 +1081,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <PriorContextSelect
                   id="prop-prior-context"
+                  detailSummaryId="prop-prior-context-detail-summary"
                   schemaPath="priorContext"
                   value={displayedProperties.priorContext}
+                  detail={resolvedPriorContextDetail}
+                  detailDisabled={fieldDisabled(
+                    PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL
+                  )}
+                  onDetailChange={(detail) =>
+                    setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL, detail)
+                  }
                   onChange={(v) =>
                     setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, v)
                   }

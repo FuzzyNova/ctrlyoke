@@ -159,6 +159,15 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         ],
         "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; { previous: N } injects the last N outputs before this prompt; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflowKey, runRef } imports the complete terminal output from one run in this workspace. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation)."
       },
+      "priorContextDetail": {
+        "valueKind": "string",
+        "enum": [
+          "full",
+          "summary"
+        ],
+        "default": "full",
+        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference."
+      },
       "additionalArgs": {
         "valueKind": "oneOf",
         "alternatives": [
@@ -433,6 +442,15 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "finalStepPrevious"
         ],
         "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; { previous: N } injects the last N outputs before this prompt; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflowKey, runRef } imports the complete terminal output from one run in this workspace. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation)."
+      },
+      "priorContextDetail": {
+        "valueKind": "string",
+        "enum": [
+          "full",
+          "summary"
+        ],
+        "default": "full",
+        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference."
       },
       "additionalArgs": {
         "valueKind": "oneOf",

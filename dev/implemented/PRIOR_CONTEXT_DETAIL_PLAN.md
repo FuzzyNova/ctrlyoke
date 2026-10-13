@@ -1,18 +1,27 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Not implemented. Supersedes D12b (`$summary:`) of
-> [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
+> **Status:** Implemented 2026-10-13. Phases 0–3 are complete.
+> Supersedes D12b (`$summary:`) of
+> [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
 > defined here. Phases 0–3 land before launch, in the order given under
 > [Sequencing](#sequencing) (decided 2026-10-13; tracked in
 > [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md)).
 >
-> - Phase 0 fixes a resolver bug every later phase builds on.
-> - Phase 1 changes the prompt text that existing `$previous`/`priorContext` workflows send.
-> - Phase 2 changes the persisted timeline format.
-> - Phase 3 adds `$summary:`.
+> - Phase 0: the resolver excludes condition attempts from step output while preserving their
+>   history records.
+> - Phase 1: prior context renders from structured events (`src/core/PriorContextTranscript.ts`,
+>   `src/utils/CliEventDiff.ts`), including earlier attempts' file changes; the
+>   `includeFullDiffsInPriorContext` setting is removed.
+> - Phase 2: `CliOutput.response`/`prompt` are gone; every reader derives text through
+>   `src/utils/StepOutputText.ts`; timeline format is v2 with a v1 legacy read path; the
+>   dashboard has Copy Full Output.
+> - Phase 3: `$summary:` selectors and `priorContextDetail` are live in the parser, schema,
+>   editor, dashboard, docs, and templates.
+> - Detail settled during implementation: an unbroken line larger than its byte cap is cut at a
+>   UTF-8 code-point boundary, because no line-boundary cut can satisfy the cap.
 >
-> Every decision is settled and there are no open questions.
+> The file and line citations below describe the code as it was before implementation.
 >
 > The plan has two parts:
 >
@@ -302,7 +311,7 @@ scripts never receive it (`EndConditionEvaluator.ts:200-208`). The interim chang
 live bug: `CommitMessageGenerator`'s cleanup regex (`:752`) only matches the one-line
 `[Edited: …]` form, so with the setting on (the default), a full-diff block's body leaks into the
 fallback commit message
-([`commit-message-fallback-leaks-full-diff-blocks.md`](../bugs/backlog/commit-message-fallback-leaks-full-diff-blocks.md)).
+([`commit-message-fallback-leaks-full-diff-blocks.md`](../bugs/implemented/commit-message-fallback-leaks-full-diff-blocks.md)).
 
 **Legacy fallback:** when a settled attempt has no structured events, the renderer uses the
 recorded `response` as the `<response>` body for both forms (the summary cuts its tail). Every
@@ -511,7 +520,7 @@ string }`) lives in `WorkflowTimelineTypes.ts` and is read only by D8b's legacy 
 - **The setting is frozen into records** (Problem 2). There is no stored copy left to freeze.
 
 **Prerequisite bug (Phase 0):**
-[`prior-context-resolves-condition-output-as-step-output.md`](../bugs/backlog/prior-context-resolves-condition-output-as-step-output.md).
+[`prior-context-resolves-condition-output-as-step-output.md`](../bugs/implemented/prior-context-resolves-condition-output-as-step-output.md).
 `resolveLatestAttempts` doesn't skip condition-script attempts. A step that never ran because
 its pre-condition failed therefore yields the condition's stdout as its response. So does an
 interrupted step whose pre-condition ran first. This was confirmed by reading the code, not yet
@@ -636,12 +645,16 @@ session. Each one leaves `npm test` green, updates this plan's status, and commi
      reach the summary's text-only tail.
    - **Uneven event kinds.** Not every harness emits every kind (no `FILE_DELETE` from opencode,
      qwen, or Claude; no `WEB_SEARCH` from codex or opencode), so each element is optional.
+     **Chunk 1a complete:** both pure modules, constants, the Claude progress marker, and focused
+     tests are in place. The consumer and renderer work remains in chunks 1b–1c.
 2. `RunOutputResolver.resolvePriorContextItems`:
    - build `transcript` from `value.output.structured.events` for prompt and `finalStep` items,
      keeping `text` only as the D5 fallback;
    - add the `finalStep` prompt and script branch (D1b);
    - collect `filesChanged` for earlier attempts through the new projection-options argument
      (D4), threaded from `createPriorContextResolver` and `PriorContextPreviewBuilder`.
+     **Chunk 1b complete:** structured prior-context projection, final-step prompts/scripts,
+     earlier-attempt file changes, and the shared full-form XML renderer are implemented.
 3. `buildPriorContextXmlFromItems`: render the transcript entries (D1 table) and
    `<earlierAttempts>`. Queue script rendering is unchanged.
 4. Remove `general.includeFullDiffsInPriorContext`: `schemas/settings-schema.json`,
@@ -676,10 +689,10 @@ Steps 3 and 4 move **readers only**. `response` is still written until step 5, s
 moves early keeps working, and a v1 record still reads through the legacy branch. Every deletion
 waits for step 5.
 
-1. `src/utils/StepOutputText.ts` (D8b), with tests that pin today's text exactly: for each harness
+1. **Complete (chunk 2a):** `src/utils/StepOutputText.ts` (D8b), with tests that pin today's text exactly: for each harness
    fixture, `getTranscriptText(events)` equals the `false`-mode `extractTextFromEvents` output,
    and `getScriptOutputText` equals the script `response` written today.
-2. Give the four response-only kinds of content their homes (D8a):
+2. **Complete (chunk 2a):** Give the four response-only kinds of content their homes (D8a):
    - add `TERMINAL_OUTPUT` to `CLI_EVENT_TYPES`, `CliOutputTypes.ts`, and the dashboard row and
      prior-context renderers;
    - switch the raw-stdout AI path to `TEXT` events;
@@ -691,7 +704,7 @@ waits for step 5.
    - an interrupted attempt has text;
    - script search finds stdout;
    - the commit-message fallback ignores failure text and diff bodies.
-4. **Dashboard readers and the full-output path** (the dashboard rows of D8c, plus D9a):
+4. **Complete (chunk 2c): Dashboard readers and the full-output path** (the dashboard rows of D8c, plus D9a):
    - fallback rows and Markdown export read `scriptOutput`;
    - every Copy Output site goes through one helper, using `ASSISTANT` text (decision 7);
    - close the Export Output gaps and make its `switch` exhaustive;
@@ -701,8 +714,8 @@ waits for step 5.
    - one export fixture per event kind, including `FILE_WRITE` content, questions, user
      steers, search results, and the terminal tail;
    - Copy Full Output equals the single-step export.
-     Docs: the dashboard page that lists the output context menu items.
-5. **Stop writing, and bump the format** (D8e). Delete `extractTextFromEvents`,
+     Docs: the dashboard page that lists the output context menu items (`docs/guide/output.md` and `docs/guide/dashboard.md`).
+5. **Complete (chunk 2d): Stop writing, and bump the format** (D8e). Delete `extractTextFromEvents`,
    `CliResponseTextExtractor.ts`, `CliResult.response`, the `onResponseComplete` payload,
    `ResolvedRunAttemptValue.responseText`, the webview's `joinCliTextEvents` and follow-up merge,
    and the `SessionActivityRecorder` text append. Remove `response` and `prompt` from
@@ -714,20 +727,20 @@ waits for step 5.
      Update the webview tests that assert on `response` (`outputUtils`, `workflowStore`,
      `useLatestStepOutput`, `useMessageHandler`, `outputProjectionEquivalence`, `outputRows`, and
      the context-menu hooks) and the fixture-only uses.
-6. Docs: `run-files.md` (record shape), `mcp-tools.md` (`responseText` is derived; cursors are
+6. **Complete (chunk 2d):** Docs: `run-files.md` (record shape), `mcp-tools.md` (`responseText` is derived; cursors are
    opaque), `docs/cli/ctrlyoke.md` (`history show` text no longer repeats thinking), and
    `CHANGELOG.md` (format v2; Copy Output vs Copy Full Output; script search).
 
 ### Phase 3 — `$summary:` and `priorContextDetail`
 
-1. Parsing (`ReferencePatterns.ts`, `FileReferenceParser.parseInlinePriorContextBody`):
+1. **Complete:** Parsing (`ReferencePatterns.ts`, `FileReferenceParser.parseInlinePriorContextBody`):
    optional `summary:` prefix, `detail` on every parsed arm; diagnostics replace the reserved
    warning.
-2. Schema: `priorContextDetail` in `executionProperties` (`enum: [full, summary]`, default
+2. **Complete:** Schema: `priorContextDetail` in `executionProperties` (`enum: [full, summary]`, default
    `full`); `PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL`; `PRIOR_CONTEXT_DETAILS` constant;
    `npm run schema:update`.
-3. `mergePriorContextReferences` / `PriorContextMerge.ts`: per-index detail, full wins.
-4. `summarizePriorContextItem` + `<filesChanged>` (D2), reusing the projection's file changes.
+3. **Complete:** `mergePriorContextReferences` / `PriorContextMerge.ts`: per-index detail, full wins.
+4. **Complete:** `summarizePriorContextItem` + `<filesChanged>` (D2), reusing the projection's file changes.
 5. Editor: completions (`PriorContextCompletions.ts`, detail text "deterministic excerpt: head of
    prompt, files changed, tail of text; no AI call"), diagnostics, `StepReferenceRenumbering`,
    `PriorContextPreviewBuilder` (pass the detail through), and the inline-reference chip pattern.
@@ -738,7 +751,7 @@ waits for step 5.
    `src/templates/agents/ctrlyoke-tech-support.agent.md`.
 8. Templates: audit built-in templates' `$previous`/`priorContext` uses and switch hand-off and
    commit-style steps to `$summary:` where the full transcript is noise.
-9. Tests: grammar, merge precedence, renumbering, summary caps and markers, `<filesChanged>`
+9. **Complete:** Tests: grammar, merge precedence, renumbering, summary caps and markers, `<filesChanged>`
    aggregation (multiple edits, create+edit, create+delete, failed, external path), preview =
    injection for both levels.
 

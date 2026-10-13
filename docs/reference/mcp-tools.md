@@ -91,8 +91,9 @@ Returns `generatedAt` and `harnesses[]` with `id`, `displayName`, `available`, a
 By default this returns every requested step's full response text. `indices` selects
 zero-based step numbers; omit it to read them all. The response has `workflowKey`,
 `runRef`, and `outputs[]` with `index`, `prompt`, `status`, and `responseText`
-(`null` when the step has no recorded output). Naming a step that does not exist is
-an error. Only queue steps are readable, not the `finalStep`.
+(`null` when the step has no recorded output). `responseText` is derived from the step's
+events or script execution record; it is not stored as a duplicate output field. Naming a
+step that does not exist is an error. Only queue steps are readable, not the `finalStep`.
 
 A member of a parallel group can read only steps before the group started.
 
@@ -102,8 +103,8 @@ several indices is an error rather than a silently ignored argument.
 
 - `limit`: maximum characters to return.
 - `cursor`: resume where a previous read stopped. Pass back the `nextCursor` from an
-  earlier `read_output` response exactly as received; it is opaque and must never be
-  constructed by hand.
+  earlier `read_output` response exactly as received; it is opaque, valid only for the
+  same run state, and must never be constructed by hand.
 - `tail`: return the last N characters instead of reading forward. Cannot be combined
   with `cursor` or `limit`.
 

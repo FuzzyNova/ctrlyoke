@@ -4,13 +4,15 @@ import {
   type StepContextMenuState,
 } from "../components/shared/StepContextMenu";
 import { writeClipboardText } from "@utils/stepClipboard";
-import { extractCliOutputText } from "@utils/outputUtils";
+import { getStepAssistantTextForCopy } from "@utils/outputUtils";
 import type { OutputMessage } from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { FINAL_STEP_PHASES } from "../types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { getTargetKey } from "@utils/outputProjection";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { generateSingleStepMarkdownExport } from "@utils/markdownExport";
+import { OUTPUT_COPY_MENU_LABELS } from "@utils/outputCopyMenuLabels";
 
 function buildCopyAllText(
   allMessages: OutputMessage[],
@@ -48,8 +50,8 @@ function buildCopyAllText(
       ? formatFinalPassLabel(target.index + 1)
       : `Step ${queueStepNum}`;
 
-    const promptText = (output.prompt ?? output.cliCommand)?.trim();
-    const outputText = extractCliOutputText(output);
+    const promptText = output.cliCommand?.trim();
+    const outputText = getStepAssistantTextForCopy(output);
 
     if (promptText || outputText) {
       const section: string[] = [`=== ${header} ===`];
@@ -107,12 +109,16 @@ export function useOutputContextMenu({
       }
 
       let hoveredOutputText: string | undefined;
+      let hoveredOutput: CliOutputType | undefined;
+      let hoveredTarget: OutputMessage["target"] | undefined;
       if (hoveredStepKey) {
         const lastCliIdx = lastCliIndexPerStep.get(hoveredStepKey);
         if (lastCliIdx !== undefined) {
           const msg = allMessages[lastCliIdx];
           if (msg?.type === OUTPUT_MESSAGE_TYPES.CLI) {
-            hoveredOutputText = extractCliOutputText(msg.data as CliOutputType);
+            hoveredOutput = msg.data as CliOutputType;
+            hoveredTarget = msg.target;
+            hoveredOutputText = getStepAssistantTextForCopy(hoveredOutput);
           }
         }
       }
@@ -158,7 +164,7 @@ export function useOutputContextMenu({
             },
           },
           {
-            label: "Copy Step Output",
+            label: OUTPUT_COPY_MENU_LABELS.COPY_STEP_OUTPUT,
             icon: "codicon-copy",
             disabled: !hoveredOutputText,
             disabledTitle: hoveredStepKey
@@ -167,6 +173,20 @@ export function useOutputContextMenu({
             onClick: () => {
               if (!hoveredOutputText) return;
               void writeClipboardText(hoveredOutputText);
+            },
+          },
+          {
+            label: OUTPUT_COPY_MENU_LABELS.COPY_FULL_OUTPUT,
+            icon: "codicon-copy",
+            disabled: !hoveredOutput || !hoveredTarget,
+            disabledTitle: hoveredStepKey
+              ? "No output to copy for this step"
+              : "No step under cursor",
+            onClick: () => {
+              if (!hoveredOutput || !hoveredTarget) return;
+              void writeClipboardText(
+                generateSingleStepMarkdownExport(hoveredOutput, hoveredTarget)
+              );
             },
           },
           { type: "divider" },

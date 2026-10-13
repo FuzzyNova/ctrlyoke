@@ -16,8 +16,10 @@ function makeCliMessage(
     target: { kind: FINAL_STEP_PHASES.QUEUE, index },
     timestamp,
     data: {
-      prompt: `prompt ${index + 1}`,
-      response,
+      structured: {
+        events: [{ type: "text", data: { text: response } }],
+        metadata: {},
+      },
       elapsed: 1,
       isStreaming: false,
     },
@@ -95,5 +97,19 @@ describe("useOutputContextMenu", () => {
     expect(copiedText).toContain("visible output three");
     expect(copiedText).not.toContain("hidden output two");
     expect(copiedText).toContain("=== Step 3 ===");
+  });
+
+  it("copies assistant text and the full single-step export from the hovered step", () => {
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Step Output" }));
+    expect(writeText).toHaveBeenLastCalledWith("visible output one");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+    expect(writeText).toHaveBeenLastCalledWith(
+      expect.stringContaining("visible output one")
+    );
   });
 });

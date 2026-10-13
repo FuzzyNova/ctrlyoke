@@ -639,7 +639,7 @@ CliTerminalFormatter.renderScriptOutput({
 const chunk = Array.from({ length: 240 }, (_, index) => "line " + index + "\\n").join("");
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true, cliCommand: "check.sh" }, { stepIndex: 0, stepName: "script", key: "bounded" });
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: chunk, elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "bounded" });
-CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: chunk, elapsed: 0, isStreaming: false, scriptVerdict: { compareSource: "stdout", actual: "ok", actualSource: "stdout", outcome: "passed", matchRule: "exact", action: "continue", durationMs: 1 } }, { stepIndex: 0, stepName: "script", key: "bounded" });`);
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, elapsed: 0, isStreaming: false, scriptVerdict: { compareSource: "stdout", actual: "ok", actualSource: "stdout", outcome: "passed", matchRule: "exact", action: "continue", durationMs: 1 } }, { stepIndex: 0, stepName: "script", key: "bounded" }, { command: "check.sh", stdout: chunk, stderr: "", exitCode: 0 });`);
 
     assert.ok(output.includes("line 199"));
     assert.ok(!output.includes("line 200"));
@@ -653,7 +653,7 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
 for (let index = 0; index < 300; index++) {
   CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: ".", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "single-char" });
 }
-CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: ".".repeat(300), elapsed: 0, isStreaming: false }, { stepIndex: 0, stepName: "script", key: "single-char" });`);
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, elapsed: 0, isStreaming: false }, { stepIndex: 0, stepName: "script", key: "single-char" }, { command: "check.sh", stdout: ".".repeat(300), stderr: "", exitCode: 0 });`);
 
     assert.ok(output.includes(".".repeat(300)));
     assert.ok(!output.includes("script output truncated"));
@@ -666,7 +666,7 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: firstChunk, elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "split-line" });
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "split ", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "split-line" });
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "line\\nlast\\n", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "split-line" });
-CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: firstChunk + "split line\\nlast\\n", elapsed: 0, isStreaming: false }, { stepIndex: 0, stepName: "script", key: "split-line" });`);
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, elapsed: 0, isStreaming: false }, { stepIndex: 0, stepName: "script", key: "split-line" }, { command: "check.sh", stdout: firstChunk + "split line\\nlast\\n", stderr: "", exitCode: 0 });`);
 
     assert.ok(output.includes("split line"));
     assert.ok(output.includes("script output truncated: 1 more lines"));

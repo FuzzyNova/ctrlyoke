@@ -39,6 +39,7 @@ import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
+  CLI_EVENT_TYPES,
   PARALLEL_GROUP_ADMISSION,
   CONDITION_ACTIONS,
   STEP_TYPES,
@@ -2291,7 +2292,7 @@ export class WorkflowExecutor {
           ? target.stepIndex
           : state.steps.length;
 
-      let result: { responseText: string; duration: number } | null = null;
+      let result: { duration: number } | null = null;
       const attemptProperties =
         attemptIndex === 0
           ? resolvedProperties
@@ -2366,7 +2367,6 @@ export class WorkflowExecutor {
           integration,
           context,
           target,
-          prompt,
           signedStepIndex,
           runIndex,
           attemptIndex,
@@ -2390,15 +2390,13 @@ export class WorkflowExecutor {
         );
       }
 
-      const { responseText, duration } = result;
+      const { duration } = result;
 
       await this.updateDashboardWithResponse(
         context,
         integration,
         target,
         target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-        prompt,
-        responseText,
         duration,
         runIndex,
         attemptIndex,
@@ -2409,17 +2407,6 @@ export class WorkflowExecutor {
           elapsed: duration,
         });
       }
-      // The completed response is durable in events.jsonl before it becomes
-      // visible to any active-only cache or subsequent prompt construction.
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.promptQueue.cacheRuntimeOutput(target.stepIndex, { responseText });
-      } else {
-        this.promptQueue.storeFinalStepResponseText(
-          target.loopIndex,
-          responseText
-        );
-      }
-
       // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
       // rather than reading prompt.endCondition directly, which misses workflow-level defaults.
       const resolvedEndCondition = resolvedProperties.endCondition;
@@ -2787,8 +2774,6 @@ export class WorkflowExecutor {
       });
 
       const evalResult = report.evaluationResult;
-      const scriptRuntimeOutput = report.scriptRuntimeOutput;
-      const outputText = report.outputText;
 
       if (evalResult.cancelled) {
         runtime.cancelAttempt(target, attemptIndex);
@@ -2845,18 +2830,6 @@ export class WorkflowExecutor {
       }
 
       const succeeded = evalResult.errored ? true : evalResult.passed;
-
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
-          responseText: outputText,
-          scriptOutput: scriptRuntimeOutput,
-        });
-      } else {
-        this.promptQueue.storeFinalStepResponseText(
-          target.loopIndex,
-          outputText
-        );
-      }
 
       const onPass = step.onPass ?? CONDITION_ACTIONS.CONTINUE;
       const onFail = step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
@@ -3315,8 +3288,6 @@ export class WorkflowExecutor {
     rawTextOutput: boolean | undefined
   ): CliOutput {
     const placeholder: CliOutput = {
-      prompt,
-      response: "",
       elapsed: 0,
       tokens: undefined,
       isStreaming: true,
@@ -3813,10 +3784,8 @@ export class WorkflowExecutor {
     integration: HarnessIntegration;
     target: ExecutionTarget;
     signedStepIndex: number;
-    prompt: PromptStep;
     runIndex: number;
     attemptIndex: number;
-    responseText?: string;
     errorMessage?: string;
     rawTextOutput?: boolean;
   }): CliOutput {
@@ -3825,10 +3794,8 @@ export class WorkflowExecutor {
       integration,
       target,
       signedStepIndex,
-      prompt,
       runIndex,
       attemptIndex,
-      responseText,
       errorMessage,
       rawTextOutput: rawTextOutputOverride,
     } = params;
@@ -3858,10 +3825,27 @@ export class WorkflowExecutor {
     }
 
     const tokens = this.resolveTokenCounts(parsedOutput);
+    const ptyTail = integration.getLastFailureOutput?.();
+    const terminalEvent = ptyTail
+      ? [
+          {
+            type: CLI_EVENT_TYPES.TERMINAL_OUTPUT,
+            data: {
+              text: ptyTail,
+              reason: errorMessage ?? "Harness process exited",
+            },
+          },
+        ]
+      : [];
+    const structuredEvents = [...(structured?.events ?? []), ...terminalEvent];
+    if (structuredEvents.length) {
+      structured = {
+        ...(structured ?? { metadata: {} }),
+        events: structuredEvents,
+      };
+    }
 
     return {
-      prompt: prompt.prompt,
-      response: responseText ?? bufferedOutput?.response ?? "",
       structured,
       elapsed: bufferedOutput?.elapsed ?? 0,
       tokens,
@@ -4174,14 +4158,14 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     target: ExecutionTarget,
     abortSignal?: AbortSignal
-  ): Promise<string | null> {
+  ): Promise<boolean> {
     const targetKey = getExecutionTargetRunKey(target);
     this.waitingResponseTargets.add(targetKey);
-    return new Promise<string | null>((resolve) => {
+    return new Promise<boolean>((resolve) => {
       let responseHandled = false;
       let abortListener: (() => void) | undefined;
 
-      const finish = (responseText: string | null): void => {
+      const finish = (completed: boolean): void => {
         if (responseHandled) {
           return;
         }
@@ -4191,17 +4175,15 @@ export class WorkflowExecutor {
           abortSignal?.removeEventListener("abort", abortListener);
         }
         this.waitingResponseTargets.delete(targetKey);
-        resolve(responseText);
+        resolve(completed);
       };
 
-      const disposable = integration.onResponseComplete(
-        (responseText: string) => {
-          finish(responseText);
-        }
-      );
+      const disposable = integration.onResponseComplete(() => {
+        finish(true);
+      });
 
       if (abortSignal) {
-        abortListener = () => finish(null);
+        abortListener = () => finish(false);
         if (abortSignal.aborted) {
           abortListener();
         } else {
@@ -4221,7 +4203,7 @@ export class WorkflowExecutor {
    * @param onPromptSent Optional async callback invoked after a successful send
    *   but *before* awaiting the response. Use for queue bookkeeping that must
    *   happen in that specific window (e.g. `markStepAsSent`).
-   * @returns `{ responseText, duration }` on success, `null` if `sendPrompt`
+   * @returns `{ duration }` on success, `null` if `sendPrompt`
    *   returns false.
    */
   private async executeWithStreaming(
@@ -4236,7 +4218,7 @@ export class WorkflowExecutor {
     onPromptSent?: () => Promise<void>,
     attemptStartReason: TimelineAttemptStartReason = TIMELINE_ATTEMPT_START_REASONS.INITIAL,
     beginAttempt: boolean = true
-  ): Promise<{ responseText: string; duration: number } | null> {
+  ): Promise<{ duration: number } | null> {
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (beginAttempt) {
       runtime.beginAttempt(target, attemptIndex, Date.now());
@@ -4455,14 +4437,14 @@ export class WorkflowExecutor {
       await onPromptSent();
     }
 
-    const responseText = await responsePromise;
+    const completed = await responsePromise;
     disposeListeners();
-    if (responseText === null) {
+    if (!completed) {
       return null;
     }
 
     const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
-    return { responseText, duration };
+    return { duration };
   }
 
   /**
@@ -4485,7 +4467,7 @@ export class WorkflowExecutor {
       currentIndex: number,
       retryAttemptIndex: number,
       promptSource: RetryPromptSource
-    ): Promise<{ responseText: string; attemptIndex: number } | null> => {
+    ): Promise<{ attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
       let resolvedProperties = PropertyResolver.resolve(
@@ -4593,7 +4575,7 @@ export class WorkflowExecutor {
       }
 
       let sendAttemptIndex = retryAttemptIndex;
-      let result: { responseText: string; duration: number } | null;
+      let result: { duration: number } | null;
       while (true) {
         const retryAttemptProperties =
           sendAttemptIndex === retryAttemptIndex
@@ -4663,7 +4645,6 @@ export class WorkflowExecutor {
           integration,
           context,
           target,
-          effectiveRetryPrompt,
           signedStepIndex ?? this.getSignedStepIndex(target),
           runIndex,
           sendAttemptIndex,
@@ -4684,8 +4665,6 @@ export class WorkflowExecutor {
         integration,
         target,
         target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-        retryPromptStep,
-        result.responseText,
         result.duration,
         runIndex,
         sendAttemptIndex,
@@ -4693,7 +4672,6 @@ export class WorkflowExecutor {
       );
 
       return {
-        responseText: result.responseText,
         attemptIndex: sendAttemptIndex,
       };
     };
@@ -5137,7 +5115,6 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
-    prompt: PromptStep,
     signedStepIndex: number,
     runIndex: number,
     attemptIndex: number,
@@ -5169,16 +5146,13 @@ export class WorkflowExecutor {
     if (runtime.stopped) {
       // Workflow was stopped by the user. Flush whatever partial output is available
       // so the history file is not empty and the user can resume from the stopped state.
-      const failureOutput = integration.getLastFailureOutput?.();
       const stoppedOutput = this.createFinalCliOutput({
         context,
         integration,
         target,
         signedStepIndex,
-        prompt,
         runIndex,
         attemptIndex,
-        responseText: failureOutput,
       });
       const statusTimestampMs = Math.max(
         Date.now(),
@@ -5203,19 +5177,6 @@ export class WorkflowExecutor {
         undefined,
         resolvedProperties?.harness
       );
-
-      if (stoppedOutput.response) {
-        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-          this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
-            responseText: stoppedOutput.response,
-          });
-        } else {
-          this.promptQueue.storeFinalStepResponseText(
-            target.loopIndex,
-            stoppedOutput.response
-          );
-        }
-      }
 
       await this.trackStatusMessage(
         context,
@@ -5271,7 +5232,6 @@ export class WorkflowExecutor {
         integration,
         context,
         target,
-        prompt,
         signedStepIndex,
         runIndex,
         attemptIndex,
@@ -5315,8 +5275,6 @@ export class WorkflowExecutor {
     // in the dashboard and persisted to history. This replaces the initial
     // isStreaming:true output that was set up before sendPrompt was called.
     const errorCliOutput = {
-      prompt: prompt.prompt,
-      response: "",
       isStreaming: false,
       elapsed: 0,
       tokens: undefined,
@@ -5360,7 +5318,6 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
-    prompt: PromptStep,
     signedStepIndex: number,
     runIndex: number,
     attemptIndex: number,
@@ -5374,7 +5331,6 @@ export class WorkflowExecutor {
   ): Promise<PromptFailureDisposition> {
     const runtime = this.getRuntime();
     const failureReason = integration.getLastFailureReason();
-    const failureOutput = integration.getLastFailureOutput?.();
     const attemptTimestampMs =
       this.getPromptPhaseStartedAt(target) ?? Date.now();
     const failureObservedAtMs = Date.now();
@@ -5430,10 +5386,8 @@ export class WorkflowExecutor {
       integration,
       target,
       signedStepIndex,
-      prompt,
       runIndex,
       attemptIndex,
-      responseText: failureOutput,
       errorMessage: failureReason,
       rawTextOutput:
         failureKind === FAILURE_KINDS.PROCESS_EXIT ? true : undefined,
@@ -5572,19 +5526,12 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
-    prompt: PromptStep,
-    responseText: string,
     duration: number,
     runIndex: number,
     attemptIndex: number = 0,
     harnessId?: HarnessId
   ): Promise<void> {
     const parsedOutput = integration.getLastParsedOutput?.();
-    let structured: DashboardOutput | undefined;
-    if (parsedOutput) {
-      structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
-    }
-
     const tokens = this.resolveTokenCounts(parsedOutput);
 
     const cliCommand = context.shouldShowCliCommand
@@ -5594,10 +5541,15 @@ export class WorkflowExecutor {
       ? integration.getLastCliCommandWasInjected()
       : undefined;
 
-    const cliOutputObj = {
-      prompt: prompt.prompt,
-      response: responseText,
-      structured,
+    const cliOutputObj: CliOutput = {
+      ...this.createFinalCliOutput({
+        context,
+        integration,
+        target,
+        signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
+        runIndex,
+        attemptIndex,
+      }),
       elapsed: duration,
       tokens,
       isStreaming: false,
@@ -5605,9 +5557,6 @@ export class WorkflowExecutor {
       cliCommandWasInjected,
       workingDirectory: context.executionWorkspace.executionRoot,
       timestampMs: this.getPromptPhaseStartedAt(target) ?? Date.now(),
-      runIndex,
-      attemptIndex,
-      rawTextOutput: integration.rawTextOutput || undefined,
     };
 
     await this.finalizeAndPersistOutput(

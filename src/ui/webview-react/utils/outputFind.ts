@@ -207,6 +207,10 @@ export function getOutputRowSearchSegments(
           return createSegments([
             { field: "response", text: (event.data as ThinkingBlock).text },
           ]);
+        case CLI_EVENT_TYPES.TERMINAL_OUTPUT:
+          return createSegments([
+            { field: "response", text: (event.data as { text: string }).text },
+          ]);
         case CLI_EVENT_TYPES.BASH_COMMAND: {
           const data = event.data as BashCommandData;
           const rendered = getRenderedBashTexts(data);

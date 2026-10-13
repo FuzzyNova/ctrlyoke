@@ -11,6 +11,8 @@ const RESHAPED_DEFAULTS: Record<string, string> = {
 };
 
 const DEFAULT_OPT_OUTS: Record<string, string> = {
+  priorContextDetail:
+    "Detail is authored at workflow or prompt level, not as a global setting.",
   sessionId:
     "Session IDs identify a particular run and cannot be a reusable default.",
   vars: "Workflow variables are authored per workflow and may contain workflow-specific values.",

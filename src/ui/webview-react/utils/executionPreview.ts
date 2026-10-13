@@ -133,6 +133,8 @@ export function getExecutionPreviewEditorSnapshot():
   if (editor.properties.errorBehavior === undefined) delete step.errorBehavior;
   if (editor.properties.preCondition === undefined) delete step.preCondition;
   if (editor.properties.priorContext === undefined) delete step.priorContext;
+  if (editor.properties.priorContextDetail === undefined)
+    delete step.priorContextDetail;
   if (editor.properties.additionalArgs === undefined) {
     delete step.additionalArgs;
   }

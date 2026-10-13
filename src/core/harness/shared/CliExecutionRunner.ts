@@ -80,7 +80,7 @@ export interface CliExecutionRunnerDeps {
   };
   hostCallbacks: {
     onStreamingEvents: (events: CliEvent[]) => void;
-    onResponseComplete: (response: string) => void;
+    onResponseComplete: () => void;
     logResponse: (response: string, statistics?: string) => void;
     onContextWindowUpdate?: (used: number, size: number) => void;
     onNotificationEvent?: (event: CtrlYokeNotificationEvent) => void;

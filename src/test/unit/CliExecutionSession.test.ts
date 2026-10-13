@@ -17,7 +17,6 @@ function createParsedOutput(
 function createCliResult(overrides?: Partial<CliResult>): CliResult {
   return {
     success: true,
-    response: "ok",
     statistics: "",
     ...overrides,
   };
@@ -56,7 +55,7 @@ suite("CliExecutionSession", () => {
     const parsedOutput = createParsedOutput({
       metadata: { sessionId: "session-output" },
     });
-    const cliResult = createCliResult({ response: "headless response" });
+    const cliResult = createCliResult();
     const session = new CliExecutionSession({
       prompt: { prompt: "say hi" },
       resolvedSessionId: "session-existing",

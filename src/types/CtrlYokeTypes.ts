@@ -313,6 +313,7 @@ export interface ExecutionProperties {
   /** Controls injection of prior prompt outputs into this prompt's text.
    *  See PriorContext type for valid values. Omitting the field = no injection. */
   priorContext?: PriorContext;
+  priorContextDetail?: "full" | "summary";
 
   /** Extra CLI flags appended to ctrlyoke's standard argument set.
    * ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally.
@@ -370,6 +371,7 @@ export const EXECUTION_PROPERTY_KEYS = [
   "endCondition",
   "preCondition",
   "priorContext",
+  "priorContextDetail",
   "additionalArgs",
   "toolPermissions",
   "errorBehavior",

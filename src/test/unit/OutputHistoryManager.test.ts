@@ -1,3 +1,5 @@
+import { getStepOutputText } from "../../utils/StepOutputText";
+import { StepOutputTextMode } from "../../types/DashboardConstants";
 import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -163,6 +165,43 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await fs.rm(tempWorkspace, { recursive: true, force: true });
   });
 
+  test("strips wire-only scriptOutput before persisting the CLI aggregate", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wire-only-script-output"
+    );
+    await manager.saveExecutionOutput(
+      filePath,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      [
+        {
+          structured: {
+            events: [{ type: "text", data: { text: "script result" } }],
+            metadata: {},
+          },
+          scriptOutput: {
+            command: "npm test",
+            stdout: "script result",
+            stderr: "",
+            exitCode: 0,
+          },
+          elapsed: 0,
+          isStreaming: false,
+        },
+      ]
+    );
+    const events = await recorder.readEvents(filePath);
+    const recorded = events.find(
+      (event) => event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+    );
+    assert.ok(
+      recorded &&
+        recorded.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+    );
+    assert.ok(!("scriptOutput" in recorded.payload.cliOutput));
+  });
+
   test("run summaries expose working-file step count while a manifest is still empty", async () => {
     const { filePath, workflowKey, runRef } = await initTestRun(
       manager,
@@ -231,8 +270,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const output = (total: number) => ({
-      prompt: "prompt",
-      response: "response",
       elapsed: 0,
       isStreaming: false,
       timestampMs: 100,
@@ -407,8 +444,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     await manager.startStreamingExecutionOutput(filePath, target, {
-      prompt: "prompt",
-      response: "response",
       elapsed: 0,
       isStreaming: false,
       timestampMs: 100,
@@ -569,8 +604,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       queueTarget,
       {
-        prompt: "queue prompt",
-        response: "",
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: 90,
@@ -622,8 +659,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       target,
       {
-        prompt: "final prompt",
-        response: "",
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: 100,
@@ -646,8 +685,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       target,
       {
-        prompt: "script final prompt",
-        response: "",
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: 110,
@@ -809,8 +850,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-          prompt: "queue-1",
-          response: "draft",
+          structured: {
+            events: [{ type: "text", data: { text: "draft" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 100,
@@ -824,8 +867,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-          prompt: "queue-1",
-          response: "final",
+          structured: {
+            events: [{ type: "text", data: { text: "final" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 120,
@@ -855,8 +900,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       [
         {
-          prompt: "final",
-          response: "final-ok",
+          structured: {
+            events: [{ type: "text", data: { text: "final-ok" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 200,
@@ -896,7 +943,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await manager.finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED, 2);
 
     const loaded = await manager.loadHistory(historyFilePath);
-    // CLI output for queue:0 is the final deduplicated one (attemptIndex=0, response="final")
+    // CLI output for queue:0 is the final deduplicated one (attemptIndex=0).
     const queueCliEntries = loaded.orderedEntries.filter(
       (e) =>
         e.kind === OUTPUT_HISTORY_KINDS.CLI &&
@@ -904,7 +951,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         (e.target as any).stepIndex === 0
     );
     assert.strictEqual(queueCliEntries.length, 1);
-    assert.strictEqual((queueCliEntries[0] as any).cliOutput.response, "final");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: (queueCliEntries[0] as any).cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "final"
+    );
 
     const queueStatusEntries = loaded.orderedEntries.filter(
       (e) =>
@@ -937,7 +990,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     if (loaded.orderedEntries[1]?.kind !== OUTPUT_HISTORY_KINDS.CLI) {
       assert.fail("expected second ordered entry to be cli output");
     }
-    assert.strictEqual(loaded.orderedEntries[1].cliOutput.response, "final");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: loaded.orderedEntries[1].cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "final"
+    );
     assert.strictEqual(loaded.orderedEntries[1].sequence, 3);
 
     const events = await recorder.readEvents(historyFilePath);
@@ -972,8 +1031,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-      prompt: "stream me",
-      response: "",
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: 100,
@@ -996,8 +1057,18 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(interruptedOutput?.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(interruptedOutput.cliOutput.response, "raw ");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: interruptedOutput.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "raw \n\nparsed"
+    );
     assert.deepStrictEqual(interruptedOutput.cliOutput.structured?.events, [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "raw " },
+      },
       {
         type: CLI_EVENT_TYPES.TEXT,
         timestamp: 110,
@@ -1027,8 +1098,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-      prompt: "stream me",
-      response: "",
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: 100,
@@ -1079,8 +1152,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     manager.setOutputActivityHandler((entry) => liveActivities.push(entry));
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-      prompt: "stream me",
-      response: "",
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: 100,
@@ -1108,8 +1183,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.saveExecutionOutput(filePath, target, [
       {
-        prompt: "stream me",
-        response: "A1",
         elapsed: 10,
         isStreaming: false,
         timestampMs: 100,
@@ -1133,7 +1206,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(completedOutput?.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(completedOutput.cliOutput.response, "A1");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: completedOutput.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "A1"
+    );
   });
 
   test("does not re-append streamed deltas once the completed aggregate lands", async () => {
@@ -1148,8 +1227,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const attemptStartedAt = 100;
 
     await manager.startStreamingExecutionOutput(filePath, target, {
-      prompt: "stream me",
-      response: "",
+      structured: {
+        events: [{ type: "text", data: { text: "" } }],
+        metadata: {},
+      },
       elapsed: 0,
       isStreaming: true,
       timestampMs: attemptStartedAt,
@@ -1163,8 +1244,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     ]);
     await manager.saveExecutionOutput(filePath, target, [
       {
-        prompt: "stream me",
-        response: "Hello world",
         elapsed: 30,
         isStreaming: false,
         timestampMs: attemptStartedAt,
@@ -1188,7 +1267,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
     );
     assert.ok(output?.kind === OUTPUT_HISTORY_KINDS.CLI);
-    assert.strictEqual(output.cliOutput.response, "Hello world");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: output.cliOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "Hello world"
+    );
     assert.deepStrictEqual(output.cliOutput.structured?.events, [
       {
         type: CLI_EVENT_TYPES.TEXT,
@@ -1287,8 +1372,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       filePath,
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       {
-        prompt: "interrupted",
-        response: "",
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         attemptIndex: 0,
@@ -1337,8 +1424,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         attemptIndex: 0,
         payload: {
           cliOutput: {
-            prompt: "queue-1",
-            response: "draft",
+            structured: {
+              events: [{ type: "text", data: { text: "draft" } }],
+              metadata: {},
+            },
             elapsed: 1,
             isStreaming: false,
             timestampMs: 100,
@@ -1353,8 +1442,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         attemptIndex: 0,
         payload: {
           cliOutput: {
-            prompt: "queue-1",
-            response: "final",
+            structured: {
+              events: [{ type: "text", data: { text: "final" } }],
+              metadata: {},
+            },
             elapsed: 1,
             isStreaming: false,
             timestampMs: 100,
@@ -1368,7 +1459,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.deepStrictEqual(
       loaded.orderedEntries.map((entry) =>
         entry.kind === OUTPUT_HISTORY_KINDS.CLI
-          ? `${entry.kind}:${entry.cliOutput.response}:${entry.sequence}`
+          ? `${entry.kind}:${getStepOutputText({ output: entry.cliOutput }, StepOutputTextMode.TRANSCRIPT)}:${entry.sequence}`
           : `${entry.kind}:${entry.sequence}`
       ),
       ["status:1", "cli:final:3"]
@@ -1394,8 +1485,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-          prompt: "queue-1",
-          response: "ok",
+          structured: {
+            events: [{ type: "text", data: { text: "ok" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 110,
@@ -1459,8 +1552,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-          prompt: "queue-1",
-          response: "ok",
+          structured: {
+            events: [{ type: "text", data: { text: "ok" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 110,
@@ -1602,8 +1697,15 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       [
         {
-          prompt: "descriptor repair",
-          response: "delete-search-document-needle",
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "delete-search-document-needle" },
+              },
+            ],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 9_001,
@@ -1992,7 +2094,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         const startedAt =
           WorkflowPaths.parseRunRefTimestamp(parsed.runRef) ?? 0;
         return {
-          schemaVersion: 1,
+          schemaVersion: 2,
           storageKind: "timeline",
           workflowId: workflowKey,
           runId: startedAt - Date.UTC(2025, 0, 1),
@@ -2201,8 +2303,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-          prompt: "v1",
-          response: "first",
+          structured: {
+            events: [{ type: "text", data: { text: "first" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 100,
@@ -2228,8 +2332,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-          prompt: "v2",
-          response: "second",
+          structured: {
+            events: [{ type: "text", data: { text: "second" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 200,
@@ -2245,8 +2351,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-          prompt: "v2",
-          response: "third",
+          structured: {
+            events: [{ type: "text", data: { text: "third" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 300,
@@ -2365,8 +2473,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       target,
       [
         {
-          prompt: "appended by MCP",
-          response: "first output",
+          structured: {
+            events: [{ type: "text", data: { text: "first output" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 200,
@@ -3131,8 +3241,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
       target,
       [
         {
-          prompt: "setup",
-          response: "ok",
           elapsed: 1,
           isStreaming: false,
           timestampMs: 100,
@@ -3147,8 +3255,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
       target,
       [
         {
-          prompt: "setup retry",
-          response: "ok",
           elapsed: 1,
           isStreaming: false,
           timestampMs: 200,
@@ -3161,8 +3267,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
     // A higher attempt index outside the phase must not count.
     await manager.saveExecutionOutput(filePath, target, [
       {
-        prompt: "regular",
-        response: "ok",
         elapsed: 1,
         isStreaming: false,
         timestampMs: 300,
@@ -3186,8 +3290,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
 
     await manager.saveExecutionOutput(filePath, target0, [
       {
-        prompt: "p0",
-        response: "r0",
         elapsed: 1,
         isStreaming: false,
         timestampMs: 1,
@@ -3197,8 +3299,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
     ]);
     await manager.saveExecutionOutput(filePath, target0, [
       {
-        prompt: "p0 rerun",
-        response: "r0b",
         elapsed: 1,
         isStreaming: false,
         timestampMs: 2,
@@ -3208,8 +3308,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
     ]);
     await manager.saveExecutionOutput(filePath, target1, [
       {
-        prompt: "p1",
-        response: "r1",
         elapsed: 1,
         isStreaming: false,
         timestampMs: 3,
@@ -3238,8 +3336,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
 
     await manager.saveExecutionOutput(filePath, target0, [
       {
-        prompt: "p0",
-        response: "r0",
         elapsed: 1,
         isStreaming: false,
         timestampMs: 1,
@@ -3249,8 +3345,6 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
     ]);
     await manager.saveExecutionOutput(filePath, target1, [
       {
-        prompt: "p1",
-        response: "r1",
         elapsed: 1,
         isStreaming: false,
         timestampMs: 2,

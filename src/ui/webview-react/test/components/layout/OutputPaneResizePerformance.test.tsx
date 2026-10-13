@@ -225,8 +225,6 @@ describe("output pane width bucketing", () => {
         runIndex: 0,
         attemptIndex: 0,
         cliOutput: {
-          prompt: "edit a file",
-          response: "done",
           elapsed: 1,
           isStreaming: false,
           structured: {

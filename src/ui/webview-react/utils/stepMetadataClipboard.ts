@@ -3,6 +3,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
 import type { PriorContext } from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
+import { PRIOR_CONTEXT_DETAILS } from "@root/types/DashboardConstants";
 import { isScriptWorkflowStep } from "./stepClipboard";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
@@ -249,7 +250,10 @@ export function buildStepMetadataClipboardText({
           if (value === null || value === undefined) return "(none)";
           return typeof value === "string" && value.length === 0
             ? "(none)"
-            : formatPriorContextLabel(value as PriorContext);
+            : formatPriorContextLabel(
+                value as PriorContext,
+                step.priorContextDetail ?? PRIOR_CONTEXT_DETAILS.FULL
+              );
         }
       ),
       resolvedLine(

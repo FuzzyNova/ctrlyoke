@@ -84,8 +84,6 @@ function output(
   } = {}
 ): CliOutputRecordedEvent {
   const cliOutput: CliOutput = {
-    prompt: "prompt",
-    response: "response",
     elapsed: 0,
     isStreaming: sequence < 100,
     timestampMs: options.timestampMs ?? sequence,

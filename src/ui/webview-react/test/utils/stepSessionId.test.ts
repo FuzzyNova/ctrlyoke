@@ -11,7 +11,6 @@ const step = (sessionId?: string): WorkflowStep =>
   ({ prompt: "Question", _runtime: { sessionId } }) as WorkflowStep;
 
 const output = (sessionId?: string): CliOutput => ({
-  response: "Answer",
   elapsed: 1,
   isStreaming: false,
   structured: {

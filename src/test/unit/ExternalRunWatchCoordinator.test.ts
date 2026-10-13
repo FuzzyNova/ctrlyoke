@@ -1,3 +1,5 @@
+import { getStepOutputText } from "../../utils/StepOutputText";
+import { StepOutputTextMode } from "../../types/DashboardConstants";
 import { suite, test } from "mocha";
 import * as assert from "assert";
 import * as fs from "fs/promises";
@@ -103,10 +105,15 @@ class TestBroadcast implements ExternalRunWatchBroadcast {
     this.cliOutputs.push({
       workflowId,
       stepIndex,
-      response: output.response,
+      response: getStepOutputText(
+        { output: output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       isStreaming: output.isStreaming,
     });
-    this.notificationOrder.push(`output:${output.response}`);
+    this.notificationOrder.push(
+      `output:${getStepOutputText({ output: output }, StepOutputTextMode.TRANSCRIPT)}`
+    );
   }
   notifyCliPromptsExtended(): void {}
   updateStepStatus(
@@ -190,10 +197,17 @@ function historyWithCliOutput(response: string): LoadedHistory {
       {
         kind: OUTPUT_HISTORY_KINDS.CLI,
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-        cliOutput: { response, isStreaming: false },
+        cliOutput: {
+          structured: {
+            events: [{ type: "text", data: { text: response } }],
+            metadata: {},
+          },
+          elapsed: 0,
+          isStreaming: false,
+        },
       },
     ],
-  } as LoadedHistory;
+  } as unknown as LoadedHistory;
 }
 
 async function createLiveRun(
@@ -287,7 +301,10 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
       );
 
       await history.startStreamingExecutionOutput(historyPath, target, {
-        response: "",
+        structured: {
+          events: [{ type: "text", data: { text: "" } }],
+          metadata: {},
+        },
         elapsed: 0,
         isStreaming: true,
         timestampMs: Date.now(),
@@ -305,7 +322,10 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       await history.startStreamingExecutionOutput(historyPath, target, {
-        response: "first second",
+        structured: {
+          events: [{ type: "text", data: { text: "first second" } }],
+          metadata: {},
+        },
         elapsed: 1,
         isStreaming: false,
         timestampMs: Date.now(),
@@ -368,7 +388,10 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
         historyPath,
         { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         {
-          response: "final tail",
+          structured: {
+            events: [{ type: "text", data: { text: "final tail" } }],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: Date.now(),

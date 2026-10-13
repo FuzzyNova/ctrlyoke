@@ -18,6 +18,19 @@ suite("PriorContextMerge", () => {
     assert.strictEqual(merged.previousCount, 3);
   });
 
+  test("keeps full detail when the same index is selected at both detail levels", () => {
+    const merged = mergePriorContextReferences(
+      [
+        { context: [2], detail: "summary" },
+        { context: [2], detail: "full" },
+        { context: "previous", detail: "summary" },
+      ],
+      3
+    );
+    assert.strictEqual(merged.detailByQueueIndex.get(1), "full");
+    assert.strictEqual(merged.previousDetail, "summary");
+  });
+
   test("deduplicates queue and final-step items by their distinct identities", () => {
     const items = [
       { index: 1, text: "queue" },

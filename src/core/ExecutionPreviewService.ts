@@ -30,6 +30,7 @@ import {
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
 } from "../types/DashboardConstants";
 import * as path from "path";
+import type { PriorContextRequest } from "../utils/PriorContextMerge";
 import type {
   EndCondition,
   ErrorBehavior,
@@ -168,7 +169,7 @@ export interface ExecutionPreviewServiceOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly enabledHookNotificationEvents?: readonly import("../types/CtrlYokeTypes").HookEvent[];
   readonly resolvePriorContextItems?: (
-    contexts: readonly import("../types/CtrlYokeTypes").PriorContext[],
+    contexts: readonly PriorContextRequest[],
     allPrompts: readonly WorkflowStep[],
     promptIndex: number
   ) => Promise<import("../core/HarnessIntegration").PriorContextItem[]>;

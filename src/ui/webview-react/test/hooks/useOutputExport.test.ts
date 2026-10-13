@@ -16,8 +16,10 @@ function makeCliMessage(
     target: { kind: FINAL_STEP_PHASES.QUEUE, index },
     timestamp,
     data: {
-      prompt: `prompt ${index + 1}`,
-      response,
+      structured: {
+        events: [{ type: "text", data: { text: response } }],
+        metadata: {},
+      },
       elapsed: 1,
       isStreaming: false,
     },

@@ -2017,12 +2017,13 @@ suite("HistorySearchIndexService", () => {
       attemptIndex,
       payload: {
         cliOutput: {
-          prompt: "",
-          response,
           elapsed: 1,
           isStreaming: false,
           structured: {
-            events: structuredEvents,
+            events:
+              structuredEvents.length > 0 || response.length === 0
+                ? structuredEvents
+                : [{ type: CLI_EVENT_TYPES.TEXT, data: { text: response } }],
             metadata: harness ? { harness } : {},
           },
         },

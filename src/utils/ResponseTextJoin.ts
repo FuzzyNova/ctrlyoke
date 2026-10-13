@@ -15,7 +15,7 @@ export const RESPONSE_TEXT_SEPARATOR = "\n\n";
 /**
  * Append `addition` to `existing`, inserting {@link RESPONSE_TEXT_SEPARATOR}
  * unless the boundary already has a line break (e.g. the `\n[Edited: ...]`
- * markers `extractTextFromEvents` emits). Only the boundary characters are
+ * markers emitted by transcript projections). Only the boundary characters are
  * inspected, so repeated appends onto a large response stay linear.
  */
 export function appendResponseText(existing: string, addition: string): string {

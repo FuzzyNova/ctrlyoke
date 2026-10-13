@@ -32,11 +32,21 @@ import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   COMPARE_SOURCES,
+  DIFF_CHANGE_TYPES,
   DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
   PriorContextItemType,
+  PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
+  PRIOR_CONTEXT_DETAILS,
+  PRIOR_CONTEXT_LIMITS,
+  PRIOR_CONTEXT_TRUNCATION,
   type TerminalEndReason,
 } from "../types/DashboardConstants";
+import type {
+  PriorContextTranscriptEntry,
+  PriorContextText,
+} from "./PriorContextTranscript";
+import { boundPriorContextText } from "./PriorContextTranscript";
 import { operatorTakesNoValue } from "../utils/ScriptComparison";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
@@ -48,16 +58,103 @@ import type { DisposableRegistry } from "./HostPorts";
 export type PriorContextItem = {
   index: number;
   name?: string;
-  /** The prompt text that was sent for this step. Absent for finalStep loop items and script steps. */
+  /** The authored prompt. */
   prompt?: string;
-  text: string;
+  detail: PriorContextDetail;
+  transcript?: PriorContextTranscriptEntry[];
+  /** Legacy fallback for timeline records without structured events. */
+  text?: string;
+  filesChanged?: PriorContextFileChange[];
+  earlierAttempts?: { count: number; filesChanged: PriorContextFileChange[] };
   /** Discriminant set when the item originates from a finalStep/finalStep loop (not a queue prompt). */
   type?: PriorContextItemType;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
   /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
   scriptVerdict?: ScriptVerdict;
+  summaryPrompt?: PriorContextText;
+  summaryResponse?: PriorContextText;
+  summaryCommand?: PriorContextText;
+  summaryScriptOutput?: PriorContextText;
 };
+
+export type { PriorContextDetail } from "../types/DashboardConstants";
+import type { PriorContextDetail } from "../types/DashboardConstants";
+
+export interface PriorContextFileChange {
+  path: string;
+  operation:
+    | typeof DIFF_CHANGE_TYPES.CREATED
+    | typeof DIFF_CHANGE_TYPES.MODIFIED
+    | typeof DIFF_CHANGE_TYPES.DELETED;
+  added: number;
+  removed: number;
+}
+
+/** Build the deterministic summary projection of a full prior-context item. */
+export function summarizePriorContextItem(
+  item: PriorContextItem
+): PriorContextItem {
+  if (item.detail !== PRIOR_CONTEXT_DETAILS.SUMMARY) return item;
+  const summary: PriorContextItem = { ...item };
+  delete summary.earlierAttempts;
+  if (item.prompt !== undefined) {
+    summary.summaryPrompt = boundPriorContextText(
+      item.prompt,
+      PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.HEAD
+    );
+    summary.prompt = summary.summaryPrompt.text;
+  }
+  if (item.scriptOutput) {
+    summary.summaryCommand = boundPriorContextText(
+      item.scriptOutput.command,
+      PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.HEAD
+    );
+    const combined = [item.scriptOutput.stdout, item.scriptOutput.stderr]
+      .filter(Boolean)
+      .join("\n");
+    summary.summaryScriptOutput = boundPriorContextText(
+      combined,
+      PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.TAIL
+    );
+    summary.scriptOutput = {
+      ...item.scriptOutput,
+      command: summary.summaryCommand.text,
+      stdout: summary.summaryScriptOutput.text,
+      stderr: "",
+    };
+  } else {
+    const text = item.transcript
+      ? item.transcript
+          .filter(
+            (
+              entry
+            ): entry is Extract<
+              PriorContextTranscriptEntry,
+              { kind: typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT }
+            > => entry.kind === PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT
+          )
+          .map((entry) => entry.text)
+          .join("\n")
+      : (item.text ?? "");
+    summary.summaryResponse = boundPriorContextText(
+      text,
+      PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.TAIL
+    );
+    summary.transcript = [
+      {
+        kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT,
+        text: summary.summaryResponse.text,
+      },
+    ];
+    summary.text = summary.summaryResponse.text;
+  }
+  return summary;
+}
 
 function escapeXmlAttribute(value: string): string {
   return value
@@ -165,19 +262,33 @@ export interface PromptSections {
 export function buildPriorContextXmlFromItems(
   contextItems: PriorContextItem[]
 ): string {
-  const sortedItems = [...contextItems].sort((a, b) => a.index - b.index);
+  const sortedItems = contextItems
+    .map(summarizePriorContextItem)
+    .sort((a, b) => a.index - b.index);
   const steps = sortedItems
     .map((item) => {
-      const nameAttr = item.name ? ` name="${item.name}"` : "";
+      const nameAttr = item.name
+        ? ` name="${escapeXmlAttribute(item.name)}"`
+        : "";
+      const detailAttr =
+        item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+          ? ` detail="${PRIOR_CONTEXT_DETAILS.SUMMARY}"`
+          : "";
       // A script finalStep has a verdict but no scriptOutput, so this is
       // rendered in both arms below.
       const verdictSection = item.scriptVerdict
         ? buildScriptVerdictXml(item.scriptVerdict)
         : "";
+      const earlierAttempts = item.earlierAttempts
+        ? `<earlierAttempts count="${item.earlierAttempts.count}">\n${renderFilesChanged(item.earlierAttempts.filesChanged)}\n</earlierAttempts>\n`
+        : "";
       if (item.scriptOutput) {
-        const commandSection = `<command>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+        const scriptTypeAttr = item.type
+          ? ` type="${escapeXmlAttribute(item.type)}"`
+          : ` type="${STEP_TYPES.SCRIPT}"`;
+        const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
         const stdoutSection = item.scriptOutput.stdout.trim()
-          ? `<stdout>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
+          ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
           : "";
         const stderrSection = item.scriptOutput.stderr.trim()
           ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
@@ -186,18 +297,91 @@ export function buildPriorContextXmlFromItems(
           item.scriptOutput.exitCode !== undefined
             ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
             : "";
-        return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}</step>`;
+        const filesChanged =
+          item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+            ? `${renderFilesChanged(item.filesChanged)}\n`
+            : "";
+        return `<step index="${item.index + 1}"${scriptTypeAttr}${nameAttr}${detailAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
       }
-      const typeAttr = item.type ? ` type="${item.type}"` : "";
-      const promptSection = item.prompt
-        ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
+      const typeAttr = item.type
+        ? ` type="${escapeXmlAttribute(item.type)}"`
         : "";
-      const responseSection = `<response>\n${item.text.trim()}\n</response>\n`;
-      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}${verdictSection}</step>`;
+      const promptSection = item.prompt
+        ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
+        : "";
+      const transcript = item.transcript
+        ? item.transcript.map(renderPriorContextEntry).join("\n")
+        : item.text !== undefined
+          ? item.text.trim()
+          : "";
+      const filesChanged = item.filesChanged
+        ? item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+          ? renderFilesChanged(item.filesChanged)
+          : ""
+        : "";
+      const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse) : ""}>\n${transcript}\n</response>\n`;
+      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}${detailAttr}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
     })
     .join("\n");
 
   return `<priorContext>\n${steps}\n</priorContext>`;
+}
+
+function renderFilesChanged(
+  changes: PriorContextFileChange[] | undefined
+): string {
+  if (!changes?.length) return "<filesChanged/>";
+  const lines = changes.map(({ path, operation, added, removed }) => {
+    if (operation === DIFF_CHANGE_TYPES.DELETED) return `Removed ${path}`;
+    // A file created in this step has no prior lines: its size is net added.
+    if (operation === DIFF_CHANGE_TYPES.CREATED)
+      return `Added ${path} +${Math.max(0, added - removed)}`;
+    return `Edited ${path} +${added} -${removed}`;
+  });
+  return `<filesChanged>\n${lines.join("\n")}\n</filesChanged>`;
+}
+
+function omittedAttributes(value: PriorContextText): string {
+  return value.omitted
+    ? ` omitted="${value.omitted}" omittedBytes="${value.omittedBytes ?? 0}"`
+    : "";
+}
+
+function failedAttribute(entry: { failed?: true }): string {
+  return entry.failed ? ' failed="true"' : "";
+}
+
+function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
+  const failed = failedAttribute(entry);
+  switch (entry.kind) {
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT:
+      return entry.text;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING:
+      return `<thinking${failed}>\n${entry.text}\n</thinking>`;
+    case "edit": {
+      const diff = entry.diff ? `\n\`\`\`diff\n${entry.diff.text}\n\`\`\`` : "";
+      const omitted = entry.diff ? omittedAttributes(entry.diff) : "";
+      return `<edit path="${escapeXmlAttribute(entry.path)}" added="${entry.added}" removed="${entry.removed}"${failed}${omitted}>${diff}\n</edit>`;
+    }
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE:
+      return `<create path="${escapeXmlAttribute(entry.path)}" added="${entry.added}"${failed}${omittedAttributes(entry.diff)}>\n\`\`\`diff\n${entry.diff.text}\n\`\`\`\n</create>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE:
+      return `<delete path="${escapeXmlAttribute(entry.path)}"${failed}/>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND:
+      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}${omittedAttributes(entry.output)}>\n${entry.command}\n<output>\n${entry.output.text}\n</output>\n</command>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ:
+      return `<read path="${escapeXmlAttribute(entry.path)}"${entry.lineStart === undefined ? "" : ` lines="${entry.lineStart}-${entry.lineEnd ?? entry.lineStart}"`}${failed}/>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL:
+      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}${omittedAttributes(entry.arguments)}>\n${entry.arguments.text}\n<output${omittedAttributes(entry.result)}>\n${entry.result.text}\n</output>\n</tool>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH:
+      return `<search query="${escapeXmlAttribute(entry.query)}"${failed}>\n${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:
+      return `<question${failed}>\n${JSON.stringify({ questions: entry.questions, declined: entry.declined })}\n</question>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER:
+      return `<userSteer${failed}>\n${entry.text}\n</userSteer>`;
+    case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TERMINAL_OUTPUT:
+      return `<terminalOutput reason="${escapeXmlAttribute(entry.reason)}">\n${entry.text}\n</terminalOutput>`;
+  }
 }
 
 /**
@@ -246,7 +430,7 @@ export abstract class HarnessIntegration {
   protected statusChangeEmitter = new TypedEmitter<HarnessStatus>();
   public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
-  protected responseCompleteEmitter = new TypedEmitter<string>();
+  protected responseCompleteEmitter = new TypedEmitter<undefined>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
 
   /** Await host-owned child cleanup when a Node host is shutting down. */

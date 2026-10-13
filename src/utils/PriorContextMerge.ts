@@ -4,9 +4,18 @@ import {
 } from "../types/CtrlYokeTypes";
 import {
   PRIOR_CONTEXT_KEYWORDS,
+  PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
+  type PriorContextDetail,
 } from "../types/DashboardConstants";
 import type { InlinePriorContextRef } from "./FileReferenceParser";
+
+export interface PriorContextSelection {
+  context: PriorContext;
+  detail: PriorContextDetail;
+}
+
+export type PriorContextRequest = PriorContext | PriorContextSelection;
 
 /** Canonical union of prior-context selectors in one prompt. */
 export interface PriorContextMerge {
@@ -19,6 +28,11 @@ export interface PriorContextMerge {
   includePreviousFinalStep: boolean;
   /** Canonical contexts that preserve the merged request semantics. */
   contexts: PriorContext[];
+  detailByQueueIndex: Map<number, PriorContextDetail>;
+  previousDetail: PriorContextDetail;
+  allQueueDetail: PriorContextDetail;
+  finalStepDetail: PriorContextDetail;
+  allFinalStepsDetail: PriorContextDetail;
 }
 
 /** Remove repeated queue/final-step items while preserving the first item. */
@@ -54,6 +68,15 @@ export function inlinePriorContextRefToPriorContext(
   }
 }
 
+export function inlinePriorContextRefToSelection(
+  ref: InlinePriorContextRef
+): PriorContextSelection {
+  return {
+    context: inlinePriorContextRefToPriorContext(ref),
+    detail: ref.detail ?? PRIOR_CONTEXT_DETAILS.FULL,
+  };
+}
+
 /**
  * Merge all prior-context selectors used by one prompt. Previous selectors
  * take the largest requested count, explicit step selectors form a union, and
@@ -61,7 +84,7 @@ export function inlinePriorContextRefToPriorContext(
  * and editor preview counting.
  */
 export function mergePriorContextReferences(
-  contexts: readonly PriorContext[],
+  requests: readonly PriorContextRequest[],
   groupStartBoundary: number
 ): PriorContextMerge {
   const explicitQueueIndices = new Set<number>();
@@ -69,8 +92,27 @@ export function mergePriorContextReferences(
   let includeAllQueue = false;
   let includeAllFinalSteps = false;
   let includePreviousFinalStep = false;
+  let previousDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
+  let allQueueDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
+  let finalStepDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
+  let allFinalStepsDetail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.SUMMARY;
+  const detailByQueueIndex = new Map<number, PriorContextDetail>();
 
-  for (const context of contexts) {
+  const setFullWins = (index: number, detail: PriorContextDetail) => {
+    if (
+      detail === PRIOR_CONTEXT_DETAILS.FULL ||
+      !detailByQueueIndex.has(index)
+    ) {
+      detailByQueueIndex.set(index, detail);
+    }
+  };
+  for (const request of requests) {
+    const wrapped =
+      typeof request === "object" &&
+      !Array.isArray(request) &&
+      "context" in request;
+    const context = wrapped ? request.context : (request as PriorContext);
+    const detail = wrapped ? request.detail : PRIOR_CONTEXT_DETAILS.FULL;
     const requestedPrevious =
       context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS
         ? 1
@@ -80,17 +122,26 @@ export function mergePriorContextReferences(
 
     if (context === PRIOR_CONTEXT_KEYWORDS.ALL) {
       includeAllQueue = true;
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        allQueueDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (requestedPrevious > 0) {
       previousCount = Math.max(previousCount, requestedPrevious);
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        previousDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
       includeAllFinalSteps = true;
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        allFinalStepsDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
       includePreviousFinalStep = true;
+      if (detail === PRIOR_CONTEXT_DETAILS.FULL)
+        finalStepDetail = PRIOR_CONTEXT_DETAILS.FULL;
     } else if (Array.isArray(context)) {
       for (const oneBasedIndex of context) {
         const index = oneBasedIndex - 1;
         if (index >= 0 && index < groupStartBoundary) {
           explicitQueueIndices.add(index);
+          setFullWins(index, detail);
         }
       }
     }
@@ -128,6 +179,11 @@ export function mergePriorContextReferences(
     includeAllFinalSteps,
     includePreviousFinalStep,
     contexts: mergedContexts,
+    detailByQueueIndex,
+    previousDetail,
+    allQueueDetail,
+    finalStepDetail,
+    allFinalStepsDetail,
   };
 }
 

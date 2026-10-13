@@ -14,7 +14,6 @@ import {
   StepExecutionOutcome,
   EXECUTION_STATES,
   WorkflowStep,
-  ScriptRuntimeOutput,
   isScriptStep,
   PromptRuntimeMetadata,
   ActiveParallelGroupRuntime,
@@ -106,18 +105,10 @@ import {
   hasStarted,
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
-import { appendResponseText } from "../utils/ResponseTextJoin";
 import {
   assertStepRemovalUnreferenced,
   renumberStepReferences,
 } from "./StepReferenceRenumbering";
-
-/** Resolver-derived, in-memory execution cache restored for an active run. */
-export interface ResolvedRuntimeOutputCacheEntry {
-  stepIndex: number;
-  responseText?: string;
-  scriptOutput?: ScriptRuntimeOutput;
-}
 
 function resolvePromptRetryBudget(endCondition?: PromptStep["endCondition"]) {
   return resolveRetryBudget(endCondition, {
@@ -140,15 +131,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private readonly onDiskStepsMergedEmitter = new TypedEmitter<
     readonly WorkflowStep[]
   >();
-  /**
-   * Resolver-derived active-execution output cache. These values deliberately
-   * never live on WorkflowStep._runtime or in workflow.ctrlyoke.json.
-   */
-  private readonly runtimeOutputCache = new Map<
-    number,
-    Omit<ResolvedRuntimeOutputCacheEntry, "stepIndex">
-  >();
-  private readonly finalStepResponseCache = new Map<number, string>();
 
   // Public event for state changes
   public readonly onDidChangeState = this.onStateChanged.event;
@@ -436,7 +418,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       parallelGroups: topology.parallelGroups,
     };
     this.finalStepRuntime = undefined;
-    this.clearRuntimeOutputCache();
     this.stateMachine.restore({
       status: EXECUTION_STATES.IDLE,
       stopped: false,
@@ -461,7 +442,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const workingFile = await this.readWorkingFile(workingFilePath);
 
       const runtime = workingFile._runtime;
-      this.clearRuntimeOutputCache();
 
       const topology = normalizeParallelGroupTopology({
         steps: workingFile.steps ?? [],
@@ -1726,23 +1706,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
-   * Merge resolver-derived follow-up text into the active-only queue cache.
-   */
-  appendPromptResponseText(promptIndex: number, additionalText: string): void {
-    if (!additionalText) {
-      return;
-    }
-    if (!this.state.steps[promptIndex]) {
-      return;
-    }
-    const existing =
-      this.runtimeOutputCache.get(promptIndex)?.responseText ?? "";
-    this.cacheRuntimeOutput(promptIndex, {
-      responseText: appendResponseText(existing, additionalText),
-    });
-  }
-
-  /**
    * Merge prompts from disk into the in-memory queue.
    * Adopts disk ordering as source of truth and preserves runtime metadata only
    * for the completed prefix whose boundary both copies agree on.
@@ -2619,72 +2582,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   ): Promise<void> {
     this.finalStepRuntime = runtime;
     await this.updateWorkingFile();
-  }
-
-  /**
-   * Store finalStep output in the active-only cache. The timeline owns durability.
-   *
-   * @param loopIndex 0-based loop index (from ExecutionTarget.loopIndex)
-   * @param text Plain-text AI response from this loop
-   */
-  public storeFinalStepResponseText(loopIndex: number, text: string): void {
-    this.finalStepResponseCache.set(loopIndex, text);
-  }
-
-  /**
-   * Append follow-up text to an active finalStep cache entry.
-   *
-   * @param loopIndex 0-based loop index (from ExecutionTarget.loopIndex)
-   * @param additionalText Extracted text from the resumed follow-up events
-   */
-  public appendFinalStepResponseText(
-    loopIndex: number,
-    additionalText: string
-  ): void {
-    if (!additionalText) {
-      return;
-    }
-    this.storeFinalStepResponseText(
-      loopIndex,
-      appendResponseText(
-        this.finalStepResponseCache.get(loopIndex) ?? "",
-        additionalText
-      )
-    );
-  }
-
-  /**
-   * Restore only the response/script values an active executor needs after a
-   * process restart. This deliberately does not write the working file.
-   */
-  public hydrateActiveRuntimeOutputCache(
-    queueEntries: readonly ResolvedRuntimeOutputCacheEntry[],
-    finalStepResponseTexts: ReadonlyMap<number, string>
-  ): void {
-    for (const entry of queueEntries) {
-      if (!this.state.steps[entry.stepIndex]) continue;
-      this.cacheRuntimeOutput(entry.stepIndex, entry);
-    }
-
-    for (const [loopIndex, responseText] of finalStepResponseTexts) {
-      this.storeFinalStepResponseText(loopIndex, responseText);
-    }
-  }
-
-  /** Cache authoritative resolver output for the currently executing process only. */
-  public cacheRuntimeOutput(
-    stepIndex: number,
-    output: Omit<ResolvedRuntimeOutputCacheEntry, "stepIndex">
-  ): void {
-    this.runtimeOutputCache.set(stepIndex, {
-      ...this.runtimeOutputCache.get(stepIndex),
-      ...output,
-    });
-  }
-
-  private clearRuntimeOutputCache(): void {
-    this.runtimeOutputCache.clear();
-    this.finalStepResponseCache.clear();
   }
 
   /**

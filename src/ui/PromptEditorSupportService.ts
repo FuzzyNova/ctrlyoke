@@ -1436,7 +1436,8 @@ export class PromptEditorSupportService {
           outputHistoryManager.getHistoryFilePath(
             address.workflowKey,
             address.runRef
-          )
+          ),
+          orchestrator.getPriorContextProjectionOptions()
         );
       } catch {
         return `<!-- Could not read workflow state for $${ref} -->`;

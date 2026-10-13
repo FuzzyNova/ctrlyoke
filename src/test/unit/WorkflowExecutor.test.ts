@@ -42,6 +42,7 @@ import {
   FAILURE_KINDS,
   GUARDRAIL_STOP_CODES,
   WORKFLOW_ATTEMPT_STATUS,
+  StepOutputTextMode,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
@@ -53,6 +54,7 @@ import type { SecretGrantsTrustStore } from "../../config/SecretGrantsTrustStore
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
+import { getStepOutputText } from "../../utils/StepOutputText";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
@@ -4187,7 +4189,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
-    let completedOutput: { response?: string; elapsed?: number } | undefined;
+    let completedOutput: CliOutput | undefined;
     const statusUpdates: Array<{ state: string; duration?: number }> = [];
     const dashboardProvider = new Proxy(
       {
@@ -4211,8 +4213,21 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       steps: [{ prompt: "pause-after-me" }, { prompt: "not-yet" }],
     });
 
+    let streamedText = "";
+    const context = makeContext(integration);
+    context.captureChunk = (_stepIndex, chunk) => {
+      streamedText += chunk;
+    };
+    context.getBufferedOutput = () => ({
+      structured: {
+        events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: streamedText } }],
+        metadata: {},
+      },
+      elapsed: 0,
+      isStreaming: true,
+    });
     await executor.execute(integration, {
-      ...makeContext(integration),
+      ...context,
       captureCompletedOutput: (_stepIndex, output) => {
         completedOutput = output;
       },
@@ -4225,7 +4240,13 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(state.results[0]?.status, STEP_STATUS.COMPLETED);
     assert.ok(state.steps[0]?._runtime?.completedAt);
     assert.deepStrictEqual(integration.sentPrompts, ["pause-after-me"]);
-    assert.strictEqual(completedOutput?.response, "done:pause-after-me");
+    assert.strictEqual(
+      getStepOutputText(
+        { output: completedOutput },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      "done:pause-after-me"
+    );
     assert.strictEqual(typeof completedOutput?.elapsed, "number");
     assert.ok(
       statusUpdates.some((status) => status.state === STEP_STATUS.COMPLETED)
@@ -4374,7 +4395,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(captureCalls.length, 1);
     assert.strictEqual(captureCalls[0].stepIndex, 0);
     assert.strictEqual(
-      captureCalls[0].output.response,
+      getStepOutputText(
+        { output: captureCalls[0].output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       "partial response before stop"
     );
     assert.strictEqual(captureCalls[0].output.errorMessage, undefined);
@@ -4624,7 +4648,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
     assert.strictEqual(completedCalls.length, 1);
     assert.strictEqual(completedCalls[0].loopIndex, 0);
-    assert.strictEqual(completedCalls[0].output.prompt, "final-capture");
+    assert.ok(!("prompt" in completedCalls[0].output));
     assert.strictEqual(completedCalls[0].output.isStreaming, false);
   });
 
@@ -4761,7 +4785,13 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       captureCalls[0].output.errorMessage,
       "CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)"
     );
-    assert.match(captureCalls[0].output.response, /unknown option '--poopy'/);
+    assert.match(
+      getStepOutputText(
+        { output: captureCalls[0].output },
+        StepOutputTextMode.TRANSCRIPT
+      ),
+      /unknown option '--poopy'/
+    );
     assert.strictEqual(captureCalls[0].output.rawTextOutput, true);
 
     assert.strictEqual(historySaves.length, 1);
@@ -4785,7 +4815,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     });
     assert.strictEqual(historySaves[0].cliOutputs.length, 1);
     assert.match(
-      historySaves[0].cliOutputs[0].response,
+      getStepOutputText(
+        { output: historySaves[0].cliOutputs[0] },
+        StepOutputTextMode.TRANSCRIPT
+      ),
       /unknown option '--poopy'/
     );
   });

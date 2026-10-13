@@ -156,8 +156,10 @@ describe("untracked store actions (must not record undo entries)", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: {
-        prompt: "p",
-        response: "r",
+        structured: {
+          events: [{ type: "text", data: { text: "r" } }],
+          metadata: {},
+        },
         elapsed: 0,
         timestampMs: Date.now(),
         isStreaming: false,

@@ -39,6 +39,7 @@ export function buildPropertyUpdateValues(
     "mcpServers",
     "hooks",
     "priorContext",
+    "priorContextDetail",
     "errorBehavior",
     "preCondition",
     "toolPermissions",

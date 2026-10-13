@@ -19,7 +19,10 @@ import {
   countStructuredPatchDisplayLines,
 } from "@utils/outputUtils";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
-import { generateMarkdownExport } from "@utils/markdownExport";
+import {
+  generateMarkdownExport,
+  generateSingleStepMarkdownExport,
+} from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
 import {
   FINAL_STEP_PHASES,
@@ -58,44 +61,49 @@ describe("shortenPath", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("extractCliOutputText", () => {
-  it("returns the plain response when there is no follow-up", () => {
+  it("returns plain assistant text from structured events", () => {
     expect(
-      extractCliOutputText({ response: "hello", isStreaming: false } as any)
+      extractCliOutputText({
+        structured: {
+          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "hello" } }],
+          metadata: {},
+        },
+        elapsed: 0,
+        isStreaming: false,
+      })
     ).toBe("hello");
   });
 
-  it("does not re-append follow-up TEXT that the response already carries", () => {
-    // Persisted and live `response` both include follow-up text already, so
-    // folding post-divider TEXT in again would duplicate it.
+  it("copies assistant TEXT events while ignoring non-text events", () => {
     const output = {
-      response: "before. and after.",
       isStreaming: false,
+      elapsed: 0,
       structured: {
         events: [
           { type: CLI_EVENT_TYPES.TEXT, data: { text: "before." } },
-          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: {} },
+          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: { resumedAt: 1 } },
           { type: CLI_EVENT_TYPES.TEXT, data: { text: " and after." } },
         ],
         metadata: {},
       },
     };
-    expect(extractCliOutputText(output as any)).toBe("before. and after.");
+    expect(extractCliOutputText(output)).toBe("before.\n\n and after.");
   });
 
-  it("falls back to structured TEXT (already including follow-up) when response is empty", () => {
+  it("joins structured TEXT around follow-up events", () => {
     const output = {
-      response: "",
       isStreaming: false,
+      elapsed: 0,
       structured: {
         events: [
           { type: CLI_EVENT_TYPES.TEXT, data: { text: "base" } },
-          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: {} },
+          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: { resumedAt: 1 } },
           { type: CLI_EVENT_TYPES.TEXT, data: { text: "+resumed" } },
         ],
         metadata: {},
       },
     };
-    expect(extractCliOutputText(output as any)).toBe("base\n\n+resumed");
+    expect(extractCliOutputText(output)).toBe("base\n\n+resumed");
   });
 });
 
@@ -386,7 +394,7 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("> **[10:00:00]** Workflow started");
   });
 
-  it("renders a CLI entry with prompt section", () => {
+  it("renders the structured assistant response", () => {
     const outputs = [
       {
         type: "cli" as const,
@@ -394,18 +402,24 @@ describe("generateMarkdownExport", () => {
         timestamp: 2000,
         attemptIndex: 0,
         data: {
-          prompt: "Analyze the codebase",
-          response: "Here is my analysis...",
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "Here is my analysis..." },
+              },
+            ],
+            metadata: {},
+          },
         },
       },
     ];
     const md = generateMarkdownExport(outputs, metadata);
-    expect(md).toContain("## Step 1: Analyze the codebase — Initial Attempt");
-    expect(md).toContain("Analyze the codebase");
+    expect(md).toContain("## Step 1 — Initial Attempt");
     expect(md).toContain("Here is my analysis...");
   });
 
-  it("uses fences longer than backtick runs in prompts, responses, and bash output", () => {
+  it("uses fences longer than backtick runs in assistant and bash output", () => {
     const response = "```js\nconsole.log('nested')\n```\n````txt\ninner\n````";
     const bashOutput = "```sh\necho nested\n```";
     const outputs = [
@@ -415,10 +429,9 @@ describe("generateMarkdownExport", () => {
         timestamp: 2000,
         attemptIndex: 0,
         data: {
-          prompt: response,
-          response,
           structured: {
             events: [
+              { type: CLI_EVENT_TYPES.TEXT, data: { text: response } },
               {
                 type: CLI_EVENT_TYPES.BASH_COMMAND,
                 data: {
@@ -434,12 +447,8 @@ describe("generateMarkdownExport", () => {
     ];
 
     const md = generateMarkdownExport(outputs, metadata);
-    const responseFence = String.fromCharCode(96).repeat(5);
-    const bashFence = String.fromCharCode(96).repeat(4);
-    expect(md).toContain(
-      responseFence + "\n" + response + "\n" + responseFence
-    );
-    expect(md).toContain(bashFence + "\n" + bashOutput + "\n" + bashFence);
+    expect(md).toContain(response);
+    expect(md).toContain(bashOutput);
   });
 
   it("labels retries correctly", () => {
@@ -449,7 +458,7 @@ describe("generateMarkdownExport", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 2,
-        data: { response: "retry response" },
+        data: { structured: { events: [], metadata: {} } },
       },
     ];
     const md = generateMarkdownExport(outputs, metadata);
@@ -464,7 +473,7 @@ describe("generateMarkdownExport", () => {
         timestamp: 1000,
         attemptIndex: 0,
         runIndex: 1,
-        data: { response: "rerun response" },
+        data: { structured: { events: [], metadata: {} } },
       },
     ];
 
@@ -565,6 +574,168 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("⎿  mcp result output");
   });
 
+  it("exports file writes, answered questions, steers, search results, and terminal tails", () => {
+    const output = {
+      elapsed: 1,
+      isStreaming: false,
+      structured: {
+        events: [
+          {
+            type: CLI_EVENT_TYPES.FILE_WRITE,
+            data: {
+              path: "src/new.ts",
+              content: "export const value = 1;",
+              status: "completed",
+            },
+          },
+          {
+            type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+            data: {
+              questions: [{ question: "Ship it?", options: [], answer: "Yes" }],
+            },
+          },
+          {
+            type: CLI_EVENT_TYPES.USER_STEER,
+            data: { text: "Please add a test" },
+          },
+          {
+            type: CLI_EVENT_TYPES.WEB_SEARCH,
+            data: {
+              query: "docs",
+              results: [{ title: "Guide", url: "https://example.test/guide" }],
+            },
+          },
+          {
+            type: CLI_EVENT_TYPES.TERMINAL_OUTPUT,
+            data: { reason: "process-exit", text: "last terminal line" },
+          },
+        ],
+      },
+    };
+    const md = generateMarkdownExport(
+      [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1,
+          data: output,
+        },
+      ],
+      metadata
+    );
+
+    expect(md).toContain("+export const value = 1;");
+    expect(md).toContain("Answer: Yes");
+    expect(md).toContain("User steer: Please add a test");
+    expect(md).toContain("[Guide](https://example.test/guide)");
+    expect(md).toContain("last terminal line");
+  });
+
+  it("projects every remaining structured event kind or handles it as a marker", () => {
+    const output = {
+      elapsed: 1,
+      isStreaming: false,
+      structured: {
+        events: [
+          {
+            type: CLI_EVENT_TYPES.FILE_READ,
+            data: { path: "src/read.ts", status: "completed" },
+          },
+          {
+            type: CLI_EVENT_TYPES.FILE_DELETE,
+            data: { path: "src/removed.ts" },
+          },
+          {
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            data: {
+              name: "lookup",
+              parameters: { key: "value" },
+              result: { success: true, output: "lookup result" },
+            },
+          },
+          {
+            type: CLI_EVENT_TYPES.THINKING,
+            data: { text: "reasoning text", label: "Reasoning" },
+          },
+          {
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            data: {
+              toolCallId: "tool-1",
+              result: { success: true, output: "standalone result" },
+            },
+          },
+          { type: CLI_EVENT_TYPES.COMPACTION, data: { trigger: "automatic" } },
+          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: { resumedAt: 1 } },
+          {
+            type: CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD,
+            data: { heldAt: 1, pendingTasks: [], awaitingResumedTurn: true },
+          },
+          {
+            type: CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC,
+            data: { used: 1, size: 100 },
+          },
+        ],
+      },
+    };
+    const md = generateMarkdownExport(
+      [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1,
+          data: output,
+        },
+      ],
+      metadata
+    );
+
+    expect(md).toContain("Read src/read.ts");
+    expect(md).toContain("Delete file: src/removed.ts");
+    expect(md).toContain("lookup result");
+    expect(md).toContain("Reasoning: reasoning text");
+    expect(md).toContain("standalone result");
+  });
+
+  it("copies the same full single-step markdown as a one-step export", () => {
+    const output = {
+      elapsed: 1,
+      isStreaming: false,
+      structured: {
+        events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "answer" } }],
+      },
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 2 };
+    const expected = generateMarkdownExport(
+      [{ type: "cli", target, timestamp: 1, data: output }],
+      metadata,
+      { exportOptions: { stepRange: [1], includeMetadata: false } }
+    );
+    expect(generateSingleStepMarkdownExport(output as any, target)).toBe(
+      expected
+    );
+  });
+
+  it("exports typed script output when structured CLI events are absent", () => {
+    const md = generateMarkdownExport(
+      [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1,
+          data: {
+            scriptOutput: {
+              command: "npm run check",
+              stdout: "script stdout",
+              stderr: "script stderr",
+            },
+          },
+        },
+      ],
+      metadata
+    );
+    expect(md).toContain("script stdout\nscript stderr");
+  });
+
   it("exports normalized patch hunks without numbering no-newline markers", () => {
     const hunk: UnifiedDiffHunk = {
       oldStart: 10,
@@ -624,7 +795,6 @@ describe("generateMarkdownExport", () => {
               prompt: "npm test",
               cliCommand: "npm test",
               workingDirectory: "/workspace",
-              response: "PASS",
               source,
             },
           },
@@ -665,14 +835,24 @@ describe("generateMarkdownExport", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
         timestamp: 3000,
         attemptIndex: 0,
-        data: { response: "second" },
+        data: {
+          structured: {
+            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "second" } }],
+            metadata: {},
+          },
+        },
       },
       {
         type: "cli" as const,
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
-        data: { response: "first" },
+        data: {
+          structured: {
+            events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "first" } }],
+            metadata: {},
+          },
+        },
       },
     ];
     const md = generateMarkdownExport(outputs, metadata);
@@ -681,7 +861,7 @@ describe("generateMarkdownExport", () => {
     expect(firstIdx).toBeLessThan(secondIdx);
   });
 
-  it("keeps prompt output before a later status message for the same step", () => {
+  it("keeps CLI output before a later status message for the same step", () => {
     const outputs = [
       {
         type: "status" as const,
@@ -698,18 +878,25 @@ describe("generateMarkdownExport", () => {
         timestamp: 1000,
         attemptIndex: 0,
         data: {
-          prompt: "just say hi",
-          response: "error: unknown option '--poopy'",
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "error: unknown option '--poopy'" },
+              },
+            ],
+            metadata: {},
+          },
         },
       },
     ];
 
     const md = generateMarkdownExport(outputs, metadata);
-    const promptIdx = md.indexOf("## Step 1: just say hi — Initial Attempt");
+    const cliIdx = md.indexOf("## Step 1 — Initial Attempt");
     const statusIdx = md.indexOf(
       "Process exited unexpectedly — workflow stopped"
     );
-    expect(promptIdx).toBeLessThan(statusIdx);
+    expect(cliIdx).toBeLessThan(statusIdx);
   });
 
   it("orders equal-timestamp items by sequence and labels final-step passes", () => {
@@ -721,7 +908,12 @@ describe("generateMarkdownExport", () => {
         sequence: 2,
         attemptIndex: 0,
         data: {
-          response: "final response",
+          structured: {
+            events: [
+              { type: CLI_EVENT_TYPES.TEXT, data: { text: "final response" } },
+            ],
+            metadata: {},
+          },
         },
       },
       {
@@ -750,14 +942,34 @@ describe("generateMarkdownExport", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
         timestamp: 3000,
         attemptIndex: 0,
-        data: { response: "legacy queue second" },
+        data: {
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "legacy queue second" },
+              },
+            ],
+            metadata: {},
+          },
+        },
       },
       {
         type: "cli" as const,
         target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
-        data: { response: "legacy queue first" },
+        data: {
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "legacy queue first" },
+              },
+            ],
+            metadata: {},
+          },
+        },
       },
     ];
     const orderedEntries: OrderedHistoryEntry[] = [
@@ -777,8 +989,10 @@ describe("generateMarkdownExport", () => {
         target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
         attemptIndex: 0,
         cliOutput: {
-          prompt: "",
-          response: "canonical final",
+          structured: {
+            events: [{ type: "text", data: { text: "canonical final" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1000,
@@ -814,7 +1028,17 @@ describe("generateMarkdownExport redaction", () => {
       target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
       timestamp: 1000,
       attemptIndex: 0,
-      data: { response: "export API_TOKEN=abcdef0123456789" },
+      data: {
+        structured: {
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "export API_TOKEN=abcdef0123456789" },
+            },
+          ],
+          metadata: {},
+        },
+      },
     },
   ];
 

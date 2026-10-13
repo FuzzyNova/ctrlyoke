@@ -29,9 +29,13 @@ import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
   CTRLYOKE_MCP_MODES,
+  FINAL_STEP_PHASES,
   MCP_SERVER_IDS,
   PERMISSION_MODES,
 } from "../types/DashboardConstants";
+import { TIMELINE_ATTEMPT_TERMINAL_STATES } from "../types/WorkflowTimelineTypes";
+import { getAssistantText } from "../utils/StepOutputText";
+import type { ResolvedRunAttemptValue } from "../core/orchestration/RunOutputResolver";
 import {
   MCP_SKILL_NAMES,
   type HarnessId,
@@ -104,6 +108,29 @@ async function writeCommitMessageLineageKey(
     path.join(runsRoot, COMMIT_MESSAGE_LINEAGE_POINTER),
     JSON.stringify({ workflowKey }, null, 2)
   );
+}
+
+/** Return only a successful AI attempt's assistant-authored commit text. */
+export function resolveCommitMessageFallback(
+  attempt: ResolvedRunAttemptValue | undefined
+): string | undefined {
+  if (attempt?.terminalState !== TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED) {
+    return undefined;
+  }
+  const assistantText = getAssistantText(
+    attempt.output?.structured?.events ?? []
+  ).trim();
+  if (!assistantText) return undefined;
+
+  return assistantText
+    .replace(/^```[a-z]*\n?([\s\S]*?)\n?```$/i, "$1")
+    .trim()
+    .replace(/^`([\s\S]*)`$/, "$1")
+    .trim()
+    .replace(/^"([\s\S]*)"$/, "$1")
+    .trim()
+    .replace(/^'([\s\S]*)'$/, "$1")
+    .trim();
 }
 
 export interface DiffResult {
@@ -589,9 +616,7 @@ export class CommitMessageGenerator {
     // that could bleed into this one-shot call. PropertyResolver materializes
     // settings into resolved step properties, which take precedence over the
     // CliAdapter fallback used by CliIntegration.
-    let capturedResponseText: string | undefined;
     let mcpToolCalled = false;
-    let responseCompleteDisposable: { dispose(): void } | undefined;
     let streamingChunkDisposable: { dispose(): void } | undefined;
     let streamingEventsDisposable: { dispose(): void } | undefined;
     let abortListener: (() => void) | undefined;
@@ -627,12 +652,6 @@ export class CommitMessageGenerator {
         );
       }
 
-      // Captured directly from the integration rather than read back from a
-      // persisted run history file: the response-complete listener is the fallback
-      // text source even though this run now persists normal timeline artifacts.
-      responseCompleteDisposable = instance.onResponseComplete((response) => {
-        capturedResponseText = response;
-      });
       streamingChunkDisposable = instance.onStreamingChunk((chunk) => {
         Log.debug(
           `[CommitMessageGenerator] Streaming chunk received during commit generation: length=${chunk.length}`
@@ -732,35 +751,33 @@ export class CommitMessageGenerator {
         );
       }
 
-      const rawResponse = capturedResponseText;
-      Log.debug(
-        `[CommitMessageGenerator] Raw captured response before empty-response check: ${rawResponse === undefined ? "undefined" : `length=${rawResponse.length}, state=${rawResponse === "" ? "empty-string" : "non-empty"}`}`
-      );
-      if (!rawResponse?.trim()) {
+      const attempts =
+        workflowKey && runRef
+          ? await instance.outputHistoryManager
+              .getRunOutputResolver()
+              .resolveLatestAttempts(
+                instance.outputHistoryManager.getHistoryFilePath(
+                  workflowKey,
+                  runRef
+                ),
+                [{ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }]
+              )
+          : new Map();
+      const firstAttempt = attempts.get("queue:0");
+      const responseText = resolveCommitMessageFallback(firstAttempt);
+      if (responseText === undefined) {
         throw new CommitMessageGenerationError(
-          "Commit message generation produced an empty response",
+          firstAttempt?.terminalState ===
+            TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+            ? "Commit message generation produced an empty response"
+            : "Commit message generation did not complete successfully",
           workflowKey,
           runRef
         );
       }
-
-      // Strip thinking blocks and file-operation annotations — for a commit message we
-      // only want the pure assistant text, not reasoning traces or tool-call summaries.
-      // These formats are defined by CliResponseTextExtractor.extractTextFromEvents().
-      let responseText = rawResponse
-        .replace(/\n?\[Thinking\][\s\S]*?\[\/Thinking\]/g, "")
-        .replace(/\n\[(Created|Edited|Deleted):[^\]]*\]/g, "")
-        .trim();
-
-      // Strip wrapper code fences (e.g. ```commit\n...\n``` or ```\n...\n```)
-      responseText = responseText
-        .replace(/^```[a-z]*\n?([\s\S]*?)\n?```$/i, "$1")
-        .trim();
-      // Strip single-backtick wrapping
-      responseText = responseText.replace(/^`([\s\S]*)`$/, "$1").trim();
-      // Strip surrounding double or single quotes (only when the entire message is wrapped)
-      responseText = responseText.replace(/^"([\s\S]*)"$/, "$1").trim();
-      responseText = responseText.replace(/^'([\s\S]*)'$/, "$1").trim();
+      Log.debug(
+        `[CommitMessageGenerator] Resolved assistant response: length=${responseText.length}`
+      );
 
       return {
         message: responseText,
@@ -782,7 +799,6 @@ export class CommitMessageGenerator {
       );
     } finally {
       instance.setMcpToolSkillContext(undefined);
-      responseCompleteDisposable?.dispose();
       streamingChunkDisposable?.dispose();
       streamingEventsDisposable?.dispose();
       if (token && abortListener) {

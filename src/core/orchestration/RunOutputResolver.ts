@@ -1,20 +1,24 @@
 import * as path from "path";
-import { type ExecutionState } from "../../types/DashboardConstants";
 import type {
-  PriorContext,
   ScriptRuntimeOutput,
   ScriptVerdict,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import { isScriptStep } from "../../types/CtrlYokeTypes";
 import {
+  CLI_EVENT_TYPES,
+  DIFF_CHANGE_TYPES,
   FINAL_STEP_PHASES,
   getExecutionPhaseKeySuffix,
+  PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
   RUN_FILE_CHANGE_SCOPES,
   SCRIPT_OUTPUT_SOURCES,
+  StepOutputTextMode,
+  type ExecutionPhase,
+  type ExecutionState,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type {
@@ -24,6 +28,8 @@ import type {
   FileWriteData,
 } from "../../types/CliOutputTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
+import type { StepOutputSource } from "../../utils/StepOutputText";
+import { getStepOutputText } from "../../utils/StepOutputText";
 import {
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_EVENT_TYPES,
@@ -37,19 +43,26 @@ import {
   type AttemptStartedEvent,
   type AttemptTerminatedEvent,
 } from "../../types/WorkflowTimelineTypes";
-import {
-  CLI_EVENT_TYPES,
-  type ExecutionPhase,
-} from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
+import {
+  countStructuredPatchChanges,
+  formatCreatedFileDiff,
+  formatEditDiff,
+} from "../../utils/CliEventDiff";
 import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
 import { evaluateFileAccess } from "../../utils/FileAccessPolicy";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
-import type { PriorContextItem } from "../HarnessIntegration";
+import {
+  type PriorContextDetail,
+  type PriorContextFileChange,
+  type PriorContextItem,
+} from "../HarnessIntegration";
+import { projectPriorContextTranscript } from "../PriorContextTranscript";
 import {
   deduplicatePriorContextItems,
   mergePriorContextReferences,
+  type PriorContextRequest,
 } from "../../utils/PriorContextMerge";
 
 /** Immutable definition and step selected for one persisted attempt. */
@@ -70,18 +83,14 @@ export interface ResolvedRunAttempt {
 
 interface ResolvedRunAttemptOutput extends ResolvedRunAttempt {
   output: CliOutput;
-  /** Exact response used for runtime responseText and output previews. */
-  responseText: string;
   kind: TimelineAttemptKind;
 }
 
-export interface ResolvedRunAttemptValue extends ResolvedRunAttempt {
+export interface ResolvedRunAttemptValue
+  extends ResolvedRunAttempt, StepOutputSource {
   prompt?: string;
   kind?: TimelineAttemptKind;
   startReason?: TimelineAttemptStartReason;
-  responseText?: string;
-  output?: CliOutput;
-  scriptOutput?: ScriptRuntimeOutput;
   terminalState?: TimelineAttemptTerminalState;
   terminalReason?: string;
 }
@@ -124,7 +133,10 @@ export function isStepAttemptKind(kind: TimelineAttemptKind): boolean {
   );
 }
 
-export type RunFileChangeOperation = "created" | "modified" | "deleted";
+export type RunFileChangeOperation =
+  | typeof DIFF_CHANGE_TYPES.CREATED
+  | typeof DIFF_CHANGE_TYPES.MODIFIED
+  | typeof DIFF_CHANGE_TYPES.DELETED;
 export type RunFileChangeScope =
   (typeof RUN_FILE_CHANGE_SCOPES)[keyof typeof RUN_FILE_CHANGE_SCOPES];
 
@@ -387,7 +399,6 @@ export class RunOutputResolver {
             attempt: {
               ...attempt,
               output: event.payload.cliOutput,
-              responseText: event.payload.cliOutput.response,
               kind:
                 event.responseKind ??
                 (event.payload.cliOutput.source ===
@@ -544,7 +555,6 @@ export class RunOutputResolver {
           // A fresh aggregate supersedes every delta buffered before it.
           state.deltas.discard(key);
           state.value.output = event.attempt.output;
-          state.value.responseText = event.attempt.responseText;
           state.value.kind = event.attempt.kind;
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK:
@@ -623,13 +633,7 @@ export class RunOutputResolver {
     key: string
   ): ResolvedRunAttemptValue {
     if (state.value.output?.isStreaming) {
-      const merged = state.deltas.flush(key, state.value.output);
-      // `responseText` tracks streamed text only — an events-only delta leaves
-      // the aggregate's own responseText authoritative.
-      if (merged.response !== state.value.output.response) {
-        state.value.responseText = merged.response;
-      }
-      state.value.output = merged;
+      state.value.output = state.deltas.flush(key, state.value.output);
     }
     return state.value;
   }
@@ -645,6 +649,7 @@ export class RunOutputResolver {
     for await (const event of this.streamAttempts(manifestPath)) {
       if (
         event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
+        !isStepAttemptKind(event.attempt.kind ?? TIMELINE_ATTEMPT_KINDS.AI) ||
         !sameAttempt(event.attempt, target, runIndex, attemptIndex)
       ) {
         continue;
@@ -669,6 +674,7 @@ export class RunOutputResolver {
     for await (const event of this.streamAttempts(manifestPath)) {
       if (
         event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
+        !isStepAttemptKind(event.attempt.kind ?? TIMELINE_ATTEMPT_KINDS.AI) ||
         !requested.has(getTargetKey(event.attempt.target))
       ) {
         continue;
@@ -960,6 +966,56 @@ export class RunOutputResolver {
     };
   }
 
+  private getPriorContextFileChanges(
+    events: readonly CliEvent[],
+    options: RunOutputProjectionOptions,
+    manifestPath: string
+  ): PriorContextFileChange[] {
+    const projection = new ProjectionAccumulator();
+    const changes = new Map<string, PriorContextFileChange>();
+    for (const event of normalizeCliEvents(events)) {
+      const observation = this.getFileChange(event, options, manifestPath);
+      if (
+        !observation?.path ||
+        !observation.scope ||
+        !observation.operation ||
+        observation.failed
+      )
+        continue;
+      projection.recordFileChange(observation);
+      const key = `${observation.scope}:${observation.path}`;
+      const data = event.data as FileEditData | FileWriteData | FileDeleteData;
+      let added = 0;
+      let removed = 0;
+      if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
+        const edit = data as FileEditData;
+        if (edit.structuredPatch?.length)
+          ({ added, removed } = countStructuredPatchChanges(
+            edit.structuredPatch
+          ));
+        else ({ added, removed } = countDiffLines(formatEditDiff(edit) ?? ""));
+      } else if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
+        ({ added } = countDiffLines(
+          formatCreatedFileDiff(data as FileWriteData)
+        ));
+      }
+      mergePriorFileChange(changes, key, {
+        path: observation.path,
+        operation: observation.operation,
+        added,
+        removed,
+      });
+    }
+    const projectedPaths = new Set(
+      projection
+        .toFileChanges()
+        .map((change) => `${change.scope}:${change.path}`)
+    );
+    return [...changes.entries()]
+      .filter(([key]) => projectedPaths.has(key))
+      .map(([, change]) => change);
+  }
+
   /**
    * Resolve prior-context items from the timeline rather than mutable working
    * file runtime fields. Callers pass only the active prompt range, keeping the
@@ -967,9 +1023,10 @@ export class RunOutputResolver {
    */
   async resolvePriorContextItems(
     manifestPath: string,
-    contexts: readonly PriorContext[],
+    contexts: readonly PriorContextRequest[],
     allPrompts: readonly WorkflowStep[],
-    groupStartBoundary: number
+    groupStartBoundary: number,
+    options: RunOutputProjectionOptions
   ): Promise<PriorContextItem[]> {
     // Steps with no output are skipped when selecting the most recent N, so
     // previous selectors resolve every earlier candidate before selecting.
@@ -986,7 +1043,111 @@ export class RunOutputResolver {
         ? await this.getFinalStepTargets(manifestPath)
         : []),
     ];
-    const resolved = await this.resolveLatestAttempts(manifestPath, targets);
+    const requested = new Set(targets.map(getTargetKey));
+    const latestValues = new Map<
+      string,
+      {
+        value: ResolvedRunAttemptValue;
+        transcript?: ReturnType<typeof projectPriorContextTranscript>;
+        legacyText?: string;
+      }
+    >();
+    const scriptVerdicts = new Map<string, ScriptVerdict>();
+    const earlierAttempts = new Map<
+      string,
+      { count: number; filesChanged: PriorContextFileChange[] }
+    >();
+    const fileHistory = new Map<
+      string,
+      {
+        latest?: {
+          identity: ProjectionAttemptIdentity;
+          changes: PriorContextFileChange[];
+        };
+        earlier: Map<string, PriorContextFileChange>;
+        attemptCount: number;
+      }
+    >();
+    for await (const event of this.streamAttempts(manifestPath)) {
+      if (
+        event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
+        !isStepAttemptKind(event.attempt.kind ?? TIMELINE_ATTEMPT_KINDS.AI)
+      )
+        continue;
+      const key = getTargetKey(event.attempt.target);
+      if (!requested.has(key)) continue;
+      const value = event.attempt;
+      const identity: ProjectionAttemptIdentity = {
+        target: value.target,
+        runIndex: value.runIndex,
+        attemptIndex: value.attemptIndex,
+        phase: value.phase,
+      };
+      const changes = this.getPriorContextFileChanges(
+        value.output?.structured?.events ?? [],
+        options,
+        manifestPath
+      );
+      const structuredEvents = value.output?.structured?.events ?? [];
+      const transcript = structuredEvents.length
+        ? projectPriorContextTranscript(structuredEvents)
+        : undefined;
+      const legacyText = structuredEvents.length
+        ? undefined
+        : getStepOutputText(value, StepOutputTextMode.TRANSCRIPT);
+      const scriptVerdict = getStepScriptVerdict(value);
+      if (scriptVerdict)
+        scriptVerdicts.set(getAttemptKey(value), scriptVerdict);
+      const prior = fileHistory.get(key) ?? {
+        earlier: new Map<string, PriorContextFileChange>(),
+        attemptCount: 0,
+      };
+      if (!event.continuation) prior.attemptCount++;
+      if (
+        !prior.latest ||
+        isNewerProjectionAttempt(identity, prior.latest.identity)
+      ) {
+        if (prior.latest)
+          mergePriorFileChanges(prior.earlier, prior.latest.changes);
+        prior.latest = { identity, changes };
+        latestValues.set(key, {
+          value: { ...value, output: undefined },
+          transcript,
+          legacyText,
+        });
+      } else if (
+        event.continuation &&
+        sameProjectionAttempt(prior.latest.identity, value)
+      ) {
+        prior.latest.changes = changes;
+        latestValues.set(key, {
+          value: { ...value, output: undefined },
+          transcript,
+          legacyText,
+        });
+      } else if (!sameProjectionAttempt(prior.latest.identity, value)) {
+        mergePriorFileChanges(prior.earlier, changes);
+      }
+      fileHistory.set(key, prior);
+    }
+    for (const [key, history] of fileHistory) {
+      if (history.attemptCount > 1)
+        earlierAttempts.set(key, {
+          count: history.attemptCount - 1,
+          filesChanged: [...history.earlier.values()],
+        });
+    }
+    const allAttemptFileChanges = new Map<string, PriorContextFileChange[]>();
+    for (const [key, history] of fileHistory) {
+      const mergedChanges = new Map<string, PriorContextFileChange>();
+      mergePriorFileChanges(mergedChanges, [...history.earlier.values()]);
+      if (history.latest)
+        mergePriorFileChanges(mergedChanges, history.latest.changes);
+      allAttemptFileChanges.set(key, [...mergedChanges.values()]);
+    }
+    const resolved = new Map(
+      [...latestValues].map(([key, projected]) => [key, projected.value])
+    );
     const resolvedQueueItems = [...queueIndices]
       .sort((left, right) => left - right)
       .flatMap((index): PriorContextItem[] => {
@@ -1008,23 +1169,92 @@ export class RunOutputResolver {
                 .filter(Boolean)
                 .join("\n")
                 .trim()
-            : (value.responseText ?? "");
-          const scriptVerdict = getStepScriptVerdict(value);
-          return text
+            : (latestValues.get(
+                getTargetKey({
+                  kind: FINAL_STEP_PHASES.QUEUE,
+                  stepIndex: index,
+                })
+              )?.legacyText ?? "");
+          const scriptVerdict = scriptVerdicts.get(getAttemptKey(value));
+          return scriptOutput || text
             ? [
                 {
                   index,
                   name: step.name,
+                  detail:
+                    merged.detailByQueueIndex.get(index) ??
+                    merged.allQueueDetail,
                   text,
                   scriptOutput,
+                  filesChanged:
+                    allAttemptFileChanges.get(
+                      getTargetKey({
+                        kind: FINAL_STEP_PHASES.QUEUE,
+                        stepIndex: index,
+                      })
+                    ) ?? [],
+                  ...(earlierAttempts.has(
+                    getTargetKey({
+                      kind: FINAL_STEP_PHASES.QUEUE,
+                      stepIndex: index,
+                    })
+                  )
+                    ? {
+                        earlierAttempts: earlierAttempts.get(
+                          getTargetKey({
+                            kind: FINAL_STEP_PHASES.QUEUE,
+                            stepIndex: index,
+                          })
+                        ),
+                      }
+                    : {}),
                   ...(scriptVerdict ? { scriptVerdict } : {}),
                 },
               ]
             : [];
         }
-        const text = value.responseText ?? "";
-        return text
-          ? [{ index, name: step.name, prompt: step.prompt, text }]
+        const projected = latestValues.get(
+          getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })
+        );
+        const transcript = projected?.transcript;
+        const text = projected?.legacyText ?? "";
+        return transcript?.length || text
+          ? [
+              {
+                index,
+                name: step.name,
+                prompt: step.prompt,
+                detail:
+                  merged.detailByQueueIndex.get(index) ??
+                  (merged.previousCount > 0
+                    ? merged.previousDetail
+                    : merged.allQueueDetail),
+                filesChanged:
+                  allAttemptFileChanges.get(
+                    getTargetKey({
+                      kind: FINAL_STEP_PHASES.QUEUE,
+                      stepIndex: index,
+                    })
+                  ) ?? [],
+                ...(transcript?.length ? { transcript } : {}),
+                ...(text ? { text } : {}),
+                ...(earlierAttempts.has(
+                  getTargetKey({
+                    kind: FINAL_STEP_PHASES.QUEUE,
+                    stepIndex: index,
+                  })
+                )
+                  ? {
+                      earlierAttempts: earlierAttempts.get(
+                        getTargetKey({
+                          kind: FINAL_STEP_PHASES.QUEUE,
+                          stepIndex: index,
+                        })
+                      ),
+                    }
+                  : {}),
+              },
+            ]
           : [];
       });
     const selectedQueueIndices = merged.includeAllQueue
@@ -1038,6 +1268,25 @@ export class RunOutputResolver {
     const queueItems = resolvedQueueItems.filter((item) =>
       selectedQueueIndices.has(item.index)
     );
+    const queueDetailForIndex = (index: number): PriorContextDetail => {
+      const selectedDetails = [
+        ...(merged.includeAllQueue ? [merged.allQueueDetail] : []),
+        ...(merged.detailByQueueIndex.has(index)
+          ? [merged.detailByQueueIndex.get(index)!]
+          : []),
+        ...(merged.previousCount > 0 &&
+        resolvedQueueItems
+          .slice(-merged.previousCount)
+          .some((item) => item.index === index)
+          ? [merged.previousDetail]
+          : []),
+      ];
+      return selectedDetails.includes(PRIOR_CONTEXT_DETAILS.FULL)
+        ? PRIOR_CONTEXT_DETAILS.FULL
+        : PRIOR_CONTEXT_DETAILS.SUMMARY;
+    };
+    for (const item of resolvedQueueItems)
+      item.detail = queueDetailForIndex(item.index);
     const finalItems = [...resolved.values()]
       .filter((value) => value.target.kind === FINAL_STEP_PHASES.FINAL_STEP)
       .sort(
@@ -1047,14 +1296,38 @@ export class RunOutputResolver {
       )
       .flatMap((value): PriorContextItem[] => {
         const index = (value.target as { loopIndex: number }).loopIndex;
-        const scriptVerdict = getStepScriptVerdict(value);
-        return value.responseText
+        const scriptVerdict = scriptVerdicts.get(getAttemptKey(value));
+        const step = value.definition?.step;
+        const targetKey = getTargetKey(value.target);
+        const selectedDetails = [
+          ...(merged.includePreviousFinalStep ? [merged.finalStepDetail] : []),
+          ...(merged.includeAllFinalSteps ? [merged.allFinalStepsDetail] : []),
+        ];
+        const detail = selectedDetails.includes(PRIOR_CONTEXT_DETAILS.FULL)
+          ? PRIOR_CONTEXT_DETAILS.FULL
+          : PRIOR_CONTEXT_DETAILS.SUMMARY;
+        const common = {
+          index,
+          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
+          detail,
+          filesChanged: allAttemptFileChanges.get(targetKey) ?? [],
+          ...(earlierAttempts.has(targetKey)
+            ? { earlierAttempts: earlierAttempts.get(targetKey) }
+            : {}),
+          ...(scriptVerdict ? { scriptVerdict } : {}),
+        };
+        if (step && isScriptStep(step) && value.scriptOutput)
+          return [{ ...common, scriptOutput: value.scriptOutput }];
+        const projected = latestValues.get(targetKey);
+        const transcript = projected?.transcript;
+        const text = projected?.legacyText ?? "";
+        return transcript?.length || text
           ? [
               {
-                index,
-                text: value.responseText,
-                type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
-                ...(scriptVerdict ? { scriptVerdict } : {}),
+                ...common,
+                ...(step && !isScriptStep(step) ? { prompt: step.prompt } : {}),
+                ...(transcript?.length ? { transcript } : {}),
+                ...(text ? { text } : {}),
               },
             ]
           : [];
@@ -1069,7 +1342,9 @@ export class RunOutputResolver {
 
   /** Read a whole terminal source run through the timeline reader. */
   async resolveAllPriorContextItems(
-    manifestPath: string
+    manifestPath: string,
+    options: RunOutputProjectionOptions,
+    detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL
   ): Promise<PriorContextItem[]> {
     const queueIndices = new Set<number>();
     for await (const event of this.stream(manifestPath)) {
@@ -1084,12 +1359,16 @@ export class RunOutputResolver {
     const maxIndex = Math.max(-1, ...queueIndices);
     return this.resolvePriorContextItems(
       manifestPath,
-      [PRIOR_CONTEXT_KEYWORDS.ALL, PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL],
+      [
+        { context: PRIOR_CONTEXT_KEYWORDS.ALL, detail },
+        { context: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL, detail },
+      ],
       Array.from({ length: maxIndex + 1 }, () => ({
         type: "prompt" as const,
         prompt: "",
       })),
-      maxIndex + 1
+      maxIndex + 1,
+      options
     );
   }
 
@@ -1315,14 +1594,75 @@ function getFileChangeOperation(
 ): RunFileChangeOperation | undefined {
   switch (event.type) {
     case CLI_EVENT_TYPES.FILE_WRITE:
-      return "created";
+      return DIFF_CHANGE_TYPES.CREATED;
     case CLI_EVENT_TYPES.FILE_EDIT:
-      return "modified";
+      return DIFF_CHANGE_TYPES.MODIFIED;
     case CLI_EVENT_TYPES.FILE_DELETE:
-      return "deleted";
+      return DIFF_CHANGE_TYPES.DELETED;
     default:
       return undefined;
   }
+}
+
+function countDiffLines(diff: string): { added: number; removed: number } {
+  return countStructuredPatchChanges([
+    {
+      oldStart: 0,
+      oldLines: 0,
+      newStart: 0,
+      newLines: 0,
+      lines: diff
+        .split("\n")
+        .filter((line) => !line.startsWith("---") && !line.startsWith("+++")),
+    },
+  ]);
+}
+
+function netFileOperation(
+  previous: PriorContextFileChange["operation"],
+  next: PriorContextFileChange["operation"]
+): PriorContextFileChange["operation"] | undefined {
+  if (
+    previous === DIFF_CHANGE_TYPES.CREATED &&
+    next === DIFF_CHANGE_TYPES.DELETED
+  )
+    return undefined;
+  if (
+    previous === DIFF_CHANGE_TYPES.DELETED &&
+    next === DIFF_CHANGE_TYPES.CREATED
+  )
+    return DIFF_CHANGE_TYPES.MODIFIED;
+  if (previous === DIFF_CHANGE_TYPES.CREATED) return DIFF_CHANGE_TYPES.CREATED;
+  if (next === DIFF_CHANGE_TYPES.DELETED) return DIFF_CHANGE_TYPES.DELETED;
+  return previous;
+}
+
+/** Fold one file change into a net per-file entry (create+delete drops it). */
+function mergePriorFileChange(
+  target: Map<string, PriorContextFileChange>,
+  key: string,
+  change: PriorContextFileChange
+): void {
+  const existing = target.get(key);
+  const operation = existing
+    ? netFileOperation(existing.operation, change.operation)
+    : change.operation;
+  if (!operation) target.delete(key);
+  else
+    target.set(key, {
+      path: change.path,
+      operation,
+      added: (existing?.added ?? 0) + change.added,
+      removed: (existing?.removed ?? 0) + change.removed,
+    });
+}
+
+function mergePriorFileChanges(
+  target: Map<string, PriorContextFileChange>,
+  changes: readonly PriorContextFileChange[]
+): void {
+  for (const change of changes)
+    mergePriorFileChange(target, change.path, change);
 }
 
 function getFinalLoopIndex(target: OutputExecutionTarget): number {
@@ -1442,7 +1782,6 @@ function foldSettledAttempt(
     definition: continued.definition ?? existing.definition,
     kind: continued.kind ?? existing.kind,
     output: continued.output ?? existing.output,
-    responseText: continued.responseText ?? existing.responseText,
     scriptOutput: continued.scriptOutput ?? existing.scriptOutput,
   };
 }

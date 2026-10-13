@@ -8,6 +8,7 @@ import {
   type ExecutionMode,
   type HarnessId,
   type CtrlYokeMcpMode,
+  PRIOR_CONTEXT_DETAILS,
 } from "./DashboardConstants";
 import type {
   EndCondition,
@@ -55,6 +56,7 @@ export interface ExecutionPropertyDefaults {
   endCondition?: EndCondition | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext;
+  priorContextDetail?: "full" | "summary";
   toolPermissions?: ToolPermissionsOverride | null;
   errorBehavior?: ErrorBehavior | null;
 }
@@ -391,6 +393,11 @@ export function resolveExecutionProperties(
     workflow.priorContext,
     defaults.priorContext
   );
+  const priorContextDetail = select(
+    prompt.priorContextDetail,
+    workflow.priorContextDetail,
+    PRIOR_CONTEXT_DETAILS.FULL
+  );
   const additionalArgs = resolveAdditionalArgs(
     prompt,
     workflow,
@@ -427,6 +434,7 @@ export function resolveExecutionProperties(
     endCondition: endCondition.value,
     preCondition: preCondition.value,
     priorContext: resolvedPriorContext,
+    priorContextDetail: priorContextDetail.value,
     additionalArgs: additionalArgs.value,
     toolPermissions: toolPermissions.value,
     errorBehavior: errorBehavior.value,
@@ -451,6 +459,7 @@ export function resolveExecutionProperties(
       endCondition: endCondition.source,
       preCondition: preCondition.source,
       priorContext: priorContext.source,
+      priorContextDetail: priorContextDetail.source,
       additionalArgs: additionalArgs.source,
       toolPermissions: toolPermissions.source,
       errorBehavior: errorBehavior.source,

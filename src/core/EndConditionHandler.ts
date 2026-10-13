@@ -80,14 +80,14 @@ export interface RetryContext {
 
 /**
  * Callback for sending retry prompts to Copilot.
- * Returns the response text on success, null on failure.
+ * Returns the attempt index on success, null on failure.
  */
 export type SendRetryPromptCallback = (
   retryPromptStep: PromptStep,
   currentIndex: number,
   attemptIndex: number,
   promptSource: RetryPromptSource
-) => Promise<{ responseText: string; attemptIndex: number } | null>;
+) => Promise<{ attemptIndex: number } | null>;
 
 /**
  * Result of handling an end condition evaluation.

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Prior output references now include commands, tool calls and results, search results, file
+  changes, and other structured events consistently across machines. Command output is
+  tail-truncated and file reads include only their path and line range. The
+  `general.includeFullDiffsInPriorContext` setting has been removed.
+- History search indexes AI response matches from `TEXT` events.
+- Run timeline format v2 removes duplicate prompt and flattened response fields from output
+  records. Readers continue to show v1 output, including across a continued v1-to-v2 run.
+- Dashboard Copy Output copies assistant-authored text; Copy Full Output includes the complete
+  structured transcript. Script search matches use `matchField: "output"` and come from
+  recorded stdout and stderr.
+- Prior-context references support `$summary:` for deterministic prompt-head, changed-file, and
+  text-tail excerpts. `priorContextDetail` adds the same Full / Summary choice in workflow and
+  prompt properties; the default remains full detail.
+
 ## [0.1.2] - 2026-09-25
 
 ### Added

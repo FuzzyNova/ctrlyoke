@@ -46,6 +46,7 @@ import {
   DEFAULT_MAX_STEPS,
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  StepOutputTextMode,
   LOGS_DIR,
   QUEUE_POSITION,
   type ExecutionState,
@@ -77,6 +78,7 @@ import {
   type ResolvedParallelItem,
 } from "./core/ParallelGroupTopology";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
+import { getStepOutputText } from "./utils/StepOutputText";
 import {
   pageOutputText,
   parseOutputTextPaging,
@@ -1639,7 +1641,9 @@ export class CtrlYokeMCPServer {
       .map((i) => {
         const p = allSteps[i];
         const resolvedOutput = resolved.get(`queue:${i}`);
-        const fullResponseText = resolvedOutput?.responseText ?? null;
+        const fullResponseText = resolvedOutput
+          ? getStepOutputText(resolvedOutput, StepOutputTextMode.TRANSCRIPT)
+          : null;
         const baseOutput = {
           index: i,
           prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,

@@ -124,6 +124,7 @@ describe("useStepContextMenu", () => {
       "Copy Step",
       "Copy Prompt",
       "Copy Output",
+      "Copy Full Output",
       "Copy Metadata",
       "Reply to Step",
       "Hide output",
@@ -504,7 +505,10 @@ describe("useStepContextMenu", () => {
       <TestHarness
         step={{ prompt: "Original prompt" }}
         latestOutput={{
-          response: "",
+          structured: {
+            events: [{ type: "text", data: { text: "" } }],
+            metadata: {},
+          },
           elapsed: 4.2,
           isStreaming: true,
           tokens: {

@@ -329,19 +329,25 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     const preOutput = cliEntries.find(
       (output) => output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
     );
-    const promptOutput = cliEntries.find(
-      (output) => output.prompt === "step 1" && output.source === undefined
-    );
+    const promptAttempt = (await fs.readFile(eventsPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .find(
+        (event) =>
+          event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED &&
+          event.payload.kind === "ai" &&
+          event.payload.prompt === "step 1"
+      );
     assert.ok(preOutput, "the pre-condition must have its own CLI entry");
     assert.strictEqual(preOutput.phase, EXECUTION_PHASES.PRE_CONDITION);
-    assert.ok(promptOutput, "the prompt must retain its own CLI entry");
-    assert.strictEqual(promptOutput.phase, undefined);
-    assert.notStrictEqual(preOutput, promptOutput);
-    // The output pane sorts by timestamp, so a prompt stamped with the
-    // whole-step attempt start would render above the gate that produced it.
+    assert.ok(promptAttempt, "the attempt start must retain its prompt");
+    assert.ok(cliEntries.every((output) => !("prompt" in output)));
+    // The prompt is recorded on the attempt, independently from the gate's
+    // CLI output entry.
     assert.ok(
-      promptOutput.timestampMs > preOutput.timestampMs,
-      `the prompt output must be stamped after the pre-condition that gated it (pre=${preOutput.timestampMs}, prompt=${promptOutput.timestampMs})`
+      promptAttempt.timestampMs > preOutput.timestampMs,
+      `the prompt attempt must be stamped after the pre-condition that gated it (pre=${preOutput.timestampMs}, prompt=${promptAttempt.timestampMs})`
     );
   });
 

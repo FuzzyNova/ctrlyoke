@@ -321,8 +321,6 @@ export function mapOrderedHistoryEntriesToMessages(
               timestampMs: activity.timestampMs,
             }
           : (aggregate?.data ?? {
-              prompt: "",
-              response: "",
               structured: { events: [], metadata: {} },
               elapsed: 0,
               isStreaming: true,

@@ -17,8 +17,10 @@ describe("outputProjection", () => {
         target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
         attemptIndex: 0,
         cliOutput: {
-          prompt: "",
-          response: "final response",
+          structured: {
+            events: [{ type: "text", data: { text: "final response" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1000,
@@ -54,8 +56,10 @@ describe("outputProjection", () => {
         runIndex: 2,
         attemptIndex: 0,
         cliOutput: {
-          prompt: "",
-          response: "explicit run",
+          structured: {
+            events: [{ type: "text", data: { text: "explicit run" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1000,
@@ -68,8 +72,10 @@ describe("outputProjection", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 1,
         cliOutput: {
-          prompt: "",
-          response: "fallback run",
+          structured: {
+            events: [{ type: "text", data: { text: "fallback run" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: false,
           timestampMs: 1001,
@@ -92,7 +98,10 @@ describe("outputProjection", () => {
         attemptIndex: 0,
         phase: "worktreeSetup",
         cliOutput: {
-          response: "",
+          structured: {
+            events: [{ type: "text", data: { text: "" } }],
+            metadata: {},
+          },
           elapsed: 0,
           isStreaming: true,
           source: "worktreeSetup",
@@ -110,7 +119,10 @@ describe("outputProjection", () => {
         attemptIndex: 0,
         phase: "worktreeSetup",
         cliOutput: {
-          response: "installed packages",
+          structured: {
+            events: [{ type: "text", data: { text: "installed packages" } }],
+            metadata: {},
+          },
           elapsed: 22,
           isStreaming: false,
           source: "worktreeSetup",
@@ -129,8 +141,16 @@ describe("outputProjection", () => {
       timestamp: 1000,
       sequence: 1,
       data: {
-        response: "installed packages",
         isStreaming: false,
+        structured: {
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "installed packages" },
+            },
+          ],
+          metadata: {},
+        },
         cliCommand: "npm ci",
       },
     });
@@ -274,8 +294,10 @@ describe("outputProjection", () => {
           runIndex: 0,
           attemptIndex: 0,
           cliOutput: {
-            prompt: "do the thing",
-            response: "done",
+            structured: {
+              events: [{ type: "text", data: { text: "done" } }],
+              metadata: {},
+            },
             elapsed: 12,
             isStreaming: false,
             timestampMs: 1000,
@@ -290,7 +312,10 @@ describe("outputProjection", () => {
           attemptIndex: 0,
           phase: EXECUTION_PHASES.END_CONDITION,
           cliOutput: {
-            response: "",
+            structured: {
+              events: [{ type: "text", data: { text: "" } }],
+              metadata: {},
+            },
             elapsed: 0.2,
             isStreaming: false,
             cliCommand: "npm test",
@@ -440,9 +465,11 @@ describe("outputProjection", () => {
           runIndex: 0,
           attemptIndex: 0,
           cliOutput: {
-            prompt: "Read the codebase and summarize the architecture.",
             cliCommand: "claude -p ...",
-            response: "",
+            structured: {
+              events: [{ type: "text", data: { text: "" } }],
+              metadata: {},
+            },
             elapsed: 0,
             isStreaming: false,
             timestampMs: 1000,
@@ -471,7 +498,6 @@ describe("outputProjection", () => {
     // lookups previously made this lookup always miss.
     const activityMessage = messages.find((message) => message.isActivity);
     expect(activityMessage?.aggregate).toMatchObject({
-      prompt: "Read the codebase and summarize the architecture.",
       cliCommand: "claude -p ...",
     });
   });

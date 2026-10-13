@@ -18,6 +18,8 @@ import type {
   ToolResultData,
   TextData,
   ThinkingBlock,
+  AskUserQuestionData,
+  UserSteerData,
   CliOutput as CliOutputType,
 } from "../types/cliEvents";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
@@ -58,6 +60,13 @@ import { isScriptOutput } from "./outputRenderUtils";
 import { formatTokenCount } from "@root/utils/TokenFormatting";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
 import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
+import { formatCreatedFileDiff } from "@root/utils/CliEventDiff";
+import {
+  getScriptOutputText,
+  getStepOutputText,
+} from "@root/utils/StepOutputText";
+import { StepOutputTextMode } from "@root/types/DashboardConstants";
+import type { OutputMessageTarget } from "./outputProjection";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -168,6 +177,15 @@ function renderStructuredEventsToMarkdown(
         break;
       }
 
+      case CLI_EVENT_TYPES.TERMINAL_OUTPUT: {
+        const data = event.data as { text: string; reason: string };
+        lines.push(`● Terminal output (${data.reason})`);
+        lines.push("");
+        lines.push(fenceLiteral(data.text.trim()));
+        lines.push("");
+        break;
+      }
+
       case CLI_EVENT_TYPES.BASH_COMMAND: {
         const data = event.data as BashCommandData;
         lines.push(`● ${data.command}`);
@@ -239,6 +257,10 @@ function renderStructuredEventsToMarkdown(
           lines.push(
             `● Wrote ${data.path}${data.content ? ` (${data.content.length} bytes)` : ""}`
           );
+          if (data.content !== undefined) {
+            lines.push("");
+            lines.push(fenceLiteral(formatCreatedFileDiff(data), "diff"));
+          }
         }
         lines.push("");
         break;
@@ -281,6 +303,32 @@ function renderStructuredEventsToMarkdown(
       case CLI_EVENT_TYPES.WEB_SEARCH: {
         const data = event.data as WebSearchData;
         lines.push(`● Web search: "${data.query}"`);
+        for (const result of data.results ?? []) {
+          lines.push(`- [${result.title}](${result.url})`);
+          if (result.snippet) lines.push(`  ${result.snippet}`);
+        }
+        if (data.error) lines.push(`  Error: ${data.error}`);
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+        const data = event.data as AskUserQuestionData;
+        for (const question of data.questions) {
+          lines.push(`● Question: ${question.question}`);
+          if (question.answer) lines.push(`  Answer: ${question.answer}`);
+          if (question.notes) lines.push(`  Notes: ${question.notes}`);
+        }
+        if (data.declined?.feedback) {
+          lines.push(`  Feedback: ${data.declined.feedback}`);
+        }
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.USER_STEER: {
+        const data = event.data as UserSteerData;
+        lines.push(`● User steer: ${data.text}`);
         lines.push("");
         break;
       }
@@ -310,6 +358,18 @@ function renderStructuredEventsToMarkdown(
           lines.push("");
         }
         break;
+      }
+
+      // Timeline markers with no standalone user-facing export representation.
+      case CLI_EVENT_TYPES.COMPACTION:
+      case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED:
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD:
+      case CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC:
+        break;
+
+      default: {
+        const exhaustive = event.type satisfies never;
+        throw new Error(`Unhandled CLI event type: ${exhaustive}`);
       }
     }
   }
@@ -434,6 +494,7 @@ export function generateMarkdownExport(
           events: Array<{ type: string; data: unknown }>;
           metadata?: { sessionId?: string; harness?: string };
         };
+        scriptOutput?: CliOutputType["scriptOutput"];
       };
 
       if (includeMetadata) {
@@ -447,20 +508,11 @@ export function generateMarkdownExport(
         const isScript = isScriptOutput(output);
         const stepDisplayName =
           item.stepName ||
-          (isScript
-            ? getFirstWords(output.cliCommand, 3)
-            : getFirstWords(output.prompt, 4));
+          (isScript ? getFirstWords(output.cliCommand, 3) : "");
         const stepLabel = isFinalStep
           ? `${formatFinalPassLabel(stepNum)}${item.stepName ? `: ${item.stepName}` : ""}`
           : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
         lines.push(`## ${stepLabel} — ${executionLabel}`);
-        lines.push("");
-      }
-
-      if (output.prompt && !isScriptOutput(output)) {
-        if (includeMetadata) lines.push("### Prompt");
-        lines.push("");
-        lines.push(fenceLiteral(output.prompt));
         lines.push("");
       }
 
@@ -487,10 +539,33 @@ export function generateMarkdownExport(
           output.structured.events as CliEvent[],
           lines
         );
-      } else if (output.response) {
+      } else if (output.scriptOutput) {
         if (includeMetadata) lines.push("### Response");
         lines.push("");
-        lines.push(fenceLiteral(output.response));
+        lines.push(fenceLiteral(getScriptOutputText(output.scriptOutput)));
+        lines.push("");
+      } else if (
+        getStepOutputText(
+          {
+            output: output as CliOutputType,
+            scriptOutput: output.scriptOutput,
+          },
+          StepOutputTextMode.TRANSCRIPT
+        )
+      ) {
+        if (includeMetadata) lines.push("### Response");
+        lines.push("");
+        lines.push(
+          fenceLiteral(
+            getStepOutputText(
+              {
+                output: output as CliOutputType,
+                scriptOutput: output.scriptOutput,
+              },
+              StepOutputTextMode.TRANSCRIPT
+            )
+          )
+        );
         lines.push("");
       }
 
@@ -546,4 +621,23 @@ export function generateMarkdownExport(
   });
 
   return redactExportText(lines.join("\n"));
+}
+
+/** Generate the complete, metadata-free export for one step/pass. */
+export function generateSingleStepMarkdownExport(
+  output: CliOutputType,
+  target: OutputMessageTarget
+): string {
+  return generateMarkdownExport(
+    [
+      {
+        type: OUTPUT_MESSAGE_TYPES.CLI,
+        target,
+        timestamp: output.timestampMs ?? 0,
+        data: output,
+      },
+    ],
+    { fileName: "", executionState: "", currentStep: 0, totalSteps: 0 },
+    { exportOptions: { stepRange: [1], includeMetadata: false } }
+  );
 }

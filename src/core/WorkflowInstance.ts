@@ -482,8 +482,8 @@ export class WorkflowInstance
   public readonly onTargetScriptOutput =
     this._targetedScriptOutputEmitter.event;
 
-  private readonly _responseCompleteEmitter = new TypedEmitter<string>();
-  /** Fires the final plain-text response from the active execution integration. */
+  private readonly _responseCompleteEmitter = new TypedEmitter<undefined>();
+  /** Signals completion of the active execution integration's response. */
   public readonly onResponseComplete = this._responseCompleteEmitter.event;
 
   private readonly _promptCompleteEmitter =
@@ -1602,8 +1602,6 @@ export class WorkflowInstance
         )
       );
     }
-    await this.hydrateActiveExecutionOutputCaches();
-
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
   }
@@ -1665,80 +1663,8 @@ export class WorkflowInstance
         )
       );
     }
-    await this.hydrateActiveExecutionOutputCaches();
-
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
-  }
-
-  /**
-   * Rebuild the small in-memory response cache required by a resumed active
-   * executor. Historical/inactive views never hydrate this cache; they read
-   * timeline data through their own resolver consumers instead.
-   */
-  private async hydrateActiveExecutionOutputCaches(): Promise<void> {
-    const state = this.promptQueue.getState();
-    const activeExecutionStates: QueueState["status"][] = [
-      EXECUTION_STATES.RUNNING,
-      EXECUTION_STATES.PAUSED,
-      EXECUTION_STATES.PAUSING,
-      EXECUTION_STATES.CANCELLING,
-    ];
-    if (
-      !state.workflowKey ||
-      !state.runRef ||
-      !activeExecutionStates.includes(state.status)
-    ) {
-      return;
-    }
-
-    const manifestPath = this.outputHistoryManager.getHistoryFilePath(
-      state.workflowKey,
-      state.runRef
-    );
-    const resolver = this.outputHistoryManager.getRunOutputResolver();
-    const queueTargets: OutputExecutionTarget[] = Array.from(
-      { length: Math.min(state.currentIndex, state.steps.length) },
-      (_, stepIndex) => ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex })
-    );
-    try {
-      const [queueAttempts, finalStepAttempts] = await Promise.all([
-        resolver.resolveLatestAttempts(manifestPath, queueTargets),
-        resolver.resolveLatestFinalStepAttempts(manifestPath),
-      ]);
-      const queueEntries = [...queueAttempts.values()].flatMap((attempt) =>
-        attempt.target.kind === FINAL_STEP_PHASES.QUEUE
-          ? [
-              {
-                stepIndex: attempt.target.stepIndex,
-                responseText: attempt.responseText,
-                scriptOutput: attempt.scriptOutput,
-              },
-            ]
-          : []
-      );
-      const finalStepResponseTexts = new Map<number, string>();
-      for (const attempt of finalStepAttempts.values()) {
-        if (
-          attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-          attempt.responseText !== undefined
-        ) {
-          finalStepResponseTexts.set(
-            attempt.target.loopIndex,
-            attempt.responseText
-          );
-        }
-      }
-      this.promptQueue.hydrateActiveRuntimeOutputCache(
-        queueEntries,
-        finalStepResponseTexts
-      );
-    } catch (error) {
-      Log.warn(
-        `[inst:${this.id.slice(0, 8)}] Failed to hydrate active output cache from timeline:`,
-        error
-      );
-    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2085,6 +2011,12 @@ export class WorkflowInstance
         createPriorContextResolver({
           workspaceRoot:
             this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+          projectionOptions: {
+            workspaceRoots: this.platform.getWorkspaceRoots(),
+            approvedExternalRoots: this.platform.getApprovedExternalFileRoots?.(
+              this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()
+            ),
+          },
           historyFilePath,
           outputResolver: this.outputHistoryManager.getRunOutputResolver(),
         }),
@@ -4184,8 +4116,8 @@ export class WorkflowInstance
     integration.onStreamingChunk((chunk) =>
       this._streamingChunkEmitter.fire(chunk)
     );
-    integration.onResponseComplete((response) =>
-      this._responseCompleteEmitter.fire(response)
+    integration.onResponseComplete(() =>
+      this._responseCompleteEmitter.fire(undefined)
     );
     integration.onNotificationEvent((event) =>
       this.dashboardSink?.notifyNotificationEvent?.(event)

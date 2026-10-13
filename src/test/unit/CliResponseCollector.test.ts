@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
+import { getTranscriptText } from "../../utils/StepOutputText";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
@@ -38,7 +39,7 @@ suite("CliResponseCollector", () => {
   test("should build cli result and prefer session ID from parsed output", async () => {
     const loggedResponses: Array<{ response: string; statistics?: string }> =
       [];
-    const completedResponses: string[] = [];
+    let completedResponses = 0;
     const debugMessages: string[] = [];
     const originalDebug = Log.debug;
     (Log as unknown as { debug(message: string): void }).debug = (message) =>
@@ -59,7 +60,7 @@ suite("CliResponseCollector", () => {
         hostCallbacks: {
           logResponse: (response, statistics) =>
             loggedResponses.push({ response, statistics }),
-          onResponseComplete: (response) => completedResponses.push(response),
+          onResponseComplete: () => completedResponses++,
         },
       });
 
@@ -72,7 +73,10 @@ suite("CliResponseCollector", () => {
       });
 
       assert.strictEqual(result.success, true);
-      assert.strictEqual(result.cliResult.response, "hello world");
+      assert.strictEqual(
+        getTranscriptText(result.parsedOutput.events),
+        "hello world"
+      );
       assert.strictEqual(
         result.cliResult.statistics,
         "Session: session- | Tokens: 1 in / 2 out"
@@ -84,7 +88,7 @@ suite("CliResponseCollector", () => {
           statistics: "Session: session- | Tokens: 1 in / 2 out",
         },
       ]);
-      assert.deepStrictEqual(completedResponses, ["hello world"]);
+      assert.strictEqual(completedResponses, 1);
       assert.ok(
         debugMessages.some((message) => message.includes("session-from-output"))
       );
@@ -165,13 +169,13 @@ suite("CliResponseCollector", () => {
 
     const loggedResponses: Array<{ response: string; statistics?: string }> =
       [];
-    const completedResponses: string[] = [];
+    let completedResponses = 0;
     const result = await new CliResponseCollector({
       provider,
       hostCallbacks: {
         logResponse: (response, statistics) =>
           loggedResponses.push({ response, statistics }),
-        onResponseComplete: (response) => completedResponses.push(response),
+        onResponseComplete: () => completedResponses++,
       },
     }).collectHeadlessResponse({
       stdout: "",
@@ -189,7 +193,7 @@ suite("CliResponseCollector", () => {
     assert.deepStrictEqual(loggedResponses, [
       { response: stderr, statistics: "" },
     ]);
-    assert.deepStrictEqual(completedResponses, [stderr]);
+    assert.strictEqual(completedResponses, 1);
   });
 
   test("should skip log-based session extraction when resuming an existing session", async () => {
@@ -327,7 +331,7 @@ suite("CliResponseCollector", () => {
       provider: createProvider({ events: [], metadata: {} }),
       hostCallbacks: {
         logResponse: (response) => loggedResponses.push(response),
-        onResponseComplete: (response) => loggedResponses.push(response),
+        onResponseComplete: () => undefined,
       },
     }).collectHeadlessResponse({
       stdout: "",
@@ -349,7 +353,7 @@ suite("CliResponseCollector", () => {
   });
 
   test("does not heuristically redact the harness's own response text (prior-context regression)", async () => {
-    // Regression: `cliResult.response` becomes `$prior-context`/`$step:N` in
+    // Regression: parsed output becomes `$prior-context`/`$step:N` in
     // a later prompt (see PromptQueue/CliPromptPreparer) and commit-message
     // text (CommitMessageGenerator). A value shaped like the heuristic
     // credential-assignment rule but backed by no resolved secret — e.g.
@@ -374,7 +378,10 @@ suite("CliResponseCollector", () => {
       executionStartTime: new Date(),
     });
 
-    assert.strictEqual(result.cliResult.response, responseText);
+    assert.strictEqual(
+      getTranscriptText(result.parsedOutput.events),
+      responseText
+    );
   });
 
   test("should preserve stderr for providers with no redaction hook", async () => {

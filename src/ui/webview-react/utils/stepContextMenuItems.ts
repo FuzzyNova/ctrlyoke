@@ -25,6 +25,8 @@ import {
   type StepRuntimeMetaSnapshot,
 } from "./stepMetadataClipboard";
 import { startReplyFromStep } from "./replyToStep";
+import { OUTPUT_COPY_MENU_LABELS } from "./outputCopyMenuLabels";
+import { generateSingleStepMarkdownExport } from "./markdownExport";
 
 export interface StepCopyMenuItemsInput {
   step: WorkflowStep;
@@ -74,13 +76,30 @@ export function buildStepCopyMenuItems({
       },
     },
     {
-      label: "Copy Output",
+      label: OUTPUT_COPY_MENU_LABELS.COPY_OUTPUT,
       icon: "codicon-copy",
       disabled: !outputText,
       disabledTitle: "No output to copy",
       onClick: () => {
         if (!outputText) return;
         void writeClipboardText(outputText);
+      },
+    },
+    {
+      label: OUTPUT_COPY_MENU_LABELS.COPY_FULL_OUTPUT,
+      icon: "codicon-copy",
+      disabled: !latestOutput,
+      disabledTitle: "No output to copy",
+      onClick: () => {
+        if (!latestOutput) return;
+        void writeClipboardText(
+          generateSingleStepMarkdownExport(latestOutput, {
+            kind: isFinalStep
+              ? FINAL_STEP_PHASES.FINAL_STEP
+              : FINAL_STEP_PHASES.QUEUE,
+            index: Math.max(0, (slotNumber ?? 1) - 1),
+          })
+        );
       },
     },
     {

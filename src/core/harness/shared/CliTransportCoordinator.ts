@@ -1,6 +1,7 @@
 import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
   EXECUTION_MODES,
+  CLI_EVENT_TYPES,
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
   SESSION_KINDS,
@@ -59,7 +60,7 @@ interface CliTransportCoordinatorHostCallbacks {
   onCommandPrepared: (info: CliTransportCoordinatorCommandInfo) => void;
   onStreamingChunk: (chunk: string) => void;
   onStreamingEvents: (events: CliEvent[]) => void;
-  onResponseComplete: (response: string) => void;
+  onResponseComplete: () => void;
   onPtyExit: (session: PtySession, exitCode: number) => void;
   cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
 }
@@ -508,7 +509,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                     ? liveOutputRedactor.push(chunk)
                     : chunk;
                   if (safeChunk) {
-                    this.deps.hostCallbacks.onStreamingChunk(safeChunk);
+                    this.deps.hostCallbacks.onStreamingEvents([
+                      {
+                        type: CLI_EVENT_TYPES.TEXT,
+                        data: { text: safeChunk },
+                      },
+                    ]);
                   }
                 }
               }
@@ -516,7 +522,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         });
       } finally {
         const tail = liveOutputRedactor?.flush();
-        if (tail) this.deps.hostCallbacks.onStreamingChunk(tail);
+        if (tail) {
+          this.deps.hostCallbacks.onStreamingEvents([
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: tail },
+            },
+          ]);
+        }
       }
 
       // A process may finish with one valid record that has no trailing line

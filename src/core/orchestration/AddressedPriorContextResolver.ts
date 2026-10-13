@@ -7,13 +7,21 @@ import {
   type WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import type { PriorContextItem } from "../HarnessIntegration";
+import type { PriorContextRequest } from "../../utils/PriorContextMerge";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { RunOutputResolver } from "./RunOutputResolver";
+import {
+  RunOutputResolver,
+  type RunOutputProjectionOptions,
+} from "./RunOutputResolver";
 
 export interface PriorContextResolverOptions {
   readonly workspaceRoot?: string;
   readonly historyFilePath?: string;
   readonly outputResolver: RunOutputResolver;
+  readonly projectionOptions?: Omit<
+    RunOutputProjectionOptions,
+    "workspaceRoot"
+  >;
 }
 
 /**
@@ -25,8 +33,9 @@ export function createPriorContextResolver({
   workspaceRoot,
   historyFilePath,
   outputResolver,
+  projectionOptions,
 }: PriorContextResolverOptions): (
-  contexts: readonly PriorContext[],
+  contexts: readonly PriorContextRequest[],
   allPrompts: readonly WorkflowStep[],
   groupStartBoundary: number
 ) => Promise<PriorContextItem[]> {
@@ -34,15 +43,16 @@ export function createPriorContextResolver({
     if (!workspaceRoot || !historyFilePath) {
       return [];
     }
-    return new AddressedPriorContextResolver(
+    return new AddressedPriorContextResolver(workspaceRoot, outputResolver, {
       workspaceRoot,
-      outputResolver
-    ).resolve(contexts, (sameRunContexts) =>
+      ...projectionOptions,
+    }).resolve(contexts, (sameRunContexts) =>
       outputResolver.resolvePriorContextItems(
         historyFilePath,
         sameRunContexts,
         allPrompts,
-        groupStartBoundary
+        groupStartBoundary,
+        { workspaceRoot, ...projectionOptions }
       )
     );
   };
@@ -56,24 +66,39 @@ export function createPriorContextResolver({
 export class AddressedPriorContextResolver {
   constructor(
     private readonly workspaceRoot: string,
-    private readonly outputResolver: RunOutputResolver
+    private readonly outputResolver: RunOutputResolver,
+    private readonly projectionOptions: RunOutputProjectionOptions = {
+      workspaceRoot,
+    }
   ) {}
 
   async resolve(
-    contexts: readonly PriorContext[],
+    contexts: readonly PriorContextRequest[],
     resolveSameRun: (
-      contexts: readonly PriorContext[]
+      contexts: readonly PriorContextRequest[]
     ) => Promise<PriorContextItem[]>
   ): Promise<PriorContextItem[]> {
-    const local: PriorContext[] = [];
-    const addressed: WorkflowRunAddress[] = [];
-    for (const context of contexts) {
-      if (isWorkflowRunAddress(context)) addressed.push(context);
-      else local.push(context);
+    const local: PriorContextRequest[] = [];
+    const addressed: {
+      address: WorkflowRunAddress;
+      detail: "full" | "summary";
+    }[] = [];
+    for (const request of contexts) {
+      const selection =
+        typeof request === "object" &&
+        !Array.isArray(request) &&
+        "context" in request
+          ? request
+          : undefined;
+      const context = selection ? selection.context : (request as PriorContext);
+      const detail = selection?.detail ?? "full";
+      if (isWorkflowRunAddress(context))
+        addressed.push({ address: context, detail });
+      else local.push(request);
     }
 
     const items = await resolveSameRun(local);
-    for (const address of addressed) {
+    for (const { address, detail } of addressed) {
       await this.assertAuthorizedTerminalRun(address);
       items.push(
         ...(await this.outputResolver.resolveAllPriorContextItems(
@@ -81,7 +106,9 @@ export class AddressedPriorContextResolver {
             this.workspaceRoot,
             address.workflowKey,
             address.runRef
-          )
+          ),
+          this.projectionOptions,
+          detail
         ))
       );
     }

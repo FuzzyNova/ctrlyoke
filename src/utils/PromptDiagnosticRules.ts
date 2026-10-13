@@ -13,6 +13,7 @@
 
 import {
   PRIOR_CONTEXT_REFERENCE_KINDS,
+  PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_SUMMARY_PREFIX,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTIC_FIELDS,
@@ -33,7 +34,8 @@ import {
   type ContextReferenceMatch,
 } from "./PromptReferenceScanner";
 import { formatRangeNotation } from "./RangeNotationParser";
-import { createReservedPriorContextPrefixPattern } from "./ReferencePatterns";
+import { createInlinePriorContextReferencePattern } from "./ReferencePatterns";
+import { parseInlinePriorContextBody } from "./FileReferenceParser";
 import {
   findVariablePlaceholders,
   isVariableDefined,
@@ -214,18 +216,25 @@ export function checkPriorContextRefs(
 }
 
 /**
- * Warn on the reserved `$summary:` prefix outside code. It is sent as literal
- * text today but will become a prior-context reference, so text written now
- * would silently change meaning after an upgrade.
+ * Diagnose malformed `$summary:` selectors. Valid forms are handled by the
+ * normal prior-context parser and receive the same position diagnostics.
  */
-export function getReservedPriorContextPrefixDiagnostics(
+export function getInvalidPriorContextSummaryDiagnostics(
   text: string
 ): PromptDiagnostic[] {
   const codeRanges = findCodeRanges(text);
   const diagnostics: PromptDiagnostic[] = [];
   for (const match of text.matchAll(
-    createReservedPriorContextPrefixPattern()
+    createInlinePriorContextReferencePattern()
   )) {
+    if (
+      !(
+        match[1] === PRIOR_CONTEXT_DETAILS.SUMMARY ||
+        match[1].startsWith(PRIOR_CONTEXT_SUMMARY_PREFIX)
+      ) ||
+      parseInlinePriorContextBody(match[1])
+    )
+      continue;
     const from = match.index;
     const to = from + match[0].length;
     if (isInCodeRange(from, to, codeRanges)) continue;
@@ -233,16 +242,15 @@ export function getReservedPriorContextPrefixDiagnostics(
       from,
       to,
       severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
-      code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_RESERVED_PREFIX,
-      message: `$${PRIOR_CONTEXT_SUMMARY_PREFIX} is reserved for a future prior-context reference and is not expanded yet — it is sent as literal text. Wrap it in backticks to keep it literal.`,
+      code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_INVALID,
+      message: `Unknown or invalid prior-context selector: $${match[1]}`,
     });
   }
   return diagnostics;
 }
 
 /**
- * Prior-context diagnostics only; see {@link checkPriorContextRefs} and
- * {@link getReservedPriorContextPrefixDiagnostics}.
+ * Prior-context diagnostics only; see {@link checkPriorContextRefs}.
  */
 export function getPriorContextDiagnostics(
   text: string,
@@ -252,7 +260,7 @@ export function getPriorContextDiagnostics(
     ...checkPriorContextRefs(text, context).flatMap((check) =>
       check.diagnostic ? [check.diagnostic] : []
     ),
-    ...getReservedPriorContextPrefixDiagnostics(text),
+    ...getInvalidPriorContextSummaryDiagnostics(text),
   ];
 }
 

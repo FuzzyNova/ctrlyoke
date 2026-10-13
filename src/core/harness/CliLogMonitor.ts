@@ -13,7 +13,7 @@ import {
 import type { FailureKind } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
-import { extractTextFromEvents } from "./shared/CliResponseTextExtractor";
+import { getTranscriptText } from "../../utils/StepOutputText";
 import { CliLogEventPump } from "./shared/CliLogEventPump";
 import type { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
 import type {
@@ -119,7 +119,7 @@ export interface LogMonitorDependencies {
     /** Callback for streaming structured CliEvents to the output panel */
     onStreamingEvents: (events: CliEvent[]) => void;
     /** Callback fired when the full response is complete */
-    onResponseComplete: (message: string) => void;
+    onResponseComplete: () => void;
     /** Callback to log the response (respects logRawCliOutput setting) */
     logResponse: (response: string, statistics?: string) => void;
     /** Called when a streaming event reveals updated context window utilization */
@@ -238,7 +238,7 @@ export class CliLogMonitor {
               )
             : undefined;
         const partialText = partialResponse
-          ? extractTextFromEvents(partialResponse)
+          ? getTranscriptText(partialResponse.events)
           : undefined;
         const effectiveSessionId =
           params.sessionIdOverride ??
@@ -250,7 +250,6 @@ export class CliLogMonitor {
           partialText || params.failureMessage
             ? {
                 success: false,
-                response: partialText || params.failureMessage,
                 statistics: "",
                 exitCode: params.exitCode ?? -1,
                 sessionId: effectiveSessionId,
@@ -380,23 +379,19 @@ export class CliLogMonitor {
           }
         }
 
-        const responseText = extractTextFromEvents(response);
+        const responseText = getTranscriptText(response.events);
         const statistics = parser.formatStatistics(
           response.metadata as unknown as BaseCliEvent
         );
 
         const cliResult: CliResult = {
           success: true,
-          response: responseText,
           statistics,
           exitCode: 0,
           sessionId: response.metadata.sessionId || sessionId || undefined,
         };
 
-        this.deps.hostCallbacks.logResponse(
-          cliResult.response,
-          cliResult.statistics
-        );
+        this.deps.hostCallbacks.logResponse(responseText, cliResult.statistics);
 
         watcher?.close();
         if (timeoutHandle) {
@@ -405,7 +400,7 @@ export class CliLogMonitor {
         if (cancellationInterval) {
           clearInterval(cancellationInterval);
         }
-        this.deps.hostCallbacks.onResponseComplete(cliResult.response);
+        this.deps.hostCallbacks.onResponseComplete();
 
         resolve({
           success: true,
@@ -858,7 +853,7 @@ export class CliLogMonitor {
                   )
                 : undefined;
             const partialText = partialResponse
-              ? extractTextFromEvents(partialResponse)
+              ? getTranscriptText(partialResponse.events)
               : undefined;
             const effectiveSessionId =
               partialResponse?.metadata.sessionId || sessionId || undefined;
@@ -866,7 +861,6 @@ export class CliLogMonitor {
             const partialResult: CliResult | undefined = partialText
               ? {
                   success: false,
-                  response: partialText,
                   statistics: "",
                   exitCode: -1,
                   sessionId: effectiveSessionId,

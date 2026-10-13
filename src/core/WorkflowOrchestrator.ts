@@ -2409,6 +2409,11 @@ export class WorkflowOrchestrator {
       secretStore: this.platform.getSecretStore?.(),
       resolvePriorContextItems: createPriorContextResolver({
         workspaceRoot,
+        projectionOptions: {
+          workspaceRoots: this.platform.getWorkspaceRoots(),
+          approvedExternalRoots:
+            this.platform.getApprovedExternalFileRoots?.(workspaceRoot),
+        },
         historyFilePath,
         outputResolver: outputHistoryManager.getRunOutputResolver(),
       }),
@@ -3380,6 +3385,16 @@ export class WorkflowOrchestrator {
 
   getOutputHistoryManager(): OutputHistoryManager {
     return this.getActiveInstance().outputHistoryManager;
+  }
+
+  getPriorContextProjectionOptions() {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    return {
+      workspaceRoot,
+      workspaceRoots: this.platform.getWorkspaceRoots(),
+      approvedExternalRoots:
+        this.platform.getApprovedExternalFileRoots?.(workspaceRoot),
+    };
   }
 
   /** Merge a persisted managed run into its captured source checkout. */

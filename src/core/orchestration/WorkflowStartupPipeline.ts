@@ -673,8 +673,6 @@ export class WorkflowStartupPipeline {
         preflightStepCount
       );
       this.port.dashboardSink.updateCliOutput(0, {
-        prompt: "",
-        response: "",
         elapsed: 0,
         errorMessage,
       });

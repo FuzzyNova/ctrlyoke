@@ -26,6 +26,18 @@ export function getPriorContextCompletionItems(
       icon: "book",
     },
     ...[
+      { label: "previous", example: "$summary:previous" },
+      { label: "previous:", example: "$summary:previous:3" },
+      { label: "all", example: "$summary:all" },
+      { label: "finalStep", example: "$summary:finalStep" },
+      { label: "allFinalStep", example: "$summary:allFinalStep" },
+      { label: "step:", example: "$summary:step:1,3-5" },
+    ].map(({ label, example }) => ({
+      label: `summary:${label}`,
+      detail: `Summary form, e.g. ${example} — deterministic excerpt: head of prompt, files changed, tail of text; no AI call`,
+      icon: "book",
+    })),
+    ...[
       SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
       SCRIPT_OUTPUT_SOURCES.END_CONDITION,
     ].flatMap((phase) =>

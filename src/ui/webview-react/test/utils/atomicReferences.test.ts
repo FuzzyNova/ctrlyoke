@@ -301,6 +301,20 @@ describe("atomic reference presentation", () => {
     ]);
   });
 
+  it("recognizes summary prior-context references as summary chips", () => {
+    expect(findAtomicReferences("Use $summary:step:1,3-4 here")).toMatchObject([
+      {
+        icon: "book",
+        label: "step 1,3-4 · summary",
+        title: "$summary:step:1,3-4",
+        attrs: {
+          "data-type": "priorContext",
+          "data-ref": "summary:step:1,3,4",
+        },
+      },
+    ]);
+  });
+
   it("parses condition-output refs without treating them as prior context", () => {
     const token = "$preCondition:stdout";
     expect(findConditionOutputRefs(token, 7)).toEqual([
@@ -441,13 +455,13 @@ describe("atomic reference presentation", () => {
         from: 12,
         to: 23,
         token: "$previous:2",
-        ref: { kind: "previous", count: 2 },
+        ref: { kind: "previous", count: 2, detail: "full" },
       },
       {
         from: 24,
         to: 31,
         token: "$step:1",
-        ref: { kind: "step", indices: [1] },
+        ref: { kind: "step", indices: [1], detail: "full" },
       },
     ]);
   });

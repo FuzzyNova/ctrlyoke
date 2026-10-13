@@ -158,8 +158,6 @@ export const CONFIG_KEYS = {
   DEFAULTS_MCP_SERVERS: "defaults.mcpServers",
   DEFAULTS_HOOKS: "defaults.hooks",
   GENERAL_DEFAULT_TEMPLATE: "general.defaultTemplate",
-  GENERAL_INCLUDE_FULL_DIFFS_IN_PRIOR_CONTEXT:
-    "general.includeFullDiffsInPriorContext",
   EXECUTION_MODE: "defaults.executionMode",
   SERVER_AUTO_START: SETTING_PATHS.SERVER_AUTO_START,
   SERVER_BIND_ADDRESS: "server.bindAddress",
@@ -1423,12 +1421,6 @@ export const ConfigurationUtils = {
       templateId === inheritedTemplateId ? undefined : templateId,
       scope
     );
-  },
-
-  /** Whether captured responses should retain full file diffs for prior context. */
-  shouldIncludeFullDiffsInPriorContext(): boolean {
-    return configService.get(CONFIG_KEYS.GENERAL)
-      .includeFullDiffsInPriorContext;
   },
 
   // ============================================================
