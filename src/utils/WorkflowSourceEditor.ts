@@ -6,6 +6,7 @@ import {
   type ParseError,
 } from "jsonc-parser";
 import {
+  isCollection,
   isMap,
   isSeq,
   parseDocument,
@@ -104,9 +105,7 @@ function setYamlTopLevelKey(
     throw new Error("The active workflow file has an invalid root object.");
   }
 
-  const pair = root.items.find(
-    (item) => item.key && String(item.key) === key
-  );
+  const pair = root.items.find((item) => item.key && String(item.key) === key);
   const existingValue = pair?.value as Node | null | undefined;
   if (existingValue?.range) {
     const [start, end] = existingValue.range;
@@ -114,7 +113,7 @@ function setYamlTopLevelKey(
       const replacement = renderYamlValue(value, existingValue, source, start);
       const eol = source.includes("\r\n") ? "\r\n" : "\n";
       const preservedLineEnding =
-        !isSeq(existingValue) || existingValue.flow
+        !isCollection(existingValue) || existingValue.flow
           ? ""
           : /(?:\r\n|\n)$/.test(source.slice(0, end))
             ? eol
@@ -155,8 +154,13 @@ function renderYamlValue(
   const lineStart = source.lastIndexOf("\n", start - 1) + 1;
   const indent = source.slice(lineStart, start).match(/^[ \t]*/)?.[0] ?? "";
   const eol = source.includes("\r\n") ? "\r\n" : "\n";
-  if (isSeq(existing) && existing.flow) {
-    return stringify(value, { collectionStyle: "flow", lineWidth: 0 }).trim();
+  // A scalar or empty value sits on the key's line, where only flow style is valid.
+  if (!isCollection(existing) || existing.flow) {
+    const flowValue = stringify(value, {
+      collectionStyle: "flow",
+      lineWidth: 0,
+    }).trim();
+    return source[start - 1] === ":" ? ` ${flowValue}` : flowValue;
   }
   return stringify(value, { lineWidth: 0 })
     .trimEnd()
@@ -165,10 +169,7 @@ function renderYamlValue(
     .join(eol);
 }
 
-function inferSequenceIndent(
-  root: YAMLMap,
-  source: string
-): string {
+function inferSequenceIndent(root: YAMLMap, source: string): string {
   for (const item of root.items) {
     if (isSeq(item.value) && item.value.range) {
       const start = item.value.range[0];
@@ -179,7 +180,5 @@ function inferSequenceIndent(
     }
   }
   const formatting = detectFormattingOptions(source);
-  return formatting.insertSpaces
-    ? " ".repeat(formatting.tabSize ?? 4)
-    : "";
+  return formatting.insertSpaces ? " ".repeat(formatting.tabSize ?? 4) : "";
 }

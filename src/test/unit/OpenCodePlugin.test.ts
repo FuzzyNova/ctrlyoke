@@ -49,16 +49,18 @@ async function loadPlugin(
           spawnCalls.push({ command, options: spawnOptions });
           const child = new EventEmitter() as EventEmitter & {
             pid: number;
-            stdin: { end: (input: string) => void };
+            stdin: EventEmitter & { end: (input: string) => void };
             stdout: EventEmitter & { setEncoding: (encoding: string) => void };
             kill: () => void;
           };
           child.pid = 4321;
-          child.stdin = {
+          child.stdin = Object.assign(new EventEmitter(), {
             end: (input: string) => {
               (spawnOptions as Record<string, unknown>).input = input;
+              // Hooks that never read stdin surface EPIPE here; it must not throw.
+              child.stdin.emit("error", new Error("write EPIPE"));
             },
-          };
+          });
           child.stdout = Object.assign(new EventEmitter(), {
             setEncoding: () => undefined,
           });
@@ -126,18 +128,24 @@ suite("OpenCode plugin user hooks", () => {
       tool_input: { command: "pwd" },
     });
     assert.strictEqual(spawnCalls[0].options.shell, true);
-    assert.deepStrictEqual(Array.from(spawnCalls[0].options.stdio as string[]), [
-      "pipe",
-      "inherit",
-      "inherit",
-    ]);
+    assert.deepStrictEqual(
+      Array.from(spawnCalls[0].options.stdio as string[]),
+      ["pipe", "inherit", "inherit"]
+    );
   });
 
   test("applies timeoutSec to decision hooks too", async () => {
     const { plugin, spawnCalls } = await loadPlugin([
-      { event: "permissionRequest", command: "node decision.js", timeoutSec: 2 },
+      {
+        event: "permissionRequest",
+        command: "node decision.js",
+        timeoutSec: 2,
+      },
     ]);
-    await plugin["permission.asked"]({ sessionID: "session-2", permission: "write" });
+    await plugin["permission.asked"]({
+      sessionID: "session-2",
+      permission: "write",
+    });
 
     assert.strictEqual(spawnCalls.length, 1);
     assert.deepStrictEqual(JSON.parse(spawnCalls[0].options.input as string), {
@@ -232,9 +240,11 @@ suite("OpenCode plugin user hooks", () => {
     );
 
     assert.strictEqual(spawnCalls[1].command, "taskkill");
-    assert.deepStrictEqual(
-      Array.from(spawnCalls[1].options.args as string[]),
-      ["/PID", "4321", "/T", "/F"]
-    );
+    assert.deepStrictEqual(Array.from(spawnCalls[1].options.args as string[]), [
+      "/PID",
+      "4321",
+      "/T",
+      "/F",
+    ]);
   });
 });

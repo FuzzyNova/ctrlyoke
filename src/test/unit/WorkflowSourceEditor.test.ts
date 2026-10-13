@@ -115,7 +115,8 @@ suite("WorkflowSourceEditor", () => {
   });
 
   test("replaces a flow-style YAML value and retains its trailing comment", () => {
-    const source = "steps: []\ntrustedExternalRoots: [C:/old] # keep this comment\n";
+    const source =
+      "steps: []\ntrustedExternalRoots: [C:/old] # keep this comment\n";
     const edited = setWorkflowSourceTopLevelKey(
       source,
       "yaml",
@@ -142,6 +143,27 @@ suite("WorkflowSourceEditor", () => {
       edited,
       "{steps: [], trustedExternalRoots: [ C:/external ]}\n"
     );
+  });
+
+  test("fills an empty or scalar YAML value with a flow sequence on the key's line", () => {
+    for (const [source, expected] of [
+      [
+        "name: x\r\ntrustedExternalRoots:\r\nsteps: []\r\n",
+        "name: x\r\ntrustedExternalRoots: [ C:/external ]\r\nsteps: []\r\n",
+      ],
+      [
+        "trustedExternalRoots: ~ # none\nsteps: []\n",
+        "trustedExternalRoots: [ C:/external ] # none\nsteps: []\n",
+      ],
+    ]) {
+      const edited = setWorkflowSourceTopLevelKey(
+        source!,
+        "yaml",
+        "trustedExternalRoots",
+        ["C:/external"]
+      );
+      assert.strictEqual(edited, expected);
+    }
   });
 
   test("preserves a JSON BOM while parsing and editing the source", () => {

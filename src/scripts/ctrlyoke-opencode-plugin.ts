@@ -241,6 +241,9 @@ function _runHook(
     }
     child.once("error", reject);
     child.once("close", (exitCode) => resolve({ exitCode, stdout }));
+    // A hook that exits without reading stdin makes this write fail with
+    // EPIPE; unhandled, that error would crash OpenCode's plugin host.
+    child.stdin?.on("error", () => {});
     child.stdin?.end(input);
 
     if (options.timeoutSec !== undefined) {
@@ -261,11 +264,10 @@ function _runHook(
 function _killProcessTree(child: ReturnType<typeof spawn>): void {
   if (!child.pid) return;
   if (process.platform === "win32") {
-    const killer = spawn(
-      "taskkill",
-      ["/PID", String(child.pid), "/T", "/F"],
-      { stdio: "ignore", windowsHide: true }
-    );
+    const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
     killer.once("error", () => child.kill("SIGKILL"));
     return;
   }
@@ -280,8 +282,9 @@ function _getUserHookEnv(hook: UserHook): NodeJS.ProcessEnv {
   let hookEnv: Record<string, string> = {};
   if (hook.envFile && hook.envId) {
     try {
-      const envByHookId = JSON.parse(readFileSync(hook.envFile, "utf8")) as
-        | Record<string, Record<string, string>>;
+      const envByHookId = JSON.parse(
+        readFileSync(hook.envFile, "utf8")
+      ) as Record<string, Record<string, string>>;
       hookEnv = envByHookId[hook.envId] ?? {};
     } catch {
       // A missing or malformed per-step file gives the hook no extra values.
