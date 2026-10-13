@@ -184,7 +184,7 @@ model: opus # override model for this workflow
 steps:
   - prompt: ...
     harness: codex-cli # override for this specific step
-    model: gpt-5.5
+    model: gpt-6-sol
 ```
 
 Each harness supports two execution modes:

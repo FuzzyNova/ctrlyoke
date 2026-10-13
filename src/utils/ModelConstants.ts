@@ -142,30 +142,26 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
  * See: https://docs.openai.com/codex
  */
 export const CODEX_CLI_MODELS = [
+  "gpt-6.1-sol",
   "gpt-6-astra",
   "gpt-6-sol",
   "gpt-6-luna",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
   "gpt-5.6-luna",
-  "gpt-5.5",
-  "gpt-5.4",
-  "gpt-5.4-mini",
 ] as const;
 
 /**
  * Codex CLI model display names
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
+  "gpt-6.1-sol": "GPT 6.1 Sol",
   "gpt-6-astra": "GPT 6 Astra",
   "gpt-6-sol": "GPT 6 Sol",
   "gpt-6-luna": "GPT 6 Luna",
   "gpt-5.6-sol": "GPT 5.6 Sol",
   "gpt-5.6-terra": "GPT 5.6 Terra",
   "gpt-5.6-luna": "GPT 5.6 Luna",
-  "gpt-5.5": "GPT 5.5",
-  "gpt-5.4": "GPT 5.4",
-  "gpt-5.4-mini": "GPT 5.4 Mini",
 };
 
 /**
@@ -201,7 +197,7 @@ export function isKnownCopilotModel(modelId: string): boolean {
 
 /**
  * Default/fallback context window size (in tokens) for the Codex CLI.
- * GPT 5.4 / 5.5 stay on 400k; GPT 5.6 variants override below.
+ * GPT 5.6 variants override below; every other model uses this default.
  */
 export const CODEX_CLI_CONTEXT_WINDOW_SIZE = 400_000;
 
@@ -363,6 +359,9 @@ export const ANTIGRAVITY_CLI_MODELS = [
   "gemini-3.8-flash-high",
   "gemini-3.8-flash-medium",
   "gemini-3.8-flash-low",
+  "gemini-4-argon-high",
+  "gemini-4-argon-medium",
+  "gemini-4-argon-low",
   "claude-sonnet-4-6",
   "claude-opus-4-6-thinking",
   "gpt-oss-120b-medium",
@@ -378,6 +377,9 @@ export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
   "gemini-3.8-flash-high": "Gemini 3.8 Flash (High)",
   "gemini-3.8-flash-medium": "Gemini 3.8 Flash (Medium)",
   "gemini-3.8-flash-low": "Gemini 3.8 Flash (Low)",
+  "gemini-4-argon-high": "Gemini 4 Argon (High)",
+  "gemini-4-argon-medium": "Gemini 4 Argon (Medium)",
+  "gemini-4-argon-low": "Gemini 4 Argon (Low)",
   "claude-sonnet-4-6": "Claude Sonnet 4.6 (Thinking)",
   "claude-opus-4-6-thinking": "Claude Opus 4.6 (Thinking)",
   "gpt-oss-120b-medium": "GPT-OSS 120B (Medium)",

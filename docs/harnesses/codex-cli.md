@@ -51,7 +51,7 @@ See [the Codex README](https://github.com/openai/codex#quickstart) for other ins
 
 ```yaml
 harness: codex-cli
-model: gpt-5.5
+model: gpt-6-sol
 
 steps:
   - prompt: Review @src/cli.ts and simplify the option parsing where practical.

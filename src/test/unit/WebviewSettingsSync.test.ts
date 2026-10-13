@@ -1482,7 +1482,7 @@ suite("WebviewSettingsSync", () => {
       const instancePath = tempFile("bound-instance");
       await fs.writeFile(
         viewedPath,
-        JSON.stringify({ harness: "codex-cli", model: "gpt-5.5" }),
+        JSON.stringify({ harness: "codex-cli", model: "gpt-6-sol" }),
         "utf-8"
       );
       await fs.writeFile(
@@ -1503,7 +1503,7 @@ suite("WebviewSettingsSync", () => {
         (m) => m.type === MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE
       )?.workflowProperties;
       assert.strictEqual(props.harness, "codex-cli");
-      assert.strictEqual(props.model, "gpt-5.5");
+      assert.strictEqual(props.model, "gpt-6-sol");
     });
 
     test("should fall back to the bound instance when the addressed file is gone", async () => {
@@ -2118,10 +2118,10 @@ suite("WebviewSettingsSync", () => {
         },
         {
           property: PROMPT_PROPERTIES.MODEL,
-          value: "gpt-5.5",
+          value: "gpt-6-sol",
           harness: HARNESS_IDS.CODEX_CLI,
           expectedKey: `${CONFIG_KEYS.DEFAULTS_MODELS}.${HARNESS_IDS.CODEX_CLI}`,
-          expectedValue: "gpt-5.5",
+          expectedValue: "gpt-6-sol",
         },
         {
           property: PROMPT_PROPERTIES.ADDITIONAL_ARGS,

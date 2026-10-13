@@ -12,7 +12,7 @@
     "models": {
       "copilot-cli": "claude-sonnet-4.6",
       "claude-cli": "sonnet",
-      "codex-cli": "gpt-5.5",
+      "codex-cli": "gpt-6-sol",
       "opencode-cli": "opencode/big-pickle",
       "qwen-cli": "qwen3.5-plus",
       "antigravity-cli": "gemini-3.6-flash-medium"
