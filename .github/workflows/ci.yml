@@ -1,0 +1,40 @@
+name: CI
+
+# The checks every pull request must pass: `npm run check:fast`, the same gate
+# the local pre-push hook runs (typecheck, lint, UI tests, packaging tests).
+# The `fast-checks` job is a required status check in the `main` ruleset
+# (scripts/apply-github-guardrails.mjs), so it deliberately has no path
+# filter -- a required check that never reports blocks the PR forever.
+#
+# Runs on `pull_request`, never `pull_request_target`: a fork PR gets a
+# read-only token and no repo secrets, so code from the PR cannot reach them.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck, lint, UI and packaging tests
+        run: npm run check:fast

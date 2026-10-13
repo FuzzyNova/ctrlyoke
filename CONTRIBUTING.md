@@ -31,8 +31,8 @@ Plain [Conventional Commits](https://www.conventionalcommits.org/) style (`feat:
 
 1. Fork the repo and branch from `main`.
 2. Make your change, adding or updating tests alongside it (`src/test/**` for core/orchestration/harness changes, `src/ui/webview-react/test/**` for React dashboard changes).
-3. Run `npm test` and `npm run lint` locally before opening a PR — CI runs the same checks (plus a full Electron extension-test suite periodically) and won't pass a PR that skips this.
-4. Open a PR against `main` with a clear description of the change and why it's needed. Fill in the PR template's checklist.
+3. Run `npm test` and `npm run lint` locally before opening a PR. CI runs `npm run check:fast` (typecheck, lint, UI and packaging tests) on every PR, and that check must pass before the PR can merge. Workflows on a first-time contributor's PR start only after a maintainer approves them.
+4. Open a PR against `main` with a clear description of the change and why it's needed. Fill in the PR template's checklist. Submitting a PR grants the contribution license in [`LICENSE.md` §5(c)](LICENSE.md#c-contributions), and every PR needs a code owner's review.
 
 Small, focused PRs are easier to review than large ones — if you're planning something big (a new harness, a major refactor), consider opening an issue first to discuss the approach.
 

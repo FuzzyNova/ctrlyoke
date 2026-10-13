@@ -784,7 +784,10 @@ package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
       release branches aren't used otherwise.
 - [ ] **Flip the repo to public** — Phase 14's pre-flip gates (EULA, secret
       scan, Issues/PRs skim, MFA hardening) all cleared September 7, 2026; the
-      actual toggle in 14.5 remains Nathan's call to trigger.
+      actual toggle in 14.5 remains Nathan's call to trigger. **The same
+      session as the toggle, run `node scripts/apply-github-guardrails.mjs`**
+      (14.5). Until it runs, the public repo has no `main` or `v*` tag
+      rulesets, no fork-PR approval gate and no push protection.
 
 **Also built this pass, not originally itemized above but needed to support
 it:** GitHub public-contribution scaffolding — `CONTRIBUTING.md`, `SECURITY.md`
@@ -803,11 +806,11 @@ grows).
   complete the Marketplace-publish step on a real `vX.Y.Z` tag push; only
   Phase 8's screenshots/package-inspection blockers stand between here and an
   actual first release.
-- Branch protection rules on `main` and any other GitHub repo _settings_ —
-  intentionally not decided or configured here; Phase 13's own model is trunk
-  commits directly to `main` with CI as the safety net, so protection rules
-  need a deliberate decision about what they'd restrict for a solo maintainer
-  who pushes directly, not a default-on assumption.
+- ~~Branch protection rules on `main`~~ — **decided 2026-10-12**: rulesets
+  restrict everyone _except_ repo admins, so trunk commits directly to `main`
+  keep working while outside PRs need a passing `ci.yml` and a code-owner
+  review. The settings are defined in `scripts/apply-github-guardrails.mjs`;
+  most of them can only be applied once the repo is public (14.5).
 - ~~`gh` CLI isn't installed in this dev environment yet~~ — installed and
   authenticated as of 2026-10-10 (`gh run list` / `gh release list` work).
 
@@ -952,10 +955,28 @@ public**.
 - [ ] Actions minutes become free and unlimited on standard runners (Phase 13).
 - [ ] Existing Issues and PRs become world-readable — skim them for internal
       notes before flipping, not after.
-- [ ] Immediately after: enable **Secret scanning + Push protection** and
-      **Dependabot alerts** (Settings → Code security; free for public repos).
-      Push protection is the durable form of 14.1 — it blocks the next accidental
-      commit instead of catching it at the next audit.
+- [ ] Immediately after: run `node scripts/apply-github-guardrails.mjs` and
+      confirm every step prints `ok`. On the free plan these settings need a
+      public repo, so the 2026-10-12 run while private applied only the
+      read-only `GITHUB_TOKEN` default and **Dependabot alerts**. It applies:
+  - the `main` ruleset: no force push or deletion; a PR with a passing
+    `fast-checks` (`ci.yml`) and a code-owner review (`.github/CODEOWNERS`);
+    repo admins bypass, so direct trunk pushes keep working;
+  - the `release tags` ruleset: only admins create, move or delete `v*` tags,
+    since `release.yml` publishes on any pushed `v*` tag;
+  - approval required before workflows run for any outside contributor;
+  - **Secret scanning + Push protection**. Push protection is the durable form
+    of 14.1: it blocks the next accidental commit instead of catching it at
+    the next audit;
+  - private vulnerability reporting, so `SECURITY.md` reporters can also use
+    GitHub's private advisory form.
+- [ ] After the flip, open a throwaway PR from a fork (or another account) and
+      confirm `fast-checks` runs after approval and is required.
+- [ ] After the flip, upload the ctrlyoke social preview image (Settings →
+      General → Social preview → Edit; 1280×640 PNG under 1 MB). GitHub hides
+      this option on private repos. Repos have no avatar of their own, so this
+      image is what a shared `FuzzyNova/ctrlyoke` link shows instead of the
+      Fuzzy Nova org avatar.
 
 ---
 
