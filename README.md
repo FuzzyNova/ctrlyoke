@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/icon.png" alt="ctrlyoke logo" width="128" height="128">
+</p>
+
 # ctrlyoke
 
 ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity. Each CLI coding agent you run through ctrlyoke is a _harness_. Prompt, steer, automate, and revisit sessions with any supported harness: send a single prompt, or define a structured YAML/JSON/Markdown workflow and let the AI continue working unattended.
