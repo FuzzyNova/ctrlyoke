@@ -72,6 +72,7 @@ const CUSTOM_TEMPLATE_EXTENSIONS = [
  *         default: npm test          # pre-filled in the UI; substituted if left blank
  *         description: The command that runs your test suite.  # helper text under the input
  *         multiline: true            # render a textarea instead of a single-line input
+ *         required: true             # the user must provide a non-blank value
  *
  * If multiple variables declare autoFillFilename: true, only the first wins.
  */
@@ -102,6 +103,8 @@ export interface TemplateVariable {
   defaultSource?: TemplateVariableDefaultSource;
   /** When true, the input renders as a multi-line textarea instead of a single-line field */
   multiline?: boolean;
+  /** When true, workflow creation requires a non-blank value for this variable */
+  required?: boolean;
 }
 
 /**
@@ -256,6 +259,7 @@ export class TemplateManager {
             entry.description = vm["description"];
           if (typeof vm["default"] === "string") entry.default = vm["default"];
           if (vm["multiline"] === true) entry.multiline = true;
+          if (vm["required"] === true) entry.required = true;
           result.variables[varName] = entry;
         }
       }
@@ -299,6 +303,7 @@ export class TemplateManager {
       if (varMeta.description) merged.description = varMeta.description;
       if (varMeta.default !== undefined) merged.default = varMeta.default;
       if (varMeta.multiline) merged.multiline = true;
+      if (varMeta.required) merged.required = true;
       if (merged.type === TEMPLATE_VARIABLE_TYPES.MODEL && varMeta.harness) {
         if (harnessVariables.has(varMeta.harness)) {
           merged.harness = varMeta.harness;
@@ -647,6 +652,24 @@ export class TemplateManager {
         variable.default !== undefined
       ) {
         withDefaults[variable.name] = variable.default;
+      }
+    }
+
+    const missingRequired = declared
+      .filter(
+        (variable) =>
+          variable.required && !withDefaults[variable.name]?.trim()
+      )
+      .map((variable) => variable.name);
+    if (missingRequired.length > 0) {
+      throw new Error(
+        `Missing required template variable(s): ${missingRequired.join(", ")}`
+      );
+    }
+
+    for (const variable of declared) {
+      if (withDefaults[variable.name] === undefined) {
+        withDefaults[variable.name] = "";
       }
     }
 

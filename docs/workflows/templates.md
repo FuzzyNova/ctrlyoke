@@ -132,6 +132,7 @@ steps:
 | `default`          | any             | Pre-fills the input; substituted when the field is left blank.                                                         |
 | `description`      | any             | Helper text shown under the input.                                                                                     |
 | `multiline`        | text            | Renders a resizable textarea instead of a single-line input.                                                           |
+| `required`         | any             | Requires a non-blank value before a workflow can be created. A default pre-fills the required field.                  |
 | `fileFilter`       | file            | Glob patterns for the file picker (e.g. `["**/*.md"]`).                                                                |
 | `autoFillFilename` | file, directory | Seeds the new workflow's filename from the picked file/folder basename. Only the first variable that declares it wins. |
 
@@ -168,7 +169,9 @@ A key under `_templateMeta.variables` only takes effect if a matching `{token}` 
 
 ## Defaults and blank fields
 
-If a variable declares a `default`, that value is pre-filled in the UI and used when the field is left empty. A `select` variable without a default starts on its first option. A text, file, or directory variable with **no** default that is never filled in stays in the output as a literal `{token}` — so give optional inputs a sensible default, and treat description/required inputs as fields the user must fill.
+If a variable declares a `default`, that value is pre-filled in the UI and used when the field is left empty. A `select` variable without a default starts on its first option. Blank optional fields become empty text in the generated workflow. Required fields must be filled before creation: the dialog blocks creation, and the API rejects a missing or blank value. A required field with a `default` is pre-filled.
+
+For optional file variables, avoid writing the placeholder with an `@` prefix. When the field is blank, the placeholder becomes empty text and leaves a bare `@` in the prompt.
 
 You can save a field's current value as a **variable default** from the template picker. Once you change a field, **Save as default** appears at the right of its label. The User/Workspace toggle in the title bar selects where **Save as default** writes; it also selects where **Set as Default** writes the default template setting. The toggle starts on Workspace until a save succeeds, then remembers the scope of the last successful save. With no workspace open, it stays on User.
 

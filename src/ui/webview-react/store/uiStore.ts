@@ -218,6 +218,8 @@ export interface TemplateVariable {
   authoredDefault?: string;
   defaultSource?: TemplateVariableDefaultSource;
   multiline?: boolean;
+  /** When true, workflow creation requires a non-blank value for this variable */
+  required?: boolean;
 }
 
 /**

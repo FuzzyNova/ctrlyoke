@@ -1,6 +1,6 @@
 # Template Required Variables + Feature-Driven Loop Plan
 
-**Status:** Proposed (not started)
+**Status:** In progress
 
 > **2026-10-10 audit:** Nothing here has landed — `TemplateVariable` has no `required`, there is no
 > `feature-driven-loop` template, and untouched optional variables without a default still leave a
@@ -106,6 +106,10 @@ _templateMeta:
 `WorkflowSerializer.toWireTemplates` (`src/ui/WorkflowSerializer.ts:921`) passes `variables` through
 untouched, so no wire change is needed once both interfaces carry the field.
 
+**Done:** Core/API contract implemented: `required` metadata is parsed and merged through defaults,
+the webview variable type mirrors it, and `createWorkflow` rejects missing/blank required values.
+The modal-specific touchpoints remain for the next step.
+
 ### Modal specifics
 
 `TemplateModal.tsx` is the only surface that collects variable values — there is no Command Palette
@@ -149,10 +153,16 @@ implementing — but it is untidy, so
 templates should keep optional file variables off an `@` prefix and let the agent open the path.
 Neither new template does this.
 
+**Verification:** `parseAtReferences("@")` returns no references; the parser's `@` expression
+requires a quoted or unquoted path after the marker. No parser change is needed.
+
 Update `docs/workflows/templates.md:171`, which currently documents the literal-`{token}` behavior.
 
 Tests: `TemplateManager.test.ts` — an untouched optional variable with no default produces empty
 text, not `{token}`; a declared default still wins over the blank fill.
+
+**Done:** Missing declared variables are filled with empty text after default resolution, with
+coverage for optional values, authored defaults, retry placeholders, and required-value validation.
 
 ---
 
