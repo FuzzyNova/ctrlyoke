@@ -61,11 +61,13 @@ export default defineConfig({
     // oversubscribed — one WorkflowPropertiesPanel case measured 719ms alone,
     // 1.4s within its own file, and 5.1s under the full suite, where it
     // intermittently tripped the 5s limit and failed a run that had nothing
-    // wrong with it. These are wall-clock budgets for catching a genuine hang,
-    // not assertions about performance, so give them enough headroom to
+    // wrong with it. A 2-vCPU GitHub runner is slower still: whole files there
+    // ran 5-10x their local time, and tests that took 14-19s routinely
+    // brushed a 20s limit. These are wall-clock budgets for catching a genuine
+    // hang, not assertions about performance, so give them enough headroom to
     // survive load; a real hang still fails, just later.
-    testTimeout: 20000,
-    hookTimeout: 20000,
+    testTimeout: 60000,
+    hookTimeout: 60000,
 
     ...(Number.isFinite(uiWorkers) && uiWorkers > 0
       ? { maxWorkers: uiWorkers }

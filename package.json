@@ -723,8 +723,6 @@
     "test": "node scripts/run-test-suites.mjs",
     "test:extension": "npm run compile-tests && npm run test:extension:run",
     "test:extension:run": "node ./out/test/runTest.js",
-    "pretest:headless": "npm run compile",
-    "test:headless": "npm run compile-tests && xvfb-run -a node ./out/test/runTest.js && npm run test:ui",
     "test:ui": "vitest run --config src/ui/webview-react/vitest.config.ts",
     "test:packaging": "node --test scripts/assert-no-copilot-runtime.test.mjs scripts/check-docs-content.test.mjs scripts/generate-compatibility-docs.test.mjs scripts/generate-schema-docs.test.mjs scripts/generate-workflow-schema-outline.test.mjs scripts/generate-yaml-schema.test.mjs scripts/generate-prompt-markdown-injection.test.mjs scripts/generate-step-palette.test.mjs scripts/statusline-format-packaging.test.mjs scripts/bundle-load-packaging.test.mjs scripts/cli-distribution-packaging.test.mjs scripts/build-npm-package.test.mjs scripts/find-hardcoded-strings.test.mjs scripts/check-a11y-names.test.mjs scripts/verify-release-tag.test.mjs scripts/run-test-suites.test.mjs scripts/clean-stale-test-temp.test.mjs scripts/sync-docs-screenshots.test.mjs scripts/publish-schemas-to-landing.test.mjs scripts/schema-bump.test.mjs",
     "clean:stale-test-temp": "node scripts/clean-stale-test-temp.mjs",

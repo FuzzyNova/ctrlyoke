@@ -5,13 +5,18 @@ name: Full Test Suite
 # demand before cutting a release, after extension-host changes, or weekly as
 # a cheap safety net -- not on every push (that's what the pre-push hook is
 # for).
+#
+# Covers the same suites as `npm test`, but as separate jobs rather than through
+# scripts/run-test-suites.mjs: a private-repo runner has 2 vCPUs, too few for
+# that script to shard anything, so the parallelism comes from running each
+# suite (and each half of the UI suite) on its own runner instead.
 on:
   workflow_dispatch: {}
   schedule:
     - cron: "0 13 * * 1" # weekly, Monday 13:00 UTC
 
 jobs:
-  test:
+  extension:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,5 +29,47 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run full suite (headless, xvfb-wrapped)
-        run: npm run test:headless
+      - name: Build
+        run: npm run compile:webview && npm run compile-tests
+
+      - name: Extension-host tests (xvfb-wrapped)
+        run: xvfb-run -a npm run test:extension:run
+
+  ui:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: UI tests (shard ${{ matrix.shard }}/2)
+        run: npm run test:ui -- --shard=${{ matrix.shard }}/2
+
+  packaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run compile:webview && npm run compile-tests
+
+      - name: Packaging tests
+        run: npm run test:packaging
