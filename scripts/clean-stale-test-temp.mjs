@@ -11,7 +11,7 @@
  * prefixes below, so anything old enough to not belong to a run still in
  * flight is safe to remove outright.
  */
-import { readdirSync, rmSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, rmSync, statSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,12 +58,51 @@ export function findStaleTempDirs({
   return stale;
 }
 
+/**
+ * Unlinks every symlink and junction under `dir` without touching targets;
+ * false if one could not be removed. Node 24's recursive `rmSync` deletes
+ * *through* a Windows junction, and a fixture left by a crashed run can hold
+ * one into the repo (the TypeScript language-server test junctions
+ * `node_modules/typescript`). Mirrors `removeTempDir` in
+ * src/test/helpers/tempWorkspace.ts, which the extension tests can't share.
+ */
+function unlinkLinksInTree(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return true;
+  }
+  let allUnlinked = true;
+  for (const entry of entries) {
+    const entryPath = join(dir, entry.name);
+    let stat;
+    try {
+      stat = lstatSync(entryPath);
+    } catch {
+      continue;
+    }
+    if (stat.isSymbolicLink()) {
+      try {
+        unlinkSync(entryPath);
+      } catch {
+        allUnlinked = false;
+      }
+    } else if (stat.isDirectory() && !unlinkLinksInTree(entryPath)) {
+      allUnlinked = false;
+    }
+  }
+  return allUnlinked;
+}
+
 /** Removes every stale directory found, best-effort. Never throws. */
 export function cleanStaleTestTempDirs(options) {
   const stale = findStaleTempDirs(options);
   let removed = 0;
   for (const dir of stale) {
     try {
+      // A surviving link would let the recursive delete reach its target.
+      if (!unlinkLinksInTree(dir)) continue;
       rmSync(dir, {
         recursive: true,
         force: true,

@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -84,4 +92,30 @@ test("removes every stale directory it finds and reports counts", () => {
     assert.equal(removed, 2);
     assert.deepEqual(findStaleTempDirs({ root, maxAgeMs: 0 }), [fresh]);
   });
+});
+
+test("removes a stale directory's junction without deleting through it", () => {
+  const outside = mkdtempSync(join(tmpdir(), "ctrlyoke-stale-sweep-target-"));
+  try {
+    writeFileSync(join(outside, "keep.txt"), "keep");
+    withFixtureRoot((root) => {
+      const stale = join(root, "ctrlyoke-lsp-integration-abc");
+      mkdirSync(join(stale, "node_modules"), { recursive: true });
+      symlinkSync(
+        outside,
+        join(stale, "node_modules", "typescript"),
+        process.platform === "win32" ? "junction" : "dir"
+      );
+      const agedTime = (Date.now() - STALE_TEMP_MAX_AGE_MS - 1000) / 1000;
+      utimesSync(stale, agedTime, agedTime);
+
+      assert.deepEqual(cleanStaleTestTempDirs({ root }), {
+        found: 1,
+        removed: 1,
+      });
+    });
+    assert.deepEqual(readdirSync(outside), ["keep.txt"]);
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
 });

@@ -58,6 +58,7 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 - Tests execute from compiled `out/test`, not directly from `src/test`. Resolve fixture paths from `__dirname` accordingly instead of assuming `process.cwd()`.
 - Use repo-relative resolution only when the code under test truly depends on repository layout (for example compiled CLI paths or workspace-scoped config files).
 - Never hardcode absolute, OS-specific paths (e.g. `C:\dev\ctrlyoke\...`) in fixtures or assertions — the suite runs on Windows, macOS, and Linux. Use neutral relative forward-slash paths (`src/foo.ts`) or derive real paths via `os.tmpdir()`/`path.join`. Pure parser/string inputs that merely _represent_ CLI output and never touch the filesystem may stay realistic.
+- **Never delete a fixture that holds a link into the repo with a bare recursive `fs.rm`/`rmSync`.** The extension tests run on Electron's Node 24, whose recursive `rmSync` follows a Windows directory junction and empties its _target_, leaving the target directory itself in place. A language-server test that junctions the repo's `node_modules/typescript` into its temp workspace emptied it on every `npm test` until the next build failed with `Cannot find module …/typescript/bin/tsc`. `removeTempDir` (`src/test/helpers/tempWorkspace.ts`) and the stale-temp sweep unlink links before recursing; clean up through them.
 
 </pathAndFixtureGotchas>
 
