@@ -1,5 +1,7 @@
 import * as assert from "assert";
 import * as fs from "fs";
+import * as fsPromises from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import * as vm from "vm";
 import { createRequire } from "module";
@@ -246,5 +248,37 @@ suite("OpenCode plugin user hooks", () => {
       "/T",
       "/F",
     ]);
+  });
+
+  test("loads hook environment values from the structured env file entry", async () => {
+    const tempDirectory = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-opencode-hook-env-")
+    );
+    const envFile = path.join(tempDirectory, "env.json");
+    try {
+      await fsPromises.writeFile(
+        envFile,
+        JSON.stringify({ "hook-0": { env: { HOOK_TOKEN: "scoped" } } })
+      );
+      const { plugin, spawnCalls } = await loadPlugin([
+        {
+          event: "preToolUse",
+          command: "node hook.js",
+          envFile,
+          envId: "hook-0",
+        },
+      ]);
+      await plugin["tool.execute.before"](
+        { tool: "bash", sessionID: "session-1", callID: "call-1" },
+        { args: { command: "pwd" } }
+      );
+
+      assert.strictEqual(
+        (spawnCalls[0].options.env as NodeJS.ProcessEnv).HOOK_TOKEN,
+        "scoped"
+      );
+    } finally {
+      await fsPromises.rm(tempDirectory, { recursive: true, force: true });
+    }
   });
 });

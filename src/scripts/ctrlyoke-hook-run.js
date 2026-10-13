@@ -11,7 +11,15 @@ if (!envFile || !hookId || !shellName || !encodedCommand) {
 } else {
   try {
     const environments = JSON.parse(fs.readFileSync(envFile, "utf8"));
-    const hookEnv = environments[hookId];
+    const hookEntry = environments[hookId];
+    if (
+      !hookEntry ||
+      typeof hookEntry !== "object" ||
+      Array.isArray(hookEntry)
+    ) {
+      throw new Error(`No environment found for ${hookId}`);
+    }
+    const hookEnv = hookEntry.env;
     if (!hookEnv || typeof hookEnv !== "object" || Array.isArray(hookEnv)) {
       throw new Error(`No environment found for ${hookId}`);
     }
@@ -23,30 +31,59 @@ if (!envFile || !hookId || !shellName || !encodedCommand) {
       detached: process.platform !== "win32",
       stdio: "inherit",
     });
+    let terminationRequested = false;
+    let timeoutTimer;
+    let parentPoll;
+    const clearWatchers = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (parentPoll) clearInterval(parentPoll);
+    };
+    const killChild = () => {
+      terminationRequested = true;
+      process.exitCode = 1;
+      if (process.platform === "win32") {
+        killWindowsProcessTree(child);
+      } else {
+        killPosixProcessTree(child, "SIGKILL");
+      }
+    };
     const forwardSignal = (signal) => {
       process.exitCode = signal === "SIGINT" ? 130 : 143;
       if (process.platform === "win32") {
         killWindowsProcessTree(child);
       } else {
-        try {
-          process.kill(-child.pid, signal);
-        } catch {
-          child.kill(signal);
-        }
+        killPosixProcessTree(child, signal);
       }
     };
     for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
       process.on(signal, forwardSignal);
     }
+    if (typeof hookEntry.timeoutSec === "number") {
+      timeoutTimer = setTimeout(
+        killChild,
+        Math.max(0, hookEntry.timeoutSec * 1000 - 250)
+      );
+    }
+    parentPoll = setInterval(() => {
+      try {
+        process.kill(process.ppid, 0);
+      } catch (error) {
+        if (error.code === "ESRCH") killChild();
+      }
+    }, 500);
+    parentPoll.unref();
     child.once("error", (error) => {
       process.stderr.write(`ctrlyoke-hook-run: ${error.message}\n`);
       process.exitCode = 1;
     });
+    child.once("close", clearWatchers);
     child.once("exit", (code, signal) => {
       for (const forwardedSignal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
         process.removeListener(forwardedSignal, forwardSignal);
       }
-      if (code !== null) {
+      if (terminationRequested) {
+        process.exitCode = 1;
+      } else if (code !== null) {
         process.exitCode = code;
       } else if (signal) {
         process.exitCode = 1;
@@ -65,4 +102,13 @@ function killWindowsProcessTree(child) {
     windowsHide: true,
   });
   killer.once("error", () => child.kill("SIGKILL"));
+}
+
+function killPosixProcessTree(child, signal) {
+  if (!child.pid) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
 }

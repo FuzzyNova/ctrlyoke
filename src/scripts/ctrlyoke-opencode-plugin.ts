@@ -284,8 +284,8 @@ function _getUserHookEnv(hook: UserHook): NodeJS.ProcessEnv {
     try {
       const envByHookId = JSON.parse(
         readFileSync(hook.envFile, "utf8")
-      ) as Record<string, Record<string, string>>;
-      hookEnv = envByHookId[hook.envId] ?? {};
+      ) as Record<string, { env: Record<string, string> }>;
+      hookEnv = envByHookId[hook.envId]?.env ?? {};
     } catch {
       // A missing or malformed per-step file gives the hook no extra values.
     }

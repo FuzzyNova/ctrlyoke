@@ -95,6 +95,7 @@ suite("UserHookEnvironment", () => {
             event: "stop",
             command: printTokenCommand,
             env: { TOKEN: "first" },
+            timeoutSec: 9,
           },
           {
             event: "stop",
@@ -109,9 +110,10 @@ suite("UserHookEnvironment", () => {
 
       const envByHookId = JSON.parse(
         await fs.readFile(prepared.tempFilePath!, "utf8")
-      ) as Record<string, Record<string, string>>;
-      assert.strictEqual(envByHookId["hook-0"].TOKEN, "first");
-      assert.strictEqual(envByHookId["hook-1"].TOKEN, "second");
+      ) as Record<string, { env: Record<string, string>; timeoutSec?: number }>;
+      assert.strictEqual(envByHookId["hook-0"].env.TOKEN, "first");
+      assert.strictEqual(envByHookId["hook-1"].env.TOKEN, "second");
+      assert.strictEqual(envByHookId["hook-0"].timeoutSec, 9);
       assert.strictEqual(prepared.hooks?.[0].env, undefined);
       assert.strictEqual(prepared.hooks?.[1].env, undefined);
 
@@ -169,8 +171,8 @@ suite("UserHookEnvironment", () => {
       await fs.writeFile(
         envFile,
         JSON.stringify({
-          "hook-0": { HOOK_TOKEN: "first" },
-          "hook-1": { HOOK_TOKEN: "second" },
+          "hook-0": { env: { HOOK_TOKEN: "first" } },
+          "hook-1": { env: { HOOK_TOKEN: "second" } },
         })
       );
       const command =
@@ -203,7 +205,7 @@ suite("UserHookEnvironment", () => {
     try {
       await fs.writeFile(
         envFile,
-        JSON.stringify({ "hook-0": { HOOK_TOKEN: "value" } })
+        JSON.stringify({ "hook-0": { env: { HOOK_TOKEN: "value" } } })
       );
       const command = "Write-Output $env:HOOK_TOKEN";
       const result = spawnSync(
@@ -232,7 +234,7 @@ suite("UserHookEnvironment", () => {
     );
     const envFile = path.join(tempDirectory, "env.json");
     const childPidPath = path.join(tempDirectory, "child.pid");
-    await fs.writeFile(envFile, JSON.stringify({ "hook-0": {} }));
+    await fs.writeFile(envFile, JSON.stringify({ "hook-0": { env: {} } }));
     const command = `node -e "require('fs').writeFileSync(process.env.HOOK_CHILD_PID_FILE, String(process.pid)); setInterval(() => {}, 1000)"`;
     const launcher = spawn(
       process.execPath,
@@ -279,18 +281,26 @@ suite("UserHookEnvironment", () => {
       platform: "win32",
       env: {},
       pid: 123,
+      ppid: 1,
       exitCode: undefined as number | undefined,
       cwd: () => os.tmpdir(),
+      kill: () => undefined,
       on: (signal: string, handler: () => void) =>
         handlers.set(signal, handler),
       removeListener: () => undefined,
     };
     vm.runInNewContext(fsSync.readFileSync(launcherPath, "utf8"), {
       Buffer,
+      setTimeout: () => ({ unref: () => undefined }),
+      clearTimeout: () => undefined,
+      setInterval: () => ({ unref: () => undefined }),
+      clearInterval: () => undefined,
       process: processStub,
       require: (name: string) => {
         if (name === "node:fs") {
-          return { readFileSync: () => JSON.stringify({ "hook-0": {} }) };
+          return {
+            readFileSync: () => JSON.stringify({ "hook-0": { env: {} } }),
+          };
         }
         if (name === "node:child_process") {
           return {
@@ -312,6 +322,91 @@ suite("UserHookEnvironment", () => {
       "/T",
       "/F",
     ]);
+  });
+
+  test("kills a hook tree when the wrapping cmd.exe parent is terminated", async function () {
+    if (process.platform !== "win32") return;
+    const tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-hook-parent-kill-")
+    );
+    const envFile = path.join(tempDirectory, "env.json");
+    const childPidPath = path.join(tempDirectory, "child.pid");
+    await fs.writeFile(envFile, JSON.stringify({ "hook-0": { env: {} } }));
+    const encodedCommand = Buffer.from(
+      `node -e "require('fs').writeFileSync(process.env.HOOK_CHILD_PID_FILE, String(process.pid)); setInterval(() => {}, 1000)"`,
+      "utf8"
+    ).toString("base64");
+    const command = `node "${launcherPath}" "${envFile}" hook-0 default ${encodedCommand}`;
+    const parent = spawn(
+      process.env.ComSpec ?? "cmd.exe",
+      ["/d", "/s", "/c", command],
+      {
+        env: { ...process.env, HOOK_CHILD_PID_FILE: childPidPath },
+        stdio: "ignore",
+        windowsVerbatimArguments: true,
+      }
+    );
+    let childPid: number | undefined;
+    try {
+      childPid = await waitForChildPid(childPidPath);
+      const parentExit = new Promise<void>((resolve, reject) => {
+        parent.once("exit", () => resolve());
+        parent.once("error", reject);
+      });
+      parent.kill();
+      await parentExit;
+      await waitForProcessExit(childPid);
+      assert.strictEqual(isProcessRunning(childPid), false);
+    } finally {
+      parent.kill();
+      if (childPid !== undefined) terminateProcessTree(childPid);
+      await fs.rm(tempDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("kills a hook process tree at its configured timeout", async () => {
+    const tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-hook-timeout-")
+    );
+    const envFile = path.join(tempDirectory, "env.json");
+    const childPidPath = path.join(tempDirectory, "child.pid");
+    await fs.writeFile(
+      envFile,
+      JSON.stringify({ "hook-0": { env: {}, timeoutSec: 1 } })
+    );
+    const command = `node -e "require('fs').writeFileSync(process.env.HOOK_CHILD_PID_FILE, String(process.pid)); setInterval(() => {}, 1000)"`;
+    const launcher = spawn(
+      process.execPath,
+      [
+        launcherPath,
+        envFile,
+        "hook-0",
+        "default",
+        Buffer.from(command, "utf8").toString("base64"),
+      ],
+      {
+        env: { ...process.env, HOOK_CHILD_PID_FILE: childPidPath },
+        stdio: "ignore",
+      }
+    );
+    let childPid: number | undefined;
+    try {
+      childPid = await waitForChildPid(childPidPath);
+      await new Promise<void>((resolve, reject) => {
+        launcher.once("close", (code) => {
+          if (code === 0)
+            reject(new Error("Timed-out hook exited successfully"));
+          else resolve();
+        });
+        launcher.once("error", reject);
+      });
+      await waitForProcessExit(childPid);
+      assert.strictEqual(isProcessRunning(childPid), false);
+    } finally {
+      launcher.kill();
+      if (childPid !== undefined) terminateProcessTree(childPid);
+      await fs.rm(tempDirectory, { recursive: true, force: true });
+    }
   });
 });
 
@@ -340,6 +435,25 @@ function isProcessRunning(pid: number): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+function terminateProcessTree(pid: number): void {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // The process may have exited before cleanup.
+      }
+    }
   }
 }
 

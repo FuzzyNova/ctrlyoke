@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-12 by Claude (bug-drain review of ~7d0de405d)
 - **Area:** `src/scripts/ctrlyoke-hook-run.js`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

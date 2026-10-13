@@ -15,6 +15,12 @@ export interface PreparedUserHookEnvironments {
   readonly mutation?: PreparedMutation;
 }
 
+/** Per-hook data written to the temporary environment file for the launcher. */
+export interface UserHookEnvironmentEntry {
+  env: Record<string, string>;
+  timeoutSec?: number;
+}
+
 export function hasUserHookEnvironment(
   hooks: UserHookConfig[] | undefined
 ): boolean {
@@ -45,14 +51,17 @@ export function prepareUserHookEnvironments(params: {
     "scripts",
     "ctrlyoke-hook-run.js"
   );
-  const envByHookId: Record<string, Record<string, string>> = {};
+  const envByHookId: Record<string, UserHookEnvironmentEntry> = {};
   const wrappedHooks: PreparedUserHookConfig[] = hooks.map((hook, index) => {
     const env = hook.env;
     if (!env || Object.keys(env).length === 0) {
       return hook;
     }
     const hookId = `hook-${index}`;
-    envByHookId[hookId] = env;
+    envByHookId[hookId] = {
+      env,
+      ...(hook.timeoutSec === undefined ? {} : { timeoutSec: hook.timeoutSec }),
+    };
     if (params.harnessId === HARNESS_IDS.OPENCODE_CLI) {
       return { ...hook, env: undefined, envFile: tempFilePath, envId: hookId };
     }
