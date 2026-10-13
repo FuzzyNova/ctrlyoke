@@ -315,12 +315,13 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const changed = sourceControlFiles.filter((f) => f.unstagedStatus !== null);
 
   // The files region sizes to its own content (a short list stays short)
-  // capped at 45% of the column so a long list still scrolls in its own
-  // region instead of pushing history off-screen. History always claims
-  // whatever's left — a fixed 50/50 split previously left a large empty gap
-  // under a short file list instead of handing that space to the graph.
+  // capped at half the space below the commit area, so a long list scrolls
+  // in its own region instead of pushing history off-screen. History always
+  // claims whatever's left — a fixed 50/50 split previously left a large
+  // empty gap under a short file list instead of handing that space to the
+  // graph.
   const filesRegionClass =
-    "flex-none max-h-[45%] min-h-0 overflow-x-hidden overflow-y-auto";
+    "flex-none max-h-1/2 min-h-0 overflow-x-hidden overflow-y-auto";
   // No overflow here: WorkspaceCommitHistoryPane owns its own scroll
   // container internally (needed so its virtualizer has a fixed element to
   // measure). Adding overflow-y-auto on this wrapper too would nest a second
@@ -547,29 +548,52 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       />
       <div className="border-t border-panel-border shrink-0" />
 
-      {/* Files region — independently scrollable */}
-      <div className={filesRegionClass}>
-        {sourceControlLoading ? (
-          <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
-            <Icon name="loading" className="animate-spin text-sm" />
-            <span className="text-xs">Refreshing…</span>
-          </div>
-        ) : (
-          sourceControlSections
-        )}
-      </div>
+      {/* Files and history split the space below the commit area, each in
+          its own scroll region. This must stay a bounded flex column on
+          mobile too: the history pane scrolls internally, so placing it in
+          an outer scroll container collapses it to zero height. */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className={filesRegionClass}>
+          {sourceControlLoading ? (
+            <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
+              <Icon name="loading" className="animate-spin text-sm" />
+              <span className="text-xs">Refreshing…</span>
+            </div>
+          ) : (
+            sourceControlSections
+          )}
+        </div>
 
-      <div className="border-t border-panel-border shrink-0" />
+        <div className="border-t border-panel-border shrink-0" />
 
-      {/* Commit history region — independently scrollable */}
-      <div className={historyRegionClass}>
-        <WorkspaceCommitHistoryPane
-          controller={commitHistoryController}
-          onRefresh={() => void loadStatus()}
-          isMobile={isMobile}
-        />
+        <div className={historyRegionClass}>
+          <WorkspaceCommitHistoryPane
+            controller={commitHistoryController}
+            onRefresh={() => void loadStatus()}
+            isMobile={isMobile}
+          />
+        </div>
       </div>
     </div>
+  );
+
+  const discardConfirmationModal = (
+    <DeleteConfirmationModal
+      isOpen={pendingDiscard !== null}
+      onClose={() => setPendingDiscard(null)}
+      title={
+        pendingDiscard?.untrackedCount === 1
+          ? "Delete Untracked File?"
+          : "Delete Untracked Files?"
+      }
+      message={discardMessage}
+      detail={discardDetail}
+      confirmLabel="Discard"
+      onConfirm={handleConfirmDiscard}
+      dontWarnAgain={dontWarnAgain}
+      onDontWarnAgainChange={handleDiscardCheckboxChange}
+      dontWarnAgainLabel="Don't warn me again before deleting untracked files"
+    />
   );
 
   if (isMobile && mobileDiffVisible) {
@@ -595,49 +619,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   if (isMobile) {
     return (
       <>
-        <div className="flex flex-col h-full overflow-hidden">
-          <div className="flex-1 overflow-x-hidden overflow-y-auto flex flex-col">
-            <WorkspaceCommitArea
-              incomingCommitCount={incomingCommitCount}
-              onRefresh={refreshAll}
-              outgoingCommitCount={outgoingCommitCount}
-            />
-            <div className="border-t border-panel-border" />
-
-            {sourceControlLoading ? (
-              <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
-                <Icon name="loading" className="animate-spin text-sm" />
-                <span className="text-xs">Refreshing…</span>
-              </div>
-            ) : (
-              sourceControlSections
-            )}
-
-            <div className="border-t border-panel-border" />
-            <WorkspaceCommitHistoryPane
-              controller={commitHistoryController}
-              onRefresh={() => void loadStatus()}
-              isMobile={isMobile}
-            />
-          </div>
-        </div>
-
-        <DeleteConfirmationModal
-          isOpen={pendingDiscard !== null}
-          onClose={() => setPendingDiscard(null)}
-          title={
-            pendingDiscard?.untrackedCount === 1
-              ? "Delete Untracked File?"
-              : "Delete Untracked Files?"
-          }
-          message={discardMessage}
-          detail={discardDetail}
-          confirmLabel="Discard"
-          onConfirm={handleConfirmDiscard}
-          dontWarnAgain={dontWarnAgain}
-          onDontWarnAgainChange={handleDiscardCheckboxChange}
-          dontWarnAgainLabel="Don't warn me again before deleting untracked files"
-        />
+        {leftColumn}
+        {discardConfirmationModal}
       </>
     );
   }
@@ -668,22 +651,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         </Group>
       </div>
 
-      <DeleteConfirmationModal
-        isOpen={pendingDiscard !== null}
-        onClose={() => setPendingDiscard(null)}
-        title={
-          pendingDiscard?.untrackedCount === 1
-            ? "Delete Untracked File?"
-            : "Delete Untracked Files?"
-        }
-        message={discardMessage}
-        detail={discardDetail}
-        confirmLabel="Discard"
-        onConfirm={handleConfirmDiscard}
-        dontWarnAgain={dontWarnAgain}
-        onDontWarnAgainChange={handleDiscardCheckboxChange}
-        dontWarnAgainLabel="Don't warn me again before deleting untracked files"
-      />
+      {discardConfirmationModal}
     </>
   );
 };
