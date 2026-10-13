@@ -189,7 +189,7 @@ steps:
 
 The `"ctrlyoke"` shorthand injects the built-in server. See the [MCP tools reference](https://ctrlyoke.dev/docs/reference/mcp-tools) for its complete tool set and response formats. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
 
-### Final prompt
+### Final step
 
 `finalStep` is a special prompt that runs after all queued prompts complete. If the AI appended new prompts during the final prompt loop and `"ctrlyoke"` is in `mcpServers`, the executor re-runs the queue then `finalStep` again until no new prompts are added.
 
