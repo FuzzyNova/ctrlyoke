@@ -1,13 +1,14 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Not implemented. Supersedes D12b (`$summary:`) of
+> **Status:** Phase 0 complete; Phases 1–3 remain. Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
 > defined here. Phases 0–3 land before launch, in the order given under
 > [Sequencing](#sequencing) (decided 2026-10-13; tracked in
 > [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md)).
 >
-> - Phase 0 fixes a resolver bug every later phase builds on.
+> - Phase 0 is done: the resolver excludes condition attempts from step output
+>   while preserving their history records.
 > - Phase 1 changes the prompt text that existing `$previous`/`priorContext` workflows send.
 > - Phase 2 changes the persisted timeline format.
 > - Phase 3 adds `$summary:`.

@@ -131,6 +131,12 @@ suite("OutputHistoryTimelineAdapter", () => {
       "prompt output",
       "dashboard history retains the AI response as a normal CLI timeline entry"
     );
+    assert.strictEqual(
+      cliEntries[1].kind === OUTPUT_HISTORY_KINDS.CLI &&
+        cliEntries[1].cliOutput.response,
+      "condition output",
+      "history retains condition output on its own phase-tagged attempt"
+    );
     assert.deepStrictEqual(
       cliEntries.map(
         (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI && entry.phase

@@ -572,6 +572,166 @@ suite("RunOutputResolver", () => {
     assert.deepStrictEqual(indexZeroItems, []);
   });
 
+  test("does not resolve a skipped step's pre-condition output as its response", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        definitionRevision: 1,
+        payload: {
+          kind: "condition",
+          startReason: "initial",
+          prompt: "check whether to run",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        definitionRevision: 1,
+        responseKind: "condition",
+        payload: {
+          cliOutput: {
+            prompt: "check whether to run",
+            response: "checking before skip",
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+    ]);
+
+    const resolver = new RunOutputResolver(recorder);
+    const attempts = [];
+    for await (const event of resolver.streamAttempts(manifestPath)) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        attempts.push(event.attempt);
+      }
+    }
+    assert.strictEqual(attempts[0]?.responseText, "checking before skip");
+    assert.strictEqual(attempts[0]?.kind, "condition");
+    assert.strictEqual(
+      await resolver.resolveAttempt(manifestPath, target, 0, 0),
+      undefined,
+      "a step-output lookup must not return the condition's attempt"
+    );
+    assert.strictEqual(
+      (await resolver.resolveLatestAttempts(manifestPath, [target])).has(
+        "queue:0"
+      ),
+      false,
+      "read_output and prior context must not treat condition output as step output"
+    );
+    assert.deepStrictEqual(
+      await resolver.resolvePriorContextItems(
+        manifestPath,
+        [[1]],
+        [{ prompt: "the step prompt" }],
+        1
+      ),
+      [],
+      "a step that never started has no prior-context response"
+    );
+  });
+
+  test("uses an interrupted step's partial response instead of its pre-condition output", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        definitionRevision: 1,
+        payload: {
+          kind: "condition",
+          startReason: "initial",
+          prompt: "check before step",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        definitionRevision: 1,
+        responseKind: "condition",
+        payload: {
+          cliOutput: {
+            prompt: "check before step",
+            response: "condition output",
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 3,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          kind: "ai",
+          startReason: "initial",
+          prompt: "the actual step prompt",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 4,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            prompt: "the actual step prompt",
+            response: "partial step response",
+            elapsed: 1,
+            isStreaming: true,
+          },
+        },
+      },
+    ]);
+
+    const resolver = new RunOutputResolver(recorder);
+    const latest = await resolver.resolveLatestAttempts(manifestPath, [target]);
+    assert.strictEqual(
+      latest.get("queue:0")?.responseText,
+      "partial step response"
+    );
+    assert.strictEqual(latest.get("queue:0")?.prompt, "the actual step prompt");
+    assert.strictEqual(
+      (await resolver.resolveAttempt(manifestPath, target, 0, 0))?.responseText,
+      "partial step response"
+    );
+    const items = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [[1]],
+      [{ prompt: "the actual step prompt" }],
+      1
+    );
+    assert.deepStrictEqual(
+      items.map((item) => item.text),
+      ["partial step response"]
+    );
+  });
+
   test("folds streamed deltas and their later aggregate exactly once", async () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     await recorder.appendEvents(manifestPath, [

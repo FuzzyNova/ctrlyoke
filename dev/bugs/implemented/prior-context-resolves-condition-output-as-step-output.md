@@ -3,7 +3,7 @@
 - **Found:** 2026-10-13 by Claude (prior-context plan review; found by reading the code, no
   reproduction yet)
 - **Area:** `src/core/orchestration/RunOutputResolver.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

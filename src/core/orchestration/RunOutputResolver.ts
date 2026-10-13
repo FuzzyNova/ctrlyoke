@@ -645,6 +645,7 @@ export class RunOutputResolver {
     for await (const event of this.streamAttempts(manifestPath)) {
       if (
         event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
+        !isStepAttemptKind(event.attempt.kind ?? TIMELINE_ATTEMPT_KINDS.AI) ||
         !sameAttempt(event.attempt, target, runIndex, attemptIndex)
       ) {
         continue;
@@ -669,6 +670,7 @@ export class RunOutputResolver {
     for await (const event of this.streamAttempts(manifestPath)) {
       if (
         event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
+        !isStepAttemptKind(event.attempt.kind ?? TIMELINE_ATTEMPT_KINDS.AI) ||
         !requested.has(getTargetKey(event.attempt.target))
       ) {
         continue;
