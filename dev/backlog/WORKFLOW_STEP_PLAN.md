@@ -470,7 +470,7 @@ bounded alternative.
 
 #### D12b. `$summary:` — a bounded excerpt of any step
 
-> **Superseded by [`PRIOR_CONTEXT_DETAIL_PLAN.md`](PRIOR_CONTEXT_DETAIL_PLAN.md)** (2026-10-13).
+> **Superseded by [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../implemented/PRIOR_CONTEXT_DETAIL_PLAN.md)** (2026-10-13).
 > That plan renders prior context from the timeline's structured events instead of the
 > capture-time `responseText`, removes `general.includeFullDiffsInPriorContext`, and redefines
 > the summary of a prompt step: authored-prompt head, a `<filesChanged>` digest, and the tail of the

@@ -4,7 +4,10 @@ import {
   getWorkflowVariableCompletions,
 } from "../../completions/PromptContextCompletions";
 import { getWorkflowPromptCompletionContext } from "../../completions/WorkflowPromptDiagnostics";
-import { CTRLYOKE_FILE_KINDS } from "../../types/DashboardConstants";
+import {
+  CTRLYOKE_FILE_KINDS,
+  PRIOR_CONTEXT_KEYWORDS,
+} from "../../types/DashboardConstants";
 import { PROMPT_DIAGNOSTIC_FIELDS } from "../../types/DashboardConstants";
 
 suite("PromptContextCompletions", () => {
@@ -86,7 +89,9 @@ suite("PromptContextCompletions", () => {
       stepCount: 1,
       hasFinalStep: true,
     });
-    assert.ok(laterStep.some((item) => item.label === "previous"));
+    assert.ok(
+      laterStep.some((item) => item.label === PRIOR_CONTEXT_KEYWORDS.PREVIOUS)
+    );
     assert.ok(laterStep.some((item) => item.label === "finalStep"));
   });
 

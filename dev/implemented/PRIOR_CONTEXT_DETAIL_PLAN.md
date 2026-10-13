@@ -1,8 +1,8 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phases 0–2 and Phase 3a complete; Phase 3b remains.
+> **Status:** Implemented 2026-10-13. Phases 0–3 are complete.
 > Supersedes D12b (`$summary:`) of
-> [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
+> [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
 > defined here. Phases 0–3 land before launch, in the order given under
 > [Sequencing](#sequencing) (decided 2026-10-13; tracked in
@@ -312,7 +312,7 @@ scripts never receive it (`EndConditionEvaluator.ts:200-208`). The interim chang
 live bug: `CommitMessageGenerator`'s cleanup regex (`:752`) only matches the one-line
 `[Edited: …]` form, so with the setting on (the default), a full-diff block's body leaks into the
 fallback commit message
-([`commit-message-fallback-leaks-full-diff-blocks.md`](../bugs/backlog/commit-message-fallback-leaks-full-diff-blocks.md)).
+([`commit-message-fallback-leaks-full-diff-blocks.md`](../bugs/implemented/commit-message-fallback-leaks-full-diff-blocks.md)).
 
 **Legacy fallback:** when a settled attempt has no structured events, the renderer uses the
 recorded `response` as the `<response>` body for both forms (the summary cuts its tail). Every
@@ -521,7 +521,7 @@ string }`) lives in `WorkflowTimelineTypes.ts` and is read only by D8b's legacy 
 - **The setting is frozen into records** (Problem 2). There is no stored copy left to freeze.
 
 **Prerequisite bug (Phase 0):**
-[`prior-context-resolves-condition-output-as-step-output.md`](../bugs/backlog/prior-context-resolves-condition-output-as-step-output.md).
+[`prior-context-resolves-condition-output-as-step-output.md`](../bugs/implemented/prior-context-resolves-condition-output-as-step-output.md).
 `resolveLatestAttempts` doesn't skip condition-script attempts. A step that never ran because
 its pre-condition failed therefore yields the condition's stdout as its response. So does an
 interrupted step whose pre-condition ran first. This was confirmed by reading the code, not yet

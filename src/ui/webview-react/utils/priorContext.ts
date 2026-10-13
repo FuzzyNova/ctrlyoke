@@ -1,4 +1,9 @@
-import { PRIOR_CONTEXT_SELECTION_MODES } from "@root/types/DashboardConstants";
+import {
+  PRIOR_CONTEXT_DETAILS,
+  PRIOR_CONTEXT_KEYWORDS,
+  PRIOR_CONTEXT_SELECTION_MODES,
+  type PriorContextDetail,
+} from "@root/types/DashboardConstants";
 import {
   isPreviousStepsPriorContext,
   isWorkflowRunAddress,
@@ -17,10 +22,19 @@ function getMode(value: PriorContext): PriorContextMode {
 }
 
 /** Display label for every prior-context value, including object variants. */
-export function formatPriorContextLabel(value: PriorContext): string {
+export function formatPriorContextLabel(
+  value: PriorContext,
+  detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL
+): string {
+  const suffix =
+    detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? " · summary" : "";
   if (isPreviousStepsPriorContext(value)) {
-    return `${PRIOR_CONTEXT_SELECT_OPTIONS_META.previous.label} ${value.previous}`;
+    return `${PRIOR_CONTEXT_SELECT_OPTIONS_META.previous.label} ${value.previous}${suffix}`;
   }
   const mode = getMode(value);
-  return PRIOR_CONTEXT_SELECT_OPTIONS_META[mode]?.label ?? String(value);
+  const label =
+    mode === PRIOR_CONTEXT_KEYWORDS.PREVIOUS
+      ? "Previous step"
+      : (PRIOR_CONTEXT_SELECT_OPTIONS_META[mode]?.label ?? String(value));
+  return `${label}${suffix}`;
 }

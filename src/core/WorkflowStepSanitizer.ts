@@ -1,6 +1,7 @@
 import {
   STEP_TYPES,
   BULK_EDITABLE_PROMPT_STEP_KEYS,
+  PRIOR_CONTEXT_DETAILS,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
   type ScriptOperator,
@@ -824,6 +825,10 @@ export function buildPromptStepProperties(
     }),
     ...(props?.priorContext !== undefined && {
       priorContext: coerce<PriorContext>(props.priorContext),
+    }),
+    ...((props?.priorContextDetail === PRIOR_CONTEXT_DETAILS.FULL ||
+      props?.priorContextDetail === PRIOR_CONTEXT_DETAILS.SUMMARY) && {
+      priorContextDetail: props.priorContextDetail,
     }),
     // additionalArgs is three-state: null = explicitly disabled, string = custom, undefined = inherit.
     // Do NOT coerce null to undefined — null must be preserved in PromptStep so the working

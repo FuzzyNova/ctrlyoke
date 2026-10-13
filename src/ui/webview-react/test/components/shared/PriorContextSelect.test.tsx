@@ -3,6 +3,29 @@ import { describe, expect, it, vi } from "vitest";
 import { PriorContextSelect } from "@components/shared/PriorContextSelect";
 
 describe("PriorContextSelect schema metadata", () => {
+  it("binds the detail toggle and marks summary labels", () => {
+    const onDetailChange = vi.fn();
+    render(
+      <PriorContextSelect
+        id="prior-context"
+        value="previous"
+        onChange={vi.fn()}
+        detail="summary"
+        onDetailChange={onDetailChange}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Previous step · summary/ })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Summary" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Full" }));
+    expect(onDetailChange).toHaveBeenCalledWith("full");
+  });
+
   it("uses the shared keyword labels and property details", () => {
     render(
       <PriorContextSelect
@@ -15,7 +38,7 @@ describe("PriorContextSelect schema metadata", () => {
     );
 
     const trigger = screen.getByRole("button", {
-      name: "Previous, priorContext: previous",
+      name: "Previous step, priorContext: previous",
     });
     expect(trigger).toHaveAttribute(
       "title",

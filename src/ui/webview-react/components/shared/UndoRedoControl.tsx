@@ -167,6 +167,7 @@ interface PromptChangeFields {
   toolPermissions?: unknown;
   additionalArgs?: string | null;
   priorContext?: unknown;
+  priorContextDetail?: string;
   enabled?: boolean;
 }
 
@@ -200,6 +201,8 @@ function describePromptChange(
     return `Changed additional args on ${scope} to ${strVal(n.additionalArgs)}`;
   if (JSON.stringify(p.priorContext) !== JSON.stringify(n.priorContext))
     return `Changed prior context on ${scope}`;
+  if (p.priorContextDetail !== n.priorContextDetail)
+    return `Changed prior context detail on ${scope} to ${strVal(n.priorContextDetail)}`;
   if (p.enabled !== n.enabled)
     return n.enabled === false ? `Disabled ${scope}` : `Enabled ${scope}`;
   return null;
@@ -249,6 +252,8 @@ function describeChange(
     JSON.stringify(prevWP.priorContext) !== JSON.stringify(nextWP.priorContext)
   )
     return `Changed workflow prior context`;
+  if (prevWP.priorContextDetail !== nextWP.priorContextDetail)
+    return `Changed workflow prior context detail to ${strVal(nextWP.priorContextDetail)}`;
   if (prevWP.resumeSession !== nextWP.resumeSession)
     return nextWP.resumeSession
       ? `Enabled resume session`

@@ -414,6 +414,10 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["onPass", ["${idPrefix}-on-pass"]],
   ["preCondition", ["settings-pre-condition-enabled"]],
   ["priorContext", ["settings-prior-context"]],
+  [
+    "priorContextDetail",
+    ["settings-prior-context-detail-summary", "prop-prior-context-detail-summary"],
+  ],
   ["resumeSession", ["settings-resume-session"]],
   ["expected", ["${idPrefix}-expected"]],
   ["ignoreCase", ["${idPrefix}-ignore-case"]],
@@ -429,16 +433,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["worktree", ["settings-worktree-mode"]],
 ]);
 
-/**
- * Properties temporarily reachable only through persisted/hand-authored data
- * may be listed here with an explanation while their editor control is staged.
- */
-const UI_CONTROL_OPTOUTS = new Map<string, string>([
-  [
-    "priorContextDetail",
-    "The property is authored through workflow/prompt files in Phase 3a; its dashboard editor control is scheduled for Phase 3b.",
-  ],
-]);
+const UI_CONTROL_OPTOUTS = new Map<string, string>();
 
 const UI_ENUM_META = [
   { path: "toolPermissions.mode", meta: PERMISSION_MODE_OPTIONS_META },
@@ -487,10 +482,7 @@ function webviewSource(): string {
 const KNOWN_LOSSY_PRESERVATION = new Set<string>();
 
 /** Dashboard save payload parity staged with the Phase 3b editor control. */
-const KNOWN_UNACCEPTED = new Set<string>([
-  "prompt step:priorContextDetail",
-  "final step (prompt):priorContextDetail",
-]);
+const KNOWN_UNACCEPTED = new Set<string>();
 
 suite("Schema -> dashboard property round trip", () => {
   let workspace = "";
@@ -586,11 +578,8 @@ suite("Schema -> dashboard property round trip", () => {
       );
       assert.deepStrictEqual(
         [...KNOWN_UNACCEPTED].sort(),
-        [
-          "final step (prompt):priorContextDetail",
-          "prompt step:priorContextDetail",
-        ],
-        "Only priorContextDetail dashboard acceptance may wait for Phase 3b"
+        [],
+        "All schema-backed workflow properties must have dashboard acceptance"
       );
     });
 

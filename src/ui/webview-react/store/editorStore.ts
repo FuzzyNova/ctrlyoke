@@ -87,6 +87,7 @@ export interface PropertyValues {
   endCondition?: EndConditionConfig | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext; // undefined = inherit/default
+  priorContextDetail?: "full" | "summary";
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
 }
@@ -808,6 +809,7 @@ export const useEditorStore = create<
         endCondition: promptData.endCondition,
         preCondition: promptData.preCondition,
         priorContext: promptData.priorContext,
+        priorContextDetail: promptData.priorContextDetail,
         additionalArgs: promptData.additionalArgs,
         toolPermissions: promptData.toolPermissions,
       };
@@ -1838,6 +1840,10 @@ export const useEditorStore = create<
     // Add priorContext if set
     if (properties.priorContext !== undefined) {
       result.priorContext = properties.priorContext;
+    }
+
+    if (properties.priorContextDetail !== undefined) {
+      result.priorContextDetail = properties.priorContextDetail;
     }
 
     // Add additionalArgs - three-state: undefined = inherit, null = explicitly none, string = custom

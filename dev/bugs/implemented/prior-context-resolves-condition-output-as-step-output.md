@@ -50,5 +50,5 @@ streaming, then resolve `$step:1`.
 
 Skip condition attempts in `resolveLatestAttempts`, as the projection does, using the
 `attemptKind` from `ATTEMPT_STARTED`. Add resolver tests for both cases before changing it.
-This is Phase 0 of [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../../backlog/PRIOR_CONTEXT_DETAIL_PLAN.md),
+This is Phase 0 of [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../../implemented/PRIOR_CONTEXT_DETAIL_PLAN.md),
 because that plan makes the resolver the only source of step output.

@@ -82,6 +82,8 @@ import {
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
+  PRIOR_CONTEXT_DETAILS,
+  type PriorContextDetail,
   RESUME_SESSION_SELECTIONS,
   SETTING_SCOPES,
   TRUSTED_ROOTS_MODES,
@@ -1200,6 +1202,23 @@ const WorkflowPropertiesPanelInner: React.FC<{
     [syncWorkflowPropertiesForUndo, vscode]
   );
 
+  const handlePriorContextDetailChange = useCallback(
+    (value: PriorContextDetail) => {
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty(
+        PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL,
+        value
+      );
+      syncWorkflowPropertiesForUndo();
+      postWorkflowDefinitionMutation(vscode, {
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL,
+        value,
+      });
+    },
+    [syncWorkflowPropertiesForUndo, vscode]
+  );
+
   const handleEndConditionToggle = useCallback(
     (enabled: boolean) => {
       setEndConditionEnabled(enabled);
@@ -1403,6 +1422,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       sessionId: "",
       priorContext:
         globalSettings.priorContext as WorkflowProperties["priorContext"],
+      priorContextDetail: undefined,
       mcpServers: globalSettings.mcpServers as WorkflowProperties["mcpServers"],
       toolPermissions:
         globalSettings.toolPermissions as WorkflowProperties["toolPermissions"],
@@ -2157,9 +2177,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <PriorContextSelect
                     id="settings-prior-context"
+                    detailSummaryId="settings-prior-context-detail-summary"
                     schemaPath="priorContext"
                     value={effectivePriorContext}
                     onChange={handlePriorContextChange}
+                    detail={
+                      workflowProperties.priorContextDetail ??
+                      PRIOR_CONTEXT_DETAILS.FULL
+                    }
+                    onDetailChange={handlePriorContextDetailChange}
                   />
                 </FormField>
               </DrawerRow>

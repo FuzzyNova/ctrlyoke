@@ -59,6 +59,7 @@ import {
   type EditorFontSize,
   type HarnessStatusString,
   type CtrlYokeFileKind,
+  type PriorContextDetail,
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
@@ -419,6 +420,7 @@ export interface PromptStep extends StepDisplayProperties {
   endCondition?: EndConditionConfig | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext;
+  priorContextDetail?: PriorContextDetail;
   additionalArgs?: string | null;
   toolPermissions?: ToolPermissionsOverride | null;
   errorBehavior?: ErrorBehavior | null;

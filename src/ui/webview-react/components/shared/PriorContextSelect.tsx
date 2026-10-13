@@ -2,6 +2,8 @@ import {
   INHERIT_DEFAULT_OPTION,
   PRIOR_CONTEXT_SELECTION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
+  PRIOR_CONTEXT_DETAILS,
+  type PriorContextDetail,
 } from "@root/types/DashboardConstants";
 import { PRIOR_CONTEXT_SELECT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import {
@@ -42,7 +44,11 @@ interface PriorContextSelectProps {
    */
   allowRunAddress?: boolean;
   disabled?: boolean;
+  detailDisabled?: boolean;
   disabledReason?: string;
+  detail?: PriorContextDetail;
+  onDetailChange?: (detail: PriorContextDetail) => void;
+  detailSummaryId?: string;
 }
 
 export type KeywordMode = keyof typeof PRIOR_CONTEXT_SELECT_OPTIONS_META;
@@ -81,7 +87,11 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   schemaPath = "priorContext",
   allowRunAddress = true,
   disabled = false,
+  detailDisabled = false,
   disabledReason,
+  detail = PRIOR_CONTEXT_DETAILS.FULL,
+  onDetailChange,
+  detailSummaryId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -253,7 +263,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   } else if (value === undefined) {
     buttonLabel = inheritLabel;
   } else {
-    buttonLabel = formatPriorContextLabel(value);
+    buttonLabel = formatPriorContextLabel(value, detail);
   }
 
   // The trigger names the value actually written; the option list keeps the
@@ -290,6 +300,39 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
 
   return (
     <div className="flex flex-col gap-1 w-full">
+      {onDetailChange && (
+        <div
+          className="flex items-center gap-2"
+          role="group"
+          aria-label="Prior context detail"
+        >
+          <span className="text-xxs text-description-fg">Detail</span>
+          {(
+            [
+              PRIOR_CONTEXT_DETAILS.FULL,
+              PRIOR_CONTEXT_DETAILS.SUMMARY,
+            ] as const
+          ).map((option) => (
+            <button
+              key={option}
+              id={
+                option === PRIOR_CONTEXT_DETAILS.SUMMARY
+                  ? detailSummaryId
+                  : detailSummaryId
+                    ? `${detailSummaryId}-full`
+                    : undefined
+              }
+              type="button"
+              aria-pressed={detail === option}
+              disabled={disabled || detailDisabled}
+              onClick={() => onDetailChange(option)}
+              className={`px-2 py-0.5 text-xxs rounded-sm border ${detail === option ? "bg-button-bg text-button-fg border-button-border" : "bg-input-bg text-description-fg border-input-border"}`}
+            >
+              {option === PRIOR_CONTEXT_DETAILS.FULL ? "Full" : "Summary"}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Dropdown button */}
       <div className="relative inline-block w-full">
         <button
