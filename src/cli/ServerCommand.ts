@@ -18,6 +18,10 @@ import { createNodeHostedServer } from "../platform/NodeHostServices";
 import { ServerCertificateService } from "../server/ServerCertificateService";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
+import {
+  normalizePublicHostname,
+  withUrlHostname,
+} from "../utils/ServerPublicHostname";
 import { PROCESS_SIGNALS } from "../types/DashboardConstants";
 import {
   defaultShutdownTimers,
@@ -36,6 +40,8 @@ export interface ResolvedServerSettings {
   port: number;
   fallbackPorts: number[];
   bindAddress: string;
+  /** Normalized `server.publicHostname`, or null when unset or invalid. */
+  publicHostname: string | null;
   https: boolean;
   certPath: string;
   keyPath: string;
@@ -51,7 +57,8 @@ export interface ResolvedServerSettings {
 type ServerSettingValues = Pick<
   CtrlYokeGlobalSettings["server"],
   "port" | "fallbackPorts" | "bindAddress" | "tls"
->;
+> &
+  Partial<Pick<CtrlYokeGlobalSettings["server"], "publicHostname">>;
 
 export function resolveServerSettings(
   options: ServerOptions,
@@ -68,6 +75,7 @@ export function resolveServerSettings(
     port,
     fallbackPorts: options.strictPort ? [] : settings.fallbackPorts,
     bindAddress: options.bind ?? settings.bindAddress,
+    publicHostname: normalizePublicHostname(settings.publicHostname),
     https: options.https ?? settings.tls.enabled,
     certPath: options.cert ?? settings.tls.certPath,
     keyPath: options.key ?? settings.tls.keyPath,
@@ -81,10 +89,12 @@ export function formatServerBanner(
   lanIps: readonly string[],
   isTty: boolean,
   qr: string,
-  https: boolean
+  https: boolean,
+  publicUrl: string | null = null
 ): string {
   const link = isTty ? `\u001b]8;;${url}\u001b\\${url}\u001b]8;;\u001b\\` : url;
   const lines = [`ctrlyoke dashboard: ${link}`];
+  if (publicUrl) lines.push(`Public: ${publicUrl}`);
   for (const ip of lanIps) {
     const lanUrl = url.replace(/\/\/[^/:]+(?=:|\/)/, `//${ip}`);
     lines.push(`LAN: ${lanUrl}`);
@@ -222,7 +232,8 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
     } else {
       const generated = await new ServerCertificateService().generate(
         path.join(ctrlyokeStateHome(), "certs"),
-        initial.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
+        initial.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES,
+        initial.publicHostname
       );
       certPath = generated.certPath;
       keyPath = generated.keyPath;
@@ -241,7 +252,13 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
   });
 
   const lanIps = runtime.server.getAvailableIps();
-  const qr = await QRCode.toString(runtime.url, {
+  // LAN addresses are reported only when the server really listens on all
+  // interfaces, which is also the only case where the public hostname applies.
+  const publicUrl =
+    initial.publicHostname && lanIps.length > 0
+      ? withUrlHostname(runtime.url, initial.publicHostname)
+      : null;
+  const qr = await QRCode.toString(publicUrl ?? runtime.url, {
     type: "terminal",
     small: true,
   });
@@ -251,7 +268,8 @@ export async function serverCommand(options: ServerOptions): Promise<void> {
       lanIps,
       !!process.stdout.isTTY,
       qr,
-      runtime.url.startsWith("https:")
+      runtime.url.startsWith("https:"),
+      publicUrl
     )
   );
   if (options.open) {

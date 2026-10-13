@@ -680,6 +680,15 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.SERVER,
     label: "Bind address",
   },
+  "server.publicHostname": {
+    id: "server.publicHostname",
+    path: "server.publicHostname",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Public hostname",
+    description:
+      "The name your phone uses to reach this computer from outside your network, such as a Tailscale MagicDNS name or a dynamic DNS name. It's offered under Connect via and added to the HTTPS certificate, so generate the certificate again after changing it.",
+    keywords: ["dynamic DNS", "DDNS", "Tailscale", "MagicDNS", "remote access"],
+  },
   "server.iconBgColor": {
     id: "server.iconBgColor",
     path: "server.iconBgColor",

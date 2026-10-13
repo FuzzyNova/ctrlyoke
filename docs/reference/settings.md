@@ -1176,6 +1176,14 @@ Color theme for the hosted server UI.
 
 Network interface to bind the server to. Use '127.0.0.1' for localhost only or '0.0.0.0' for all interfaces.
 
+### `server.publicHostname` {#server-publichostname}
+
+- **Type:** `string`
+- **Default:** `""`
+- **Constraints:** at most 253 characters · pattern `^$|^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$`
+
+Hostname other devices use to reach this computer from outside your network, such as a Tailscale MagicDNS name, a dynamic DNS name, or a public IPv4 address. Just the name: no https://, port, or path. Used only when the server listens on all interfaces: it is added to a generated HTTPS certificate (generate the certificate again after changing it) and offered under Connect via for the link and QR code. Leave empty to use only this computer's detected network addresses.
+
 ### `server.tls` {#server-tls}
 
 - **Type:** `{ enabled?, certPath?, keyPath? }`

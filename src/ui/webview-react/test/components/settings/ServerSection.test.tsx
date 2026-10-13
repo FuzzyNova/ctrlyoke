@@ -134,6 +134,81 @@ describe("ServerSection", () => {
     useSettingsStore.setState({ lastCertGenerated: null });
   });
 
+  it("defaults Connect via to the public hostname and offers the LAN address too", () => {
+    const settings = createSettings("0.0.0.0");
+    settings.settings.server = {
+      ...settings.settings.server,
+      publicHostname: "my-pc.example.ts.net",
+    };
+    useSettingsStore.setState({
+      licenseAccess: { isPro: true, hasRemoteAccess: true, trialEndsAt: null },
+      bindAddressFallback: null,
+      serverUrl: "http://192.168.55.25:4747/?token=test",
+      availableIps: ["192.168.55.25"],
+    });
+    render(
+      <ServerSection
+        settings={settings}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: "http://my-pc.example.ts.net:4747/?token=test",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose server connection address" })
+    ).toHaveTextContent("my-pc.example.ts.net (public hostname)");
+  });
+
+  it("saves a normalized public hostname and rejects a URL", () => {
+    const onUpdate = vi.fn();
+    useSettingsStore.setState({
+      licenseAccess: { isPro: true, hasRemoteAccess: true, trialEndsAt: null },
+      bindAddressFallback: null,
+    });
+    render(
+      <ServerSection
+        settings={createSettings("0.0.0.0")}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={vi.fn()}
+      />
+    );
+    const input = screen.getByLabelText(/^Public hostname/);
+
+    fireEvent.change(input, {
+      target: { value: "https://my-pc.example.ts.net" },
+    });
+    fireEvent.blur(input);
+    expect(onUpdate).not.toHaveBeenCalled();
+    expect(screen.getByText(/without https:\/\//)).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: " My-PC.Example.ts.net " } });
+    fireEvent.blur(input);
+    expect(onUpdate).toHaveBeenCalledWith(
+      "server.publicHostname",
+      "my-pc.example.ts.net"
+    );
+    expect(screen.queryByText(/without https:\/\//)).not.toBeInTheDocument();
+  });
+
+  it("hides the public hostname field for a localhost-only server", () => {
+    render(
+      <ServerSection
+        settings={createSettings("127.0.0.1")}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+    expect(screen.queryByLabelText(/^Public hostname/)).not.toBeInTheDocument();
+  });
+
   it("shows the Pro unlock banner only for Free users", () => {
     const props = {
       activeScope: SETTING_SCOPES.USER,

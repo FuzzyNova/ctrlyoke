@@ -2,6 +2,10 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { NETWORK_INTERFACE_FAMILIES } from "../types/DashboardConstants";
+import {
+  isIpv4Literal,
+  normalizePublicHostname,
+} from "../utils/ServerPublicHostname";
 
 export interface GeneratedServerCertificate {
   readonly certPath: string;
@@ -13,9 +17,15 @@ export interface GeneratedServerCertificate {
 
 /** Generates the local CA certificate used to trust hosted ctrlyoke servers. */
 export class ServerCertificateService {
+  /**
+   * `includeLanIps` is true for an all-interfaces server. Only then is
+   * `publicHostname` (`server.publicHostname`) added: a localhost-only server
+   * is never reached by name from another network.
+   */
   async generate(
     certDir: string,
-    includeLanIps: boolean
+    includeLanIps: boolean,
+    publicHostname?: string | null
   ): Promise<GeneratedServerCertificate> {
     await fs.mkdir(certDir, { recursive: true });
     const lanIps = includeLanIps
@@ -29,6 +39,10 @@ export class ServerCertificateService {
           )
           .map((iface) => iface.address)
       : [];
+    const hostname = includeLanIps
+      ? normalizePublicHostname(publicHostname)
+      : null;
+    const extraHosts = hostname && !lanIps.includes(hostname) ? [hostname] : [];
     const { generate } = await import("selfsigned");
     const generatedAt = new Date();
     const expiresAt = new Date(generatedAt);
@@ -58,6 +72,11 @@ export class ServerCertificateService {
               { type: 2, value: "localhost" },
               { type: 7, ip: "127.0.0.1" },
               ...lanIps.map((ip) => ({ type: 7 as const, ip })),
+              ...extraHosts.map((host) =>
+                isIpv4Literal(host)
+                  ? { type: 7 as const, ip: host }
+                  : { type: 2 as const, value: host }
+              ),
             ],
           },
         ],
@@ -74,7 +93,7 @@ export class ServerCertificateService {
       keyPath,
       generatedAt,
       expiresAt,
-      sans: ["localhost", "127.0.0.1", ...lanIps],
+      sans: ["localhost", "127.0.0.1", ...lanIps, ...extraHosts],
     };
   }
 }

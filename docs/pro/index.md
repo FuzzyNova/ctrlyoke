@@ -22,8 +22,10 @@ authoritative text. This page is a plain-language summary, not legal advice.
 
 ## What Pro includes
 
-- Remote and LAN dashboard access, including QR-to-phone connections and
-  [installing ctrlyoke as an app on your phone](./mobile-setup.md).
+- Remote and LAN dashboard access, including QR-to-phone connections,
+  [installing ctrlyoke as an app on your phone](./mobile-setup.md), and
+  [connecting from anywhere](./remote-access.md) over Tailscale or your own
+  VPN.
 - HTTPS and self-signed certificate generation for remote connections.
 - Browser and mobile push notifications.
 - Air-gapped activation from a signed license file.

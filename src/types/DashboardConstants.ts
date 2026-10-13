@@ -2081,6 +2081,7 @@ export const SETTING_PATHS = {
   UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
   SERVER_AUTO_START: "server.autoStart",
   SERVER_THEME: "server.theme",
+  SERVER_PUBLIC_HOSTNAME: "server.publicHostname",
   COMMIT_SYSTEM_PROMPT: "commit.systemPrompt",
   STATUS_LINE: "statusLine",
   STATUS_LINE_USE_DIFFERENT_FORMAT_PER_HARNESS:

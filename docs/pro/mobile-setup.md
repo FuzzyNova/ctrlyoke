@@ -56,7 +56,9 @@ generate a new certificate, restart the server, and install the new one on
 your phone.
 
 The phone must be on the same network as your computer, or connected to it
-through a VPN.
+through a VPN. To use it away from home, set up the VPN first, then follow
+[Connect from anywhere](/pro/remote-access) before installing the app: the app
+belongs to the address you install it from.
 
 ## 2. Open ctrlyoke on the phone
 

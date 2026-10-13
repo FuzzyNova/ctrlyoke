@@ -1597,11 +1597,12 @@ export class WebviewSettingsSync {
       PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.CERTS_DIR
     );
-    const bindAddress =
-      configService.get(CONFIG_KEYS.SERVER)?.bindAddress ?? "127.0.0.1";
+    const serverSettings = configService.get(CONFIG_KEYS.SERVER);
+    const bindAddress = serverSettings?.bindAddress ?? "127.0.0.1";
     const certificate = await this.certificateService.generate(
       certsDir,
-      bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
+      bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES,
+      serverSettings?.publicHostname
     );
 
     await configService.set(

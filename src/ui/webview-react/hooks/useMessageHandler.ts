@@ -3350,7 +3350,9 @@ export function createMessageHandlers(
       ? message.availableIps
       : [];
     settingsStore.setAvailableIps(ips);
-    settingsStore.setSelectedDisplayIp(ips[0] ?? null);
+    // No explicit choice yet: ServerSection defaults to the public hostname
+    // when one is set, otherwise to the first detected address.
+    settingsStore.setSelectedDisplayIp(null);
     settingsStore.setPortFallback(message.portFallback ?? null);
     settingsStore.setBindAddressFallback(message.bindAddressFallback ?? null);
     // Server started — any previously regenerated token is now in effect

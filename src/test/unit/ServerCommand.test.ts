@@ -166,6 +166,49 @@ suite("ServerCommand", () => {
     assert.ok(tty.endsWith("Press Ctrl+C to stop the server."));
   });
 
+  test("lists the public hostname URL ahead of the LAN URLs", () => {
+    const banner = formatServerBanner(
+      "https://localhost:4747/?token=secret",
+      ["192.168.1.4"],
+      false,
+      "QR",
+      true,
+      "https://my-pc.example.ts.net:4747/?token=secret"
+    );
+    const lines = banner.split("\n");
+    const publicLine = lines.indexOf(
+      "Public: https://my-pc.example.ts.net:4747/?token=secret"
+    );
+    assert.ok(publicLine > 0);
+    assert.ok(publicLine < lines.findIndex((line) => line.startsWith("LAN:")));
+    assert.ok(
+      !formatServerBanner("http://localhost:4747/", [], false, "QR", false)
+        .split("\n")
+        .some((line) => line.startsWith("Public:"))
+    );
+  });
+
+  test("normalizes the public hostname setting and drops invalid values", () => {
+    assert.strictEqual(
+      resolveServerSettings({}, "C:/repo", {
+        ...settings,
+        publicHostname: " My-PC.Example.ts.net ",
+      }).publicHostname,
+      "my-pc.example.ts.net"
+    );
+    assert.strictEqual(
+      resolveServerSettings({}, "C:/repo", {
+        ...settings,
+        publicHostname: "https://my-pc.example.ts.net",
+      }).publicHostname,
+      null
+    );
+    assert.strictEqual(
+      resolveServerSettings({}, "C:/repo", settings).publicHostname,
+      null
+    );
+  });
+
   test("selects the platform URL handler without shell interpolation", () => {
     const url = "https://localhost/?token=secret&theme=dark";
     assert.deepStrictEqual(getUrlOpener(url, "win32"), {

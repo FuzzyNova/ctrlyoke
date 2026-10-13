@@ -96,7 +96,9 @@ Anyone on the network who has the link can control ctrlyoke on your computer,
 including starting workflows that run harness CLIs with the permissions you
 configured. Bind to all interfaces only on networks you trust. To connect from
 outside your network, use a VPN rather than forwarding the port to the
-internet.
+internet. [Connect from anywhere](/pro/remote-access) covers Tailscale, your
+own VPN server, the **Public hostname** setting, and keeping your computer
+awake.
 
 ## HTTPS
 
@@ -163,14 +165,15 @@ workspaces apart.
 
 ## Settings
 
-| Setting                | Default     | What it does                                                       |
-| ---------------------- | ----------- | ------------------------------------------------------------------ |
-| `server.autoStart`     | `false`     | Start the server when the extension activates.                     |
-| `server.port`          | `4747`      | The port to listen on.                                             |
-| `server.fallbackPorts` | `[]`        | Ports to try, in order, when `port` is taken.                      |
-| `server.bindAddress`   | `127.0.0.1` | `127.0.0.1` for this computer only, `0.0.0.0` for every interface. |
-| `server.tls`           | off         | `enabled`, `certPath` and `keyPath` for HTTPS.                     |
-| `server.theme`         | `auto`      | `auto`, `light` or `dark`.                                         |
+| Setting                 | Default     | What it does                                                                                           |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------ |
+| `server.autoStart`      | `false`     | Start the server when the extension activates.                                                         |
+| `server.port`           | `4747`      | The port to listen on.                                                                                 |
+| `server.fallbackPorts`  | `[]`        | Ports to try, in order, when `port` is taken.                                                          |
+| `server.bindAddress`    | `127.0.0.1` | `127.0.0.1` for this computer only, `0.0.0.0` for every interface.                                     |
+| `server.publicHostname` | empty       | Name to reach this computer from outside your network ([details](/pro/remote-access#public-hostname)). |
+| `server.tls`            | off         | `enabled`, `certPath` and `keyPath` for HTTPS.                                                         |
+| `server.theme`          | `auto`      | `auto`, `light` or `dark`.                                                                             |
 
 See the [settings reference](/reference/settings) for the full list and
 [Settings](/guide/settings) for user and workspace scopes.

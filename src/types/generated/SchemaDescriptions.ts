@@ -534,6 +534,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "server.iconBgColor": "Background color for the workspace icon (hex, e.g. '#1076ba'). Applies to the SVG favicon and PWA homescreen icon.",
   "server.iconFgColor": "Foreground (path/stroke) color for the workspace icon (hex, e.g. '#ffffff'). Applies to the SVG favicon and PWA homescreen icon.",
   "server.port": "Port for the ctrlyoke hosted server.",
+  "server.publicHostname": "Hostname other devices use to reach this computer from outside your network, such as a Tailscale MagicDNS name, a dynamic DNS name, or a public IPv4 address. Just the name: no https://, port, or path. Used only when the server listens on all interfaces: it is added to a generated HTTPS certificate (generate the certificate again after changing it) and offered under Connect via for the link and QR code. Leave empty to use only this computer's detected network addresses.",
   "server.theme": "Color theme for the hosted server UI.",
   "server.tls": "TLS configuration for the hosted server.",
   "server.tls.certPath": "Path to the TLS certificate file.",

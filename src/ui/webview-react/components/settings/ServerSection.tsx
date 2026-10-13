@@ -40,6 +40,10 @@ import { downloadBlob } from "@utils/download";
 import { WebviewLog } from "@utils/logger";
 import { isIosDevice } from "@utils/platform";
 import { getServerCertLanCoverage } from "@utils/serverCertCoverage";
+import {
+  normalizePublicHostname,
+  withUrlHostname,
+} from "@root/utils/ServerPublicHostname";
 
 function buildIconPreviewDataUrl(bgColor: string, fgColor: string): string {
   const svg = appIconSvg
@@ -146,6 +150,26 @@ export function ServerSection({
     return () => clearTimeout(t);
   }, [certDownloadPending]);
 
+  // The addresses a phone can use, offered under "Connect via". Detected LAN
+  // addresses are reported only while the server really listens on all
+  // interfaces, which is also the only case where the public hostname applies,
+  // so it is offered (first, as the default) only alongside them.
+  const publicHostname = normalizePublicHostname(server.publicHostname);
+  const connectAddresses = useMemo(
+    () =>
+      publicHostname && availableIps.length > 0
+        ? [
+            publicHostname,
+            ...availableIps.filter((ip) => ip !== publicHostname),
+          ]
+        : availableIps,
+    [publicHostname, availableIps]
+  );
+  const connectAddress =
+    selectedDisplayIp && connectAddresses.includes(selectedDisplayIp)
+      ? selectedDisplayIp
+      : (connectAddresses[0] ?? null);
+
   const certExpired =
     lastCertGenerated != null &&
     new Date(lastCertGenerated.expiresAt) < new Date();
@@ -153,7 +177,7 @@ export function ServerSection({
     ? getServerCertLanCoverage(
         server.bindAddress,
         lastCertGenerated.sans,
-        selectedDisplayIp ?? availableIps[0] ?? null
+        connectAddress
       )
     : null;
 
@@ -206,20 +230,34 @@ export function ServerSection({
       ? bindAddressFallback
       : null;
 
-  const showIpSelector =
-    server.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES &&
-    availableIps.length > 1;
+  const listensOnAllInterfaces =
+    server.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES;
+  const showIpSelector = listensOnAllInterfaces && connectAddresses.length > 1;
 
-  const displayUrl = useMemo(() => {
-    if (!serverUrl || !selectedDisplayIp) return serverUrl;
-    try {
-      const u = new URL(serverUrl);
-      u.hostname = selectedDisplayIp;
-      return u.toString();
-    } catch {
-      return serverUrl;
-    }
-  }, [serverUrl, selectedDisplayIp]);
+  const displayUrl = useMemo(
+    () =>
+      serverUrl && connectAddress
+        ? withUrlHostname(serverUrl, connectAddress)
+        : serverUrl,
+    [serverUrl, connectAddress]
+  );
+
+  const [publicHostnameError, setPublicHostnameError] = useState(false);
+  const handlePublicHostnameCommit = useCallback(
+    (raw: string) => {
+      if (raw.trim() === "") {
+        setPublicHostnameError(false);
+        onUpdate(SETTING_PATHS.SERVER_PUBLIC_HOSTNAME, "");
+        return;
+      }
+      const normalized = normalizePublicHostname(raw);
+      setPublicHostnameError(normalized === null);
+      if (normalized !== null) {
+        onUpdate(SETTING_PATHS.SERVER_PUBLIC_HOSTNAME, normalized);
+      }
+    },
+    [onUpdate]
+  );
 
   const certDownloadUrl = useMemo(() => {
     if (!server.tls?.enabled) return null;
@@ -290,7 +328,11 @@ export function ServerSection({
 
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-  const displayIpOptions = availableIps.map((ip) => ({ label: ip, value: ip }));
+  const displayIpOptions = connectAddresses.map((address) => ({
+    label:
+      address === publicHostname ? `${address} (public hostname)` : address,
+    value: address,
+  }));
   const bindAddressOptions = [
     {
       label: "Localhost only (127.0.0.1)",
@@ -411,7 +453,7 @@ export function ServerSection({
               >
                 <CustomSelect
                   id="server-display-ip"
-                  value={selectedDisplayIp ?? ""}
+                  value={connectAddress ?? ""}
                   onChange={setSelectedDisplayIp}
                   options={displayIpOptions}
                   triggerAriaLabel="Choose server connection address"
@@ -598,6 +640,37 @@ export function ServerSection({
                   ctrlyoke started on localhost only — a Pro license or active
                   remote-access trial is required for All Interfaces (
                   {bindAddressFallbackForCurrentSetting.requestedBindAddress}).
+                </span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Public hostname — only meaningful for an all-interfaces server */}
+        {!isStandalone && listensOnAllInterfaces && (
+          <div>
+            <SettingInputRow
+              settingKey="server.publicHostname"
+              id="server-public-hostname"
+              {...rowProps}
+            >
+              <LocalTextInput
+                id="server-public-hostname"
+                value={server.publicHostname ?? ""}
+                placeholder="my-pc.example.ts.net"
+                onCommit={handlePublicHostnameCommit}
+                disabled={!licenseAccess.hasRemoteAccess}
+                aria-invalid={publicHostnameError || undefined}
+                spellCheck={false}
+                className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground font-mono focus:outline-hidden focus:border-focus-border disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </SettingInputRow>
+            {publicHostnameError && (
+              <p className="mt-1 flex items-baseline gap-1 text-xs text-error-fg">
+                <Icon name="warning" className="shrink-0 translate-y-px" />
+                <span>
+                  Enter just a hostname or IPv4 address, such as
+                  my-pc.example.ts.net, without https://, a port, or a path.
                 </span>
               </p>
             )}

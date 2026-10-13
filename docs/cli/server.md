@@ -14,6 +14,9 @@ ctrlyoke server
 
 The launch banner prints the local URL, a terminal QR code, and a clickable
 OSC 8 link in terminals that support it. The URL includes an access token.
+When the server listens on all interfaces and `server.publicHostname` is set,
+the banner also prints a `Public:` link and the QR code uses it; see
+[Connect from anywhere](/pro/remote-access#public-hostname).
 Use `--open` to open that URL in your default desktop browser:
 
 ```sh

@@ -161,6 +161,7 @@ export default defineConfig({
           items: [
             { text: "Overview & activation", link: "/pro/" },
             { text: "Use ctrlyoke on your phone", link: "/pro/mobile-setup" },
+            { text: "Connect from anywhere", link: "/pro/remote-access" },
           ],
         },
       ],

@@ -378,6 +378,12 @@ export interface CtrlYokeGlobalSettings {
     fallbackPorts: number[];
     theme: "auto" | "light" | "dark";
     bindAddress: string; // "127.0.0.1" = localhost only; "0.0.0.0" = all interfaces
+    /**
+     * Name other devices use to reach this computer from outside the local
+     * network (dynamic DNS, Tailscale MagicDNS, or a public IPv4 address).
+     * Empty when unused. See `src/utils/ServerPublicHostname.ts`.
+     */
+    publicHostname: string;
     tls: {
       enabled: boolean;
       certPath: string;
@@ -653,6 +659,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     fallbackPorts: [],
     theme: "auto",
     bindAddress: "127.0.0.1",
+    publicHostname: "",
     tls: {
       enabled: false,
       certPath: "",
