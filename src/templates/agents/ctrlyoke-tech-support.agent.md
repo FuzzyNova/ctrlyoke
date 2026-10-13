@@ -264,7 +264,7 @@ Use these patterns when relevant:
   - Run sends the prompt and starts/resumes execution. With no active queue, it queues the prompt into a new workflow and runs it.
   - Run Next appears when there are pending prompts; it inserts/queues the new prompt at the current execution position so it runs next rather than only appending to the end.
   - Keyboard shortcuts mirror the buttons: Ctrl+Enter runs, Ctrl+Shift+Enter queues.
-- To create a structured starter workflow: use New Workflow from Template, select Simple Feature, Full Feature, Fix Tests, or Spec-Driven Loop, fill variables, then Run. This is useful when the user already wants a multi-step plan.
+- To create a structured starter workflow: use New Workflow from Template, select Simple Feature, Full Feature, Fix Tests, Spec-Driven Loop, or Feature-Driven Loop, fill variables, then Run. This is useful when the user already wants a multi-step plan.
 - Manual workflow files and `.prompt.md` files are advanced/power-user paths. They are useful for versioned workflows, reusable automation, CI-style generation, or running from context menus, but new users usually do not need to create files by hand.
 - To make the AI keep checking its work: add an end condition with a real command such as `npm test`, `npm run compile`, or a custom script.
 - To keep context between adjacent steps: set `resumeSession: true`, but only for small related chains that fit one conversation. For larger work, write a plan file and reference it from fresh sessions.

@@ -14,10 +14,10 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 </entryPoints>
 
 <workflowTemplates>
-- Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`template-starter`, `simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`, `parallel-research`, `bug-hunt-loop`, `bug-drain-loop`). `blank` is special-cased in code and has no file here.
+- Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`template-starter`, `simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`, `feature-driven-loop`, `parallel-research`, `bug-hunt-loop`, `bug-drain-loop`). `blank` is special-cased in code and has no file here.
 - Workspace and user custom templates are discovered from `.ctrlyoke/templates/*.ctrlyoke.{yaml,yml,json}` as scope-qualified custom IDs. A basename is unique within a scope regardless of format. Do not assume files under `src/templates/workflows/` cover all available templates.
 - `_templateMeta` is authoring-only metadata for the picker UI; `createWorkflow()` strips it before writing the real workflow file.
-- `spec-driven-loop` is the canonical example of `finalStep` orchestration, and deliberately ships `steps: []` — the orchestrator stages every step itself. It relies on `agent`, `mcpServers: [ctrlyoke]`, `resumeSession: true`, and `sessionId: finalStep` together; the resumed session (not `priorContext`) is what carries the plan across loops.
+- `spec-driven-loop` is the canonical example of `finalStep` orchestration: its visible `plan` step uses `workflow-orchestrator` to stage work, and its `review` finalStep resumes that session with `sessionId: 1`. `feature-driven-loop` is the plan-first variant: it writes a plan document before the orchestrator step, so its review finalStep resumes `sessionId: 2`. Both rely on `agent`, `mcpServers: [ctrlyoke]`, and `resumeSession: true`; the resumed session (not `priorContext`) carries the plan across loops.
 - A final-step-only workflow is valid everywhere — empty `steps` plus a `finalStep` passes both schema validation and `validateWorkflowSteps`. See the `hasExecutableSteps` bullet in `core.instructions.md` before adding any new "does this workflow have work" check.
 </workflowTemplates>
 

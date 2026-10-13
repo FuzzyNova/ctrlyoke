@@ -62,6 +62,8 @@ interface CustomSelectProps extends HideableProps {
   disabled?: boolean;
   className?: string;
   triggerAriaLabel?: string;
+  ariaRequired?: boolean;
+  onBlur?: () => void;
   triggerTitle?: string;
   /** Schema property represented by this select. */
   schemaPath?: string;
@@ -103,6 +105,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   disabled = false,
   className = "",
   triggerAriaLabel,
+  ariaRequired,
+  onBlur,
   triggerTitle,
   schemaPath,
   namespace,
@@ -334,10 +338,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-controls={listboxId}
+        onBlur={onBlur}
         aria-label={
           schemaPath
-            ? schemaAriaLabel(triggerLabel, schemaPath)
-            : triggerAriaLabel
+            ? schemaAriaLabel(
+                `${triggerLabel}${ariaRequired ? " (required)" : ""}`,
+                schemaPath
+              )
+            : ariaRequired
+              ? `${triggerAriaLabel ?? triggerLabel} (required)`
+              : triggerAriaLabel
         }
         aria-describedby={warning ? warningId : undefined}
         title={

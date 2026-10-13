@@ -283,6 +283,10 @@
         "multiline": {
           "type": "boolean",
           "description": "Render a text variable as a multiline input."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Require a non-blank value for this variable before creating a workflow."
         }
       },
       "if": {

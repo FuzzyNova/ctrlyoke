@@ -48,6 +48,15 @@ describe("TemplateVariableField", () => {
     expect(screen.getByRole("textbox", { name: "model" })).toBeTruthy();
   });
 
+  it("marks required fields visually and on the control", () => {
+    renderField({ name: "topic", type: "text", required: true });
+    expect(screen.getByRole("textbox", { name: "topic" })).toHaveAttribute(
+      "aria-required",
+      "true"
+    );
+    expect(screen.getByText("*")).toHaveAttribute("aria-hidden", "true");
+  });
+
   it.each([
     ["file", "Browse for file"],
     ["directory", "Browse for folder"],

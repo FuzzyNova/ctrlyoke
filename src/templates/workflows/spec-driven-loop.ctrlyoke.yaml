@@ -5,6 +5,7 @@ _templateMeta:
   variables:
     specFile:
       type: file
+      required: true
       fileFilter:
         - "**/*.md"
         - "**/*.txt"

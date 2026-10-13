@@ -388,4 +388,75 @@ describe("TemplateModal variable defaults", () => {
       screen.queryByText(/Default template \((User|Workspace)\)/)
     ).toBeNull();
   });
+
+  it("keeps both create actions disabled until required values are filled", () => {
+    openModal(template([{ name: "feature", type: "text", required: true }]));
+    fireEvent.change(screen.getByRole("textbox", { name: "Workflow Name" }), {
+      target: { value: "new-workflow" },
+    });
+    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create & Run" })).toBeDisabled();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "feature" }), {
+      target: { value: "  Build a feature  " },
+    });
+    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create & Run" })).toBeEnabled();
+  });
+
+  it("marks required fields and satisfies a required default immediately", () => {
+    openModal(
+      template([
+        { name: "feature", type: "text", required: true, default: "Build it" },
+      ])
+    );
+    expect(screen.getByRole("textbox", { name: "feature" })).toHaveAttribute(
+      "aria-required",
+      "true"
+    );
+    expect(screen.getByText("*")).toHaveAttribute("aria-hidden", "true");
+    fireEvent.change(screen.getByRole("textbox", { name: "Workflow Name" }), {
+      target: { value: "new-workflow" },
+    });
+    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create & Run" })).toBeEnabled();
+  });
+
+  it("shows required errors on blur and clears them when a value is entered", () => {
+    openModal(template([{ name: "feature", type: "text", required: true }]));
+    const field = screen.getByRole("textbox", { name: "feature" });
+    fireEvent.blur(field);
+    expect(screen.getByText("This field is required")).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: "Build it" } });
+    expect(screen.queryByText("This field is required")).toBeNull();
+  });
+
+  it("does not block creation for optional fields", () => {
+    openModal(template([{ name: "notes", type: "text" }]));
+    fireEvent.change(screen.getByRole("textbox", { name: "Workflow Name" }), {
+      target: { value: "new-workflow" },
+    });
+    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create & Run" })).toBeEnabled();
+  });
+
+  it("clears required errors when switching templates", () => {
+    const requiredTemplate = template([
+      { name: "feature", type: "text", required: true },
+    ]);
+    const optionalTemplate = {
+      ...template([{ name: "notes", type: "text" }]),
+      id: "optional",
+    };
+    openModal(requiredTemplate);
+    act(() => {
+      useUiStore.setState({ templates: [requiredTemplate, optionalTemplate] });
+    });
+    fireEvent.blur(screen.getByRole("textbox", { name: "feature" }));
+    expect(screen.getByText("This field is required")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Template"), {
+      target: { value: "optional" },
+    });
+    expect(screen.queryByText("This field is required")).toBeNull();
+  });
 });

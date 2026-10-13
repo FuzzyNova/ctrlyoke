@@ -51,6 +51,14 @@
       "icon": "$(sync)"
     },
     {
+      "id": "feature-driven-loop",
+      "label": "Feature-Driven Loop",
+      "description": "Describe a feature and get a plan-first self-extending loop that queues and reviews work until the goal is met",
+      "file": "feature-driven-loop.ctrlyoke.yaml",
+      "tags": ["advanced", "loop", "feature"],
+      "icon": "$(sync)"
+    },
+    {
       "id": "bug-hunt-loop",
       "label": "Bug Hunt Loop",
       "description": "Open-ended loop that reviews the last round of fixes, files new bugs in your repo, and queues their fixes",

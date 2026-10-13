@@ -1,0 +1,102 @@
+schemaVersion: 1
+_templateMeta:
+  name: Feature-Driven Loop
+  description: "Describe a feature and get a plan-first self-extending loop that queues and reviews work until the goal is met."
+  variables:
+    featureDescription:
+      type: text
+      multiline: true
+      required: true
+      description: What you want built. Include any constraints you care about.
+    planDoc:
+      type: text
+      default: .ctrlyoke/plans/plan.md
+      description: Where the plan is written. Rename it per feature so runs do not overwrite each other.
+
+# Every queued step is its own island: a fresh session that gets all the context
+# it needs from its own prompt and the repo. The plan step and finalStep are the
+# exception — the finalStep resumes the plan step's orchestrator session.
+resumeSession: false
+priorContext: none
+
+# First write a durable plan, then let the orchestrator stage visible work and
+# review it repeatedly until the goal is met.
+steps:
+  - name: write-plan
+    prompt: |
+      Feature request:
+      {featureDescription}
+
+      Analyze the repository and write an actionable implementation plan to {planDoc}.
+      Create the parent directories if they do not exist. Do not implement the feature.
+      The plan must be specific enough for another agent to carry out without guessing.
+      Include:
+
+      - A concise goal and checkable requirements. Phrase each requirement so an
+        implementer can verify whether it is satisfied.
+      - The files and code areas likely to change, with the role of each change.
+        Inspect the repository and name real paths; distinguish confirmed touchpoints
+        from areas that need investigation.
+      - The existing patterns, interfaces, schemas, and conventions the implementation
+        should follow, plus any compatibility or security constraints that matter.
+      - A staged implementation order. Put shared contracts and foundations before
+        consumers, keep related tests beside each behavior change, and identify any
+        independent work only when it can truly proceed in parallel.
+      - A test strategy with focused tests for each requirement and the relevant type,
+        lint, and broader test commands. Do not claim tests passed unless you ran them.
+      - Open questions, assumptions, and risks. Resolve what repository evidence can
+        answer; clearly flag anything that still needs a decision.
+
+      Keep the plan concise, grounded in the current code, and free of speculative
+      implementation details. Do not modify implementation files.
+    endCondition:
+      script: node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "{planDoc}"
+      maxRetries: 2
+      onFail: retry
+      retryPrompt: |
+        The plan document was not created at {planDoc}. Create its parent directories
+        if needed, then write the complete implementation plan to that exact path.
+        Do not implement the feature yet.
+
+  - name: plan
+    agent: workflow-orchestrator
+    mcpServers:
+      - ctrlyoke
+    prompt: |
+      Be my ctrlyoke orchestrator for this feature plan:
+      @{planDoc}
+
+      Review the plan and the codebase it touches, then use the append_step
+      tool to add one step for each chunk of work that can reasonably be completed in a
+      single session, in the correct staging order. Update the plan first if you find a
+      clear problem with it; if the plan needs more thought than you can give it here,
+      make finalizing the plan the first queued step. Use your judgment on how to split
+      the work — that judgment is the point of this workflow. Every queued step must be
+      self-contained, must keep the planning docs current, and must commit its own work
+      before finishing.
+
+      Once you've queued the plan, end your turn. A review pass will run automatically
+      after everything you queued has completed.
+
+finalStep:
+  name: review
+  agent: workflow-orchestrator
+  mcpServers:
+    - ctrlyoke
+  # Resume the orchestrator session started by the plan step (step 2 above), so
+  # it remembers the work it staged. The write-plan step has its own session.
+  resumeSession: true
+  sessionId: 2
+  prompt: |
+    Resume your ctrlyoke orchestrator session for this feature plan:
+    @{planDoc}
+
+    All the steps you queued should have run by now. Verify the work is actually
+    complete, inspect it, fix any errors you find, and commit your cleanup. If a large
+    chunk is still missing or wrong, use edit_step/remove_step/reorder_steps for
+    pending work or append_step to add more steps and
+    let the loop continue. Once everything is done, give me a real summary of what was
+    built and end your turn.
+
+    You don't need to work out whether this is your first review pass — you're
+    resuming your planning session, so read the state and act accordingly.

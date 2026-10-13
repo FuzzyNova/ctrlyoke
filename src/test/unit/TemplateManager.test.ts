@@ -227,6 +227,7 @@ suite("TemplateManager variable metadata", () => {
         "      default: npm test",
         "      description: The test command.",
         "      multiline: true",
+        "      required: true",
         "steps:",
         "  - prompt: hi",
         "",
@@ -245,6 +246,7 @@ suite("TemplateManager variable metadata", () => {
         default: "npm test",
         description: "The test command.",
         multiline: true,
+        required: true,
       });
     });
 
@@ -298,7 +300,7 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(entry.options, undefined);
     });
 
-    test("ignores non-string default and non-true multiline", () => {
+    test("ignores non-string default and non-true boolean fields", () => {
       const tm = makeManager();
       const content = [
         "_templateMeta:",
@@ -306,16 +308,18 @@ suite("TemplateManager variable metadata", () => {
         "    x:",
         "      default: 123",
         "      multiline: false",
+        "      required: yes",
         "steps: []",
       ].join("\n");
       const entry = tm.parseTemplateMeta(content).variables.x;
       assert.strictEqual(entry.default, undefined);
       assert.strictEqual(entry.multiline, undefined);
+      assert.strictEqual(entry.required, undefined);
     });
   });
 
   suite("mergeVariablesWithMeta", () => {
-    test("enriches extracted variables by name (type, default, description, multiline)", () => {
+    test("enriches extracted variables by name (type, default, description, multiline, required)", () => {
       const tm = makeManager();
       const extracted = [
         { name: "featureDescription" },
@@ -325,6 +329,7 @@ suite("TemplateManager variable metadata", () => {
         featureDescription: {
           type: "text",
           multiline: true,
+          required: true,
           description: "What to build",
         },
         planDocument: { type: "text", default: "docs/plan.md" },
@@ -334,6 +339,7 @@ suite("TemplateManager variable metadata", () => {
         name: "featureDescription",
         type: "text",
         multiline: true,
+        required: true,
         description: "What to build",
       });
       assert.deepStrictEqual(merged[1], {
@@ -790,6 +796,136 @@ suite("TemplateManager variable metadata", () => {
   });
 
   suite("workflow instantiation", () => {
+    test("registers feature-driven-loop with a required description and default plan path", async () => {
+      const tm = makeManager();
+      tm.getBuiltInTemplatesPath = () =>
+        path.resolve(__dirname, "../../templates/workflows");
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: makeTempDir() } });
+
+      const templates = await tm.getAvailableTemplates();
+      const featureTemplate = templates.find(
+        (template: { id: string }) => template.id === "feature-driven-loop"
+      );
+      const specTemplate = templates.find(
+        (template: { id: string }) => template.id === "spec-driven-loop"
+      );
+      assert.ok(featureTemplate);
+      assert.deepStrictEqual(
+        featureTemplate.variables.map(
+          (variable: { name: string; required?: boolean; default?: string }) =>
+            [variable.name, variable.required, variable.default]
+        ),
+        [
+          ["featureDescription", true, undefined],
+          ["planDoc", undefined, ".ctrlyoke/plans/plan.md"],
+        ]
+      );
+      assert.strictEqual(
+        specTemplate?.variables.find(
+          (variable: { name: string }) => variable.name === "specFile"
+        )?.required,
+        true
+      );
+
+      const workflow = await tm.createWorkflow("feature-driven-loop", {
+        featureDescription: "x",
+      });
+      assert.strictEqual(workflow.steps?.length, 2);
+      assert.strictEqual(workflow.steps?.[0].name, "write-plan");
+      assert.strictEqual(workflow.steps?.[0].agent, undefined);
+      assert.strictEqual(
+        workflow.steps?.[0].endCondition?.script,
+        'node -e "process.exit(require(\'fs\').existsSync(process.argv[1])?0:1)" ".ctrlyoke/plans/plan.md"'
+      );
+      assert.strictEqual(workflow.steps?.[0].endCondition?.maxRetries, 2);
+      assert.strictEqual(workflow.steps?.[0].endCondition?.onFail, "retry");
+      assert.ok(workflow.steps?.[0].endCondition?.retryPrompt);
+      assert.strictEqual(workflow.steps?.[1].name, "plan");
+      assert.strictEqual(workflow.finalStep?.name, "review");
+      assert.strictEqual(workflow.finalStep?.sessionId, 2);
+      assert.ok(workflow.steps?.[1].prompt.includes("@.ctrlyoke/plans/plan.md"));
+      assert.ok(workflow.finalStep?.prompt.includes("@.ctrlyoke/plans/plan.md"));
+
+      await assert.rejects(
+        tm.createWorkflow("feature-driven-loop", {}),
+        /Missing required template variable\(s\): featureDescription/
+      );
+      await assert.rejects(
+        tm.createWorkflow("spec-driven-loop", {}),
+        /Missing required template variable\(s\): specFile/
+      );
+    });
+
+    test("rejects missing, empty, and whitespace-only required variables by name", async () => {
+      const tm = makeManager();
+      tm.getTemplateContent = async () =>
+        [
+          "_templateMeta:",
+          "  variables:",
+          "    featureDescription:",
+          "      required: true",
+          "    specFile:",
+          "      required: true",
+          "steps:",
+          "  - prompt: Build {featureDescription} from {file:specFile}",
+        ].join("\n");
+
+      await assert.rejects(
+        tm.createWorkflow("custom:test", {}),
+        /Missing required template variable\(s\): featureDescription, specFile/
+      );
+      await assert.rejects(
+        tm.createWorkflow("custom:test", {
+          featureDescription: "",
+          specFile: "docs/spec.md",
+        }),
+        /Missing required template variable\(s\): featureDescription/
+      );
+      await assert.rejects(
+        tm.createWorkflow("custom:test", {
+          featureDescription: "  \t",
+          specFile: "  ",
+        }),
+        /Missing required template variable\(s\): featureDescription, specFile/
+      );
+    });
+
+    test("accepts a required variable's declared default when omitted", async () => {
+      const tm = makeManager();
+      tm.getTemplateContent = async () =>
+        [
+          "_templateMeta:",
+          "  variables:",
+          "    featureDescription:",
+          "      required: true",
+          "      default: Build the feature",
+          "steps:",
+          "  - prompt: '{featureDescription}'",
+        ].join("\n");
+
+      const workflow = await tm.createWorkflow("custom:test", {});
+      assert.strictEqual(workflow.steps![0].prompt, "Build the feature");
+    });
+
+    test("fills absent optional variables while preserving defaults and retry placeholders", async () => {
+      const tm = makeManager();
+      tm.getTemplateContent = async () =>
+        [
+          "_templateMeta:",
+          "  variables:",
+          "    withDefault:",
+          "      default: Authored default",
+          "steps:",
+          "  - prompt: 'Optional [{optional}], default [{withDefault}], retry [{stdout}]'",
+        ].join("\n");
+
+      const workflow = await tm.createWorkflow("custom:test", {});
+      assert.strictEqual(
+        workflow.steps![0].prompt,
+        "Optional [], default [Authored default], retry [{stdout}]"
+      );
+    });
+
     test("preserves multiline feature descriptions in simple-feature prompts", async () => {
       const tm = makeManager();
       const workspaceDir = makeTempDir();
