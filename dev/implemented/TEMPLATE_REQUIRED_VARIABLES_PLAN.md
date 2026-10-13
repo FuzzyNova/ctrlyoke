@@ -1,6 +1,6 @@
 # Template Required Variables + Feature-Driven Loop Plan
 
-**Status:** In progress
+**Status:** Implemented (Phase 4 deferred)
 
 > **2026-10-10 audit:** Nothing here has landed — `TemplateVariable` has no `required`, there is no
 > `feature-driven-loop` template, and untouched optional variables without a default still leave a
@@ -61,9 +61,9 @@ Phase 2 fixes it for genuinely optional ones.
 - **Conditional template sections** (`{?var}…{/var}`). Their only motivating use case was the
   combined spec-or-description template, which this plan replaces with two templates. Substituting a
   blank optional variable to an empty string (Phase 2) covers the remaining need.
-- Any change to workflow execution, the queue, or the schema in `schemas/workflow-schema.json`.
-  `_templateMeta` is stripped before validation (`TemplateManager.createWorkflow`, ~line 664), so nothing
-  here touches the workflow contract.
+- Any change to workflow execution, the queue, or persisted workflow fields. The authoring schema
+  recognizes `_templateMeta.variables.required`; `TemplateManager.createWorkflow` strips `_templateMeta`
+  before validating the generated workflow, so this does not change the workflow contract.
 
 ---
 
@@ -237,8 +237,10 @@ backslashes survive:
 
 ```yaml
 script: node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "{planDoc}"
-returns: "true"
 ```
+
+The schema has removed `returns`; omit it. Set `onFail: retry` with `maxRetries` and
+`retryPrompt` so a missing plan document sends the write-plan step back to create it.
 
 ### Registration
 
@@ -276,6 +278,11 @@ role, and a well-written prompt is enough. Revisit only if plan quality disappoi
   self-extending loop" section points users at Spec-Driven Loop; mention the description-first
   variant in the same sentence.
 
+**Done:** Added and registered the plan-first Feature-Driven Loop, made Spec-Driven Loop's
+`specFile` required, verified the generated workflow shape and required-input behavior, and
+updated the template guidance and built-in lists. The orchestrator agent already describes its
+input generically as the plan used by the workflow, so it needed no file-specific wording change.
+
 ---
 
 ## Phase 4 (optional) — reserved `{workflowName}` token
@@ -311,10 +318,10 @@ meantime.
 
 ## Open questions
 
-1. **Does `required` deserve schema/JSON-schema surfacing for custom templates?** Custom templates are
-   plain JSON with no schema validation of `_templateMeta` today; malformed metadata is silently
-   ignored by `parseTemplateMeta`. Staying consistent with that (ignore unknown/ill-typed `required`)
-   is the low-risk answer for v1.
+1. **Should `required` be in the authoring schema? Resolved: yes.** The workflow parser validates
+   source template files before instantiation, and `_templateMeta.variables` is closed to unknown
+   properties. The schema therefore accepts the authoring-only boolean while generated workflows
+   still strip `_templateMeta` before validation.
 2. **Does `feature-driven-loop`'s `planDoc` want its own `required`?** It has a default, so the gate
    never fires. Left optional; revisit if users blank it and hit a workflow with no plan target.
 

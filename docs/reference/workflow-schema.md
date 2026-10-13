@@ -1029,6 +1029,12 @@ Initial value used when the user leaves the variable unchanged.
 
 Render a text variable as a multiline input.
 
+### `required` {#template-variable-required}
+
+- **Type:** `boolean`
+
+Require a non-blank value for this variable before creating a workflow.
+
 ## Template placeholder {#template-placeholder}
 
 A template variable placeholder such as {harness}. Only accepted in authoring files that declare \_templateMeta.

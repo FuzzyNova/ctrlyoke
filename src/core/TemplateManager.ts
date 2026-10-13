@@ -154,6 +154,7 @@ export class TemplateManager {
     "fix-tests",
     "full-feature",
     "spec-driven-loop",
+    "feature-driven-loop",
     "bug-hunt-loop",
     "bug-drain-loop",
   ] as const;

@@ -796,6 +796,66 @@ suite("TemplateManager variable metadata", () => {
   });
 
   suite("workflow instantiation", () => {
+    test("registers feature-driven-loop with a required description and default plan path", async () => {
+      const tm = makeManager();
+      tm.getBuiltInTemplatesPath = () =>
+        path.resolve(__dirname, "../../templates/workflows");
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: makeTempDir() } });
+
+      const templates = await tm.getAvailableTemplates();
+      const featureTemplate = templates.find(
+        (template: { id: string }) => template.id === "feature-driven-loop"
+      );
+      const specTemplate = templates.find(
+        (template: { id: string }) => template.id === "spec-driven-loop"
+      );
+      assert.ok(featureTemplate);
+      assert.deepStrictEqual(
+        featureTemplate.variables.map(
+          (variable: { name: string; required?: boolean; default?: string }) =>
+            [variable.name, variable.required, variable.default]
+        ),
+        [
+          ["featureDescription", true, undefined],
+          ["planDoc", undefined, ".ctrlyoke/plans/plan.md"],
+        ]
+      );
+      assert.strictEqual(
+        specTemplate?.variables.find(
+          (variable: { name: string }) => variable.name === "specFile"
+        )?.required,
+        true
+      );
+
+      const workflow = await tm.createWorkflow("feature-driven-loop", {
+        featureDescription: "x",
+      });
+      assert.strictEqual(workflow.steps?.length, 2);
+      assert.strictEqual(workflow.steps?.[0].name, "write-plan");
+      assert.strictEqual(workflow.steps?.[0].agent, undefined);
+      assert.strictEqual(
+        workflow.steps?.[0].endCondition?.script,
+        'node -e "process.exit(require(\'fs\').existsSync(process.argv[1])?0:1)" ".ctrlyoke/plans/plan.md"'
+      );
+      assert.strictEqual(workflow.steps?.[0].endCondition?.maxRetries, 2);
+      assert.strictEqual(workflow.steps?.[0].endCondition?.onFail, "retry");
+      assert.ok(workflow.steps?.[0].endCondition?.retryPrompt);
+      assert.strictEqual(workflow.steps?.[1].name, "plan");
+      assert.strictEqual(workflow.finalStep?.name, "review");
+      assert.strictEqual(workflow.finalStep?.sessionId, 2);
+      assert.ok(workflow.steps?.[1].prompt.includes("@.ctrlyoke/plans/plan.md"));
+      assert.ok(workflow.finalStep?.prompt.includes("@.ctrlyoke/plans/plan.md"));
+
+      await assert.rejects(
+        tm.createWorkflow("feature-driven-loop", {}),
+        /Missing required template variable\(s\): featureDescription/
+      );
+      await assert.rejects(
+        tm.createWorkflow("spec-driven-loop", {}),
+        /Missing required template variable\(s\): specFile/
+      );
+    });
+
     test("rejects missing, empty, and whitespace-only required variables by name", async () => {
       const tm = makeManager();
       tm.getTemplateContent = async () =>
