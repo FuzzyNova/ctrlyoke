@@ -26,6 +26,8 @@ import type {
 } from "../../types/CliOutputTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { StepOutputSource } from "../../utils/StepOutputText";
+import { getStepOutputText } from "../../utils/StepOutputText";
+import { StepOutputTextMode } from "../../types/DashboardConstants";
 import {
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_EVENT_TYPES,
@@ -74,8 +76,6 @@ export interface ResolvedRunAttempt {
 
 interface ResolvedRunAttemptOutput extends ResolvedRunAttempt {
   output: CliOutput;
-  /** Exact response used for runtime responseText and output previews. */
-  responseText: string;
   kind: TimelineAttemptKind;
 }
 
@@ -84,7 +84,6 @@ export interface ResolvedRunAttemptValue
   prompt?: string;
   kind?: TimelineAttemptKind;
   startReason?: TimelineAttemptStartReason;
-  responseText?: string;
   terminalState?: TimelineAttemptTerminalState;
   terminalReason?: string;
 }
@@ -393,7 +392,6 @@ export class RunOutputResolver {
             attempt: {
               ...attempt,
               output: event.payload.cliOutput,
-              responseText: event.payload.cliOutput.response,
               kind:
                 event.responseKind ??
                 (event.payload.cliOutput.source ===
@@ -550,7 +548,6 @@ export class RunOutputResolver {
           // A fresh aggregate supersedes every delta buffered before it.
           state.deltas.discard(key);
           state.value.output = event.attempt.output;
-          state.value.responseText = event.attempt.responseText;
           state.value.kind = event.attempt.kind;
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK:
@@ -629,13 +626,7 @@ export class RunOutputResolver {
     key: string
   ): ResolvedRunAttemptValue {
     if (state.value.output?.isStreaming) {
-      const merged = state.deltas.flush(key, state.value.output);
-      // `responseText` tracks streamed text only — an events-only delta leaves
-      // the aggregate's own responseText authoritative.
-      if (merged.response !== state.value.output.response) {
-        state.value.responseText = merged.response;
-      }
-      state.value.output = merged;
+      state.value.output = state.deltas.flush(key, state.value.output);
     }
     return state.value;
   }
@@ -1046,7 +1037,9 @@ export class RunOutputResolver {
       const changes = this.getPriorContextFileChanges(value.output?.structured?.events ?? [], options, manifestPath);
       const structuredEvents = value.output?.structured?.events ?? [];
       const transcript = structuredEvents.length ? projectPriorContextTranscript(structuredEvents) : undefined;
-      const legacyText = structuredEvents.length ? undefined : value.responseText;
+      const legacyText = structuredEvents.length
+        ? undefined
+        : getStepOutputText(value, StepOutputTextMode.TRANSCRIPT);
       const scriptVerdict = getStepScriptVerdict(value);
       if (scriptVerdict) scriptVerdicts.set(getAttemptKey(value), scriptVerdict);
       const prior = fileHistory.get(key) ?? { earlier: new Map<string, PriorContextFileChange>(), attemptCount: 0 };
@@ -1054,10 +1047,10 @@ export class RunOutputResolver {
       if (!prior.latest || isNewerProjectionAttempt(identity, prior.latest.identity)) {
         if (prior.latest) mergePriorFileChanges(prior.earlier, prior.latest.changes);
         prior.latest = { identity, changes };
-        latestValues.set(key, { value: { ...value, output: undefined, responseText: legacyText }, transcript, legacyText });
+        latestValues.set(key, { value: { ...value, output: undefined }, transcript, legacyText });
       } else if (event.continuation && sameProjectionAttempt(prior.latest.identity, value)) {
         prior.latest.changes = changes;
-        latestValues.set(key, { value: { ...value, output: undefined, responseText: legacyText }, transcript, legacyText });
+        latestValues.set(key, { value: { ...value, output: undefined }, transcript, legacyText });
       } else if (!sameProjectionAttempt(prior.latest.identity, value)) {
         mergePriorFileChanges(prior.earlier, changes);
       }
@@ -1088,7 +1081,7 @@ export class RunOutputResolver {
                 .filter(Boolean)
                 .join("\n")
                 .trim()
-            : (value.responseText ?? "");
+            : (latestValues.get(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index }))?.legacyText ?? "");
           const scriptVerdict = scriptVerdicts.get(getAttemptKey(value));
           return text
             ? [
@@ -1566,7 +1559,6 @@ function foldSettledAttempt(
     definition: continued.definition ?? existing.definition,
     kind: continued.kind ?? existing.kind,
     output: continued.output ?? existing.output,
-    responseText: continued.responseText ?? existing.responseText,
     scriptOutput: continued.scriptOutput ?? existing.scriptOutput,
   };
 }

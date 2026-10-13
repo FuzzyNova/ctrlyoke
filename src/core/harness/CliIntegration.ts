@@ -723,11 +723,10 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   // Deliberately not redacted: these emitters carry the harness's canonical,
-  // still-in-progress response. WorkflowExecutor consumes their payloads to
-  // build `$prior-context`/`$step:N` for later prompts and the runtime
-  // output cache (see PromptQueue.cacheRuntimeOutput), so pre-redacting here
-  // would send the model back its own corrupted output next turn — the same
-  // failure mode that broke the standalone shim's generated JS. Every
+  // still-in-progress response. WorkflowExecutor uses the payload while
+  // persisting the current CliOutput response, so pre-redacting here would
+  // send the model back its own corrupted output next turn — the same failure
+  // mode that broke the standalone shim's generated JS. Every
   // downstream consumer that actually persists or displays this content
   // (TimelineRecorder, dashboard/hosted transports, OutputHistoryManager via
   // TimelineRecorder, CLI output, Markdown export) redacts independently at

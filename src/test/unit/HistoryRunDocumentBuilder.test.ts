@@ -44,20 +44,52 @@ suite("HistoryRunDocumentBuilder", () => {
       documentsFromRun.map(({ text, textLower }) => ({ text, textLower })),
       [
         { text: "promp", textLower: "promp" },
-        { text: "respo", textLower: "respo" },
         { text: "strea", textLower: "strea" },
         { text: "statu", textLower: "statu" },
       ]
     );
     assert.strictEqual(documentsFromRun[0]?.attemptIndex, 2);
-    assert.strictEqual(documentsFromRun[2]?.attemptIndex, 3);
-    assert.strictEqual(documentsFromRun[3]?.attemptIndex, 0);
+    assert.strictEqual(documentsFromRun[1]?.attemptIndex, 3);
+    assert.strictEqual(documentsFromRun[2]?.attemptIndex, 0);
     assert.strictEqual(documentsFromRun[0]?.harness, "codex-cli");
     assert.strictEqual(documentsFromRun[0]?.sessionId, "session-1");
     assert.strictEqual(
       documentsFromRun[0]?.id,
       "builder-test:run-1000:7:1:prompt:content:0"
     );
+  });
+
+  test("indexes script stdout as output text", () => {
+    const builder = new HistoryRunDocumentBuilder();
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const [document] = builder.buildEventDocuments(
+      {
+        eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+        workflowId: "builder-test",
+        runId: 7,
+        sequence: 4,
+        timestampMs: 1400,
+        target,
+        runIndex: 0,
+        attemptIndex: 4,
+        definitionRevision: 1,
+        payload: {
+          command: "npm test",
+          stdout: "stdout search hit",
+          stderr: "stderr details",
+          exitCode: 1,
+        },
+      },
+      {
+        manifest: createManifest(),
+        workflowKey: "builder-test" as WorkflowKey,
+        runRef: "run-1000" as RunRef,
+        workflowName: "Builder Test",
+      }
+    );
+    assert.strictEqual(document?.eventKind, "script");
+    assert.strictEqual(document?.matchField, "output");
+    assert.strictEqual(document?.text, "stdout search hit");
   });
 
   async function* streamEvents(

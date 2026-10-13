@@ -12,6 +12,7 @@ import { MAX_INDEXED_TEXT_LENGTH } from "../../core/orchestration/HistorySearchI
 import { projectHistorySearchResult } from "../../core/orchestration/HistorySearchResultUtils";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
+  CLI_EVENT_TYPES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
@@ -186,6 +187,10 @@ suite("HistoryRunDeepScanner", () => {
       response,
       elapsed: 1,
       isStreaming: false,
+      structured: {
+        events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: response } }],
+        metadata: {},
+      },
     };
   }
 });

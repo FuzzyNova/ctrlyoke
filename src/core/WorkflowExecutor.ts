@@ -2410,17 +2410,6 @@ export class WorkflowExecutor {
           elapsed: duration,
         });
       }
-      // The completed response is durable in events.jsonl before it becomes
-      // visible to any active-only cache or subsequent prompt construction.
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.promptQueue.cacheRuntimeOutput(target.stepIndex, { responseText });
-      } else {
-        this.promptQueue.storeFinalStepResponseText(
-          target.loopIndex,
-          responseText
-        );
-      }
-
       // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
       // rather than reading prompt.endCondition directly, which misses workflow-level defaults.
       const resolvedEndCondition = resolvedProperties.endCondition;
@@ -2788,8 +2777,6 @@ export class WorkflowExecutor {
       });
 
       const evalResult = report.evaluationResult;
-      const scriptRuntimeOutput = report.scriptRuntimeOutput;
-      const outputText = report.outputText;
 
       if (evalResult.cancelled) {
         runtime.cancelAttempt(target, attemptIndex);
@@ -2846,18 +2833,6 @@ export class WorkflowExecutor {
       }
 
       const succeeded = evalResult.errored ? true : evalResult.passed;
-
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
-          responseText: outputText,
-          scriptOutput: scriptRuntimeOutput,
-        });
-      } else {
-        this.promptQueue.storeFinalStepResponseText(
-          target.loopIndex,
-          outputText
-        );
-      }
 
       const onPass = step.onPass ?? CONDITION_ACTIONS.CONTINUE;
       const onFail = step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
@@ -4508,7 +4483,7 @@ export class WorkflowExecutor {
       currentIndex: number,
       retryAttemptIndex: number,
       promptSource: RetryPromptSource
-    ): Promise<{ responseText: string; attemptIndex: number } | null> => {
+    ): Promise<{ attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
       let resolvedProperties = PropertyResolver.resolve(
@@ -4716,7 +4691,6 @@ export class WorkflowExecutor {
       );
 
       return {
-        responseText: result.responseText,
         attemptIndex: sendAttemptIndex,
       };
     };
@@ -5226,19 +5200,6 @@ export class WorkflowExecutor {
         undefined,
         resolvedProperties?.harness
       );
-
-      if (stoppedOutput.response) {
-        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-          this.promptQueue.cacheRuntimeOutput(target.stepIndex, {
-            responseText: stoppedOutput.response,
-          });
-        } else {
-          this.promptQueue.storeFinalStepResponseText(
-            target.loopIndex,
-            stoppedOutput.response
-          );
-        }
-      }
 
       await this.trackStatusMessage(
         context,

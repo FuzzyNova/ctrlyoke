@@ -2310,7 +2310,6 @@ suite("CLI history inspection command handlers", () => {
         runIndex: 2,
         attemptIndex: 1,
         prompt: "the prompt",
-        responseText: "the complete answer",
         definition: {
           definitionRevision: 7,
           definition: {
@@ -2326,7 +2325,7 @@ suite("CLI history inspection command handlers", () => {
           isStreaming: false,
           structured: {
             events: [
-              { type: "text", data: { text: "event one" } },
+              { type: "text", data: { text: "the complete answer" } },
               { type: "toolCall", data: { toolName: "Read" } },
             ],
           } as never,
@@ -2611,7 +2610,6 @@ suite("CLI history inspection command handlers", () => {
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       {
         prompt: "SECRET PROMPT",
-        responseText: "SECRET RESPONSE",
         output: {
           prompt: "SECRET PROMPT",
           response: "SECRET RESPONSE",
@@ -2678,7 +2676,6 @@ suite("CLI history inspection command handlers", () => {
     const hugeCommandOutput = "x".repeat(50_000);
     const aiAttempt = settledAttempt(target, {
       prompt: "P".repeat(10_000),
-      responseText: "0123456789",
       output: {
         prompt: "P".repeat(10_000),
         response: "0123456789",
@@ -2782,7 +2779,6 @@ suite("CLI history inspection command handlers", () => {
     // Script attempts page their combined stdout and stderr.
     const scriptAttempt = settledAttempt(target, {
       kind: "script",
-      responseText: "ignored",
       output: {
         response: "ignored",
         elapsed: 1,
@@ -2812,6 +2808,37 @@ suite("CLI history inspection command handlers", () => {
       exitCode: 1,
     });
     assert.ok(scriptIo.output[0].length < 1_000);
+  });
+
+  test("pages transcript text without duplicating thinking events", async () => {
+    const key = "release" as WorkflowKey;
+    const attempt = settledAttempt(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      {
+        output: {
+          response: "stale flattened value",
+          elapsed: 1,
+          isStreaming: false,
+          structured: structuredEvents([
+            { type: CLI_EVENT_TYPES.TEXT, data: { text: "answer" } },
+            { type: CLI_EVENT_TYPES.THINKING, data: { text: "reasoning" } },
+          ]),
+        },
+      }
+    );
+    const io = new TestIo();
+    await showHistoryCommand(
+      { workflow: key, run: "3", step: "0", json: true, summary: true, limit: "200" },
+      io,
+      dependencies(
+        new TestLineageRepository([key], new Map(), new Map()),
+        historyManagerForShow(key),
+        new TestRunOutputResolver([attempt])
+      )
+    );
+    const record = JSON.parse(io.output[0]) as { responseText: string };
+    assert.strictEqual(record.responseText, "answer\n[Thinking]\nreasoning\n[/Thinking]");
+    assert.strictEqual(record.responseText.match(/\[Thinking\]/g)?.length, 1);
   });
 
   test("validates paging selections before writing anything", async () => {
@@ -3671,6 +3698,15 @@ async function createDeepSearchRun(
           response: `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}`,
           elapsed: 1,
           isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}` },
+              },
+            ],
+            metadata: {},
+          },
         },
       },
     },

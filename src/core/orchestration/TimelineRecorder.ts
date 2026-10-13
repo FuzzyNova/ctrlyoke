@@ -416,11 +416,6 @@ function truncateHistorySearchEvent(
       maxTextLength,
       onStringTruncated
     );
-    cliOutput.response = truncateRequiredString(
-      cliOutput.response,
-      maxTextLength,
-      onStringTruncated
-    );
     cliOutput.cliCommand = truncateString(
       cliOutput.cliCommand,
       maxTextLength,
@@ -433,6 +428,19 @@ function truncateHistorySearchEvent(
         onStringTruncated
       );
     }
+  } else if (
+    event.eventType === TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED
+  ) {
+    event.payload.stdout = truncateRequiredString(
+      event.payload.stdout,
+      maxTextLength,
+      onStringTruncated
+    );
+    event.payload.stderr = truncateRequiredString(
+      event.payload.stderr,
+      maxTextLength,
+      onStringTruncated
+    );
   } else if (
     event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
   ) {

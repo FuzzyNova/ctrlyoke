@@ -7,12 +7,14 @@ import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
 import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
 import { PriorContextPreviewBuilder } from "../../utils/PriorContextPreviewBuilder";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { getStepOutputText } from "../../utils/StepOutputText";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import {
   EXECUTION_STATES,
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
   CLI_EVENT_TYPES,
+  StepOutputTextMode,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
 } from "../../types/DashboardConstants";
 import {
@@ -432,7 +434,7 @@ suite("RunOutputResolver", () => {
       0,
       0
     );
-    assert.strictEqual(original?.responseText, "original response");
+    assert.strictEqual(original?.output?.response, "original response");
     assert.strictEqual(original?.definition?.definitionRevision, 1);
     assert.strictEqual(
       (original?.definition?.step as { prompt?: string }).prompt,
@@ -459,13 +461,13 @@ suite("RunOutputResolver", () => {
       stderr: "",
       exitCode: 0,
     });
-    assert.strictEqual(script?.responseText, "pass");
+    assert.strictEqual(script?.output?.response, "pass");
     assert.strictEqual(script?.terminalState, "failed");
 
     const retry = await resolver.resolveAttempt(manifestPath, queueZero, 1, 1);
     assert.strictEqual(retry?.prompt, "retry with diagnostics");
     assert.strictEqual(retry?.startReason, "retry");
-    assert.strictEqual(retry?.responseText, "partial retry response");
+    assert.strictEqual(retry?.output?.response, "partial retry response");
     assert.strictEqual(retry?.terminalState, "stopped");
 
     const resumedFinal = await resolver.resolveAttempt(
@@ -475,7 +477,7 @@ suite("RunOutputResolver", () => {
       0
     );
     assert.strictEqual(resumedFinal?.startReason, "resumed");
-    assert.strictEqual(resumedFinal?.responseText, finalResponse);
+    assert.strictEqual(resumedFinal?.output?.response, finalResponse);
     assert.strictEqual(resumedFinal?.output?.response, finalResponse);
     assert.strictEqual(resumedFinal?.terminalState, "cancelled");
     assert.strictEqual(resumedFinal?.definition?.definitionRevision, 2);
@@ -500,7 +502,7 @@ suite("RunOutputResolver", () => {
       queueScript,
     ]);
     assert.strictEqual(
-      latest.get("queue:0")?.responseText,
+      latest.get("queue:0")?.output?.response,
       "partial retry response",
       "read-output and active restore use the latest run/attempt for a target"
     );
@@ -731,7 +733,7 @@ suite("RunOutputResolver", () => {
         attempts.push(event.attempt);
       }
     }
-    assert.strictEqual(attempts[0]?.responseText, "checking before skip");
+    assert.strictEqual(attempts[0]?.output?.response, "checking before skip");
     assert.strictEqual(attempts[0]?.kind, "condition");
     assert.strictEqual(
       await resolver.resolveAttempt(manifestPath, target, 0, 0),
@@ -828,12 +830,12 @@ suite("RunOutputResolver", () => {
     const resolver = new RunOutputResolver(recorder);
     const latest = await resolver.resolveLatestAttempts(manifestPath, [target]);
     assert.strictEqual(
-      latest.get("queue:0")?.responseText,
+      latest.get("queue:0")?.output?.response,
       "partial step response"
     );
     assert.strictEqual(latest.get("queue:0")?.prompt, "the actual step prompt");
     assert.strictEqual(
-      (await resolver.resolveAttempt(manifestPath, target, 0, 0))?.responseText,
+      (await resolver.resolveAttempt(manifestPath, target, 0, 0))?.output?.response,
       "partial step response"
     );
     const items = await resolver.resolvePriorContextItems(
@@ -936,9 +938,9 @@ suite("RunOutputResolver", () => {
     }
 
     assert.strictEqual(settled.length, 1);
-    assert.strictEqual(settled[0].attempt.responseText, "the answer");
+    assert.strictEqual(settled[0].attempt.output?.response, "the answer");
     assert.strictEqual(
-      settled[0].attempt.responseText?.split("the answer").length,
+      settled[0].attempt.output?.response.split("the answer").length,
       2,
       "the aggregate must supersede the earlier deltas rather than append them"
     );
@@ -999,7 +1001,11 @@ suite("RunOutputResolver", () => {
 
     assert.strictEqual(settled.length, 1);
     assert.strictEqual(settled[0].unterminated, true);
-    assert.strictEqual(settled[0].attempt.responseText, "partial output");
+    assert.strictEqual(
+      getStepOutputText(settled[0].attempt, StepOutputTextMode.TRANSCRIPT),
+      "partial output",
+      "interrupted attempts retain their streamed text in the event projection"
+    );
     assert.strictEqual(settled[0].attempt.terminalState, undefined);
   });
 
@@ -1145,12 +1151,12 @@ suite("RunOutputResolver", () => {
     const latest = (
       await resolver.resolveLatestAttempts(manifestPath, [target])
     ).get("queue:0");
-    assert.strictEqual(latest?.responseText, expected);
+    assert.strictEqual(latest?.output?.response, expected);
     assert.strictEqual(latest?.prompt, "run it");
     assert.strictEqual(latest?.terminalState, "completed");
 
     const single = await resolver.resolveAttempt(manifestPath, target, 0, 0);
-    assert.strictEqual(single?.responseText, expected);
+    assert.strictEqual(single?.output?.response, expected);
     assert.strictEqual(single?.prompt, "run it");
 
     const priorItems = await resolver.resolvePriorContextItems(
@@ -1257,7 +1263,7 @@ suite("RunOutputResolver", () => {
       [secondTarget, firstTarget]
     );
     assert.deepStrictEqual(
-      settled.map((event) => event.attempt.responseText),
+      settled.map((event) => event.attempt.output?.response),
       ["second output", "first output plus more"]
     );
     assert.strictEqual(
@@ -1331,7 +1337,7 @@ suite("RunOutputResolver", () => {
     );
 
     const resolved = await resolver.resolveAttempt(manifestPath, target, 0, 0);
-    const resolvedResponse = resolved?.responseText;
+    const resolvedResponse = resolved?.output?.response;
     assert.strictEqual(resolvedResponse?.length, response.length);
     assert.strictEqual(resolvedResponse, response);
   });
@@ -1434,7 +1440,7 @@ suite("RunOutputResolver", () => {
         0,
         0
       );
-      assert.strictEqual(restored?.responseText, boundary.response);
+      assert.strictEqual(restored?.output?.response, boundary.response);
       assert.strictEqual(restored?.terminalState, boundary.terminal);
     }
   });

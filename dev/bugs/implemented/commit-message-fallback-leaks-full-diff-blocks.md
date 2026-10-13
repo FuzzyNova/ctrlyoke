@@ -37,3 +37,5 @@ The full-diff leak path is gone after Phase 1; captured response text now uses o
 setting, and `extractTextFromEvents` then always emits the one-line form, which this regex
 matches. Phase 2 of that plan (D8c) fixes both problems properly: the generator reads only the
 step's `TEXT` events and checks success, and the regexes are deleted.
+
+**Resolution:** fixed in this commit

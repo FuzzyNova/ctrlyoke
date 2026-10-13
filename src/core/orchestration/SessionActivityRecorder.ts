@@ -22,7 +22,7 @@ import {
   type DefinitionRevisionContext,
 } from "./OutputHistoryManager";
 import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
-import { extractTextFromEvents } from "../harness/shared/CliResponseTextExtractor";
+import { getTranscriptText } from "../../utils/StepOutputText";
 import { Log } from "../../utils/Log";
 import { appendResponseText } from "../../utils/ResponseTextJoin";
 
@@ -237,7 +237,7 @@ export class SessionActivityRecorder {
     const contentEvents = events.filter(
       (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
     );
-    const followUpText = extractTextFromEvents({ events: contentEvents });
+    const followUpText = getTranscriptText(contentEvents);
     const latestContextWindowSync = [...events]
       .reverse()
       .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
@@ -344,20 +344,6 @@ export class SessionActivityRecorder {
         );
       }
     }
-    if (followUpText) {
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.port.promptQueue.appendPromptResponseText(
-          target.stepIndex,
-          followUpText
-        );
-      } else {
-        this.port.promptQueue.appendFinalStepResponseText(
-          target.loopIndex,
-          followUpText
-        );
-      }
-    }
-
     if (!historyFilePath || !existingOutput) {
       return;
     }
@@ -365,12 +351,12 @@ export class SessionActivityRecorder {
       const merged: CliOutput = {
         ...existingOutput,
         response: appendResponseText(existingOutput.response, followUpText),
-        structured: existingOutput.structured
+        structured: eventsToAppend.length
           ? {
-              ...existingOutput.structured,
+              ...(existingOutput.structured ?? { metadata: {} }),
               events: [...existingEvents, ...eventsToAppend],
             }
-          : undefined,
+          : existingOutput.structured,
         tokens:
           contextWindow && existingOutput.tokens
             ? {

@@ -12,6 +12,7 @@ import {
   CommitMessageGenerationError,
   getCommitMessageStatePaths,
   MAX_DIFF_BYTES,
+  resolveCommitMessageFallback,
 } from "../../git/CommitMessageGenerator";
 import { parseSecretReferences } from "../../utils/SecretReferenceParser";
 import {
@@ -34,6 +35,43 @@ import type {
 const execFileAsync = promisify(execFile);
 
 suite("CommitMessageGenerator", () => {
+  test("fallback uses only assistant text from a successful attempt", () => {
+    const failed = {
+      terminalState: "failed",
+      output: {
+        response: "harness failed: full failure body",
+        structured: {
+          events: [{ type: "text", data: { text: "harness failed" } }],
+        },
+      },
+    } as any;
+    assert.strictEqual(resolveCommitMessageFallback(failed), undefined);
+
+    const completed = {
+      terminalState: "completed",
+      output: {
+        response: "```diff\n+secret diff body\n```",
+        structured: {
+          events: [
+            { type: "thinking", data: { text: "private reasoning" } },
+            {
+              type: "fileEdit",
+              data: {
+                path: "src/file.ts",
+                diff: "```diff\n+secret diff body\n```",
+              },
+            },
+            { type: "text", data: { text: "`fix: handle empty input`" } },
+          ],
+        },
+      },
+    } as any;
+    assert.strictEqual(
+      resolveCommitMessageFallback(completed),
+      "fix: handle empty input"
+    );
+  });
+
   test("keeps commit state under state root while retaining repository cwd", () => {
     const repositoryRoot = path.join(os.tmpdir(), "repo-b");
     const stateRoot = path.join(os.tmpdir(), "workspace-state");

@@ -3,6 +3,7 @@ import {
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
   SCRIPT_OUTPUT_SOURCES,
+  EXECUTION_PHASES,
   type ScriptOutputSource,
 } from "../../types/DashboardConstants";
 import type { CliOutput, CliEvent } from "../../types/WebviewMessageTypes";
@@ -84,13 +85,6 @@ export class HistoryCandidateExtractor {
         cliOutput.prompt
       ),
       ...this.toCandidate(
-        scriptEventKind ?? HISTORY_EVENT_KINDS.RESPONSE,
-        scriptEventKind
-          ? HISTORY_MATCH_FIELDS.OUTPUT
-          : HISTORY_MATCH_FIELDS.CONTENT,
-        cliOutput.response
-      ),
-      ...this.toCandidate(
         scriptEventKind ?? HISTORY_EVENT_KINDS.CLI_COMMAND,
         HISTORY_MATCH_FIELDS.COMMAND,
         cliOutput.cliCommand
@@ -125,6 +119,21 @@ export class HistoryCandidateExtractor {
       HISTORY_EVENT_KINDS.STATUS,
       HISTORY_MATCH_FIELDS.CONTENT,
       message
+    );
+  }
+
+  collectScriptExecutionCandidates(
+    scriptOutput: { stdout: string; stderr: string },
+    phase?: string
+  ): MatchCandidate[] {
+    const eventKind =
+      phase === EXECUTION_PHASES.PRE_CONDITION
+        ? HISTORY_EVENT_KINDS.PRE_CONDITION
+        : phase === EXECUTION_PHASES.END_CONDITION
+          ? HISTORY_EVENT_KINDS.END_CONDITION
+          : HISTORY_EVENT_KINDS.SCRIPT;
+    return [scriptOutput.stdout, scriptOutput.stderr].flatMap((text) =>
+      this.toCandidate(eventKind, HISTORY_MATCH_FIELDS.OUTPUT, text)
     );
   }
 

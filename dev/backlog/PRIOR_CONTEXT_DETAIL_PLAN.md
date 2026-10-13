@@ -1,6 +1,6 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phases 0 and 1 complete; Phase 2 steps 1–2 complete (chunk 2a); Phase 2 steps 3–6 and Phase 3 remain.
+> **Status:** Phases 0 and 1 complete; Phase 2 steps 1–3 complete (chunks 2a–2b); Phase 2 steps 4–6 and Phase 3 remain.
 > Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer

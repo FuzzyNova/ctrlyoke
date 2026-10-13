@@ -617,14 +617,6 @@ suite("ScriptExecutionReporter", () => {
     ]) {
       const events: string[] = [];
       const { reporter, context } = makeReporter(result, events);
-      let cacheWrites = 0;
-      (
-        context as ScriptExecutionReporterContext & {
-          cacheRuntimeOutput?: () => void;
-        }
-      ).cacheRuntimeOutput = () => {
-        cacheWrites += 1;
-      };
 
       const report = await reporter.report({
         context,
@@ -657,7 +649,6 @@ suite("ScriptExecutionReporter", () => {
       assert.strictEqual(report.verdict.actual, result.actual);
       assert.strictEqual(report.verdict.timedOut, result.timeout);
       assert.strictEqual(report.verdict.error, result.error);
-      assert.strictEqual(cacheWrites, 0);
     }
   });
 

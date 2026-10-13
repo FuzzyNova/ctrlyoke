@@ -43,6 +43,7 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   DEFAULT_MAX_STEPS,
+  CLI_EVENT_TYPES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PARALLEL_GROUP_ADMISSION,
@@ -168,6 +169,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     options: {
       prompt?: string;
       responseText?: string;
+      isStreaming?: boolean;
       worktree?: WorkingFileWorktreeRuntime;
       stepCount?: number;
       currentIndex?: number;
@@ -261,7 +263,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
               prompt: options.prompt ?? `prompt-${suffix}`,
               response: options.responseText ?? `output-${suffix}`,
               elapsed: 1,
-              isStreaming: false,
+              isStreaming: options.isStreaming ?? false,
             },
           },
         },
@@ -1116,6 +1118,37 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         2
       )
     );
+  });
+
+  test("reads an interrupted attempt's text from streamed events", async () => {
+    const server = await setup();
+    const run = await createRun("interrupted-output", "2026-01-01T00-00-00-000Z", {
+      responseText: "",
+      isStreaming: true,
+    });
+    const recorder = new TimelineRecorder();
+    await recorder.appendEvents(
+      WorkflowPaths.manifestPath(workspaceRoot, run.workflowKey, run.runRef),
+      [
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+          timestampMs: 3,
+          target: { kind: "queue", stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: {
+            events: [
+              { type: CLI_EVENT_TYPES.TEXT, data: { text: "partial answer" } },
+            ],
+          },
+        },
+      ]
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(await server.invokeTool("read_output", {}));
+    assert.strictEqual(output.outputs[0].responseText, "partial answer");
   });
 
   test("returns a next cursor for a forward page", async () => {

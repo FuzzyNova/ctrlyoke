@@ -16,7 +16,6 @@ import {
   HARNESS_IDS,
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
-  STEP_STATUS,
   type HarnessId,
   INTERACTIVE_TERMINAL_MODES,
 } from "../../types/DashboardConstants";
@@ -504,7 +503,10 @@ suite("WorkflowInstance session activity forwarding", () => {
     }
   });
 
-  test("appends resumed assistant text only to the active queue output cache", async () => {
+  test("retains resumed events when the existing aggregate has no structured output", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-session-activity-no-structured-")
+    );
     const platform = new MockPlatform();
     const instance = new WorkflowInstance(
       platform,
@@ -513,77 +515,60 @@ suite("WorkflowInstance session activity forwarding", () => {
       () => new MockHarnessIntegration(undefined, false),
       () => {},
       () => {},
-      process.cwd()
+      tempWorkspace
     );
+    try {
+      const historyInit = await initTestRun(
+        instance.outputHistoryManager,
+        tempWorkspace,
+        "wf-session-activity-no-structured"
+      );
+      (instance as any).activeHistoryFilePath = historyInit.filePath;
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target,
+        [
+          {
+            prompt: "do the thing",
+            response: "before.",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: Date.now() - 1000,
+            attemptIndex: 0,
+            runIndex: 0,
+          } as any,
+        ]
+      );
+      (instance as any).sessionActivityRecorder.lastCompletedActivityTarget = {
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+      };
 
-    instance.promptQueue.loadPrompts({ steps: [{ prompt: "queue-1" }] });
-    instance.promptQueue.cacheRuntimeOutput(0, { responseText: "before." });
-    (instance as any).sessionActivityRecorder.lastCompletedActivityTarget = {
-      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-      runIndex: 0,
-      attemptIndex: 0,
-    };
+      await (instance as any).handleSessionActivityResumed([
+        {
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: Date.now(),
+          data: { text: " and after." },
+        },
+      ]);
 
-    // A backgrounded task auto-resuming produces genuine assistant TEXT events.
-    await (instance as any).handleSessionActivityResumed([
-      {
-        type: CLI_EVENT_TYPES.TEXT,
-        timestamp: Date.now(),
-        data: { text: " and after." },
-      },
-    ]);
-
-    assert.strictEqual(
-      (instance.promptQueue as any).runtimeOutputCache.get(0).responseText,
-      "before.\n\n and after."
-    );
-    assert.ok((instance.promptQueue as any).state.steps[0]._runtime?.stepId);
-    assert.strictEqual(
-      (instance.promptQueue as any).state.steps[0]._runtime?.startedAt,
-      undefined
-    );
-  });
-
-  test("appends resumed assistant text only to the active finalStep cache", async () => {
-    const platform = new MockPlatform();
-    const instance = new WorkflowInstance(
-      platform,
-      undefined,
-      new MockIntegrationFactory(platform),
-      () => new MockHarnessIntegration(undefined, false),
-      () => {},
-      () => {},
-      process.cwd()
-    );
-
-    instance.promptQueue.loadPrompts({
-      steps: [{ prompt: "queue-1" }],
-      finalStep: { prompt: "final-loop" },
-    });
-    await instance.promptQueue.setFinalStepRuntime({
-      phase: FINAL_STEP_PHASES.FINAL_STEP,
-      loopCount: 0,
-      status: STEP_STATUS.RUNNING,
-      startedAt: Date.now(),
-    });
-    await instance.promptQueue.storeFinalStepResponseText(0, "loop-before.");
-    (instance as any).sessionActivityRecorder.lastCompletedActivityTarget = {
-      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
-      runIndex: 0,
-      attemptIndex: 0,
-    };
-
-    await (instance as any).handleSessionActivityResumed([
-      {
-        type: CLI_EVENT_TYPES.TEXT,
-        timestamp: Date.now(),
-        data: { text: " loop-after." },
-      },
-    ]);
-
-    assert.strictEqual(
-      (instance.promptQueue as any).finalStepResponseCache.get(0),
-      "loop-before.\n\n loop-after."
-    );
+      const history = await instance.outputHistoryManager.loadHistory(
+        historyInit.filePath
+      );
+      const output = history.orderedEntries.find(
+        (entry: any) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+      ) as any;
+      assert.ok(output?.cliOutput?.structured);
+      assert.ok(
+        output.cliOutput.structured.events.some(
+          (event: any) => event.type === CLI_EVENT_TYPES.TEXT && event.data.text === " and after."
+        )
+      );
+    } finally {
+      instance.dispose();
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
   });
 });

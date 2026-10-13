@@ -108,6 +108,11 @@ export class HistoryRunDocumentBuilder {
         return this.candidateExtractor.collectStructuredEventsCandidates(
           event.payload.events
         );
+      case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED:
+        return this.candidateExtractor.collectScriptExecutionCandidates(
+          event.payload,
+          event.phase
+        );
       case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
         return this.candidateExtractor.collectStatusCandidates(
           event.payload.statusMessage.message
@@ -121,6 +126,7 @@ export class HistoryRunDocumentBuilder {
     switch (event.eventType) {
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
+      case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED:
         return event.attemptIndex;
       default:
         return 0;

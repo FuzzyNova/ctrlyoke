@@ -1633,6 +1633,15 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         {
           prompt: "descriptor repair",
           response: "delete-search-document-needle",
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.TEXT,
+                data: { text: "delete-search-document-needle" },
+              },
+            ],
+            metadata: {},
+          },
           elapsed: 1,
           isStreaming: false,
           timestampMs: 9_001,
