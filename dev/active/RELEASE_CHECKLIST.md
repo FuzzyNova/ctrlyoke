@@ -1026,6 +1026,19 @@ later version at no compatibility cost.
     `buildPriorContextXmlFromItems`, independent of the workflow step type. The rest of the plan is
     additive. It also claims a new `$summary:` reference prefix. A literal collision in existing
     prompts is very unlikely, but reserving it in the parser now costs nothing.
+- [ ] **Prior context: one meaning on every machine** —
+      [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../backlog/PRIOR_CONTEXT_DETAIL_PLAN.md) Phase 1.
+  - **Cost if late:** `$previous` output currently depends on the
+    `general.includeFullDiffsInPriorContext` setting of the machine that ran the earlier step, and
+    it leaves out commands and tool calls. If `$previous` is changed to render from the timeline's
+    events after launch, the prompt text of every existing authored workflow that uses prior
+    context changes on upgrade, and so do the stored settings files that still carry the key.
+  - **Decided 2026-10-13: Phases 1–3 before launch.**
+    - Phase 1: render the full form from structured events and remove the setting.
+    - Phase 2: delete the duplicated `CliOutput.response`; bump the timeline format to v2, the
+      first exercise of the persisted-format bump path; close the Export Output gaps; add Copy
+      Full Output.
+    - Phase 3: `$summary:` and `priorContextDetail`.
 - [x] **Docs: move content between pages before the URLs are indexed** —
       [`DOCUMENTATION_GAPS_PLAN.md`](../backlog/DOCUMENTATION_GAPS_PLAN.md).
   - **Done 2026-10-10.** Script steps, comparisons and script resolution moved to
@@ -1102,7 +1115,7 @@ already-versioned lineage descriptor).
 | CLI distribution (VSIX + npm)                                              | DONE (0.1.2 on npm)   | Phase 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; first real tag push done (`v0.1.2` green 2026-09-25); `full-suite.yml` runs weekly but has failed every run since 2026-09-14 and needs triage                                                                                                                                                                                                                                                                                                   |
 | Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here                                                                                                                                                                                                                                                                                                                                                                  |
-| Pre-release compatibility window                                           | OPEN — REVIEW         | Only the script verdict in prior context remains; the trial-clock bug, guardrails and docs page moves are done. See the section above                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Pre-release compatibility window                                           | OPEN — REVIEW         | Prior-context rework (`PRIOR_CONTEXT_DETAIL_PLAN.md` Phases 1–3) remains; everything else is done. See the section above                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---

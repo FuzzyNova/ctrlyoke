@@ -470,6 +470,13 @@ bounded alternative.
 
 #### D12b. `$summary:` — a bounded excerpt of any step
 
+> **Superseded by [`PRIOR_CONTEXT_DETAIL_PLAN.md`](PRIOR_CONTEXT_DETAIL_PLAN.md)** (2026-10-13).
+> That plan renders prior context from the timeline's structured events instead of the
+> capture-time `responseText`, removes `general.includeFullDiffsInPriorContext`, and redefines
+> the summary of a prompt step: authored-prompt head, a `<filesChanged>` digest, and the tail of the
+> text only. The grammar, `priorContextDetail`, "full wins", and the workflow budget below carry
+> over unchanged. Its truncation markers (`omitted`/`omittedBytes`) replace `truncated` here.
+
 **Grammar:** `$summary:` is a prefix on the existing selectors, not a new set of selectors:
 `$summary:previous`, `$summary:previous:3`, `$summary:step:1,4-5`, `$summary:all`,
 `$summary:finalStep`, `$summary:allFinalStep`. The body after `summary:` goes through the same
