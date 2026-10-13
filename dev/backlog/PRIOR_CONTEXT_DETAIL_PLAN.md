@@ -1,6 +1,7 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phase 0 complete; Phases 1–3 remain. Supersedes D12b (`$summary:`) of
+> **Status:** Phase 0 and Phase 1 chunk 1a complete; Phase 1 chunks 1b–1c and Phases 2–3 remain.
+> Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
 > defined here. Phases 0–3 land before launch, in the order given under
@@ -9,6 +10,10 @@
 >
 > - Phase 0 is done: the resolver excludes condition attempts from step output
 >   while preserving their history records.
+> - Phase 1 chunk 1a is done: the pure diff helper and transcript projection are implemented
+>   with tests; no prior-context consumer uses them yet.
+> - Truncation detail settled in chunk 1a: an unbroken line larger than its byte cap is cut at
+>   a UTF-8 code-point boundary because no line-boundary cut can satisfy the cap.
 > - Phase 1 changes the prompt text that existing `$previous`/`priorContext` workflows send.
 > - Phase 2 changes the persisted timeline format.
 > - Phase 3 adds `$summary:`.
@@ -637,6 +642,8 @@ session. Each one leaves `npm test` green, updates this plan's status, and commi
      reach the summary's text-only tail.
    - **Uneven event kinds.** Not every harness emits every kind (no `FILE_DELETE` from opencode,
      qwen, or Claude; no `WEB_SEARCH` from codex or opencode), so each element is optional.
+   **Chunk 1a complete:** both pure modules, constants, the Claude progress marker, and focused
+   tests are in place. The consumer and renderer work remains in chunks 1b–1c.
 2. `RunOutputResolver.resolvePriorContextItems`:
    - build `transcript` from `value.output.structured.events` for prompt and `finalStep` items,
      keeping `text` only as the D5 fallback;

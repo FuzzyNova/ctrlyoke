@@ -4054,6 +4054,42 @@ export const CLI_EVENT_TYPES = {
   CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
 
+export const PRIOR_CONTEXT_LIMITS = {
+  // full form
+  COMMAND_OUTPUT_TAIL_BYTES: 2048,
+  TOOL_RESULT_TAIL_BYTES: 1024,
+  TOOL_ARGUMENTS_HEAD_BYTES: 512,
+  DIFF_BYTES: 65536,
+  // summary form
+  PROMPT_HEAD_BYTES: 2048,
+  OUTPUT_TAIL_BYTES: 4096,
+  WORKFLOW_BUDGET_BYTES: 24576,
+} as const;
+
+export const PRIOR_CONTEXT_TRUNCATION = {
+  HEAD: "head",
+  TAIL: "tail",
+  OMITTED_START: "start",
+  OMITTED_END: "end",
+} as const;
+
+export const PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS = {
+  TEXT: "text",
+  THINKING: "thinking",
+  EDIT: "edit",
+  CREATE: "create",
+  DELETE: "delete",
+  COMMAND: "command",
+  READ: "read",
+  TOOL: "tool",
+  SEARCH: "search",
+  QUESTION: "question",
+  USER_STEER: "userSteer",
+} as const;
+
+export type PriorContextTranscriptEntryKind =
+  (typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS)[keyof typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS];
+
 export const CLI_OUTPUT_METADATA_KEYS = {
   TIMESTAMP: "timestamp",
   TOTAL_CONFIDENCE: "totalConfidence",

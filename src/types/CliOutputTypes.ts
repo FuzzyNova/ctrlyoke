@@ -32,6 +32,8 @@ export interface CliEvent {
    * produced inside a spawned sub-agent (Task tool). Omitted for non-tool events.
    */
   callerType?: CallerType | string;
+  /** Excluded from prior-context transcripts while retained in dashboard output. */
+  priorContextExcluded?: boolean;
 }
 
 /**
