@@ -182,6 +182,7 @@ export interface WorkflowProperties {
   endCondition?: EndCondition | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext;
+  priorContextDetail?: "full" | "summary";
   additionalArgs?: string | null;
   toolPermissions?: {
     mode?: ToolPermissionMode;

@@ -787,6 +787,7 @@ suite("FileReferenceParser", () => {
       assert.deepStrictEqual(refs[0].ref, {
         kind: "step",
         indices: [1, 2, 3],
+        detail: "full",
       });
       assert.strictEqual(refs[0].token, "$step:3,1-2,2");
     });
@@ -796,19 +797,19 @@ suite("FileReferenceParser", () => {
         "$workflow-xyz:step:1 $unknown $previously $previous"
       );
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "previous" });
+      assert.deepStrictEqual(refs[0].ref, { kind: "previous", detail: "full" });
     });
 
     test("skips invalid step ranges", () => {
       const refs = parseInlinePriorContextRefs("$step:abc $step:3-1 $step:2");
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [2] });
+      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [2], detail: "full" });
     });
 
     test("allows punctuation after keyword tokens", () => {
       const refs = parseInlinePriorContextRefs("Use $previous, then continue.");
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "previous" });
+      assert.deepStrictEqual(refs[0].ref, { kind: "previous", detail: "full" });
     });
 
     test("leaves a prose colon after bare prior-context keywords", () => {
@@ -836,7 +837,7 @@ suite("FileReferenceParser", () => {
         "First review $step:1,4, then tell me which design you think is better"
       );
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [1, 4] });
+      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [1, 4], detail: "full" });
       assert.strictEqual(refs[0].token, "$step:1,4");
     });
 
@@ -849,7 +850,7 @@ suite("FileReferenceParser", () => {
       const text = "Look at $previous:3, then fix it";
       const refs = parseInlinePriorContextRefs(text);
       assert.strictEqual(refs.length, 1);
-      assert.deepStrictEqual(refs[0].ref, { kind: "previous", count: 3 });
+      assert.deepStrictEqual(refs[0].ref, { kind: "previous", count: 3, detail: "full" });
       assert.strictEqual(refs[0].token, "$previous:3");
       assert.strictEqual(
         text.slice(refs[0].startOffset, refs[0].endOffset),
@@ -878,6 +879,12 @@ suite("FileReferenceParser", () => {
         "finalStep",
         "allFinalStep",
         "step:1-3,5",
+        "summary:previous",
+        "summary:previous:3",
+        "summary:step:1,4-5",
+        "summary:all",
+        "summary:finalStep",
+        "summary:allFinalStep",
       ]) {
         const parsed = parseInlinePriorContextBody(body);
         assert.ok(parsed, body);
@@ -887,10 +894,20 @@ suite("FileReferenceParser", () => {
           parsed.ref.kind,
           body
         );
+        assert.strictEqual(
+          parseInlinePriorContextBody(formatInlinePriorContextBody(parsed.ref))
+            ?.ref.detail,
+          body.startsWith("summary:") ? "summary" : "full",
+          body
+        );
       }
       assert.strictEqual(
         formatInlinePriorContextBody({ kind: "step", indices: [1, 2, 3, 5] }),
         "step:1,2,3,5"
+      );
+      assert.strictEqual(
+        formatInlinePriorContextBody({ kind: "step", indices: [1, 4, 5], detail: "summary" }),
+        "summary:step:1,4,5"
       );
     });
 
@@ -902,7 +919,7 @@ suite("FileReferenceParser", () => {
     });
 
     test("rejects unknown and malformed bodies", () => {
-      for (const body of ["previously", "previous:", "previous:-1", "step:"]) {
+      for (const body of ["previously", "previous:", "previous:-1", "step:", "summary:", "summary:nope"]) {
         assert.strictEqual(parseInlinePriorContextBody(body), null, body);
       }
     });

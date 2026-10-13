@@ -1,6 +1,6 @@
 # Prior Context Detail Plan — step output from events only, full `$previous`, bounded `$summary:`
 
-> **Status:** Phases 0–2 complete (chunks 2a–2d); Phase 3 remains.
+> **Status:** Phases 0–2 and Phase 3a complete; Phase 3b remains.
 > Supersedes D12b (`$summary:`) of
 > [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md). That plan keeps D12a (workflow-step output)
 > and D12c (pulling child output on demand), and its workflow arm renders through the renderer
@@ -734,14 +734,14 @@ waits for step 5.
 
 ### Phase 3 — `$summary:` and `priorContextDetail`
 
-1. Parsing (`ReferencePatterns.ts`, `FileReferenceParser.parseInlinePriorContextBody`):
+1. **Complete:** Parsing (`ReferencePatterns.ts`, `FileReferenceParser.parseInlinePriorContextBody`):
    optional `summary:` prefix, `detail` on every parsed arm; diagnostics replace the reserved
    warning.
-2. Schema: `priorContextDetail` in `executionProperties` (`enum: [full, summary]`, default
+2. **Complete:** Schema: `priorContextDetail` in `executionProperties` (`enum: [full, summary]`, default
    `full`); `PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL`; `PRIOR_CONTEXT_DETAILS` constant;
    `npm run schema:update`.
-3. `mergePriorContextReferences` / `PriorContextMerge.ts`: per-index detail, full wins.
-4. `summarizePriorContextItem` + `<filesChanged>` (D2), reusing the projection's file changes.
+3. **Complete:** `mergePriorContextReferences` / `PriorContextMerge.ts`: per-index detail, full wins.
+4. **Complete:** `summarizePriorContextItem` + `<filesChanged>` (D2), reusing the projection's file changes.
 5. Editor: completions (`PriorContextCompletions.ts`, detail text "deterministic excerpt: head of
    prompt, files changed, tail of text; no AI call"), diagnostics, `StepReferenceRenumbering`,
    `PriorContextPreviewBuilder` (pass the detail through), and the inline-reference chip pattern.
@@ -752,7 +752,7 @@ waits for step 5.
    `src/templates/agents/ctrlyoke-tech-support.agent.md`.
 8. Templates: audit built-in templates' `$previous`/`priorContext` uses and switch hand-off and
    commit-style steps to `$summary:` where the full transcript is noise.
-9. Tests: grammar, merge precedence, renumbering, summary caps and markers, `<filesChanged>`
+9. **Complete:** Tests: grammar, merge precedence, renumbering, summary caps and markers, `<filesChanged>`
    aggregation (multiple edits, create+edit, create+delete, failed, external path), preview =
    injection for both levels.
 

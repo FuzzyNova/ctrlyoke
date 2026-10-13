@@ -123,6 +123,12 @@ suite("PropertyResolver Tests", () => {
           defaults: "previous",
         },
         {
+          property: "priorContextDetail",
+          prompt: "summary",
+          workflow: "full",
+          defaults: "full",
+        },
+        {
           property: "additionalArgs",
           prompt: "--prompt",
           workflow: "--workflow",

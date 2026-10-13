@@ -441,13 +441,13 @@ describe("atomic reference presentation", () => {
         from: 12,
         to: 23,
         token: "$previous:2",
-        ref: { kind: "previous", count: 2 },
+        ref: { kind: "previous", count: 2, detail: "full" },
       },
       {
         from: 24,
         to: 31,
         token: "$step:1",
-        ref: { kind: "step", indices: [1] },
+        ref: { kind: "step", indices: [1], detail: "full" },
       },
     ]);
   });

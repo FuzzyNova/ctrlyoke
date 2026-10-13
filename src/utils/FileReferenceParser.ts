@@ -21,6 +21,9 @@
 import {
   GIT_CHANGE_KINDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
+  PRIOR_CONTEXT_SUMMARY_PREFIX,
+  PRIOR_CONTEXT_DETAILS,
+  type PriorContextDetail,
   SCRIPT_OUTPUT_SOURCES,
   type GitChangeKind,
 } from "../types/DashboardConstants";
@@ -650,11 +653,11 @@ export interface FileReference {
 
 export type InlinePriorContextRef =
   /** `$previous` (no count) or `$previous:N` (the last N outputs). */
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS; count?: number }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP }
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.STEP; indices: number[] };
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS; count?: number; detail?: PriorContextDetail }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL; detail?: PriorContextDetail }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP; detail?: PriorContextDetail }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP; detail?: PriorContextDetail }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.STEP; indices: number[]; detail?: PriorContextDetail };
 
 export interface InlinePriorContextMatch {
   ref: InlinePriorContextRef;
@@ -900,38 +903,41 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
 export function parseInlinePriorContextBody(
   body: string
 ): { ref: InlinePriorContextRef; length: number } | null {
-  switch (body) {
+  const summary = body.startsWith(PRIOR_CONTEXT_SUMMARY_PREFIX);
+  const selector = summary ? body.slice(PRIOR_CONTEXT_SUMMARY_PREFIX.length) : body;
+  const detail = summary ? PRIOR_CONTEXT_DETAILS.SUMMARY : PRIOR_CONTEXT_DETAILS.FULL;
+  switch (selector) {
     case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
     case PRIOR_CONTEXT_REFERENCE_KINDS.ALL:
     case PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP:
     case PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP:
-      return { ref: { kind: body }, length: body.length };
+      return { ref: { kind: selector, detail }, length: body.length };
   }
 
   const previousPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS}:`;
-  if (body.startsWith(previousPrefix)) {
-    const countText = body.slice(previousPrefix.length);
+  if (selector.startsWith(previousPrefix)) {
+    const countText = selector.slice(previousPrefix.length);
     const count = /^\d+$/.test(countText) ? Number(countText) : NaN;
     if (!Number.isSafeInteger(count) || count < 1) {
       return null;
     }
     return {
-      ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS, count },
+      ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS, count, detail },
       length: body.length,
     };
   }
 
   const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
-  if (body.startsWith(stepPrefix)) {
-    const rawRangeText = body.slice(stepPrefix.length);
+  if (selector.startsWith(stepPrefix)) {
+    const rawRangeText = selector.slice(stepPrefix.length);
     const rangeText = rawRangeText.replace(/,+$/, "");
     const indices = parseRangeNotation(rangeText);
     if (!indices) {
       return null;
     }
     return {
-      ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices },
-      length: stepPrefix.length + rangeText.length,
+      ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices, detail },
+      length: (summary ? PRIOR_CONTEXT_SUMMARY_PREFIX.length : 0) + stepPrefix.length + rangeText.length,
     };
   }
 
@@ -946,13 +952,14 @@ export function parseInlinePriorContextBody(
 export function formatInlinePriorContextBody(
   ref: InlinePriorContextRef
 ): string {
+  const prefix = ref.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? PRIOR_CONTEXT_SUMMARY_PREFIX : "";
   switch (ref.kind) {
     case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
-      return ref.count === undefined ? ref.kind : `${ref.kind}:${ref.count}`;
+      return `${prefix}${ref.count === undefined ? ref.kind : `${ref.kind}:${ref.count}`}`;
     case PRIOR_CONTEXT_REFERENCE_KINDS.STEP:
-      return `${ref.kind}:${ref.indices.join(",")}`;
+      return `${prefix}${ref.kind}:${ref.indices.join(",")}`;
     default:
-      return ref.kind;
+      return `${prefix}${ref.kind}`;
   }
 }
 

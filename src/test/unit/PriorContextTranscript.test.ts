@@ -167,9 +167,9 @@ suite("PriorContextTranscript", () => {
     }
   });
 
-  test("truncates on line boundaries and respects UTF-8 code point boundaries", () => {
+  test("prefers line boundaries while respecting UTF-8 code point boundaries", () => {
     const lineBounded = boundPriorContextText("one\nββ\nend", 5, "tail");
-    assert.deepStrictEqual(lineBounded, { text: "end", omitted: "start", omittedBytes: 9 });
+    assert.deepStrictEqual(lineBounded, { text: "\nend", omitted: "start", omittedBytes: 8 });
 
     const longCodePointLine = boundPriorContextText("a😀b", 5, "tail");
     assert.strictEqual(longCodePointLine.text, "😀b");

@@ -780,6 +780,17 @@ $defs:
           resumeSession:true may duplicate context (accepted limitation).
         $ref: '#/$defs/priorContext'
         title: Prior Context
+      priorContextDetail:
+        type: string
+        enum:
+          - full
+          - summary
+        default: full
+        description: >-
+          How much prior output to include. 'full' includes the complete bounded transcript;
+          'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt
+          → workflow. Inline $summary: references select summary for that reference.
+        title: Prior Context Detail
       additionalArgs:
         oneOf:
           - type: string

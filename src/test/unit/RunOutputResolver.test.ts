@@ -700,24 +700,63 @@ suite("RunOutputResolver", () => {
     });
     await recorder.appendEvents(manifestPath, [
       start(0, "first prompt"),
-      output(0, [{ type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: "src/old.ts", oldContent: "one\n", newContent: "two\nthree\n" } }]),
+      output(0, [
+        { type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: "src/old.ts", oldContent: "one\n", newContent: "two\nthree\n" } },
+        { type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: "src/old.ts", oldContent: "two\nthree\n", newContent: "four\n" } },
+        { type: CLI_EVENT_TYPES.FILE_WRITE, data: { path: "src/new.ts", content: "new\n" } },
+        { type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: "src/new.ts", oldContent: "new\n", newContent: "newer\n" } },
+        { type: CLI_EVENT_TYPES.FILE_WRITE, data: { path: "src/transient.ts", content: "gone\n" } },
+        { type: CLI_EVENT_TYPES.FILE_DELETE, data: { path: "src/transient.ts" } },
+        { type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: "src/failed.ts", oldContent: "old", newContent: "new", success: false } },
+        { type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: path.join(approvedExternalRoot, "external.ts"), oldContent: "old", newContent: "new" } },
+      ]),
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 30, target, runIndex: 0, attemptIndex: 0, definitionRevision: 1, payload: { terminalState: "failed" } },
       start(1, "latest prompt"),
       output(1, [{ type: CLI_EVENT_TYPES.THINKING, data: { text: "reasoning" } }, { type: CLI_EVENT_TYPES.TEXT, data: { text: "latest answer" } }]),
       { eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED, timestampMs: 40, target, runIndex: 0, attemptIndex: 1, definitionRevision: 1, payload: { terminalState: "completed" } },
     ]);
     const resolver = new RunOutputResolver(recorder);
-    const items = await resolver.resolvePriorContextItems(manifestPath, [[1]], revisionOne.steps, 1, { workspaceRoot });
+    const projectionOptions = { workspaceRoot, approvedExternalRoots: [approvedExternalRoot] };
+    const items = await resolver.resolvePriorContextItems(manifestPath, [[1]], revisionOne.steps, 1, projectionOptions);
     assert.deepStrictEqual(items[0].transcript?.map((entry) => entry.kind), ["thinking", "text"]);
     assert.strictEqual(items[0].text, undefined, "structured records use transcript entries instead of responseText");
     assert.deepStrictEqual(items[0].earlierAttempts, {
       count: 1,
-      filesChanged: [{ path: "src/old.ts", operation: "modified", added: 2, removed: 1 }],
+      filesChanged: [
+        { path: "src/old.ts", operation: "modified", added: 3, removed: 3 },
+        { path: "src/new.ts", operation: "created", added: 2, removed: 1 },
+        { path: path.join(approvedExternalRoot, "external.ts"), operation: "modified", added: 1, removed: 1 },
+      ],
     });
     const injected = buildPriorContextXmlFromItems(items);
-    assert.match(injected, /<earlierAttempts count="1">[\s\S]*Edited src\/old\.ts \+2 -1[\s\S]*<\/earlierAttempts>/);
-    const preview = await PriorContextPreviewBuilder.buildPreview("step:1", 1, revisionOne.steps, resolver, manifestPath, { workspaceRoot });
+    assert.match(injected, /<earlierAttempts count="1">[\s\S]*Edited src\/old\.ts \+3 -3[\s\S]*<\/earlierAttempts>/);
+    const preview = await PriorContextPreviewBuilder.buildPreview("step:1", 1, revisionOne.steps, resolver, manifestPath, projectionOptions);
     assert.strictEqual(preview, injected);
+    const summaryItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [{ context: [1], detail: "summary" }],
+      revisionOne.steps,
+      1,
+      projectionOptions
+    );
+    assert.strictEqual(summaryItems[0].detail, "summary");
+    assert.deepStrictEqual(summaryItems[0].filesChanged, items[0].earlierAttempts.filesChanged);
+    const summary = buildPriorContextXmlFromItems(summaryItems);
+    assert.ok(summary.includes("Added src/new.ts +2 -1"), summary);
+    assert.ok(summary.includes("Edited src/old.ts +3 -3"), summary);
+    assert.ok(summary.includes(`Edited ${path.join(approvedExternalRoot, "external.ts")} +1 -1`), summary);
+    assert.ok(!summary.includes("transient.ts"), summary);
+    assert.ok(!summary.includes("failed.ts"), summary);
+    assert.ok(!summary.includes("reasoning"), summary);
+    const summaryPreview = await PriorContextPreviewBuilder.buildPreview(
+      "summary:step:1",
+      1,
+      revisionOne.steps,
+      resolver,
+      manifestPath,
+      projectionOptions
+    );
+    assert.strictEqual(summaryPreview, summary);
   });
 
   test("uses finalStep definition prompts and renders script passes from script output", async () => {

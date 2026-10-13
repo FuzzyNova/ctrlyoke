@@ -591,6 +591,20 @@ suite("PromptFileParser Tests", () => {
         message: /Step 1: Numeric priorContext reference 2.*steps 1, 2/i,
       },
       {
+        name: "inline summary priorContext sibling",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one $summary:step:2" },
+                { prompt: "two" },
+              ],
+            },
+          ],
+        },
+        message: /Inline priorContext reference 2.*steps 1, 2/i,
+      },
+      {
         name: "numeric sessionId sibling",
         workflow: {
           steps: [

@@ -90,6 +90,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
   "_runtime.priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "_runtime.priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "_runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "_runtime.priorContext[]": "1-based prompt number",
   "_runtime.resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "_runtime.retryCount": "Number of retry attempts for this prompt",
@@ -327,6 +328,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
   "finalStep._runtime.priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "finalStep._runtime.priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "finalStep._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "finalStep._runtime.priorContext[]": "1-based prompt number",
   "finalStep._runtime.resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "finalStep._runtime.retryCount": "Number of retry attempts for this prompt",
@@ -409,6 +411,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep.priorContext.previous": "How many of the most recent earlier outputs to include",
   "finalStep.priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "finalStep.priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "finalStep.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "finalStep.priorContext[]": "1-based prompt number",
   "finalStep.prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
   "finalStep.resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
@@ -512,6 +515,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "priorContext.previous": "How many of the most recent earlier outputs to include",
   "priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "priorContext[]": "1-based prompt number",
   "prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
   "queue": "Queue management settings.",
@@ -634,6 +638,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
   "steps[]._runtime.priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "steps[]._runtime.priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "steps[]._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "steps[]._runtime.priorContext[]": "1-based prompt number",
   "steps[]._runtime.resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "steps[]._runtime.retryCount": "Number of retry attempts for this prompt",
@@ -768,6 +773,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
   "steps[].parallel[]._runtime.priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "steps[].parallel[]._runtime.priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "steps[].parallel[]._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "steps[].parallel[]._runtime.priorContext[]": "1-based prompt number",
   "steps[].parallel[]._runtime.resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "steps[].parallel[]._runtime.retryCount": "Number of retry attempts for this prompt",
@@ -850,6 +856,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[].priorContext.previous": "How many of the most recent earlier outputs to include",
   "steps[].parallel[].priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "steps[].parallel[].priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "steps[].parallel[].priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "steps[].parallel[].priorContext[]": "1-based prompt number",
   "steps[].parallel[].prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
   "steps[].parallel[].resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
@@ -881,6 +888,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].priorContext.previous": "How many of the most recent earlier outputs to include",
   "steps[].priorContext.runRef": "Stable completed-run reference within workflowKey.",
   "steps[].priorContext.workflowKey": "Stable workflow lineage key within the current workspace.",
+  "steps[].priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.",
   "steps[].priorContext[]": "1-based prompt number",
   "steps[].prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
   "steps[].resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
@@ -1149,6 +1157,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "none",
     "finalStepAll",
     "finalStepPrevious"
+  ],
+  "_runtime.priorContextDetail": [
+    "full",
+    "summary"
   ],
   "_runtime.stopReason.code": [
     "queue-size-limit",
@@ -1556,6 +1568,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "finalStepAll",
     "finalStepPrevious"
   ],
+  "finalStep._runtime.priorContextDetail": [
+    "full",
+    "summary"
+  ],
   "finalStep._runtime.terminalStatus": [
     "completed",
     "cancelled",
@@ -1697,6 +1713,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "finalStepAll",
     "finalStepPrevious"
   ],
+  "finalStep.priorContextDetail": [
+    "full",
+    "summary"
+  ],
   "finalStep.toolPermissions.mode": [
     "dangerouslyAllowAll",
     "allowAll",
@@ -1828,6 +1848,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "none",
     "finalStepAll",
     "finalStepPrevious"
+  ],
+  "priorContextDetail": [
+    "full",
+    "summary"
   ],
   "queue.maxSteps": [
     -1
@@ -2099,6 +2123,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "finalStepAll",
     "finalStepPrevious"
   ],
+  "steps[]._runtime.priorContextDetail": [
+    "full",
+    "summary"
+  ],
   "steps[]._runtime.terminalStatus": [
     "completed",
     "cancelled",
@@ -2316,6 +2344,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "finalStepAll",
     "finalStepPrevious"
   ],
+  "steps[].parallel[]._runtime.priorContextDetail": [
+    "full",
+    "summary"
+  ],
   "steps[].parallel[]._runtime.terminalStatus": [
     "completed",
     "cancelled",
@@ -2457,6 +2489,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "finalStepAll",
     "finalStepPrevious"
   ],
+  "steps[].parallel[].priorContextDetail": [
+    "full",
+    "summary"
+  ],
   "steps[].parallel[].toolPermissions.mode": [
     "dangerouslyAllowAll",
     "allowAll",
@@ -2501,6 +2537,10 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "none",
     "finalStepAll",
     "finalStepPrevious"
+  ],
+  "steps[].priorContextDetail": [
+    "full",
+    "summary"
   ],
   "steps[].toolPermissions.mode": [
     "dangerouslyAllowAll",

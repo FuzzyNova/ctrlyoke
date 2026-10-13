@@ -4,7 +4,7 @@ import { RunOutputResolver } from "../core/orchestration/RunOutputResolver";
 import type { RunOutputProjectionOptions } from "../core/orchestration/RunOutputResolver";
 import { parseInlinePriorContextBody } from "./FileReferenceParser";
 import {
-  inlinePriorContextRefToPriorContext,
+  inlinePriorContextRefToSelection,
   parseMergedPriorContextBody,
 } from "./PriorContextMerge";
 
@@ -38,7 +38,7 @@ export class PriorContextPreviewBuilder {
     const parsed = parseInlinePriorContextBody(ref);
     const contexts =
       mergedContexts ??
-      (parsed ? [inlinePriorContextRefToPriorContext(parsed.ref)] : []);
+      (parsed ? [inlinePriorContextRefToSelection(parsed.ref)] : []);
     const items =
       contexts.length > 0
         ? await resolver.resolvePriorContextItems(

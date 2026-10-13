@@ -7,6 +7,7 @@ import {
   CONDITION_ACTIONS,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
+  PRIOR_CONTEXT_LIMITS,
   SCRIPT_OPERATORS,
   SCRIPT_VERDICT_OUTCOMES,
 } from "../../types/DashboardConstants";
@@ -206,6 +207,30 @@ suite("prior-context XML", () => {
       '<terminalOutput reason="exit &amp; failed">\ncrashed\n</terminalOutput>',
       '<earlierAttempts count="2">\n<filesChanged>\nRemoved src/old.ts +0 -0',
     ]) assert.ok(xml.includes(fragment), `missing ${fragment}: ${xml}`);
+  });
+
+  test("renders summary as a bounded text projection with prompt head and net files", () => {
+    const prompt = `head\n${"p".repeat(PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES + 32)}`;
+    const response = `${"r".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES + 24)}\nconclusion`;
+    const xml = buildPriorContextXmlFromItems([{
+      index: 0,
+      detail: "summary",
+      prompt,
+      transcript: [
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.THINKING, text: "omit thinking" },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT, text: response },
+        { kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND, command: "omit command", exitCode: 0, output: { text: "omit output" } },
+      ],
+      filesChanged: [{ path: "src/added.ts", operation: "created", added: 2, removed: 0 }],
+    }]);
+
+    assert.ok(xml.includes('<step index="1" detail="summary">'));
+    assert.ok(xml.includes(`<prompt omitted="end" omittedBytes="${Buffer.byteLength(prompt) - PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES}">`));
+    assert.ok(xml.includes(`<response omitted="start" omittedBytes="${Buffer.byteLength(response) - PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES}">`));
+    assert.ok(xml.includes("conclusion"));
+    assert.ok(xml.includes("Added src/added.ts +2 -0"));
+    assert.ok(!xml.includes("omit thinking"));
+    assert.ok(!xml.includes("omit command"));
   });
 
   test("maps inline references to the resolver's canonical context selectors", () => {

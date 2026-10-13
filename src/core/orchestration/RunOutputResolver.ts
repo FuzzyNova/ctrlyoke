@@ -1,7 +1,6 @@
 import * as path from "path";
 import { type ExecutionState } from "../../types/DashboardConstants";
 import type {
-  PriorContext,
   ScriptRuntimeOutput,
   ScriptVerdict,
   WorkflowStep,
@@ -51,11 +50,12 @@ import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAcc
 import { evaluateFileAccess } from "../../utils/FileAccessPolicy";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
-import { PRIOR_CONTEXT_DETAIL, type PriorContextFileChange, type PriorContextItem } from "../HarnessIntegration";
+import { PRIOR_CONTEXT_DETAIL, type PriorContextDetail, type PriorContextFileChange, type PriorContextItem } from "../HarnessIntegration";
 import { projectPriorContextTranscript } from "../PriorContextTranscript";
 import {
   deduplicatePriorContextItems,
   mergePriorContextReferences,
+  type PriorContextRequest,
 } from "../../utils/PriorContextMerge";
 
 /** Immutable definition and step selected for one persisted attempt. */
@@ -1003,7 +1003,7 @@ export class RunOutputResolver {
    */
   async resolvePriorContextItems(
     manifestPath: string,
-    contexts: readonly PriorContext[],
+    contexts: readonly PriorContextRequest[],
     allPrompts: readonly WorkflowStep[],
     groupStartBoundary: number,
     options: RunOutputProjectionOptions
@@ -1059,6 +1059,13 @@ export class RunOutputResolver {
     for (const [key, history] of fileHistory) {
       if (history.attemptCount > 1) earlierAttempts.set(key, { count: history.attemptCount - 1, filesChanged: [...history.earlier.values()] });
     }
+    const allAttemptFileChanges = new Map<string, PriorContextFileChange[]>();
+    for (const [key, history] of fileHistory) {
+      const mergedChanges = new Map<string, PriorContextFileChange>();
+      mergePriorFileChanges(mergedChanges, [...history.earlier.values()]);
+      if (history.latest) mergePriorFileChanges(mergedChanges, history.latest.changes);
+      allAttemptFileChanges.set(key, [...mergedChanges.values()]);
+    }
     const resolved = new Map([...latestValues].map(([key, projected]) => [key, projected.value]));
     const resolvedQueueItems = [...queueIndices]
       .sort((left, right) => left - right)
@@ -1083,14 +1090,15 @@ export class RunOutputResolver {
                 .trim()
             : (latestValues.get(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index }))?.legacyText ?? "");
           const scriptVerdict = scriptVerdicts.get(getAttemptKey(value));
-          return text
+          return scriptOutput || text
             ? [
                 {
                   index,
                   name: step.name,
-                  detail: PRIOR_CONTEXT_DETAIL.FULL,
+                  detail: merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
                   text,
                   scriptOutput,
+                  filesChanged: allAttemptFileChanges.get(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) ?? [],
                   ...(earlierAttempts.has(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) ? { earlierAttempts: earlierAttempts.get(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) } : {}),
                   ...(scriptVerdict ? { scriptVerdict } : {}),
                 },
@@ -1101,7 +1109,7 @@ export class RunOutputResolver {
         const transcript = projected?.transcript;
         const text = projected?.legacyText ?? "";
         return transcript?.length || text
-          ? [{ index, name: step.name, prompt: step.prompt, detail: PRIOR_CONTEXT_DETAIL.FULL, ...(transcript?.length ? { transcript } : {}), ...(text ? { text } : {}), ...(earlierAttempts.has(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) ? { earlierAttempts: earlierAttempts.get(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) } : {}) }]
+          ? [{ index, name: step.name, prompt: step.prompt, detail: merged.detailByQueueIndex.get(index) ?? (merged.previousCount > 0 ? merged.previousDetail : merged.allQueueDetail), filesChanged: allAttemptFileChanges.get(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) ?? [], ...(transcript?.length ? { transcript } : {}), ...(text ? { text } : {}), ...(earlierAttempts.has(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) ? { earlierAttempts: earlierAttempts.get(getTargetKey({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index })) } : {}) }]
           : [];
       });
     const selectedQueueIndices = merged.includeAllQueue
@@ -1115,6 +1123,19 @@ export class RunOutputResolver {
     const queueItems = resolvedQueueItems.filter((item) =>
       selectedQueueIndices.has(item.index)
     );
+    const queueDetailForIndex = (index: number): PriorContextDetail => {
+      const selectedDetails = [
+        ...(merged.includeAllQueue ? [merged.allQueueDetail] : []),
+        ...(merged.detailByQueueIndex.has(index) ? [merged.detailByQueueIndex.get(index)!] : []),
+        ...(merged.previousCount > 0 && resolvedQueueItems.slice(-merged.previousCount).some((item) => item.index === index)
+          ? [merged.previousDetail]
+          : []),
+      ];
+      return selectedDetails.includes(PRIOR_CONTEXT_DETAIL.FULL)
+        ? PRIOR_CONTEXT_DETAIL.FULL
+        : PRIOR_CONTEXT_DETAIL.SUMMARY;
+    };
+    for (const item of resolvedQueueItems) item.detail = queueDetailForIndex(item.index);
     const finalItems = [...resolved.values()]
       .filter((value) => value.target.kind === FINAL_STEP_PHASES.FINAL_STEP)
       .sort(
@@ -1127,7 +1148,14 @@ export class RunOutputResolver {
         const scriptVerdict = scriptVerdicts.get(getAttemptKey(value));
         const step = value.definition?.step;
         const targetKey = getTargetKey(value.target);
-        const common = { index, type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP, detail: PRIOR_CONTEXT_DETAIL.FULL, ...(earlierAttempts.has(targetKey) ? { earlierAttempts: earlierAttempts.get(targetKey) } : {}), ...(scriptVerdict ? { scriptVerdict } : {}) };
+        const selectedDetails = [
+          ...(merged.includePreviousFinalStep ? [merged.finalStepDetail] : []),
+          ...(merged.includeAllFinalSteps ? [merged.allFinalStepsDetail] : []),
+        ];
+        const detail = selectedDetails.includes(PRIOR_CONTEXT_DETAIL.FULL)
+          ? PRIOR_CONTEXT_DETAIL.FULL
+          : PRIOR_CONTEXT_DETAIL.SUMMARY;
+        const common = { index, type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP, detail, filesChanged: allAttemptFileChanges.get(targetKey) ?? [], ...(earlierAttempts.has(targetKey) ? { earlierAttempts: earlierAttempts.get(targetKey) } : {}), ...(scriptVerdict ? { scriptVerdict } : {}) };
         if (step && isScriptStep(step) && value.scriptOutput) return [{ ...common, scriptOutput: value.scriptOutput }];
         const projected = latestValues.get(targetKey);
         const transcript = projected?.transcript;
@@ -1145,7 +1173,8 @@ export class RunOutputResolver {
   /** Read a whole terminal source run through the timeline reader. */
   async resolveAllPriorContextItems(
     manifestPath: string,
-    options: RunOutputProjectionOptions
+    options: RunOutputProjectionOptions,
+    detail: PriorContextDetail = PRIOR_CONTEXT_DETAIL.FULL
   ): Promise<PriorContextItem[]> {
     const queueIndices = new Set<number>();
     for await (const event of this.stream(manifestPath)) {
@@ -1160,7 +1189,10 @@ export class RunOutputResolver {
     const maxIndex = Math.max(-1, ...queueIndices);
     return this.resolvePriorContextItems(
       manifestPath,
-      [PRIOR_CONTEXT_KEYWORDS.ALL, PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL],
+      [
+        { context: PRIOR_CONTEXT_KEYWORDS.ALL, detail },
+        { context: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL, detail },
+      ],
       Array.from({ length: maxIndex + 1 }, () => ({
         type: "prompt" as const,
         prompt: "",

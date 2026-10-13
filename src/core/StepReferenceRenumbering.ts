@@ -1,5 +1,7 @@
 import { isScriptStep, type WorkflowStep } from "../types/CtrlYokeTypes";
 import { hasStarted } from "../utils/StepStatusDerivation";
+import { formatInlinePriorContextBody, scanInlinePriorContextRefs } from "../utils/FileReferenceParser";
+import { PRIOR_CONTEXT_REFERENCE_KINDS } from "../types/DashboardConstants";
 
 export interface StepReferenceRenumberingResult {
   steps: WorkflowStep[];
@@ -77,11 +79,56 @@ export function renumberStepReferences(
       });
     }
 
+    const renumberInlineReferences = (text: string | undefined): string | undefined => {
+      if (typeof text !== "string") return text;
+      let rewritten = text;
+      const matches = scanInlinePriorContextRefs(text).filter(
+        (match) => match.ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
+      );
+      for (const match of [...matches].reverse()) {
+        if (match.ref.kind !== PRIOR_CONTEXT_REFERENCE_KINDS.STEP) continue;
+        const indices = match.ref.indices.flatMap((reference) => {
+          const target = oldSteps[reference - 1];
+          const targetId = target?._runtime?.stepId;
+          const targetNewIndex = target
+            ? findStepIndex(target, targetId, newIndexById)
+            : undefined;
+          if (target && targetNewIndex === undefined) {
+            if (isFinalStep || !hasStarted(step)) {
+              refusals.push(
+                isFinalStep
+                  ? "Final step"
+                  : describeReferencingStep(step, oldIndex!)
+              );
+              return [reference];
+            }
+            return [];
+          }
+          return [targetNewIndex === undefined ? reference : targetNewIndex + 1];
+        });
+        const body = formatInlinePriorContextBody({ ...match.ref, indices });
+        rewritten = `${rewritten.slice(0, match.startOffset)}$${body}${rewritten.slice(match.endOffset)}`;
+      }
+      return rewritten;
+    };
+    const prompt = renumberInlineReferences(step.prompt);
+    const endCondition = step.endCondition && {
+      ...step.endCondition,
+      ...(step.endCondition.retryPrompt !== undefined
+        ? { retryPrompt: renumberInlineReferences(step.endCondition.retryPrompt) }
+        : {}),
+      ...(step.endCondition.passRetryPrompt !== undefined
+        ? { passRetryPrompt: renumberInlineReferences(step.endCondition.passRetryPrompt) }
+        : {}),
+    };
+
     const { sessionId: _oldSessionId, ...stepWithoutSessionId } = step;
     return {
       ...stepWithoutSessionId,
       ...(sessionId !== undefined ? { sessionId } : {}),
       ...(priorContext !== undefined ? { priorContext } : {}),
+      ...(prompt !== undefined ? { prompt } : {}),
+      ...(endCondition !== undefined ? { endCondition } : {}),
     } as WorkflowStep;
   };
 

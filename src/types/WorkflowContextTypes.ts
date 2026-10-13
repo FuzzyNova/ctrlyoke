@@ -1,7 +1,6 @@
 import * as path from "path";
 import type {
   ConditionEvaluationSummary,
-  PriorContext,
   PromptFile,
   WorkflowStep,
   WorktreeResolution,
@@ -14,6 +13,7 @@ import type {
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import type { RunSecretRedactor } from "../utils/SecretRedactionService";
+import type { PriorContextRequest } from "../utils/PriorContextMerge";
 
 /**
  * Immutable roots used by one workflow execution.
@@ -158,7 +158,7 @@ export interface WorkflowContext {
    * The timeline is the only response source; execution caches are in-memory only.
    */
   resolvePriorContextItems?: (
-    contexts: readonly PriorContext[],
+    contexts: readonly PriorContextRequest[],
     allPrompts: readonly WorkflowStep[],
     groupStartBoundary: number
   ) => Promise<PriorContextItem[]>;

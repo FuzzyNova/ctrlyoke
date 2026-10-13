@@ -37,9 +37,13 @@ import {
   STEP_TYPES,
   PriorContextItemType,
   PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS,
+  PRIOR_CONTEXT_DETAILS,
+  PRIOR_CONTEXT_LIMITS,
+  PRIOR_CONTEXT_TRUNCATION,
   type TerminalEndReason,
 } from "../types/DashboardConstants";
 import type { PriorContextTranscriptEntry, PriorContextText } from "./PriorContextTranscript";
+import { boundPriorContextText } from "./PriorContextTranscript";
 import { operatorTakesNoValue } from "../utils/ScriptComparison";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
@@ -65,10 +69,15 @@ export type PriorContextItem = {
   scriptOutput?: ScriptRuntimeOutput;
   /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
   scriptVerdict?: ScriptVerdict;
+  summaryPrompt?: PriorContextText;
+  summaryResponse?: PriorContextText;
+  summaryCommand?: PriorContextText;
+  summaryScriptOutput?: PriorContextText;
 };
 
-export const PRIOR_CONTEXT_DETAIL = { FULL: "full" } as const;
-export type PriorContextDetail = (typeof PRIOR_CONTEXT_DETAIL)[keyof typeof PRIOR_CONTEXT_DETAIL];
+export const PRIOR_CONTEXT_DETAIL = PRIOR_CONTEXT_DETAILS;
+export type { PriorContextDetail } from "../types/DashboardConstants";
+import type { PriorContextDetail } from "../types/DashboardConstants";
 
 export interface PriorContextFileChange {
   path: string;
@@ -78,6 +87,56 @@ export interface PriorContextFileChange {
     | typeof DIFF_CHANGE_TYPES.DELETED;
   added: number;
   removed: number;
+}
+
+/** Build the deterministic summary projection of a full prior-context item. */
+export function summarizePriorContextItem(item: PriorContextItem): PriorContextItem {
+  if (item.detail !== PRIOR_CONTEXT_DETAILS.SUMMARY) return item;
+  const summary: PriorContextItem = { ...item };
+  delete summary.earlierAttempts;
+  if (item.prompt !== undefined) {
+    summary.summaryPrompt = boundPriorContextText(
+      item.prompt,
+      PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.HEAD
+    );
+    summary.prompt = summary.summaryPrompt.text;
+  }
+  if (item.scriptOutput) {
+    summary.summaryCommand = boundPriorContextText(
+      item.scriptOutput.command,
+      PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.HEAD
+    );
+    const combined = [item.scriptOutput.stdout, item.scriptOutput.stderr]
+      .filter(Boolean).join("\n");
+    summary.summaryScriptOutput = boundPriorContextText(
+      combined,
+      PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.TAIL
+    );
+    summary.scriptOutput = {
+      ...item.scriptOutput,
+      command: summary.summaryCommand.text,
+      stdout: summary.summaryScriptOutput.text,
+      stderr: "",
+    };
+  } else {
+    const text = item.transcript
+      ? item.transcript
+          .filter((entry): entry is Extract<PriorContextTranscriptEntry, { kind: typeof PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT }> => entry.kind === PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT)
+          .map((entry) => entry.text)
+          .join("\n")
+      : item.text ?? "";
+    summary.summaryResponse = boundPriorContextText(
+      text,
+      PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES,
+      PRIOR_CONTEXT_TRUNCATION.TAIL
+    );
+    summary.transcript = [{ kind: PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT, text: summary.summaryResponse.text }];
+    summary.text = summary.summaryResponse.text;
+  }
+  return summary;
 }
 
 function escapeXmlAttribute(value: string): string {
@@ -186,10 +245,11 @@ export interface PromptSections {
 export function buildPriorContextXmlFromItems(
   contextItems: PriorContextItem[]
 ): string {
-  const sortedItems = [...contextItems].sort((a, b) => a.index - b.index);
+  const sortedItems = contextItems.map(summarizePriorContextItem).sort((a, b) => a.index - b.index);
   const steps = sortedItems
     .map((item) => {
       const nameAttr = item.name ? ` name="${escapeXmlAttribute(item.name)}"` : "";
+      const detailAttr = item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? ` detail="${PRIOR_CONTEXT_DETAILS.SUMMARY}"` : "";
       // A script finalStep has a verdict but no scriptOutput, so this is
       // rendered in both arms below.
       const verdictSection = item.scriptVerdict
@@ -202,9 +262,9 @@ export function buildPriorContextXmlFromItems(
         const scriptTypeAttr = item.type
           ? ` type="${escapeXmlAttribute(item.type)}"`
           : ` type="${STEP_TYPES.SCRIPT}"`;
-        const commandSection = `<command>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+        const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
         const stdoutSection = item.scriptOutput.stdout.trim()
-          ? `<stdout>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
+          ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
           : "";
         const stderrSection = item.scriptOutput.stderr.trim()
           ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
@@ -213,11 +273,12 @@ export function buildPriorContextXmlFromItems(
           item.scriptOutput.exitCode !== undefined
             ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
             : "";
-        return `<step index="${item.index + 1}"${scriptTypeAttr}${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${earlierAttempts}</step>`;
+        const filesChanged = item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? `${renderFilesChanged(item.filesChanged)}\n` : "";
+        return `<step index="${item.index + 1}"${scriptTypeAttr}${nameAttr}${detailAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
       }
       const typeAttr = item.type ? ` type="${escapeXmlAttribute(item.type)}"` : "";
       const promptSection = item.prompt
-        ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
+        ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
         : "";
       const transcript = item.transcript
         ? item.transcript.map(renderPriorContextEntry).join("\n")
@@ -225,10 +286,12 @@ export function buildPriorContextXmlFromItems(
           ? item.text.trim()
           : "";
       const filesChanged = item.filesChanged
-        ? renderFilesChanged(item.filesChanged)
+        ? item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+          ? renderFilesChanged(item.filesChanged)
+          : ""
         : "";
-      const responseSection = `<response>\n${transcript}\n</response>\n`;
-      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
+      const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse) : ""}>\n${transcript}\n</response>\n`;
+      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}${detailAttr}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
     })
     .join("\n");
 

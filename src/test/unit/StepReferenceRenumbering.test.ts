@@ -42,6 +42,30 @@ suite("StepReferenceRenumbering", () => {
     );
   });
 
+  test("renumbers inline $summary:step references while leaving full references in sync", () => {
+    const oldSteps = ensureStepIds([
+      { prompt: "first" },
+      { prompt: "target" },
+      {
+        prompt: "reference $summary:step:1,2 and $step:2",
+        endCondition: { script: "true", retryPrompt: "retry $summary:step:2" },
+      },
+    ] as WorkflowStep[]);
+    const inserted = ensureStepIds(
+      [...oldSteps.slice(0, 1), { prompt: "new" }, ...oldSteps.slice(1)],
+      oldSteps
+    );
+    const result = renumberStepReferences(oldSteps, inserted);
+    assert.strictEqual(
+      (result.steps[3] as PromptStep).prompt,
+      "reference $summary:step:1,3 and $step:3"
+    );
+    assert.strictEqual(
+      (result.steps[3] as PromptStep).endCondition?.retryPrompt,
+      "retry $summary:step:3"
+    );
+  });
+
   test("refuses removing a referenced target while the referencing step is unstarted", () => {
     const oldSteps = ensureStepIds([
       { prompt: "target" },

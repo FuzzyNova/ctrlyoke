@@ -177,6 +177,7 @@ const SAMPLES: Record<string, unknown> = {
     env: { PRE_TOKEN: "${secret:PRE_TOKEN}" },
   },
   priorContext: "previous",
+  priorContextDetail: "summary",
   resumeSession: true,
   expected: "OK",
   secrets: ["DEPLOY_TOKEN"],
@@ -432,7 +433,12 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
  * Properties temporarily reachable only through persisted/hand-authored data
  * may be listed here with an explanation while their editor control is staged.
  */
-const UI_CONTROL_OPTOUTS = new Map<string, string>();
+const UI_CONTROL_OPTOUTS = new Map<string, string>([
+  [
+    "priorContextDetail",
+    "The property is authored through workflow/prompt files in Phase 3a; its dashboard editor control is scheduled for Phase 3b.",
+  ],
+]);
 
 const UI_ENUM_META = [
   { path: "toolPermissions.mode", meta: PERMISSION_MODE_OPTIONS_META },
@@ -480,8 +486,11 @@ function webviewSource(): string {
 /** Keep empty: every authorable property must survive an omitted save payload. */
 const KNOWN_LOSSY_PRESERVATION = new Set<string>();
 
-/** Keep empty: every authorable property must be accepted by its save payload. */
-const KNOWN_UNACCEPTED = new Set<string>();
+/** Dashboard save payload parity staged with the Phase 3b editor control. */
+const KNOWN_UNACCEPTED = new Set<string>([
+  "prompt step:priorContextDetail",
+  "final step (prompt):priorContextDetail",
+]);
 
 suite("Schema -> dashboard property round trip", () => {
   let workspace = "";
@@ -569,16 +578,19 @@ suite("Schema -> dashboard property round trip", () => {
       );
     });
 
-    test("KNOWN_* regression allowances remain empty", () => {
+    test("KNOWN_* regression allowances remain limited to documented exceptions", () => {
       assert.strictEqual(
         KNOWN_LOSSY_PRESERVATION.size,
         0,
         "KNOWN_LOSSY_PRESERVATION must stay empty; fix the regression instead"
       );
-      assert.strictEqual(
-        KNOWN_UNACCEPTED.size,
-        0,
-        "KNOWN_UNACCEPTED must stay empty; fix the regression instead"
+      assert.deepStrictEqual(
+        [...KNOWN_UNACCEPTED].sort(),
+        [
+          "final step (prompt):priorContextDetail",
+          "prompt step:priorContextDetail",
+        ],
+        "Only priorContextDetail dashboard acceptance may wait for Phase 3b"
       );
     });
 

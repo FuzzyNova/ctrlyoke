@@ -22,20 +22,7 @@ const UNQUOTED_REFERENCE_END = String.raw`(?=$|[\s:"]|[^\p{L}\p{N}/\\\s:"]+(?:[\
  */
 export function createInlinePriorContextReferencePattern(): RegExp {
   return new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$((?:step:[A-Za-z0-9,_\\-]*|previous:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9_]*))`,
-    "gu"
-  );
-}
-
-/**
- * Build a pattern for the reserved `$summary:` prior-context prefix plus the
- * selector after it (`$summary:step:1,3-5`), with the same word boundary as
- * real references so `price$summary:` is not matched. A trailing comma is
- * sentence punctuation, as for `$step:`.
- */
-export function createReservedPriorContextPrefixPattern(): RegExp {
-  return new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$${PRIOR_CONTEXT_SUMMARY_PREFIX}(?:[A-Za-z0-9:\\-]|,(?=[0-9]))*`,
+    `${NOT_AFTER_BOUNDARY}\\$((?:${PRIOR_CONTEXT_SUMMARY_PREFIX.replace(":", "")}(?::(?:[A-Za-z][A-Za-z0-9_]*(?::[A-Za-z0-9,_\\-]*)?)?)?|step:[A-Za-z0-9,_\\-]*|previous:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9_]*))`,
     "gu"
   );
 }

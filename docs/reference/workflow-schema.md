@@ -242,6 +242,13 @@ Accepted forms:
 
 How many of the most recent earlier outputs to include
 
+### `priorContextDetail` {#execution-properties-priorcontextdetail}
+
+- **Type:** `"full" | "summary"`
+- **Default:** `"full"`
+
+How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.
+
 ### `additionalArgs` {#execution-properties-additionalargs}
 
 - **Type:** `string` or `null`

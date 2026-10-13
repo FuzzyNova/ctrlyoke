@@ -145,7 +145,15 @@ export function boundPriorContextText(
     keep === PRIOR_CONTEXT_TRUNCATION.HEAD ? lines : [...lines].reverse();
   for (const line of orderedLines) {
     const lineBytes = utf8Bytes(line);
-    if (keptBytes + lineBytes > maxBytes) break;
+    if (keptBytes + lineBytes > maxBytes) {
+      const remaining = maxBytes - keptBytes;
+      if (remaining > 0) {
+        const partial = codePointSlice(line, remaining, keep === PRIOR_CONTEXT_TRUNCATION.TAIL);
+        kept.push(partial);
+        keptBytes += utf8Bytes(partial);
+      }
+      break;
+    }
     kept.push(line);
     keptBytes += lineBytes;
   }

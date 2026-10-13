@@ -12,6 +12,7 @@ import type {
   CtrlYokeMcpMode,
   PermissionMode,
 } from "./DashboardConstants";
+import type { PriorContextDetail } from "./DashboardConstants";
 
 /** Unified permission mode used by harness adapters and authored workflows. */
 export type ToolPermissionMode = PermissionMode;
@@ -40,6 +41,7 @@ export interface ResolvedProperties {
   endCondition?: EndCondition;
   preCondition?: PreCondition;
   priorContext?: PriorContext;
+  priorContextDetail?: PriorContextDetail;
   additionalArgs?: string;
   toolPermissions: ToolPermissionConfig | null;
   errorBehavior?: ErrorBehavior;

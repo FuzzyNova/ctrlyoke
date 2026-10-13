@@ -7,6 +7,7 @@ import {
   type WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import type { PriorContextItem } from "../HarnessIntegration";
+import type { PriorContextRequest } from "../../utils/PriorContextMerge";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { RunOutputResolver, type RunOutputProjectionOptions } from "./RunOutputResolver";
 
@@ -28,7 +29,7 @@ export function createPriorContextResolver({
   outputResolver,
   projectionOptions,
 }: PriorContextResolverOptions): (
-  contexts: readonly PriorContext[],
+  contexts: readonly PriorContextRequest[],
   allPrompts: readonly WorkflowStep[],
   groupStartBoundary: number
 ) => Promise<PriorContextItem[]> {
@@ -65,20 +66,23 @@ export class AddressedPriorContextResolver {
   ) {}
 
   async resolve(
-    contexts: readonly PriorContext[],
+    contexts: readonly PriorContextRequest[],
     resolveSameRun: (
-      contexts: readonly PriorContext[]
+      contexts: readonly PriorContextRequest[]
     ) => Promise<PriorContextItem[]>
   ): Promise<PriorContextItem[]> {
-    const local: PriorContext[] = [];
-    const addressed: WorkflowRunAddress[] = [];
-    for (const context of contexts) {
-      if (isWorkflowRunAddress(context)) addressed.push(context);
-      else local.push(context);
+    const local: PriorContextRequest[] = [];
+    const addressed: { address: WorkflowRunAddress; detail: "full" | "summary" }[] = [];
+    for (const request of contexts) {
+      const selection = typeof request === "object" && !Array.isArray(request) && "context" in request ? request : undefined;
+      const context = selection ? selection.context : request as PriorContext;
+      const detail = selection?.detail ?? "full";
+      if (isWorkflowRunAddress(context)) addressed.push({ address: context, detail });
+      else local.push(request);
     }
 
     const items = await resolveSameRun(local);
-    for (const address of addressed) {
+    for (const { address, detail } of addressed) {
       await this.assertAuthorizedTerminalRun(address);
       items.push(
         ...(await this.outputResolver.resolveAllPriorContextItems(
@@ -87,7 +91,8 @@ export class AddressedPriorContextResolver {
             address.workflowKey,
             address.runRef
           ),
-          this.projectionOptions
+          this.projectionOptions,
+          detail
         ))
       );
     }
