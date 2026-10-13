@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       deploy-args:
-        description: "Extra args passed to netlify deploy (e.g. --prod or --alias=branch-name)"
+        description: "One extra flag passed to netlify deploy (e.g. --prod or --alias=branch-name)"
         required: true
         type: string
     secrets:
@@ -17,9 +17,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
@@ -32,8 +32,13 @@ jobs:
       - name: Build landing site + docs
         run: npm run build:site
 
+      # deploy-args carries a branch name for previews, and Git allows shell
+      # metacharacters in those, so it reaches the shell only as a quoted env
+      # var -- never spliced into the script with ${{ }}. Quoting also keeps it
+      # one argument, which is why it must be a single flag.
       - name: Deploy to Netlify
-        run: npx netlify-cli@latest deploy --dir=landing/dist ${{ inputs.deploy-args }}
+        run: npx netlify-cli@latest deploy --dir=landing/dist "$DEPLOY_ARGS"
         env:
+          DEPLOY_ARGS: ${{ inputs.deploy-args }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
