@@ -92,10 +92,22 @@ suite("ExternalRunWatchSession", () => {
       new NodeFileWatcherFactory()
     );
 
-    assert.strictEqual(session.shouldBroadcastOutput("queue:0:run:0", "a"), true);
-    assert.strictEqual(session.shouldBroadcastOutput("queue:0:run:0", "a"), false);
-    assert.strictEqual(session.shouldBroadcastOutput("queue:0:run:0", "b"), true);
-    assert.strictEqual(session.shouldBroadcastOutput("queue:1:run:0", "a"), true);
+    assert.strictEqual(
+      session.shouldBroadcastOutput("queue:0:run:0", "a"),
+      true
+    );
+    assert.strictEqual(
+      session.shouldBroadcastOutput("queue:0:run:0", "a"),
+      false
+    );
+    assert.strictEqual(
+      session.shouldBroadcastOutput("queue:0:run:0", "b"),
+      true
+    );
+    assert.strictEqual(
+      session.shouldBroadcastOutput("queue:1:run:0", "a"),
+      true
+    );
   });
 
   test("forwards the persisted token aggregate through working-file updates", async () => {

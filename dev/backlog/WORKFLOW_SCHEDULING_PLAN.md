@@ -59,12 +59,12 @@
 
 A schedule needs a live process to fire it. ctrlyoke's runtime hosts:
 
-| Host                                                                        | Alive when…                            | Owns a `WorkflowOrchestrator`?                                          | Fires schedules?                                                           |
-| --------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Extension host**                                                          | VS Code open with the extension active | Yes                                                                     | **Yes**                                                                    |
-| **Hosted server** (`CtrlYokeHostedServer`)                                  | The extension boots it                 | No — it's a front-end transport handed the **extension's** orchestrator | Yes, but only because the extension host is already running (same process) |
+| Host                                                                           | Alive when…                            | Owns a `WorkflowOrchestrator`?                                          | Fires schedules?                                                           |
+| ------------------------------------------------------------------------------ | -------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Extension host**                                                             | VS Code open with the extension active | Yes                                                                     | **Yes**                                                                    |
+| **Hosted server** (`CtrlYokeHostedServer`)                                     | The extension boots it                 | No — it's a front-end transport handed the **extension's** orchestrator | Yes, but only because the extension host is already running (same process) |
 | **Standalone `ctrlyoke server`** (`dev/implemented/STANDALONE_SERVER_PLAN.md`) | The user runs `ctrlyoke server`        | Yes — `createNodeHostedServer` composes its own                         | **Yes**                                                                    |
-| **CLI** (`ctrlyoke run`)                                                    | One invocation only                    | No — uses `WorkflowInstance`/`IntegrationFactory` directly              | **No** (by design — one-shot, not a scheduling host)                       |
+| **CLI** (`ctrlyoke run`)                                                       | One invocation only                    | No — uses `WorkflowInstance`/`IntegrationFactory` directly              | **No** (by design — one-shot, not a scheduling host)                       |
 
 The decisive simplification: **the hosted server is not a separate substrate** —
 it rides on the extension's orchestrator, so "VS Code open" and "hosted server
@@ -193,7 +193,7 @@ them without recomputation.
 
 > **Synced state home — double-fire hazard.** In the default user mode the runs
 > root lives under the ctrlyoke state home, which may sit in OneDrive/Dropbox.
-> A synced descriptor means two machines with the same project open would *both*
+> A synced descriptor means two machines with the same project open would _both_
 > arm and fire the schedule. Running one project on two synced machines at once is
 > already unsupported (see `copilot-instructions.md`), but a schedule makes
 > it happen without the user doing anything. v1 should record the arming machine
@@ -311,7 +311,7 @@ loads schedules from the lineage descriptors the host **already enumerates**
 (`WorkflowLineageRepository.listLineageKeys` + `readDescriptor`, the same pass
 `handleGetRecentWorkflows` uses), arms a timer for each `enabled` one, fires via
 the existing orchestrator new-run path, and on startup re-arms each schedule for
-its next *future* occurrence (missed runs are skipped, never caught up). Plus the UI: row schedule icon + editor popover, the
+its next _future_ occurrence (missed runs are skipped, never caught up). Plus the UI: row schedule icon + editor popover, the
 "Scheduled" dropdown section, message types + serializer handlers to get/set
 schedules, and Zustand wiring. This is the whole feature for the extension host —
 **and the standalone `ctrlyoke server` inherits it unchanged** because it

@@ -1043,10 +1043,7 @@ export class WorkflowStartupPipeline {
     restartFromBeginning: boolean
   ): void {
     const settings = ConfigurationUtils.getHarnessUsageSettings();
-    if (
-      !settings.enabled ||
-      !this.port.getHarnessUsageSnapshots
-    ) {
+    if (!settings.enabled || !this.port.getHarnessUsageSnapshots) {
       return;
     }
     const startIndex = restartFromBeginning ? 0 : queueState.currentIndex;

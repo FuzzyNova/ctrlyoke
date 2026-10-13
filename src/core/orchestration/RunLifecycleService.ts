@@ -1240,8 +1240,8 @@ export class RunLifecycleService {
       await fs.access(WorkflowPaths.draftFilePath(workspaceRoot, workflowKey));
       return { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
     } catch {
-      const newestRun = [...remaining].sort(
-        (left, right) => right.runRef.localeCompare(left.runRef)
+      const newestRun = [...remaining].sort((left, right) =>
+        right.runRef.localeCompare(left.runRef)
       )[0];
       return newestRun
         ? {

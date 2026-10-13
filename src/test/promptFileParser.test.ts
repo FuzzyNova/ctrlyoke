@@ -917,7 +917,9 @@ suite("PromptFileParser Tests", () => {
         await fs.writeFile(filePath, "# no workflow yet\n", "utf8");
         assert.strictEqual(await parser.parsePromptFile(filePath), null);
         assert.ok(parser.lastParseError);
-        assert.ok(!parser.lastParseError.message.includes("expected a document"));
+        assert.ok(
+          !parser.lastParseError.message.includes("expected a document")
+        );
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }

@@ -65,7 +65,9 @@ export function resolveTemplateVariableDefaults<
     userValues,
     workspaceValues
   );
-  const byName = new Map(variables.map((variable) => [variable.name, variable]));
+  const byName = new Map(
+    variables.map((variable) => [variable.name, variable])
+  );
   const harnessSource = new Map<string, TemplateVariableDefaultSource>();
 
   for (const variable of variables) {
@@ -88,20 +90,23 @@ export function resolveTemplateVariableDefaults<
         ? variable.authoredDefault
         : variable.default;
     let resolved: string | undefined;
-    let source: TemplateVariableDefaultSource = TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
+    let source: TemplateVariableDefaultSource =
+      TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
 
     if (variable.type === TEMPLATE_VARIABLE_TYPES.MODEL && variable.harness) {
       const pairSource = harnessSource.get(variable.harness);
       if (pairSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE) {
         resolved = validValues.workspace?.[variable.name] ?? authoredDefault;
-        source = validValues.workspace?.[variable.name] !== undefined
-          ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
-          : TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
+        source =
+          validValues.workspace?.[variable.name] !== undefined
+            ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
+            : TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
       } else if (pairSource === TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER) {
         resolved = validValues.user?.[variable.name] ?? authoredDefault;
-        source = validValues.user?.[variable.name] !== undefined
-          ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
-          : TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
+        source =
+          validValues.user?.[variable.name] !== undefined
+            ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
+            : TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
       } else {
         // A model saved outside the harness's selected scope cannot be paired safely.
         resolved = authoredDefault;
@@ -122,13 +127,16 @@ export function resolveTemplateVariableDefaults<
       variable.harness &&
       !byName.has(variable.harness)
     ) {
-      resolved = validValues.workspace?.[variable.name] ??
-        validValues.user?.[variable.name] ?? authoredDefault;
-      source = validValues.workspace?.[variable.name] !== undefined
-        ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
-        : validValues.user?.[variable.name] !== undefined
-          ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
-          : TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
+      resolved =
+        validValues.workspace?.[variable.name] ??
+        validValues.user?.[variable.name] ??
+        authoredDefault;
+      source =
+        validValues.workspace?.[variable.name] !== undefined
+          ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.WORKSPACE
+          : validValues.user?.[variable.name] !== undefined
+            ? TEMPLATE_VARIABLE_DEFAULT_SOURCES.USER
+            : TEMPLATE_VARIABLE_DEFAULT_SOURCES.TEMPLATE;
     }
 
     return {
@@ -151,9 +159,13 @@ export function classifyTemplateVariableDefaults(
   validValues: Partial<Record<SettingWriteScope, Record<string, string>>>;
   issues: TemplateVariableDefaultIssue[];
 } {
-  const definitions = new Map(variables.map((variable) => [variable.name, variable]));
+  const definitions = new Map(
+    variables.map((variable) => [variable.name, variable])
+  );
   const issues: TemplateVariableDefaultIssue[] = [];
-  const validValues: Partial<Record<SettingWriteScope, Record<string, string>>> = {};
+  const validValues: Partial<
+    Record<SettingWriteScope, Record<string, string>>
+  > = {};
 
   for (const [scope, values] of [
     [SETTING_SCOPES.USER, userValues],
@@ -184,9 +196,12 @@ export function classifyTemplateVariableDefaults(
     }
 
     for (const variable of variables) {
-      if (variable.type === TEMPLATE_VARIABLE_TYPES.MODEL &&
-          variable.harness && invalidHarnesses.has(variable.harness) &&
-          Object.prototype.hasOwnProperty.call(values, variable.name)) {
+      if (
+        variable.type === TEMPLATE_VARIABLE_TYPES.MODEL &&
+        variable.harness &&
+        invalidHarnesses.has(variable.harness) &&
+        Object.prototype.hasOwnProperty.call(values, variable.name)
+      ) {
         delete valid[variable.name];
         issues.push({
           scope,
@@ -224,10 +239,20 @@ export function shouldClearTemplateVariableDefaults(
   for (const variable of variables) {
     if (variable.type !== TEMPLATE_VARIABLE_TYPES.HARNESS) continue;
     const linked = variables.filter(
-      (candidate) => candidate.type === TEMPLATE_VARIABLE_TYPES.MODEL && candidate.harness === variable.name
+      (candidate) =>
+        candidate.type === TEMPLATE_VARIABLE_TYPES.MODEL &&
+        candidate.harness === variable.name
     );
-    if ([variable.name, ...linked.map(({ name }) => name)].some((name) => namesToCompare.has(name))) {
-      if (![variable.name, ...linked.map(({ name }) => name)].every((name) => namesToCompare.has(name))) {
+    if (
+      [variable.name, ...linked.map(({ name }) => name)].some((name) =>
+        namesToCompare.has(name)
+      )
+    ) {
+      if (
+        ![variable.name, ...linked.map(({ name }) => name)].every((name) =>
+          namesToCompare.has(name)
+        )
+      ) {
         return false;
       }
     }

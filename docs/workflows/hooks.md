@@ -56,11 +56,11 @@ have the details and the reason for each gap.
 
 Each hook has an `event` and a `command`, plus two optional fields:
 
-| Field        | Meaning                                                                                                                                            |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `event`      | One of the eight events above.                                                                                                                     |
-| `command`    | The command to run. Use a path relative to the workspace root, as in the examples.                                                                 |
-| `env`        | Environment variables for the hook. Values may use `{{var}}` [variables](/workflows/variables) and `${secret:NAME}` [secrets](/workflows/secrets). |
+| Field        | Meaning                                                                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `event`      | One of the eight events above.                                                                                                                               |
+| `command`    | The command to run. Use a path relative to the workspace root, as in the examples.                                                                           |
+| `env`        | Environment variables for the hook. Values may use `{{var}}` [variables](/workflows/variables) and `${secret:NAME}` [secrets](/workflows/secrets).           |
 | `timeoutSec` | Maximum hook runtime in seconds. Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode honor it when set; other harnesses use their own timeout. |
 
 `{{var}}` placeholders work in `command` too.

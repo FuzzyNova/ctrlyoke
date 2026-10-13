@@ -113,7 +113,10 @@ suite("CliProcessManager teardown", () => {
 
     await manager.disposeAsync();
     const result = await resultPromise;
-    assert.deepStrictEqual(signals, [PROCESS_SIGNALS.TERMINATE, PROCESS_SIGNALS.KILL]);
+    assert.deepStrictEqual(signals, [
+      PROCESS_SIGNALS.TERMINATE,
+      PROCESS_SIGNALS.KILL,
+    ]);
     assert.strictEqual(result.terminationSignal, PROCESS_SIGNALS.KILL);
   });
 
@@ -181,11 +184,14 @@ suite("CliProcessManager teardown", () => {
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 3500));
-      const firstPid = killCalls.find((call) => call.signal === PROCESS_SIGNALS.TERMINATE)?.pid;
+      const firstPid = killCalls.find(
+        (call) => call.signal === PROCESS_SIGNALS.TERMINATE
+      )?.pid;
       assert.ok(firstPid, "timed-out child should have received SIGTERM");
       assert.ok(
         killCalls.some(
-          (call) => call.pid === firstPid && call.signal === PROCESS_SIGNALS.KILL
+          (call) =>
+            call.pid === firstPid && call.signal === PROCESS_SIGNALS.KILL
         ),
         "timed-out child should receive SIGKILL after the escalation delay"
       );

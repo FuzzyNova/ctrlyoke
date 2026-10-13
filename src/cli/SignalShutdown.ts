@@ -1,6 +1,12 @@
-import { PROCESS_SIGNALS, type ProcessSignal } from "../types/DashboardConstants";
+import {
+  PROCESS_SIGNALS,
+  type ProcessSignal,
+} from "../types/DashboardConstants";
 
-export type ShutdownSignal = Exclude<ProcessSignal, typeof PROCESS_SIGNALS.KILL>;
+export type ShutdownSignal = Exclude<
+  ProcessSignal,
+  typeof PROCESS_SIGNALS.KILL
+>;
 
 export interface ShutdownSignalSource {
   once(signal: ShutdownSignal, listener: () => void): unknown;
@@ -8,7 +14,10 @@ export interface ShutdownSignalSource {
 }
 
 export interface ShutdownTimers {
-  setTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;
+  setTimeout(
+    callback: () => void,
+    delayMs: number
+  ): ReturnType<typeof setTimeout>;
   clearTimeout(timer: ReturnType<typeof setTimeout>): void;
 }
 
@@ -113,7 +122,11 @@ export function installTwoStageShutdown(
     }
 
     const count = options.countRunningWorkflows();
-    if (signal === PROCESS_SIGNALS.INTERRUPT && options.isInteractive && count > 0) {
+    if (
+      signal === PROCESS_SIGNALS.INTERRUPT &&
+      options.isInteractive &&
+      count > 0
+    ) {
       const withinConfirmation = confirmationTimer !== undefined;
       if (confirmationTimer !== undefined) {
         options.timers.clearTimeout(confirmationTimer);

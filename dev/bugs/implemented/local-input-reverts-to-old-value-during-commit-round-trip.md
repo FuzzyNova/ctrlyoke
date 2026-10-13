@@ -49,7 +49,7 @@ that leaves the external value unchanged.
 
 ## Suggested Fix
 
-Keep the committed value as *pending*: after blur, display the committed value
+Keep the committed value as _pending_: after blur, display the committed value
 until `externalValue` changes (then follow the external value as usual), and
 resolve the normalized case without a round trip. For example, let callers
 supply the normalized form (`LocalNumberInput` knows `parse`), compare it with

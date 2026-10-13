@@ -118,10 +118,7 @@ import {
   resolvePromptFileTextWithVariables,
   resolvePromptTextWithVariables,
 } from "./PromptTextResolver";
-import {
-  RETRY_PROMPT_SOURCES,
-  type RetryPromptSource,
-} from "./RetryBudget";
+import { RETRY_PROMPT_SOURCES, type RetryPromptSource } from "./RetryBudget";
 import {
   CliOutputFormatter,
   DashboardOutput,

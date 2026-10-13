@@ -20,10 +20,10 @@ Phase 12 (refund check).
 > when Test mode is flipped off) must also subscribe to `order_refunded` and
 > `subscription_payment_refunded`, or refunds won't suspend licenses or send the confirmation
 > email. Both are dashboard clicks, not code.
-**Related:** [`../implemented/PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) (the
-LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPRISE_TERMS.md) §6–7,
-[`../../LICENSE.md`](../../LICENSE.md) §6(e),
-[`../bugs/implemented/partial-refund-suspends-license.md`](../bugs/implemented/partial-refund-suspends-license.md).
+> **Related:** [`../implemented/PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) (the
+> LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPRISE_TERMS.md) §6–7,
+> [`../../LICENSE.md`](../../LICENSE.md) §6(e),
+> [`../bugs/implemented/partial-refund-suspends-license.md`](../bugs/implemented/partial-refund-suspends-license.md).
 
 ---
 
@@ -35,7 +35,7 @@ LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPR
 | `ENTERPRISE_TERMS.md` §6          | Cancellation stops renewal at term end and does not refund the unused term.                                                                                                                                            |
 | `LICENSE.md` §6(e)                | A license may be revoked for fraudulent purchase, payment reversal, or chargeback. **Says nothing about refunds for Pro.**                                                                                             |
 | Pricing page, `docs/pro/index.md` | **Nothing.**                                                                                                                                                                                                           |
-| `netlify/functions/ls-webhook.ts` | `order_refunded` → suspend the Keygen license for that order (since `87ba0728a`: full refunds only; renewal refunds also handled).                                                                                                                                                          |
+| `netlify/functions/ls-webhook.ts` | `order_refunded` → suspend the Keygen license for that order (since `87ba0728a`: full refunds only; renewal refunds also handled).                                                                                     |
 
 So the **individual Pro ($59) SKU has no refund policy at all**. A buyer reading the site can't tell
 whether a refund is possible, and the only governing text is Lemon Squeezy's buyer terms

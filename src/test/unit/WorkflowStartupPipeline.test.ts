@@ -205,7 +205,8 @@ class TestPort implements WorkflowStartupPipelinePort {
   readonly dashboardSink: IDashboardSink | undefined = undefined;
   readonly feedback: Array<{ severity: string; message: string }> = [];
   readonly userFeedbackSink: UserFeedbackSink = {
-    notify: ({ severity, message }) => this.feedback.push({ severity, message }),
+    notify: ({ severity, message }) =>
+      this.feedback.push({ severity, message }),
   };
   usageSnapshots: readonly HarnessUsageSnapshot[] = [];
   readonly getHarnessUsageSnapshots = () => this.usageSnapshots;

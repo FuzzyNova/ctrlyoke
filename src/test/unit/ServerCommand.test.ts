@@ -7,10 +7,7 @@ import {
   resolveServerSettings,
   type ServerSignalSource,
 } from "../../cli/ServerCommand";
-import type {
-  ShutdownSignal,
-  ShutdownTimers,
-} from "../../cli/SignalShutdown";
+import type { ShutdownSignal, ShutdownTimers } from "../../cli/SignalShutdown";
 import { handleCliError } from "../../cli/CliExitCode";
 import { PROCESS_SIGNALS } from "../../types/DashboardConstants";
 
@@ -26,10 +23,7 @@ const settings = {
 };
 
 class FakeSignals implements ServerSignalSource {
-  private readonly handlers = new Map<
-    ShutdownSignal,
-    Set<() => void>
-  >();
+  private readonly handlers = new Map<ShutdownSignal, Set<() => void>>();
 
   once(signal: ShutdownSignal, listener: () => void): void {
     const listeners = this.handlers.get(signal) ?? new Set<() => void>();
@@ -58,7 +52,10 @@ class FakeTimers implements ShutdownTimers {
     { at: number; callback: () => void }
   >();
 
-  setTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout> {
+  setTimeout(
+    callback: () => void,
+    delayMs: number
+  ): ReturnType<typeof setTimeout> {
     const id = ++this.nextId;
     this.pending.set(id, { at: this.now + delayMs, callback });
     return id as unknown as ReturnType<typeof setTimeout>;
@@ -192,7 +189,11 @@ suite("ServerCommand", () => {
     const messages: string[] = [];
     let disposeCount = 0;
     installServerShutdown(
-      { dispose: () => { disposeCount += 1; } },
+      {
+        dispose: () => {
+          disposeCount += 1;
+        },
+      },
       {
         signals,
         timers,
@@ -218,7 +219,11 @@ suite("ServerCommand", () => {
     const messages: string[] = [];
     let disposeCount = 0;
     installServerShutdown(
-      { dispose: () => { disposeCount += 1; } },
+      {
+        dispose: () => {
+          disposeCount += 1;
+        },
+      },
       {
         signals,
         timers,
@@ -247,7 +252,11 @@ suite("ServerCommand", () => {
     const messages: string[] = [];
     let disposeCount = 0;
     installServerShutdown(
-      { dispose: () => { disposeCount += 1; } },
+      {
+        dispose: () => {
+          disposeCount += 1;
+        },
+      },
       {
         signals,
         timers,
@@ -262,7 +271,11 @@ suite("ServerCommand", () => {
     signals.emit(PROCESS_SIGNALS.INTERRUPT);
     assert.strictEqual(disposeCount, 0);
     assert.strictEqual(messages.length, 2);
-    assert.ok(messages.every((message) => message.includes("Press Ctrl+C again within 3s")));
+    assert.ok(
+      messages.every((message) =>
+        message.includes("Press Ctrl+C again within 3s")
+      )
+    );
   });
 
   test("recounts workflows on the confirming press", async () => {
@@ -273,7 +286,11 @@ suite("ServerCommand", () => {
     let count = 1;
     let disposeCount = 0;
     installServerShutdown(
-      { dispose: () => { disposeCount += 1; } },
+      {
+        dispose: () => {
+          disposeCount += 1;
+        },
+      },
       {
         signals,
         timers,
@@ -302,7 +319,11 @@ suite("ServerCommand", () => {
       const exits: number[] = [];
       let disposeCount = 0;
       installServerShutdown(
-        { dispose: () => { disposeCount += 1; } },
+        {
+          dispose: () => {
+            disposeCount += 1;
+          },
+        },
         {
           signals,
           timers: new FakeTimers(),
@@ -320,14 +341,22 @@ suite("ServerCommand", () => {
       );
       signals.emit(signal);
       await flushPromises();
-      assert.strictEqual(disposeCount, 1, `${signal} should dispose immediately`);
+      assert.strictEqual(
+        disposeCount,
+        1,
+        `${signal} should dispose immediately`
+      );
       assert.deepStrictEqual(exits, [0]);
     }
 
     const signals = new FakeSignals();
     let disposeCount = 0;
     installServerShutdown(
-      { dispose: () => { disposeCount += 1; } },
+      {
+        dispose: () => {
+          disposeCount += 1;
+        },
+      },
       {
         signals,
         timers: new FakeTimers(),

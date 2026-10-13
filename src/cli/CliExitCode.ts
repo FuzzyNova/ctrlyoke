@@ -51,8 +51,7 @@ export const CLI_GUARDRAIL_STOP_EXIT_CODE = 6;
 /** Report an unexpected CLI error and exit with the documented usage code. */
 export function handleCliError(
   error: unknown,
-  writeError: (message: string) => void = (message) =>
-    console.error(message),
+  writeError: (message: string) => void = (message) => console.error(message),
   exit: (code: number) => void = (code) => process.exit(code)
 ): void {
   const message = error instanceof Error ? error.message : String(error);

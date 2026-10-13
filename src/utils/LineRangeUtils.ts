@@ -7,9 +7,7 @@ export interface LineRangeReference {
 export function hasLineRange(
   reference: LineRangeReference
 ): reference is { startLine: number; endLine: number } {
-  return (
-    reference.startLine !== undefined && reference.endLine !== undefined
-  );
+  return reference.startLine !== undefined && reference.endLine !== undefined;
 }
 
 /** The shared 1-based, inclusive line-range rule used by lint and expansion. */

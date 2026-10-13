@@ -15,12 +15,12 @@ The two items below are what remains from that investigation.
 Measured from the session logs of an iPhone PWA connecting over cellular to a
 workspace with 1,448 lineages and about 1,870 run/draft working files:
 
-| Connect (UTC)         | READY → view bound | run view sent    | phone loaded it | spinner cleared |
-| --------------------- | ------------------ | ---------------- | --------------- | --------------- |
-| 2026-10-12 21:03:21   | 6.9 s              | 3.6 MB           | 28.7 s          | 38.8 s          |
-| 2026-10-12 20:32:11   | 5.1 s              | 2.1 MB           | 14.9 s          | 17.4 s          |
-| 2026-10-11 17:15:58   | 0.5 s              | 5–6 MB           | 101.6 s         | 103.7 s         |
-| typical fast connect  | 0.2–0.3 s          | —                | 0.3–1.5 s       | 0.4–2 s         |
+| Connect (UTC)        | READY → view bound | run view sent | phone loaded it | spinner cleared |
+| -------------------- | ------------------ | ------------- | --------------- | --------------- |
+| 2026-10-12 21:03:21  | 6.9 s              | 3.6 MB        | 28.7 s          | 38.8 s          |
+| 2026-10-12 20:32:11  | 5.1 s              | 2.1 MB        | 14.9 s          | 17.4 s          |
+| 2026-10-11 17:15:58  | 0.5 s              | 5–6 MB        | 101.6 s         | 103.7 s         |
+| typical fast connect | 0.2–0.3 s          | —             | 0.3–1.5 s       | 0.4–2 s         |
 
 Those rows were recorded before the four fixes. Re-measure before starting
 either item; compression alone should cut the "phone loaded it" column several

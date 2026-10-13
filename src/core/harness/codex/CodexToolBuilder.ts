@@ -14,7 +14,10 @@ import {
   McpToolCallData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
 import {

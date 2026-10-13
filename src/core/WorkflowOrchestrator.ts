@@ -1187,8 +1187,7 @@ export class WorkflowOrchestrator {
     return [...this.instances.values()].filter((instance) => {
       const state = instance.getSummary().executionState;
       return (
-        state === EXECUTION_STATES.RUNNING ||
-        state === EXECUTION_STATES.PAUSING
+        state === EXECUTION_STATES.RUNNING || state === EXECUTION_STATES.PAUSING
       );
     }).length;
   }
@@ -4721,7 +4720,9 @@ export class WorkflowOrchestrator {
       ...this.instances.values(),
       ...this.retiredInstances.values(),
     ]);
-    await Promise.all([...instances].map((instance) => instance.disposeAsync()));
+    await Promise.all(
+      [...instances].map((instance) => instance.disposeAsync())
+    );
     const endConditionDisposal = this.endConditionEvaluator.disposeAsync();
     this.disposeResources(false, false);
     await endConditionDisposal;

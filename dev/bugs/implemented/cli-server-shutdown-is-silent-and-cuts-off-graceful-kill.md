@@ -35,7 +35,7 @@ problems are in how it is presented and how it ends:
    first or second signal, so the user never sees the graceful path happen.
 3. **`process.exit` runs straight after dispose and cuts off async kills.**
    `.finally(() => exit(0))` runs as soon as `dispose()` resolves.
-   `killGracefully` (`CliProcessManager.ts` ~386-420) only *starts* a SIGTERM
+   `killGracefully` (`CliProcessManager.ts` ~386-420) only _starts_ a SIGTERM
    and arms a 3 s timer (`KILL_ESCALATION_DELAY_MS`) to escalate to SIGKILL.
    Exiting at once means the escalation timer never fires, so a child that
    ignores SIGTERM is orphaned. On POSIX, `tree-kill` first runs `ps` to find
@@ -91,27 +91,27 @@ stray Ctrl+C should not do it without warning:
 4. **Graceful shutdown, with feedback:** print
    `Stopping N workflow(s) and shutting down… (press Ctrl+C again to force quit)`
    to stderr, then run `runtime.dispose()`. A confirmed second press means
-   *stop gracefully* (workflows record a clean stop and the run can be
-   continued later), not *force*. Calling it "force stop" would wrongly
+   _stop gracefully_ (workflows record a clean stop and the run can be
+   continued later), not _force_. Calling it "force stop" would wrongly
    suggest state is lost.
 5. **Ctrl+C during shutdown → force:** print `Force quitting.` and exit with a
    non-zero code (130 for SIGINT, the 128+signal convention), so scripts can
    tell a forced exit from a clean one. Keep exit 0 for a graceful shutdown
    that completes.
-4. **Bound the graceful phase:** race `dispose()` against an overall deadline
+6. **Bound the graceful phase:** race `dispose()` against an overall deadline
    longer than `KILL_ESCALATION_DELAY_MS` plus the instance settle window
    (around 5 s). On timeout, log what was still pending and exit non-zero.
-5. **Let process cleanup finish before exit:** do not call `process.exit`
+7. **Let process cleanup finish before exit:** do not call `process.exit`
    while kills are still running. Either have `CliProcessManager.dispose()`
    (or a new `disposeAsync()`) return a promise that resolves on child `close`,
    with SIGKILL escalation, and await it from `dispose()`, or close every
    handle and let the event loop drain instead of calling `process.exit(0)`.
    Either way, the SIGTERM → SIGKILL escalation must complete for children
    that are still running.
-6. **More signals:** extend `ServerSignalSource` and `installServerShutdown`
+8. **More signals:** extend `ServerSignalSource` and `installServerShutdown`
    to handle `SIGHUP` and, on Windows, `SIGBREAK` through the same graceful
    path. Use `once` for the first signal so handlers are not left stacked.
-7. **Reuse it:** `src/cli.ts` ~1287-1305 has its own Ctrl+C handler for
+9. **Reuse it:** `src/cli.ts` ~1287-1305 has its own Ctrl+C handler for
    `run`/`continue` with a different message and exit code (5). Move the
    two-stage signal handling (message, force-on-second, deadline, signal set)
    into one shared helper in `src/cli/` that both commands use, each passing

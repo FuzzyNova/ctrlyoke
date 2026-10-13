@@ -103,8 +103,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     : "pending";
   const longPressHandlers = useLongPress(onContextMenu);
   const contextWindow = resolveEffectiveContextWindow({
-    isCurrent:
-      isWorkflowRunningForFinalStep(status, phase),
+    isCurrent: isWorkflowRunningForFinalStep(status, phase),
     liveContextWindow,
     latestOutputTokens: latestOutput?.tokens,
     runtimeContextWindow: finalStep?._runtime,
@@ -328,5 +327,7 @@ function isWorkflowRunningForFinalStep(
   status: StepStatus | null,
   phase: FinalStepPhase | null
 ): boolean {
-  return status === STEP_STATUS.RUNNING && phase === FINAL_STEP_PHASES.FINAL_STEP;
+  return (
+    status === STEP_STATUS.RUNNING && phase === FINAL_STEP_PHASES.FINAL_STEP
+  );
 }

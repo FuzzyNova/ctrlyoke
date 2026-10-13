@@ -95,10 +95,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
     (state) => state.snapshotsByHarness[activeHarnessId]
   );
   const percentDirection = useUsagePercentDirection();
-  const usageDisplay = getHarnessUsageDisplay(
-    usageSnapshot,
-    percentDirection
-  );
+  const usageDisplay = getHarnessUsageDisplay(usageSnapshot, percentDirection);
   const availabilityPhrase = getHarnessAvailabilityPhrase(
     harnessStatus[activeHarnessId]
   );

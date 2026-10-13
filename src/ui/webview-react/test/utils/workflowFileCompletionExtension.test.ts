@@ -18,10 +18,9 @@ describe("workflow file prompt completions", () => {
       transport: {} as never,
     });
     const state = EditorState.create({ doc: text, extensions: extension });
-    const sources = state.languageDataAt<(context: CompletionContext) => unknown>(
-      "autocomplete",
-      pos
-    );
+    const sources = state.languageDataAt<
+      (context: CompletionContext) => unknown
+    >("autocomplete", pos);
     const results = sources.map((source) =>
       source(new CompletionContext(state, pos, true))
     );

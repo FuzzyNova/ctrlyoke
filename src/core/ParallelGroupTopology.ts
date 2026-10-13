@@ -50,7 +50,11 @@ export function getParallelSiblingReferenceErrors(
     );
     const memberNumberText = memberNumbers.join(", ");
 
-    for (let stepIndex = group.startIndex; stepIndex <= group.endIndex; stepIndex++) {
+    for (
+      let stepIndex = group.startIndex;
+      stepIndex <= group.endIndex;
+      stepIndex++
+    ) {
       const step = steps[stepIndex];
       if (isScriptStep(step)) {
         continue;

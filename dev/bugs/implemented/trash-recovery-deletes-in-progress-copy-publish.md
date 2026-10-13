@@ -31,7 +31,7 @@ another window, or `purgeAll` — recovery deletes the published folder:
 
 `recoverPendingEntries` (~614-627) treats "published folder exists without
 `entry.json`" as an interrupted copy and deletes it immediately. That check
-runs *before* the owner-liveness check (~628-646) that skips pending entries
+runs _before_ the owner-liveness check (~628-646) that skips pending entries
 whose owner process is still alive. During `publishEntry`'s copy fallback
 (~544-554) that exact state is normal, and `list()` runs recovery every time.
 

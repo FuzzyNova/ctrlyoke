@@ -1124,7 +1124,9 @@ export class WorkflowInstance
       ...this.lastRunIntegrations,
       ...[...this.activeTargetResources.values()]
         .map((resource) => resource.integration)
-        .filter((integration): integration is HarnessIntegration => !!integration),
+        .filter(
+          (integration): integration is HarnessIntegration => !!integration
+        ),
     ]);
     const processRunners = new Set(this.targetScriptProcessRunners.values());
     this.dispose();

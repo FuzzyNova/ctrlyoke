@@ -310,7 +310,11 @@ export class OutputCaptureBuffer {
     this.contextWindowBuffer.set(stepIndex, { used, size });
   }
 
-  captureFinalStepContextWindow(loopIndex: number, used: number, size: number): void {
+  captureFinalStepContextWindow(
+    loopIndex: number,
+    used: number,
+    size: number
+  ): void {
     this.finalStepContextWindowBuffer.set(loopIndex, { used, size });
   }
 

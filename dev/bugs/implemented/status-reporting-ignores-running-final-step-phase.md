@@ -20,7 +20,7 @@ already established this. Two status surfaces don't account for it:
    chips (`useMessageHandler.ts`).
 2. **`global_status` / `ctrlyoke status` report a position past the end.** A
    2-step run whose final step is running returns `currentStep: 3,
-   totalSteps: 2`, which the CLI table prints as `3/2`. After the final step
+totalSteps: 2`, which the CLI table prints as `3/2`. After the final step
    appends two steps it reports `3/4`, naming a pending step as current.
 
 ## Steps to Reproduce

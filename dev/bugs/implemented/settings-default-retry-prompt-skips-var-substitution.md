@@ -43,7 +43,7 @@ Two regressions from the fix for
    `getDefaultPassRetryPrompt()`), which was never pre-substituted. It now
    reaches the harness unsubstituted.
 2. `ExecutionPreviewService.buildConditions` uses
-   `resolveRetryBudget(...).permittedRetries`, which counts only *failure*
+   `resolveRetryBudget(...).permittedRetries`, which counts only _failure_
    retries (`canRetry`). Pass retries share the same counter and only need
    `maxRetries` (`canPassRetry`), so an `onPass: retry` step with no
    `retryPrompt` and `onFail` not `retry` previews zero retries.

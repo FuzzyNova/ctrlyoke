@@ -24,7 +24,7 @@ not landed, and `merge: true` never runs. Ctrlyoke only lands a branch whose tip
 
 `completeManagedRun` (`WorktreeManager.ts` ~701) first calls `validateManagedCheckoutIdentity`,
 which requires `branchTip === record.lastVerifiedBranchTip` (~1140). `lastVerifiedBranchTip` is
-written only at creation (`baseCommit`) and at landing, so *any* agent commit, even with leftover
+written only at creation (`baseCommit`) and at landing, so _any_ agent commit, even with leftover
 uncommitted changes, moves the tip and blocks settlement there. The later
 `if (!changed) return blocked("Managed branch changed without a ctrlyoke landing ...")` (~755) is
 effectively unreachable: `getManagedWorktreeWatermark(record)` equals `lastVerifiedBranchTip` in

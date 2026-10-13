@@ -6,12 +6,12 @@
 
 ## Symptom
 
-| endCondition                        | Runtime attempts on failure | Preview "Maximum attempts" |
-| ----------------------------------- | --------------------------- | -------------------------- |
-| `{ maxRetries: 3 }`                 | 1                           | 4                          |
-| `{ maxRetries: 3, onFail: continue }` | 1                         | 4                          |
-| `{ onFail: retry }`                 | `DEFAULT_ERROR_BEHAVIOR_RETRIES` + 1 | 2                 |
-| `{ retryPrompt: "…" }` with a settings default `maxRetries` | default + 1 | 1         |
+| endCondition                                                | Runtime attempts on failure          | Preview "Maximum attempts" |
+| ----------------------------------------------------------- | ------------------------------------ | -------------------------- |
+| `{ maxRetries: 3 }`                                         | 1                                    | 4                          |
+| `{ maxRetries: 3, onFail: continue }`                       | 1                                    | 4                          |
+| `{ onFail: retry }`                                         | `DEFAULT_ERROR_BEHAVIOR_RETRIES` + 1 | 2                          |
+| `{ retryPrompt: "…" }` with a settings default `maxRetries` | default + 1                          | 1                          |
 
 In the `{ maxRetries: 3 }` case, the runtime also reports "End condition failed
 after 0 retries." (`EndConditionHandler.ts` ~291-294), because the headline

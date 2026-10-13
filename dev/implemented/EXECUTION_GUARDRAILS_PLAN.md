@@ -179,6 +179,7 @@ This plan is an enforcement and consistency audit, not a new schema feature.
    text/JSON; MCP has no dry-run/preview tool.
 5. ~~Dashboard and notification surfaces; settings copy; close out the plan and
    release-checklist item.~~ — done.
+
 - Keep configuration in the existing Execution and Queue settings sections; do
   not add workflow or prompt property controls.
 

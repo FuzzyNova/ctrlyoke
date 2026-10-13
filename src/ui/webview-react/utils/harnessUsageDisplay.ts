@@ -101,10 +101,7 @@ export function getHarnessUsageDisplay(
         window.percentUsed === undefined
           ? undefined
           : Math.round(
-              formatUsagePercentForDisplay(
-                window.percentUsed,
-                percentDirection
-              )
+              formatUsagePercentForDisplay(window.percentUsed, percentDirection)
             );
       const label = window.isUnlimited
         ? "Unlimited"

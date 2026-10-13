@@ -32,6 +32,6 @@ local text survives.
 After `onCommit` in `onBlur`, reset the local value to the latest external
 value (kept in a ref). If the commit changes the store, the effect then
 replaces it with the new value as usual. Don't break the existing guarantee
-that external updates are ignored *while* editing. Add
+that external updates are ignored _while_ editing. Add
 `src/ui/webview-react/test/hooks/useLocalInput.test.tsx` (no test exists for
 this hook yet).

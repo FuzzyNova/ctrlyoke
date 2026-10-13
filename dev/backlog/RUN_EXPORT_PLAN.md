@@ -115,7 +115,7 @@ What already exists: during execution, `StreamingSecretRedactor`
 (`src/utils/SecretRedactionService.ts`, used by `CliTransportCoordinator`,
 `PtyProcessManager`, and `ScriptExecutionReporter`) scrubs resolved secret
 values out of output before it is persisted, so a run's `events.jsonl` should
-already be free of the secrets *that run* resolved. That is not sufficient for
+already be free of the secrets _that run_ resolved. That is not sufficient for
 export: a `RunSecretRedactor` holds values only while its run executes (cleared on
 unregister), heuristics may have been off, and the harness can still print
 secrets it read from the repo that ctrlyoke never resolved. The exporter should

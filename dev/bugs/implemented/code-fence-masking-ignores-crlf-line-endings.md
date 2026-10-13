@@ -19,14 +19,17 @@ literal while the runtime expands them.
 
 ## Steps to Reproduce
 
-```ts
-import { findCodeRanges, parseInlinePriorContextRefs } from "src/utils/FileReferenceParser";
+````ts
+import {
+  findCodeRanges,
+  parseInlinePriorContextRefs,
+} from "src/utils/FileReferenceParser";
 const lf = "Intro\n```\nsee $previous and @src/app.ts\n```\nafter";
 const crlf = lf.replace(/\n/g, "\r\n");
-findCodeRanges(lf);                       // [{ from: 6, to: 43 }]
-findCodeRanges(crlf);                     // []  <- no fence found
+findCodeRanges(lf); // [{ from: 6, to: 43 }]
+findCodeRanges(crlf); // []  <- no fence found
 parseInlinePriorContextRefs(crlf).length; // 1   <- $previous expands inside the fence
-```
+````
 
 ## Root Cause
 
@@ -43,6 +46,7 @@ part of the line terminator. Drop it from the text used for fence detection, but
 keep the physical offsets intact so ranges still index the original string.
 Every caller then works unchanged: the runtime, the editor lint/chips and
 `maskCodeRanges`. Add CRLF cases to the `FileReferenceParser` unit tests:
+
 - fenced `@path` and `$previous` stay literal;
 - a fenced `{{var}}` stays literal in `VarSubstitutor`;
 - returned offsets still map onto the original CRLF string.

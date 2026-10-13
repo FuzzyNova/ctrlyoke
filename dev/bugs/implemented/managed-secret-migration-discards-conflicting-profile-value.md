@@ -20,6 +20,7 @@
    Each value and its metadata key also migrate separately, so a kept OS
    value can end up paired with the profile's metadata (`lastUpdated`,
    description).
+
 2. **Index entries can be lost.** `OsCredentialStore.addKeyToIndex` and
    `removeKeyFromIndex` read and rewrite the whole `ctrlyoke.secret.index`
    entry with no serialization. The migration starts as a fire-and-forget

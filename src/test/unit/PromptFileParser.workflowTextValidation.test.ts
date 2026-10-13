@@ -102,7 +102,11 @@ suite("PromptFileParser.validateWorkflowText", () => {
   });
 
   test("accepts empty and comment-only prompt markdown frontmatter", () => {
-    for (const frontmatter of ["", "   \n", "# metadata intentionally omitted\n"]) {
+    for (const frontmatter of [
+      "",
+      "   \n",
+      "# metadata intentionally omitted\n",
+    ]) {
       assert.deepStrictEqual(
         parser.validateWorkflowText(
           `---\n${frontmatter}---\nBody\n`,

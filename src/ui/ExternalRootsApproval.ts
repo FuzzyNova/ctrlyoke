@@ -12,7 +12,10 @@ import {
 import type { ChoiceRequest, UserInteractionPort } from "./UserInteractionPort";
 import { NullUserInteractionPort } from "./UserInteractionPort";
 import { Log } from "../utils/Log";
-import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
+import {
+  loadYamlDocument,
+  WORKFLOW_YAML_SCHEMA,
+} from "../core/WorkflowYamlSchema";
 import {
   parseWorkflowSourceJson,
   setWorkflowSourceTopLevelKey,

@@ -67,10 +67,7 @@ import {
 } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import {
-  resolveRetryBudget,
-  type RetryPromptSource,
-} from "./RetryBudget";
+import { resolveRetryBudget, type RetryPromptSource } from "./RetryBudget";
 
 export interface SequentialStepSettlement {
   readonly promotedGroup?: ParallelGroupDefinition;
@@ -2193,7 +2190,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         this.workflowFile?.finalStep
       );
       assertNoParallelSiblingReferences(
-        { steps: renumbered.steps, parallelGroups: nextTopology.parallelGroups },
+        {
+          steps: renumbered.steps,
+          parallelGroups: nextTopology.parallelGroups,
+        },
         this.workflowFile
       );
       assertStartedStepPositionsPreserved(

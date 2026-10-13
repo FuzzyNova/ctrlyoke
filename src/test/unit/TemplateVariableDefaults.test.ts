@@ -17,7 +17,12 @@ suite("TemplateVariableDefaults", () => {
     { name: "folder", type: TYPE.TEXT, default: "authored" },
     { name: "harness", type: TYPE.HARNESS, default: "claude-cli" },
     { name: "model", type: TYPE.MODEL, harness: "harness", default: "opus" },
-    { name: "format", type: TYPE.SELECT, options: ["json", "yaml"], default: "yaml" },
+    {
+      name: "format",
+      type: TYPE.SELECT,
+      options: ["json", "yaml"],
+      default: "yaml",
+    },
   ];
 
   test("merges workspace and user defaults per variable and exposes provenance", () => {
@@ -27,7 +32,12 @@ suite("TemplateVariableDefaults", () => {
       { folder: "workspace-folder" }
     );
     assert.deepStrictEqual(
-      resolved.map(({ variable }) => [variable.name, variable.default, variable.authoredDefault, variable.defaultSource]),
+      resolved.map(({ variable }) => [
+        variable.name,
+        variable.default,
+        variable.authoredDefault,
+        variable.defaultSource,
+      ]),
       [
         ["folder", "workspace-folder", "authored", SOURCE.WORKSPACE],
         ["harness", "claude-cli", "claude-cli", SOURCE.TEMPLATE],
@@ -44,8 +54,13 @@ suite("TemplateVariableDefaults", () => {
       { harness: "claude-cli" }
     );
     assert.deepStrictEqual(
-      userPair.slice(1, 3).map(({ variable }) => [variable.default, variable.defaultSource]),
-      [["claude-cli", SOURCE.WORKSPACE], ["opus", SOURCE.TEMPLATE]]
+      userPair
+        .slice(1, 3)
+        .map(({ variable }) => [variable.default, variable.defaultSource]),
+      [
+        ["claude-cli", SOURCE.WORKSPACE],
+        ["opus", SOURCE.TEMPLATE],
+      ]
     );
 
     const workspacePair = resolveTemplateVariableDefaults(
@@ -54,15 +69,25 @@ suite("TemplateVariableDefaults", () => {
       { harness: "codex-cli", model: "gpt-6-codex" }
     );
     assert.deepStrictEqual(
-      workspacePair.slice(1, 3).map(({ variable }) => [variable.default, variable.defaultSource]),
-      [["codex-cli", SOURCE.WORKSPACE], ["gpt-6-codex", SOURCE.WORKSPACE]]
+      workspacePair
+        .slice(1, 3)
+        .map(({ variable }) => [variable.default, variable.defaultSource]),
+      [
+        ["codex-cli", SOURCE.WORKSPACE],
+        ["gpt-6-codex", SOURCE.WORKSPACE],
+      ]
     );
   });
 
   test("classifies unknown variables, invalid harnesses and invalid select options", () => {
     const { validValues, issues } = classifyTemplateVariableDefaults(
       definitions,
-      { gone: "old", harness: "removed-cli", model: "old-model", format: "toml" },
+      {
+        gone: "old",
+        harness: "removed-cli",
+        model: "old-model",
+        format: "toml",
+      },
       undefined
     );
     assert.deepStrictEqual(validValues.user, {});
@@ -79,20 +104,44 @@ suite("TemplateVariableDefaults", () => {
 
   test("compares against the inherited value at the target scope", () => {
     assert.strictEqual(
-      shouldClearTemplateVariableDefaults(definitions, SETTING_SCOPES.USER, undefined, undefined, { folder: "authored" }),
+      shouldClearTemplateVariableDefaults(
+        definitions,
+        SETTING_SCOPES.USER,
+        undefined,
+        undefined,
+        { folder: "authored" }
+      ),
       true
     );
     assert.strictEqual(
-      shouldClearTemplateVariableDefaults(definitions, SETTING_SCOPES.WORKSPACE, { folder: "user" }, { folder: "x" }, { folder: "user" }),
+      shouldClearTemplateVariableDefaults(
+        definitions,
+        SETTING_SCOPES.WORKSPACE,
+        { folder: "user" },
+        { folder: "x" },
+        { folder: "user" }
+      ),
       true
     );
     // Authored value at Workspace must be stored when it differs from the User value.
     assert.strictEqual(
-      shouldClearTemplateVariableDefaults(definitions, SETTING_SCOPES.WORKSPACE, { folder: "different-user" }, undefined, { folder: "authored" }),
+      shouldClearTemplateVariableDefaults(
+        definitions,
+        SETTING_SCOPES.WORKSPACE,
+        { folder: "different-user" },
+        undefined,
+        { folder: "authored" }
+      ),
       false
     );
     assert.strictEqual(
-      shouldClearTemplateVariableDefaults(definitions, SETTING_SCOPES.WORKSPACE, undefined, undefined, { harness: "claude-cli" }),
+      shouldClearTemplateVariableDefaults(
+        definitions,
+        SETTING_SCOPES.WORKSPACE,
+        undefined,
+        undefined,
+        { harness: "claude-cli" }
+      ),
       false,
       "a harness pin must include its linked model as one unit"
     );
@@ -111,11 +160,21 @@ suite("TemplateVariableDefaults", () => {
       )
     ) as TemplateVariableDefaultDefinition[];
     assert.strictEqual(
-      shouldClearTemplateVariableDefaults(wire, SETTING_SCOPES.USER, undefined, { testCommand: "npm test" }, { testCommand: "npm test" }),
+      shouldClearTemplateVariableDefaults(
+        wire,
+        SETTING_SCOPES.USER,
+        undefined,
+        { testCommand: "npm test" },
+        { testCommand: "npm test" }
+      ),
       false,
       "pinning the Workspace value at User must store it, not treat it as authored"
     );
-    const [resolved] = resolveTemplateVariableDefaults(wire, undefined, undefined);
+    const [resolved] = resolveTemplateVariableDefaults(
+      wire,
+      undefined,
+      undefined
+    );
     assert.strictEqual(resolved.variable.default, undefined);
     assert.strictEqual(resolved.variable.defaultSource, SOURCE.TEMPLATE);
   });

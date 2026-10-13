@@ -2342,7 +2342,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
   test("gates unknown mcpServers list IDs in fail mode", async () => {
     const queue = new PromptQueue();
     queue.loadPrompts({
-      steps: [{ prompt: "Run this step", mcpServers: ["missing-list-id-test"] }],
+      steps: [
+        { prompt: "Run this step", mcpServers: ["missing-list-id-test"] },
+      ],
     });
     const integration = new MockHarnessIntegration(undefined, false);
     const diagnostics: CompatibilityDiagnostic[] = [];
@@ -3568,10 +3570,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     try {
       const failureQueue = new PromptQueue();
       const failureIntegration = new MockHarnessIntegration(undefined, false);
-      const failureEvaluator = new RecordingShellEvaluator(
-        new MockPlatform(),
-        [shellEvaluationResult(false), shellEvaluationResult(true)]
-      );
+      const failureEvaluator = new RecordingShellEvaluator(new MockPlatform(), [
+        shellEvaluationResult(false),
+        shellEvaluationResult(true),
+      ]);
       failureQueue.loadPrompts({
         vars: { target: "src/foo.ts" },
         steps: [
@@ -4658,8 +4660,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         },
       } as any,
       {
-        get: (target, property) =>
-          target[property] ?? (() => {}),
+        get: (target, property) => target[property] ?? (() => {}),
       }
     );
     queue.loadPrompts({

@@ -132,7 +132,10 @@ suite("StepStatusDerivation", () => {
       FINAL_STEP_PHASES.FINAL_STEP
     );
 
-    assert.deepStrictEqual(statuses, [STEP_STATUS.RUNNING, STEP_STATUS.PENDING]);
+    assert.deepStrictEqual(statuses, [
+      STEP_STATUS.RUNNING,
+      STEP_STATUS.PENDING,
+    ]);
   });
 
   test("keeps the current step in flight while pausing or cancelling", () => {

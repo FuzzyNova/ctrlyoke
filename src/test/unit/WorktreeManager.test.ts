@@ -1647,7 +1647,10 @@ suite("WorktreeManager", function () {
     );
 
     assert.strictEqual(appendResult.landingOutcome, "landed");
-    assert.strictEqual(localBranchExists(repository, appendInfo.branchName), true);
+    assert.strictEqual(
+      localBranchExists(repository, appendInfo.branchName),
+      true
+    );
     assert.ok(!appendResult.message?.includes("Managed no-change branch"));
     assert.ok(record);
     assert.strictEqual(record.recoveryOutcome, undefined);
