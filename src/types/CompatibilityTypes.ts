@@ -221,7 +221,7 @@ export type HookCaveatCode =
   (typeof HOOK_CAVEAT_CODES)[keyof typeof HOOK_CAVEAT_CODES];
 
 /**
- * Resolve a declaration's `caveatCode` into a trailing "because ..." clause.
+ * Resolve a declaration's `caveatCode` into shared explanatory prose.
  * Returns undefined when the declaration carries no caveat, so callers can
  * omit the clause rather than inventing a reason.
  */
@@ -234,7 +234,7 @@ export function getCompatibilityCaveatMessage(
     case PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES:
       return "because this harness uses coarse permission modes instead of individual tool patterns";
     case PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS:
-      return "because Claude's existing settings allow rules also count as pre-approved in headless mode";
+      return "Claude's own settings allow rules can add to this list in headless mode";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT:
@@ -273,7 +273,9 @@ export function getCompatibilityDiagnosticMessage(
   // limitation, not an open question, so the reason belongs in the same
   // sentence rather than a separate lookup.
   const withCaveat = (sentence: string): string =>
-    caveat ? `${sentence} ${caveat}.` : `${sentence}.`;
+    caveat
+      ? `${sentence}${caveat.startsWith("because ") ? ` ${caveat}` : `; ${caveat}`}.`
+      : `${sentence}.`;
 
   switch (code) {
     case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:

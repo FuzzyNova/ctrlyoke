@@ -536,6 +536,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const deniedFieldDiagnostics = deniedAggregate
     ? [deniedAggregate]
     : deniedDiagnostics;
+  const hasPermissionWarning = [
+    ...modeDiagnostics,
+    ...allowedFieldDiagnostics,
+    ...deniedFieldDiagnostics,
+  ].some((diagnostic) => diagnostic.severity === "warning");
 
   // Local input state for Additional Args — committed on blur/Enter to avoid
   // flooding the undo stack with every keystroke.
@@ -1399,7 +1404,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     workflowProperties,
     globalSettings,
     undefined,
-    permissionDiagnostics.length > 0,
+    hasPermissionWarning,
     hookDiagnostics.length > 0,
     mcpDiagnostics.length > 0
   );

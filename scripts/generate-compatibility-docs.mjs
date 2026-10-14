@@ -250,8 +250,10 @@ function buildNotes(facts, compatibilityTypes, presentation) {
         declaration
       );
     const { status } = presentFidelity(presentation, declaration.fidelity);
-    // Caveats are "because …" clauses written to complete a sentence.
-    const explanation = caveat ? `${status} ${caveat}.` : `${status}.`;
+    // Caveats may be "because …" clauses or standalone clarifying phrases.
+    const explanation = caveat
+      ? `${status}${caveat.startsWith("because ") ? ` ${caveat}` : `: ${caveat}`}.`
+      : `${status}.`;
     const key = `${explanation}\n${remediation ?? ""}`;
     let note = notes.find((candidate) => candidate.key === key);
     if (!note) {
