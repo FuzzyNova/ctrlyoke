@@ -6,6 +6,54 @@ import {
   FINAL_STEP_PHASES,
   isPromptExecutionPhase,
 } from "../types/messages";
+import type { OrderedCliHistoryEntry } from "@root/types/OutputHistoryTypes";
+
+function useLatestFinalPromptEntry(): OrderedCliHistoryEntry | undefined {
+  const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
+  const { isViewingHistory } = useUiStore();
+  const entries =
+    isViewingHistory && historyOutputs
+      ? historyOutputs.orderedEntries
+      : liveOrderedEntries;
+
+  return useMemo(() => {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (
+        entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        isPromptExecutionPhase(entry.phase) &&
+        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ) {
+        return entry;
+      }
+    }
+    return undefined;
+  }, [entries]);
+}
+
+function useLatestQueuePromptEntries(): Map<number, OrderedCliHistoryEntry> {
+  const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
+  const { isViewingHistory } = useUiStore();
+  const entries =
+    isViewingHistory && historyOutputs
+      ? historyOutputs.orderedEntries
+      : liveOrderedEntries;
+
+  return useMemo(() => {
+    const result = new Map<number, OrderedCliHistoryEntry>();
+    for (const entry of entries) {
+      if (
+        entry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
+        !isPromptExecutionPhase(entry.phase) ||
+        entry.target.kind !== FINAL_STEP_PHASES.QUEUE
+      ) {
+        continue;
+      }
+      result.set(entry.target.stepIndex, entry);
+    }
+    return result;
+  }, [entries]);
+}
 
 /**
  * Returns the final step's most recent CLI output from any pass.
@@ -23,27 +71,12 @@ import {
  * Shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function useFinalStepLatestOutput(): CliOutput | null {
-  const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
-  const { isViewingHistory } = useUiStore();
+  return useLatestFinalPromptEntry()?.cliOutput ?? null;
+}
 
-  const entries =
-    isViewingHistory && historyOutputs
-      ? historyOutputs.orderedEntries
-      : liveOrderedEntries;
-
-  return useMemo(() => {
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const entry = entries[i];
-      if (
-        entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-        isPromptExecutionPhase(entry.phase) &&
-        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ) {
-        return entry.cliOutput;
-      }
-    }
-    return null;
-  }, [entries]);
+/** Returns the prompt paired with the latest prompt-phase final-step output. */
+export function useFinalStepLatestPrompt(): string | undefined {
+  return useLatestFinalPromptEntry()?.prompt;
 }
 
 /**
@@ -63,31 +96,20 @@ export function useFinalStepLatestOutput(): CliOutput | null {
  * Shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function useLatestStepOutput() {
-  const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
-  const { isViewingHistory } = useUiStore();
-
-  const entries =
-    isViewingHistory && historyOutputs
-      ? historyOutputs.orderedEntries
-      : liveOrderedEntries;
-  const latestOutputs = useMemo(() => {
-    const result = new Map<number, CliOutput>();
-    for (const entry of entries) {
-      if (
-        entry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
-        !isPromptExecutionPhase(entry.phase) ||
-        !("target" in entry) ||
-        entry.target.kind !== FINAL_STEP_PHASES.QUEUE
-      ) {
-        continue;
-      }
-      result.set(entry.target.stepIndex, entry.cliOutput);
-    }
-    return result;
-  }, [entries]);
+  const latestEntries = useLatestQueuePromptEntries();
 
   return useCallback(
-    (index: number) => latestOutputs.get(index) ?? null,
-    [latestOutputs]
+    (index: number) => latestEntries.get(index)?.cliOutput ?? null,
+    [latestEntries]
+  );
+}
+
+/** Returns a queue step's latest prompt-phase request text by step index. */
+export function useLatestStepPrompt() {
+  const latestEntries = useLatestQueuePromptEntries();
+
+  return useCallback(
+    (index: number) => latestEntries.get(index)?.prompt,
+    [latestEntries]
   );
 }

@@ -37,6 +37,7 @@ export interface StepCopyMenuItemsInput {
   /** Response/output text to copy; undefined disables the Copy Output item. */
   outputText?: string;
   latestOutput?: CliOutput | null;
+  latestPrompt?: string;
   runtimeMeta?: StepRuntimeMetaSnapshot;
   liveContextWindow?: { used: number; size: number };
 }
@@ -51,6 +52,7 @@ export function buildStepCopyMenuItems({
   isFinalStep = false,
   outputText,
   latestOutput,
+  latestPrompt,
   runtimeMeta,
   liveContextWindow,
 }: StepCopyMenuItemsInput): StepContextMenuItem[] {
@@ -93,12 +95,16 @@ export function buildStepCopyMenuItems({
       onClick: () => {
         if (!latestOutput) return;
         void writeClipboardText(
-          generateSingleStepMarkdownExport(latestOutput, {
-            kind: isFinalStep
-              ? FINAL_STEP_PHASES.FINAL_STEP
-              : FINAL_STEP_PHASES.QUEUE,
-            index: Math.max(0, (slotNumber ?? 1) - 1),
-          })
+          generateSingleStepMarkdownExport(
+            latestOutput,
+            {
+              kind: isFinalStep
+                ? FINAL_STEP_PHASES.FINAL_STEP
+                : FINAL_STEP_PHASES.QUEUE,
+              index: Math.max(0, (slotNumber ?? 1) - 1),
+            },
+            latestPrompt
+          )
         );
       },
     },

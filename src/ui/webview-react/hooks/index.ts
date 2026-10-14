@@ -47,6 +47,8 @@ export { useSortableDndSensors } from "./useSortableDndSensors";
 export {
   useLatestStepOutput,
   useFinalStepLatestOutput,
+  useLatestStepPrompt,
+  useFinalStepLatestPrompt,
 } from "./useLatestStepOutput";
 export { useIsViewingDeletedWorkflow } from "./useIsViewingDeletedWorkflow";
 export { useIsSystemGeneratedWorkflow } from "./useIsSystemGeneratedWorkflow";

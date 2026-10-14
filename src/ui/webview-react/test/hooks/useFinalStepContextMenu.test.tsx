@@ -7,16 +7,24 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
-import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import type {
+  OrderedCliHistoryEntry,
+  OrderedHistoryEntry,
+} from "@root/types/OutputHistoryTypes";
 import { generateSingleStepMarkdownExport } from "@utils/markdownExport";
 
 type OutputTarget = Extract<OrderedHistoryEntry, { target: unknown }>["target"];
 
-function cliEntry(target: OutputTarget, sequence: number): OrderedHistoryEntry {
+function cliEntry(
+  target: OutputTarget,
+  sequence: number,
+  prompt?: string
+): OrderedCliHistoryEntry {
   return {
     kind: OUTPUT_HISTORY_KINDS.CLI,
     target,
     attemptIndex: 0,
+    prompt,
     cliOutput: {
       structured: {
         events: [{ type: "text", data: { text: "r" } }],
@@ -331,6 +339,41 @@ describe("useFinalStepContextMenu", () => {
         index: 0,
       })
     );
+  });
+
+  it("includes the attempt prompt in copied full output markdown", () => {
+    const latestOutput: CliOutput = {
+      elapsed: 1,
+      isStreaming: false,
+      structured: {
+        events: [{ type: "text", data: { text: "final response" } }],
+        metadata: {},
+      },
+    };
+    useWorkflowStore.setState({
+      liveOrderedEntries: [
+        {
+          ...cliEntry(
+            { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+            1,
+            "the final attempt prompt"
+          ),
+          cliOutput: latestOutput,
+        },
+      ],
+    });
+    render(
+      <TestHarness
+        finalStep={{ prompt: "Final prompt" }}
+        latestOutput={latestOutput}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain("### Prompt");
+    expect(copiedText).toContain("the final attempt prompt");
   });
 
   it("shows only the enable/disable toggle when there is no final step configured", () => {

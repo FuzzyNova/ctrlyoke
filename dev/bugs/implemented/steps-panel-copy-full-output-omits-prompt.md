@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-13 by Claude Code (while fixing output-pane-prompt-row-missing-after-timeline-v2)
 - **Area:** `src/ui/webview-react/utils/stepContextMenuItems.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

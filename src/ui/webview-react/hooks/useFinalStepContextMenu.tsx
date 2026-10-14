@@ -21,6 +21,7 @@ import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import { useFinalStepLatestPrompt } from "@hooks/useLatestStepOutput";
 
 const SHELL_WORKFLOW_ID = "_shell";
 const EMPTY_TARGET_KEYS: readonly string[] = [];
@@ -35,6 +36,7 @@ interface UseFinalStepContextMenuOptions {
   outputText?: string;
   /** Latest CLI output for the final step, used to build the Copy Metadata text. */
   latestOutput?: CliOutput | null;
+  latestPrompt?: string;
   /** Cached runtime metadata (session ID, elapsed, context window). */
   runtimeMeta?: StepRuntimeMetaSnapshot;
 }
@@ -46,6 +48,7 @@ export function useFinalStepContextMenu({
   onToggleEnabled,
   outputText,
   latestOutput,
+  latestPrompt,
   runtimeMeta,
 }: UseFinalStepContextMenuOptions) {
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
@@ -54,6 +57,7 @@ export function useFinalStepContextMenu({
   const soloOutputTargets = useUiStore((s) => s.soloOutputTargets);
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
   const finalStepLoopCount = useWorkflowStore((s) => s.finalStepLoopCount);
+  const currentLatestPrompt = useFinalStepLatestPrompt();
   const liveContextWindow = useWorkflowStore(
     (s) => s.liveFinalStepContextWindow[s.finalStepLoopCount]
   );
@@ -88,6 +92,7 @@ export function useFinalStepContextMenu({
             isFinalStep: true,
             outputText,
             latestOutput,
+            latestPrompt: latestPrompt ?? currentLatestPrompt,
             runtimeMeta,
             liveContextWindow,
           })
@@ -172,6 +177,8 @@ export function useFinalStepContextMenu({
       onToggleEnabled,
       outputText,
       latestOutput,
+      latestPrompt,
+      currentLatestPrompt,
       runtimeMeta,
       liveContextWindow,
       finalStepLoopCount,

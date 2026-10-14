@@ -388,6 +388,8 @@ export interface ExportOptions {
    * When false, only prompt text, command (if enabled), and response output are emitted.
    */
   includeMetadata?: boolean;
+  /** Include the prompt heading even when metadata sections are omitted. */
+  includePromptHeading?: boolean;
   /**
    * 1-based step numbers to include. When undefined all steps are exported.
    * e.g. [1,2,3,5] exports steps 1–3 and 5.
@@ -414,6 +416,8 @@ export function generateMarkdownExport(
   const lines: string[] = [];
   const includeCommand = options?.exportOptions?.includeCommand ?? true;
   const includeMetadata = options?.exportOptions?.includeMetadata ?? true;
+  const includePromptHeading =
+    options?.exportOptions?.includePromptHeading ?? includeMetadata;
   const stepRange = options?.exportOptions?.stepRange;
 
   if (includeMetadata) {
@@ -519,7 +523,7 @@ export function generateMarkdownExport(
       }
 
       if (item.prompt && !isScriptOutput(output)) {
-        if (includeMetadata) lines.push("### Prompt");
+        if (includePromptHeading) lines.push("### Prompt");
         lines.push("");
         lines.push(fenceLiteral(item.prompt));
         lines.push("");
@@ -649,6 +653,12 @@ export function generateSingleStepMarkdownExport(
       },
     ],
     { fileName: "", executionState: "", currentStep: 0, totalSteps: 0 },
-    { exportOptions: { stepRange: [1], includeMetadata: false } }
+    {
+      exportOptions: {
+        stepRange: [1],
+        includeMetadata: false,
+        includePromptHeading: true,
+      },
+    }
   );
 }
