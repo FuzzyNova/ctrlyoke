@@ -51,7 +51,7 @@ whether a refund is possible, and the only governing text is Lemon Squeezy's buy
   purchase, at its own discretion, in order to prevent chargebacks." Any policy stricter than ~60
   days is therefore not fully enforceable in practice.
 - **The platform fee is not returned.** The refunded amount minus LS's fee is deducted from the next
-  payout — each refund costs the fee (~5% + 50¢, ≈ $3.45 on $59; ≈ $250 on $5,000; verify the
+  payout — each refund costs the fee (~5% + 50¢, ≈ $3.45 on $59; ≈ $225 on $4,499; verify the
   current rate). A **chargeback** costs the refund plus a **$15 dispute fee** — so a quick, easy
   refund is strictly cheaper than a dispute.
 - **LS buyer terms:** no refunds on unused subscription periods; the EU/UK withdrawal right is
@@ -90,7 +90,7 @@ Sources: [LS refunds & chargebacks](https://docs.lemonsqueezy.com/help/payments/
   is the backstop. Reserve the right to refuse requests showing a refund-abuse pattern (repeat
   buy/refund), which LS's buyer terms also allow.
 
-### Enterprise ($5,000/yr): keep the existing terms — non-refundable
+### Enterprise ($4,499/yr): keep the existing terms — non-refundable
 
 - **No change to `ENTERPRISE_TERMS.md` §6–7.** Annual site licenses that are non-refundable once the
   term starts are standard, and the terms are already attorney-reviewed; adding a window would mean

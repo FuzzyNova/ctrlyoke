@@ -277,7 +277,7 @@ Route: `ctrlyoke.dev/pricing/`
 
 ### 6.1 Layout
 
-Two columns: **Free** (left) and **Pro** (right, highlighted). _As shipped, `pricing.astro` has a third **Enterprise** card ($5,000/yr site license, with "Contact sales" and PO/invoicing), added 2026-09-17. See `RELEASE_CHECKLIST.md` Phase 4.4._
+Two columns: **Free** (left) and **Pro** (right, highlighted). _As shipped, `pricing.astro` has a third **Enterprise** card ($4,499/yr site license, with "Contact sales" and PO/invoicing), added 2026-09-17. See `RELEASE_CHECKLIST.md` Phase 4.4._
 
 **Free column:**
 
@@ -308,7 +308,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - "What is a perpetual license?" — One-time purchase, yours forever, includes all future Pro features in the same tier.
 - "Can I use it on multiple machines?" — Yes, one license activates on up to 10 devices.
 - "Is there a trial?" — Yes. The free tier is fully functional forever (no time limit, no credit card), and remote "code on the go" access is free to trial for 14 days on top of that.
-- "Do you offer team/enterprise pricing?" — As shipped: yes, a $5,000/year Enterprise site license; email sales@ctrlyoke.dev, which also handles POs.
+- "Do you offer team/enterprise pricing?" — As shipped: yes, a $4,499/year Enterprise site license; email sales@ctrlyoke.dev, which also handles POs.
 - "What's your refund policy?" — As shipped: Pro has a 30-day money-back guarantee, and Enterprise is non-refundable once the term starts (see `dev/backlog/REFUND_POLICY.md`).
 
 ---
