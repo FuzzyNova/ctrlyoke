@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code (bug-drain review of `claude-allowed-tools-warning-says-ignored`)
 - **Area:** `src/types/CompatibilityAnalyzer.ts`, `src/types/CompatibilityTypes.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

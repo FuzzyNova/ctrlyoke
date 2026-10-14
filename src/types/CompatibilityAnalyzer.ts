@@ -29,7 +29,9 @@ import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
   getCompatibilityDiagnosticRemediation,
+  isAdvisoryCaveat,
 } from "./CompatibilityTypes";
+import type { CompatibilityCaveatCode } from "./CompatibilityTypes";
 
 export interface CompatibilityExecutionTarget {
   consumer: CompatibilityConsumerTarget;
@@ -184,7 +186,7 @@ export function analyzeCompatibility({
       key: "mode" | "allowedTools" | "deniedTools";
       used: boolean;
       state: EffectiveCapabilityState;
-      caveatCode?: string;
+      caveatCode?: CompatibilityCaveatCode;
       sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"];
       propertyPointer?: string;
     }> = [
@@ -446,7 +448,7 @@ function createHookDiagnostic(
     state: EffectiveCapabilityState;
   },
   hookIndex: number,
-  caveatCode?: string
+  caveatCode?: CompatibilityCaveatCode
 ): CompatibilityDiagnostic {
   const pointerBase =
     base.consumer.kind === FINAL_STEP_PHASES.QUEUE
@@ -484,7 +486,7 @@ function diagnosticsForPermissionField(
   harnessId: HarnessId,
   target: CompatibilityExecutionTarget,
   sourceTier: ResolvedExecutionTarget["sources"]["toolPermissions"],
-  caveatCode?: string,
+  caveatCode?: CompatibilityCaveatCode,
   propertyPointer?: string
 ): CompatibilityDiagnostic[] {
   const diagnostics: CompatibilityDiagnostic[] = [];
@@ -516,14 +518,21 @@ function diagnosticsForPermissionField(
       )
     );
   } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
+    const advisory = isAdvisoryCaveat(caveatCode);
     diagnostics.push(
       createDiagnostic(
         key === PERMISSION_CAPABILITY_KEYS.MODE
           ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
           : key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
-            ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
-            : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
-        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+            ? advisory
+              ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT
+              : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
+            : advisory
+              ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_ENFORCED_WITH_CAVEAT
+              : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
+        advisory
+          ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+          : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
         base.harnessId,
         base.capability,
         base.target,
@@ -577,7 +586,7 @@ function createDiagnostic(
   state: EffectiveCapabilityState,
   sourceTier?: ResolvedExecutionTarget["sources"]["toolPermissions"],
   permissionKey?: "mode" | "allowedTools" | "deniedTools",
-  caveatCode?: string,
+  caveatCode?: CompatibilityCaveatCode,
   propertyPointer?: string
 ): CompatibilityDiagnostic {
   const pointerBase =

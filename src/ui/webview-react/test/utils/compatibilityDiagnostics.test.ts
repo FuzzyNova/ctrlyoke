@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { workflowPermissionDiagnostic } from "@utils/compatibilityDiagnostics";
-import { HARNESS_IDS } from "@root/types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  HARNESS_IDS,
+} from "@root/types/DashboardConstants";
 import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
 import type { HarnessCapabilityRegistrySnapshot } from "@root/types/CompatibilityTypes";
 import type { HarnessId } from "@root/types/DashboardConstants";
@@ -136,7 +139,7 @@ describe("workflowPermissionDiagnostic", () => {
         claudePartialSnapshot
       )
     ).toEqual({
-      severity: "info",
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
       message:
         "Enforced for 2 Claude Code steps, but Claude's own settings allow rules can add to this list in headless mode.",
     });

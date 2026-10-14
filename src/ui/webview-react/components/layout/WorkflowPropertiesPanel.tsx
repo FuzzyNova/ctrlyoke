@@ -2482,7 +2482,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       PERMISSION_MODE_OPTIONS_META,
                       "toolPermissions.mode"
                     )}
-                    warning={modeDiagnostics[0]?.message}
+                    warning={
+                      modeDiagnostics.find(
+                        (diagnostic) =>
+                          diagnostic.severity ===
+                          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                      )?.message
+                    }
                     warningId="settings-permission-mode-diagnostic"
                   />
                 </FormField>

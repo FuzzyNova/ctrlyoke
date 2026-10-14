@@ -14,6 +14,8 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   getCompatibilityCaveatMessage,
+  isAdvisoryCaveat,
+  type CompatibilityCaveatCode,
   type CompatibilityDiagnostic,
   type HarnessCapabilityRegistrySnapshot,
 } from "@root/types/CompatibilityTypes";
@@ -79,13 +81,13 @@ export function permissionCapabilitySummary(
 
   if (supported.length > 0) {
     diagnostics.push({
-      severity: "info",
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
       message: `${label} are currently supported by ${joinLabels(supported)}.`,
     });
   }
   if (notEnforced.length > 0) {
     diagnostics.push({
-      severity: "warning",
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       message: `${joinLabels(notEnforced)} only support an overall permission mode, not individual tool patterns; ${label} are NOT ENFORCED by these harnesses.`,
     });
   }
@@ -129,11 +131,14 @@ function isLossy(state: { fidelity: string; verification: string }): boolean {
   );
 }
 
-function hasEnforcedCaveat(
+function hasAdvisoryCaveat(
   state: { fidelity: string; verification: string },
-  caveatCode: string | undefined
+  caveatCode: CompatibilityCaveatCode | undefined
 ): boolean {
-  return state.fidelity === CAPABILITY_FIDELITIES.PARTIAL && !!caveatCode;
+  return (
+    state.fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
+    isAdvisoryCaveat(caveatCode)
+  );
 }
 
 function harnessLabel(harnessId: HarnessId): string {
@@ -155,7 +160,12 @@ function reasonForHarness(
       ?.caveatCode
   );
   if (caveat) {
-    return caveat.startsWith("because ") ? caveat : `because ${caveat}`;
+    return isAdvisoryCaveat(
+      capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
+        ?.caveatCode
+    )
+      ? caveat
+      : `because ${caveat}`;
   }
   return "because this harness does not provide verified individual tool-pattern enforcement";
 }
@@ -198,7 +208,7 @@ export function workflowPermissionDiagnostic(
     const caveatCode =
       capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
         ?.caveatCode;
-    if (state && hasEnforcedCaveat(state, caveatCode)) group.caveated += 1;
+    if (state && hasAdvisoryCaveat(state, caveatCode)) group.caveated += 1;
     else if (state && !isLossy(state)) group.supported += 1;
     else group.affected += 1;
     grouped.set(harnessId, group);

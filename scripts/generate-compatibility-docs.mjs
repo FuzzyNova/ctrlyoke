@@ -250,9 +250,10 @@ function buildNotes(facts, compatibilityTypes, presentation) {
         declaration
       );
     const { status } = presentFidelity(presentation, declaration.fidelity);
-    // Caveats may be "because …" clauses or standalone clarifying phrases.
+    // Advisory caveats add a note to enforced support; reason caveats explain
+    // why the capability is limited.
     const explanation = caveat
-      ? `${status}${caveat.startsWith("because ") ? ` ${caveat}` : `: ${caveat}`}.`
+      ? `${status}${compatibilityTypes.isAdvisoryCaveat(declaration.caveatCode) ? `: ${caveat}` : ` ${caveat}`}.`
       : `${status}.`;
     const key = `${explanation}\n${remediation ?? ""}`;
     let note = notes.find((candidate) => candidate.key === key);
