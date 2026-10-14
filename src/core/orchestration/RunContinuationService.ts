@@ -67,7 +67,7 @@ import {
 } from "../StepIdentity";
 import { hasInFlightStep, hasStarted } from "../../utils/StepStatusDerivation";
 import {
-  assertStepRemovalUnreferenced,
+  describeStepRemovalWarning,
   renumberStepReferences,
 } from "../StepReferenceRenumbering";
 import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
@@ -918,7 +918,10 @@ export class RunContinuationService {
     );
   }
 
-  /** Remove one explicitly addressed step. */
+  /**
+   * Remove explicitly addressed steps. Never refused because another step
+   * references them; `warning` names the steps whose references it affected.
+   */
   static async removeStepsAtRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
@@ -927,8 +930,9 @@ export class RunContinuationService {
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun = false
-  ): Promise<RunContinuationMutationResult> {
-    return this.mutateRunDefinition(
+  ): Promise<RunContinuationMutationResult & { warning?: string }> {
+    let warning: string | undefined;
+    const written = await this.mutateRunDefinition(
       workspaceRoot,
       workflowKey,
       runRef,
@@ -959,7 +963,6 @@ export class RunContinuationService {
           nextTopology.steps,
           source.finalStep
         );
-        assertStepRemovalUnreferenced(renumbered, unique);
         if (isExecutionActiveState(source._runtime?.executionState)) {
           assertStartedStepPositionsPreserved(
             topology.steps,
@@ -967,6 +970,7 @@ export class RunContinuationService {
             "remove"
           );
         }
+        warning = describeStepRemovalWarning(renumbered, unique);
         const currentIndex = source._runtime?.currentIndex ?? 0;
         return {
           workingFile: {
@@ -990,6 +994,7 @@ export class RunContinuationService {
       },
       { lineageRepository, allowInterruptedRun }
     );
+    return { ...written, ...(warning ? { warning } : {}) };
   }
 
   /** Reorder the pending suffix using absolute workflow step indices. */

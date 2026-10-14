@@ -137,6 +137,7 @@ export async function removeStepCommand(
     },
     `Removed step ${index} from ${target.workflowKey}/${target.runRef} (definition revision ${removed.definitionRevision}).`
   );
+  if (removed.warning) io.writeErr?.(removed.warning);
 }
 
 export async function reorderStepsCommand(

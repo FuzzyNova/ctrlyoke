@@ -693,19 +693,32 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().definitionRevision, revision);
     });
 
-    test("refuses deleting a step referenced by an unstarted step", async () => {
+    test("deletes a step referenced by an unstarted step and warns", async () => {
       queue.loadPrompts(
         createPromptFile([
           { prompt: "target" },
-          { prompt: "follow-up", name: "follow-up", sessionId: 1 },
+          {
+            prompt: "follow-up $step:1",
+            name: "follow-up",
+            sessionId: 1,
+          },
         ])
       );
 
-      await assert.rejects(
-        () => queue.deletePrompts([0]),
-        /Cannot remove step 1: referenced by Step 2 \("follow-up"\)/
+      const warning = await queue.deletePrompts([0]);
+
+      assert.match(
+        warning ?? "",
+        /^Removed step 1\. Step references in Step 2 \("follow-up"\)/
       );
-      assert.strictEqual(queue.getState().steps.length, 2);
+      const steps = queue.getState().steps;
+      assert.strictEqual(steps.length, 1);
+      assert.strictEqual("sessionId" in steps[0], false);
+      assert.strictEqual(
+        (steps[0] as { prompt: string }).prompt,
+        "follow-up $step:1",
+        "a removal never edits another step's prompt text"
+      );
     });
 
     test("should not allow deleting the current prompt while pause is pending", async () => {

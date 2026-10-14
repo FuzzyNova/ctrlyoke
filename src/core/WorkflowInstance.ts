@@ -2993,8 +2993,9 @@ export class WorkflowInstance
     );
   }
 
-  async deletePromptFromQueue(indices: number[]): Promise<void> {
-    await this.promptQueue.deletePrompts(indices);
+  /** @returns The removal warning from `PromptQueue.deletePrompts`, if any. */
+  async deletePromptFromQueue(indices: number[]): Promise<string | undefined> {
+    const warning = await this.promptQueue.deletePrompts(indices);
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
       const fileName = this.currentPromptFile
@@ -3010,6 +3011,7 @@ export class WorkflowInstance
     }
     await this.reconcileExecutionStateAfterStepChange();
     Log.debug(`[WorkflowInstance] Deleted prompts ${indices.join(", ")}`);
+    return warning;
   }
 
   /**

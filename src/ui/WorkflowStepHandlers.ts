@@ -301,11 +301,19 @@ export class WorkflowStepHandlers {
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
 
     try {
-      await orchestrator.deletePromptFromQueue(
+      const warning = await orchestrator.deletePromptFromQueue(
         this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         message.indices,
         ctx.clientId
       );
+      if (warning) {
+        ctx.emit({
+          type: MESSAGE_TYPES.USER_FEEDBACK,
+          id: `delete-prompt-references-${Date.now()}`,
+          severity: USER_FEEDBACK_SEVERITY.WARNING,
+          message: warning,
+        });
+      }
       // Identity-only — see the comment in handleUpdatePrompt above; the
       // deleting client already holds the post-delete steps via its own
       // PROMPT_DELETED broadcast.

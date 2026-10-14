@@ -1374,7 +1374,7 @@ export class CtrlYokeMCPServer {
       selected,
       removed,
       target.definitionRevision,
-      { index }
+      { index, ...(removed.warning ? { warning: removed.warning } : {}) }
     );
   }
 

@@ -3853,22 +3853,32 @@ export class WorkflowOrchestrator {
     );
   }
 
+  /**
+   * Remove steps. Never refused because another step references them.
+   * @returns A warning naming steps whose references the removal affected.
+   */
   async deletePromptFromQueue(
     mutation: WorkflowDefinitionMutation | undefined,
     indices: number[],
     clientId: string = this.PANEL_CLIENT_ID
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      await this.getInstanceForClient(clientId).deletePromptFromQueue(indices);
+      const warning =
+        await this.getInstanceForClient(clientId).deletePromptFromQueue(
+          indices
+        );
       await this.recordDefinitionWrite(undefined, clientId);
-      return;
+      return warning;
     }
     const runAddress = mutation.address;
+    let warning: string | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       clientId,
       mutation.expectedDefinitionRevision,
-      (instance) => instance.deletePromptFromQueue(indices),
+      async (instance) => {
+        warning = await instance.deletePromptFromQueue(indices);
+      },
       (workspaceRoot) =>
         RunContinuationService.removeStepsAtRun(
           workspaceRoot,
@@ -3877,8 +3887,12 @@ export class WorkflowOrchestrator {
           indices,
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then((written) => written.definitionRevision)
+        ).then((written) => {
+          warning = written.warning;
+          return written.definitionRevision;
+        })
     );
+    return warning;
   }
 
   async reorderPendingPrompts(

@@ -81,10 +81,7 @@ import {
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
 } from "./ParallelGroupTopology";
-import {
-  assertStepRemovalUnreferenced,
-  renumberStepReferences,
-} from "./StepReferenceRenumbering";
+import { renumberStepReferences } from "./StepReferenceRenumbering";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
   return key === PROMPT_PROPERTIES.AGENT &&
@@ -1653,7 +1650,6 @@ export class WorkingFileManager {
           nextTopology.steps,
           source.finalStep
         );
-        assertStepRemovalUnreferenced(renumbered, unique);
         const currentIndex = source._runtime?.currentIndex ?? 0;
         const nextCurrentIndex =
           currentIndex - unique.filter((index) => index < currentIndex).length;

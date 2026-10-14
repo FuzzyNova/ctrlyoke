@@ -106,7 +106,7 @@ import {
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
 import {
-  assertStepRemovalUnreferenced,
+  describeStepRemovalWarning,
   renumberStepReferences,
 } from "./StepReferenceRenumbering";
 
@@ -2878,8 +2878,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @throws Error if any index is out of range or duplicated, or (while
    *   executing) if any step is the running step or an already-completed step —
    *   only the pending tail after the running step is deletable mid-run.
+   * @returns A warning naming steps whose references the removal affected, if any.
    */
-  public async deletePrompts(indices: number[]): Promise<void> {
+  public async deletePrompts(indices: number[]): Promise<string | undefined> {
+    let warning: string | undefined;
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
     await this.workingFileManager.runInQueue(async () => {
@@ -2912,7 +2914,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         nextTopology.steps,
         this.workflowFile?.finalStep
       );
-      assertStepRemovalUnreferenced(renumbered, unique);
       if (this.isExecutionActive) {
         assertStartedStepPositionsPreserved(
           previousSteps,
@@ -2920,6 +2921,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           "delete"
         );
       }
+      warning = describeStepRemovalWarning(renumbered, unique);
       for (const index of unique) {
         this.archiveStepRuntime(this.state.steps[index], index, "deletePrompt");
       }
@@ -2951,6 +2953,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         `[PromptQueue] Deleted prompts at indices ${unique.join(", ")}`
       );
     });
+    return warning;
   }
 
   private removeStepAt(index: number): void {

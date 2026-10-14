@@ -9,13 +9,27 @@ import { PRIOR_CONTEXT_REFERENCE_KINDS } from "../types/DashboardConstants";
 export interface StepReferenceRenumberingResult {
   steps: WorkflowStep[];
   finalStep?: WorkflowStep;
-  refusals: string[];
+  /**
+   * Labels of unstarted steps (and the final step) whose positional
+   * references a removal invalidated or left pointing at a different step.
+   * Removal is never refused for them; callers warn instead.
+   */
+  affectedSteps: string[];
 }
 
+/** A removed target, as opposed to `undefined` for a position with no old step. */
+const REMOVED_TARGET = null;
+
 /**
- * Rewrites structured positional references after a queue topology change.
- * Existing steps are matched by their stable runtime stepId; newly inserted
- * steps keep the numbers authored for their position in the new queue.
+ * Rewrites positional references after a queue topology change. Existing
+ * steps are matched by their stable runtime stepId; newly inserted steps keep
+ * the numbers authored for their position in the new queue.
+ *
+ * Structured fields (`sessionId`, `priorContext` arrays) always follow their
+ * targets, and a removed target is dropped from them. Inline `$step:N` text is
+ * renumbered on insert and reorder, but a removal never edits prompt text: the
+ * author's references stay exactly as written, the editor flags any that no
+ * longer resolve, and the step is reported in `affectedSteps`.
  */
 export function renumberStepReferences(
   oldSteps: readonly WorkflowStep[],
@@ -24,7 +38,23 @@ export function renumberStepReferences(
 ): StepReferenceRenumberingResult {
   const oldIndexById = buildStepIndex(oldSteps);
   const newIndexById = buildStepIndex(newSteps);
-  const refusals: string[] = [];
+  const affectedSteps: string[] = [];
+  const removesSteps = oldSteps.some(
+    (step) =>
+      findStepIndex(step, step._runtime?.stepId, newIndexById) === undefined
+  );
+
+  /** New 1-based position of an old reference, or `REMOVED_TARGET`. */
+  const newPositionOf = (reference: number): number | null | undefined => {
+    const target = oldSteps[reference - 1];
+    if (!target) return undefined;
+    const targetNewIndex = findStepIndex(
+      target,
+      target._runtime?.stepId,
+      newIndexById
+    );
+    return targetNewIndex === undefined ? REMOVED_TARGET : targetNewIndex + 1;
+  };
 
   const renumberStep = (
     step: WorkflowStep,
@@ -34,51 +64,31 @@ export function renumberStepReferences(
     const stepId = step._runtime?.stepId;
     const oldIndex = findStepIndex(step, stepId, oldIndexById);
     if (oldIndex === undefined && !isFinalStep) return step;
+    // A started step has already resolved its references, so only steps that
+    // will still resolve them are worth warning about.
+    const warnable = isFinalStep || !hasStarted(step);
+    let affected = false;
 
     let sessionId = step.sessionId;
     if (typeof sessionId === "number") {
-      const target = oldSteps[sessionId - 1];
-      const targetId = target?._runtime?.stepId;
-      const targetNewIndex = target
-        ? findStepIndex(target, targetId, newIndexById)
-        : undefined;
-      if (target && targetNewIndex === undefined) {
-        if (isFinalStep || !hasStarted(step)) {
-          refusals.push(
-            isFinalStep
-              ? "Final step"
-              : describeReferencingStep(step, oldIndex!)
-          );
-        } else {
-          sessionId = undefined;
-        }
-      } else if (targetNewIndex !== undefined) {
-        sessionId = targetNewIndex + 1;
+      const position = newPositionOf(sessionId);
+      if (position === REMOVED_TARGET) {
+        sessionId = undefined;
+        affected ||= warnable;
+      } else if (position !== undefined) {
+        sessionId = position;
       }
     }
 
     let priorContext = step.priorContext;
     if (Array.isArray(priorContext)) {
       priorContext = priorContext.flatMap((reference) => {
-        const target = oldSteps[reference - 1];
-        const targetId = target?._runtime?.stepId;
-        const targetNewIndex = target
-          ? findStepIndex(target, targetId, newIndexById)
-          : undefined;
-        if (target && targetNewIndex === undefined) {
-          if (isFinalStep || !hasStarted(step)) {
-            refusals.push(
-              isFinalStep
-                ? "Final step"
-                : describeReferencingStep(step, oldIndex!)
-            );
-            return [reference];
-          }
+        const position = newPositionOf(reference);
+        if (position === REMOVED_TARGET) {
+          affected ||= warnable;
           return [];
         }
-        return targetNewIndex === undefined
-          ? [reference]
-          : [targetNewIndex + 1];
+        return [position ?? reference];
       });
     }
 
@@ -94,34 +104,21 @@ export function renumberStepReferences(
       );
       for (const match of [...matches].reverse()) {
         if (match.ref.kind !== PRIOR_CONTEXT_REFERENCE_KINDS.STEP) continue;
-        const indices = match.ref.indices.flatMap((reference) => {
-          const target = oldSteps[reference - 1];
-          const targetId = target?._runtime?.stepId;
-          const targetNewIndex = target
-            ? findStepIndex(target, targetId, newIndexById)
-            : undefined;
-          if (target && targetNewIndex === undefined) {
-            if (isFinalStep || !hasStarted(step)) {
-              refusals.push(
-                isFinalStep
-                  ? "Final step"
-                  : describeReferencingStep(step, oldIndex!)
-              );
-              return [reference];
-            }
-            return [];
-          }
-          return [
-            targetNewIndex === undefined ? reference : targetNewIndex + 1,
-          ];
-        });
-        // Leave an unaffected token exactly as written (e.g. keep `1-3`).
         const original = match.ref.indices;
-        if (
-          indices.length === original.length &&
-          indices.every((index, position) => index === original[position])
-        )
+        const positions = original.map(newPositionOf);
+        const unchanged = positions.every(
+          (position, at) => position === undefined || position === original[at]
+        );
+        if (removesSteps) {
+          affected ||= warnable && !unchanged;
           continue;
+        }
+        // Leave an unaffected token exactly as written (e.g. keep `1-3`).
+        if (unchanged) continue;
+        // Without a removal every old target still has a position.
+        const indices = positions.map(
+          (position, at) => position ?? original[at]
+        );
         const body = formatInlinePriorContextBody({ ...match.ref, indices });
         rewritten = `${rewritten.slice(0, match.startOffset)}$${body}${rewritten.slice(match.endOffset)}`;
       }
@@ -145,6 +142,11 @@ export function renumberStepReferences(
           }
         : {}),
     };
+    if (affected) {
+      affectedSteps.push(
+        isFinalStep ? "Final step" : describeReferencingStep(step, oldIndex!)
+      );
+    }
 
     const { sessionId: _oldSessionId, ...stepWithoutSessionId } = step;
     return {
@@ -164,24 +166,25 @@ export function renumberStepReferences(
   return {
     steps,
     ...(renumberedFinalStep ? { finalStep: renumberedFinalStep } : {}),
-    refusals: [...new Set(refusals)],
+    affectedSteps,
   };
 }
 
 /**
- * Throws when removing `removedIndices` would orphan a reference from an
- * unstarted step or the final step (see `renumberStepReferences` refusals).
+ * The warning shown after removing `removedIndices`, or `undefined` when no
+ * remaining step's references were affected. Removal itself always proceeds.
  */
-export function assertStepRemovalUnreferenced(
+export function describeStepRemovalWarning(
   result: StepReferenceRenumberingResult,
   removedIndices: readonly number[]
-): void {
-  if (result.refusals.length === 0) return;
+): string | undefined {
+  if (result.affectedSteps.length === 0) return undefined;
   const label = removedIndices.length === 1 ? "step" : "steps";
-  const positions = removedIndices.map((index) => index + 1).join(", ");
-  throw new Error(
-    `Cannot remove ${label} ${positions}: referenced by ${result.refusals.join(", ")}`
-  );
+  const positions = [...removedIndices]
+    .sort((left, right) => left - right)
+    .map((index) => index + 1)
+    .join(", ");
+  return `Removed ${label} ${positions}. Step references in ${result.affectedSteps.join(", ")} may now point at a missing or different step; check them.`;
 }
 
 interface StepIndex {

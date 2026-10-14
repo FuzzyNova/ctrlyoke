@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { ensureStepIds } from "../../core/StepIdentity";
-import { renumberStepReferences } from "../../core/StepReferenceRenumbering";
+import {
+  describeStepRemovalWarning,
+  renumberStepReferences,
+} from "../../core/StepReferenceRenumbering";
 import type { PromptStep, WorkflowStep } from "../../types/CtrlYokeTypes";
 
 suite("StepReferenceRenumbering", () => {
@@ -17,7 +20,7 @@ suite("StepReferenceRenumbering", () => {
 
     const result = renumberStepReferences(oldSteps, inserted);
 
-    assert.deepStrictEqual(result.refusals, []);
+    assert.deepStrictEqual(result.affectedSteps, []);
     assert.strictEqual((result.steps[3] as PromptStep).sessionId, 3);
     assert.deepStrictEqual(
       (result.steps[3] as PromptStep).priorContext,
@@ -93,15 +96,71 @@ suite("StepReferenceRenumbering", () => {
     );
   });
 
-  test("refuses removing a referenced target while the referencing step is unstarted", () => {
+  test("removes a referenced target, clears the session link, and reports the unstarted step", () => {
     const oldSteps = ensureStepIds([
       { prompt: "target" },
-      { prompt: "follow-up", name: "follow-up", sessionId: 1 },
+      {
+        prompt: "follow-up",
+        name: "follow-up",
+        sessionId: 1,
+        priorContext: [1],
+      },
     ] as WorkflowStep[]);
 
     const result = renumberStepReferences(oldSteps, [oldSteps[1]]);
 
-    assert.deepStrictEqual(result.refusals, ['Step 2 ("follow-up")']);
+    assert.deepStrictEqual(result.affectedSteps, ['Step 2 ("follow-up")']);
+    assert.strictEqual("sessionId" in result.steps[0], false);
+    assert.deepStrictEqual((result.steps[0] as PromptStep).priorContext, []);
+    assert.strictEqual(
+      describeStepRemovalWarning(result, [0]),
+      'Removed step 1. Step references in Step 2 ("follow-up") may now point at a missing or different step; check them.'
+    );
+  });
+
+  test("never edits inline references when a step is removed", () => {
+    const oldSteps = ensureStepIds([
+      { prompt: "one" },
+      { prompt: "two" },
+      { prompt: "three" },
+      {
+        prompt: "use $step:1-3 and $summary:step:3",
+        endCondition: { script: "true", retryPrompt: "retry $step:2" },
+      },
+      { prompt: "unaffected $step:1" },
+    ] as WorkflowStep[]);
+
+    const result = renumberStepReferences(oldSteps, [
+      oldSteps[0],
+      oldSteps[2],
+      oldSteps[3],
+      oldSteps[4],
+    ]);
+
+    const referencing = result.steps[2] as PromptStep;
+    assert.strictEqual(referencing.prompt, "use $step:1-3 and $summary:step:3");
+    assert.strictEqual(referencing.endCondition?.retryPrompt, "retry $step:2");
+    assert.strictEqual(
+      (result.steps[3] as PromptStep).prompt,
+      "unaffected $step:1"
+    );
+    assert.deepStrictEqual(result.affectedSteps, ["Step 4"]);
+  });
+
+  test("does not report a started step whose inline references a removal invalidated", () => {
+    const oldSteps = ensureStepIds([
+      { prompt: "removed" },
+      { prompt: "started $step:1", _runtime: { startedAt: 1 } },
+    ] as WorkflowStep[]);
+
+    const result = renumberStepReferences(oldSteps, [oldSteps[1]]);
+
+    assert.strictEqual(
+      (result.steps[0] as PromptStep).prompt,
+      "started $step:1"
+    );
+    assert.deepStrictEqual(result.affectedSteps, []);
+    assert.strictEqual(describeStepRemovalWarning(result, [0]), undefined);
   });
 
   test("renumbers after removing an unrelated step", () => {
@@ -114,7 +173,7 @@ suite("StepReferenceRenumbering", () => {
 
     const result = renumberStepReferences(oldSteps, oldSteps.slice(1));
 
-    assert.deepStrictEqual(result.refusals, []);
+    assert.deepStrictEqual(result.affectedSteps, []);
     assert.strictEqual((result.steps[2] as PromptStep).sessionId, 2);
     assert.deepStrictEqual(
       (result.steps[2] as PromptStep).priorContext,
@@ -139,10 +198,10 @@ suite("StepReferenceRenumbering", () => {
     assert.strictEqual("sessionId" in result.steps[1], false);
     assert.strictEqual((result.finalStep as PromptStep).sessionId, 1);
     assert.deepStrictEqual((result.finalStep as PromptStep).priorContext, [1]);
-    assert.deepStrictEqual(result.refusals, []);
+    assert.deepStrictEqual(result.affectedSteps, []);
   });
 
-  test("refuses removal of a target referenced by finalStep", () => {
+  test("removes a target referenced by finalStep and reports the final step", () => {
     const oldSteps = ensureStepIds([{ prompt: "target" }]);
 
     const result = renumberStepReferences(oldSteps, [], {
@@ -150,6 +209,7 @@ suite("StepReferenceRenumbering", () => {
       sessionId: 1,
     });
 
-    assert.deepStrictEqual(result.refusals, ["Final step"]);
+    assert.deepStrictEqual(result.affectedSteps, ["Final step"]);
+    assert.strictEqual("sessionId" in (result.finalStep ?? {}), false);
   });
 });
