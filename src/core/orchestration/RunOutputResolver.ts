@@ -1123,12 +1123,26 @@ export class RunOutputResolver {
         event.continuation &&
         sameProjectionAttempt(prior.latest.identity, value)
       ) {
-        prior.latest.changes = changes;
-        latestValues.set(key, {
-          value: { ...value, output: undefined },
-          transcript,
-          legacyText,
-        });
+        // A continuation carries cumulative output when it recorded any; one
+        // that recorded none (a follow-up turn with no captured events) must
+        // not erase the transcript the attempt already settled with.
+        const held = latestValues.get(key);
+        if (value.output || !held) {
+          prior.latest.changes = changes;
+          latestValues.set(key, {
+            value: { ...value, output: undefined },
+            transcript,
+            legacyText,
+          });
+        } else {
+          latestValues.set(key, {
+            ...held,
+            value: {
+              ...foldSettledAttempt(held.value, event),
+              output: undefined,
+            },
+          });
+        }
       } else if (!sameProjectionAttempt(prior.latest.identity, value)) {
         mergePriorFileChanges(prior.earlier, changes);
       }

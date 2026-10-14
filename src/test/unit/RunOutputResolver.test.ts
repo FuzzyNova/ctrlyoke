@@ -1852,6 +1852,82 @@ suite("RunOutputResolver", () => {
     assert.deepStrictEqual(priorItems.map(getPriorText), [expected]);
   });
 
+  test("keeps a settled step's prior context when a later follow-up records no output", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const identity = { target, runIndex: 0, attemptIndex: 0 } as const;
+    // Shape of a real interactive run: the step completes, then follow-up
+    // turns in the same session (e.g. a harness slash command) append
+    // follow-up records without re-recording the aggregate output.
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        ...identity,
+        definitionRevision: 1,
+        payload: { kind: "ai", startReason: "initial", prompt: "review it" },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        ...identity,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            structured: {
+              events: [
+                { type: CLI_EVENT_TYPES.TEXT, data: { text: "Review done." } },
+              ],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        timestampMs: 3,
+        ...identity,
+        definitionRevision: 1,
+        payload: { terminalState: "completed" },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+        timestampMs: 4,
+        payload: { executionState: EXECUTION_STATES.COMPLETED, stepCount: 1 },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+        timestampMs: 5,
+        ...identity,
+        definitionRevision: 1,
+        payload: { responseTextLength: 0, eventCount: 1 },
+      },
+    ]);
+
+    const resolver = new RunOutputResolver(recorder);
+    const steps = [{ prompt: "review it" }, { prompt: "next" }];
+    const priorItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      ["previous"],
+      steps,
+      1,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(priorItems.map(getPriorText), ["Review done."]);
+
+    const preview = await PriorContextPreviewBuilder.buildPreview(
+      "step:1",
+      1,
+      steps,
+      resolver,
+      manifestPath,
+      { workspaceRoot }
+    );
+    assert.match(preview, /Review done\./);
+  });
+
   test("yields interleaved parallel attempts once in settle order", async () => {
     const firstTarget = {
       kind: FINAL_STEP_PHASES.QUEUE,
