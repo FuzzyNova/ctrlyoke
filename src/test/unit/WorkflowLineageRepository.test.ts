@@ -343,8 +343,8 @@ suite("WorkflowLineageRepository", () => {
         WorkflowPaths.draftFilePath(ws, referencer.workflowKey),
         JSON.stringify({
           priorContext: {
-            workflowKey: source.workflowKey,
-            runRef: sourceRun.runRef,
+            workflow: source.workflowKey,
+            run: sourceRun.runRef,
           },
         }),
         "utf8"

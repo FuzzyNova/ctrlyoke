@@ -4,7 +4,7 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   isPreviousStepsPriorContext,
-  isWorkflowRunAddress,
+  isPriorContextRunSource,
   type PriorContext,
   type UserHookConfig,
 } from "@root/types/CtrlYokeTypes";
@@ -200,7 +200,7 @@ export function priorContextBadge(priorContext: PriorContext): {
     label = `ctx: [${priorContext.join(",")}]`;
   } else if (isPreviousStepsPriorContext(priorContext)) {
     label = `ctx: ${PRIOR_CONTEXT_KEYWORD_OPTIONS_META.previous.short} ${priorContext.previous}`;
-  } else if (isWorkflowRunAddress(priorContext)) {
+  } else if (isPriorContextRunSource(priorContext)) {
     // The full address is in the title; it is too long for a chip.
     label = "ctx: run";
   } else {

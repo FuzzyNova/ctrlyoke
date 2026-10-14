@@ -207,7 +207,7 @@ suite("PromptFileResolver", () => {
       resolver.resolvePromptValue(
         "./.ctrlyoke/.runs/workflow/run/manifest.json"
       ),
-      /priorContext: \{ workflowKey, runRef \}/
+      /priorContext: \{ workflow, run \}/
     );
   });
 

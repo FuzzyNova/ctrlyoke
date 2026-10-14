@@ -317,8 +317,10 @@ suite("PromptEditorSupportService", () => {
     };
     assert.strictEqual(result.results[0].exists, false);
     assert.match(result.results[0].message ?? "", /priorContext/);
-    assert.match(result.results[0].message ?? "", /workflowKey/);
-    assert.match(result.results[0].message ?? "", /runRef/);
+    assert.match(
+      result.results[0].message ?? "",
+      /priorContext: \{ workflow, run \}/
+    );
   });
 
   test("emits script completions through the requesting client context", async () => {

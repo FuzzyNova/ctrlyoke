@@ -20,10 +20,11 @@ import React, { useId, useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
-import type { PriorContext, WorkflowRunAddress } from "@/types/messages";
+import type { PriorContext } from "@/types/messages";
 import {
   isPreviousStepsPriorContext,
-  isWorkflowRunAddress,
+  isPriorContextRunSource,
+  type RunRef,
 } from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
 import {
@@ -70,7 +71,7 @@ function getMode(value: PriorContext | undefined): KeywordMode {
   if (Array.isArray(value)) return PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
   if (isPreviousStepsPriorContext(value))
     return PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT;
-  if (isWorkflowRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
+  if (isPriorContextRunSource(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
   return value as KeywordMode;
 }
 
@@ -131,11 +132,11 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const [customText, setCustomText] = useState(() =>
     Array.isArray(value) ? formatRangeNotation(value) : ""
   );
-  const [workflowKey, setWorkflowKey] = useState(() =>
-    isWorkflowRunAddress(value) ? value.workflowKey : ""
+  const [runWorkflowText, setRunWorkflowText] = useState(() =>
+    isPriorContextRunSource(value) ? value.workflow : ""
   );
-  const [runRef, setRunRef] = useState(() =>
-    isWorkflowRunAddress(value) ? value.runRef : ""
+  const [runText, setRunText] = useState(() =>
+    isPriorContextRunSource(value) ? formatRunSelector(value.run) : ""
   );
   const [previousCountText, setPreviousCountText] = useState(() =>
     String(
@@ -147,7 +148,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const [customError, setCustomError] = useState(false);
   // Track onChange calls originating from our text input so we don't sync back
   const textChangePendingRef = useRef(false);
-  // Selecting RUN is a local choice until both address fields have a value.
+  // Selecting RUN is a local choice until the workflow field has a value.
   const runSelectionPendingRef = useRef(false);
 
   const showCustomInput =
@@ -169,9 +170,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       setCustomText("");
       setCustomError(false);
     }
-    if (isWorkflowRunAddress(value)) {
-      setWorkflowKey(value.workflowKey);
-      setRunRef(value.runRef);
+    if (isPriorContextRunSource(value)) {
+      setRunWorkflowText(value.workflow);
+      setRunText(formatRunSelector(value.run));
       setWantsRun(true);
       runSelectionPendingRef.current = false;
     } else if (!runSelectionPendingRef.current) {
@@ -195,7 +196,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       setWantsRun(false);
       runSelectionPendingRef.current = false;
       setCustomError(false);
-      const count = parsePreviousCount(previousCountText);
+      const count = parsePositiveCount(previousCountText);
       onChange({ previous: count ?? DEFAULT_PREVIOUS_COUNT });
       setIsOpen(false);
       return;
@@ -244,17 +245,22 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   ) => {
     const text = e.target.value.replace(/[^0-9]/g, "");
     setPreviousCountText(text);
-    const count = parsePreviousCount(text);
+    const count = parsePositiveCount(text);
     if (count !== undefined) onChange({ previous: count });
   };
 
-  const updateRunAddress = (key: string, ref: string) => {
-    setWorkflowKey(key);
-    setRunRef(ref);
-    if (key && ref) {
-      runSelectionPendingRef.current = false;
-      onChange({ workflowKey: key, runRef: ref } as WorkflowRunAddress);
-    }
+  const runTextInvalid = parseRunText(runText) === null;
+
+  const updateRunSource = (workflowText: string, nextRunText: string) => {
+    setRunWorkflowText(workflowText);
+    setRunText(nextRunText);
+    const workflow = workflowText.trim();
+    const run = parseRunText(nextRunText);
+    if (!workflow || run === null) return;
+    runSelectionPendingRef.current = false;
+    // Keep the typed text as-is (e.g. a trailing space mid-name).
+    textChangePendingRef.current = true;
+    onChange({ workflow, ...(run !== undefined && { run }) });
   };
 
   // Build button label
@@ -438,7 +444,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
               placeholder="e.g. 3"
               aria-label="Number of previous step outputs"
               className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7 ${dropdownBorderClass(
-                parsePreviousCount(previousCountText) === undefined,
+                parsePositiveCount(previousCountText) === undefined,
                 "error"
               )}`}
             />
@@ -452,23 +458,28 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       {showRunInputs && (
         <div className="mt-1 grid grid-cols-1 gap-1">
           <input
-            value={workflowKey}
-            onChange={(event) => updateRunAddress(event.target.value, runRef)}
-            placeholder="Workflow key"
-            aria-label="Prior-context workflow key"
+            value={runWorkflowText}
+            onChange={(event) => updateRunSource(event.target.value, runText)}
+            placeholder="Workflow key or name"
+            aria-label="Prior-context workflow"
             className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
           />
           <input
-            value={runRef}
+            value={runText}
             onChange={(event) =>
-              updateRunAddress(workflowKey, event.target.value)
+              updateRunSource(runWorkflowText, event.target.value.trim())
             }
-            placeholder="Run reference"
-            aria-label="Prior-context run reference"
-            className="w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7"
+            placeholder="Run # (blank = latest)"
+            aria-label="Prior-context run number"
+            className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7 ${dropdownBorderClass(
+              runTextInvalid,
+              "error"
+            )}`}
           />
           <span className="text-xxs text-description-fg">
-            Imports all output from a completed run in this workspace.
+            Imports all output from a completed run in this workspace. Use Copy
+            Workflow Key from the workflow list&apos;s context menu, and leave
+            the run blank to follow the latest completed run.
           </span>
         </div>
       )}
@@ -498,9 +509,23 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
 };
 
 /** A whole count of at least 1, or undefined while the input is incomplete. */
-function parsePreviousCount(text: string): number | undefined {
+function parsePositiveCount(text: string): number | undefined {
   const count = Number(text);
   return text !== "" && Number.isSafeInteger(count) && count >= 1
     ? count
     : undefined;
+}
+
+/**
+ * The run field's value: undefined when blank (latest completed run), a run
+ * number, or a run reference kept as typed; null when it is neither.
+ */
+function parseRunText(text: string): number | RunRef | undefined | null {
+  if (text === "") return undefined;
+  if (/^\d+$/.test(text)) return parsePositiveCount(text) ?? null;
+  return text.startsWith("run-") ? (text as RunRef) : null;
+}
+
+function formatRunSelector(run: number | RunRef | undefined): string {
+  return run === undefined ? "" : String(run);
 }

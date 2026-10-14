@@ -1,12 +1,16 @@
 import * as fs from "node:fs/promises";
-import type {
-  RunRef,
-  WorkflowKey,
-  WorkflowLineageDescriptor,
-} from "../types/CtrlYokeTypes";
+import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import { withFileLock } from "../utils/FileLockUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import {
+  matchRunSelector,
+  matchWorkflowSelector,
+  parseRunSelector,
+  RUN_SELECTOR_MATCH_KINDS,
+  WORKFLOW_SELECTOR_MATCH_KINDS,
+  type WorkflowLineageLookup,
+} from "../core/orchestration/WorkflowRunSelector";
 
 export {
   formatCliStepSelector,
@@ -36,54 +40,33 @@ export function createWorkflowLineageNotFoundError(workflowKey: string): Error {
   );
 }
 
-export interface CliWorkflowLineageProvider {
-  listLineageKeys(workspaceRoot: string): Promise<WorkflowKey[]>;
-  listRunRefs(
-    workspaceRoot: string,
-    workflowKey: WorkflowKey
-  ): Promise<RunRef[]>;
-  tryReadDescriptor(
-    workspaceRoot: string,
-    workflowKey: WorkflowKey
-  ): Promise<WorkflowLineageDescriptor | undefined>;
-}
+export type CliWorkflowLineageProvider = WorkflowLineageLookup;
 
-/** Resolve a lineage key or an exact, case-insensitive workflow display name. */
+/**
+ * Resolve a lineage key, or a case-insensitive workflow display name or key
+ * slug.
+ */
 export async function resolveCliWorkflowKey(
   workspaceRoot: string,
   lineageRepository: CliWorkflowLineageProvider,
   value: string,
   writeErr: (message: string) => void = (message) => console.error(message)
 ): Promise<WorkflowKey> {
-  const keys = await lineageRepository.listLineageKeys(workspaceRoot);
-  if (keys.includes(value as WorkflowKey)) {
-    return value as WorkflowKey;
-  }
-
-  const normalizedName = value.toLowerCase();
-  const matches = (
-    await Promise.all(
-      keys.map(async (workflowKey) => ({
-        workflowKey,
-        descriptor: await lineageRepository.tryReadDescriptor(
-          workspaceRoot,
-          workflowKey
-        ),
-      }))
-    )
-  ).filter(
-    ({ descriptor }) =>
-      descriptor?.workflowName.toLowerCase() === normalizedName
+  const match = await matchWorkflowSelector(
+    workspaceRoot,
+    lineageRepository,
+    value
   );
-
-  if (matches.length === 1) {
-    const workflowKey = matches[0].workflowKey;
-    writeErr(`Using lineage ${workflowKey}`);
-    return workflowKey;
+  if (match.kind === WORKFLOW_SELECTOR_MATCH_KINDS.KEY) {
+    return match.workflowKey;
   }
-  if (matches.length > 1) {
+  if (match.kind === WORKFLOW_SELECTOR_MATCH_KINDS.NAME) {
+    writeErr(`Using lineage ${match.workflowKey}`);
+    return match.workflowKey;
+  }
+  if (match.kind === WORKFLOW_SELECTOR_MATCH_KINDS.AMBIGUOUS) {
     const candidates = await Promise.all(
-      matches.map(async ({ workflowKey }) => {
+      match.workflowKeys.map(async (workflowKey) => {
         const latestRunRef = (
           await lineageRepository.listRunRefs(workspaceRoot, workflowKey)
         )[0];
@@ -121,37 +104,27 @@ export async function resolveCliRunRef(
     return latest.runRef;
   }
 
-  if (/^\d+$/.test(selector)) {
-    const runId = Number(selector);
-    if (!Number.isSafeInteger(runId) || runId <= 0) {
-      throw new Error(`Invalid ${optionName} run ID "${selector}"`);
-    }
-    const matches = summaries.filter((summary) => summary.runId === runId);
-    if (matches.length === 1) {
-      return matches[0].runRef;
-    }
-    if (matches.length > 1) {
-      throw new Error(
-        `Ambiguous ${optionName} run ID "${selector}"; use a stable run reference instead`
-      );
-    }
+  const parsed = parseRunSelector(selector);
+  if (parsed === undefined) {
     throw new Error(
-      `Run ID "${selector}" was not found in workflow "${workflowKey}"`
+      /^\d+$/.test(selector)
+        ? `Invalid ${optionName} run ID "${selector}"`
+        : `Invalid ${optionName} selector "${selector}"; provide a run reference or numeric run ID`
     );
   }
-
-  try {
-    WorkflowPaths.assertValidRunRef(selector);
-  } catch {
-    throw new Error(
-      `Invalid ${optionName} selector "${selector}"; provide a run reference or numeric run ID`
-    );
+  const match = matchRunSelector(summaries, parsed);
+  if (match.kind === RUN_SELECTOR_MATCH_KINDS.FOUND) {
+    return match.run.runRef;
   }
-  if (summaries.some((summary) => summary.runRef === selector)) {
-    return selector;
+  if (match.kind === RUN_SELECTOR_MATCH_KINDS.AMBIGUOUS) {
+    throw new Error(
+      `Ambiguous ${optionName} run ID "${selector}"; use a stable run reference instead`
+    );
   }
   throw new Error(
-    `Run "${selector}" was not found in workflow "${workflowKey}"`
+    typeof parsed === "number"
+      ? `Run ID "${selector}" was not found in workflow "${workflowKey}"`
+      : `Run "${selector}" was not found in workflow "${workflowKey}"`
   );
 }
 

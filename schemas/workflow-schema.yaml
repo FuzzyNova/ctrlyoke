@@ -572,24 +572,34 @@ $defs:
       - type
       - script
     unevaluatedProperties: false
-  workflowRunAddress:
+  priorContextRunSource:
     type: object
     additionalProperties: false
     required:
-      - workflowKey
-      - runRef
+      - workflow
     properties:
-      workflowKey:
+      workflow:
         type: string
         minLength: 1
-        pattern: ^(?!\.{1,2}$)[^/\\]+$
-        description: Stable workflow lineage key within the current workspace.
-        title: Workflow Key
-      runRef:
-        type: string
-        pattern: ^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$
-        description: Stable completed-run reference within workflowKey.
-        title: Run Ref
+        description: >-
+          The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the
+          workflow list's context menu), its name, or its key without the timestamp suffix. Names
+          are matched case-insensitively, and a name shared by several workflows is an error at
+          execution, so use the key to be exact.
+        title: Workflow
+      run:
+        oneOf:
+          - type: integer
+            minimum: 1
+            description: The run's number, as shown in the run list.
+          - type: string
+            pattern: ^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$
+            description: The run's stable run reference.
+        description: >-
+          Which run of the workflow to import: its number, or its run reference. Omit it to use the
+          workflow's latest completed run, which moves on as new runs complete. A run named here
+          cannot be deleted while a workflow references it.
+        title: Run
   executionProperties:
     type: object
     description: >-
@@ -2164,10 +2174,10 @@ $defs:
       - $ref: '#/$defs/priorContextKeyword'
       - $ref: '#/$defs/priorContextPromptNumbers'
       - $ref: '#/$defs/priorContextPreviousCount'
-      - $ref: '#/$defs/workflowRunAddress'
+      - $ref: '#/$defs/priorContextRunSource'
         description: >-
-          Import all resolved queue and final-step output from one completed run in this same
-          workspace.
+          Import all resolved queue and final-step output from a completed run of another workflow
+          in this same workspace.
   priorContextKeyword:
     type: string
     enum:

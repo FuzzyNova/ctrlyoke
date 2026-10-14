@@ -222,34 +222,39 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
     );
   });
 
-  test("preserves run-address priorContext through sanitization and clipboard round trips", () => {
-    const step = {
-      type: STEP_TYPES.PROMPT,
-      prompt: "continue from the completed run",
-      priorContext: {
-        workflowKey: "workflow-1",
-        runRef: "run-2026-01-01T00-00-00-000Z",
-        ignored: "not part of WorkflowRunAddress",
-      },
-    } as any;
-    const expected = {
-      type: STEP_TYPES.PROMPT,
-      prompt: "continue from the completed run",
-      priorContext: {
-        workflowKey: "workflow-1",
-        runRef: "run-2026-01-01T00-00-00-000Z",
-      },
-    };
+  test("preserves run-source priorContext through sanitization and clipboard round trips", () => {
+    for (const [priorContext, expectedContext] of [
+      [
+        { workflow: "workflow-1", run: 4, ignored: "not part of the source" },
+        { workflow: "workflow-1", run: 4 },
+      ],
+      [{ workflow: "Bug Sweep" }, { workflow: "Bug Sweep" }],
+    ]) {
+      const step = {
+        type: STEP_TYPES.PROMPT,
+        prompt: "continue from the completed run",
+        priorContext,
+      } as any;
+      const expected = {
+        type: STEP_TYPES.PROMPT,
+        prompt: "continue from the completed run",
+        priorContext: expectedContext,
+      };
 
-    assert.deepStrictEqual(sanitizeClipboardWorkflowStep(step), expected);
-    assert.deepStrictEqual(
-      parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(step)),
-      expected
-    );
+      assert.deepStrictEqual(sanitizeClipboardWorkflowStep(step), expected);
+      assert.deepStrictEqual(
+        parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(step)),
+        expected
+      );
+    }
   });
 
   test("drops malformed priorContext objects while retaining supported forms", () => {
-    for (const priorContext of [{ workflowKey: 1 }, { runRef: "run-1" }]) {
+    for (const priorContext of [
+      { workflow: 1 },
+      { run: 2 },
+      { workflow: "workflow-1", run: 0 },
+    ]) {
       assert.deepStrictEqual(
         sanitizeClipboardWorkflowStep({ prompt: "prompt", priorContext }),
         { prompt: "prompt" }

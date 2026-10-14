@@ -10,7 +10,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   isScriptStep,
-  isWorkflowRunAddress,
+  isPriorContextRunSource,
   type ErrorBehavior,
   type EndCondition,
   type HarnessId,
@@ -323,8 +323,11 @@ function clonePriorContext(value: unknown): PriorContext | undefined {
   if (typeof value === "string") {
     return value as PriorContext;
   }
-  if (isWorkflowRunAddress(value)) {
-    return { workflowKey: value.workflowKey, runRef: value.runRef };
+  if (isPriorContextRunSource(value)) {
+    return {
+      workflow: value.workflow,
+      ...(value.run !== undefined && { run: value.run }),
+    };
   }
   if (
     Array.isArray(value) &&

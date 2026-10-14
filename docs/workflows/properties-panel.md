@@ -63,7 +63,10 @@ Field details: [`worktree`](/reference/workflow-schema#worktree).
   step's complete record, and **Summary** sends a bounded excerpt (the start of
   the prompt, the files changed, and the end of the reply). Choosing **Previous
   N** shows a count field, and choosing **Custom** shows a field for specific
-  prompt numbers, such as `1,2,4-10`. See
+  prompt numbers, such as `1,2,4-10`. Choosing **Completed run output** shows a
+  workflow field and an optional run number field; see
+  [Output from another workflow](/workflows/context-files#output-from-another-workflow).
+  See also
   [Prior output references](/workflows/context-files#prior-output-references).
 - **Variables** — workflow-level <code v-pre>{{name}}</code> values. Use **Bulk
   edit** to paste several `name=value` lines at once.

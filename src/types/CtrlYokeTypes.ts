@@ -69,8 +69,9 @@ export type { ToolPermissionMode };
  * - number[]: Inject specific prompt outputs by 1-based prompt number (e.g., [1, 3])
  * - PreviousStepsPriorContext: Inject the last N outputs before this prompt
  *   (`{ previous: 3 }`), counted relative to the prompt so it survives reordering.
- * - WorkflowRunAddress: Inject the complete, terminal timeline of an explicitly
- *   addressed run in this workspace. Addresses intentionally contain no path.
+ * - PriorContextRunSource: Inject the complete, terminal timeline of a
+ *   completed run in this workspace, selected by workflow and run number.
+ *   Sources intentionally contain no path.
  *
  * Context is injected as an XML block before the user's prompt text.
  * Note: When used with resumeSession:true, context may be duplicated — this is accepted behavior.
@@ -79,7 +80,36 @@ export type PriorContext =
   | (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS]
   | number[]
   | PreviousStepsPriorContext
-  | WorkflowRunAddress;
+  | PriorContextRunSource;
+
+/**
+ * A completed run in this workspace, as a person types it: `workflow` is a
+ * lineage key, workflow name, or key slug, and `run` is the run's number or
+ * `RunRef`. Without `run`, the lineage's latest completed run is used, so the
+ * source follows new runs. Resolved to a `WorkflowRunAddress` at execution.
+ */
+export interface PriorContextRunSource {
+  workflow: string;
+  run?: number | RunRef;
+}
+
+/** True when a prior-context value selects another run's output. */
+export function isPriorContextRunSource(
+  value: unknown
+): value is PriorContextRunSource {
+  if (!value || Array.isArray(value) || typeof value !== "object") {
+    return false;
+  }
+  const source = value as Record<string, unknown>;
+  return (
+    typeof source.workflow === "string" &&
+    (source.run === undefined ||
+      typeof source.run === "string" ||
+      (typeof source.run === "number" &&
+        Number.isSafeInteger(source.run) &&
+        source.run >= 1))
+  );
+}
 
 /**
  * The last `previous` earlier queue steps that produced output, oldest first.
@@ -519,21 +549,6 @@ export type WorkflowViewAddress =
 export interface WorkflowRunAddress {
   workflowKey: WorkflowKey;
   runRef: RunRef;
-}
-
-/** True when a persisted prior-context value addresses one promoted run. */
-export function isWorkflowRunAddress(
-  value: unknown
-): value is WorkflowRunAddress {
-  return (
-    !!value &&
-    !Array.isArray(value) &&
-    typeof value === "object" &&
-    "workflowKey" in value &&
-    "runRef" in value &&
-    typeof value.workflowKey === "string" &&
-    typeof value.runRef === "string"
-  );
 }
 
 /**

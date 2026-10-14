@@ -55,7 +55,7 @@ say what it does.
 | [Variables](#vars) | Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. |
 | [Hook entry](#hook-entry) | One user-defined hook in a `hooks` array. |
 | [MCP server entry](#mcp-server-entry) | User-defined MCP server configuration. |
-| [Run address](#run-address) | Identifies one completed run for `priorContext` imports. |
+| [Run source](#run-source) | Selects another workflow's completed run for `priorContext` imports. |
 | [Harness IDs](#harness-ids) | The harnesses a workflow or step can select. |
 | [Template metadata](#template-metadata) | Authoring metadata for a reusable workflow template. |
 | [Template variable](#template-variable) | One entry in `_templateMeta.variables`. |
@@ -222,7 +222,7 @@ Script gate that runs before the prompt. Determines whether to run the prompt, s
 
 ### `priorContext` {#execution-properties-priorcontext}
 
-- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or `{ previous }` or [Run address](#run-address)
+- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or `{ previous }` or [Run source](#run-source)
 - **Settings default:** [`defaults.priorContext`](/reference/settings#defaults-priorcontext)
 
 Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; { previous: N } injects the last N outputs before this prompt; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflowKey, runRef } imports the complete terminal output from one run in this workspace. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation).
@@ -232,7 +232,7 @@ Accepted forms:
 - `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` — Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final-step pass outputs, 'finalStepPrevious' = immediately preceding final-step pass output
 - `integer[]` — Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)
 - `{ previous }` — The last N queue prompt outputs before this prompt, oldest first (e.g. { previous: 3 }). Counted relative to the prompt, so it stays correct when steps are inserted or reordered. Like 'previous', steps that produced no output are skipped rather than counted; { previous: 1 } is the same as 'previous'. Inline equivalent: $previous:N.
-- [Run address](#run-address) — Import all resolved queue and final-step output from one completed run in this same workspace.
+- [Run source](#run-source) — Import all resolved queue and final-step output from a completed run of another workflow in this same workspace.
 
 ### `priorContext.previous` {#execution-properties-priorcontext-previous}
 
@@ -934,25 +934,28 @@ HTTP headers to send with every request (remote servers only, e.g. { "Authorizat
 
 Tool names from this server to deny at execution time. Use bare tool names without the mcp\_\_&lt;serverid>\_\_ prefix (e.g. ["append\_step"]). Translated to mcp\_\_&lt;id>\_\_&lt;tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.
 
-## Run address {#run-address}
+## Run source {#run-source}
 
-Identifies one completed run for `priorContext` imports.
+Selects another workflow's completed run for `priorContext` imports.
 
-### `workflowKey` {#run-address-workflowkey}
-
-- **Type:** `string`
-- **Required:** yes
-- **Constraints:** at least 1 character(s) · pattern `^(?!\.{1,2}$)[^/\\]+$`
-
-Stable workflow lineage key within the current workspace.
-
-### `runRef` {#run-address-runref}
+### `workflow` {#run-source-workflow}
 
 - **Type:** `string`
 - **Required:** yes
-- **Constraints:** pattern `^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$`
+- **Constraints:** at least 1 character(s)
 
-Stable completed-run reference within workflowKey.
+The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.
+
+### `run` {#run-source-run}
+
+- **Type:** `integer` or `string`
+
+Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it.
+
+Accepted forms:
+
+- `integer` — The run's number, as shown in the run list.
+- `string` matching `^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$` — The run's stable run reference.
 
 ## Harness IDs {#harness-ids}
 

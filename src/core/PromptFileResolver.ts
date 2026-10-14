@@ -524,7 +524,7 @@ export function getLegacyRunHistoryReferenceGuidance(
     return undefined;
   }
 
-  return "run history is not a workspace file; use priorContext: { workflowKey, runRef } to reference a completed run";
+  return "run history is not a workspace file; use priorContext: { workflow, run } to reference a completed run";
 }
 
 function getErrorMessage(error: unknown): string {

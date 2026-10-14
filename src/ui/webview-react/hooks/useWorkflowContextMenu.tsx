@@ -52,6 +52,19 @@ interface UseWorkflowContextMenuOptions {
 const copyRunDirectoryTitle =
   "Copies the path; in hosted browser mode, it is on the server's filesystem.";
 
+function copyToClipboard(text: string, what: string): void {
+  void writeClipboardText(text)
+    .then(() => {
+      notifyUser(`${what} copied to clipboard`, USER_FEEDBACK_SEVERITY.SUCCESS);
+    })
+    .catch(() => {
+      notifyUser(
+        `Failed to copy ${what.toLowerCase()}`,
+        USER_FEEDBACK_SEVERITY.ERROR
+      );
+    });
+}
+
 export function useWorkflowContextMenu({
   onDuplicate,
   onToggleFavorite,
@@ -124,6 +137,15 @@ export function useWorkflowContextMenu({
           },
           { type: "divider" },
           {
+            label: "Copy Workflow Key",
+            icon: "codicon-key",
+            disabled: false,
+            title:
+              "Copies the key that prior context's Completed run output uses to import this workflow's runs",
+            onClick: () =>
+              copyToClipboard(target.address.workflowKey, "Workflow key"),
+          },
+          {
             label: "Copy Run Directory Path",
             icon: "codicon-copy",
             disabled: !hasRunDirectory,
@@ -133,19 +155,7 @@ export function useWorkflowContextMenu({
               : `Run directory path is unavailable. ${copyRunDirectoryTitle}`,
             onClick: () => {
               if (!target.runDirectory) return;
-              void writeClipboardText(target.runDirectory)
-                .then(() => {
-                  notifyUser(
-                    "Run directory path copied to clipboard",
-                    USER_FEEDBACK_SEVERITY.SUCCESS
-                  );
-                })
-                .catch(() => {
-                  notifyUser(
-                    "Failed to copy run directory path",
-                    USER_FEEDBACK_SEVERITY.ERROR
-                  );
-                });
+              copyToClipboard(target.runDirectory, "Run directory path");
             },
           },
           { type: "divider" },

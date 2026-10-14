@@ -91,6 +91,7 @@ describe("useWorkflowContextMenu", () => {
       "Open menu",
       "New Run (Don't Start)",
       "Duplicate Workflow…",
+      "Copy Workflow Key",
       "Copy Run Directory Path",
       "Add to Favorites",
       "Delete Workflow",
@@ -213,6 +214,24 @@ describe("useWorkflowContextMenu", () => {
         expect.arrayContaining([
           expect.objectContaining({
             message: "Run directory path copied to clipboard",
+          }),
+        ])
+      )
+    );
+  });
+
+  it("copies the workflow key and confirms with a toast", async () => {
+    const writeText = vi.mocked(navigator.clipboard.writeText);
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy Workflow Key" }));
+
+    expect(writeText).toHaveBeenCalledWith("workflow-1");
+    await waitFor(() =>
+      expect(useUiStore.getState().toastQueue).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Workflow key copied to clipboard",
           }),
         ])
       )
