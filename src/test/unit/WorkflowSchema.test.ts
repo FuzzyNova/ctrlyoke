@@ -1203,27 +1203,35 @@ suite("Workflow template schema", () => {
     }
   });
 
-  test("accepts a run address in the exact form ctrlyoke writes run refs", () => {
-    const withAddress = (workflowKey: string, runRef: string) => ({
-      steps: [{ prompt: "Continue", priorContext: { workflowKey, runRef } }],
+  test("accepts a run source by workflow, with a run number, run ref, or neither", () => {
+    const withSource = (priorContext: object) => ({
+      steps: [{ prompt: "Continue", priorContext }],
     });
 
-    assert.strictEqual(
-      validate(withAddress("my-flow", formatRunRef(Date.UTC(2026, 8, 23)))),
-      true,
-      JSON.stringify(validate.errors)
-    );
-
-    for (const [workflowKey, runRef] of [
-      ["my-flow", "run-2026-09-23"],
-      ["my-flow", "run-2026-09-23T10:11:12.123Z"],
-      ["nested/flow", formatRunRef(Date.UTC(2026, 8, 23))],
-      ["nested\\flow", formatRunRef(Date.UTC(2026, 8, 23))],
+    for (const source of [
+      { workflow: "my-flow" },
+      { workflow: "My Flow", run: 3 },
+      { workflow: "my-flow", run: formatRunRef(Date.UTC(2026, 8, 23)) },
     ]) {
       assert.strictEqual(
-        validate(withAddress(workflowKey, runRef)),
+        validate(withSource(source)),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+
+    for (const source of [
+      { workflow: "" },
+      { run: 3 },
+      { workflow: "my-flow", run: 0 },
+      { workflow: "my-flow", run: "run-2026-09-23" },
+      { workflow: "my-flow", run: "run-2026-09-23T10:11:12.123Z" },
+      { workflowKey: "my-flow", runRef: formatRunRef(Date.UTC(2026, 8, 23)) },
+    ]) {
+      assert.strictEqual(
+        validate(withSource(source)),
         false,
-        `${workflowKey} ${runRef}`
+        JSON.stringify(source)
       );
     }
   });

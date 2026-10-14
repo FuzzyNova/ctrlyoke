@@ -197,11 +197,12 @@ const WORKFLOW_PAGES = [
         properties: [{ pointer: "#/$defs/mcpServerConfig/properties" }],
       },
       {
-        id: "run-address",
-        title: "Run address",
-        summary: "Identifies one completed run for `priorContext` imports.",
-        refs: ["#/$defs/workflowRunAddress"],
-        properties: [{ pointer: "#/$defs/workflowRunAddress/properties" }],
+        id: "run-source",
+        title: "Run source",
+        summary:
+          "Selects another workflow's completed run for `priorContext` imports.",
+        refs: ["#/$defs/priorContextRunSource"],
+        properties: [{ pointer: "#/$defs/priorContextRunSource/properties" }],
       },
       {
         id: "harness-ids",

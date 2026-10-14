@@ -3,12 +3,11 @@ import * as path from "path";
 import * as crypto from "crypto";
 import type {
   RunRef,
-  WorkflowRunAddress,
   WorkflowKey,
   WorkflowLineageDescriptor,
   WorkflowLineageCreationOptions,
 } from "../../types/CtrlYokeTypes";
-import { isWorkflowRunAddress } from "../../types/CtrlYokeTypes";
+import { isPriorContextRunSource } from "../../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { withFileLock } from "../../utils/FileLockUtils";
 import {
@@ -24,19 +23,13 @@ import {
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../utils/FormatMigrations";
+import { TimelineRecorder } from "./TimelineRecorder";
+import { selectorNamesLineage } from "./WorkflowRunSelector";
 
 const DESCRIPTOR_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR];
 /** How long a `.creating-*` staging dir can go without a new write before `pruneStaleStagingDirs` removes it. */
 const STALE_STAGING_DIR_MS = 5 * 60 * 1000;
-
-/** A lineage key minus its run-timestamp suffix, used when no descriptor name exists. */
-export function deriveWorkflowNameFromKey(workflowKey: WorkflowKey): string {
-  return workflowKey.replace(
-    /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
-    ""
-  );
-}
 
 export interface CreatedLineage {
   workflowKey: WorkflowKey;
@@ -225,7 +218,7 @@ export class WorkflowLineageRepository {
     } catch {
       // Fall through to the key-derived name below.
     }
-    return deriveWorkflowNameFromKey(workflowKey);
+    return WorkflowPaths.workflowNameFromKey(workflowKey);
   }
 
   async tryReadDescriptor(
@@ -450,6 +443,7 @@ export class WorkflowLineageRepository {
         await this.isReferencedAsPriorContext(
           workspaceRoot,
           workflowKey,
+          descriptor.workflowName,
           runRef
         )
       ) {
@@ -693,14 +687,35 @@ export class WorkflowLineageRepository {
   }
 
   /**
-   * Source addresses are durable dependencies. Scan only known working-file
-   * locations and never follow a link while deciding whether deletion is safe.
+   * A source naming an exact run is a durable dependency. One without `run`
+   * follows the latest completed run, so it pins none. A name selector counts
+   * whenever it could name this lineage, even if it is ambiguous. Scan only
+   * known working-file locations and never follow a link while deciding
+   * whether deletion is safe.
    */
   private async isReferencedAsPriorContext(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
+    workflowName: string,
     runRef: RunRef
   ): Promise<boolean> {
+    let runId: number | undefined;
+    try {
+      runId = (
+        await new TimelineRecorder().readManifest(
+          WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef)
+        )
+      ).runId;
+    } catch {
+      // Without a readable manifest only a RunRef selector can name the run.
+    }
+    const namesRun = (context: unknown): boolean =>
+      isPriorContextRunSource(context) &&
+      context.run !== undefined &&
+      (context.run === runRef || context.run === runId) &&
+      (context.workflow === workflowKey ||
+        selectorNamesLineage(context.workflow, workflowKey, workflowName));
+
     for (const key of await this.listLineageKeys(workspaceRoot)) {
       const files = [
         WorkflowPaths.draftFilePath(workspaceRoot, key),
@@ -725,20 +740,7 @@ export class WorkflowLineageRepository {
             ...(parsed.steps ?? []).map((step) => step.priorContext),
             parsed.finalStep?.priorContext,
           ];
-          if (
-            contexts.some((context) => {
-              const address = isWorkflowRunAddress(
-                context as import("../../types/CtrlYokeTypes").PriorContext
-              )
-                ? (context as WorkflowRunAddress)
-                : undefined;
-              return (
-                address !== undefined &&
-                address.workflowKey === workflowKey &&
-                address.runRef === runRef
-              );
-            })
-          ) {
+          if (contexts.some(namesRun)) {
             return true;
           }
         } catch {

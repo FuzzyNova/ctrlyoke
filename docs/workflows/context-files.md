@@ -102,6 +102,33 @@ detail level to its `priorContext` selectors; the default is `full`. An inline
 `:summary` selector requests summary for that reference even when the property
 uses the full form.
 
+## Output from another workflow
+
+`priorContext` can also import every step's output from a completed run of
+another workflow in the same workspace:
+
+```yaml
+steps:
+  - prompt: Review the fixes from the last bug sweep.
+    priorContext:
+      workflow: bug-sweep
+  - prompt: Compare against the sweep before that one.
+    priorContext:
+      workflow: bug-sweep
+      run: 12
+```
+
+`workflow` takes the workflow's name or its workflow key. To get the key,
+right-click the workflow in the workflow list and choose **Copy Workflow Key**.
+A name is matched without regard to case, and if more than one workflow has
+that name, the step fails, so use the key to be exact. Leave out `run` to use
+the workflow's latest completed run, which moves on as new runs complete. Set
+`run` to a run number from the run list to pin one run. A run pinned this way
+cannot be deleted while a workflow still references it.
+
+In the properties panel, choose **Completed run output** under **Prior
+Context** and fill in the same two fields.
+
 ## Context at a parallel boundary
 
 For a member of a parallel group, `previous` and `all` are evaluated at the

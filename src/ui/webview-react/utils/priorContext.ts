@@ -6,7 +6,7 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   isPreviousStepsPriorContext,
-  isWorkflowRunAddress,
+  isPriorContextRunSource,
   type PriorContext,
 } from "@root/types/CtrlYokeTypes";
 import { PRIOR_CONTEXT_SELECT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
@@ -17,7 +17,7 @@ function getMode(value: PriorContext): PriorContextMode {
   if (Array.isArray(value)) return PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
   if (isPreviousStepsPriorContext(value))
     return PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT;
-  if (isWorkflowRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
+  if (isPriorContextRunSource(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
   return value as PriorContextMode;
 }
 

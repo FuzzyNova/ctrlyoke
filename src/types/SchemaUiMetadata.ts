@@ -451,7 +451,7 @@ export const PRIOR_CONTEXT_SELECT_OPTIONS_META = {
   [PRIOR_CONTEXT_SELECTION_MODES.RUN]: {
     value: PRIOR_CONTEXT_SELECTION_MODES.RUN,
     label: "Completed run output",
-    pseudo: { writes: "priorContext: { workflowKey: ..., runRef: ... }" },
+    pseudo: { writes: "priorContext: { workflow: ..., run: ... }" },
   },
   [PRIOR_CONTEXT_SELECTION_MODES.CUSTOM]: {
     value: PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,

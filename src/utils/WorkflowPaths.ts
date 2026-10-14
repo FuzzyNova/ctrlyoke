@@ -31,7 +31,7 @@ const RUN_REF_PREFIX = "run-";
 /** Matches `run-<ISO timestamp with `:`/`.` replaced by `-`>`, e.g. `run-2026-07-20T10-30-00-000Z`. */
 const RUN_REF_PATTERN = /^run-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)$/;
 const WORKFLOW_KEY_TIMESTAMP_SUFFIX =
-  /-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?$/;
+  /-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?Z?$/;
 
 // Windows reserved device names (case-insensitive), rejected as any path segment.
 const WINDOWS_RESERVED_NAMES = new Set([
@@ -148,7 +148,10 @@ function sanitizeNameForKey(nameHint: string): string {
   return sanitized || "workflow";
 }
 
-/** Returns the user-facing name encoded in a timestamped workflow key. */
+/**
+ * A lineage key minus its timestamp suffix: the slug the key was minted from,
+ * and the display name of last resort when a lineage has no descriptor name.
+ */
 export function workflowNameFromKey(workflowKey: string): string {
   return workflowKey.replace(WORKFLOW_KEY_TIMESTAMP_SUFFIX, "");
 }

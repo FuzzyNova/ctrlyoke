@@ -219,6 +219,9 @@ Right-click a workflow or run for:
   independent workflow. You can pick a different **Workflow Harness** and
   **Workflow Model** for the copy, which makes it easy to run the same workflow
   on two harnesses and compare the results.
+- **Copy Workflow Key**: copy the workflow's key, which another workflow's
+  `priorContext` uses to import this workflow's output. See
+  [Output from another workflow](/workflows/context-files#output-from-another-workflow).
 - **Copy Run Directory Path**: copy the path of the run's files (its working
   copy, `events.jsonl` timeline and manifest). In the browser dashboard the path
   is on the machine running ctrlyoke. See [Run files](/reference/run-files).

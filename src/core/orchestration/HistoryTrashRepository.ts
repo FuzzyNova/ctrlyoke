@@ -35,10 +35,7 @@ import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { isProcessAlive } from "../../utils/LockSafetyPrimitives";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
-import {
-  deriveWorkflowNameFromKey,
-  WorkflowLineageRepository,
-} from "./WorkflowLineageRepository";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 
 const ENTRY_FILE_NAME = "entry.json";
@@ -81,7 +78,7 @@ export const HISTORY_TRASH_REQUESTERS = {
 export class LiveLineageDeleteError extends Error {
   constructor(readonly workflowKey: WorkflowKey) {
     super(
-      `"${deriveWorkflowNameFromKey(workflowKey)}" is running. Stop it before deleting it.`
+      `"${WorkflowPaths.workflowNameFromKey(workflowKey)}" is running. Stop it before deleting it.`
     );
     this.name = "LiveLineageDeleteError";
   }
@@ -724,7 +721,7 @@ export class HistoryTrashRepository {
       if (!wholeLineage && runRefs.length === 0) continue;
       items.push({
         workflowKey,
-        workflowName: deriveWorkflowNameFromKey(workflowKey),
+        workflowName: WorkflowPaths.workflowNameFromKey(workflowKey),
         wholeLineage,
         runRefs,
         runIds,

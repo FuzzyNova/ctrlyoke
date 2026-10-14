@@ -99,11 +99,11 @@ describe("PriorContextSelect schema metadata", () => {
     fireEvent.click(screen.getByRole("button", { name: /Inherit/ }));
     expect(
       screen.getByRole("button", {
-        name: /Completed run output.*priorContext: \{ workflowKey/,
+        name: /Completed run output.*priorContext: \{ workflow:/,
       })
     ).toHaveAttribute(
       "title",
-      expect.stringContaining("priorContext: { workflowKey: ..., runRef: ... }")
+      expect.stringContaining("priorContext: { workflow: ..., run: ... }")
     );
     expect(
       screen.getByRole("button", { name: /Custom.*priorContext: \[1,2\]/ })
@@ -139,14 +139,28 @@ describe("PriorContextSelect schema metadata", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("does not treat { previous } as a run address", () => {
+  it("shows the custom range input only while Custom is selected", () => {
     render(<PriorContextSelect value={{ previous: 2 }} onChange={vi.fn()} />);
     expect(
-      screen.queryByLabelText("Prior-context workflow key")
+      screen.queryByLabelText(/Custom step range/)
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Previous 2,/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
+    expect(screen.getByLabelText(/Custom step range/)).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Number of previous step outputs")
     ).not.toBeInTheDocument();
   });
 
-  it("shows both run-address inputs when Completed run output is selected", () => {
+  it("does not treat { previous } as a run source", () => {
+    render(<PriorContextSelect value={{ previous: 2 }} onChange={vi.fn()} />);
+    expect(
+      screen.queryByLabelText("Prior-context workflow")
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows both run-source inputs when Completed run output is selected", () => {
     render(<PriorContextSelect value="none" onChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: /None/ }));
@@ -157,18 +171,16 @@ describe("PriorContextSelect schema metadata", () => {
     expect(
       screen.getByRole("button", { name: /Completed run output/ })
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Prior-context workflow")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Prior-context workflow key")
-    ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Prior-context run reference")
+      screen.getByLabelText("Prior-context run number")
     ).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Number of previous step outputs")
     ).not.toBeInTheDocument();
   });
 
-  it("writes a run address after both fields are filled", () => {
+  it("writes the latest-run source from the workflow alone, then pins a run number", () => {
     const onChange = vi.fn();
     render(<PriorContextSelect value="none" onChange={onChange} />);
 
@@ -176,30 +188,49 @@ describe("PriorContextSelect schema metadata", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Completed run output/ })
     );
-    fireEvent.change(screen.getByLabelText("Prior-context workflow key"), {
-      target: { value: "workflow-1" },
-    });
     expect(onChange).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText("Prior-context run reference"), {
-      target: { value: "run-42" },
+    fireEvent.change(screen.getByLabelText("Prior-context workflow"), {
+      target: { value: "Bug Sweep " },
     });
+    expect(onChange).toHaveBeenLastCalledWith({ workflow: "Bug Sweep" });
+    expect(screen.getByLabelText("Prior-context workflow")).toHaveValue(
+      "Bug Sweep "
+    );
+
+    const run = screen.getByLabelText("Prior-context run number");
+    fireEvent.change(run, { target: { value: "12" } });
     expect(onChange).toHaveBeenLastCalledWith({
-      workflowKey: "workflow-1",
-      runRef: "run-42",
+      workflow: "Bug Sweep",
+      run: 12,
     });
+
+    onChange.mockClear();
+    fireEvent.change(run, { target: { value: "0" } });
+    expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("hides run-address inputs after switching to another keyword", () => {
+  it("shows a stored source's workflow and run", () => {
+    render(
+      <PriorContextSelect
+        value={{ workflow: "bug-sweep-2026-07-20T00-00-00", run: 3 }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("Prior-context workflow")).toHaveValue(
+      "bug-sweep-2026-07-20T00-00-00"
+    );
+    expect(screen.getByLabelText("Prior-context run number")).toHaveValue("3");
+  });
+
+  it("hides run-source inputs after switching to another keyword", () => {
     render(<PriorContextSelect value="none" onChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: /None/ }));
     fireEvent.click(
       screen.getByRole("button", { name: /Completed run output/ })
     );
-    expect(
-      screen.getByLabelText("Prior-context workflow key")
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Prior-context workflow")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: /Completed run output/ })
@@ -209,10 +240,10 @@ describe("PriorContextSelect schema metadata", () => {
     );
 
     expect(
-      screen.queryByLabelText("Prior-context workflow key")
+      screen.queryByLabelText("Prior-context workflow")
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByLabelText("Prior-context run reference")
+      screen.queryByLabelText("Prior-context run number")
     ).not.toBeInTheDocument();
   });
 });

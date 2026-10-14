@@ -8,7 +8,6 @@ import {
   getPermissionTabOverride,
   priorContextBadge,
 } from "@components/shared/tabBadgeUtils";
-import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 
 describe("permission tab badges", () => {
   it("omits the badge for none", () => {
@@ -103,12 +102,9 @@ describe("priorContextBadge", () => {
     expect(priorContextBadge({ previous: 3 }).label).toBe("ctx: prev 3");
   });
 
-  it("labels a run address as run and keeps the address in the title", () => {
-    const badge = priorContextBadge({
-      workflowKey: "lineage-a" as WorkflowKey,
-      runRef: "run-2026-07-20T00-00-00-000Z" as RunRef,
-    });
+  it("labels a run source as run and keeps the source in the title", () => {
+    const badge = priorContextBadge({ workflow: "lineage-a", run: 4 });
     expect(badge.label).toBe("ctx: run");
-    expect(badge.title).toContain('"workflowKey":"lineage-a"');
+    expect(badge.title).toContain('"workflow":"lineage-a"');
   });
 });
