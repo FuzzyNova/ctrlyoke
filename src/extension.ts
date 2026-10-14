@@ -438,6 +438,29 @@ export async function activate(context: vscode.ExtensionContext) {
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
     const dashboardHostActions = new VsCodeDashboardHostActions();
     const fileWatcherFactory = new VsCodeFileWatcherFactory();
+    const settingsFilePaths = [
+      userConfigBackend.filePath,
+      ...(workspaceFolders?.length
+        ? [
+            path.join(
+              getVsCodeWorkspaceRoot(),
+              ".ctrlyoke",
+              "settings.json"
+            ),
+          ]
+        : []),
+    ];
+    for (const settingsFilePath of new Set(settingsFilePaths)) {
+      const settingsWatcher = fileWatcherFactory.create(
+        path.dirname(settingsFilePath),
+        path.basename(settingsFilePath)
+      );
+      const notifySettingsChanged = (): void => configService.notify();
+      settingsWatcher.onDidCreate(notifySettingsChanged);
+      settingsWatcher.onDidChange(notifySettingsChanged);
+      settingsWatcher.onDidDelete(notifySettingsChanged);
+      context.subscriptions.push(settingsWatcher);
+    }
     const templateManager = new TemplateManager(
       context.extensionPath,
       () => getVsCodeWorkspaceFolder()?.uri.fsPath,

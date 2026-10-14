@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code (setting up the D19 near-limit warning screenshot)
 - **Area:** `src/config/FileConfigBackend.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

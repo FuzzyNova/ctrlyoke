@@ -1138,7 +1138,7 @@ ctrlyoke hosted server settings.
 - **Type:** `boolean`
 - **Default:** `false`
 
-Automatically start the hosted dashboard server when the VS Code extension activates.
+Automatically start the hosted dashboard server when the VS Code extension activates. This is read at activation time; change it before reloading the window to affect startup.
 
 ### `server.port` {#server-port}
 
@@ -1146,14 +1146,14 @@ Automatically start the hosted dashboard server when the VS Code extension activ
 - **Default:** `4747`
 - **Constraints:** minimum 1 · maximum 65535
 
-Port for the ctrlyoke hosted server.
+Port for the ctrlyoke hosted server. The port is selected when the server starts; restart the hosted server after changing it.
 
 ### `server.fallbackPorts` {#server-fallbackports}
 
 - **Type:** `integer[]`
 - **Default:** `[]`
 
-Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance.
+Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance. These ports are selected when the server starts; restart the hosted server after changing them.
 
 ### `server.theme` {#server-theme}
 
@@ -1167,7 +1167,7 @@ Color theme for the hosted server UI.
 - **Type:** `string`
 - **Default:** `"127.0.0.1"`
 
-Network interface to bind the server to. Use '127.0.0.1' for localhost only or '0.0.0.0' for all interfaces.
+Network interface to bind the server to. Use '127.0.0.1' for localhost only or '0.0.0.0' for all interfaces. The address is selected when the server starts; restart the hosted server after changing it.
 
 ### `server.publicHostname` {#server-publichostname}
 
