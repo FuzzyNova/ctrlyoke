@@ -1572,6 +1572,43 @@ describe("hydrateLiveRunHistory activity reconciliation", () => {
     expect(structuredEventCount()).toBe(2);
   });
 
+  it("keeps a reconnect's buffered-output replay out of the activity batches", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    store().appendStreamingEvents(
+      0,
+      makeStreamedEvents(),
+      0,
+      0,
+      undefined,
+      200,
+      5
+    );
+    store().hydrateLiveRunHistory(makeHistory());
+
+    // `OutputCaptureBuffer.replayTo` overlays the in-flight attempt as one
+    // streaming aggregate, exactly as the CLI_OUTPUT handler files it.
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        isStreaming: true,
+        timestampMs: 150,
+        structured: { events: makeStreamedEvents(), metadata: {} },
+      }),
+      timestampMs: 150,
+      sequence: store().liveSequence,
+    });
+
+    expect(structuredEventCount()).toBe(2);
+    const liveEntry = store().liveOrderedEntries.find(
+      (entry): entry is OrderedCliHistoryEntry =>
+        entry.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    expect(liveEntry?.cliOutput.structured?.events).toHaveLength(2);
+  });
+
   it("does not re-append a status the durable timeline already holds", () => {
     const statusActivity = {
       timestampMs: 180,

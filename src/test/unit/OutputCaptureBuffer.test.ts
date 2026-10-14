@@ -14,7 +14,7 @@ import {
 } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
-import type { CliEvent } from "../../types/WebviewMessageTypes";
+import type { CliEvent, CliOutput } from "../../types/WebviewMessageTypes";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
@@ -22,8 +22,39 @@ import type { PromptStep } from "../../types/CtrlYokeTypes";
 const DASHBOARD_SINK_METHODS = {
   UPDATE_CLI_OUTPUT: "updateCliOutput",
   UPDATE_CLI_STREAMING_CHUNK: "updateCliStreamingChunk",
+  UPDATE_CLI_STREAMING_EVENTS: "updateCliStreamingEvents",
   UPDATE_RETRY_ATTEMPT: "updateRetryAttempt",
 } as const;
+
+/**
+ * An in-flight attempt replays as one streaming aggregate. A streaming delta
+ * here would carry no timeline sequence, so the dashboard would record it as a
+ * second copy of every batch the run-view snapshot already delivered.
+ */
+function assertNoStreamingDeltaReplay(
+  calls: Array<{ method: string; args: any[] }>
+): void {
+  assert.deepStrictEqual(
+    calls
+      .filter(
+        (c) =>
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_CHUNK ||
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_EVENTS
+      )
+      .map((c) => c.method),
+    []
+  );
+}
+
+function getReplayedStreamingOutput(
+  calls: Array<{ method: string; args: any[] }>
+): CliOutput | undefined {
+  return calls.find(
+    (c) =>
+      c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT &&
+      c.args[1]?.isStreaming
+  )?.args[1];
+}
 
 function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
   callbacks: OutputCaptureCallbacks;
@@ -277,11 +308,14 @@ suite("OutputCaptureBuffer", () => {
         streamingOutput!.args[1].cliCommand,
         "copilot --prompt foo"
       );
-      const chunkCall = calls.find(
-        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_CHUNK
+      assert.deepStrictEqual(
+        (streamingOutput!.args[1] as CliOutput).structured?.events,
+        [
+          { type: "tool_call", data: {} },
+          { type: CLI_EVENT_TYPES.TEXT, data: { text: "partial response" } },
+        ]
       );
-      assert.ok(chunkCall);
-      assert.strictEqual(chunkCall!.args[1], "partial response");
+      assertNoStreamingDeltaReplay(calls);
       const events = buffer.getBufferedOutput(0)?.structured?.events ?? [];
       assert.deepStrictEqual(
         events.map((event) => event.type),
@@ -367,11 +401,11 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const chunkCall = calls.find(
-        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_CHUNK
+      assert.deepStrictEqual(
+        getReplayedStreamingOutput(calls)?.structured?.events,
+        [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "hello world" } }]
       );
-      assert.ok(chunkCall);
-      assert.strictEqual(chunkCall!.args[1], "hello world");
+      assertNoStreamingDeltaReplay(calls);
     });
 
     test("should be a no-op if step was never initialized", () => {
@@ -414,11 +448,14 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const eventsCall = calls.find(
-        (c) => c.method === "updateCliStreamingEvents"
+      assert.deepStrictEqual(
+        getReplayedStreamingOutput(calls)?.structured?.events,
+        [
+          { ...event1, data: {} },
+          { ...event2, data: {} },
+        ]
       );
-      assert.ok(eventsCall);
-      assert.strictEqual(eventsCall!.args[1].length, 2);
+      assertNoStreamingDeltaReplay(calls);
     });
 
     test("should be a no-op if step was never initialized", () => {
@@ -1074,11 +1111,12 @@ suite("OutputCaptureBuffer", () => {
       assert.ok(!("prompt" in outputCall!.args[1]));
       assert.strictEqual(outputCall!.args[1].rawTextOutput, true);
 
-      const chunkCall = calls.find(
-        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_CHUNK
+      assert.deepStrictEqual(
+        (outputCall!.args[1] as CliOutput).structured?.events,
+        [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "partial data" } }],
+        "should replay accumulated text inside the streaming aggregate"
       );
-      assert.ok(chunkCall, "should replay accumulated text");
-      assert.strictEqual(chunkCall!.args[1], "partial data");
+      assertNoStreamingDeltaReplay(calls);
     });
 
     test("should NOT replay streaming buffer when status is not RUNNING", () => {

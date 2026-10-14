@@ -530,6 +530,19 @@ export class OutputCaptureBuffer {
     };
   }
 
+  /**
+   * An in-flight attempt's buffered output, replayed as one aggregate that
+   * *replaces* the client's copy of that attempt. Never replay it as streaming
+   * deltas: a delta carries no timeline sequence, so the client records it as
+   * a new activity batch alongside the sequenced batches the run-view snapshot
+   * already delivered, and the output pane renders the whole attempt twice.
+   */
+  private createStreamingReplayOutput(
+    buffer: StepOutputBufferEntry
+  ): CliOutput {
+    return { ...this.createBufferedOutput(buffer), isStreaming: true };
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Replay
   // ─────────────────────────────────────────────────────────────────────────
@@ -649,41 +662,10 @@ export class OutputCaptureBuffer {
 
         dashboardSink.updateCliOutput(
           stepIndex,
-          {
-            elapsed: 0,
-            tokens: undefined,
-            isStreaming: true,
-            cliCommand: buffer.cliCommand,
-            cliCommandWasInjected: buffer.cliCommandWasInjected,
-            workingDirectory: buffer.workingDirectory,
-            timestampMs: buffer.timestampMs,
-            attemptIndex: buffer.attemptIndex,
-            runIndex: buffer.runIndex,
-            rawTextOutput: buffer.rawTextOutput,
-          },
+          this.createStreamingReplayOutput(buffer),
           undefined,
           buffer.prompt
         );
-        if (buffer.accumulatedText) {
-          dashboardSink.updateCliStreamingChunk(
-            stepIndex,
-            buffer.accumulatedText,
-            undefined,
-            undefined,
-            buffer.timestampMs,
-            undefined,
-            buffer.attemptIndex,
-            buffer.runIndex
-          );
-        }
-        if (buffer.accumulatedEvents.length > 0) {
-          dashboardSink.updateCliStreamingEvents(
-            stepIndex,
-            buffer.accumulatedEvents,
-            buffer.attemptIndex,
-            buffer.runIndex
-          );
-        }
         // Replay the last known live context-window reading so the running
         // step's gauge is populated immediately, rather than staying empty
         // until the harness happens to report its next update.
@@ -706,35 +688,12 @@ export class OutputCaptureBuffer {
       const loopIndex = finalRuntime.loopCount;
       const buffer = this.finalStepOutputBuffer.get(loopIndex);
       if (buffer) {
-        const events = normalizeCliEvents(buffer.accumulatedEvents);
-        if (
-          buffer.accumulatedText &&
-          !events.some((event) => event.type === CLI_EVENT_TYPES.TEXT)
-        ) {
-          events.push({
-            type: CLI_EVENT_TYPES.TEXT,
-            data: { text: buffer.accumulatedText },
-          });
-        }
         Log.trace(
           `${instanceTag} replayFullStateTo: replaying finalStep loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
         );
         dashboardSink.updateFinalStepOutput(
           loopIndex,
-          {
-            structured:
-              events.length > 0 ? { events, metadata: {} } : undefined,
-            elapsed: 0,
-            tokens: undefined,
-            isStreaming: true,
-            cliCommand: buffer.cliCommand,
-            cliCommandWasInjected: buffer.cliCommandWasInjected,
-            workingDirectory: buffer.workingDirectory,
-            timestampMs: buffer.timestampMs,
-            attemptIndex: buffer.attemptIndex,
-            runIndex: buffer.runIndex,
-            rawTextOutput: buffer.rawTextOutput,
-          },
+          this.createStreamingReplayOutput(buffer),
           undefined,
           buffer.prompt
         );
