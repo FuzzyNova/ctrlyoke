@@ -116,7 +116,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
       onToggle={() => setFooterOpenPicker(isOpen ? null : "permissions")}
       onClose={() => setFooterOpenPicker(null)}
       title={`Permissions: ${valueLabel}`}
-      heading="Permissions"
+      heading="Permission Mode"
       popupMinWidth="220px"
       disabled={disabled}
       disabledReason={disabledReason}
