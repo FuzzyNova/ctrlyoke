@@ -5807,3 +5807,123 @@ describe("captureAndSendThemeVars theme kind", () => {
     expect(capturedThemeKind([])).toBe(THEME_KINDS.LIGHT);
   });
 });
+
+// Regression: the attempt's prompt reaches the output pane only through the
+// live entry. Every CLI output update after the first one (streamed batches,
+// the completed aggregate) arrives without it, so an update must never erase
+// a prompt the entry already holds.
+describe("attempt prompt on live CLI entries", () => {
+  const livePrompts = () =>
+    useWorkflowStore
+      .getState()
+      .liveOrderedEntries.map((entry) =>
+        entry.kind === OUTPUT_HISTORY_KINDS.CLI ? entry.prompt : undefined
+      );
+
+  it("keeps a queue step's prompt when its completed output replaces the placeholder", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Fix the bug")],
+      });
+      dispatch(MESSAGE_TYPES.CLI_OUTPUT, {
+        stepIndex: 0,
+        prompt: "Fix the bug",
+        output: {
+          elapsed: 0,
+          isStreaming: true,
+          timestampMs: 1000,
+          runIndex: 0,
+          attemptIndex: 0,
+        },
+      });
+      dispatch(MESSAGE_TYPES.CLI_OUTPUT, {
+        stepIndex: 0,
+        output: {
+          elapsed: 5,
+          isStreaming: false,
+          timestampMs: 1000,
+          runIndex: 0,
+          attemptIndex: 0,
+        },
+      });
+    });
+
+    expect(livePrompts()).toEqual(["Fix the bug"]);
+  });
+
+  it("keeps a finalStep pass's prompt when its completed output replaces the placeholder", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0")],
+        finalStep: makePrompt("Review everything"),
+      });
+      dispatch(MESSAGE_TYPES.FINAL_PROMPT_OUTPUT, {
+        loopIndex: 0,
+        prompt: "Review everything",
+        output: {
+          elapsed: 0,
+          isStreaming: true,
+          timestampMs: 1000,
+          runIndex: 0,
+          attemptIndex: 0,
+        },
+      });
+      dispatch(MESSAGE_TYPES.FINAL_PROMPT_OUTPUT, {
+        loopIndex: 0,
+        output: {
+          elapsed: 5,
+          isStreaming: false,
+          timestampMs: 1000,
+          runIndex: 0,
+          attemptIndex: 0,
+        },
+      });
+    });
+
+    expect(livePrompts()).toEqual(["Review everything"]);
+  });
+
+  it("keeps the prompt of a CLI-managed run's attempt across watch updates", () => {
+    renderHook(() => useMessageHandler());
+    const workflowId = "wf-watched";
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Fix the bug")],
+      });
+      useUiStore.setState({ activeWorkflowId: workflowId });
+      dispatch(MESSAGE_TYPES.CLI_WATCH_OUTPUT, {
+        workflowId,
+        stepIndex: 0,
+        prompt: "Fix the bug",
+        output: {
+          elapsed: 0,
+          isStreaming: true,
+          timestampMs: 1000,
+          runIndex: 0,
+          attemptIndex: 0,
+        },
+      });
+      dispatch(MESSAGE_TYPES.CLI_WATCH_OUTPUT, {
+        workflowId,
+        stepIndex: 0,
+        output: {
+          elapsed: 5,
+          isStreaming: false,
+          timestampMs: 1000,
+          runIndex: 0,
+          attemptIndex: 0,
+        },
+      });
+    });
+
+    expect(livePrompts()).toEqual(["Fix the bug"]);
+  });
+});

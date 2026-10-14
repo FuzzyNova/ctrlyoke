@@ -213,8 +213,13 @@ export class WorkflowTaggedSink implements IDashboardSink {
     );
   }
 
-  updateCliOutput(stepIndex: number, output: unknown): void {
-    this.inner.updateCliOutput(stepIndex, output, this.workflowId);
+  updateCliOutput(
+    stepIndex: number,
+    output: unknown,
+    _workflowId?: string,
+    prompt?: string
+  ): void {
+    this.inner.updateCliOutput(stepIndex, output, this.workflowId, prompt);
   }
 
   updateCliStreamingChunk(
@@ -347,8 +352,18 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateFinalStepStatus(status, loopCount, phase, this.workflowId);
   }
 
-  updateFinalStepOutput(loopIndex: number, output: unknown): void {
-    this.inner.updateFinalStepOutput(loopIndex, output, this.workflowId);
+  updateFinalStepOutput(
+    loopIndex: number,
+    output: unknown,
+    _workflowId?: string,
+    prompt?: string
+  ): void {
+    this.inner.updateFinalStepOutput(
+      loopIndex,
+      output,
+      this.workflowId,
+      prompt
+    );
   }
 
   updateFinalStepStreamingChunk(

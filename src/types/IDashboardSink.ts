@@ -113,10 +113,15 @@ export interface IDashboardSink {
     workflowId?: string
   ): void;
 
+  /**
+   * `prompt` is the attempt's prompt. Send it whenever it is known; an update
+   * without it keeps the prompt the dashboard already holds for the attempt.
+   */
   updateCliOutput(
     stepIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void;
 
   updateCliStreamingChunk(
@@ -204,10 +209,12 @@ export interface IDashboardSink {
     workflowId?: string
   ): void;
 
+  /** `prompt` follows the same rule as `updateCliOutput`'s. */
   updateFinalStepOutput(
     loopIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void;
 
   updateFinalStepStreamingChunk(

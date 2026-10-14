@@ -725,7 +725,7 @@ export const MESSAGE_TYPES = {
   THEME_VARS_CAPTURED: "themeVarsCaptured", // Webview captured CSS vars: { vars: Record<string, string> }
 
   // CLI Watch Mode — Extension → Webview
-  CLI_WATCH_OUTPUT: "cliWatchOutput", // Live output update from CLI-managed workflow: { workflowId, stepIndex, output }
+  CLI_WATCH_OUTPUT: "cliWatchOutput", // Live output update from CLI-managed workflow: { workflowId, stepIndex, output, prompt? }
 
   // Multi-workflow coordination — Webview → Extension
   GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]

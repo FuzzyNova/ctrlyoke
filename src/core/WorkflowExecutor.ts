@@ -3304,7 +3304,12 @@ export class WorkflowExecutor {
       if (signedStepIndex === undefined) {
         return placeholder;
       }
-      context.dashboardProvider?.updateCliOutput(signedStepIndex, placeholder);
+      context.dashboardProvider?.updateCliOutput(
+        signedStepIndex,
+        placeholder,
+        undefined,
+        prompt
+      );
       context.captureOutputInit?.(
         signedStepIndex,
         prompt,
@@ -3319,7 +3324,9 @@ export class WorkflowExecutor {
     } else {
       context.dashboardProvider?.updateFinalStepOutput(
         target.loopIndex,
-        placeholder
+        placeholder,
+        undefined,
+        prompt
       );
       context.captureFinalStepOutputInit?.(
         target.loopIndex,

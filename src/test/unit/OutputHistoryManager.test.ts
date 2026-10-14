@@ -262,6 +262,53 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     }
   });
 
+  // Regression: timeline v2 stopped writing `CliOutput.prompt`, and the
+  // dashboard's prompt row vanished because nothing else carried the prompt
+  // to it. `ATTEMPT_STARTED` is now the single record of it.
+  test("loads each attempt's ATTEMPT_STARTED prompt onto its history entry", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-attempt-prompt"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const output = (attemptIndex: number, isStreaming: boolean) => ({
+      elapsed: 0,
+      isStreaming,
+      timestampMs: 100 + attemptIndex,
+      runIndex: 0,
+      attemptIndex,
+      structured: { events: [], metadata: {} },
+    });
+
+    await manager.startStreamingExecutionOutput(
+      filePath,
+      target,
+      output(0, true),
+      undefined,
+      { kind: "ai", startReason: "initial", prompt: "Fix the bug" }
+    );
+    await manager.saveExecutionOutput(filePath, target, [output(0, false)]);
+    await manager.startStreamingExecutionOutput(
+      filePath,
+      target,
+      output(1, true),
+      undefined,
+      { kind: "ai", startReason: "retry", prompt: "Try again" }
+    );
+
+    const history = await manager.loadHistory(filePath);
+    const prompts = history.orderedEntries.map((entry) =>
+      entry.kind === OUTPUT_HISTORY_KINDS.CLI
+        ? [entry.attemptIndex, entry.prompt]
+        : undefined
+    );
+    assert.deepStrictEqual(prompts.filter(Boolean), [
+      [0, "Fix the bug"],
+      [1, "Try again"],
+    ]);
+  });
+
   test("persists replacement snapshots, preserves same-run history across reopen, and finalizes both copies", async () => {
     const { workflowKey, runRef, filePath } = await initTestRun(
       manager,

@@ -28,7 +28,7 @@ import {
   type ExecutionMode,
 } from "../../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
-import type { CliOutput } from "../../types/WebviewMessageTypes";
+import type { ReplayableAttemptOutput } from "../OutputCaptureBuffer";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { DefinitionRevisionContext } from "./OutputHistoryManager";
 import type { WorkspaceWorktreeResolution } from "../../utils/WorktreeResolution";
@@ -155,7 +155,7 @@ export interface WorkflowStartupExecutionPort {
   ) => void;
   readonly cacheHistoricalStepOutput?: (
     stepIndex: number,
-    outputs: readonly CliOutput[],
+    outputs: readonly ReplayableAttemptOutput[],
     retry?: { currentRetry: number; maxRetries: number }
   ) => void;
   readonly getStepBufferSize?: () => number;
@@ -1189,7 +1189,7 @@ export class WorkflowStartupPipeline {
       const history = await this.port.history.loadHistory(this.historyFilePath);
       const cliEntriesByStep = new Map<
         number,
-        Array<{ cliOutput: CliOutput; attemptIndex: number }>
+        Array<ReplayableAttemptOutput & { attemptIndex: number }>
       >();
       for (const entry of history.orderedEntries) {
         if (
@@ -1199,7 +1199,8 @@ export class WorkflowStartupPipeline {
           const stepIndex = entry.target.stepIndex;
           const entries = cliEntriesByStep.get(stepIndex) ?? [];
           entries.push({
-            cliOutput: entry.cliOutput,
+            output: entry.cliOutput,
+            prompt: entry.prompt,
             attemptIndex: entry.attemptIndex,
           });
           cliEntriesByStep.set(stepIndex, entries);
@@ -1213,7 +1214,7 @@ export class WorkflowStartupPipeline {
         );
         this.port.execution.cacheHistoricalStepOutput?.(
           i,
-          entries.map((entry) => entry.cliOutput),
+          entries.map(({ output, prompt }) => ({ output, prompt })),
           maxAttemptIndex > 0
             ? { currentRetry: maxAttemptIndex, maxRetries: maxAttemptIndex }
             : undefined

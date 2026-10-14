@@ -1567,6 +1567,7 @@ export function createMessageHandlers(
       attemptIndex: message.output.attemptIndex ?? 0,
       phase,
       cliOutput: message.output,
+      prompt: message.prompt,
       timestampMs: message.output.timestampMs ?? Date.now(),
       sequence: store.liveSequence,
     };
@@ -1631,6 +1632,7 @@ export function createMessageHandlers(
       attemptIndex: message.output.attemptIndex ?? 0,
       phase,
       cliOutput: message.output,
+      prompt: message.prompt,
       timestampMs: message.output.timestampMs ?? Date.now(),
       sequence: store.liveSequence,
     };
@@ -1764,6 +1766,7 @@ export function createMessageHandlers(
       // output overwrite the step's AI response.
       phase: getExecutionPhaseForScriptOutputSource(message.output.source),
       cliOutput: message.output,
+      prompt: message.prompt,
       timestampMs: message.output.timestampMs ?? Date.now(),
       sequence: store.liveSequence,
     };

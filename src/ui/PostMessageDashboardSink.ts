@@ -237,12 +237,14 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateCliOutput(
     stepIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.CLI_OUTPUT,
       stepIndex,
       output,
+      ...(prompt ? { prompt } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -428,12 +430,14 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateFinalStepOutput(
     loopIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.FINAL_PROMPT_OUTPUT,
       loopIndex,
       output,
+      ...(prompt ? { prompt } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }

@@ -791,8 +791,8 @@ describe("generateMarkdownExport", () => {
             target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
             timestamp: 1000,
             attemptIndex: 0,
+            prompt: "npm test",
             data: {
-              prompt: "npm test",
               cliCommand: "npm test",
               workingDirectory: "/workspace",
               source,
@@ -806,6 +806,33 @@ describe("generateMarkdownExport", () => {
       expect(md).not.toContain("### Prompt");
       expect(md).toContain("/workspace> npm test");
     }
+  });
+
+  // Regression: timeline v2 dropped `CliOutput.prompt`, and the export lost
+  // its Prompt section and prompt-derived step label along with it.
+  it("exports a harness attempt's prompt and labels an unnamed step from it", () => {
+    const md = generateMarkdownExport(
+      [
+        {
+          type: "cli" as const,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          prompt: "Fix the failing auth test please",
+          data: {
+            structured: {
+              events: [{ type: "text", data: { text: "Fixed." } }],
+              metadata: {},
+            },
+          },
+        },
+      ],
+      metadata
+    );
+
+    expect(md).toContain("## Step 1: Fix the failing auth");
+    expect(md).toContain("### Prompt");
+    expect(md).toContain("Fix the failing auth test please");
   });
 
   it("renders injected prompts in the command section using the injected text", () => {

@@ -600,6 +600,25 @@ function findMatchingCliEntryIndex(
   return findCliEntryIndexByIdentity(entries, getCliEntryIdentity(cliEntry));
 }
 
+/**
+ * A newer copy of the same attempt, updated in place. It keeps the persisted
+ * position and the prompt: only the attempt's opening update carries the
+ * prompt, so a later streaming or completed update must not erase it.
+ */
+function replaceCliEntry(
+  existing: OrderedHistoryEntry,
+  replacement: OrderedCliHistoryEntry
+): OrderedCliHistoryEntry {
+  const prompt =
+    replacement.prompt ??
+    (existing.kind === OUTPUT_HISTORY_KINDS.CLI ? existing.prompt : undefined);
+  return {
+    ...replacement,
+    ...(prompt !== undefined ? { prompt } : {}),
+    sequence: existing.sequence,
+  };
+}
+
 function activityEntryKey(entry: OutputActivityEntry): string {
   // Compose the canonical identity key rather than re-deriving its fields by
   // hand — a hand-rolled duplicate of the same format is exactly what let the
@@ -730,10 +749,10 @@ function overlayLiveHistoryEntries(
     if (overlayEntry.kind === OUTPUT_HISTORY_KINDS.CLI) {
       const matchingIdx = findMatchingCliEntryIndex(entries, overlayEntry);
       if (matchingIdx >= 0) {
-        entries[matchingIdx] = {
-          ...overlayEntry,
-          sequence: entries[matchingIdx].sequence,
-        };
+        entries[matchingIdx] = replaceCliEntry(
+          entries[matchingIdx],
+          overlayEntry
+        );
         continue;
       }
     }
@@ -1156,13 +1175,13 @@ export const useWorkflowStore = create<
               );
               if (matchingIdx >= 0) {
                 const newEntries = [...state.liveOrderedEntries];
-                newEntries[matchingIdx] = {
-                  ...entry,
-                  // An overlay updates the same logical attempt in place. Keep
-                  // its persisted position even though the replacement arrived
-                  // after the snapshot.
-                  sequence: newEntries[matchingIdx].sequence,
-                };
+                // An overlay updates the same logical attempt in place. Keep
+                // its persisted position even though the replacement arrived
+                // after the snapshot.
+                newEntries[matchingIdx] = replaceCliEntry(
+                  newEntries[matchingIdx],
+                  cliEntry
+                );
                 return {
                   liveOrderedEntries: newEntries,
                   liveSequence: state.liveSequence + 1,

@@ -61,7 +61,8 @@ export interface ExternalRunWatchBroadcast {
   notifyCliWatchOutput(
     workflowId: string,
     stepIndex: number,
-    output: CliOutput
+    output: CliOutput,
+    prompt?: string
   ): void;
   notifyCliPromptsExtended(
     workflowId: string,
@@ -753,7 +754,12 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
               stepIndex: number;
             }
           ).stepIndex;
-          sink.updateCliOutput(stepIndex, entry.cliOutput as CliOutput);
+          sink.updateCliOutput(
+            stepIndex,
+            entry.cliOutput as CliOutput,
+            undefined,
+            entry.prompt
+          );
         }
       }
     } catch (err) {
@@ -828,7 +834,12 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       const signature = getCliOutputSignature(output);
       if (!entry.session.shouldBroadcastOutput(entryKey, signature)) continue;
       if (this.externalRunSessions.get(workflowId) !== entry) return;
-      this.host.broadcast.notifyCliWatchOutput(workflowId, stepIndex, output);
+      this.host.broadcast.notifyCliWatchOutput(
+        workflowId,
+        stepIndex,
+        output,
+        historyEntry.prompt
+      );
     }
   }
 

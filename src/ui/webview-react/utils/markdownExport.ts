@@ -97,6 +97,8 @@ interface MarkdownExportItem {
   timestamp: number;
   sequence?: number;
   data: unknown;
+  /** The attempt's prompt (see `OutputMessage.prompt`). */
+  prompt?: string;
   attemptIndex?: number;
   runIndex?: number;
   /** User-defined step name (undefined when none set) */
@@ -476,8 +478,6 @@ export function generateMarkdownExport(
       lines.push("");
     } else if (item.type === OUTPUT_MESSAGE_TYPES.CLI) {
       const output = item.data as {
-        prompt?: string;
-        response?: string;
         cliCommand?: string;
         cliCommandWasInjected?: boolean;
         workingDirectory?: string;
@@ -508,11 +508,20 @@ export function generateMarkdownExport(
         const isScript = isScriptOutput(output);
         const stepDisplayName =
           item.stepName ||
-          (isScript ? getFirstWords(output.cliCommand, 3) : "");
+          (isScript
+            ? getFirstWords(output.cliCommand, 3)
+            : getFirstWords(item.prompt, 4));
         const stepLabel = isFinalStep
           ? `${formatFinalPassLabel(stepNum)}${item.stepName ? `: ${item.stepName}` : ""}`
           : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
         lines.push(`## ${stepLabel} — ${executionLabel}`);
+        lines.push("");
+      }
+
+      if (item.prompt && !isScriptOutput(output)) {
+        if (includeMetadata) lines.push("### Prompt");
+        lines.push("");
+        lines.push(fenceLiteral(item.prompt));
         lines.push("");
       }
 
@@ -626,7 +635,8 @@ export function generateMarkdownExport(
 /** Generate the complete, metadata-free export for one step/pass. */
 export function generateSingleStepMarkdownExport(
   output: CliOutputType,
-  target: OutputMessageTarget
+  target: OutputMessageTarget,
+  prompt?: string
 ): string {
   return generateMarkdownExport(
     [
@@ -635,6 +645,7 @@ export function generateSingleStepMarkdownExport(
         target,
         timestamp: output.timestampMs ?? 0,
         data: output,
+        prompt,
       },
     ],
     { fileName: "", executionState: "", currentStep: 0, totalSteps: 0 },

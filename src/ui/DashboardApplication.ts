@@ -277,13 +277,15 @@ export class DashboardApplication
   notifyCliWatchOutput(
     workflowId: string,
     stepIndex: number,
-    output: CliOutput
+    output: CliOutput,
+    prompt?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
       workflowId,
       stepIndex,
       output,
+      ...(prompt ? { prompt } : {}),
     });
   }
 

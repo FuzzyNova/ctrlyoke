@@ -55,6 +55,7 @@ describe("outputRows", () => {
             timestamp: 1000,
             attemptIndex: 0,
             runIndex: 0,
+            prompt: "Run the suite",
             data: {
               cliCommand: "npm test",
               structured: {
@@ -104,7 +105,195 @@ describe("outputRows", () => {
             row.rowKind.includes("command")
         )
         .map((row) => row.rowKind)
-    ).toEqual([OUTPUT_ROW_KINDS.CLI_COMMAND]);
+    ).toEqual([OUTPUT_ROW_KINDS.PROMPT, OUTPUT_ROW_KINDS.CLI_COMMAND]);
+  });
+
+  // Regression: the timeline-v2 migration dropped `CliOutput.prompt` and the
+  // prompt row went with it, leaving every attempt as header + command only.
+  // The prompt now travels on the attempt's history entry, so these tests
+  // drive the real projection (`mapOrderedHistoryEntriesToMessages`) rather
+  // than hand-built messages.
+  describe("prompt row", () => {
+    const queueTarget = {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 0,
+    } as const;
+
+    const buildRowsFor = (
+      allMessages: OutputMessage[],
+      finalStep: WorkflowStep | null = null
+    ) =>
+      buildOutputRows({
+        allMessages,
+        steps,
+        finalStep,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+      }).rows;
+
+    const leadingChrome = (rows: ReturnType<typeof buildRowsFor>) =>
+      rows
+        .filter(
+          (row) =>
+            row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER ||
+            row.rowKind === OUTPUT_ROW_KINDS.PROMPT ||
+            row.rowKind === OUTPUT_ROW_KINDS.CLI_COMMAND
+        )
+        .map((row) =>
+          row.rowKind === OUTPUT_ROW_KINDS.PROMPT
+            ? `${row.rowKind}:${row.text}`
+            : row.rowKind
+        );
+
+    it("shows a completed attempt's prompt between its header and command", () => {
+      const rows = buildRowsFor(
+        mapOrderedHistoryEntriesToMessages([
+          {
+            kind: "cli",
+            target: queueTarget,
+            runIndex: 0,
+            attemptIndex: 0,
+            prompt: "Fix the failing test",
+            cliOutput: {
+              cliCommand: "claude -p",
+              structured: {
+                events: [
+                  { type: CLI_EVENT_TYPES.TEXT, data: { text: "Done" } },
+                ],
+                metadata: {},
+              },
+              elapsed: 1,
+              isStreaming: false,
+            },
+            timestampMs: 1000,
+            sequence: 1,
+          },
+        ])
+      );
+
+      expect(leadingChrome(rows)).toEqual([
+        OUTPUT_ROW_KINDS.CLI_HEADER,
+        `${OUTPUT_ROW_KINDS.PROMPT}:Fix the failing test`,
+        OUTPUT_ROW_KINDS.CLI_COMMAND,
+      ]);
+    });
+
+    it("shows the prompt exactly once for an attempt rendered from streamed slices", () => {
+      // A live attempt renders from its activity slices, not its aggregate;
+      // the prompt must still open the attempt, once.
+      const rows = buildRowsFor(
+        mapOrderedHistoryEntriesToMessages(
+          [
+            {
+              kind: "cli",
+              target: queueTarget,
+              runIndex: 0,
+              attemptIndex: 0,
+              prompt: "Summarize the plan",
+              cliOutput: {
+                cliCommand: "claude -p",
+                elapsed: 0,
+                isStreaming: true,
+                timestampMs: 1000,
+              },
+              timestampMs: 1000,
+              sequence: 1,
+            },
+          ],
+          [1001, 1002].map((timestampMs, index) => ({
+            timestampMs,
+            sequence: index + 2,
+            target: queueTarget,
+            runIndex: 0,
+            attemptIndex: 0,
+            kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+            events: [
+              {
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                data: { command: `echo ${index}`, output: `${index}` },
+              },
+            ],
+          }))
+        )
+      );
+
+      expect(leadingChrome(rows)).toEqual([
+        OUTPUT_ROW_KINDS.CLI_HEADER,
+        `${OUTPUT_ROW_KINDS.PROMPT}:Summarize the plan`,
+        OUTPUT_ROW_KINDS.CLI_COMMAND,
+      ]);
+    });
+
+    it("shows each finalStep pass's prompt", () => {
+      const rows = buildRowsFor(
+        mapOrderedHistoryEntriesToMessages([
+          {
+            kind: "cli",
+            target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+            runIndex: 0,
+            attemptIndex: 0,
+            prompt: "Review everything",
+            cliOutput: {
+              structured: {
+                events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "ok" } }],
+                metadata: {},
+              },
+              elapsed: 1,
+              isStreaming: false,
+            },
+            timestampMs: 1000,
+            sequence: 1,
+          },
+        ]),
+        { name: "Review", prompt: "Review everything" } as WorkflowStep
+      );
+
+      expect(
+        rows
+          .filter((row) => row.rowKind === OUTPUT_ROW_KINDS.PROMPT)
+          .map((row) =>
+            row.rowKind === OUTPUT_ROW_KINDS.PROMPT ? row.text : undefined
+          )
+      ).toEqual(["Review everything"]);
+    });
+
+    it("does not show a prompt row for a script attempt", () => {
+      const rows = buildRowsFor(
+        mapOrderedHistoryEntriesToMessages([
+          {
+            kind: "cli",
+            target: queueTarget,
+            runIndex: 0,
+            attemptIndex: 0,
+            phase: EXECUTION_PHASES.PRE_CONDITION,
+            prompt: "npm test",
+            cliOutput: {
+              cliCommand: "npm test",
+              source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+              elapsed: 1,
+              isStreaming: false,
+            },
+            timestampMs: 1000,
+            sequence: 1,
+          },
+        ])
+      );
+
+      expect(
+        rows.filter((row) => row.rowKind === OUTPUT_ROW_KINDS.PROMPT)
+      ).toEqual([]);
+    });
   });
 
   it("collapses retry attempts into an explicitly labelled aggregate", () => {

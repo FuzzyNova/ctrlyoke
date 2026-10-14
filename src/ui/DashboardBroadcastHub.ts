@@ -110,10 +110,11 @@ export class DashboardBroadcastHub
   notifyCliWatchOutput(
     workflowId: string,
     stepIndex: number,
-    output: CliOutput
+    output: CliOutput,
+    prompt?: string
   ): void {
     for (const client of this.clients) {
-      client.notifyCliWatchOutput(workflowId, stepIndex, output);
+      client.notifyCliWatchOutput(workflowId, stepIndex, output, prompt);
     }
   }
 
@@ -287,10 +288,11 @@ export class DashboardBroadcastHub
   updateCliOutput(
     stepIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
     for (const client of this.clients) {
-      client.updateCliOutput?.(stepIndex, output, workflowId);
+      client.updateCliOutput?.(stepIndex, output, workflowId, prompt);
     }
   }
 
@@ -459,10 +461,11 @@ export class DashboardBroadcastHub
   updateFinalStepOutput(
     loopIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
     for (const client of this.clients) {
-      client.updateFinalStepOutput?.(loopIndex, output, workflowId);
+      client.updateFinalStepOutput?.(loopIndex, output, workflowId, prompt);
     }
   }
 

@@ -771,15 +771,18 @@ suite("WorkflowInstance finalStep replay", () => {
     (instance as any).outputCaptureBuffer.finalStepCompletedOutputs.set(0, {
       outputs: [
         {
-          structured: {
-            events: [
-              { type: "text", data: { text: "completed-final-output" } },
-            ],
-            metadata: {},
+          output: {
+            structured: {
+              events: [
+                { type: "text", data: { text: "completed-final-output" } },
+              ],
+              metadata: {},
+            },
+            elapsed: 1.2,
+            isStreaming: false,
+            attemptIndex: 0,
           },
-          elapsed: 1.2,
-          isStreaming: false,
-          attemptIndex: 0,
+          prompt: "final-loop",
         },
       ],
     });

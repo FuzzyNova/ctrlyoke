@@ -111,6 +111,7 @@ export function useOutputContextMenu({
       let hoveredOutputText: string | undefined;
       let hoveredOutput: CliOutputType | undefined;
       let hoveredTarget: OutputMessage["target"] | undefined;
+      let hoveredPrompt: string | undefined;
       if (hoveredStepKey) {
         const lastCliIdx = lastCliIndexPerStep.get(hoveredStepKey);
         if (lastCliIdx !== undefined) {
@@ -118,6 +119,7 @@ export function useOutputContextMenu({
           if (msg?.type === OUTPUT_MESSAGE_TYPES.CLI) {
             hoveredOutput = msg.data as CliOutputType;
             hoveredTarget = msg.target;
+            hoveredPrompt = msg.prompt;
             hoveredOutputText = getStepAssistantTextForCopy(hoveredOutput);
           }
         }
@@ -185,7 +187,11 @@ export function useOutputContextMenu({
             onClick: () => {
               if (!hoveredOutput || !hoveredTarget) return;
               void writeClipboardText(
-                generateSingleStepMarkdownExport(hoveredOutput, hoveredTarget)
+                generateSingleStepMarkdownExport(
+                  hoveredOutput,
+                  hoveredTarget,
+                  hoveredPrompt
+                )
               );
             },
           },

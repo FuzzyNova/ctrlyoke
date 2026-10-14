@@ -618,6 +618,75 @@ suite("OutputCaptureBuffer", () => {
       assert.strictEqual(outputCalls.length, 2, "should replay both attempts");
     });
 
+    // Regression: `CliOutput` no longer carries the prompt, so a replay that
+    // forwards only the output leaves every replayed attempt without its
+    // prompt row after a workflow switch.
+    test("replays each attempt's prompt alongside its in-flight and completed output", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+      const init = (stepIndex: number, prompt: string) =>
+        buffer.captureOutputInit(
+          stepIndex,
+          prompt,
+          undefined,
+          undefined,
+          "/repo",
+          1000,
+          0,
+          undefined
+        );
+
+      init(0, "First prompt");
+      buffer.captureCompletedOutput(0, { elapsed: 1, attemptIndex: 0 });
+      init(1, "Second prompt");
+      buffer.captureFinalStepOutputInit(
+        0,
+        "Final prompt",
+        undefined,
+        undefined,
+        "/repo",
+        2000,
+        0,
+        undefined
+      );
+      buffer.captureFinalStepCompletedOutput(0, {
+        elapsed: 1,
+        attemptIndex: 0,
+      });
+      buffer.captureFinalStepOutputInit(
+        1,
+        "Next pass prompt",
+        undefined,
+        undefined,
+        "/repo",
+        3000,
+        0,
+        undefined
+      );
+
+      const { sink, calls } = makeDashboardSink();
+      buffer.replayTo(
+        sink,
+        { status: EXECUTION_STATES.RUNNING, currentIndex: 1 },
+        { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 1 },
+        "tag"
+      );
+
+      const promptsByCall = calls
+        .filter(
+          (c) =>
+            c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT ||
+            c.method === "updateFinalStepOutput"
+        )
+        .map((c) => `${c.method}:${c.args[0]}:${c.args[3]}`);
+      assert.deepStrictEqual(promptsByCall, [
+        "updateCliOutput:0:First prompt",
+        "updateFinalStepOutput:0:Final prompt",
+        "updateCliOutput:1:Second prompt",
+        "updateFinalStepOutput:1:Next pass prompt",
+      ]);
+    });
+
     test("replays the effective retryState recorded by the runtime", () => {
       const promptStep: Partial<PromptStep> = {
         endCondition: { maxRetries: 3 } as any,
@@ -832,8 +901,10 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.cacheHistoricalStepOutput(0, [{ response: "old" }]);
-      buffer.cacheHistoricalStepOutput(1, [{ response: "old2" }]);
+      buffer.cacheHistoricalStepOutput(0, [
+        { output: { elapsed: 1 }, prompt: "Old prompt" },
+      ]);
+      buffer.cacheHistoricalStepOutput(1, [{ output: { elapsed: 2 } }]);
 
       const { sink, calls } = makeDashboardSink();
       buffer.replayTo(
@@ -845,7 +916,13 @@ suite("OutputCaptureBuffer", () => {
       const outputCalls = calls.filter(
         (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT
       );
-      assert.strictEqual(outputCalls.length, 2);
+      assert.deepStrictEqual(
+        outputCalls.map((c) => [c.args[0], c.args[1], c.args[3]]),
+        [
+          [0, { elapsed: 1 }, "Old prompt"],
+          [1, { elapsed: 2 }, undefined],
+        ]
+      );
     });
 
     test("should include retryState when provided", () => {
@@ -854,7 +931,7 @@ suite("OutputCaptureBuffer", () => {
 
       buffer.cacheHistoricalStepOutput(
         0,
-        [{ response: "r0" }, { response: "r1" }],
+        [{ output: { attemptIndex: 0 } }, { output: { attemptIndex: 1 } }],
         { currentRetry: 1, maxRetries: 2 }
       );
 

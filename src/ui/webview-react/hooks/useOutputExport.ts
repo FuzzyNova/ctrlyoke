@@ -113,6 +113,7 @@ export function useOutputExport({
         timestamp: msg.timestamp,
         sequence: msg.sequence,
         data: msg.data,
+        prompt: msg.prompt,
         attemptIndex: msg.attemptIndex,
         runIndex: msg.runIndex,
         stepName:

@@ -33,6 +33,8 @@ export interface OutputMessage {
   timestamp: number;
   sequence?: number;
   data: OutputStatusMessage | CliOutput;
+  /** The attempt's prompt, carried from its CLI history entry. */
+  prompt?: string;
   attemptIndex?: number;
   runIndex?: number;
   phase?: ExecutionPhase;
@@ -219,6 +221,7 @@ export function mapOrderedHistoryEntriesToMessages(
           timestamp: entry.timestampMs,
           sequence: entry.sequence,
           data: entry.cliOutput,
+          prompt: entry.prompt,
           attemptIndex: entry.attemptIndex,
           runIndex: entryIdentity.runIndex,
           phase: entry.phase,
@@ -235,6 +238,7 @@ export function mapOrderedHistoryEntriesToMessages(
           // chronological position while projecting the newest payload.
           aggregateMessages[existingIndex] = {
             ...message,
+            prompt: message.prompt ?? existing.prompt,
             timestamp: existing.timestamp,
             sequence: existing.sequence,
           };
@@ -297,6 +301,7 @@ export function mapOrderedHistoryEntriesToMessages(
     if (existing) {
       existing.activityText = `${existing.activityText ?? ""}${activity.text ?? ""}`;
       existing.aggregate = aggregate?.data as CliOutput | undefined;
+      existing.prompt = aggregate?.prompt;
       continue;
     }
 
@@ -328,6 +333,7 @@ export function mapOrderedHistoryEntriesToMessages(
               runIndex: activity.runIndex,
               attemptIndex: activity.attemptIndex,
             }),
+      prompt: aggregate?.prompt,
       attemptIndex: activity.attemptIndex,
       runIndex: activity.runIndex,
       phase: activity.phase,

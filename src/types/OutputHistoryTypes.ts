@@ -39,6 +39,12 @@ export interface OrderedCliHistoryEntry extends OrderedHistoryEntryBase {
   /** Execution phase; absent is the default prompt phase. */
   phase?: ExecutionPhase;
   cliOutput: CliOutput;
+  /**
+   * The prompt this attempt sent, from its `ATTEMPT_STARTED` event. It lives
+   * on the attempt rather than in `cliOutput` because the timeline records it
+   * once per attempt; live updates that omit it keep the one already held.
+   */
+  prompt?: string;
 }
 
 export interface OrderedStatusHistoryEntry extends OrderedHistoryEntryBase {

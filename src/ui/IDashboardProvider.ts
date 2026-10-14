@@ -38,7 +38,8 @@ export interface IDashboardProvider {
   notifyCliWatchOutput(
     workflowId: string,
     stepIndex: number,
-    output: CliOutput
+    output: CliOutput,
+    prompt?: string
   ): void;
 
   /** Notify that a CLI-managed workflow dynamically extended its queue. */

@@ -109,8 +109,29 @@ function getAccumulatedOutput(
     : { accumulatedText: "", accumulatedEvents: [] };
 }
 
+/** The prompt of the streaming attempt that `output` completes, if it is that attempt. */
+function getStreamingPrompt(
+  streaming: StepOutputBufferEntry | undefined,
+  output: { attemptIndex?: number; runIndex?: number }
+): string | undefined {
+  return streaming?.attemptIndex === (output.attemptIndex ?? 0) &&
+    streaming.runIndex === (output.runIndex ?? 0)
+    ? streaming.prompt || undefined
+    : undefined;
+}
+
+/**
+ * One completed attempt held for replay. The prompt rides beside the output
+ * because `CliOutput` no longer carries it; without it a replayed attempt
+ * would render with no prompt row.
+ */
+export interface ReplayableAttemptOutput {
+  output: any;
+  prompt?: string;
+}
+
 interface CompletedStepEntry {
-  outputs: any[];
+  outputs: ReplayableAttemptOutput[];
   retryState?: { currentRetry: number; maxRetries: number };
 }
 
@@ -180,7 +201,7 @@ export class OutputCaptureBuffer {
   /** Completed outputs keyed by finalStep loopIndex. */
   private readonly finalStepCompletedOutputs = new Map<
     number,
-    { outputs: any[] }
+    { outputs: ReplayableAttemptOutput[] }
   >();
 
   /** Buffered status messages keyed by finalStep loopIndex. */
@@ -322,10 +343,14 @@ export class OutputCaptureBuffer {
   captureCompletedOutput(stepIndex: number, output: any): void {
     const existing = this.completedStepOutputs.get(stepIndex);
     const attemptIndex = output.attemptIndex ?? 0;
+    const completed = {
+      output,
+      prompt: getStreamingPrompt(this.stepOutputBuffer.get(stepIndex), output),
+    };
     if (existing) {
-      existing.outputs.push(output);
+      existing.outputs.push(completed);
     } else {
-      this.completedStepOutputs.set(stepIndex, { outputs: [output] });
+      this.completedStepOutputs.set(stepIndex, { outputs: [completed] });
     }
     Log.trace(
       `${this.instanceTag} captureCompletedOutput: step ${stepIndex} attempt ${attemptIndex}, total outputs=${this.completedStepOutputs.get(stepIndex)!.outputs.length}, retryState=${JSON.stringify(this.completedStepOutputs.get(stepIndex)!.retryState ?? null)}`
@@ -429,10 +454,17 @@ export class OutputCaptureBuffer {
 
   captureFinalStepCompletedOutput(loopIndex: number, output: any): void {
     const existing = this.finalStepCompletedOutputs.get(loopIndex);
+    const completed = {
+      output,
+      prompt: getStreamingPrompt(
+        this.finalStepOutputBuffer.get(loopIndex),
+        output
+      ),
+    };
     if (existing) {
-      existing.outputs.push(output);
+      existing.outputs.push(completed);
     } else {
-      this.finalStepCompletedOutputs.set(loopIndex, { outputs: [output] });
+      this.finalStepCompletedOutputs.set(loopIndex, { outputs: [completed] });
     }
     this.finalStepOutputBuffer.delete(loopIndex);
     this.finalStepContextWindowBuffer.delete(loopIndex);
@@ -466,7 +498,7 @@ export class OutputCaptureBuffer {
    */
   cacheHistoricalStepOutput(
     stepIndex: number,
-    outputs: any[],
+    outputs: ReplayableAttemptOutput[],
     retryState?: { currentRetry: number; maxRetries: number }
   ): void {
     this.completedStepOutputs.set(stepIndex, { outputs, retryState });
@@ -533,8 +565,8 @@ export class OutputCaptureBuffer {
             entry.retryState.maxRetries
           );
         }
-        for (const output of entry.outputs) {
-          dashboardSink.updateCliOutput(stepIndex, output);
+        for (const { output, prompt } of entry.outputs) {
+          dashboardSink.updateCliOutput(stepIndex, output, undefined, prompt);
         }
       }
     }
@@ -545,8 +577,13 @@ export class OutputCaptureBuffer {
         Log.trace(
           `${instanceTag} replayFullStateTo: replaying finalStep loop ${loopIndex} (${entry.outputs.length} attempt(s))`
         );
-        for (const output of entry.outputs) {
-          dashboardSink.updateFinalStepOutput(loopIndex, output);
+        for (const { output, prompt } of entry.outputs) {
+          dashboardSink.updateFinalStepOutput(
+            loopIndex,
+            output,
+            undefined,
+            prompt
+          );
         }
       }
     }
@@ -610,18 +647,23 @@ export class OutputCaptureBuffer {
           }
         }
 
-        dashboardSink.updateCliOutput(stepIndex, {
-          elapsed: 0,
-          tokens: undefined,
-          isStreaming: true,
-          cliCommand: buffer.cliCommand,
-          cliCommandWasInjected: buffer.cliCommandWasInjected,
-          workingDirectory: buffer.workingDirectory,
-          timestampMs: buffer.timestampMs,
-          attemptIndex: buffer.attemptIndex,
-          runIndex: buffer.runIndex,
-          rawTextOutput: buffer.rawTextOutput,
-        });
+        dashboardSink.updateCliOutput(
+          stepIndex,
+          {
+            elapsed: 0,
+            tokens: undefined,
+            isStreaming: true,
+            cliCommand: buffer.cliCommand,
+            cliCommandWasInjected: buffer.cliCommandWasInjected,
+            workingDirectory: buffer.workingDirectory,
+            timestampMs: buffer.timestampMs,
+            attemptIndex: buffer.attemptIndex,
+            runIndex: buffer.runIndex,
+            rawTextOutput: buffer.rawTextOutput,
+          },
+          undefined,
+          buffer.prompt
+        );
         if (buffer.accumulatedText) {
           dashboardSink.updateCliStreamingChunk(
             stepIndex,
@@ -677,19 +719,25 @@ export class OutputCaptureBuffer {
         Log.trace(
           `${instanceTag} replayFullStateTo: replaying finalStep loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
         );
-        dashboardSink.updateFinalStepOutput(loopIndex, {
-          structured: events.length > 0 ? { events, metadata: {} } : undefined,
-          elapsed: 0,
-          tokens: undefined,
-          isStreaming: true,
-          cliCommand: buffer.cliCommand,
-          cliCommandWasInjected: buffer.cliCommandWasInjected,
-          workingDirectory: buffer.workingDirectory,
-          timestampMs: buffer.timestampMs,
-          attemptIndex: buffer.attemptIndex,
-          runIndex: buffer.runIndex,
-          rawTextOutput: buffer.rawTextOutput,
-        });
+        dashboardSink.updateFinalStepOutput(
+          loopIndex,
+          {
+            structured:
+              events.length > 0 ? { events, metadata: {} } : undefined,
+            elapsed: 0,
+            tokens: undefined,
+            isStreaming: true,
+            cliCommand: buffer.cliCommand,
+            cliCommandWasInjected: buffer.cliCommandWasInjected,
+            workingDirectory: buffer.workingDirectory,
+            timestampMs: buffer.timestampMs,
+            attemptIndex: buffer.attemptIndex,
+            runIndex: buffer.runIndex,
+            rawTextOutput: buffer.rawTextOutput,
+          },
+          undefined,
+          buffer.prompt
+        );
       }
       const contextWindow = this.finalStepContextWindowBuffer.get(loopIndex);
       if (contextWindow) {

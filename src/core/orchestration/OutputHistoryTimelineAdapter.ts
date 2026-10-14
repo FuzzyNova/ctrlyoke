@@ -184,6 +184,12 @@ export class OutputHistoryTimelineAdapter {
       NonNullable<CliOutput["scriptOutput"]>
     >();
     /**
+     * Each attempt's prompt, keyed like its CLI entry. `ATTEMPT_STARTED` is
+     * the only record of it; the latest start of an attempt wins, matching
+     * `RunOutputResolver`.
+     */
+    const attemptPrompts = new Map<string, string>();
+    /**
      * Attempts whose completed aggregate has already been projected. The final
      * `cliOutputRecorded` carries the attempt's *start* timestamp, so it sorts
      * ahead of the streamed deltas it supersedes. Without this seal those
@@ -221,6 +227,19 @@ export class OutputHistoryTimelineAdapter {
             sequence: event.sequence,
             transition: event.payload.transition,
           });
+          break;
+        case TIMELINE_EVENT_TYPES.ATTEMPT_STARTED:
+          if (event.payload.prompt) {
+            attemptPrompts.set(
+              getCliEntryKey(
+                event.target,
+                event.runIndex,
+                event.attemptIndex,
+                event.phase
+              ),
+              event.payload.prompt
+            );
+          }
           break;
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED: {
           const runIndex = event.runIndex ?? 0;
@@ -338,6 +357,10 @@ export class OutputHistoryTimelineAdapter {
       const scriptOutput = scriptOutputs.get(key);
       if (scriptOutput) {
         entry.cliOutput = { ...entry.cliOutput, scriptOutput };
+      }
+      const prompt = attemptPrompts.get(key);
+      if (prompt) {
+        entry.prompt = prompt;
       }
     }
 

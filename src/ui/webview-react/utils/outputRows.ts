@@ -2644,6 +2644,16 @@ export function buildOutputRows(
       output = activityOutput;
     }
 
+    if (emitsLeadingChrome && message.prompt && !scriptish) {
+      rows.push({
+        key: `${attemptRowKeyBase}:prompt`,
+        rowKind: OUTPUT_ROW_KINDS.PROMPT,
+        target,
+        text: message.prompt,
+        estimateSize: 36,
+      });
+    }
+
     if (emitsLeadingChrome && output.cliCommand) {
       rows.push({
         key: `${attemptRowKeyBase}:command`,

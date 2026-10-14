@@ -576,9 +576,10 @@ export class CtrlYokeWebviewProvider
   public updateCliOutput(
     stepIndex: number,
     output: CliOutput,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
-    this.sink.updateCliOutput(stepIndex, output, workflowId);
+    this.sink.updateCliOutput(stepIndex, output, workflowId, prompt);
   }
   public updateCliStreamingChunk(
     stepIndex: number,
@@ -720,9 +721,10 @@ export class CtrlYokeWebviewProvider
   public updateFinalStepOutput(
     loopIndex: number,
     output: CliOutput,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
-    this.sink.updateFinalStepOutput(loopIndex, output, workflowId);
+    this.sink.updateFinalStepOutput(loopIndex, output, workflowId, prompt);
   }
   public updateFinalStepStreamingChunk(
     loopIndex: number,
@@ -846,13 +848,15 @@ export class CtrlYokeWebviewProvider
   public notifyCliWatchOutput(
     workflowId: string,
     stepIndex: number,
-    output: CliOutput
+    output: CliOutput,
+    prompt?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
       workflowId,
       stepIndex,
       output,
+      ...(prompt ? { prompt } : {}),
     });
   }
 

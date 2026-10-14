@@ -695,13 +695,15 @@ export class CtrlYokeHostedServer
   notifyCliWatchOutput(
     workflowId: string,
     stepIndex: number,
-    output: CliOutput
+    output: CliOutput,
+    prompt?: string
   ): void {
     this.broadcast({
       type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
       workflowId,
       stepIndex,
       output,
+      ...(prompt ? { prompt } : {}),
     });
   }
 
@@ -918,9 +920,10 @@ export class CtrlYokeHostedServer
   updateCliOutput(
     stepIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
-    this.sink.updateCliOutput(stepIndex, output, workflowId);
+    this.sink.updateCliOutput(stepIndex, output, workflowId, prompt);
   }
   updateCliStreamingChunk(
     stepIndex: number,
@@ -1057,9 +1060,10 @@ export class CtrlYokeHostedServer
   updateFinalStepOutput(
     loopIndex: number,
     output: unknown,
-    workflowId?: string
+    workflowId?: string,
+    prompt?: string
   ): void {
-    this.sink.updateFinalStepOutput(loopIndex, output, workflowId);
+    this.sink.updateFinalStepOutput(loopIndex, output, workflowId, prompt);
   }
   updateFinalStepStreamingChunk(
     loopIndex: number,

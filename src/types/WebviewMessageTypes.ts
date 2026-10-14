@@ -807,6 +807,8 @@ export interface CliOutputMessage {
   type: typeof MESSAGE_TYPES.CLI_OUTPUT;
   stepIndex: number;
   output: CliOutput;
+  /** The attempt's prompt; sent when known and kept by updates that omit it. */
+  prompt?: string;
 }
 
 /**
@@ -980,6 +982,8 @@ export interface FinalStepOutputMessage {
   type: typeof MESSAGE_TYPES.FINAL_PROMPT_OUTPUT;
   loopIndex: number;
   output: CliOutput;
+  /** The pass's prompt; sent when known and kept by updates that omit it. */
+  prompt?: string;
 }
 
 /**
