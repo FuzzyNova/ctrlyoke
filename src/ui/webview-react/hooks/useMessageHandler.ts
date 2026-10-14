@@ -72,10 +72,11 @@ import { useBatchApprovalStore } from "../store/batchApprovalStore";
 import { useChoiceStore } from "../store/choiceStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
+import { drainPanelInboundBuffer } from "./panelInboundBuffer";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
 import {
-  clearPanelReconnectReloadWatchdog,
-  schedulePanelReconnectReloadWatchdog,
+  clearPanelReconnectWatchdog,
+  schedulePanelReconnectWatchdog,
 } from "./reconnectWatchdog";
 import {
   getNotificationSeverityColor,
@@ -862,15 +863,12 @@ export function createMessageHandlers(
       startupReady: false,
       myClientId: "",
     });
-    // For a full window reload VS Code restarts the renderer and (on some builds)
-    // preserves the webview process. Scheduling a self-reload watchdog here causes
-    // window.location.reload() to fire ~1.5 s into the reload sequence — before
-    // resolveWebviewView() has set fresh HTML — which corrupts the acquireVsCodeApi()
-    // lifecycle and leaves the panel showing "raw html text" or stuck in a dead state.
+    // A full window reload replaces this page along with the renderer, so a
+    // handshake retry ~1.5 s in would only reach the host being torn down.
     // For extension host restart the webview IS retained and the watchdog is needed
     // as a self-healing fallback if the READY handshake doesn't complete.
     if (message.command !== "workbench.action.reloadWindow") {
-      schedulePanelReconnectReloadWatchdog();
+      schedulePanelReconnectWatchdog();
     } else if (isStandalone) {
       // Tell the standalone shim to be patient with reconnects during the full
       // rebuild + window reload cycle, which can take 20-60+ seconds.
@@ -898,11 +896,11 @@ export function createMessageHandlers(
       preferredViewAddress: getReadyPreferredViewAddress(),
       pageLoadId: panelPageLoadId,
     });
-    // schedulePanelReconnectReloadWatchdog() is a no-op when this is a fresh
+    // schedulePanelReconnectWatchdog() is a no-op when this is a fresh
     // page load that already sent READY via BootstrapApp (freshPageReadySent=true).
     // It only arms the watchdog for retained contexts where the panel hasn't
     // yet received CLIENT_ID_ASSIGNED from the new extension host.
-    schedulePanelReconnectReloadWatchdog();
+    schedulePanelReconnectWatchdog();
   };
 
   handlers[MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE] = (message) => {
@@ -2229,7 +2227,7 @@ export function createMessageHandlers(
     const editorStore = useEditorStore.getState();
     settingsStore.setWorkflowLoaded(true);
     editorStore.setHasActiveQueue(true);
-    clearPanelReconnectReloadWatchdog();
+    clearPanelReconnectWatchdog();
     // Deliberately does NOT lift the startup overlay. WORKFLOW_LOADED means "a
     // working file was read and its properties are on screen" — it says nothing
     // about whether the extension has finished starting. On a cold start the panel
@@ -2252,7 +2250,7 @@ export function createMessageHandlers(
     WebviewLog.info(
       `[startup] STARTUP_COMPLETE received — overlay already dismissed: ${startupReady}`
     );
-    clearPanelReconnectReloadWatchdog();
+    clearPanelReconnectWatchdog();
     useUiStore.getState().setStartupReady(true);
     // The first recent-workflows fetch waits for the handshake to settle rather
     // than firing when the dropdown mounts: in a browser that mount runs before
@@ -3497,6 +3495,18 @@ export function useMessageHandler(): UseMessageHandlerReturn {
     };
 
     window.addEventListener("message", handleMessage);
+    // Replay what arrived before this listener existed (see panelInboundBuffer).
+    // Each is isolated like a live dispatch, so one failing handler cannot
+    // drop the rest of the startup messages.
+    for (const event of drainPanelInboundBuffer()) {
+      try {
+        handleMessage(event);
+      } catch (error) {
+        WebviewLog.error(
+          `[MessageHandler] Buffered ${String(event.data?.type)} failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
     return () => window.removeEventListener("message", handleMessage);
   }, [handlers]);
 

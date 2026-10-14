@@ -38,7 +38,7 @@ Key roles:
 <criticalPatterns>
 **Per-client replay vs broadcast:** `DashboardBroadcastHub` is for shared events only. Full workflow state, active workflow changes, and targeted startup completion go through per-client replay/send paths.
 
-**Panel reconnect logic is deliberate:** `CtrlYokeWebviewProvider` sends `RECONNECT` with retry/backoff because VS Code can retain the old iframe across extension-host restarts. Do not “simplify” this by reassigning `webview.html`; that caused raw-HTML/blank-panel regressions.
+**Panel reconnect logic is deliberate:** `CtrlYokeWebviewProvider` sends `RECONNECT` with retry/backoff because VS Code can retain the old iframe across extension-host restarts. Do not “simplify” this by reassigning `webview.html`; that caused raw-HTML/blank-panel regressions. The one sanctioned reassignment is `rebuildPanelHtml`, answering the module-mount watchdog's `PANEL_RELOAD_REQUEST` from a page whose bundle never mounted; it is capped until a READY is accepted.
 
 **READY handling is asymmetric:** panel READY and browser READY differ. Browser READY may complete startup follow-up in the background to avoid blocking the shared router queue; panel READY also replays PTY/controller state and flushes queued editor inserts.
 

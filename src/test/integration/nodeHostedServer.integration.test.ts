@@ -17,6 +17,7 @@ import {
   MESSAGE_TYPES,
   RUN_HISTORY_LOCATIONS,
   RUNNER_IDS,
+  SERVER_BIND_ADDRESSES,
 } from "../../types/DashboardConstants";
 import { setRuntimeMode } from "../../utils/RuntimeMode";
 import {
@@ -57,12 +58,49 @@ async function openSocket(url: string, clientId: string): Promise<WebSocket> {
   socketUrl.pathname = "/ws";
   socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
   socketUrl.searchParams.set("clientId", clientId);
+  // The server binds 127.0.0.1 but advertises "localhost", which Node resolves
+  // to ::1 first. That attempt is refused, and the IPv4 one then races Node's
+  // 250ms per-family connect timeout; while the host is busy probing harness
+  // CLIs it loses, and the connect fails as an AggregateError. Dial the bound
+  // address (this suite always binds it) directly.
+  socketUrl.hostname = SERVER_BIND_ADDRESSES.LOCALHOST;
   const socket = new WebSocket(socketUrl.toString());
   await new Promise<void>((resolve, reject) => {
     socket.once("open", resolve);
-    socket.once("error", reject);
+    socket.once("error", (error) =>
+      reject(
+        error instanceof AggregateError
+          ? new Error(
+              `WebSocket connect to ${socketUrl.host} failed: ${error.errors.map(String).join("; ")}`
+            )
+          : error
+      )
+    );
   });
   return socket;
+}
+
+// Setup once timed out at the suite's 60s under `npm test` with no hint of
+// which phase stalled (the host was also probing every real harness CLI on the
+// machine at the time). Report any slow phase so the next failure says where
+// the time went.
+const SLOW_SETUP_PHASE_MS = 5_000;
+
+async function timedSetupPhase<T>(
+  phase: string,
+  run: () => Promise<T>
+): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    return await run();
+  } finally {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs >= SLOW_SETUP_PHASE_MS) {
+      console.warn(
+        `[nodeHostedServer.integration] slow setup phase "${phase}": ${elapsedMs}ms`
+      );
+    }
+  }
 }
 
 suite("Node hosted server composition", function () {
@@ -124,10 +162,12 @@ suite("Node hosted server composition", function () {
         tls: { enabled: false, certPath: "", keyPath: "" },
       },
     });
-    runtime = await createNodeHostedServer({
-      cwd: workspaceRoot,
-      mode: "headless",
-    });
+    runtime = await timedSetupPhase("createNodeHostedServer", () =>
+      createNodeHostedServer({
+        cwd: workspaceRoot,
+        mode: "headless",
+      })
+    );
   });
 
   teardown(async () => {

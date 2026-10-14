@@ -14,6 +14,8 @@ declare global {
     __ctrlyokeReactMounted?: boolean;
     /** Set to true when CLIENT_ID_ASSIGNED arrives; used by the HTML handshake watchdog. */
     __ctrlyokePanelHandshakeDone?: boolean;
+    /** Re-sends READY as a fresh handshake; called by the HTML handshake watchdog. */
+    __ctrlyokeRetryPanelHandshake?: () => void;
     __ctrlyokeBootstrapLog?: (level: string, message: string) => void;
     __ctrlyokeFlushBootstrapLogs?: () => void;
     acquireVsCodeApi?: () => VsCodeApi;
@@ -26,11 +28,12 @@ export const isStandalone =
 
 /**
  * Identifies the current page load (module evaluation), stable for the lifetime
- * of this JS context and distinct after any `window.location.reload()`. Every
+ * of this JS context and distinct for every page the extension builds. Every
  * READY the panel sends during one page load carries this same value so the
  * extension can tell "duplicate READY within this page" (BootstrapApp → App.tsx,
- * safe to ignore) apart from "READY from a fresh page after a reload" (must be
- * handled, or the panel never receives CLIENT_ID_ASSIGNED again).
+ * safe to ignore) apart from a READY from a rebuilt page (must be handled, or
+ * the panel never receives CLIENT_ID_ASSIGNED again). Handshake retries derive
+ * their own id from it (see panelHandshake.ts).
  */
 export const panelPageLoadId: string =
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"

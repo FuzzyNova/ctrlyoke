@@ -3059,9 +3059,12 @@ export class CtrlYokeHostedServer
   }
 
   private async enforceRemoteBindBeforeListen(): Promise<void> {
+    // Loopback first: the entitlement check reads the OS credential store,
+    // which spawns a process per read on the Node host (seconds in total, and
+    // over a minute under load) for an answer a loopback bind never needs.
     if (
-      (await this.resolveRemoteAccess()) ||
-      isLoopbackBindAddress(this.bindAddress)
+      isLoopbackBindAddress(this.bindAddress) ||
+      (await this.resolveRemoteAccess())
     ) {
       return;
     }

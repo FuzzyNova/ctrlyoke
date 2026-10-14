@@ -54,6 +54,10 @@ import {
   useMessageHandler,
 } from "@hooks/useMessageHandler";
 import * as reconnectWatchdog from "@hooks/reconnectWatchdog";
+import {
+  drainPanelInboundBuffer,
+  startPanelInboundBuffer,
+} from "@hooks/panelInboundBuffer";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -862,13 +866,10 @@ describe("TEMPLATE_VARIABLE_DEFAULTS_SET", () => {
 // ---------------------------------------------------------------------------
 
 describe("restart lifecycle", () => {
-  it("schedules a panel reload fallback after DEV_RESTARTING", () => {
+  it("schedules a handshake retry after DEV_RESTARTING", () => {
     vi.useFakeTimers();
-    const reloadSpy = vi
-      .spyOn(
-        reconnectWatchdog.reconnectWatchdogHooks,
-        "reloadPanelForReconnect"
-      )
+    const retrySpy = vi
+      .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
     renderHook(() => useMessageHandler());
@@ -886,17 +887,14 @@ describe("restart lifecycle", () => {
       vi.advanceTimersByTime(1600);
     });
 
-    expect(reloadSpy).toHaveBeenCalledTimes(1);
-    reloadSpy.mockRestore();
+    expect(retrySpy).toHaveBeenCalledTimes(1);
+    retrySpy.mockRestore();
   });
 
-  it("cancels the reload fallback once CLIENT_ID_ASSIGNED arrives", () => {
+  it("cancels the handshake retry once CLIENT_ID_ASSIGNED arrives", () => {
     vi.useFakeTimers();
-    const reloadSpy = vi
-      .spyOn(
-        reconnectWatchdog.reconnectWatchdogHooks,
-        "reloadPanelForReconnect"
-      )
+    const retrySpy = vi
+      .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
     renderHook(() => useMessageHandler());
@@ -909,17 +907,14 @@ describe("restart lifecycle", () => {
     });
 
     expect(useUiStore.getState().myClientId).toBe("panel");
-    expect(reloadSpy).not.toHaveBeenCalled();
-    reloadSpy.mockRestore();
+    expect(retrySpy).not.toHaveBeenCalled();
+    retrySpy.mockRestore();
   });
 
-  it("does not schedule a panel reload fallback for reloadWindow", () => {
+  it("does not schedule a handshake retry for reloadWindow", () => {
     vi.useFakeTimers();
-    const reloadSpy = vi
-      .spyOn(
-        reconnectWatchdog.reconnectWatchdogHooks,
-        "reloadPanelForReconnect"
-      )
+    const retrySpy = vi
+      .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
     renderHook(() => useMessageHandler());
@@ -931,17 +926,14 @@ describe("restart lifecycle", () => {
       vi.advanceTimersByTime(1600);
     });
 
-    expect(reloadSpy).not.toHaveBeenCalled();
-    reloadSpy.mockRestore();
+    expect(retrySpy).not.toHaveBeenCalled();
+    retrySpy.mockRestore();
   });
 
   it("does not schedule watchdog on RECONNECT when fresh page already sent READY", () => {
     vi.useFakeTimers();
-    const reloadSpy = vi
-      .spyOn(
-        reconnectWatchdog.reconnectWatchdogHooks,
-        "reloadPanelForReconnect"
-      )
+    const retrySpy = vi
+      .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
     // Simulate BootstrapApp having sent READY on this fresh page load.
@@ -954,17 +946,14 @@ describe("restart lifecycle", () => {
       vi.advanceTimersByTime(1600);
     });
 
-    expect(reloadSpy).not.toHaveBeenCalled();
-    reloadSpy.mockRestore();
+    expect(retrySpy).not.toHaveBeenCalled();
+    retrySpy.mockRestore();
   });
 
   it("schedules watchdog on RECONNECT in retained context (CLIENT_ID_ASSIGNED previously received)", () => {
     vi.useFakeTimers();
-    const reloadSpy = vi
-      .spyOn(
-        reconnectWatchdog.reconnectWatchdogHooks,
-        "reloadPanelForReconnect"
-      )
+    const retrySpy = vi
+      .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
     // Simulate retained context: freshPageReadySent was cleared when
@@ -979,8 +968,8 @@ describe("restart lifecycle", () => {
       vi.advanceTimersByTime(1600);
     });
 
-    expect(reloadSpy).toHaveBeenCalledOnce();
-    reloadSpy.mockRestore();
+    expect(retrySpy).toHaveBeenCalledOnce();
+    retrySpy.mockRestore();
   });
 
   it("clears freshPageReadySent flag when CLIENT_ID_ASSIGNED arrives", () => {
@@ -996,11 +985,8 @@ describe("restart lifecycle", () => {
     // After CLIENT_ID_ASSIGNED, the flag should be cleared so the next
     // extension host restart (retained context) can arm the watchdog again.
     vi.useFakeTimers();
-    const reloadSpy = vi
-      .spyOn(
-        reconnectWatchdog.reconnectWatchdogHooks,
-        "reloadPanelForReconnect"
-      )
+    const retrySpy = vi
+      .spyOn(reconnectWatchdog.reconnectWatchdogHooks, "retryHandshake")
       .mockImplementation(() => undefined);
 
     act(() => {
@@ -1008,8 +994,43 @@ describe("restart lifecycle", () => {
       vi.advanceTimersByTime(1600);
     });
 
-    expect(reloadSpy).toHaveBeenCalledOnce();
-    reloadSpy.mockRestore();
+    expect(retrySpy).toHaveBeenCalledOnce();
+    retrySpy.mockRestore();
+  });
+});
+
+describe("panel inbound buffer", () => {
+  // BootstrapApp's early READY can be answered before App has mounted this
+  // hook. The extension discards App's own READY as an in-page duplicate, so
+  // anything not buffered here is never re-sent.
+  it("replays CLIENT_ID_ASSIGNED that arrived before the listener attached", () => {
+    window.__ctrlyokePanelHandshakeDone = false;
+    startPanelInboundBuffer();
+
+    dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "panel" });
+    expect(useUiStore.getState().myClientId).toBe("");
+
+    renderHook(() => useMessageHandler());
+
+    expect(useUiStore.getState().myClientId).toBe("panel");
+    expect(window.__ctrlyokePanelHandshakeDone).toBe(true);
+  });
+
+  it("replays buffered messages in arrival order and only once", () => {
+    startPanelInboundBuffer();
+    dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "first" });
+    dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "second" });
+
+    const { rerender, unmount } = renderHook(() => useMessageHandler());
+    expect(useUiStore.getState().myClientId).toBe("second");
+
+    useUiStore.getState().setMyClientId("live");
+    rerender();
+    unmount();
+    renderHook(() => useMessageHandler());
+
+    expect(useUiStore.getState().myClientId).toBe("live");
+    expect(drainPanelInboundBuffer()).toEqual([]);
   });
 });
 

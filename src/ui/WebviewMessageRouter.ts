@@ -3061,8 +3061,8 @@ export interface WebviewRouterCallbacks {
    * false when this webview has already begun its READY handshake *for the same
    * page load* (BootstrapApp's early READY vs. App.tsx's later one), allowing the
    * router to discard that in-page duplicate. `pageLoadId` distinguishes it from
-   * a READY sent by a fresh page after `window.location.reload()`, which must
-   * always be handled or the reloaded panel never receives CLIENT_ID_ASSIGNED.
+   * a READY sent by a rebuilt page or a watchdog's handshake retry, which must
+   * always be handled or that handshake never receives CLIENT_ID_ASSIGNED.
    */
   onPanelReady?: (pageLoadId: string | undefined) => boolean;
   /**

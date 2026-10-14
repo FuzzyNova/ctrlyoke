@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
-import { suite, teardown, test } from "mocha";
+import { suite, suiteSetup, suiteTeardown, teardown, test } from "mocha";
 import {
   WorktreeManager,
   WorktreeSetupError,
@@ -14,7 +14,10 @@ import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRoo
 import { summarizeStatusError } from "../../core/orchestration/ScriptExecutionReporter";
 import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
-import { listWorktrees } from "../../utils/GitUtils";
+import {
+  listWorktrees,
+  setGitTimeoutOverridesForTests,
+} from "../../utils/GitUtils";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_LIFECYCLE_STATES,
@@ -41,6 +44,23 @@ suite("WorktreeManager", function () {
   // `npm test` (six extension hosts plus Vitest) pushed it past 30s.
   this.timeout(120_000);
   const temporaryDirectories: string[] = [];
+
+  // The same load stalls individual `git` spawns, not just whole cases: under
+  // `npm test` one case took 37s and a lone `rev-parse --git-common-dir` ran
+  // past the production 10s short-command timeout. The location lookups
+  // swallow that failure as null, so it surfaced as "Cannot resolve the
+  // repository Git common directory" rather than as a timeout. Lift the Git
+  // timeouts to the suite budget so the cases measure behaviour, not load.
+  let restoreGitTimeouts: (() => void) | undefined;
+  suiteSetup(() => {
+    restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+  });
+  suiteTeardown(() => {
+    restoreGitTimeouts?.();
+  });
 
   teardown(async () => {
     await Promise.all(

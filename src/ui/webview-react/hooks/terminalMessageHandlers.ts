@@ -22,7 +22,7 @@ import type {
   TerminalStartedMessage,
 } from "@root/types/WebviewMessageTypes";
 import {
-  clearPanelReconnectReloadWatchdog,
+  clearPanelReconnectWatchdog,
   clearFreshPageReadySent,
 } from "./reconnectWatchdog";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
@@ -105,13 +105,13 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     const { clientId } = message;
     if (clientId) {
       // Signal the HTML-level handshake watchdog that the extension connection
-      // succeeded so it does not reload the panel unnecessarily.
+      // succeeded so it does not retry the handshake unnecessarily.
       window.__ctrlyokePanelHandshakeDone = true;
       // Reset the fresh-page flag so future RECONNECT messages (e.g. on the
       // next extension host restart) correctly schedule the retained-context
-      // reload watchdog.
+      // reconnect watchdog.
       clearFreshPageReadySent();
-      clearPanelReconnectReloadWatchdog();
+      clearPanelReconnectWatchdog();
       useUiStore.getState().setMyClientId(clientId as string);
     }
   };

@@ -457,6 +457,9 @@ export const MESSAGE_TYPES = {
 
   // Webview -> Extension (Logging)
   LOG_MESSAGE: "logMessage", // Forward webview log entries to extension Log class (payload: { level: LogLevel, message: string })
+  // VS Code panel only: the dashboard bundle never mounted, so ask the extension
+  // to reassign webview.html (a page-side location.reload() blanks the webview).
+  PANEL_RELOAD_REQUEST: "panelReloadRequest",
 
   // Webview -> Extension
   READY: "ready",

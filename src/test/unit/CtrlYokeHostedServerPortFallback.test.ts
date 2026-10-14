@@ -281,6 +281,27 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     assert.strictEqual(blocked, 1);
   });
 
+  test("does not consult the remote-access entitlement for a loopback bind", async () => {
+    const fakeHttpServer = new FakeHttpServer(null, 4747);
+    const server = createListenHarness(4747, fakeHttpServer);
+    server.bindAddress = "127.0.0.1";
+    let entitlementChecks = 0;
+    server.canUseRemoteAccess = async () => {
+      entitlementChecks++;
+      return false;
+    };
+
+    await server.listen();
+
+    assert.strictEqual(server.bindAddress, "127.0.0.1");
+    assert.strictEqual(server.getBindAddressFallbackInfo(), null);
+    assert.strictEqual(
+      entitlementChecks,
+      0,
+      "the entitlement read hits the OS credential store; a loopback bind must not pay for it"
+    );
+  });
+
   test("allows an unused trial to bind remotely without starting it", async () => {
     const fakeHttpServer = new FakeHttpServer(null, 4747);
     const server = createListenHarness(4747, fakeHttpServer);

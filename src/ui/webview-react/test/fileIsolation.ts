@@ -18,6 +18,7 @@ const INJECTED_WINDOW_GLOBALS = [
   "__ctrlyokeStandalone",
   "__ctrlyokeReactMounted",
   "__ctrlyokePanelHandshakeDone",
+  "__ctrlyokeRetryPanelHandshake",
   "__ctrlyokeBootstrapLog",
   "__ctrlyokeFlushBootstrapLogs",
   "ctrlyokeProfiler",

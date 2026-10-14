@@ -70,6 +70,9 @@ export type { CliOutput } from "../types/WebviewMessageTypes";
 // Re-export HarnessStatus for external consumers
 export type { HarnessStatus } from "./WebviewSettingsSync";
 
+/** Panel HTML rebuilds allowed before a READY proves the bundle can mount. */
+const MAX_PANEL_HTML_REBUILDS = 2;
+
 /**
  * VS Code panel transport for the shared dashboard application.
  * Owns HTML generation, panel READY/reconnect, and queued editor inserts.
@@ -94,12 +97,15 @@ export class CtrlYokeWebviewProvider
   private panelReadyWaiters: Array<() => void> = [];
   // The pageLoadId of the panel page whose READY was last accepted. Compared
   // (not just latched as a boolean) so that a READY from a *different* page
-  // load — e.g. after the webview's own window.location.reload() — is never
-  // mistaken for an in-page duplicate of BootstrapApp's/App.tsx's two READY
-  // sends. VS Code retains the same WebviewView instance across such a
-  // reload, so panelReady alone would otherwise stay stuck true forever and
-  // silently drop CLIENT_ID_ASSIGNED for every reload after the first.
+  // load or handshake — a rebuilt panel, or a watchdog's handshake retry — is
+  // never mistaken for an in-page duplicate of BootstrapApp's/App.tsx's two
+  // READY sends. VS Code retains the same WebviewView instance across both, so
+  // panelReady alone would otherwise stay stuck true and silently drop
+  // CLIENT_ID_ASSIGNED for every new handshake after the first.
   private readyPageLoadId: string | undefined;
+  // Rebuilds granted since the panel last completed a READY handshake. Capped
+  // so a bundle that can never mount does not rebuild the panel forever.
+  private panelHtmlRebuildsWithoutReady = 0;
   private readonly pendingPromptEditorInsertQueue: PromptEditorInsertRequest[] =
     [];
   private readonly dashboardApplication: DashboardApplication;
@@ -178,6 +184,7 @@ export class CtrlYokeWebviewProvider
     this.view = webviewView;
     this.panelReady = false;
     this.readyPageLoadId = undefined;
+    this.panelHtmlRebuildsWithoutReady = 0;
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -196,6 +203,10 @@ export class CtrlYokeWebviewProvider
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage((message) => {
+      if (message?.type === MESSAGE_TYPES.PANEL_RELOAD_REQUEST) {
+        this.rebuildPanelHtml(webviewView);
+        return;
+      }
       if (message?.type === MESSAGE_TYPES.READY) {
         this.cancelReconnectRetry();
       }
@@ -239,10 +250,9 @@ export class CtrlYokeWebviewProvider
     // Each retry closure captures `session`; incrementing reconnectRetrySession
     // in cancelReconnectRetry() causes all in-flight closures to self-terminate.
     //
-    // If the panel still doesn't respond after all retries, the React-side
-    // reconnect watchdog (reconnectWatchdog.ts) handles the self-reload. It is
-    // triggered by RECONNECT messages and fires window.location.reload() after
-    // a cooldown if CLIENT_ID_ASSIGNED never arrives. This avoids the "raw html
+    // If the panel still doesn't complete the handshake, the React-side
+    // reconnect watchdog (reconnectWatchdog.ts) re-sends READY under a fresh
+    // page-load id once CLIENT_ID_ASSIGNED is overdue. This avoids the "raw html
     // text" regression caused by setting webview.html a second time from the
     // extension side while the first load is still in progress.
     const session = ++this.reconnectRetrySession;
@@ -356,7 +366,7 @@ export class CtrlYokeWebviewProvider
         vscode.Uri.joinPath(webviewScriptsUri, "moduleLoaderScript.js").fsPath,
         "utf-8"
       );
-      moduleLoaderScript = `<script type="module" nonce="${nonce}">\nconst __cyModuleSrc__ = ${JSON.stringify(moduleScriptSrc)};\nconst __cyLogMessageType__ = ${JSON.stringify(MESSAGE_TYPES.LOG_MESSAGE)};\nconst __cyLogLevels__ = ${JSON.stringify(LOG_LEVELS)};\n${loaderBody}</script>`;
+      moduleLoaderScript = `<script type="module" nonce="${nonce}">\nconst __cyModuleSrc__ = ${JSON.stringify(moduleScriptSrc)};\nconst __cyPanelReloadRequestType__ = ${JSON.stringify(MESSAGE_TYPES.PANEL_RELOAD_REQUEST)};\nconst __cyLogMessageType__ = ${JSON.stringify(MESSAGE_TYPES.LOG_MESSAGE)};\nconst __cyLogLevels__ = ${JSON.stringify(LOG_LEVELS)};\n${loaderBody}</script>`;
     }
 
     // Inject the bootstrap BEFORE the module scripts.
@@ -1135,6 +1145,34 @@ export class CtrlYokeWebviewProvider
     this.reconnectRetrySession++;
   }
 
+  /**
+   * Answers the panel's module-mount watchdog (PANEL_RELOAD_REQUEST): the
+   * dashboard bundle never mounted, and the page cannot reload itself because
+   * a VS Code webview's content frame is an empty `fake.html` our HTML is
+   * written into. Reassigning `webview.html` makes VS Code rebuild that frame.
+   * This is safe here, unlike during RECONNECT (see ui.instructions.md),
+   * because the request comes from a page that finished loading 30 s ago.
+   */
+  private rebuildPanelHtml(webviewView: vscode.WebviewView): void {
+    if (this.view !== webviewView) {
+      return;
+    }
+    if (this.panelHtmlRebuildsWithoutReady >= MAX_PANEL_HTML_REBUILDS) {
+      Log.warn(
+        `[CtrlYokeWebviewProvider] Ignoring panel rebuild request — ${MAX_PANEL_HTML_REBUILDS} rebuilds have not produced a READY`
+      );
+      return;
+    }
+    this.panelHtmlRebuildsWithoutReady++;
+    Log.warn(
+      `[CtrlYokeWebviewProvider] Rebuilding panel HTML after the dashboard failed to mount (attempt ${this.panelHtmlRebuildsWithoutReady}/${MAX_PANEL_HTML_REBUILDS})`
+    );
+    this.panelReady = false;
+    this.readyPageLoadId = undefined;
+    this.cancelReconnectRetry();
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+  }
+
   public handlePanelReady(pageLoadId: string | undefined): boolean {
     this.cancelReconnectRetry();
     // A READY carrying the same pageLoadId as the one already accepted is the
@@ -1151,6 +1189,7 @@ export class CtrlYokeWebviewProvider
     }
     this.panelReady = true;
     this.readyPageLoadId = pageLoadId;
+    this.panelHtmlRebuildsWithoutReady = 0;
     this.resolvePanelReadyWaiters();
     this.flushPendingPromptEditorInserts();
     return true;

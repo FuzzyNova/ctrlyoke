@@ -197,6 +197,24 @@ export interface NodeHostedServerRuntime {
   dispose(): Promise<void>;
 }
 
+const SLOW_STARTUP_PHASE_MS = 3_000;
+
+/**
+ * Logs how long one startup phase took and returns the next phase's start.
+ * Startup is ~1s idle but has taken over 60s under heavy machine load; these
+ * lines show which phase absorbed the time.
+ */
+function logStartupPhase(phase: string, startedAt: number): number {
+  const now = Date.now();
+  const message = `[NodeHostServices] startup phase "${phase}" took ${now - startedAt}ms`;
+  if (now - startedAt >= SLOW_STARTUP_PHASE_MS) {
+    Log.warn(message);
+  } else {
+    Log.debug(message);
+  }
+  return now;
+}
+
 /** Compose and start the complete dashboard server in a plain Node process. */
 export async function createNodeHostedServer(options: {
   cwd: string;
@@ -204,7 +222,9 @@ export async function createNodeHostedServer(options: {
   regenerateToken?: boolean;
   strictPort?: boolean;
 }): Promise<NodeHostedServerRuntime> {
+  let phaseStartedAt = Date.now();
   const services = await createNodeHostServices(options);
+  phaseStartedAt = logStartupPhase("host services", phaseStartedAt);
   const { cwd } = services;
   setRuntimeMode(RUNNER_IDS.SERVER);
   let hub = services.hub;
@@ -300,11 +320,13 @@ export async function createNodeHostedServer(options: {
     );
   });
 
+  phaseStartedAt = logStartupPhase("orchestrator composition", phaseStartedAt);
   const token = await resolveServerToken(
     services.tokenStore,
     process.env.CTRLYOKE_SERVER_TOKEN,
     options.regenerateToken
   );
+  phaseStartedAt = logStartupPhase("server token", phaseStartedAt);
   // Exempt the connection token from heuristic redaction while the server is
   // up, as the VS Code host does, so dashboard URLs and QR codes stay intact.
   const unprotectToken = secretRedactionService.protectValue(token);
@@ -356,6 +378,7 @@ export async function createNodeHostedServer(options: {
   let runningUrl: string;
   try {
     const url = await server.listen();
+    logStartupPhase("listen", phaseStartedAt);
     if (!url) throw new Error("The hosted server did not start.");
     runningUrl = url;
     if (configService.get("languageServers").startOnLaunch) {

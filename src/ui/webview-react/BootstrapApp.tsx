@@ -8,6 +8,8 @@ import {
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { markFreshPageReadySent } from "@hooks/reconnectWatchdog";
+import { startPanelInboundBuffer } from "@hooks/panelInboundBuffer";
+import { installPanelHandshakeRetry } from "@hooks/panelHandshake";
 
 type DashboardAppComponent = ComponentType;
 
@@ -51,6 +53,10 @@ export default function BootstrapApp() {
     // (only --vscode-* props are captured here), corrupting cachedThemeVars on the
     // server and breaking body-class-based icon inversion for subsequent connections.
     if (!isStandalone) {
+      // Must start before READY: the extension can answer it before App (and
+      // useMessageHandler's listener) has loaded.
+      startPanelInboundBuffer();
+      installPanelHandshakeRetry();
       vscode.postMessage({
         type: MESSAGE_TYPES.READY,
         preferredViewAddress: initialPreferredViewAddress,

@@ -1,23 +1,23 @@
 import { useUiStore } from "@store/uiStore";
 import { isStandalone } from "./useVsCodeApi";
+import { retryPanelHandshake } from "./panelHandshake";
 import { WebviewLog } from "@utils/logger";
 
-const PANEL_RECONNECT_RELOAD_DELAY_MS = 1500;
-const PANEL_RECONNECT_RELOAD_COOLDOWN_MS = 10000;
-const PANEL_RECONNECT_RELOAD_SESSION_KEY = "ctrlyoke-panel-reconnect-reload-at";
+const PANEL_RECONNECT_RETRY_DELAY_MS = 1500;
+const PANEL_RECONNECT_RETRY_COOLDOWN_MS = 10000;
+const PANEL_RECONNECT_RETRY_SESSION_KEY = "ctrlyoke-panel-reconnect-retry-at";
 
-let panelReconnectReloadTimer: number | undefined;
+let panelReconnectRetryTimer: number | undefined;
 
 // True after BootstrapApp sends READY on a fresh page load. This flag
 // distinguishes a fresh-page RECONNECT (extension queue is busy processing
 // another client) from a retained-context RECONNECT (extension host restarted
 // without a page reload). Reset to false when CLIENT_ID_ASSIGNED arrives.
 //
-// Why this matters: the 1500 ms watchdog is only safe for retained contexts.
+// Why this matters: the 1500 ms watchdog is only meant for retained contexts.
 // On a fresh page the extension may take >1500 ms to reach the panel's READY
-// in its serialized routeQueue (e.g. browser client READY is processed first).
-// Firing window.location.reload() during that window causes acquireVsCodeApi()
-// to throw on the second load, leaving the panel showing raw HTML.
+// in its serialized routeQueue (e.g. browser client READY is processed first),
+// and a retry there would only queue a redundant full handshake behind it.
 let freshPageReadySent = false;
 
 export function markFreshPageReadySent(): void {
@@ -28,76 +28,80 @@ export function clearFreshPageReadySent(): void {
   freshPageReadySent = false;
 }
 
-function clearPanelReconnectReloadTimer(): void {
-  if (panelReconnectReloadTimer === undefined) return;
-  window.clearTimeout(panelReconnectReloadTimer);
-  panelReconnectReloadTimer = undefined;
+function clearPanelReconnectRetryTimer(): void {
+  if (panelReconnectRetryTimer === undefined) return;
+  window.clearTimeout(panelReconnectRetryTimer);
+  panelReconnectRetryTimer = undefined;
 }
 
-export function clearPanelReconnectReloadWatchdog(): void {
-  clearPanelReconnectReloadTimer();
+export function clearPanelReconnectWatchdog(): void {
+  clearPanelReconnectRetryTimer();
   try {
-    sessionStorage.removeItem(PANEL_RECONNECT_RELOAD_SESSION_KEY);
+    sessionStorage.removeItem(PANEL_RECONNECT_RETRY_SESSION_KEY);
   } catch {
     // Best-effort cleanup only.
   }
 }
 
 export const reconnectWatchdogHooks = {
-  reloadPanelForReconnect(): void {
-    window.location.reload();
+  retryHandshake(): void {
+    retryPanelHandshake();
   },
 };
 
-export function schedulePanelReconnectReloadWatchdog(): void {
+/**
+ * After an extension-host restart VS Code can keep this page alive, so the new
+ * host learns about it only from the READY the RECONNECT handler sends. If no
+ * CLIENT_ID_ASSIGNED follows, re-run the handshake in place (see
+ * retryPanelHandshake for why this is never a page reload).
+ */
+export function schedulePanelReconnectWatchdog(): void {
   if (isStandalone) return;
 
   // Fresh page: BootstrapApp already sent READY before the message listener
   // was registered. The extension will process it when its routeQueue is free
-  // (possibly after finishing another client's READY). Skip the watchdog —
-  // firing window.location.reload() here would corrupt the acquireVsCodeApi()
-  // lifecycle and cause the raw-HTML regression.
+  // (possibly after finishing another client's READY). Skip the watchdog.
   if (freshPageReadySent) {
     return;
   }
 
-  clearPanelReconnectReloadTimer();
-  panelReconnectReloadTimer = window.setTimeout(() => {
-    panelReconnectReloadTimer = undefined;
+  clearPanelReconnectRetryTimer();
+  panelReconnectRetryTimer = window.setTimeout(() => {
+    panelReconnectRetryTimer = undefined;
 
     // The new extension host has already assigned this panel an identity, so
-    // the reconnect succeeded and a hard reload is no longer needed.
+    // the reconnect succeeded and no retry is needed.
     if (useUiStore.getState().myClientId) {
-      clearPanelReconnectReloadWatchdog();
+      clearPanelReconnectWatchdog();
       return;
     }
 
-    let lastReloadAt = 0;
+    let lastRetryAt = 0;
     try {
-      lastReloadAt = Number(
-        sessionStorage.getItem(PANEL_RECONNECT_RELOAD_SESSION_KEY) ?? "0"
+      lastRetryAt = Number(
+        sessionStorage.getItem(PANEL_RECONNECT_RETRY_SESSION_KEY) ?? "0"
       );
     } catch {
-      // Ignore storage failures and fall through to the reload.
+      // Ignore storage failures and fall through to the retry.
     }
 
     const now = Date.now();
     if (
-      Number.isFinite(lastReloadAt) &&
-      now - lastReloadAt < PANEL_RECONNECT_RELOAD_COOLDOWN_MS
+      Number.isFinite(lastRetryAt) &&
+      now - lastRetryAt < PANEL_RECONNECT_RETRY_COOLDOWN_MS
     ) {
       return;
     }
 
     WebviewLog.warn(
-      "[reconnectWatchdog] retained-context reconnect timed out — reloading panel"
+      "[reconnectWatchdog] retained-context reconnect timed out — re-sending READY"
     );
     try {
-      sessionStorage.setItem(PANEL_RECONNECT_RELOAD_SESSION_KEY, String(now));
+      sessionStorage.setItem(PANEL_RECONNECT_RETRY_SESSION_KEY, String(now));
     } catch {
       // Best-effort persistence only.
     }
 
-    reconnectWatchdogHooks.reloadPanelForReconnect();
-  }, PANEL_RECONNECT_RELOAD_DELAY_MS);
+    reconnectWatchdogHooks.retryHandshake();
+  }, PANEL_RECONNECT_RETRY_DELAY_MS);
 }
