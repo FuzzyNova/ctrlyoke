@@ -143,7 +143,7 @@ export const CONFIG_KEYS = {
   COORDINATION_MAX_NOTE_LENGTH: "coordination.maxNoteLength",
   COORDINATION_MAX_ENTRIES: "coordination.maxEntries",
   COORDINATION_MAX_BOARD_BYTES: "coordination.maxBoardBytes",
-  COORDINATION_MAX_ENTRY_AGE_DAYS: "coordination.maxEntryAgeDays",
+  COORDINATION_MAX_NOTE_AGE_HOURS: "coordination.maxNoteAgeHours",
   COORDINATION_CLI_PARTICIPANT_TTL_MINUTES:
     "coordination.cliParticipantTtlMinutes",
   COORDINATION_ALLOW_EXTERNAL_PARTICIPANTS:

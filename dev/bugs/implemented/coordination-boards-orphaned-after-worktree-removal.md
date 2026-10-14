@@ -2,7 +2,9 @@
 
 - **Found:** 2026-10-14 by Claude (auditing coordination cleanup)
 - **Area:** `src/core/orchestration/ExecutionRootScope.ts`, `src/core/orchestration/ExecutionRootCoordinationStore.ts`, `src/core/orchestration/WorktreeManager.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit. `sweepOrphanedScopeStorage()` runs after every
+  managed removal (`WorktreeManager.removeCheckout`) and in the extension's periodic orphan
+  sweep, which also catches worktrees removed with plain `git worktree remove`.
 
 ## Symptom
 

@@ -19,6 +19,7 @@ import {
 import { migrateToCurrent } from "../../utils/FormatMigrations";
 import {
   resolveExecutionRootScope,
+  SCOPE_STORAGE_CATEGORIES,
   scopeStorageRoot,
   verifyScopeRecord,
   type ExecutionRootScope,
@@ -36,8 +37,10 @@ export type CoordinationRetentionOptions = Pick<
   | "maxNoteLength"
   | "maxEntries"
   | "maxBoardBytes"
-  | "maxEntryAgeDays"
+  | "maxNoteAgeHours"
 >;
+
+const HOUR_MS = 60 * 60 * 1_000;
 
 export interface CoordinationStoreOptions {
   retention?: Partial<CoordinationRetentionOptions>;
@@ -75,11 +78,16 @@ export interface CoordinationReadOptions {
   recipient?: string;
   /** Return the newest page rather than the oldest page. */
   latest?: boolean;
+  /** Leave out entries written by this participant (a reader's own notes). */
+  excludeFrom?: string;
 }
 
 export interface CoordinationReadResult {
   entries: CoordinationEntry[];
+  /** Forward page only: pass as `since` to read the entries after this page. */
   nextCursor?: number;
+  /** `latest` page only: how many older matching entries the page left out. */
+  omittedOlder?: number;
 }
 
 export interface CoordinationBoardTransaction {
@@ -88,7 +96,10 @@ export interface CoordinationBoardTransaction {
 }
 
 function readScopeStorage(scope: ExecutionRootScope): CoordinationBoardScope {
-  const storageRoot = scopeStorageRoot(scope, "coordination");
+  const storageRoot = scopeStorageRoot(
+    scope,
+    SCOPE_STORAGE_CATEGORIES.COORDINATION
+  );
   return {
     identity: scope.identity,
     scopeHash: scope.scopeHash,
@@ -168,9 +179,9 @@ function retentionOptions(
       overrides.maxBoardBytes ?? configured.maxBoardBytes,
       DEFAULT_COORDINATION_SETTINGS.maxBoardBytes
     ),
-    maxEntryAgeDays: positiveNumber(
-      overrides.maxEntryAgeDays ?? configured.maxEntryAgeDays,
-      DEFAULT_COORDINATION_SETTINGS.maxEntryAgeDays
+    maxNoteAgeHours: positiveNumber(
+      overrides.maxNoteAgeHours ?? configured.maxNoteAgeHours,
+      DEFAULT_COORDINATION_SETTINGS.maxNoteAgeHours
     ),
   };
 }
@@ -304,14 +315,16 @@ function compactDepartedParticipants(
   liveParticipants: ReadonlySet<string> | undefined,
   activeClaims: readonly CoordinationActiveClaim[],
   now: number,
-  maxEntryAgeDays: number
+  maxNoteAgeHours: number
 ): CoordinationEntry[] {
   const settled = new Set<number>();
   const openJoins = new Map<string, number[]>();
   const unresolvedClaimParticipants = new Set(
     activeClaims.map((claim) => claim.entry.from.participantId)
   );
-  const cutoff = now - maxEntryAgeDays * 24 * 60 * 60 * 1_000;
+  // Only consulted without a liveness resolver (a bare store): a participant
+  // whose latest join is older than the note window is treated as departed.
+  const cutoff = now - maxNoteAgeHours * HOUR_MS;
   const entryBySequence = new Map(entries.map((entry) => [entry.seq, entry]));
 
   for (const entry of entries) {
@@ -369,17 +382,37 @@ function compactSettledClaims(
     });
 }
 
-function removeOldNotes(
+/**
+ * A note expires once it is older than `maxNoteAgeHours` and its author is no
+ * longer on the board. A sibling that is still running may have posted its
+ * plan hours ago and it is still the plan, so a live author's notes never age
+ * out. Without a liveness resolver (a bare store) age alone decides.
+ *
+ * Reads and compaction share this predicate, so a note is hidden at exactly
+ * the moment it becomes removable rather than lingering until the next write.
+ */
+function isExpiredNote(
+  entry: CoordinationEntry,
+  now: number,
+  maxNoteAgeHours: number,
+  liveParticipants: ReadonlySet<string> | undefined
+): boolean {
+  if (entry.kind !== COORDINATION_ENTRY_KINDS.NOTE) return false;
+  const timestamp = Date.parse(entry.at);
+  if (!Number.isFinite(timestamp)) return false;
+  if (timestamp >= now - maxNoteAgeHours * HOUR_MS) return false;
+  return !liveParticipants?.has(entry.from.participantId);
+}
+
+function removeExpiredNotes(
   entries: readonly CoordinationEntry[],
   now: number,
-  maxEntryAgeDays: number
+  maxNoteAgeHours: number,
+  liveParticipants: ReadonlySet<string> | undefined
 ): CoordinationEntry[] {
-  const cutoff = now - maxEntryAgeDays * 24 * 60 * 60 * 1_000;
-  return entries.filter((entry) => {
-    if (entry.kind !== COORDINATION_ENTRY_KINDS.NOTE) return true;
-    const timestamp = Date.parse(entry.at);
-    return !Number.isFinite(timestamp) || timestamp >= cutoff;
-  });
+  return entries.filter(
+    (entry) => !isExpiredNote(entry, now, maxNoteAgeHours, liveParticipants)
+  );
 }
 
 function noteContributor(entry: CoordinationEntry): string {
@@ -522,16 +555,18 @@ export class ExecutionRootCoordinationStore {
           const resolveClaims =
             this.options.unresolvedClaims ?? unresolvedClaims;
           const activeClaims = resolveClaims(entries);
-          const compactedExisting = removeOldNotes(
+          const liveParticipants = this.options.liveParticipants?.(entries);
+          const compactedExisting = removeExpiredNotes(
             compactDepartedParticipants(
               compactSettledClaims(entries, this.options.unresolvedClaims),
-              this.options.liveParticipants?.(entries),
+              liveParticipants,
               activeClaims,
               now,
-              settings.maxEntryAgeDays
+              settings.maxNoteAgeHours
             ),
             now,
-            settings.maxEntryAgeDays
+            settings.maxNoteAgeHours,
+            liveParticipants
           );
           if (
             !trimmingPreservesUnresolvedClaims(
@@ -552,7 +587,7 @@ export class ExecutionRootCoordinationStore {
             this.options.liveParticipants?.([...compactedExisting, persisted]),
             resolveClaims([...compactedExisting, persisted]),
             now,
-            settings.maxEntryAgeDays
+            settings.maxNoteAgeHours
           );
           const fitted = trimNotesToCaps(
             compacted,
@@ -592,31 +627,44 @@ export class ExecutionRootCoordinationStore {
 
     return withFileLock(scope.boardPath, async () => {
       await verifyBoardScope(scope);
-      const entries = await readEntries(scope.boardPath);
-      const from = options.from && new Set(options.from);
-      const filtered = entries.filter(
-        (entry) =>
-          (options.kind === undefined || entry.kind === options.kind) &&
-          (options.recipient === undefined ||
-            entry.to === undefined ||
-            entry.to.includes(options.recipient)) &&
-          (options.since === undefined || entry.seq > options.since) &&
-          (!from || from.size === 0 || from.has(entry.from.participantId))
-      );
-      const limit = pageSize(
-        options.limit,
-        retentionOptions(this.options.retention).readNotesPageSize
-      );
-      const page = options.latest
-        ? filtered.slice(Math.max(0, filtered.length - limit))
-        : filtered.slice(0, limit);
-      return {
-        entries: page,
-        ...(filtered.length > page.length
-          ? { nextCursor: options.latest ? page[0]?.seq : page.at(-1)?.seq }
-          : {}),
-      };
+      return this.select(await readEntries(scope.boardPath), options);
     });
+  }
+
+  /**
+   * Filter and page entries already loaded under the board lock. `read()` and
+   * callers holding a {@link transaction} share this, so both hide expired
+   * notes identically.
+   */
+  select(
+    entries: readonly CoordinationEntry[],
+    options: CoordinationReadOptions = {}
+  ): CoordinationReadResult {
+    const settings = retentionOptions(this.options.retention);
+    const now = this.options.now?.() ?? Date.now();
+    const liveParticipants = this.options.liveParticipants?.(entries);
+    const from = options.from && new Set(options.from);
+    const filtered = entries.filter(
+      (entry) =>
+        (options.kind === undefined || entry.kind === options.kind) &&
+        (options.recipient === undefined ||
+          entry.to === undefined ||
+          entry.to.includes(options.recipient)) &&
+        (options.since === undefined || entry.seq > options.since) &&
+        (!from || from.size === 0 || from.has(entry.from.participantId)) &&
+        (options.excludeFrom === undefined ||
+          entry.from.participantId !== options.excludeFrom) &&
+        !isExpiredNote(entry, now, settings.maxNoteAgeHours, liveParticipants)
+    );
+    const limit = pageSize(options.limit, settings.readNotesPageSize);
+    const page = options.latest
+      ? filtered.slice(Math.max(0, filtered.length - limit))
+      : filtered.slice(0, limit);
+    const omitted = filtered.length - page.length;
+    if (omitted === 0) return { entries: page };
+    return options.latest
+      ? { entries: page, omittedOlder: omitted }
+      : { entries: page, nextCursor: page.at(-1)?.seq };
   }
 }
 
@@ -631,11 +679,4 @@ export async function appendCoordinationEntry(
   entry: CoordinationEntryInput
 ): Promise<CoordinationEntry> {
   return new ExecutionRootCoordinationStore(executionRoot).append(entry);
-}
-
-export async function readCoordinationEntries(
-  executionRoot: string,
-  options?: CoordinationReadOptions
-): Promise<CoordinationReadResult> {
-  return new ExecutionRootCoordinationStore(executionRoot).read(options);
 }

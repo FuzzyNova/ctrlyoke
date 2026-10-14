@@ -73,6 +73,7 @@ import {
   type ExecutionLeaseConflict,
   type ExecutionLeaseRequest,
 } from "./ExecutionRootLeaseManager";
+import { sweepOrphanedScopeStorage } from "./ExecutionRootScope";
 import { summarizeStatusError } from "./ScriptExecutionReporter";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
@@ -1246,7 +1247,7 @@ export class WorktreeManager {
     mergeResult?: WorktreeMergeResult
   ): Promise<WorktreeCompletionResult> {
     try {
-      await removeWorktree(repositoryRoot, info.worktreePath);
+      await this.removeCheckout(repositoryRoot, info.worktreePath);
     } catch (error) {
       const message = `Managed worktree removal failed: ${
         error instanceof Error ? error.message : String(error)
@@ -2080,7 +2081,7 @@ export class WorktreeManager {
           );
           return;
         }
-        await removeWorktree(
+        await this.removeCheckout(
           sourceRoot,
           record.worktreePath,
           options.action === WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE
@@ -2816,6 +2817,20 @@ export class WorktreeManager {
     }
   }
 
+  /**
+   * Remove a linked checkout, then drop the coordination board and execution
+   * leases Git left orphaned in the common dir. Every managed removal goes
+   * through here so no path forgets the second half.
+   */
+  private async removeCheckout(
+    repositoryRoot: string,
+    worktreePath: string,
+    force = false
+  ): Promise<void> {
+    await removeWorktree(repositoryRoot, worktreePath, force);
+    await sweepOrphanedScopeStorage(repositoryRoot);
+  }
+
   private async pathExists(candidate: string): Promise<boolean> {
     try {
       await fs.access(candidate);
@@ -2898,7 +2913,7 @@ export class WorktreeManager {
           // A failed setup may have left ignored or untracked output behind.
           // The ownership record and the absence of a live lease authorize
           // removing this managed checkout on the retry/recovery trigger.
-          await removeWorktree(repositoryRoot, record.worktreePath, true);
+          await this.removeCheckout(repositoryRoot, record.worktreePath, true);
         } catch {
           continue;
         }

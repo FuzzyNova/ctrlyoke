@@ -20,6 +20,7 @@ import {
   ExecutionRootCoordinationStore,
   DEFAULT_COORDINATION_SETTINGS,
   type CoordinationActiveClaim,
+  type CoordinationReadOptions,
   type CoordinationReadResult,
   type CoordinationRetentionOptions,
   type CoordinationBoardTransaction,
@@ -722,15 +723,82 @@ export class CoordinationParticipantRegistry {
     });
   }
 
+  /**
+   * Read the notes this participant has not seen yet.
+   *
+   * The cursor lives on the participant's lease record rather than with the
+   * caller, because a skill-mode caller is a fresh process per call and has
+   * nowhere else to keep it. Without `since`, a participant's first read
+   * returns the newest page (older matches are only counted) and later reads
+   * return what arrived since. An explicit `since` pages from there instead;
+   * it never moves the cursor backwards. A `from` filter leaves the cursor
+   * alone, since notes it skipped have not been read. A reader's own notes are
+   * left out unless `from` asks for them.
+   */
   async readNotes(
     participantId: string,
     options: { since?: number; from?: readonly string[] } = {}
   ): Promise<CoordinationReadResult> {
-    await this.heartbeatParticipant(participantId);
-    return this.store.read({
-      ...options,
-      kind: COORDINATION_ENTRY_KINDS.NOTE,
-      recipient: participantId,
+    return this.store.transaction(async (transaction) => {
+      const participant = this.requireLiveParticipant(
+        transaction.entries,
+        participantId
+      );
+      const cursor = options.since ?? participant.readCursor;
+      const filtered = options.from !== undefined && options.from.length > 0;
+      const result = this.store.select(transaction.entries, {
+        kind: COORDINATION_ENTRY_KINDS.NOTE,
+        recipient: participantId,
+        ...(filtered ? { from: options.from } : { excludeFrom: participantId }),
+        ...(cursor === undefined ? { latest: true } : { since: cursor }),
+      });
+      const boardHead = transaction.entries.reduce(
+        (maximum, entry) => Math.max(maximum, entry.seq),
+        0
+      );
+      const readThrough = result.nextCursor ?? boardHead;
+      const readCursor = filtered
+        ? participant.readCursor
+        : Math.max(participant.readCursor ?? 0, readThrough);
+      await this.refresh(participantId, transaction, {
+        ...(readCursor !== undefined ? { readCursor } : {}),
+      });
+      return result;
+    });
+  }
+
+  /** Read a page of raw board entries, hiding expired notes like {@link readNotes}. */
+  async readEntries(
+    options: CoordinationReadOptions = {}
+  ): Promise<CoordinationReadResult> {
+    return this.store.read(options);
+  }
+
+  /**
+   * Return the live participants when they differ from the set this
+   * participant was last shown, recording the new set; otherwise `undefined`.
+   * Lets tool responses carry the participant list only when it changed.
+   */
+  async participantsIfChanged(
+    participantId: string
+  ): Promise<CoordinationParticipant[] | undefined> {
+    return this.store.transaction(async (transaction) => {
+      const { participants } = foldCoordinationEntries(
+        transaction.entries,
+        this.foldOptions()
+      );
+      const participant = participants.find(
+        (candidate) => candidate.participantId === participantId
+      );
+      const seenParticipants = participants
+        .map((candidate) => candidate.participantId)
+        .sort()
+        .join(",");
+      if (!participant || participant.seenParticipants === seenParticipants) {
+        return undefined;
+      }
+      await this.refresh(participantId, transaction, { seenParticipants });
+      return participants;
     });
   }
 
@@ -793,18 +861,38 @@ export class CoordinationParticipantRegistry {
     };
   }
 
-  private async refresh(
-    participantId: string,
-    transaction: CoordinationBoardTransaction
-  ): Promise<CoordinationParticipant> {
+  private requireLiveParticipant(
+    entries: readonly CoordinationEntry[],
+    participantId: string
+  ): CoordinationParticipant {
     const participant = findLiveParticipant(
-      transaction.entries,
+      entries,
       participantId,
       this.foldOptions()
     );
     if (!participant) {
       throw new Error(`Coordination participant is not live: ${participantId}`);
     }
+    return participant;
+  }
+
+  /**
+   * Extend the participant's lease by appending a fresh join. `update` carries
+   * per-participant reader state (read cursor, participants last shown) on
+   * that same record, so it survives across one-shot CLI calls.
+   */
+  private async refresh(
+    participantId: string,
+    transaction: CoordinationBoardTransaction,
+    update: Pick<
+      CoordinationParticipant,
+      "readCursor" | "seenParticipants"
+    > = {}
+  ): Promise<CoordinationParticipant> {
+    const participant = {
+      ...this.requireLiveParticipant(transaction.entries, participantId),
+      ...update,
+    };
     const now = this.now();
     const refreshed: CoordinationParticipant =
       participant.via === COORDINATION_PARTICIPANT_VIA.MCP

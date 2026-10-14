@@ -89,15 +89,15 @@ export function CoordinationSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        settingKey="coordination.maxEntryAgeDays"
-        id="coordination-max-entry-age-days"
+        settingKey="coordination.maxNoteAgeHours"
+        id="coordination-max-note-age-hours"
         {...rowProps}
       >
         <LocalNumberInput
-          id="coordination-max-entry-age-days"
+          id="coordination-max-note-age-hours"
           min={1}
-          value={coordination.maxEntryAgeDays}
-          onCommit={(value) => onUpdate("coordination.maxEntryAgeDays", value)}
+          value={coordination.maxNoteAgeHours}
+          onCommit={(value) => onUpdate("coordination.maxNoteAgeHours", value)}
           parse={(value) => parseInt(value, 10) || 1}
           className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />

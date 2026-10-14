@@ -74,6 +74,7 @@ import {
 } from "./utils/GitUtils";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
+import { sweepOrphanedScopeStorage } from "./core/orchestration/ExecutionRootScope";
 import { pathsEqual } from "./utils/PathCasing";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { disposeTelemetry } from "./utils/TelemetryReporter";
@@ -208,6 +209,21 @@ async function sweepOrphanedTempFiles(primaryWorkspaceRoot: string) {
   if (totalCleaned > 0) {
     Log.info(
       `[Extension] ctrlyoke: Cleaned up ${totalCleaned} orphaned temp file(s) across ${roots.size} root(s)`
+    );
+  }
+}
+
+/**
+ * The periodic orphan sweep: temp files, then the coordination boards and
+ * execution leases of worktrees removed outside ctrlyoke (a plain
+ * `git worktree remove`), which no managed removal path ever sees.
+ */
+async function sweepOrphanedState(workspaceRoot: string) {
+  await sweepOrphanedTempFiles(workspaceRoot);
+  const removed = await sweepOrphanedScopeStorage(workspaceRoot);
+  if (removed.length > 0) {
+    Log.info(
+      `[Extension] ctrlyoke: Removed ${removed.length} coordination/lease scope(s) left by deleted worktrees`
     );
   }
 }
@@ -397,9 +413,9 @@ export async function activate(context: vscode.ExtensionContext) {
         // Clean up orphaned temp prompt files (from previous sessions), across
         // the primary workspace root and any git worktrees of it, and keep
         // sweeping periodically for the rest of this VS Code session.
-        void sweepOrphanedTempFiles(workspaceRoot);
+        void sweepOrphanedState(workspaceRoot);
         const tempCleanupTimer = setInterval(() => {
-          void sweepOrphanedTempFiles(workspaceRoot);
+          void sweepOrphanedState(workspaceRoot);
         }, TEMP_CLEANUP_INTERVAL_MS);
         context.subscriptions.push({
           dispose: () => clearInterval(tempCleanupTimer),

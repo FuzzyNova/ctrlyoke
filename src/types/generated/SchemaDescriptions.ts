@@ -153,7 +153,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "coordination.cliParticipantTtlMinutes": "Lease lifetime for participants delivered through the CLI or built-in skill.",
   "coordination.maxBoardBytes": "Hard maximum size of the coordination board in bytes.",
   "coordination.maxEntries": "Maximum number of coordination entries retained after compaction.",
-  "coordination.maxEntryAgeDays": "Remove coordination notes older than this many days during compaction.",
+  "coordination.maxNoteAgeHours": "Hours a coordination note stays relevant once its author has left the board. Older notes from departed authors are hidden from read_notes and removed during compaction; notes from authors still on the board are kept until they leave.",
   "coordination.maxNoteLength": "Maximum number of characters in a coordination note.",
   "coordination.readNotesPageSize": "Maximum number of coordination entries returned by one read_notes page. Reads are always paged.",
   "defaults": "Default execution properties applied to all new workflows (mirrors ExecutionProperties).",

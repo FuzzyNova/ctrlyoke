@@ -970,4 +970,145 @@ suite("ExecutionRootCoordination", function () {
     assert.strictEqual(folded.participants[0].address?.stepIndex, undefined);
     assert.strictEqual(folded.claims[0].path, "README.md");
   });
+
+  suite("reader state", () => {
+    async function twoParticipants(
+      root: string,
+      retention?: { readNotesPageSize: number }
+    ) {
+      const registry = new CoordinationParticipantRegistry(root, {
+        ...(retention ? { retention } : {}),
+      });
+      const register = (label: string) =>
+        registry.registerParticipant({
+          kind: "external",
+          label,
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+      return {
+        registry,
+        reader: await register("reader"),
+        writer: await register("writer"),
+      };
+    }
+
+    const texts = (result: { entries: CoordinationEntry[] }) =>
+      result.entries.map((entry) => entry.text);
+
+    test("read_notes returns only unread notes and never the reader's own", async () => {
+      const root = await tempDirectory();
+      try {
+        const { registry, reader, writer } = await twoParticipants(root);
+        await registry.postNote(writer.participantId, "one");
+        await registry.postNote(reader.participantId, "mine");
+        await registry.postNote(writer.participantId, "two");
+
+        assert.deepStrictEqual(
+          texts(await registry.readNotes(reader.participantId)),
+          ["one", "two"]
+        );
+        assert.deepStrictEqual(
+          texts(await registry.readNotes(reader.participantId)),
+          []
+        );
+
+        await registry.postNote(writer.participantId, "three");
+        assert.deepStrictEqual(
+          texts(await registry.readNotes(reader.participantId)),
+          ["three"]
+        );
+
+        assert.deepStrictEqual(
+          texts(await registry.readNotes(reader.participantId, { since: 0 })),
+          ["one", "two", "three"],
+          "an explicit since re-reads history"
+        );
+        assert.deepStrictEqual(
+          texts(await registry.readNotes(reader.participantId)),
+          [],
+          "re-reading history must not move the cursor backwards"
+        );
+      } finally {
+        await removeDirectory(root);
+      }
+    });
+
+    test("a first read shows the newest page and counts the older notes", async () => {
+      const root = await tempDirectory();
+      try {
+        const { registry, reader, writer } = await twoParticipants(root, {
+          readNotesPageSize: 2,
+        });
+        for (const text of ["one", "two", "three"]) {
+          await registry.postNote(writer.participantId, text);
+        }
+
+        const first = await registry.readNotes(reader.participantId);
+        assert.deepStrictEqual(texts(first), ["two", "three"]);
+        assert.strictEqual(first.omittedOlder, 1);
+        assert.deepStrictEqual(
+          texts(await registry.readNotes(reader.participantId)),
+          []
+        );
+      } finally {
+        await removeDirectory(root);
+      }
+    });
+
+    test("a from filter does not mark skipped notes as read", async () => {
+      const root = await tempDirectory();
+      try {
+        const { registry, reader, writer } = await twoParticipants(root);
+        await registry.postNote(writer.participantId, "from writer");
+        assert.deepStrictEqual(
+          texts(
+            await registry.readNotes(reader.participantId, {
+              from: ["nobody"],
+            })
+          ),
+          []
+        );
+        assert.deepStrictEqual(
+          texts(await registry.readNotes(reader.participantId)),
+          ["from writer"]
+        );
+      } finally {
+        await removeDirectory(root);
+      }
+    });
+
+    test("participantsIfChanged reports the list only when membership changes", async () => {
+      const root = await tempDirectory();
+      try {
+        const { registry, reader } = await twoParticipants(root);
+        assert.deepStrictEqual(
+          (await registry.participantsIfChanged(reader.participantId))
+            ?.map((value) => value.label)
+            .sort(),
+          ["reader", "writer"]
+        );
+        assert.strictEqual(
+          await registry.participantsIfChanged(reader.participantId),
+          undefined
+        );
+
+        const late = await registry.registerParticipant({
+          kind: "external",
+          label: "late",
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+        assert.strictEqual(
+          (await registry.participantsIfChanged(reader.participantId))?.length,
+          3
+        );
+        await late.leave();
+        assert.strictEqual(
+          (await registry.participantsIfChanged(reader.participantId))?.length,
+          2
+        );
+      } finally {
+        await removeDirectory(root);
+      }
+    });
+  });
 });

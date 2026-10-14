@@ -7,10 +7,7 @@ import {
   CoordinationParticipantRegistry,
   type CoordinationClaim,
 } from "./ExecutionRootCoordination";
-import {
-  readCoordinationEntries,
-  resolveCoordinationBoardScope,
-} from "./ExecutionRootCoordinationStore";
+import { resolveCoordinationBoardScope } from "./ExecutionRootCoordinationStore";
 
 export const COORDINATION_BOARD_CHANGE_THROTTLE_MS = 150;
 export const COORDINATION_ATTESTATION_NOTICE =
@@ -39,9 +36,12 @@ export async function readCoordinationScopeSnapshot(
 ): Promise<CoordinationScopeSnapshot> {
   const scope = await resolveCoordinationBoardScope(executionRoot);
   const pageSize = configService.get("coordination").readNotesPageSize;
+  // The registry's store knows who is live, so a note from a still-running
+  // author is shown however old it is, exactly as read_notes shows it.
+  const registry = new CoordinationParticipantRegistry(executionRoot);
   const [readResult, folded] = await Promise.all([
-    readCoordinationEntries(executionRoot, { limit: pageSize, latest: true }),
-    new CoordinationParticipantRegistry(executionRoot).fold(),
+    registry.readEntries({ limit: pageSize, latest: true }),
+    registry.fold(),
   ]);
   return {
     executionRoot: scope.executionRoot,

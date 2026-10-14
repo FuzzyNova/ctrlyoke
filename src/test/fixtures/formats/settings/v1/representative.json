@@ -72,7 +72,7 @@
     "maxNoteLength": 2000,
     "maxEntries": 1000,
     "maxBoardBytes": 5242880,
-    "maxEntryAgeDays": 7,
+    "maxNoteAgeHours": 24,
     "cliParticipantTtlMinutes": 30,
     "allowExternalParticipants": true
   },

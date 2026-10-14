@@ -10,6 +10,7 @@ import {
 import { lockFilePath, withFileLock } from "../../utils/FileLockUtils";
 import {
   resolveExecutionRootScope,
+  SCOPE_STORAGE_CATEGORIES,
   scopeStorageRoot,
   verifyScopeRecord as verifyExecutionRootScopeRecord,
 } from "./ExecutionRootScope";
@@ -126,7 +127,10 @@ async function resolveLeaseScope(
   git?: GitLocationLookup
 ): Promise<LeaseScope> {
   const scope = await resolveExecutionRootScope(executionRoot, git);
-  const storageRoot = scopeStorageRoot(scope, "execution-leases");
+  const storageRoot = scopeStorageRoot(
+    scope,
+    SCOPE_STORAGE_CATEGORIES.EXECUTION_LEASES
+  );
   const arbitrationTarget = path.join(storageRoot, "arbitration");
   return {
     identity: scope.identity,

@@ -94,7 +94,7 @@ const settings = {
       maxNoteLength: 2000,
       maxEntries: 1000,
       maxBoardBytes: 5_000_000,
-      maxEntryAgeDays: 7,
+      maxNoteAgeHours: 24,
       cliParticipantTtlMinutes: 30,
       allowExternalParticipants: true,
     },

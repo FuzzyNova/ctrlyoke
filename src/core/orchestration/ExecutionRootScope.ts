@@ -25,6 +25,15 @@ export interface ScopeRecord {
   scopeIdentity: string;
 }
 
+/** Every category of execution-root-scoped storage under `<common-dir>/ctrlyoke/`. */
+export const SCOPE_STORAGE_CATEGORIES = {
+  COORDINATION: "coordination",
+  EXECUTION_LEASES: "execution-leases",
+} as const;
+
+export type ScopeStorageCategory =
+  (typeof SCOPE_STORAGE_CATEGORIES)[keyof typeof SCOPE_STORAGE_CATEGORIES];
+
 async function readJson<T>(filePath: string): Promise<T | null> {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
@@ -100,14 +109,15 @@ export async function resolveExecutionRootScope(
  *    filesystem — so a synced location (the user-mode state home under
  *    OneDrive/Dropbox) would be wrong here even though run history tolerates it.
  * 3. Records outlive a managed worktree's directory. Load-bearing for the
- *    worktree ownership records next door, incidental for the board.
+ *    worktree ownership records next door; for the board and leases it is a
+ *    leak that {@link sweepOrphanedScopeStorage} cleans up.
  *
  * The non-Git fallback accepts (1) and (2) being unavailable because there is
  * no repository to dirty and nowhere else scoped to put it.
  */
 export function scopeStorageRoot(
   scope: ExecutionRootScope,
-  category: string
+  category: ScopeStorageCategory
 ): string {
   return scope.gitCommonDir
     ? path.join(scope.gitCommonDir, "ctrlyoke", category, scope.scopeHash)
@@ -151,6 +161,70 @@ export async function verifyScopeRecord({
     scopePath,
     JSON.stringify({ scopeIdentity } satisfies ScopeRecord, null, 2)
   );
+}
+
+async function pathExists(value: string): Promise<boolean> {
+  try {
+    await fs.access(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete scope storage whose linked worktree no longer exists, returning the
+ * directories removed.
+ *
+ * Storage lives in the common dir and so outlives the worktree, and its own
+ * retention only runs when something writes to it. Nothing ever writes to a
+ * removed worktree's board or leases again, so without this sweep every
+ * worktree ever created leaves a directory behind forever. Its contents are
+ * safe to drop: the claims and leases name an execution root that is gone,
+ * and the notes are advisory.
+ *
+ * Only scopes whose recorded identity is a `<common-dir>/worktrees/<name>`
+ * admin directory are candidates, and only when that directory is gone. Git
+ * deletes it on `git worktree remove`/`prune`, so a live worktree, the main
+ * checkout, and a non-Git fallback are never touched. Best-effort: any entry
+ * that cannot be read or removed is skipped.
+ */
+export async function sweepOrphanedScopeStorage(
+  executionRoot: string,
+  git: GitLocationLookup = liveGitLocations
+): Promise<string[]> {
+  const commonDir = await git.gitCommonDir(executionRoot).catch(() => null);
+  if (!commonDir) return [];
+  const canonicalCommonDir = await canonicalPath(commonDir);
+  const worktreeAdminRoot = foldPathForCompare(
+    path.join(canonicalCommonDir, "worktrees")
+  );
+  const removed: string[] = [];
+  for (const category of Object.values(SCOPE_STORAGE_CATEGORIES)) {
+    const categoryRoot = path.join(canonicalCommonDir, "ctrlyoke", category);
+    const scopeNames = await fs.readdir(categoryRoot).catch(() => []);
+    for (const scopeName of scopeNames) {
+      const storageRoot = path.join(categoryRoot, scopeName);
+      try {
+        const record = await readJson<ScopeRecord>(
+          path.join(storageRoot, "scope.json")
+        );
+        const identity = record?.scopeIdentity;
+        if (
+          !identity ||
+          path.dirname(identity) !== worktreeAdminRoot ||
+          (await pathExists(identity))
+        ) {
+          continue;
+        }
+        await fs.rm(storageRoot, { recursive: true, force: true });
+        removed.push(storageRoot);
+      } catch {
+        // Unreadable or locked: leave it for a later sweep.
+      }
+    }
+  }
+  return removed;
 }
 
 /** Backward-friendly name for callers that previously owned the lease resolver. */

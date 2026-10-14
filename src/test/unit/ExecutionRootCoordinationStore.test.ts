@@ -14,6 +14,7 @@ import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
 import {
   resolveExecutionRootScope,
   scopeStorageRoot,
+  sweepOrphanedScopeStorage,
 } from "../../core/orchestration/ExecutionRootScope";
 import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
 
@@ -164,6 +165,47 @@ suite("ExecutionRootCoordinationStore", function () {
       );
       assert.strictEqual(worktreeScope.identity, worktreeLease.identity);
       assert.ok(!worktreeScope.boardPath.startsWith(worktree));
+    } finally {
+      await removeDirectory(parent);
+    }
+  });
+
+  test("sweeps scope storage only for worktrees that no longer exist", async () => {
+    const parent = await tempDirectory("sweep");
+    const source = path.join(parent, "source");
+    const removed = path.join(parent, "removed");
+    const kept = path.join(parent, "kept");
+    await fs.mkdir(source);
+    try {
+      const git = (...args: string[]) =>
+        execFileSync("git", ["-C", source, ...args], { stdio: "ignore" });
+      execFileSync("git", ["init", source], { stdio: "ignore" });
+      git("config", "user.name", "Tests");
+      git("config", "user.email", "tests@example.com");
+      await fs.writeFile(path.join(source, "tracked.txt"), "base\n", "utf8");
+      git("add", "tracked.txt");
+      git("commit", "-m", "initial");
+      git("worktree", "add", "-b", "sweep-removed", removed);
+      git("worktree", "add", "-b", "sweep-kept", kept);
+
+      for (const root of [source, removed, kept]) {
+        await new ExecutionRootCoordinationStore(root).append(
+          note("writer", root)
+        );
+      }
+      const removedScope = await resolveCoordinationBoardScope(removed);
+      const keptScope = await resolveCoordinationBoardScope(kept);
+      const sourceScope = await resolveCoordinationBoardScope(source);
+
+      assert.deepStrictEqual(await sweepOrphanedScopeStorage(source), []);
+      git("worktree", "remove", removed);
+
+      assert.deepStrictEqual(await sweepOrphanedScopeStorage(kept), [
+        removedScope.storageRoot,
+      ]);
+      await assert.rejects(fs.access(removedScope.storageRoot));
+      await fs.access(keptScope.boardPath);
+      await fs.access(sourceScope.boardPath);
     } finally {
       await removeDirectory(parent);
     }
@@ -390,7 +432,7 @@ suite("ExecutionRootCoordinationStore", function () {
     try {
       const store = new ExecutionRootCoordinationStore(root, {
         now: () => now,
-        retention: { maxEntryAgeDays: 7 },
+        retention: { maxNoteAgeHours: 7 * 24 },
       });
       await store.append({
         ...note("old", "expired"),
@@ -406,6 +448,80 @@ suite("ExecutionRootCoordinationStore", function () {
         result.entries.map((entry) => entry.text),
         ["retained"]
       );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("hides an expired note from reads before any append compacts it", async () => {
+    const root = await tempDirectory("age-read");
+    let now = Date.parse("2026-09-11T12:00:00.000Z");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        now: () => now,
+        retention: { maxNoteAgeHours: 24 },
+      });
+      await store.append({
+        ...note("writer", "fresh then stale"),
+        at: "2026-09-11T12:00:00.000Z",
+      });
+      assert.strictEqual((await store.read()).entries.length, 1);
+
+      now = Date.parse("2026-09-12T13:00:00.000Z");
+      assert.deepStrictEqual((await store.read()).entries, []);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("keeps an old note visible and retained while its author is live", async () => {
+    const root = await tempDirectory("age-live");
+    const now = Date.parse("2026-09-20T12:00:00.000Z");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        now: () => now,
+        retention: { maxNoteAgeHours: 24 },
+        liveParticipants: () => new Set(["running"]),
+      });
+      await store.append({
+        ...note("running", "plan from a live sibling"),
+        at: "2026-09-01T12:00:00.000Z",
+      });
+      await store.append({
+        ...note("finished", "plan from a departed agent"),
+        at: "2026-09-01T12:00:00.000Z",
+      });
+      await store.append(note("writer", "trigger retention"));
+
+      assert.deepStrictEqual(
+        (await store.read()).entries.map((entry) => entry.text),
+        ["plan from a live sibling", "trigger retention"]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("leaves out the reader's own entries and counts what a latest page omits", async () => {
+    const root = await tempDirectory("select");
+    try {
+      const store = new ExecutionRootCoordinationStore(root);
+      await store.append(note("me", "mine"));
+      for (const text of ["one", "two", "three"]) {
+        await store.append(note("other", text));
+      }
+
+      const result = await store.read({
+        excludeFrom: "me",
+        latest: true,
+        limit: 2,
+      });
+      assert.deepStrictEqual(
+        result.entries.map((entry) => entry.text),
+        ["two", "three"]
+      );
+      assert.strictEqual(result.omittedOlder, 1);
+      assert.strictEqual(result.nextCursor, undefined);
     } finally {
       await removeDirectory(root);
     }
@@ -509,7 +625,7 @@ suite("ExecutionRootCoordinationStore", function () {
     let now = Date.parse("2026-09-01T12:00:00.000Z");
     const store = new ExecutionRootCoordinationStore(root, {
       now: () => now,
-      retention: { maxEntryAgeDays: 7 },
+      retention: { maxNoteAgeHours: 7 * 24 },
     });
     const at = (date: string) => ({ at: date });
     try {

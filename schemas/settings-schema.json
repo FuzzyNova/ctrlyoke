@@ -291,11 +291,11 @@
           "description": "Hard maximum size of the coordination board in bytes.",
           "default": 5242880
         },
-        "maxEntryAgeDays": {
-          "type": "number",
+        "maxNoteAgeHours": {
+          "type": "integer",
           "minimum": 1,
-          "description": "Remove coordination notes older than this many days during compaction.",
-          "default": 7
+          "description": "Hours a coordination note stays relevant once its author has left the board. Older notes from departed authors are hidden from read_notes and removed during compaction; notes from authors still on the board are kept until they leave.",
+          "default": 24
         },
         "cliParticipantTtlMinutes": {
           "type": "number",

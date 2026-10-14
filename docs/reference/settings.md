@@ -506,13 +506,13 @@ Maximum number of coordination entries retained after compaction.
 
 Hard maximum size of the coordination board in bytes.
 
-### `coordination.maxEntryAgeDays` {#coordination-maxentryagedays}
+### `coordination.maxNoteAgeHours` {#coordination-maxnoteagehours}
 
-- **Type:** `number`
-- **Default:** `7`
+- **Type:** `integer`
+- **Default:** `24`
 - **Constraints:** minimum 1
 
-Remove coordination notes older than this many days during compaction.
+Hours a coordination note stays relevant once its author has left the board. Older notes from departed authors are hidden from read\_notes and removed during compaction; notes from authors still on the board are kept until they leave.
 
 ### `coordination.cliParticipantTtlMinutes` {#coordination-cliparticipantttlminutes}
 

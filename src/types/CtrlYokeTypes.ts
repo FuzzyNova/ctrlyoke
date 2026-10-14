@@ -490,6 +490,10 @@ export interface CoordinationParticipant {
   pid?: number;
   lastHeartbeat?: number;
   leaseExpiresAt?: number;
+  /** Highest board sequence this participant has read notes up to; absent until its first read. */
+  readCursor?: number;
+  /** Sorted live participant IDs this participant was last shown; tool responses omit an unchanged list. */
+  seenParticipants?: string;
 }
 
 export interface CoordinationEntry {

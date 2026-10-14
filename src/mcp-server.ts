@@ -228,11 +228,18 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function serializeParticipant<
-  T extends Pick<CoordinationParticipant, "label" | "attested" | "kind">,
->(participant: T): T & { attribution: string } {
+/**
+ * The caller-facing view of a participant: who it is and where it runs. Lease
+ * mechanics (PID, heartbeat, expiry) and per-reader board state are left out;
+ * a model can do nothing with them and they repeat on every claim owner.
+ */
+function serializeParticipant(participant: CoordinationParticipant) {
   return {
-    ...participant,
+    participantId: participant.participantId,
+    label: participant.label,
+    kind: participant.kind,
+    attested: participant.attested,
+    ...(participant.address ? { address: participant.address } : {}),
     attribution: participantAttribution(participant),
   };
 }
@@ -786,10 +793,15 @@ export class CtrlYokeMCPServer {
     return this.coordinationState;
   }
 
-  private async coordinationScope(
-    state: CoordinationState,
-    includeClaims: boolean
-  ) {
+  /**
+   * Board context appended to every coordination response. The participant
+   * list rides along only when it differs from the one this caller was last
+   * shown, so a step making a dozen calls reads it once plus on each change.
+   */
+  private async coordinationScope(state: CoordinationState) {
+    const participantId = state.lease.participantId;
+    const changedParticipants =
+      await state.registry.participantsIfChanged(participantId);
     const folded = await state.registry.fold();
     const counts = new Map<string, number>();
     for (const claim of folded.claims) {
@@ -800,14 +812,14 @@ export class CtrlYokeMCPServer {
     }
     return {
       executionRoot: state.scope.executionRoot,
-      identity: state.scope.identity,
-      participants: folded.participants.map(serializeParticipant),
+      you: participantId,
+      ...(changedParticipants
+        ? { participants: changedParticipants.map(serializeParticipant) }
+        : { participantsUnchanged: true }),
       claimSummary: {
         count: folded.claims.length,
         byParticipant: Object.fromEntries(counts),
-        ...(includeClaims ? { claims: folded.claims.map(serializeClaim) } : {}),
       },
-      attestationNotice: ATTESTATION_NOTICE,
     };
   }
 
@@ -882,7 +894,7 @@ export class CtrlYokeMCPServer {
               seq: entry.seq,
               text: entry.text,
               ...(args.to?.length ? { to: args.to } : {}),
-              scope: await this.coordinationScope(state, false),
+              scope: await this.coordinationScope(state),
             },
             null,
             2
@@ -902,8 +914,12 @@ export class CtrlYokeMCPServer {
       ...(args.from ? { from: args.from } : {}),
     });
     const entries = result.entries.map((entry) => ({
-      ...entry,
+      seq: entry.seq,
+      at: entry.at,
+      from: entry.from.participantId,
       attribution: participantAttribution(entry.from),
+      ...(entry.to ? { to: entry.to } : {}),
+      text: entry.text,
       untrusted: true,
     }));
     return {
@@ -914,9 +930,19 @@ export class CtrlYokeMCPServer {
             {
               entries,
               ...(result.nextCursor !== undefined
-                ? { nextCursor: result.nextCursor }
+                ? {
+                    nextCursor: result.nextCursor,
+                    more: `More unread notes remain; call ${MCP_READ_NOTES_TOOL_NAME} again to continue.`,
+                  }
                 : {}),
-              scope: await this.coordinationScope(state, false),
+              ...(result.omittedOlder !== undefined
+                ? {
+                    omittedOlder: result.omittedOlder,
+                    more: `This is your first read, so only the newest notes are shown. Pass "since": 0 to page through the ${result.omittedOlder} older ones from the start.`,
+                  }
+                : {}),
+              notice: ATTESTATION_NOTICE,
+              scope: await this.coordinationScope(state),
             },
             null,
             2
@@ -952,7 +978,7 @@ export class CtrlYokeMCPServer {
                 owner: serializeParticipant(denied.owner),
               })),
               claims: result.claims.map(serializeClaim),
-              scope: await this.coordinationScope(state, true),
+              scope: await this.coordinationScope(state),
             },
             null,
             2
@@ -1000,7 +1026,7 @@ export class CtrlYokeMCPServer {
                     note: `You held no claim on ${notHeld.join(", ")}, so ${notHeld.length === 1 ? "it was" : "they were"} not released. Only the participant that claimed a path can release it.`,
                   }
                 : {}),
-              scope: await this.coordinationScope(state, true),
+              scope: await this.coordinationScope(state),
             },
             null,
             2

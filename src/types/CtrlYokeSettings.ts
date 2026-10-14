@@ -111,7 +111,7 @@ export interface CoordinationSettings {
   maxNoteLength: number;
   maxEntries: number;
   maxBoardBytes: number;
-  maxEntryAgeDays: number;
+  maxNoteAgeHours: number;
   cliParticipantTtlMinutes: number;
   allowExternalParticipants: boolean;
 }
@@ -529,7 +529,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     maxNoteLength: 2_000,
     maxEntries: 1_000,
     maxBoardBytes: 5 * 1024 * 1024,
-    maxEntryAgeDays: 7,
+    maxNoteAgeHours: 24,
     cliParticipantTtlMinutes: 30,
     allowExternalParticipants: true,
   },

@@ -33,6 +33,13 @@ rather than assuming:
 - `release_paths` returns `released`, plus `notHeld` for any path you named
   that was not yours to release.
 
+`read_notes` with no arguments returns only the notes you have not read yet.
+The board keeps your place between calls, so you do not need to track a cursor.
+Your own notes are left out, and so are old notes from agents that have
+already finished. `scope.participants` appears only when the set of
+participants has changed since your last call. Otherwise the response says
+`participantsUnchanged`, and the list you saw before is still current.
+
 Addressing a note with `to` requires live participant IDs: an unknown ID is
 refused rather than posted, because nobody would ever read it. Omit `to` to
 broadcast to everyone sharing the execution root.

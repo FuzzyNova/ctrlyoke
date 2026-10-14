@@ -483,15 +483,38 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
     assert.strictEqual(posted.seq, 3);
     assert.strictEqual(posted.scope.participants.length, 1);
-    assert.match(posted.scope.attestationNotice, /not a security boundary/);
+    assert.strictEqual(
+      posted.scope.participants[0].participantId,
+      posted.scope.you
+    );
+    assert.strictEqual(
+      posted.scope.participants[0].pid,
+      undefined,
+      "lease mechanics stay out of caller-facing participants"
+    );
 
+    const reader = new CtrlYokeMCPServer({ workspaceRoot });
     const notes = responseJson(
-      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, {})
+      await reader.invokeTool(MCP_READ_NOTES_TOOL_NAME, {})
     );
     assert.strictEqual(notes.entries.length, 1);
-    assert.strictEqual(notes.entries[0].from.attested, false);
+    assert.strictEqual(notes.entries[0].from, posted.scope.you);
     assert.match(notes.entries[0].attribution, /unattested external session/);
     assert.strictEqual(notes.entries[0].untrusted, true);
+    assert.match(notes.notice, /not a security boundary/);
+    assert.strictEqual(notes.scope.participants.length, 2);
+    assert.deepStrictEqual(
+      responseJson(await reader.invokeTool(MCP_READ_NOTES_TOOL_NAME, {}))
+        .entries,
+      [],
+      "a second read returns only notes posted since the first"
+    );
+
+    const unchanged = responseJson(
+      await reader.invokeTool(MCP_READ_NOTES_TOOL_NAME, {})
+    );
+    assert.strictEqual(unchanged.scope.participants, undefined);
+    assert.strictEqual(unchanged.scope.participantsUnchanged, true);
 
     const claimed = responseJson(
       await server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
@@ -526,9 +549,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       /unattested ctrlyoke step \(skill\/CLI\)/
     );
     const notes = responseJson(
-      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, {})
+      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, {
+        from: [posted.scope.you],
+      })
     );
-    assert.strictEqual(notes.entries[0].from.kind, "ctrlyoke-step");
+    assert.strictEqual(notes.entries.length, 1);
     assert.match(
       notes.entries[0].attribution,
       /unattested ctrlyoke step \(skill\/CLI\)/
@@ -962,7 +987,12 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const released = callCli(MCP_RELEASE_PATHS_TOOL_NAME, {});
     assert.deepStrictEqual(released.released, ["src/a.ts"]);
     assert.strictEqual(released.scope.claimSummary.count, 0);
-    assert.strictEqual(released.scope.participants.length, 1);
+    assert.strictEqual(claimed.scope.participants.length, 1);
+    assert.strictEqual(
+      released.scope.participantsUnchanged,
+      true,
+      "a later one-shot call by the same step is not shown the list again"
+    );
   });
 
   test("rejects a CLI coordination call for a bad working-file address", async () => {

@@ -415,12 +415,13 @@ const STATIC_SETTINGS_CATALOG = {
     label: "Maximum board size (bytes)",
     description: "Hygiene ceiling for the persisted board.",
   },
-  "coordination.maxEntryAgeDays": {
-    id: "coordination.maxEntryAgeDays",
-    path: "coordination.maxEntryAgeDays",
+  "coordination.maxNoteAgeHours": {
+    id: "coordination.maxNoteAgeHours",
+    path: "coordination.maxNoteAgeHours",
     tab: GLOBAL_SETTINGS_TABS.COORDINATION,
-    label: "Note retention (days)",
-    description: "Notes older than this are removed during compaction.",
+    label: "Note retention (hours)",
+    description:
+      "Notes older than this are hidden and removed once their author has left the board.",
   },
   "coordination.cliParticipantTtlMinutes": {
     id: "coordination.cliParticipantTtlMinutes",
