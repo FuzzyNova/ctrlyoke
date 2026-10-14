@@ -473,31 +473,26 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         </div>
       )}
 
-      {/* Custom range input — always rendered, disabled when not in custom mode */}
-      <div
-        className={`mt-1${showCustomInput ? "" : " opacity-50 pointer-events-none"}`}
-        title={
-          showCustomInput ? undefined : "Select 'Custom' to specify step ranges"
-        }
-      >
-        <input
-          type="text"
-          value={customText}
-          onChange={handleCustomTextChange}
-          disabled={!showCustomInput}
-          placeholder="e.g. 1,2,4-10"
-          aria-label="Custom step range (e.g. 1,2,4-10)"
-          className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7 ${dropdownBorderClass(
-            customError,
-            "error"
-          )}`}
-        />
-        {customError && (
-          <span className="text-xxs text-error-fg mt-0.5 block">
-            Use numbers, commas, and ranges (e.g. 1,3,5-10)
-          </span>
-        )}
-      </div>
+      {showCustomInput && (
+        <div className="mt-1">
+          <input
+            type="text"
+            value={customText}
+            onChange={handleCustomTextChange}
+            placeholder="e.g. 1,2,4-10"
+            aria-label="Custom step range (e.g. 1,2,4-10)"
+            className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded-sm focus:outline-hidden focus:border-focus-border h-7 ${dropdownBorderClass(
+              customError,
+              "error"
+            )}`}
+          />
+          {customError && (
+            <span className="text-xxs text-error-fg mt-0.5 block">
+              Use numbers, commas, and ranges (e.g. 1,3,5-10)
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 };

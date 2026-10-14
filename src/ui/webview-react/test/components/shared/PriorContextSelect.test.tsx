@@ -139,6 +139,20 @@ describe("PriorContextSelect schema metadata", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("shows the custom range input only while Custom is selected", () => {
+    render(<PriorContextSelect value={{ previous: 2 }} onChange={vi.fn()} />);
+    expect(
+      screen.queryByLabelText(/Custom step range/)
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Previous 2,/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
+    expect(screen.getByLabelText(/Custom step range/)).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Number of previous step outputs")
+    ).not.toBeInTheDocument();
+  });
+
   it("does not treat { previous } as a run address", () => {
     render(<PriorContextSelect value={{ previous: 2 }} onChange={vi.fn()} />);
     expect(

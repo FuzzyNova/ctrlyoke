@@ -61,8 +61,9 @@ Field details: [`worktree`](/reference/workflow-schema#worktree).
 - **Prior Context** — inject earlier step outputs into each prompt. The detail
   dropdown below the selector sets `priorContextDetail`: **Full** sends each
   step's complete record, and **Summary** sends a bounded excerpt (the start of
-  the prompt, the files changed, and the end of the reply). The field below that
-  takes specific prompt numbers, such as `1,2,4-10`. See
+  the prompt, the files changed, and the end of the reply). Choosing **Previous
+  N** shows a count field, and choosing **Custom** shows a field for specific
+  prompt numbers, such as `1,2,4-10`. See
   [Prior output references](/workflows/context-files#prior-output-references).
 - **Variables** — workflow-level <code v-pre>{{name}}</code> values. Use **Bulk
   edit** to paste several `name=value` lines at once.
