@@ -421,7 +421,7 @@ const initialGlobalSettings: GlobalSettings = {
   maxSteps: CTRLYOKE_SETTINGS_DEFAULTS.queue.maxSteps,
   effectiveParallelGroupWidth:
     CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
-  resumeSession: false,
+  resumeSession: CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession,
   mcpServers: [],
   hooks: [],
   autoFocusOutputOnExecution: true,

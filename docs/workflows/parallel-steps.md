@@ -47,8 +47,12 @@ member terminals still belong to the same workflow controller scope.
 ## Rules
 
 A group needs at least two members. Before the group starts, ctrlyoke checks
-that the members resolve to distinct harness sessions: two members that would
-resume the same session are rejected. A numeric `priorContext` or `sessionId` in
+that the members resolve to distinct harness sessions: two members whose
+`sessionId` resumes the same session are rejected. A member that would
+automatically resume a session an earlier member already holds starts a new
+session instead, because concurrent steps cannot continue one conversation (see
+[Session management](/workflows/session-management#sessions-at-a-parallel-group-boundary)).
+A numeric `priorContext` or `sessionId` in
 a member cannot point at another member of the same group. If the host cannot run
 several interactive terminals at once, it also rejects multiple interactive
 members. In that case, set `executionMode: headless` on those members.

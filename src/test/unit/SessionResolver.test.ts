@@ -458,13 +458,16 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(result, true);
     });
 
-    test("should return false when no workflow provided and prompt not set", () => {
+    test("should fall back to the defaults.resumeSession setting when no workflow provided and prompt not set", () => {
       const prompt: PromptStep = {
         prompt: "test",
       };
 
       const result = SessionResolver.shouldResumeSession(prompt);
-      assert.strictEqual(result, false);
+      assert.strictEqual(
+        result,
+        ConfigurationUtils.shouldResumeExistingSession()
+      );
     });
   });
 

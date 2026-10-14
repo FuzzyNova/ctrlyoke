@@ -693,6 +693,8 @@ suite("WorkflowExecutor condition shell reporting", () => {
         steps: [
           {
             prompt: "initial",
+            // A fresh first attempt isolates the retry's own resume decision.
+            resumeSession: false,
             endCondition: {
               script: "check-result",
               onFail: CONDITION_ACTIONS.RETRY,

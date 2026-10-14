@@ -48,6 +48,12 @@ export interface ParallelGroupPreflightMember {
   readonly variables: Readonly<Record<string, string>>;
   readonly effectivePromptText?: string;
   readonly resolvedSessionId?: string;
+  /**
+   * Step index of an earlier member that already holds the session this member
+   * would auto-resume (no `sessionId`). Concurrent members cannot continue one
+   * conversation, so this member starts a new session instead.
+   */
+  readonly autoResumeSharedWith?: number;
   /** Internal reservation used to verify integration isolation. */
   readonly integrationReservation?: unknown;
 }
@@ -213,7 +219,7 @@ export async function preflightParallelGroupMember(
     });
   }
 
-  const resolvedSessionId = isScriptStep(step)
+  const candidateSessionId = isScriptStep(step)
     ? undefined
     : SessionResolver.resolveWithProperties(
         prompt,
@@ -224,6 +230,24 @@ export async function preflightParallelGroupMember(
         group.startIndex,
         false
       );
+
+  const reservedMembers = options.reservedMembers ?? [];
+  const sessionOwners = reservedMembers.filter(
+    (reserved) =>
+      !isScriptStep(reserved.step) &&
+      candidateSessionId !== undefined &&
+      reserved.resolvedSessionId === candidateSessionId &&
+      reserved.resolvedProperties.harness === resolvedProperties.harness
+  );
+  // An auto-resumed session (no sessionId) that an earlier member already holds
+  // is not an authoring conflict, just two branches inheriting one
+  // conversation: the later member starts fresh. Explicit references still fail.
+  const autoResumeSharedWith =
+    sessionOwners.length > 0 && resolvedProperties.sessionId === undefined
+      ? sessionOwners[0].stepIndex
+      : undefined;
+  const resolvedSessionId =
+    autoResumeSharedWith === undefined ? candidateSessionId : undefined;
   const member: ParallelGroupPreflightMember = {
     stepIndex: options.stepIndex,
     step,
@@ -235,17 +259,10 @@ export async function preflightParallelGroupMember(
     variables,
     ...(effectivePromptText !== undefined ? { effectivePromptText } : {}),
     ...(resolvedSessionId !== undefined ? { resolvedSessionId } : {}),
+    ...(autoResumeSharedWith !== undefined ? { autoResumeSharedWith } : {}),
   };
 
-  const reservedMembers = options.reservedMembers ?? [];
-  const sessionOwners = reservedMembers.filter(
-    (reserved) =>
-      !isScriptStep(reserved.step) &&
-      resolvedSessionId !== undefined &&
-      reserved.resolvedSessionId === resolvedSessionId &&
-      reserved.resolvedProperties.harness === resolvedProperties.harness
-  );
-  if (sessionOwners.length > 0) {
+  if (sessionOwners.length > 0 && autoResumeSharedWith === undefined) {
     const indices = [
       ...sessionOwners.map((owner) => owner.stepIndex),
       options.stepIndex,

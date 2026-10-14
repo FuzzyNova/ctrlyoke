@@ -38,6 +38,7 @@ import type {
 } from "./types/CtrlYokeTypes";
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
 import {
   BOOLEAN_STRING_VALUES,
   CAPABILITIES_FILE,
@@ -1052,6 +1053,12 @@ export class CtrlYokeMCPServer {
         // present; warnings are advisory and must not fail this read tool.
       }
     }
+    // The working file carries every workflow-level setting (filled from
+    // settings when the run was created), so step → workflow is the whole
+    // inheritance chain; the shipped default only covers a hand-written file.
+    const workflowResumeSession =
+      queueData.resumeSession ??
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts are a read_output
     // call away.
@@ -1069,7 +1076,9 @@ export class CtrlYokeMCPServer {
         status: stepStatuses[index],
         model: isScriptStep(p) ? undefined : p.model,
         sessionId: isScriptStep(p) ? null : (p.sessionId ?? null),
-        resumeSession: isScriptStep(p) ? false : (p.resumeSession ?? false),
+        resumeSession: isScriptStep(p)
+          ? false
+          : (p.resumeSession ?? workflowResumeSession),
       };
     });
 
@@ -1094,6 +1103,7 @@ export class CtrlYokeMCPServer {
         ),
         harness: queueData.harness ?? null,
         model: queueData.model ?? null,
+        resumeSession: workflowResumeSession,
         currentIndex: runtime.currentIndex,
         totalSteps: allSteps.length,
         completedSteps: completedCount,

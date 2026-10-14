@@ -6,6 +6,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { PropertyResolver } from "./PropertyResolver";
+import { ConfigurationUtils } from "./ConfigurationUtils";
 import { Log } from "./Log";
 
 /**
@@ -311,7 +312,7 @@ export class SessionResolver {
    * Applies three-tier precedence (using PropertyResolver):
    * 1. Prompt-level resumeSession setting (highest priority)
    * 2. Workflow-level resumeSession setting
-   * 3. Global ctrlyoke.resumeExistingSession setting (lowest priority)
+   * 3. `defaults.resumeSession` setting (lowest priority)
    *
    * @param prompt The prompt to check
    * @param workflow Workflow file for workflow-level defaults (optional)
@@ -325,13 +326,10 @@ export class SessionResolver {
       return PropertyResolver.resolve(prompt, workflow).resumeSession;
     }
 
-    // Fallback when workflow is unavailable (should be rare)
-    // In this case, respect prompt-level setting or default to false
-    if (prompt.resumeSession !== undefined) {
-      return prompt.resumeSession;
-    }
-
-    // Default to new session when no workflow or prompt setting exists
-    return false;
+    // Fallback when workflow is unavailable (should be rare): respect the
+    // prompt-level setting, otherwise the defaults.resumeSession setting.
+    return ConfigurationUtils.shouldResumeSessionForPrompt(
+      prompt.resumeSession
+    );
   }
 }

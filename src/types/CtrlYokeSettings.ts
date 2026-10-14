@@ -479,7 +479,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     skills: [],
     secrets: [],
     executionMode: "interactive",
-    resumeSession: false,
+    resumeSession: true,
     priorContext: "none",
     mcpServers: [],
     hooks: [],

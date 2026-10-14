@@ -5,10 +5,12 @@ import {
   CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
+  type HarnessId,
 } from "../../types/DashboardConstants";
 import type {
   ParallelGroupDefinition,
   PromptFile,
+  PromptStep,
 } from "../../types/CtrlYokeTypes";
 import {
   ctrlYokeToolFamilies,
@@ -112,18 +114,49 @@ suite("ParallelGroupPreflight", () => {
     );
   });
 
-  test("finds same-harness auto-resume collisions and allows different harnesses", async () => {
-    const before = {
-      prompt: "before",
+  function completedOn(harness: HarnessId, sessionId: string): PromptStep {
+    return {
+      prompt: `before on ${harness}`,
+      harness,
       _runtime: {
-        harness: HARNESS_IDS.COPILOT_CLI,
+        harness,
         model: "model",
-        sessionId: "prior-session",
+        sessionId,
         startedAt: 1,
         completedAt: 2,
       },
-    } as const;
-    const sameHarness = await run({
+    };
+  }
+
+  function sessions(result: Awaited<ReturnType<typeof run>>) {
+    return result.members.map((member) => ({
+      sessionId: member.resolvedSessionId,
+      autoResumeSharedWith: member.autoResumeSharedWith,
+    }));
+  }
+
+  test("auto-resumes each member's own harness session across groups", async () => {
+    const result = await run({
+      resumeSession: true,
+      steps: [
+        completedOn(HARNESS_IDS.COPILOT_CLI, "copilot-session"),
+        completedOn(HARNESS_IDS.CLAUDE_CLI, "claude-session"),
+        { prompt: "fix on copilot", harness: HARNESS_IDS.COPILOT_CLI },
+        { prompt: "fix on claude", harness: HARNESS_IDS.CLAUDE_CLI },
+      ],
+      parallelGroups: [{ ...group, startIndex: 2, endIndex: 3 }],
+    });
+
+    assert.deepStrictEqual(result.issues, []);
+    assert.deepStrictEqual(sessions(result), [
+      { sessionId: "copilot-session", autoResumeSharedWith: undefined },
+      { sessionId: "claude-session", autoResumeSharedWith: undefined },
+    ]);
+  });
+
+  test("starts a later member fresh when its auto-resumed session is already held", async () => {
+    const before = completedOn(HARNESS_IDS.COPILOT_CLI, "prior-session");
+    const autoResumed = await run({
       harness: HARNESS_IDS.COPILOT_CLI,
       resumeSession: true,
       steps: [
@@ -133,31 +166,43 @@ suite("ParallelGroupPreflight", () => {
       ],
       parallelGroups: [group],
     });
+    assert.deepStrictEqual(autoResumed.issues, []);
+    assert.deepStrictEqual(sessions(autoResumed), [
+      { sessionId: "prior-session", autoResumeSharedWith: undefined },
+      { sessionId: undefined, autoResumeSharedWith: 1 },
+    ]);
+
+    const heldByExplicitReference = await run({
+      harness: HARNESS_IDS.COPILOT_CLI,
+      resumeSession: true,
+      steps: [before, { prompt: "one", sessionId: 1 }, { prompt: "two" }],
+      parallelGroups: [group],
+    });
+    assert.deepStrictEqual(heldByExplicitReference.issues, []);
+    assert.deepStrictEqual(sessions(heldByExplicitReference), [
+      { sessionId: "prior-session", autoResumeSharedWith: undefined },
+      { sessionId: undefined, autoResumeSharedWith: 1 },
+    ]);
+  });
+
+  test("still rejects an explicit sessionId that collides with an auto-resumed member", async () => {
+    const result = await run({
+      harness: HARNESS_IDS.COPILOT_CLI,
+      resumeSession: true,
+      steps: [
+        completedOn(HARNESS_IDS.COPILOT_CLI, "prior-session"),
+        { name: "alpha", prompt: "one" },
+        { name: "beta", prompt: "two", sessionId: 1 },
+      ],
+      parallelGroups: [group],
+    });
     assert.match(
-      sameHarness.issues.find(
+      result.issues.find(
         (issue) =>
           issue.code ===
           PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
       )?.message ?? "",
       /Step 2 \("alpha"\).*Step 3 \("beta"\)/
-    );
-
-    const differentHarness = await run({
-      resumeSession: true,
-      steps: [
-        before,
-        { prompt: "one", harness: HARNESS_IDS.COPILOT_CLI },
-        { prompt: "two", harness: HARNESS_IDS.CLAUDE_CLI },
-      ],
-      parallelGroups: [group],
-    });
-    assert.strictEqual(
-      differentHarness.issues.some(
-        (issue) =>
-          issue.code ===
-          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
-      ),
-      false
     );
   });
 

@@ -866,7 +866,8 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
     page: "context",
     label: "Resume existing session",
-    description: "Attempt to resume the most recent AI session.",
+    description:
+      "Each step continues the previous step's conversation on the same harness. Turn off to start every step in a new session.",
   },
   "defaults.priorContext": {
     id: "defaults.priorContext",

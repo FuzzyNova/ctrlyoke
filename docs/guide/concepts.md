@@ -95,8 +95,8 @@ If the final step has `mcpServers: ["ctrlyoke"]` and appends more prompts, ctrly
 
 A session is the underlying conversation or thread maintained by a harness. ctrlyoke can:
 
-- start a new session
-- resume the immediately previous session with `resumeSession: true`
+- continue the previous step's session, which is the default (`resumeSession: true`)
+- start a new session with `resumeSession: false`
 - resume a specific earlier step with `sessionId: 1`
 - resume an exact harness session ID string
 - resume the most recent final step's session with `sessionId: finalStep`

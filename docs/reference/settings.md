@@ -247,10 +247,10 @@ Default execution mode for new workflows. 'interactive' spawns a live terminal (
 ### `defaults.resumeSession` {#defaults-resumesession}
 
 - **Type:** `boolean`
-- **Default:** `false`
+- **Default:** `true`
 - **Workflow field:** [`resumeSession`](/reference/workflow-schema#execution-properties-resumesession) — a workflow or step value overrides this default
 
-Resume an existing session when running a workflow.
+Default for whether a step continues an earlier step's conversation instead of starting a new session. With no sessionId, a step continues the most recent earlier step on the same harness; the first step always starts a new session. Workflows and individual steps can override this, e.g. set resumeSession: false at the workflow level for loops whose steps must each start fresh.
 
 ### `defaults.priorContext` {#defaults-priorcontext}
 

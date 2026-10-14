@@ -4,10 +4,11 @@ Session management controls how one step picks up from another.
 
 ## The simple rule
 
-- use `resumeSession: true` when the next step should continue the previous compatible conversation
+- by default, each step continues the previous compatible conversation, like follow-up messages in a chat
+- use `resumeSession: false` when a step should start a new session instead
 - add `sessionId` (together with `resumeSession: true`) when you need to pick a specific conversation
 
-`resumeSession` defaults to the `defaults.resumeSession` setting, which is `false` out of the box, so every step starts a fresh session unless you opt in. It can be set per step or once at the workflow level.
+`resumeSession` defaults to the `defaults.resumeSession` setting, which is `true` out of the box. It can be set once at the workflow level and overridden per step; a step inherits the workflow's value, and the workflow inherits the setting. The first step always starts a new session.
 
 ::: warning `sessionId` needs `resumeSession: true`
 `sessionId` only chooses _which_ session to resume. When the effective `resumeSession` is `false`, it is ignored and the step starts a fresh session.
@@ -15,28 +16,32 @@ Session management controls how one step picks up from another.
 
 ## When to resume vs. start fresh
 
-`resumeSession: true` shares the previous step's live conversation, so **only use it when the combined work fits one context window** — small, tightly-coupled steps like implement-right-after-plan on a focused change.
+Resuming shares the previous step's live conversation, so it works best **when the combined work fits one context window**: a conversation you keep steering, or small, tightly-coupled steps like implement-right-after-plan on a focused change.
 
-For **large features**, don't chain sessions: the full body of work won't fit a single context window, and an overstuffed session degrades quality. Instead, have an early step write a durable plan/design doc and give each later step its **own** session (`resumeSession: false`, the default), sharing context by referencing that doc:
+For **large features**, don't chain sessions: the full body of work won't fit a single context window, and an overstuffed session degrades quality. Instead, have an early step write a durable plan/design doc and give each later step its **own** session (`resumeSession: false`), sharing context by referencing that doc. Setting it once at the workflow level makes every step start fresh:
 
 ```yaml
+resumeSession: false # every step starts a new session; the plan doc carries the context
 steps:
   - name: plan
     prompt: Analyze @src/ and write the implementation plan to docs/feature-plan.md.
 
   - name: implement
     prompt: Implement the feature per @docs/feature-plan.md.
-    # resumeSession omitted → fresh session; the plan doc carries the context
 
   - name: review
     prompt: Review the implementation against @docs/feature-plan.md and fix any issues.
 ```
+
+The built-in loop templates (Bug Hunt Loop, Bug Drain Loop, Spec-Driven Loop, Feature-Driven Loop) set `resumeSession: false` at the workflow level for this reason. Steps a workflow appends to itself with `append_step` inherit the workflow's value like any other property, so the `workflow-orchestrator` agent sets `resumeSession: false` on each step it queues, which shows as a **no resume** chip on the step.
 
 The written artifact is the shared memory: it survives across fresh sessions and keeps each step focused on its slice.
 
 ## Automatic resume
 
 With `resumeSession: true` and no `sessionId`, ctrlyoke walks backwards from the current step and resumes the most recent earlier step that ran on the **same harness** and recorded a session ID. If none exists (for example on the first step), a new session starts.
+
+Steps on other harnesses are skipped, not continued. In a Claude → Codex → Claude workflow, the third step resumes the first step's conversation, which never saw the Codex step's work (the files it changed are still on disk). Reference the skipped step's output with a [prior output reference](/workflows/context-files#prior-output-references) such as `$step:2` if the step needs it.
 
 ## Numeric step references
 
@@ -89,15 +94,24 @@ otherwise ctrlyoke starts a new session and logs why.
 ## Sessions at a parallel group boundary
 
 Parallel members resolve their effective properties from one immutable snapshot
-at the point where the group starts. `resumeSession: true`, inherited defaults,
-and numeric `sessionId` references therefore use only sessions completed before
-the group, not a sibling that is starting in the same group. Numeric references
-to another member of the group are rejected during parsing/preflight.
+at the point where the group starts. Numeric `sessionId` references therefore use
+only sessions completed before the group, not a sibling that is starting in the
+same group. Numeric references to another member of the group are rejected
+during parsing/preflight.
+
+[Automatic resume](#automatic-resume) works for parallel members as long as
+each one continues a different conversation. For example, three members on three
+harnesses each continue the most recent earlier session on their own harness.
+Members run concurrently, though, so they cannot all continue one conversation:
+when a member without a `sessionId` would resume a session an earlier member of
+the group already holds, that member starts a new session and ctrlyoke logs a
+warning. Give it a `sessionId` to continue a different earlier conversation.
 
 Every concurrently running prompt member must have a distinct effective session
-for its harness. This collision check happens after workflow defaults,
-step-level overrides, and automatic session resolution are applied, so two
-members that inherit the same session are rejected before any member launches.
+for its harness. This check happens after workflow defaults and step-level
+overrides are applied. Apart from the automatic-resume case above, two members
+that resolve to the same session through a `sessionId` (for example both
+inheriting a workflow-level `sessionId`) are rejected before any member launches.
 Different harnesses may use sessions with the same provider-specific ID because
 session identity includes the harness.
 

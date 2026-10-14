@@ -85,7 +85,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "resumeSession": {
         "valueKind": "boolean",
-        "description": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry."
+        "description": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry."
       },
       "mcpServers": {
         "valueKind": "oneOf",
@@ -369,7 +369,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       },
       "resumeSession": {
         "valueKind": "boolean",
-        "description": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry."
+        "description": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry."
       },
       "mcpServers": {
         "valueKind": "oneOf",

@@ -42,7 +42,7 @@ Key fields:
 
 - **`prompt`** — the instruction for that step. Attach context with ctrlyoke references, following the attached `ctrlyoke-syntax` skill: `@path/to/file.ts` for a file, `@path/to/dir/` for a directory tree, plus line ranges, symbols, git changes, and earlier steps' output. There is no "whole workspace" reference. For broad context, reference the relevant directories or just describe what to analyze.
 - **`model`** _(optional)_ — a model override for the step. Omit it to inherit the workflow/user default. Model names are **harness-specific**, so prefer describing intent (see Models) over hardcoding a value.
-- **`resumeSession: true`** — continue the prior step's conversation (shared live context) instead of starting fresh. **Only use it when the combined work fits one context window** — small, tightly-coupled steps (e.g. implement right after plan on a small change). For larger features, keep sessions separate and share context through a written plan doc instead (see Session strategy).
+- **`resumeSession`** — `true` continues the prior step's conversation (shared live context); `false` starts a new session. When omitted it comes from the user's `defaults.resumeSession` setting (`true` out of the box), so **always set it explicitly** in workflows you write, at the workflow level, the step level, or both. Resume **only when the combined work fits one context window** — small, tightly-coupled steps (e.g. implement right after plan on a small change). For larger features, keep sessions separate and share context through a written plan doc instead (see Session strategy).
 - **`endCondition`** — run a `script` after the step and gate on its result. With no comparison fields it passes when the script exits 0, which covers most checkpoints. To compare output instead, state all three: `compareSource` (`stdout`/`stderr`/`exitCode`), `operator` (`eq`, `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty` — word tokens, never symbols), and `expected`. Never write `expected: "true"` for an exit code; exit 0 means success, and there is no boolean form. `onFail: retry` re-runs after failure with `retryPrompt`; `onPass: retry` re-runs after a pass with `passRetryPrompt` (or the step's own prompt) up to `maxRetries` times, then advances when the budget is exhausted. Feed the script's output back with condition output references (`$endCondition:stdout` and friends, per the `ctrlyoke-syntax` skill); `$endCondition:*` only works in a `retryPrompt`. Use this at checkpoints (tests, lint, build), including regression tests that should fail with `onPass: retry` and `onFail: continue`.
 
 ## Standard phases
@@ -64,7 +64,7 @@ Size the workflow to the request — not every task needs every phase.
 - **Small, tightly-coupled work** — chain steps with `resumeSession: true` so each step sees the earlier reasoning directly. Fine when plan + implementation comfortably fit a single session.
 - **Large features** — do **not** chain sessions. The full body of work won't fit one context window, and an overstuffed session degrades output quality. Instead:
   - Have the plan step write a durable plan/design doc (e.g. `docs/<feature>-plan.md`).
-  - Give every later step its **own** session (`resumeSession: false`) and share context by **referencing that doc** (`@docs/<feature>-plan.md`) — not by session continuity.
+  - Give every step its **own** session (`resumeSession: false` at the workflow level) and share context by **referencing that doc** (`@docs/<feature>-plan.md`) — not by session continuity.
   - The written artifact is the shared memory: it survives across fresh sessions and keeps each step focused on its slice.
 
 ## Models
@@ -85,6 +85,7 @@ A plain `steps:` list is a **fixed, linear** plan — best when you can enumerat
 User: "Add JWT authentication." A larger feature: the plan step writes `docs/auth-plan.md`, and every later step runs in its **own** session, pulling shared context from that doc rather than a chained conversation.
 
 ```yaml
+resumeSession: false # every step gets its own session; context comes from the plan doc, not the chat thread
 steps:
   - name: plan
     prompt: |
@@ -100,18 +101,15 @@ steps:
   - name: implement-service
     prompt: |
       Implement the auth service (login, logout, token refresh) per @docs/auth-plan.md.
-    resumeSession: false # own session; context comes from the plan doc, not the chat thread
 
   - name: implement-routes
     prompt: |
       Add auth middleware and protect authenticated routes per @docs/auth-plan.md.
-    resumeSession: false
 
   - name: review
     prompt: |
       Review the implementation against @docs/auth-plan.md for security, error
       handling, and type safety. Fix any issues found.
-    resumeSession: false
     endCondition:
       script: "npm test"
       maxRetries: 2

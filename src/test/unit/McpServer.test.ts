@@ -11,6 +11,7 @@ import {
   type McpToolCallingContext,
 } from "../../mcp-server";
 import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import { STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS } from "../../utils/TextUtils";
 import { parseArgString } from "../../utils/CliArgParser";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
@@ -1093,6 +1094,47 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(status.metadata.runDirectory.startsWith(".."), false);
     assert.strictEqual(output.workflowKey, own.workflowKey);
     assert.strictEqual(output.outputs[0].responseText, "own output");
+  });
+
+  test("workflow_status reports each step's effective resumeSession", async () => {
+    const server = await setup();
+    const run = await createRun("resume", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.resumeSession = false;
+    workingFile.steps = [
+      { prompt: "explicit resume", resumeSession: true },
+      { prompt: "inherits the workflow" },
+      { type: "script", script: "npm test" },
+    ];
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(status.metadata.resumeSession, false);
+    assert.deepStrictEqual(
+      status.steps.map(
+        (step: { resumeSession: boolean }) => step.resumeSession
+      ),
+      [true, false, false]
+    );
+
+    delete workingFile.resumeSession;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    const unset = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(
+      unset.metadata.resumeSession,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession
+    );
+    assert.strictEqual(
+      unset.steps[1].resumeSession,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession
+    );
   });
 
   test("preserves the read_output response when paging is omitted", async () => {

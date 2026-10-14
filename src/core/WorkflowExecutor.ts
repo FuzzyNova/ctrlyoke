@@ -895,17 +895,28 @@ export class WorkflowExecutor {
       throwIfParallelGroupPreflightFailed(preflight);
     }
     for (const member of preflight.members) {
-      if (
-        !isScriptStep(member.step) &&
-        member.resolvedProperties.resumeSession &&
-        member.resolvedSessionId === undefined
-      ) {
-        Log.warn(
-          `[WorkflowExecutor] Parallel preflight: Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
-        );
-      }
+      this.warnIfParallelMemberStartsFresh(member);
     }
     return preflight;
+  }
+
+  /** Explain why a parallel member that asked to resume starts a new session. */
+  private warnIfParallelMemberStartsFresh(
+    member: ParallelGroupPreflightMember
+  ): void {
+    if (
+      isScriptStep(member.step) ||
+      !member.resolvedProperties.resumeSession ||
+      member.resolvedSessionId !== undefined
+    ) {
+      return;
+    }
+    const label = `Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""}`;
+    Log.warn(
+      member.autoResumeSharedWith !== undefined
+        ? `[WorkflowExecutor] Parallel preflight: ${label} would resume the same ${member.resolvedProperties.harness} session as step ${member.autoResumeSharedWith + 1}, which runs concurrently in its group; starting fresh. Set sessionId to resume a different earlier step.`
+        : `[WorkflowExecutor] Parallel preflight: ${label} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
+    );
   }
 
   private getParallelGroupPreflightOptions(
@@ -970,15 +981,7 @@ export class WorkflowExecutor {
       stepIndex,
       reservedMembers: runningMembers,
     });
-    if (
-      !isScriptStep(result.member.step) &&
-      result.member.resolvedProperties.resumeSession &&
-      result.member.resolvedSessionId === undefined
-    ) {
-      Log.warn(
-        `[WorkflowExecutor] Parallel preflight: Step ${stepIndex + 1}${result.member.step.name ? ` ("${result.member.step.name}")` : ""} has no historical ${result.member.resolvedProperties.harness} session at the group boundary; starting fresh.`
-      );
-    }
+    this.warnIfParallelMemberStartsFresh(result.member);
     return result;
   }
 

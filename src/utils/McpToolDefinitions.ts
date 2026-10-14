@@ -227,7 +227,7 @@ const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
     resumeSession: {
       type: "boolean",
       description:
-        "Continue an earlier step's conversation instead of starting fresh.",
+        "Continue an earlier step's conversation instead of starting fresh. Defaults to the workflow's resumeSession (workflow_status shows it). Without sessionId, it continues the most recent earlier step on the same harness.",
     },
     sessionId: {
       type: "number",
@@ -313,7 +313,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending, and its sessionId/resumeSession settings. Each step's prompt is shortened to its first line (promptTruncated marks a shortened one); call read_output with a step's index to read its full prompt.",
+      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending, its sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). metadata shows the workflow's harness, model, and resumeSession, which steps you append inherit unless you set them. Each step's prompt is shortened to its first line (promptTruncated marks a shortened one); call read_output with a step's index to read its full prompt.",
     inputSchema: { type: "object", properties: {} },
   },
   {
