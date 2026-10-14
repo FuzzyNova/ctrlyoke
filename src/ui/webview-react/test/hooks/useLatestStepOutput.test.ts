@@ -197,7 +197,9 @@ describe("useFinalStepLatestOutput", () => {
     });
 
     const { result } = renderHook(() => useFinalStepLatestOutput());
-    const { result: promptResult } = renderHook(() => useFinalStepLatestPrompt());
+    const { result: promptResult } = renderHook(() =>
+      useFinalStepLatestPrompt()
+    );
     expect(
       getStepOutputText(
         { output: result.current },

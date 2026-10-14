@@ -8,13 +8,17 @@ import {
 } from "../types/messages";
 import type { OrderedCliHistoryEntry } from "@root/types/OutputHistoryTypes";
 
-function useLatestFinalPromptEntry(): OrderedCliHistoryEntry | undefined {
+/** The displayed output history: the viewed run's when browsing history, else live. */
+function useDisplayedOrderedEntries() {
   const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
   const { isViewingHistory } = useUiStore();
-  const entries =
-    isViewingHistory && historyOutputs
-      ? historyOutputs.orderedEntries
-      : liveOrderedEntries;
+  return isViewingHistory && historyOutputs
+    ? historyOutputs.orderedEntries
+    : liveOrderedEntries;
+}
+
+function useLatestFinalPromptEntry(): OrderedCliHistoryEntry | undefined {
+  const entries = useDisplayedOrderedEntries();
 
   return useMemo(() => {
     for (let i = entries.length - 1; i >= 0; i--) {
@@ -32,12 +36,7 @@ function useLatestFinalPromptEntry(): OrderedCliHistoryEntry | undefined {
 }
 
 function useLatestQueuePromptEntries(): Map<number, OrderedCliHistoryEntry> {
-  const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
-  const { isViewingHistory } = useUiStore();
-  const entries =
-    isViewingHistory && historyOutputs
-      ? historyOutputs.orderedEntries
-      : liveOrderedEntries;
+  const entries = useDisplayedOrderedEntries();
 
   return useMemo(() => {
     const result = new Map<number, OrderedCliHistoryEntry>();

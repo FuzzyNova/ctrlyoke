@@ -257,10 +257,10 @@ export async function activate(context: vscode.ExtensionContext) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const userConfigBackend = createUserConfigBackend();
     configService.setUserBackend(userConfigBackend);
-    if (workspaceFolders && workspaceFolders.length > 0) {
-      const workspaceConfigBackend = createWorkspaceConfigBackend(
-        getVsCodeWorkspaceRoot()
-      );
+    const workspaceConfigBackend = workspaceFolders?.length
+      ? createWorkspaceConfigBackend(getVsCodeWorkspaceRoot())
+      : undefined;
+    if (workspaceConfigBackend) {
       configService.setWorkspaceBackend(workspaceConfigBackend);
     }
     context.subscriptions.push(
@@ -440,15 +440,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const fileWatcherFactory = new VsCodeFileWatcherFactory();
     const settingsFilePaths = [
       userConfigBackend.filePath,
-      ...(workspaceFolders?.length
-        ? [
-            path.join(
-              getVsCodeWorkspaceRoot(),
-              ".ctrlyoke",
-              "settings.json"
-            ),
-          ]
-        : []),
+      ...(workspaceConfigBackend ? [workspaceConfigBackend.filePath] : []),
     ];
     for (const settingsFilePath of new Set(settingsFilePaths)) {
       const settingsWatcher = fileWatcherFactory.create(

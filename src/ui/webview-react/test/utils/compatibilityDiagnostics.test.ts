@@ -130,7 +130,11 @@ describe("workflowPermissionDiagnostic", () => {
       target("custom", ["write"], [], HARNESS_IDS.CLAUDE_CLI),
     ];
     expect(
-      workflowPermissionDiagnostic("allowedTools", targets, claudePartialSnapshot)
+      workflowPermissionDiagnostic(
+        "allowedTools",
+        targets,
+        claudePartialSnapshot
+      )
     ).toEqual({
       severity: "info",
       message:

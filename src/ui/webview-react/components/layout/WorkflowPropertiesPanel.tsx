@@ -11,7 +11,10 @@ import type {
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
 import { EXECUTION_PROPERTY_KEYS } from "@root/types/CtrlYokeTypes";
-import { TRUST_DECISIONS } from "@root/types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  TRUST_DECISIONS,
+} from "@root/types/DashboardConstants";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -540,7 +543,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
     ...modeDiagnostics,
     ...allowedFieldDiagnostics,
     ...deniedFieldDiagnostics,
-  ].some((diagnostic) => diagnostic.severity === "warning");
+  ].some(
+    (diagnostic) =>
+      diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+  );
 
   // Local input state for Additional Args — committed on blur/Enter to avoid
   // flooding the undo stack with every keystroke.

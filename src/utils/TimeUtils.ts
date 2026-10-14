@@ -4,6 +4,12 @@
  * @param timestampMs - Future timestamp in milliseconds
  * @param now - Reference "current" time in milliseconds (defaults to Date.now(), pass explicitly in tests)
  * @returns Compact time string relative to `now`
+ *
+ * @example
+ * formatFutureTime(fiveThisAfternoon)                 // "5:00 PM today"
+ * formatFutureTime(fiveTomorrowAfternoon)              // "5:00 PM tomorrow"
+ * formatFutureTime(fiveNextWednesdayAfternoon)         // "5:00 PM Wed"
+ * formatFutureTime(fiveInThreeWeeksAfternoon)          // "5:00 PM 8/31"
  */
 export function formatFutureTime(
   timestampMs: number,

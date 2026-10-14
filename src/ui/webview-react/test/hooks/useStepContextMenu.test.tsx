@@ -524,7 +524,10 @@ describe("useStepContextMenu", () => {
       ],
     });
     render(
-      <TestHarness step={{ prompt: "Original prompt" }} latestOutput={latestOutput} />
+      <TestHarness
+        step={{ prompt: "Original prompt" }}
+        latestOutput={latestOutput}
+      />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));

@@ -5,6 +5,7 @@ import {
   PERMISSION_MODES,
   CAPABILITY_FIDELITIES,
   CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
   HOOK_EVENT_ORDER,
   MCP_CAPABILITY_KEYS,
@@ -187,8 +188,11 @@ export function workflowPermissionDiagnostic(
   >();
   for (const target of relevant) {
     const harnessId = target.resolved.properties.harness;
-    const group =
-      grouped.get(harnessId) ?? { supported: 0, caveated: 0, affected: 0 };
+    const group = grouped.get(harnessId) ?? {
+      supported: 0,
+      caveated: 0,
+      affected: 0,
+    };
     const state =
       capabilities.harnesses[harnessId]?.effective?.permissions?.[field];
     const caveatCode =
@@ -229,7 +233,10 @@ export function workflowPermissionDiagnostic(
       ? " Denied Tools are NOT ENFORCED by the affected consumers."
       : "";
   return {
-    severity: ignored.length > 0 ? "warning" : "info",
+    severity:
+      ignored.length > 0
+        ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+        : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
     message: `${enforced.concat(caveated, ignored).join(". ")}.${deniedRuleWarning}`,
   };
 }
