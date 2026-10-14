@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { resolveCtrlYokeToolView } from "@components/output/ctrlyoke-tools/registry";
 import { PostNoteBody } from "@components/output/ctrlyoke-tools/PostNoteView";
@@ -17,6 +17,7 @@ import {
   MCP_SERVER_IDS,
   TOOL_CALL_EXPANSION_SECTIONS,
   OUTPUT_ROW_KINDS,
+  STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { OutputRenderRow } from "@utils/outputRows";
 import { OutputRow } from "@components/output/OutputRow";
@@ -24,6 +25,7 @@ import { AppendStepBody } from "@components/output/ctrlyoke-tools/AppendStepView
 import { ClaimPathsBody } from "@components/output/ctrlyoke-tools/ClaimPathsView";
 import { ReleasePathsBody } from "@components/output/ctrlyoke-tools/ReleasePathsView";
 import { ReadNotesBody } from "@components/output/ctrlyoke-tools/ReadNotesView";
+import { WorkflowStatusBody } from "@components/output/ctrlyoke-tools/WorkflowStatusView";
 import {
   parseClaimPathsParams,
   parseClaimPathsResultText,
@@ -99,6 +101,57 @@ const readNotesResult = {
 };
 
 describe("ctrlyoke MCP tool views", () => {
+  it("renders script workflow status without assigning the workflow harness", () => {
+    const result = {
+      workflowKey: "workflow",
+      runRef: "run",
+      metadata: {
+        currentIndex: 0,
+        totalSteps: 2,
+        completedSteps: 0,
+        executionState: "running",
+        harness: "claude-cli",
+        model: "model",
+      },
+      steps: [
+        {
+          index: 0,
+          type: STEP_TYPES.SCRIPT,
+          script: "npm run build",
+          name: "Build",
+          status: "pending",
+        },
+        {
+          index: 1,
+          prompt: "Review the output",
+          status: "pending",
+        },
+      ],
+      schemaWarnings: [],
+    };
+    const data = {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "workflow_status",
+      result: { success: true, output: JSON.stringify(result) },
+    };
+
+    render(
+      <WorkflowStatusBody
+        params={undefined}
+        result={result}
+        data={data as never}
+        expansion={{ ...DEFAULT_TOOL_CALL_EXPANSION_STATE }}
+        onExpansionChange={vi.fn()}
+      />
+    );
+
+    const scriptRow = screen.getByText("Build").closest("tr")!;
+    expect(within(scriptRow).getByText("Script")).toBeInTheDocument();
+    expect(within(scriptRow).queryByText("Claude Code")).toBeNull();
+    const promptRow = screen.getByText("Review the output").closest("tr")!;
+    expect(within(promptRow).getByText("Claude Code")).toBeInTheDocument();
+  });
+
   it("parses claim_paths results, falls back for invalid/error results, and warns on denials", () => {
     const raw = JSON.stringify({
       granted: ["src/a.ts", "src/b.ts"],

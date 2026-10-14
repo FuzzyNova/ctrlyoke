@@ -52,6 +52,7 @@ import {
   RUNNER_IDS,
   RUN_HISTORY_LOCATIONS,
   STEP_STATUS,
+  STEP_TYPES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -2454,6 +2455,50 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.ok(persisted.steps?.[1]._runtime?.stepId);
   });
 
+  test("rejects script-marker prompts in append_step", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "append-script-marker",
+      "2026-01-01T00-00-00-000Z",
+      {
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const before = await fs.readFile(run.runFilePath, "utf8");
+
+    await assert.rejects(
+      () =>
+        server.invokeTool("append_step", {
+          position: "end",
+          steps: [{ prompt: "(script) npm run build" }],
+        }),
+      /Script steps cannot be appended through MCP/u
+    );
+    assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+  });
+
+  test("rejects script-marker prompts in edit_step", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "edit-script-marker",
+      "2026-01-01T00-00-00-000Z",
+      {
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 0,
+          updates: { prompt: "(script) npm run build" },
+        }),
+      /Script steps cannot be edited through MCP/u
+    );
+  });
+
   test("workflow maxSteps rejects an MCP append even when the global limit is unlimited", async () => {
     const server = await setup();
     process.env.CTRLYOKE_MAX_STEPS = "-1";
@@ -3451,6 +3496,53 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await server.invokeTool(MCP_READ_OUTPUT_TOOL_NAME, { indices: [0] })
     );
     assert.strictEqual(output.outputs[0].prompt, longPrompt);
+  });
+
+  test("reports script steps with an explicit type and script field", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "explicit-script-step",
+      "2026-01-01T00-00-00-000Z",
+      {
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = [
+      {
+        type: STEP_TYPES.SCRIPT,
+        name: "Build",
+        script: "npm run build && npm test",
+      },
+      { prompt: "Review the build" },
+    ];
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.deepStrictEqual(status.steps[0], {
+      index: 0,
+      type: STEP_TYPES.SCRIPT,
+      script: "npm run build && npm test",
+      name: "Build",
+      status: STEP_STATUS.PENDING,
+      sessionId: null,
+      resumeSession: false,
+    });
+    assert.ok(!("prompt" in status.steps[0]));
+    assert.strictEqual(status.steps[1].prompt, "Review the build");
+    assert.ok(!("type" in status.steps[1]));
+
+    const output = responseJson(
+      await server.invokeTool(MCP_READ_OUTPUT_TOOL_NAME, { indices: [0, 1] })
+    );
+    assert.strictEqual(output.outputs[0].type, STEP_TYPES.SCRIPT);
+    assert.strictEqual(output.outputs[0].script, "npm run build && npm test");
+    assert.strictEqual(output.outputs[0].prompt, undefined);
+    assert.strictEqual(output.outputs[1].prompt, "Review the build");
+    assert.ok(!("type" in output.outputs[1]));
   });
 
   test("returns the newer workflow format refusal as a tool error", async () => {

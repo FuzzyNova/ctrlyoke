@@ -27,7 +27,7 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(reference.includes("### append_step"));
     assert.ok(
       reference.includes(
-        "Add one or more steps or future parallel groups to your workflow's queue. This is how you build up or extend the workflow"
+        "Add one or more prompt steps or future parallel groups to your workflow's queue. Script steps cannot be appended through MCP. This is how you build up or extend the workflow"
       )
     );
     assert.ok(
