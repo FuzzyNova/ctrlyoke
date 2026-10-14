@@ -2537,6 +2537,65 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.deepStrictEqual(operations, ["run-view"]);
   });
 
+  test("replays the live PTY sessions to a client connecting to a lineage-backed workflow", async () => {
+    // Regression: the client is bound before the addressed load, so the
+    // publisher's bind-change-keyed terminal replay never fired and a fresh
+    // browser connect to a running workflow showed an empty terminal tab.
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    const workflowId = "workflow-live";
+    const workflowKey = "live-lineage" as never;
+    const runRef = "run-2026-07-21T12-00-00-000Z" as never;
+    const operations: string[] = [];
+
+    internal.viewerRegistry = new Map<string, string | null>();
+    internal.viewAddressRegistry = new Map();
+    internal.instances = new Map([
+      [
+        workflowId,
+        {
+          getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
+          getQueueState: () => ({ workflowKey, runRef }),
+          replayFullStateTo: () => operations.push("session-restored"),
+        },
+      ],
+    ]);
+    internal.retiredInstances = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
+    internal.getActiveTerminalWorkflowRefs = () => [];
+    internal.loadRunViewForClient = async (
+      _address: unknown,
+      _send: (message: unknown) => void,
+      _clientId: string,
+      _requestId: string | undefined,
+      _definitionRollback: unknown,
+      _announceReplayBoundary: boolean,
+      skipTerminalReplay: boolean
+    ) => {
+      assert.strictEqual(
+        skipTerminalReplay,
+        true,
+        "the caller owns the terminal replay"
+      );
+      operations.push("run-view");
+    };
+    internal.replayTerminalSessionsTo = (replayedId: string) => {
+      operations.push(`terminals:${replayedId}`);
+    };
+
+    await orchestrator.replayWorkflowStateTo(
+      workflowId,
+      () => undefined,
+      "browser:connect"
+    );
+
+    assert.deepStrictEqual(operations, [
+      "run-view",
+      `terminals:${workflowId}`,
+    ]);
+  });
+
   test("loadRunSummariesForClient sends a request-correlated summary snapshot without binding a client view", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-run-summaries-")

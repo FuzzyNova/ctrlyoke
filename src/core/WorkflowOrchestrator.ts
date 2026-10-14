@@ -997,6 +997,10 @@ export class WorkflowOrchestrator {
 
       const queueState = instance.getQueueState();
       if (queueState.workflowKey) {
+        // RunViewPublisher sends the full addressed snapshot, then overlays
+        // the bound live output buffer. Its own terminal replay is keyed on a
+        // bind *change*, and the client was already bound above, so it would
+        // never fire here — terminals are replayed below instead.
         await this.loadRunViewForClient(
           queueState.runRef
             ? {
@@ -1013,23 +1017,24 @@ export class WorkflowOrchestrator {
           undefined,
           undefined,
           false,
-          options?.skipTerminalReplay
+          true
         );
-        // RunViewPublisher sends the full addressed snapshot, then overlays
-        // the bound live output buffer and replays terminals (unless the caller
-        // requested skipTerminalReplay). It is the complete lineage bind.
-        return;
+      } else {
+        // A brand-new workflow has no lineage/address to publish, so its full
+        // state replay replaces whatever the client was displaying.
+        instance.replayFullStateTo(sink, {
+          asReplacement: true,
+        });
       }
-
-      // A brand-new workflow has no lineage/address to publish, so its full
-      // state replay replaces whatever the client was displaying.
-      instance.replayFullStateTo(sink, {
-        asReplacement: true,
-      });
+      // Replay against the instance the client ended up bound to: the lineage
+      // bind can move it to the lineage's executing owner.
       if (!options?.skipTerminalReplay) {
-        this.replayTerminalSessionsTo(workflowId, send, clientId);
+        this.replayTerminalSessionsTo(
+          this.getViewedWorkflowId(clientId) ?? workflowId,
+          send,
+          clientId
+        );
       }
-      // setViewedWorkflowId already called before awaits above.
       return;
     }
 
