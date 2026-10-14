@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PriorContextSelect } from "@components/shared/PriorContextSelect";
 
 describe("PriorContextSelect schema metadata", () => {
-  it("binds the detail toggle and marks summary labels", () => {
+  it("shows the detail dropdown after the kind and binds it", () => {
     const onDetailChange = vi.fn();
     render(
       <PriorContextSelect
@@ -11,19 +11,56 @@ describe("PriorContextSelect schema metadata", () => {
         value="previous"
         onChange={vi.fn()}
         detail="summary"
+        detailId="prior-context-detail"
         onDetailChange={onDetailChange}
       />
     );
 
+    const kind = document.getElementById("prior-context")!;
+    const detail = document.getElementById("prior-context-detail")!;
+    expect(kind).toHaveTextContent("Previous step");
+    expect(kind).not.toHaveTextContent("summary");
+    expect(detail).toHaveTextContent("Summary");
     expect(
-      screen.getByRole("button", { name: /Previous step · summary/ })
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Summary" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Full" }));
+      kind.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    fireEvent.click(detail);
+    expect(
+      screen.queryByRole("button", { name: /Inherit/ })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Full/ }));
     expect(onDetailChange).toHaveBeenCalledWith("full");
+  });
+
+  it("offers an inherit detail and disables detail for none", () => {
+    const onDetailChange = vi.fn();
+    const { rerender } = render(
+      <PriorContextSelect
+        value="previous"
+        onChange={vi.fn()}
+        detailId="prior-context-detail"
+        detailInheritLabel="Inherit (Summary)"
+        onDetailChange={onDetailChange}
+      />
+    );
+
+    const detail = document.getElementById("prior-context-detail")!;
+    expect(detail).toHaveTextContent("Inherit (Summary)");
+    fireEvent.click(detail);
+    fireEvent.click(screen.getByRole("button", { name: /^Full/ }));
+    expect(onDetailChange).toHaveBeenLastCalledWith("full");
+
+    rerender(
+      <PriorContextSelect
+        value="none"
+        onChange={vi.fn()}
+        detailId="prior-context-detail"
+        detailInheritLabel="Inherit (Summary)"
+        onDetailChange={onDetailChange}
+      />
+    );
+    expect(document.getElementById("prior-context-detail")).toBeDisabled();
   });
 
   it("uses the shared keyword labels and property details", () => {

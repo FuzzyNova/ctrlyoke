@@ -69,6 +69,7 @@ import {
   ERROR_BEHAVIOR_SELECTION_OPTIONS_META,
   EXECUTION_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
+  PRIOR_CONTEXT_DETAIL_OPTIONS_META,
   RESUME_SESSION_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
@@ -430,14 +431,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const resolvedPriorContext =
     workflowProperties.priorContext ??
     (globalSettings.priorContext as PriorContext);
-  const resolvedPriorContextDetail =
-    displayedProperties.priorContextDetail ??
-    workflowProperties.priorContextDetail ??
-    PRIOR_CONTEXT_DETAILS.FULL;
   const defaultPriorContextLabel = `Inherit (${formatPriorContextLabel(
-    resolvedPriorContext,
-    resolvedPriorContextDetail
+    resolvedPriorContext
   )})`;
+  const defaultPriorContextDetailLabel = `Inherit (${
+    PRIOR_CONTEXT_DETAIL_OPTIONS_META[
+      workflowProperties.priorContextDetail ?? PRIOR_CONTEXT_DETAILS.FULL
+    ].label
+  })`;
 
   // Get models for current harness
   const currentHarness = (
@@ -1081,10 +1082,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <PriorContextSelect
                   id="prop-prior-context"
-                  detailSummaryId="prop-prior-context-detail-summary"
+                  detailId="prop-prior-context-detail"
                   schemaPath="priorContext"
                   value={displayedProperties.priorContext}
-                  detail={resolvedPriorContextDetail}
+                  detail={displayedProperties.priorContextDetail}
+                  detailInheritLabel={defaultPriorContextDetailLabel}
                   detailDisabled={fieldDisabled(
                     PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL
                   )}

@@ -2,10 +2,15 @@ import {
   INHERIT_DEFAULT_OPTION,
   PRIOR_CONTEXT_SELECTION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
-  PRIOR_CONTEXT_DETAILS,
+  PROMPT_PROPERTIES,
   type PriorContextDetail,
 } from "@root/types/DashboardConstants";
-import { PRIOR_CONTEXT_SELECT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import {
+  PRIOR_CONTEXT_DETAIL_OPTIONS_META,
+  PRIOR_CONTEXT_SELECT_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
+import { CustomSelect } from "./CustomSelect";
 import {
   schemaAriaLabel,
   schemaOptionTitle,
@@ -46,9 +51,13 @@ interface PriorContextSelectProps {
   disabled?: boolean;
   detailDisabled?: boolean;
   disabledReason?: string;
+  /** Detail set at this level; undefined inherits when `detailInheritLabel` is given. */
   detail?: PriorContextDetail;
-  onDetailChange?: (detail: PriorContextDetail) => void;
-  detailSummaryId?: string;
+  /** Offer an "Inherit (…)" detail option with this label. Use in prompt-level UI. */
+  detailInheritLabel?: string;
+  /** Show the detail dropdown below the kind selector. */
+  onDetailChange?: (detail: PriorContextDetail | undefined) => void;
+  detailId?: string;
 }
 
 export type KeywordMode = keyof typeof PRIOR_CONTEXT_SELECT_OPTIONS_META;
@@ -89,9 +98,10 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   disabled = false,
   detailDisabled = false,
   disabledReason,
-  detail = PRIOR_CONTEXT_DETAILS.FULL,
+  detail,
+  detailInheritLabel,
   onDetailChange,
-  detailSummaryId,
+  detailId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -263,8 +273,24 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   } else if (value === undefined) {
     buttonLabel = inheritLabel;
   } else {
-    buttonLabel = formatPriorContextLabel(value, detail);
+    // With the detail control shown, the trigger names only the kind.
+    buttonLabel = formatPriorContextLabel(
+      value,
+      onDetailChange ? undefined : detail
+    );
   }
+
+  const detailApplies = value !== PRIOR_CONTEXT_KEYWORDS.NONE;
+  const detailOptions = toSelectOptions(
+    PRIOR_CONTEXT_DETAIL_OPTIONS_META,
+    PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL
+  ).flatMap((option) =>
+    option.value !== INHERIT_DEFAULT_OPTION
+      ? [option]
+      : detailInheritLabel
+        ? [{ ...option, label: detailInheritLabel }]
+        : []
+  );
 
   // The trigger names the value actually written; the option list keeps the
   // pseudo-options' example shapes.
@@ -300,36 +326,6 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
 
   return (
     <div className="flex flex-col gap-1 w-full">
-      {onDetailChange && (
-        <div
-          className="flex items-center gap-2"
-          role="group"
-          aria-label="Prior context detail"
-        >
-          <span className="text-xxs text-description-fg">Detail</span>
-          {(
-            [PRIOR_CONTEXT_DETAILS.FULL, PRIOR_CONTEXT_DETAILS.SUMMARY] as const
-          ).map((option) => (
-            <button
-              key={option}
-              id={
-                option === PRIOR_CONTEXT_DETAILS.SUMMARY
-                  ? detailSummaryId
-                  : detailSummaryId
-                    ? `${detailSummaryId}-full`
-                    : undefined
-              }
-              type="button"
-              aria-pressed={detail === option}
-              disabled={disabled || detailDisabled}
-              onClick={() => onDetailChange(option)}
-              className={`px-2 py-0.5 text-xxs rounded-sm border ${detail === option ? "bg-button-bg text-button-fg border-button-border" : "bg-input-bg text-description-fg border-input-border"}`}
-            >
-              {option === PRIOR_CONTEXT_DETAILS.FULL ? "Full" : "Summary"}
-            </button>
-          ))}
-        </div>
-      )}
       {/* Dropdown button */}
       <div className="relative inline-block w-full">
         <button
@@ -405,6 +401,30 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           </div>
         </DropdownPortal>
       </div>
+
+      {/* Detail follows the kind, as in `$previous:summary`. */}
+      {onDetailChange && (
+        <CustomSelect
+          id={detailId}
+          schemaPath={PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL}
+          triggerAriaLabel="Prior context detail"
+          value={detail ?? INHERIT_DEFAULT_OPTION}
+          onChange={(v) =>
+            onDetailChange(
+              v === INHERIT_DEFAULT_OPTION
+                ? undefined
+                : (v as PriorContextDetail)
+            )
+          }
+          options={detailOptions}
+          disabled={disabled || detailDisabled || !detailApplies}
+          triggerTitle={
+            detailApplies
+              ? disabledReason
+              : "Select prior context to choose its detail"
+          }
+        />
+      )}
 
       {mode === PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT &&
         !showCustomInput &&

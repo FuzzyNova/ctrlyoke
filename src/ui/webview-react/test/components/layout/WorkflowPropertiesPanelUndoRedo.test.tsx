@@ -374,7 +374,7 @@ const CONTEXT_CASES: UndoCase[] = [
     name: "prior context dropdown",
     tab: "Context",
     run: () => {
-      fireEvent.click(screen.getByRole("button", { name: /priorContext/ }));
+      fireEvent.click(screen.getByRole("button", { name: /priorContext\b/ }));
       chooseOption("All");
     },
   },

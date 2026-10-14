@@ -416,10 +416,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["priorContext", ["settings-prior-context"]],
   [
     "priorContextDetail",
-    [
-      "settings-prior-context-detail-summary",
-      "prop-prior-context-detail-summary",
-    ],
+    ["settings-prior-context-detail", "prop-prior-context-detail"],
   ],
   ["resumeSession", ["settings-resume-session"]],
   ["expected", ["${idPrefix}-expected"]],

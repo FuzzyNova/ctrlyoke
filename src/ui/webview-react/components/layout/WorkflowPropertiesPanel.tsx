@@ -1203,7 +1203,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   );
 
   const handlePriorContextDetailChange = useCallback(
-    (value: PriorContextDetail) => {
+    (value: PriorContextDetail | undefined) => {
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty(
         PROMPT_PROPERTIES.PRIOR_CONTEXT_DETAIL,
@@ -2177,7 +2177,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <PriorContextSelect
                     id="settings-prior-context"
-                    detailSummaryId="settings-prior-context-detail-summary"
+                    detailId="settings-prior-context-detail"
                     schemaPath="priorContext"
                     value={effectivePriorContext}
                     onChange={handlePriorContextChange}

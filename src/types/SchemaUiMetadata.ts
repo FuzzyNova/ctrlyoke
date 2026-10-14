@@ -15,6 +15,7 @@ import {
   HOOK_EVENT_NAMES,
   NOTIFICATION_EVENT_MODES,
   PERMISSION_MODES,
+  PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_SELECTION_MODES,
   INHERIT_DEFAULT_OPTION,
@@ -456,6 +457,22 @@ export const PRIOR_CONTEXT_SELECT_OPTIONS_META = {
     value: PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
     label: "Custom",
     pseudo: { writes: "priorContext: [1,2]" },
+  },
+} as const;
+
+export const PRIOR_CONTEXT_DETAIL_OPTIONS_META = {
+  [INHERIT_DEFAULT_OPTION]: {
+    value: INHERIT_DEFAULT_OPTION,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [PRIOR_CONTEXT_DETAILS.FULL]: {
+    value: PRIOR_CONTEXT_DETAILS.FULL,
+    label: "Full",
+  },
+  [PRIOR_CONTEXT_DETAILS.SUMMARY]: {
+    value: PRIOR_CONTEXT_DETAILS.SUMMARY,
+    label: "Summary",
   },
 } as const;
 
