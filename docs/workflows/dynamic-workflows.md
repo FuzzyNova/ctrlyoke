@@ -51,6 +51,21 @@ finalStep:
 
 A workflow can even start with an empty `steps` list and let the `finalStep` build the whole workflow.
 
+## Watching it in the dashboard {#in-the-dashboard}
+
+An appended step joins the steps panel as soon as the tool call returns, in the
+position it was given, and runs like any authored step. The output pane shows
+each ctrlyoke tool call as its own row: `workflow_status` as a table of the
+run's steps, and `append_step` as "Appended N steps at #X" with the new steps'
+names, harness and model, and prompts. **Raw** shows the call's full response.
+The **Final Step** bar counts the passes, so **Pass 2** means the final step has
+run again after the steps it appended.
+
+![A finished dynamic workflow: the steps panel lists the authored Run tests script step and the appended Summarize test results step, and the output pane shows the final step's workflow_status table and its "Appended 1 step at #2 (end)" row](/screenshots/dynamic-workflow-append-1600x1000.png)
+
+Appended steps are saved to the run like authored ones, so they appear in the
+run's history and can be rerun, edited, or reordered afterwards.
+
 ## Parallel groups
 
 Parallel-group members may use the built-in `ctrlyoke` server. A member can:

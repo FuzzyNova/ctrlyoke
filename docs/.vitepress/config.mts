@@ -128,6 +128,7 @@ export default defineConfig({
             { text: "Hooks", link: "/workflows/hooks" },
             { text: "Worktrees", link: "/workflows/worktrees" },
             { text: "Dynamic workflows", link: "/workflows/dynamic-workflows" },
+            { text: "Coordination", link: "/workflows/coordination" },
           ],
         },
       ],

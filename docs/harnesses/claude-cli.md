@@ -61,11 +61,48 @@ steps:
     prompt: Implement the fixes.
 ```
 
+## Model selection {#model-selection}
+
+Claude Code has no command that lists its models, so the **Model** picker shows a fixed list of
+Claude's short aliases: `fable`, `sonnet`, `sonnet[1m]`, `opus`, `opus[1m]` and `haiku`. Claude Code
+resolves each alias to its current model.
+
+Set `model` on the workflow or on a step. Without one, ctrlyoke uses
+[`defaults.models["claude-cli"]`](/reference/settings#defaults-models), which is `sonnet` out of
+the box. A Copilot-style ID such as `claude-sonnet-4.6` is mapped to the alias for its family
+(`sonnet`), so it loses any version or `[1m]` suffix. Any other value is replaced by your default,
+with a warning in the log. Keep model overrides harness-specific.
+
+`model: none` passes no `--model` flag, so Claude Code uses its own default model. To pass a model
+the list doesn't have, such as a full model ID, set `model: none` and put `--model <id>` in
+`additionalArgs`. See [How step properties inherit](/workflows/yaml-format#property-inheritance).
+
+## Permissions {#permissions}
+
+The permission `mode` maps to Claude Code flags:
+
+- `dangerouslyAllowAll` → `--dangerously-skip-permissions`. The deny list is ignored.
+- `allowAll` → `--permission-mode bypassPermissions --tools default`, plus `--disallowedTools`
+  with the deny list
+- `custom` → `--allowedTools` with the allow list and `--disallowedTools` with the deny list. In
+  headless runs ctrlyoke also passes `--permission-mode dontAsk`, which denies any tool that isn't
+  pre-approved. Interactive runs keep Claude's default mode, which asks you in the terminal.
+- `none` → no permission flags (Claude's own settings, such as `~/.claude/settings.json`)
+
+Tool names are translated to Claude's spelling, and arguments are kept: `shell` and `bash` become
+`Bash`, `write` becomes `Write`, and `read`, `edit`, `multiedit`, `glob`, `grep`, `ls`, `webfetch`
+and `todowrite` become `Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch` and
+`TodoWrite`. The default deny list therefore reaches Claude as
+`--disallowedTools Bash(rm:*) Bash(git push:*) …`. MCP patterns such as
+`mcp__github__create_issue` pass through unchanged.
+
+In headless `custom` runs, allow rules in Claude's own settings also count as pre-approved, so they
+can add to your allow list. See [Permissions](/workflows/permissions) for the modes, the pattern
+syntax and [the default lists](/workflows/permissions#the-default-lists).
+
 ## Notes
 
-- Claude uses short model aliases (`fable`, `sonnet`, `sonnet[1m]`, `opus`, `opus[1m]`, `haiku`), not Copilot-style IDs like `claude-sonnet-4.6`, so keep model overrides harness-specific.
 - Session IDs are harness-specific. Reuse only Claude sessions with Claude steps.
-- When you need custom tool permission behavior, configure it in workflow `toolPermissions` or `defaults.toolPermissions` in settings.
 - Directories in `permissions.trustedExternalRoots` are passed to Claude as `--add-dir`.
 - Hooks and MCP servers are passed per process with `--settings` and `--mcp-config`, so ctrlyoke writes nothing to your project's `.claude/` folder. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#claude-code).
 
@@ -86,3 +123,30 @@ tooltip, and on the [**Stats & Usage**](/guide/usage-and-stats) settings tab. If
 [`usageTracking.warningPercentUsed`](/reference/settings#usagetracking-warningpercentused) (80% by
 default), ctrlyoke warns when the run starts but doesn't stop it. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).
+
+## Status line {#status-line}
+
+ctrlyoke changes your global Claude Code settings: the first time it runs Claude Code, it points
+the `statusLine` key in `~/.claude/settings.json` at its own status line command. That is how it
+reads the quota, and Claude's terminal UI shows the model, context and quota as well. The change
+stays in place between runs, in every project. If you already had a status line command, ctrlyoke
+keeps running it underneath.
+
+To undo it, turn Claude Code off in [**Settings → Status Line**](/guide/usage-and-stats#status-line).
+ctrlyoke then puts your original command back, and stops tracking Claude's quota. See
+[Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line).
+
+## Sign-in problems {#sign-in}
+
+If your Claude Code sign-in expires during a run, the next step that starts Claude Code fails, and
+the workflow stops unless `errorBehavior` retries it. A headless step shows Claude's error in its
+output; for an interactive step, look at the **Terminal** tab. Retries fail the same way until you
+sign in again.
+
+To recover, run `claude` in a terminal and complete the sign-in, then click **Resume** in the
+dashboard to retry the failed step.
+
+From the `ctrlyoke` CLI, a sign-in failure exits with code `1`, not `3`. ctrlyoke can't tell an
+expired sign-in from any other error Claude Code reports, so it counts as a failed step. Code `3`
+means only that the `claude` executable wasn't found. See [Exit codes](/cli/ci#exit-codes), and
+[Harness sign-in](/cli/ci#harness-sign-in) for CI runners.

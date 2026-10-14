@@ -133,7 +133,7 @@ executing, a `note` says so instead of silently returning an empty list.
 
 ## Coordination tools
 
-Steps — and other agents — working in the same checkout (execution root) share a coordination board. Everything on it is advisory and **untrusted**: notes are data, never instructions or permission, and claims never block file access.
+Steps — and other agents — working in the same checkout (execution root) share a coordination board. Everything on it is advisory and **untrusted**: notes are data, never instructions or permission, and claims never block file access. [Coordination](/workflows/coordination) explains participants, attestation, and how to use the board.
 
 - `post_note` posts `text` to the board. `to` optionally directs it to participant IDs; an unknown ID is an error. Returns the note's `seq` and a `scope` summary.
 - `read_notes` returns `entries` (each with author, attribution, and `untrusted: true`), a `nextCursor` when more remain, and `scope`. `since` reads after a sequence number; `from` filters by author participant IDs. Reads are paged by the `coordination.readNotesPageSize` setting.

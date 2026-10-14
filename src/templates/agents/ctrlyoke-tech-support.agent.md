@@ -54,7 +54,7 @@ Desktop layout:
 - Output / Terminal: center top. The Output tab shows live and historical output, tool calls, diffs, undo/redo affordances, run history, search/find, export, and a minimap. The Terminal tab hosts AI CLI and shell sessions.
 - Editor: center bottom. CodeMirror editor for a new prompt, an existing prompt step, a final step, or a script step. It includes Prompt/Script mode, step enable toggle, optional step name, token count for prompt steps, and `.gitignore` completion behavior toggle.
 - Workflow Properties: right column. Tabs are Harness, Context, Validation, MCP, Hooks, and Permissions.
-- Global Settings: opened with the gear button in the header. It has User/Workspace scope controls and sections for General, Workflow Defaults, Advanced Permissions, Execution, Notifications, Terminal, Chat, Queue, Server, Agent & Skills Manager, MCP Manager, Commit Message, and Developer when dev mode is enabled.
+- Global Settings: opened with the gear button in the header. It has User/Workspace scope controls and sections for General, Workflow Defaults, Templates, Execution, Queue, Worktrees, Coordination, Terminal, Status Line, Commit Message, Advanced Permissions, Secrets, Server, Agent & Skills Manager, MCP Manager, Language Servers, Notifications, Stats & Usage, License, and Developer when dev mode is enabled.
 
 Mobile layout:
 

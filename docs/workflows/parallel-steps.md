@@ -42,7 +42,9 @@ workspace and one run timeline; there is no per-member workspace isolation or
 automatic merge. A run using a managed or named worktree likewise gives the
 whole group that one worktree. Do not put conflicting edits in the same group.
 Terminal controller arbitration is per workflow, not per session, so multiple
-member terminals still belong to the same workflow controller scope.
+member terminals still belong to the same workflow controller scope. To let
+members tell each other which files they are editing, use the
+[coordination board](/workflows/coordination).
 
 ## Rules
 
@@ -71,5 +73,6 @@ the details.
 
 ## See also
 
+- [Coordination](/workflows/coordination)
 - [Parallel group reference](/reference/workflow-schema#parallel-group)
 - [Core concepts: parallel groups](/guide/concepts#parallel-groups)
