@@ -796,13 +796,19 @@ suite("RunContinuationService topology append transaction", () => {
       (joined.workingFile.steps?.[5] as PromptStep).sessionId,
       3
     );
+    // Authored references are positions and are never rewritten; the
+    // insert reports the final step whose targets shifted instead.
     assert.strictEqual(
       (joined.workingFile.finalStep as PromptStep).sessionId,
-      7
+      5
     );
     assert.deepStrictEqual(
       (joined.workingFile.finalStep as PromptStep).priorContext,
-      [6, 7]
+      [4, 5]
+    );
+    assert.strictEqual(
+      joined.warning,
+      "Inserted 2 steps. Step references in Final step now point at a different or missing step; check them."
     );
     assert.strictEqual(joined.definitionRevision, 2);
 
@@ -983,6 +989,107 @@ suite("RunContinuationService addressed step mutations", () => {
     if (workspace) {
       await fs.rm(workspace, { recursive: true, force: true });
     }
+  });
+
+  // Regression guard — do not "fix" by making references follow their targets.
+  // `$step:N`, `priorContext: [N]`, and `sessionId: N` are positions the author
+  // chose (often for where a step will be after they move it). An insert,
+  // reorder, or removal must leave every authored field byte-for-byte as
+  // written and only report shifted references through `warning`. See
+  // core.instructions.md ("Topology edits never rewrite authored settings").
+  test("never rewrites authored references on insert, reorder, or removal", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-authored-references-")
+    );
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "one" },
+      { prompt: "two" },
+      { prompt: "three" },
+      { prompt: "four" },
+      {
+        prompt: "five uses $step:1-4 and $summary:step:2",
+        priorContext: [1, 2, 3, 4],
+        sessionId: 3,
+        endCondition: { script: "true", retryPrompt: "retry with $step:4" },
+      },
+      { prompt: "six", priorContext: [4], sessionId: 2 },
+    ]);
+    const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const seeded = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
+    await fs.writeFile(
+      runPath,
+      JSON.stringify({
+        ...seeded,
+        priorContext: [2, 4],
+        sessionId: 1,
+        finalStep: { prompt: "final $step:3", priorContext: [5], sessionId: 4 },
+      }),
+      "utf8"
+    );
+
+    const authored = (file: WorkingFile) => ({
+      steps: Object.fromEntries(
+        (file.steps ?? []).map((step) => {
+          const { _runtime: _ignored, ...fields } = step as PromptStep;
+          return [fields.prompt.split(" ")[0], fields];
+        })
+      ),
+      priorContext: file.priorContext,
+      sessionId: file.sessionId,
+      finalStep: file.finalStep,
+    });
+    const before = authored(
+      JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile
+    );
+    const repository = new WorkflowLineageRepository();
+
+    const inserted = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "inserted" }],
+      1,
+      100,
+      repository,
+      false,
+      1
+    );
+    assert.ok(inserted.warning, "an insert that shifts references warns");
+    const reordered = await RunContinuationService.reorderStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [0, 1, 2, 3, 5, 4, 6],
+      inserted.definitionRevision,
+      repository
+    );
+    assert.ok(reordered.warning, "a reorder that shifts references warns");
+    const removed = await RunContinuationService.removeStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [2, 3],
+      reordered.definitionRevision,
+      repository
+    );
+    assert.ok(removed.warning, "a removal that shifts references warns");
+
+    const after = authored(
+      JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile
+    );
+    const { one, four, five, six } = before.steps;
+    assert.deepStrictEqual(after.steps, {
+      one,
+      four,
+      five,
+      six,
+      inserted: { prompt: "inserted" },
+    });
+    assert.deepStrictEqual(after.priorContext, before.priorContext);
+    assert.strictEqual(after.sessionId, before.sessionId);
+    assert.deepStrictEqual(after.finalStep, before.finalStep);
   });
 
   test("edits pending steps while running and rejects completed and in-flight steps", async () => {

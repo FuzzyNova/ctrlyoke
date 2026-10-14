@@ -74,6 +74,10 @@ export interface McpAppendStepResult {
   descriptorRevision: number;
   /** Grants in the appended steps that this workspace has not approved. */
   unapprovedSecretGrants?: string[];
+  /**
+   * Human-readable warnings: unapproved secret grants, and steps whose
+   * positional references the insert shifted (references are never rewritten).
+   */
   warning?: string;
 }
 

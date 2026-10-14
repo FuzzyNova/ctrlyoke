@@ -244,12 +244,13 @@ export class WorkflowStepHandlers {
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
 
     try {
-      await orchestrator.insertWorkflowStepAfterIndex(
+      const warning = await orchestrator.insertWorkflowStepAfterIndex(
         this.mutationCoordinator.asWorkflowDefinitionMutation(message),
         message.afterIndex,
         message.step,
         ctx.clientId
       );
+      this.emitShiftedReferenceWarning(ctx, "insert-step", warning);
       // Identity-only — see the comment in handleUpdatePrompt above; the
       // inserting client already holds the post-insert steps via its own
       // STEPS_EXTENDED broadcast.
@@ -288,6 +289,25 @@ export class WorkflowStepHandlers {
     }
   }
 
+  /**
+   * Toast the warning a step insert, reorder, or delete returned when it left
+   * positional references pointing at a different step. The edit itself has
+   * already been applied; references are never rewritten.
+   */
+  private emitShiftedReferenceWarning(
+    ctx: WebviewClientContext,
+    operation: string,
+    warning: string | undefined
+  ): void {
+    if (!warning) return;
+    ctx.emit({
+      type: MESSAGE_TYPES.USER_FEEDBACK,
+      id: `${operation}-references-${Date.now()}`,
+      severity: USER_FEEDBACK_SEVERITY.WARNING,
+      message: warning,
+    });
+  }
+
   async handleDeletePrompt(
     ctx: WebviewClientContext,
     message: DeletePromptMessage
@@ -306,14 +326,7 @@ export class WorkflowStepHandlers {
         message.indices,
         ctx.clientId
       );
-      if (warning) {
-        ctx.emit({
-          type: MESSAGE_TYPES.USER_FEEDBACK,
-          id: `delete-prompt-references-${Date.now()}`,
-          severity: USER_FEEDBACK_SEVERITY.WARNING,
-          message: warning,
-        });
-      }
+      this.emitShiftedReferenceWarning(ctx, "delete-prompt", warning);
       // Identity-only — see the comment in handleUpdatePrompt above; the
       // deleting client already holds the post-delete steps via its own
       // PROMPT_DELETED broadcast.
@@ -339,12 +352,13 @@ export class WorkflowStepHandlers {
       return;
     }
 
-    await orchestrator.reorderPendingPrompts(
+    const warning = await orchestrator.reorderPendingPrompts(
       this.mutationCoordinator.asWorkflowDefinitionMutation(message),
       message.newPendingOrder,
       ctx.clientId,
       message.pendingGroups
     );
+    this.emitShiftedReferenceWarning(ctx, "reorder-steps", warning);
     await this.mutationCoordinator.publishViewIdentity(ctx);
   }
 

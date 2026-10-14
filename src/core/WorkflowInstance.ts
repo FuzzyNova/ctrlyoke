@@ -2835,10 +2835,11 @@ export class WorkflowInstance
     );
   }
 
+  /** @returns A warning naming steps whose references the insert shifted. */
   async insertWorkflowStepAfterIndex(
     afterIndex: number,
     step: unknown
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     const sanitizedStep = sanitizeClipboardWorkflowStep(step);
 
     if (!this.promptQueue.getState().workingFilePath) {
@@ -2846,7 +2847,7 @@ export class WorkflowInstance
     }
 
     this.reopenRuntimeForContinuationIfNeeded(false);
-    await this.promptQueue.insertStepAfterIndex(
+    const warning = await this.promptQueue.insertStepAfterIndex(
       afterIndex,
       sanitizedStep,
       "Clipboard paste"
@@ -2872,6 +2873,7 @@ export class WorkflowInstance
     Log.debug(
       `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${isScriptStep(sanitizedStep) ? sanitizedStep.script.substring(0, 50) : sanitizedStep.prompt.substring(0, 50)}...`
     );
+    return warning;
   }
 
   async updatePromptInQueue(
@@ -3079,11 +3081,12 @@ export class WorkflowInstance
     }
   }
 
+  /** @returns A warning naming steps whose references the reorder shifted. */
   async reorderPendingPrompts(
     newPendingOrder: number[],
     pendingGroups?: PendingParallelGroupRange[]
-  ): Promise<void> {
-    await this.promptQueue.reorderPendingPrompts(
+  ): Promise<string | undefined> {
+    const warning = await this.promptQueue.reorderPendingPrompts(
       newPendingOrder,
       pendingGroups
     );
@@ -3096,6 +3099,7 @@ export class WorkflowInstance
         state.definitionRevision
       );
     }
+    return warning;
   }
 
   /**

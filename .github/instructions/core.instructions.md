@@ -18,6 +18,16 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 
 <runtimeModel>
 
+- **Topology edits never rewrite authored settings.** An insert, move, or
+  removal of steps must not change any step's or the workflow's `prompt`
+  text, `priorContext`, `sessionId`, retry prompts, or any other authored
+  field: `$step:N`, `priorContext: [N]`, and `sessionId: N` are positions,
+  and authors deliberately write them for where a step _will_ be before moving
+  it there. An earlier `StepReferenceRenumbering` "kept references pointing
+  at the same step" and turned a dragged step's `priorContext: [1,2,3,4]` into
+  `[1,2,3,5]`. References also never block the edit. Instead, every topology
+  path calls `findShiftedStepReferences` (`StepReferenceShifts.ts`) and returns
+  the resulting warning, which the dashboard toasts and MCP/CLI return.
 - Standalone prompt-file references are persisted as authored path strings and
   resolved just before execution/preview. The semantic base is the input
   definition path for direct loads or the lineage descriptor's `originalFile`

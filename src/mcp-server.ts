@@ -73,6 +73,7 @@ import {
   getReorderableStepIndices,
   RunContinuationService,
 } from "./core/orchestration/RunContinuationService";
+import { withWarning } from "./core/StepReferenceShifts";
 import {
   flattenParallelItems,
   type ResolvedParallelItem,
@@ -1215,6 +1216,7 @@ export class CtrlYokeMCPServer {
         placement: joined.placement,
         parallelGroupsAdded: joined.parallelGroupsAdded,
         joinedParallelGroup: joined.joinedParallelGroup,
+        ...withWarning(joined.warning),
         workingFile: selected.filePath,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(
           selected.filePath
@@ -1251,6 +1253,7 @@ export class CtrlYokeMCPServer {
           appended.placement.insertedIndex + appended.stepsAdded - 1,
         placement: appended.placement,
         parallelGroupsAdded: appended.parallelGroupsAdded,
+        ...withWarning(appended.warning),
         workingFile: selected.filePath,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(
           selected.filePath
@@ -1276,9 +1279,12 @@ export class CtrlYokeMCPServer {
     );
     if (unapprovedSecretGrants.length > 0) {
       response.unapprovedSecretGrants = unapprovedSecretGrants;
-      response.warning = formatAppendedUnapprovedSecretGrantsWarning(
-        unapprovedSecretGrants
-      );
+      response.warning = [
+        response.warning,
+        formatAppendedUnapprovedSecretGrantsWarning(unapprovedSecretGrants),
+      ]
+        .filter(Boolean)
+        .join(" ");
     }
 
     return {
@@ -1374,7 +1380,7 @@ export class CtrlYokeMCPServer {
       selected,
       removed,
       target.definitionRevision,
-      { index, ...(removed.warning ? { warning: removed.warning } : {}) }
+      { index, ...withWarning(removed.warning) }
     );
   }
 
@@ -1410,7 +1416,7 @@ export class CtrlYokeMCPServer {
       selected,
       reordered,
       target.definitionRevision,
-      { indices },
+      { indices, ...withWarning(reordered.warning) },
       requestedOrderMatchesCurrent(reordered.workingFile, indices)
     );
   }

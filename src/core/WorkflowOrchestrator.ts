@@ -3778,26 +3778,29 @@ export class WorkflowOrchestrator {
     await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
   }
 
+  /** @returns A warning naming steps whose references the insert shifted. */
   async insertWorkflowStepAfterIndex(
     mutation: WorkflowDefinitionMutation | undefined,
     afterIndex: number,
     step: WorkflowStep,
     clientId: string = this.PANEL_CLIENT_ID
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      await this.getInstanceForClient(clientId).insertWorkflowStepAfterIndex(
-        afterIndex,
-        step
-      );
+      const warning = await this.getInstanceForClient(
+        clientId
+      ).insertWorkflowStepAfterIndex(afterIndex, step);
       await this.recordDefinitionWrite(undefined, clientId);
-      return;
+      return warning;
     }
     const runAddress = mutation.address;
+    let warning: string | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       clientId,
       mutation.expectedDefinitionRevision,
-      (instance) => instance.insertWorkflowStepAfterIndex(afterIndex, step),
+      async (instance) => {
+        warning = await instance.insertWorkflowStepAfterIndex(afterIndex, step);
+      },
       (workspaceRoot) =>
         WorkingFileManager.insertStepAtRun(
           workspaceRoot,
@@ -3807,8 +3810,12 @@ export class WorkflowOrchestrator {
           sanitizeClipboardWorkflowStep(step),
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then((written) => written.definitionRevision)
+        ).then((written) => {
+          warning = written.warning;
+          return written.definitionRevision;
+        })
     );
+    return warning;
   }
 
   async updateFinalStepInQueue(
@@ -3895,27 +3902,32 @@ export class WorkflowOrchestrator {
     return warning;
   }
 
+  /** @returns A warning naming steps whose references the reorder shifted. */
   async reorderPendingPrompts(
     mutation: WorkflowDefinitionMutation | undefined,
     newPendingOrder: number[],
     clientId: string = this.PANEL_CLIENT_ID,
     pendingGroups?: PendingParallelGroupRange[]
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      await this.getInstanceForClient(clientId).reorderPendingPrompts(
-        newPendingOrder,
-        pendingGroups
-      );
+      const warning = await this.getInstanceForClient(
+        clientId
+      ).reorderPendingPrompts(newPendingOrder, pendingGroups);
       await this.recordDefinitionWrite(undefined, clientId);
-      return;
+      return warning;
     }
     const runAddress = mutation.address;
+    let warning: string | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       clientId,
       mutation.expectedDefinitionRevision,
-      (instance) =>
-        instance.reorderPendingPrompts(newPendingOrder, pendingGroups),
+      async (instance) => {
+        warning = await instance.reorderPendingPrompts(
+          newPendingOrder,
+          pendingGroups
+        );
+      },
       (workspaceRoot) =>
         WorkingFileManager.reorderStepsAtRun(
           workspaceRoot,
@@ -3925,8 +3937,12 @@ export class WorkflowOrchestrator {
           mutation.expectedDefinitionRevision,
           this.lineageRepository,
           pendingGroups
-        ).then((written) => written.definitionRevision)
+        ).then((written) => {
+          warning = written.warning;
+          return written.definitionRevision;
+        })
     );
+    return warning;
   }
 
   /**

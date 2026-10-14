@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-13 by Claude (review of the prior-context detail work)
 - **Area:** `src/core/StepReferenceRenumbering.ts`
-- **Resolution:** fixed in this commit — a removal no longer edits any prompt text, so the empty token cannot be produced
+- **Resolution:** fixed in be9e9c0b2, and superseded by the never-rewrite rule below
 
 ## Symptom
 
@@ -36,16 +36,18 @@ is worse. Add a test next to the existing inline renumbering tests in
 
 ## Resolution
 
-Fixed differently from the suggestion above. The rule is now that removing a step never edits
-another step's prompt text, and step references never block a removal:
+Fixed by removing rewriting altogether. `be9e9c0b2` stopped removals from editing inline text;
+the follow-up commit replaced `StepReferenceRenumbering.ts` with `StepReferenceShifts.ts`, which
+changes nothing. The rule:
 
-- Inline `$step:N` / `$summary:step:N` references stay exactly as written. The editor's
-  reference lint flags any that no longer resolve.
-- Structured `sessionId` and `priorContext: [N]` still follow their targets. A removed
-  target is cleared from `sessionId` or dropped from the list.
-- The `Cannot remove step N: referenced by …` refusal is gone. The delete proceeds and the
-  dashboard shows a warning toast that names each unstarted step, and the final step, whose
-  references the removal affected (`describeStepRemovalWarning`). MCP `remove_step` returns
-  the same text as `warning`, and `ctrlyoke step remove` prints it to stderr.
-
-Insert and reorder still renumber inline references, because every target still exists.
+- A step insert, move, or removal never rewrites any authored setting, on any step or at workflow
+  level. Inline `$step:N` / `$summary:step:N` text, `priorContext: [N]`, and `sessionId: N`
+  stay exactly as written; position N means whatever step is at N.
+- Step references never block an insert, move, or removal. (The parallel-sibling check still
+  refuses a topology the parser could not load; it refuses, it never edits.)
+- `findShiftedStepReferences` reports the unstarted steps, the final step, and workflow-level
+  defaults whose references now resolve to a different or missing step. The dashboard shows it as a
+  warning toast, MCP `append_step` / `reorder_steps` / `remove_step` return it as `warning`, and
+  `ctrlyoke step reorder` / `step remove` print it to stderr. New steps and the step that was
+  moved are not reported; the editor's reference lint still flags any reference that no longer
+  resolves.

@@ -179,6 +179,7 @@ export async function reorderStepsCommand(
     },
     `Reordered pending steps in ${target.workflowKey}/${target.runRef} (definition revision ${reordered.definitionRevision}).`
   );
+  if (reordered.warning) io.writeErr?.(reordered.warning);
 }
 
 async function resolveEditTarget(

@@ -81,7 +81,14 @@ import {
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
 } from "./ParallelGroupTopology";
-import { renumberStepReferences } from "./StepReferenceRenumbering";
+import {
+  describeShiftedStepReferences,
+  describeStepInsertion,
+  describeStepRemoval,
+  findShiftedStepReferences,
+  STEP_REFERENCE_CHANGES,
+  withWarning,
+} from "./StepReferenceShifts";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
   return key === PROMPT_PROPERTIES.AGENT &&
@@ -1357,8 +1364,11 @@ export class WorkingFileManager {
     workingFile: WorkingFile;
     definitionRevision: number;
     descriptorRevision: number;
+    /** Steps whose positional references the change left resolving differently. */
+    warning?: string;
   }> {
-    return this.mutateRunDefinition(
+    let warning: string | undefined;
+    const written = await this.mutateRunDefinition(
       workspaceFolderPath,
       workflowKey,
       runRef,
@@ -1387,11 +1397,19 @@ export class WorkingFileManager {
           requestedIndex,
           [ensureStepIds([...topology.steps, step]).at(-1)!]
         );
-        const renumbered = renumberStepReferences(
+        const shiftedReferences = findShiftedStepReferences(
           topology.steps,
           nextTopology.steps,
-          source.finalStep
+          {
+            finalStep: source.finalStep,
+            workflowDefaults: source,
+          }
         );
+        warning = describeShiftedStepReferences(
+          describeStepInsertion(1),
+          shiftedReferences
+        );
+
         const currentIndex = source._runtime?.currentIndex ?? 0;
         // Strict `<`, matching `PromptQueue.insertStepAfterIndex`: an insert at
         // `currentIndex` becomes the next step to run rather than being shifted
@@ -1401,10 +1419,7 @@ export class WorkingFileManager {
         return {
           workingFile: {
             ...source,
-            steps: renumbered.steps,
-            ...(renumbered.finalStep
-              ? { finalStep: renumbered.finalStep }
-              : {}),
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1415,6 +1430,7 @@ export class WorkingFileManager {
       },
       { lineageRepository }
     );
+    return { ...written, ...withWarning(warning) };
   }
 
   /**
@@ -1620,8 +1636,11 @@ export class WorkingFileManager {
     workingFile: WorkingFile;
     definitionRevision: number;
     descriptorRevision: number;
+    /** Steps whose positional references the change left resolving differently. */
+    warning?: string;
   }> {
-    return this.mutateRunDefinition(
+    let warning: string | undefined;
+    const written = await this.mutateRunDefinition(
       workspaceFolderPath,
       workflowKey,
       runRef,
@@ -1645,21 +1664,26 @@ export class WorkingFileManager {
           assertEditableDuringExecution(source, steps, index, "delete");
         }
         const nextTopology = deleteParallelGroupSteps(topology, unique);
-        const renumbered = renumberStepReferences(
+        const shiftedReferences = findShiftedStepReferences(
           topology.steps,
           nextTopology.steps,
-          source.finalStep
+          {
+            finalStep: source.finalStep,
+            workflowDefaults: source,
+          }
         );
+        warning = describeShiftedStepReferences(
+          describeStepRemoval(unique),
+          shiftedReferences
+        );
+
         const currentIndex = source._runtime?.currentIndex ?? 0;
         const nextCurrentIndex =
           currentIndex - unique.filter((index) => index < currentIndex).length;
         return {
           workingFile: {
             ...source,
-            steps: renumbered.steps,
-            ...(renumbered.finalStep
-              ? { finalStep: renumbered.finalStep }
-              : {}),
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1670,6 +1694,7 @@ export class WorkingFileManager {
       },
       { lineageRepository }
     );
+    return { ...written, ...withWarning(warning) };
   }
 
   public static async updateStepColorsAtRun(
@@ -1734,8 +1759,11 @@ export class WorkingFileManager {
     workingFile: WorkingFile;
     definitionRevision: number;
     descriptorRevision: number;
+    /** Steps whose positional references the change left resolving differently. */
+    warning?: string;
   }> {
-    return this.mutateRunDefinition(
+    let warning: string | undefined;
+    const written = await this.mutateRunDefinition(
       workspaceFolderPath,
       workflowKey,
       runRef,
@@ -1755,14 +1783,22 @@ export class WorkingFileManager {
             source._runtime?.executionState as ExecutionState
           )
         );
-        const renumbered = renumberStepReferences(
+        const shiftedReferences = findShiftedStepReferences(
           topology.steps,
           nextTopology.steps,
-          source.finalStep
+          {
+            finalStep: source.finalStep,
+            workflowDefaults: source,
+          }
         );
+        warning = describeShiftedStepReferences(
+          STEP_REFERENCE_CHANGES.REORDER,
+          shiftedReferences
+        );
+
         assertNoParallelSiblingReferences(
           {
-            steps: renumbered.steps,
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           source
@@ -1770,10 +1806,7 @@ export class WorkingFileManager {
         return {
           workingFile: {
             ...source,
-            steps: renumbered.steps,
-            ...(renumbered.finalStep
-              ? { finalStep: renumbered.finalStep }
-              : {}),
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           result: undefined,
@@ -1781,6 +1814,7 @@ export class WorkingFileManager {
       },
       { lineageRepository }
     );
+    return { ...written, ...withWarning(warning) };
   }
 
   /**

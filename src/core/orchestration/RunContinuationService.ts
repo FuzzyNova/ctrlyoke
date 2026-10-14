@@ -67,9 +67,13 @@ import {
 } from "../StepIdentity";
 import { hasInFlightStep, hasStarted } from "../../utils/StepStatusDerivation";
 import {
-  describeStepRemovalWarning,
-  renumberStepReferences,
-} from "../StepReferenceRenumbering";
+  describeShiftedStepReferences,
+  describeStepInsertion,
+  describeStepRemoval,
+  findShiftedStepReferences,
+  STEP_REFERENCE_CHANGES,
+  withWarning,
+} from "../StepReferenceShifts";
 import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
 import { assertStepIndex } from "./StepIndexValidation";
 
@@ -117,6 +121,8 @@ export interface RunContinuationMutationResult {
   workingFile: WorkingFile;
   definitionRevision: number;
   descriptorRevision: number;
+  /** Steps whose positional references the change left resolving differently. */
+  warning?: string;
 }
 
 export interface RunParallelJoinMutationResult {
@@ -133,6 +139,8 @@ export interface RunParallelJoinMutationResult {
     endIndex: number;
     promoted: boolean;
   };
+  /** Steps whose positional references the change left resolving differently. */
+  warning?: string;
 }
 
 export type RunStepClaimResult =
@@ -355,6 +363,8 @@ export class RunContinuationService {
     insertIndex: number;
     parallelGroupsAdded: ParallelGroupDefinition[];
     stepsAdded: number;
+    /** Steps whose positional references now resolve differently. */
+    warning?: string;
   }> {
     if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
       throw new Error(
@@ -472,14 +482,18 @@ export class RunContinuationService {
           requestedIndex,
           sanitizedIncomingTopology
         );
-        const renumbered = renumberStepReferences(
+        const shiftedReferences = findShiftedStepReferences(
           sourceTopology.steps,
           nextTopology.steps,
-          source.finalStep
+          {
+            finalStep: source.finalStep,
+            workflowDefaults: source,
+          }
         );
+
         assertNoParallelSiblingReferences(
           {
-            steps: renumbered.steps,
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           source
@@ -493,8 +507,7 @@ export class RunContinuationService {
         const workingFile: WorkingFile = {
           ...source,
           definitionRevision: sourceRevision + 1,
-          steps: renumbered.steps,
-          ...(renumbered.finalStep ? { finalStep: renumbered.finalStep } : {}),
+          steps: nextTopology.steps,
           parallelGroups: nextTopology.parallelGroups,
           _runtime: {
             currentIndex: source._runtime?.currentIndex ?? 0,
@@ -513,6 +526,12 @@ export class RunContinuationService {
           insertIndex: placement.insertedIndex,
           parallelGroupsAdded,
           stepsAdded: stepsToAdd,
+          ...withWarning(
+            describeShiftedStepReferences(
+              describeStepInsertion(stepsToAdd),
+              shiftedReferences
+            )
+          ),
         };
       });
     });
@@ -694,14 +713,18 @@ export class RunContinuationService {
           }
         }
 
-        const renumbered = renumberStepReferences(
+        const shiftedReferences = findShiftedStepReferences(
           sourceTopology.steps,
           nextTopology.steps,
-          source.finalStep
+          {
+            finalStep: source.finalStep,
+            workflowDefaults: source,
+          }
         );
+
         assertNoParallelSiblingReferences(
           {
-            steps: renumbered.steps,
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           source
@@ -722,8 +745,7 @@ export class RunContinuationService {
         const workingFile: WorkingFile = {
           ...source,
           definitionRevision: sourceRevision + 1,
-          steps: renumbered.steps,
-          ...(renumbered.finalStep ? { finalStep: renumbered.finalStep } : {}),
+          steps: nextTopology.steps,
           parallelGroups: nextTopology.parallelGroups,
           _runtime: {
             ...source._runtime!,
@@ -750,6 +772,12 @@ export class RunContinuationService {
             endIndex: joinedGroup.endIndex,
             promoted,
           },
+          ...withWarning(
+            describeShiftedStepReferences(
+              describeStepInsertion(steps.length),
+              shiftedReferences
+            )
+          ),
         };
       });
     });
@@ -930,7 +958,7 @@ export class RunContinuationService {
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun = false
-  ): Promise<RunContinuationMutationResult & { warning?: string }> {
+  ): Promise<RunContinuationMutationResult> {
     let warning: string | undefined;
     const written = await this.mutateRunDefinition(
       workspaceRoot,
@@ -958,11 +986,15 @@ export class RunContinuationService {
           );
         }
         const nextTopology = deleteParallelGroupSteps(topology, unique);
-        const renumbered = renumberStepReferences(
+        const shiftedReferences = findShiftedStepReferences(
           topology.steps,
           nextTopology.steps,
-          source.finalStep
+          {
+            finalStep: source.finalStep,
+            workflowDefaults: source,
+          }
         );
+
         if (isExecutionActiveState(source._runtime?.executionState)) {
           assertStartedStepPositionsPreserved(
             topology.steps,
@@ -970,15 +1002,15 @@ export class RunContinuationService {
             "remove"
           );
         }
-        warning = describeStepRemovalWarning(renumbered, unique);
+        warning = describeShiftedStepReferences(
+          describeStepRemoval(unique),
+          shiftedReferences
+        );
         const currentIndex = source._runtime?.currentIndex ?? 0;
         return {
           workingFile: {
             ...source,
-            steps: renumbered.steps,
-            ...(renumbered.finalStep
-              ? { finalStep: renumbered.finalStep }
-              : {}),
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? {
@@ -994,7 +1026,7 @@ export class RunContinuationService {
       },
       { lineageRepository, allowInterruptedRun }
     );
-    return { ...written, ...(warning ? { warning } : {}) };
+    return { ...written, ...withWarning(warning) };
   }
 
   /** Reorder the pending suffix using absolute workflow step indices. */
@@ -1081,7 +1113,8 @@ export class RunContinuationService {
     pendingGroups: PendingParallelGroupRange[] | undefined,
     allowInterruptedRun: boolean
   ): Promise<RunContinuationMutationResult> {
-    return this.mutateRunDefinition(
+    let warning: string | undefined;
+    const written = await this.mutateRunDefinition(
       workspaceRoot,
       workflowKey,
       runRef,
@@ -1113,25 +1146,30 @@ export class RunContinuationService {
           nextTopology.steps,
           "reorder"
         );
-        const renumbered = renumberStepReferences(
+        const shiftedReferences = findShiftedStepReferences(
           topology.steps,
           nextTopology.steps,
-          source.finalStep
+          {
+            finalStep: source.finalStep,
+            workflowDefaults: source,
+          }
         );
+
         assertNoParallelSiblingReferences(
           {
-            steps: renumbered.steps,
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           source
         );
+        warning = describeShiftedStepReferences(
+          STEP_REFERENCE_CHANGES.REORDER,
+          shiftedReferences
+        );
         return {
           workingFile: {
             ...source,
-            steps: renumbered.steps,
-            ...(renumbered.finalStep
-              ? { finalStep: renumbered.finalStep }
-              : {}),
+            steps: nextTopology.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           result: undefined,
@@ -1139,6 +1177,7 @@ export class RunContinuationService {
       },
       { lineageRepository, allowInterruptedRun }
     );
+    return { ...written, ...withWarning(warning) };
   }
 
   private static async mutateRunDefinition(

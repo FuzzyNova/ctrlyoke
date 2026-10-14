@@ -709,15 +709,40 @@ suite("PromptQueue State Machine Tests", () => {
 
       assert.match(
         warning ?? "",
-        /^Removed step 1\. Step references in Step 2 \("follow-up"\)/
+        /^Removed step 1\. Step references in Step 1 \("follow-up"\)/
       );
-      const steps = queue.getState().steps;
+      const steps = queue.getState().steps as PromptStep[];
       assert.strictEqual(steps.length, 1);
-      assert.strictEqual("sessionId" in steps[0], false);
+      assert.strictEqual(steps[0].sessionId, 1, "sessionId is never rewritten");
       assert.strictEqual(
-        (steps[0] as { prompt: string }).prompt,
+        steps[0].prompt,
         "follow-up $step:1",
         "a removal never edits another step's prompt text"
+      );
+    });
+
+    test("moving a step never changes its own or other steps' authored references", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "one" },
+          { prompt: "two" },
+          { prompt: "three" },
+          { prompt: "four" },
+          { prompt: "moved", priorContext: [1, 2, 3, 4], sessionId: 3 },
+          { prompt: "after $step:4", priorContext: [4] },
+        ])
+      );
+
+      const warning = await queue.reorderPendingPrompts([0, 1, 2, 4, 3, 5]);
+
+      const steps = queue.getState().steps as PromptStep[];
+      assert.deepStrictEqual(steps[3].priorContext, [1, 2, 3, 4]);
+      assert.strictEqual(steps[3].sessionId, 3);
+      assert.strictEqual(steps[5].prompt, "after $step:4");
+      assert.deepStrictEqual(steps[5].priorContext, [4]);
+      assert.strictEqual(
+        warning,
+        "Reordered steps. Step references in Step 6 now point at a different or missing step; check them."
       );
     });
 
@@ -780,7 +805,7 @@ suite("PromptQueue State Machine Tests", () => {
         );
       });
 
-      test("renumbers references when appending a parallel-group member", async () => {
+      test("keeps authored references when appending a parallel-group member and warns", async () => {
         queue.loadPrompts({
           steps: [
             { prompt: "member-a" },
@@ -794,17 +819,21 @@ suite("PromptQueue State Machine Tests", () => {
           finalStep: { prompt: "final", sessionId: 3, priorContext: [2, 3] },
         });
 
-        await queue.appendParallelGroupMember("group-1", {
+        const insertion = await queue.appendParallelGroupMember("group-1", {
           prompt: "member-c",
         });
 
         const reference = queue.getState().steps[4] as PromptStep;
-        assert.strictEqual(reference.sessionId, 4);
-        assert.deepStrictEqual(reference.priorContext, [2, 4]);
-        assert.strictEqual((queue as any).workflowFile.finalStep.sessionId, 4);
+        assert.strictEqual(reference.sessionId, 3);
+        assert.deepStrictEqual(reference.priorContext, [2, 3]);
+        assert.strictEqual((queue as any).workflowFile.finalStep.sessionId, 3);
         assert.deepStrictEqual(
           (queue as any).workflowFile.finalStep.priorContext,
-          [2, 4]
+          [2, 3]
+        );
+        assert.strictEqual(
+          insertion.warning,
+          "Inserted a step. Step references in Step 5, Final step now point at a different or missing step; check them."
         );
       });
 
@@ -2022,7 +2051,7 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("insertStepAfterIndex", () => {
-    test("renumbers references on Queue next append including finalStep", async () => {
+    test("keeps authored references on Queue next append including finalStep and warns", async () => {
       queue.loadPrompts({
         steps: [
           { prompt: "current" },
@@ -2032,23 +2061,27 @@ suite("PromptQueue State Machine Tests", () => {
         finalStep: { prompt: "final", sessionId: 2, priorContext: [1, 2] },
       });
 
-      await queue.appendSteps(
+      const warning = await queue.appendSteps(
         [{ prompt: "next" }],
         "test",
         QUEUE_POSITION.NEXT
       );
 
       const reference = queue.getState().steps[3] as PromptStep;
-      assert.strictEqual(reference.sessionId, 3);
-      assert.deepStrictEqual(reference.priorContext, [1, 3]);
-      assert.strictEqual((queue as any).workflowFile.finalStep.sessionId, 3);
+      assert.strictEqual(reference.sessionId, 2);
+      assert.deepStrictEqual(reference.priorContext, [1, 2]);
+      assert.strictEqual((queue as any).workflowFile.finalStep.sessionId, 2);
       assert.deepStrictEqual(
         (queue as any).workflowFile.finalStep.priorContext,
-        [1, 3]
+        [1, 2]
+      );
+      assert.strictEqual(
+        warning,
+        "Inserted a step. Step references in Step 4, Final step now point at a different or missing step; check them."
       );
     });
 
-    test("renumbers numeric step references when inserting before their target", async () => {
+    test("keeps numeric step references when inserting before their target and warns", async () => {
       queue.loadPrompts(
         createPromptFile([
           { prompt: "before" },
@@ -2057,11 +2090,17 @@ suite("PromptQueue State Machine Tests", () => {
         ])
       );
 
-      await queue.insertStepAfterIndex(0, { prompt: "inserted" });
+      const warning = await queue.insertStepAfterIndex(0, {
+        prompt: "inserted",
+      });
 
       const reference = queue.getState().steps[3] as PromptStep;
-      assert.strictEqual(reference.sessionId, 3);
-      assert.deepStrictEqual(reference.priorContext, [1, 3]);
+      assert.strictEqual(reference.sessionId, 2);
+      assert.deepStrictEqual(reference.priorContext, [1, 2]);
+      assert.strictEqual(
+        warning,
+        "Inserted a step. Step references in Step 4 now point at a different or missing step; check them."
+      );
     });
 
     test("assigns fresh IDs to inserted and appended steps", async () => {
@@ -2486,7 +2525,7 @@ suite("PromptQueue State Machine Tests", () => {
       }
     });
 
-    test("renumbers numeric step references when a referenced step is reordered", async () => {
+    test("keeps numeric step references when a referenced step is reordered and warns", async () => {
       queue.loadPrompts(
         createPromptFile([
           { prompt: "target" },
@@ -2495,11 +2534,15 @@ suite("PromptQueue State Machine Tests", () => {
         ])
       );
 
-      await queue.reorderPendingPrompts([1, 0, 2]);
+      const warning = await queue.reorderPendingPrompts([1, 0, 2]);
 
       const reference = queue.getState().steps[2] as PromptStep;
-      assert.strictEqual(reference.sessionId, 2);
-      assert.deepStrictEqual(reference.priorContext, [2, 1]);
+      assert.strictEqual(reference.sessionId, 1);
+      assert.deepStrictEqual(reference.priorContext, [1, 2]);
+      assert.strictEqual(
+        warning,
+        "Reordered steps. Step references in Step 3 now point at a different or missing step; check them."
+      );
     });
 
     test("should keep done-prefix unchanged and reorder pending section", async () => {
