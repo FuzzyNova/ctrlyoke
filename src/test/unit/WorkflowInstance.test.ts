@@ -27,11 +27,16 @@ import {
   STEP_STATUS,
   HARNESS_IDS,
   STATUS_MESSAGE_SEVERITY,
+  USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
   type HarnessId,
   INTERACTIVE_TERMINAL_MODES,
 } from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
+import type {
+  UserFeedback,
+  UserFeedbackSink,
+} from "../../core/UserFeedbackSink";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
@@ -3388,6 +3393,106 @@ suite("WorkflowInstance append-and-continue", () => {
       await instance.executeEphemeralPrompt("over cap", {}, ACTION_TYPES.QUEUE);
 
       assert.strictEqual(instance.promptQueue.getState().steps.length, 1);
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  async function createReferenceInstance(
+    tempWorkspace: string,
+    feedback: UserFeedback[]
+  ): Promise<WorkflowInstance> {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      tempWorkspace
+    );
+    (instance as any).userFeedbackSink = {
+      notify: (message: UserFeedback) => feedback.push(message),
+    } satisfies UserFeedbackSink;
+    const steps: PromptStep[] = [
+      { prompt: "current" },
+      { prompt: "target" },
+      { prompt: "uses $step:2" },
+    ];
+    const workingFilePath = await instance.promptQueue.createWorkingFile(
+      "shifted-references",
+      steps,
+      tempWorkspace
+    );
+    instance.promptQueue.loadPrompts({ steps }, workingFilePath);
+    return instance;
+  }
+
+  test("warns when a queued-next prompt shifts a step reference, and not when appended at the end", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-editor-shifted-references-")
+    );
+    try {
+      const feedback: UserFeedback[] = [];
+      const instance = await createReferenceInstance(tempWorkspace, feedback);
+
+      await instance.executeEphemeralPrompt("at end", {}, ACTION_TYPES.QUEUE);
+      assert.deepStrictEqual(
+        feedback,
+        [],
+        "an insert that changes no reference's meaning does not warn"
+      );
+
+      await instance.executeEphemeralPrompt(
+        "next",
+        {},
+        ACTION_TYPES.QUEUE_NEXT
+      );
+
+      const steps = instance.promptQueue.getState().steps as PromptStep[];
+      assert.strictEqual(steps[3].prompt, "uses $step:2");
+      assert.deepStrictEqual(feedback, [
+        {
+          severity: USER_FEEDBACK_SEVERITY.WARNING,
+          message:
+            "Inserted a step. Step references in Step 4 now point at a different or missing step; check them.",
+        },
+      ]);
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("warns when a parallel prompt shifts a step reference", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-parallel-shifted-references-")
+    );
+    try {
+      const feedback: UserFeedback[] = [];
+      const instance = await createReferenceInstance(tempWorkspace, feedback);
+      await startQueueExecution(instance);
+      instance.promptQueue.getState().steps[0]._runtime = {
+        stepId: "current-id",
+        startedAt: Date.now(),
+      };
+      (instance as any).workflowExecutor.joinRunningParallelGroup =
+        async () => ({ accepted: true });
+
+      await instance.executeEphemeralPrompt(
+        "parallel member",
+        {},
+        ACTION_TYPES.RUN_PARALLEL
+      );
+
+      const steps = instance.promptQueue.getState().steps as PromptStep[];
+      assert.strictEqual(steps[3].prompt, "uses $step:2");
+      assert.deepStrictEqual(
+        feedback.map((message) => message.message),
+        [
+          "Inserted a step. Step references in Step 4 now point at a different or missing step; check them.",
+        ]
+      );
     } finally {
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }

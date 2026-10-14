@@ -1,6 +1,6 @@
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
-import { PromptQueue } from "./PromptQueue";
+import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
 import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
 import { WorkingFileManager } from "./WorkingFileManager";
 import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
@@ -55,6 +55,7 @@ import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { pathsEqual } from "../utils/PathCasing";
 import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
 import {
+  USER_FEEDBACK_SEVERITY,
   ACTION_TYPES,
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
@@ -2583,7 +2584,7 @@ export class WorkflowInstance
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
       this.reopenRuntimeForContinuationIfNeeded(false);
-      await this.promptQueue.appendSteps(
+      const shiftWarning = await this.promptQueue.appendSteps(
         parsed.steps,
         source,
         position,
@@ -2629,6 +2630,7 @@ export class WorkflowInstance
         "info",
         `Queued ${parsed.steps.length} prompt(s) ${positionText}`
       );
+      this.notifyShiftedReferences(shiftWarning);
     } catch (error) {
       Log.error("[WorkflowInstance] Failed to queue prompts:", error);
       notifyUserFeedback(
@@ -3177,6 +3179,20 @@ export class WorkflowInstance
     return stepHarness;
   }
 
+  /**
+   * Surface the warning an insert returned when it left positional step
+   * references (never rewritten) resolving to a different step.
+   */
+  private notifyShiftedReferences(warning: string | undefined): void {
+    if (warning) {
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.WARNING,
+        warning
+      );
+    }
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,
@@ -3264,8 +3280,13 @@ export class WorkflowInstance
         return;
       }
       this.reopenRuntimeForContinuationIfNeeded(shouldRun);
-      await this.promptQueue.appendSteps([step], "Dashboard editor", position);
+      const shiftWarning = await this.promptQueue.appendSteps(
+        [step],
+        "Dashboard editor",
+        position
+      );
       this.syncCurrentPromptFileFromQueue();
+      this.notifyShiftedReferences(shiftWarning);
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
@@ -3354,7 +3375,7 @@ export class WorkflowInstance
     const previousActiveRuntime = activeRuntime
       ? { ...activeRuntime }
       : undefined;
-    let insertion: { stepIndex: number; stepId?: string };
+    let insertion: ParallelGroupMemberInsertion;
     let runtimePromotionUndoSuppressed = false;
     // The queue emits its topology echo before executor admission completes.
     // Suppress that provisional echo; the explicit success echo below is the
@@ -3409,6 +3430,7 @@ export class WorkflowInstance
 
     this.syncCurrentPromptFileFromQueue();
     this.syncParallelGroupTerminalSessions(insertion.stepIndex);
+    this.notifyShiftedReferences(insertion.warning);
     if (this.dashboardSink) {
       const updatedState = this.promptQueue.getState();
       this.dashboardSink.updateStepsExtended(
