@@ -120,18 +120,14 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
         setFooterOpenPicker(isOpen ? null : FOOTER_PICKERS.CONTEXT)
       }
       onClose={() => setFooterOpenPicker(null)}
-      title="Context override"
-      heading="Context"
+      title="Resume Session override"
+      heading="Resume Session"
       popupMinWidth="260px"
       disabled={disabled}
       disabledReason={disabledReason}
     >
       <div className="flex flex-col gap-3 p-3">
-        {/* Resume Session section */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-xxs uppercase tracking-wide text-description-fg font-medium">
-            Resume Session
-          </span>
           <CustomSelect
             value={resumeSessionValue}
             onChange={handleResumeSessionChange}
