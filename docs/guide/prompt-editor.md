@@ -111,19 +111,25 @@ for what **Run** and **Queue** do in each workflow state.
 The footer under the editor holds quick pickers for the step's most-used
 properties:
 
-| Picker          | Sets                                                                                                                                                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Harness**     | The step's harness. Its badge shows the harness's usage percentage (see [Usage and stats](/guide/usage-and-stats)), and its tooltip says whether the CLI is installed. Changing it also resets the model and additional arguments to that harness's defaults. |
-| **Model**       | A model from the harness's list.                                                                                                                                                                                                                              |
-| **Agent**       | An agent file to run the step as (see [Agents and skills](/workflows/agents-and-skills)).                                                                                                                                                                     |
-| **Skills**      | Skills to attach.                                                                                                                                                                                                                                             |
-| **Permissions** | The tool permission mode.                                                                                                                                                                                                                                     |
-| **Context**     | Whether to resume a session, and which one: **Inherit**, **Resume** with an optional session ID or step number, **New Session**, or **Final Step Session**. See [Session management](/workflows/session-management).                                          |
+| Picker          | Sets                                                                                                                                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Harness**     | The step's harness. Its badge shows the harness's usage percentage (see [Usage and stats](/guide/usage-and-stats)), and its tooltip says whether the CLI is installed. Changing it also clears the step's model and additional arguments. |
+| **Model**       | A model from the harness's list.                                                                                                                                                                                                          |
+| **Agent**       | An agent file to run the step as (see [Agents and skills](/workflows/agents-and-skills)).                                                                                                                                                 |
+| **Skills**      | Skills to attach.                                                                                                                                                                                                                         |
+| **Permissions** | The tool permission mode.                                                                                                                                                                                                                 |
+| **Context**     | Whether to resume a session, and which one: **Inherit**, **Resume** with an optional session ID or step number, **New Session**, or **Final Step Session**. See [Session management](/workflows/session-management).                      |
 
 Each picker starts at **Inherit (…)**, naming the value the step gets from the
 workflow or your defaults. An icon is dimmed while the step inherits, and
 highlighted once the step has its own value. Pick **Inherit** again to remove
 the override. On a narrow dashboard the pickers show only their icons.
+
+The model and additional arguments belong to one harness. When a step runs on a
+different harness from the workflow, these pickers show **Default (…)** instead.
+The step then uses the settings default for its own harness, not the workflow's
+value. See
+[Steps on another harness](/workflows/yaml-format#steps-on-another-harness).
 
 In a harness list, hover a harness you never use and click its eye icon to hide
 it. **Show hidden** at the bottom of the list brings hidden harnesses back into

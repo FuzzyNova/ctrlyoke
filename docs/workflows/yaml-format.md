@@ -162,24 +162,29 @@ A root `toolPermissions` that sets only some of `mode`, `allowedTools` and
 
 ### Steps on another harness
 
-`defaults.models` and `defaults.additionalArgs` hold one value per harness, but
-`model` and `additionalArgs` at the root hold one value for the whole workflow.
-A step that switches to another harness should set its own `model` and
-`additionalArgs`. Otherwise it inherits the workflow's, which may not exist on
-that harness. The dashboard does this for you: picking a harness for a step
-also sets the step's model and additional arguments to that harness's
-defaults.
+Model names and command-line flags differ from one harness to the next, so
+`model` and `additionalArgs` at the root apply only to steps that run on the
+workflow's own harness. A step on another harness that leaves them out uses
+that harness's [`defaults.models`](/reference/settings#defaults-models) and
+`defaults.additionalArgs` values instead:
 
 ```yaml
 harness: claude-cli
 model: sonnet
 
 steps:
-  - prompt: Plan the change.
+  - prompt: Plan the change. # sonnet
+  - harness: codex-cli
+    prompt: Implement the plan. # defaults.models for codex-cli
   - harness: codex-cli
     model: gpt-6-sol
-    prompt: Implement the plan.
+    prompt: Review the change. # gpt-6-sol
 ```
+
+The step's properties show which one applies. **Inherit (…)** means the step
+takes the workflow's value. **Default (…)** means it takes the settings default
+for its own harness. Picking a harness for a step clears the step's model and
+additional arguments, so they follow the rule above until you choose new ones.
 
 ### `model: none`
 

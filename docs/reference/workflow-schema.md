@@ -129,7 +129,7 @@ Harness to use for this prompt. Determines which AI CLI executes the prompt. Opt
 
 - **Type:** `string`
 
-AI model to use for this prompt. Each harness supports different models — unsupported models fall back to the harness default with a warning. Use 'none' (the None option) to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to the active harness model setting.
+AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. Use 'none' (the None option) to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to the active harness model setting.
 
 ### `executionMode` {#execution-properties-executionmode}
 
@@ -254,7 +254,7 @@ How much prior output to include. 'full' includes the complete bounded transcrip
 - **Type:** `string` or `null`
 - **Settings default:** [`defaults.additionalArgs`](/reference/settings#defaults-additionalargs)
 
-Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: "--effort high --max-turns 10"
+Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: "--effort high --max-turns 10"
 
 ### `toolPermissions` {#execution-properties-toolpermissions}
 

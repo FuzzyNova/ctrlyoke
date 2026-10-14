@@ -48,6 +48,7 @@ import type {
   UserHookConfig,
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
+import { inheritsWorkflowHarnessScopedValues } from "@root/types/ExecutionPropertyResolver";
 import {
   CTRLYOKE_SETTINGS_DEFAULTS,
   DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
@@ -387,7 +388,12 @@ interface SettingsActions {
 
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
-  getEffectiveModel: () => string;
+  /**
+   * The model a step inherits. Pass the step's harness to apply the
+   * harness-scoped rule: a step on another harness than the workflow's gets
+   * that harness's settings default, not the workflow model.
+   */
+  getEffectiveModel: (stepHarness?: HarnessId) => string;
   getEffectiveExecutionMode: () => ExecutionMode;
   getEffectiveWorktree: () => WorktreeObjectConfig | false;
   getEffectiveAgent: () => string;
@@ -395,7 +401,8 @@ interface SettingsActions {
   getEffectiveMcpServers: () => (string | object)[] | null;
   getEffectiveHooks: () => UserHookConfig[] | null;
   getEffectivePriorContext: () => PriorContext;
-  getEffectiveAdditionalArgs: () => string;
+  /** The additional args a step inherits; harness-scoped like `getEffectiveModel`. */
+  getEffectiveAdditionalArgs: (stepHarness?: HarnessId) => string;
   getEffectiveToolPermissions: () => WorkflowProperties["toolPermissions"];
 
   // Reset
@@ -758,9 +765,20 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       );
     },
 
-    getEffectiveModel: () => {
-      const { workflowProperties, globalSettings } = get();
-      return workflowProperties.model ?? globalSettings.model;
+    getEffectiveModel: (stepHarness) => {
+      const { workflowProperties, globalSettings, getEffectiveHarness } = get();
+      const workflowHarness = getEffectiveHarness();
+      if (
+        stepHarness !== undefined &&
+        !inheritsWorkflowHarnessScopedValues(stepHarness, workflowHarness)
+      ) {
+        return globalSettings.harnessDefaultModels[stepHarness] ?? "";
+      }
+      return (
+        workflowProperties.model ??
+        globalSettings.harnessDefaultModels[workflowHarness] ??
+        globalSettings.model
+      );
     },
 
     getEffectiveExecutionMode: () => {
@@ -828,16 +846,17 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       );
     },
 
-    getEffectiveAdditionalArgs: () => {
-      const { workflowProperties, globalSettings } = get();
-      if (workflowProperties.additionalArgs !== undefined) {
+    getEffectiveAdditionalArgs: (stepHarness) => {
+      const { workflowProperties, globalSettings, getEffectiveHarness } = get();
+      const workflowHarness = getEffectiveHarness();
+      const harness = stepHarness ?? workflowHarness;
+      if (
+        inheritsWorkflowHarnessScopedValues(harness, workflowHarness) &&
+        workflowProperties.additionalArgs !== undefined
+      ) {
         return workflowProperties.additionalArgs ?? "";
       }
-      const effectiveHarness =
-        (workflowProperties.harness as HarnessId) ?? globalSettings.harness;
-      return (
-        globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? ""
-      );
+      return globalSettings.harnessDefaultAdditionalArgs[harness] ?? "";
     },
 
     getEffectiveToolPermissions: () => {

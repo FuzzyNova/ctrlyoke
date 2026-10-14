@@ -268,11 +268,25 @@ export function resolveNullable<T>(
   return { value: selected.value ?? undefined, source: selected.source };
 }
 
+/**
+ * Whether a step inherits the workflow's harness-scoped values (`model` and
+ * `additionalArgs`). Those values are written for the workflow's own harness,
+ * so a step that runs on a different harness skips them and falls through to
+ * the settings default for its own harness instead.
+ */
+export function inheritsWorkflowHarnessScopedValues(
+  stepHarness: HarnessId,
+  workflowHarness: HarnessId
+): boolean {
+  return stepHarness === workflowHarness;
+}
+
 function resolveAdditionalArgs(
   prompt: PromptStep,
   workflow: PromptFile,
   defaults: ExecutionPropertyDefaults,
-  harness: HarnessId
+  harness: HarnessId,
+  inheritsWorkflowValue: boolean
 ): { value: string | undefined; source: ResolutionSource } {
   const promptValue = prompt.additionalArgs;
   if (promptValue !== undefined) {
@@ -282,7 +296,9 @@ function resolveAdditionalArgs(
       source: "prompt",
     };
   }
-  const workflowValue = workflow.additionalArgs;
+  const workflowValue = inheritsWorkflowValue
+    ? workflow.additionalArgs
+    : undefined;
   if (workflowValue !== undefined) {
     return {
       value:
@@ -334,9 +350,13 @@ export function resolveExecutionProperties(
 ): ResolvedExecutionTarget {
   const { defaults } = context;
   const harness = select(prompt.harness, workflow.harness, defaults.harness);
+  const inheritsHarnessScoped = inheritsWorkflowHarnessScopedValues(
+    harness.value,
+    workflow.harness ?? defaults.harness
+  );
   const model = select(
     prompt.model,
-    workflow.model,
+    inheritsHarnessScoped ? workflow.model : undefined,
     defaults.modelsByHarness[harness.value] ?? ""
   );
   const executionMode = select(
@@ -403,7 +423,8 @@ export function resolveExecutionProperties(
     prompt,
     workflow,
     defaults,
-    harness.value
+    harness.value,
+    inheritsHarnessScoped
   );
   const toolPermissions = resolveToolPermissions(prompt, workflow, defaults);
   const errorBehavior = resolveNullable(

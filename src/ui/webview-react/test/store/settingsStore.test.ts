@@ -325,6 +325,34 @@ describe("getEffectiveModel", () => {
       "claude-opus-4"
     );
   });
+
+  it("gives a step on another harness that harness's default, not the workflow model", () => {
+    const state = useSettingsStore.getState();
+    state.updateGlobalSetting("harness", HARNESS_IDS.CLAUDE_CLI);
+    state.updateGlobalSetting("harnessDefaultModels", {
+      [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
+      [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3-pro",
+    });
+    state.updateWorkflowProperty("model", "opus");
+    const effective = useSettingsStore.getState().getEffectiveModel;
+    expect(effective(HARNESS_IDS.ANTIGRAVITY_CLI)).toBe("gemini-3-pro");
+    expect(effective(HARNESS_IDS.CLAUDE_CLI)).toBe("opus");
+  });
+});
+
+describe("getEffectiveAdditionalArgs", () => {
+  it("scopes the workflow's args to the workflow's harness", () => {
+    const state = useSettingsStore.getState();
+    state.updateGlobalSetting("harness", HARNESS_IDS.CLAUDE_CLI);
+    state.updateGlobalSetting("harnessDefaultAdditionalArgs", {
+      [HARNESS_IDS.CODEX_CLI]: "--search",
+    });
+    state.updateWorkflowProperty("additionalArgs", "--effort high");
+    const effective = useSettingsStore.getState().getEffectiveAdditionalArgs;
+    expect(effective()).toBe("--effort high");
+    expect(effective(HARNESS_IDS.CLAUDE_CLI)).toBe("--effort high");
+    expect(effective(HARNESS_IDS.CODEX_CLI)).toBe("--search");
+  });
 });
 
 describe("getEffectiveExecutionMode", () => {

@@ -2,7 +2,14 @@
 
 - **Found:** 2026-10-14 by Claude Code (documenting property inheritance for `docs/workflows/yaml-format.md`)
 - **Area:** `src/core/orchestration/PromptFileLoader.ts`, `src/types/ExecutionPropertyResolver.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit. The workflow-level `model` and
+  `additionalArgs` are still seeded from settings but now apply only to steps
+  on the workflow's harness (`inheritsWorkflowHarnessScopedValues` in
+  `ExecutionPropertyResolver.ts`); other steps fall through to their own
+  harness's settings default. The step drawer and footer label that fallback
+  **Default (…)** instead of **Inherit (…)**, picking a step harness now clears
+  the step's model and args, and the `model` schema description no longer
+  promises a fallback on every harness.
 
 ## Symptom
 

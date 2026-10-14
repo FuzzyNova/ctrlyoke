@@ -28,35 +28,22 @@ describe("defaultModelForHarness", () => {
   });
 });
 
-const defaults = {
-  harnessDefaultModels: { "claude-cli": "sonnet", "codex-cli": "" },
-  harnessDefaultAdditionalArgs: { "claude-cli": "--fast", "codex-cli": "" },
-};
-
 describe("buildHarnessChangeCascade", () => {
   it("clears harness companions when inheriting", () => {
-    expect(buildHarnessChangeCascade(INHERIT_DEFAULT_OPTION, defaults)).toEqual(
-      {
-        harness: undefined,
-        model: undefined,
-        additionalArgs: undefined,
-      }
-    );
-  });
-
-  it("sets the harness defaults when available", () => {
-    expect(buildHarnessChangeCascade("claude-cli", defaults)).toEqual({
-      harness: "claude-cli",
-      model: "sonnet",
-      additionalArgs: "--fast",
+    expect(buildHarnessChangeCascade(INHERIT_DEFAULT_OPTION)).toEqual({
+      harness: undefined,
+      model: undefined,
+      additionalArgs: undefined,
     });
   });
 
-  it("sets no model and explicitly clears args when defaults are absent", () => {
-    expect(buildHarnessChangeCascade("codex-cli", defaults)).toEqual({
+  it("clears model and args overrides when picking a harness", () => {
+    // Cleared, not seeded: the resolver gives a step on another harness that
+    // harness's settings defaults, and the drawer labels them "Default (…)".
+    expect(buildHarnessChangeCascade("codex-cli")).toEqual({
       harness: "codex-cli",
       model: undefined,
-      additionalArgs: null,
+      additionalArgs: undefined,
     });
   });
 });

@@ -14,6 +14,7 @@ import { FOOTER_PICKERS } from "../../types/messages";
 import { modelNamespaceForHarness } from "../../types/dropdownNamespaces";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
+import { harnessScopedFallbackLabel } from "../../utils/harnessScopedFallback";
 import { Icon } from "../shared/Icon";
 
 interface ModelQuickPickerProps {
@@ -41,6 +42,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
+  const getEffectiveModel = useSettingsStore((s) => s.getEffectiveModel);
   const footerOpenPicker = useUiStore((s) => s.footerOpenPicker);
   const setFooterOpenPicker = useUiStore((s) => s.setFooterOpenPicker);
   const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
@@ -49,20 +51,21 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
 
   const isOpen = footerOpenPicker === FOOTER_PICKERS.MODEL;
 
-  const resolvedHarness = (properties.harness ??
-    workflowProperties.harness ??
+  const workflowHarness = (workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
+  const resolvedHarness = (properties.harness ?? workflowHarness) as HarnessId;
   const models = getModelsForHarness(resolvedHarness);
   const modelNamespace = modelNamespaceForHarness(resolvedHarness);
 
-  const resolvedModelValue =
-    workflowProperties.model ??
-    globalSettings.harnessDefaultModels[resolvedHarness] ??
-    globalSettings.model;
+  const resolvedModelValue = getEffectiveModel(resolvedHarness);
   const resolvedModelLabel =
     models.find((m) => m.value === resolvedModelValue)?.label ??
     resolvedModelValue;
-  const defaultModelLabel = `Inherit (${resolvedModelLabel || "None"})`;
+  const defaultModelLabel = harnessScopedFallbackLabel(
+    resolvedHarness,
+    workflowHarness,
+    resolvedModelLabel || "None"
+  );
 
   const valueLabel =
     modelValue === MIXED_VALUE

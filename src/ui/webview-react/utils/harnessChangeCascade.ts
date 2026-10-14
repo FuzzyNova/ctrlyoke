@@ -2,11 +2,6 @@ import type { PropertyValues } from "../store/editorStore";
 import type { GlobalSettings, ModelOption } from "../store/settingsStore";
 import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 
-type HarnessDefaults = Pick<
-  GlobalSettings,
-  "harnessDefaultModels" | "harnessDefaultAdditionalArgs"
->;
-
 /**
  * The model a harness should start on: the user's default model for that
  * harness when the harness offers it, otherwise the harness's first model.
@@ -24,17 +19,18 @@ export function defaultModelForHarness(
     : models[0].value;
 }
 
-/** Build the prompt property changes that accompany a harness selection. */
+/**
+ * Build the prompt property changes that accompany a harness selection. A
+ * model or args override belongs to the harness it was picked for, so both are
+ * cleared: the step then inherits the workflow's values when it runs on the
+ * workflow's harness, or uses the new harness's settings defaults otherwise.
+ */
 export function buildHarnessChangeCascade(
-  harness: string,
-  settings: HarnessDefaults
+  harness: string
 ): Partial<PropertyValues> {
-  if (harness === INHERIT_DEFAULT_OPTION) {
-    return { harness: undefined, model: undefined, additionalArgs: undefined };
-  }
   return {
-    harness,
-    model: settings.harnessDefaultModels[harness] || undefined,
-    additionalArgs: settings.harnessDefaultAdditionalArgs[harness] || null,
+    harness: harness === INHERIT_DEFAULT_OPTION ? undefined : harness,
+    model: undefined,
+    additionalArgs: undefined,
   };
 }

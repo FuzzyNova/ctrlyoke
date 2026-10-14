@@ -625,6 +625,78 @@ suite("PropertyResolver Tests", () => {
       // Should default to ConfigurationUtils.getCopilotCliModel() for CopilotCli
       assert.ok(resolved.model); // Model should be defined
     });
+
+    test("workflow model and args apply only to steps on the workflow's harness", () => {
+      const context = PropertyResolver.createContext();
+      context.defaults.harness = HARNESS_IDS.COPILOT_CLI;
+      context.defaults.modelsByHarness = {
+        [HARNESS_IDS.CLAUDE_CLI]: "opus",
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: "gemini-3-pro",
+      };
+      context.defaults.additionalArgsByHarness = {
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: "--agy-flag",
+      };
+      const workflow: PromptFile = {
+        steps: [],
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "sonnet",
+        additionalArgs: "--effort high",
+      };
+
+      const sameHarness = resolveExecutionProperties(
+        { prompt: "plan" },
+        workflow,
+        context
+      );
+      assert.strictEqual(sameHarness.properties.model, "sonnet");
+      assert.strictEqual(sameHarness.sources.model, "workflow");
+      assert.strictEqual(
+        sameHarness.properties.additionalArgs,
+        "--effort high"
+      );
+
+      const explicitSameHarness = resolveExecutionProperties(
+        { prompt: "plan", harness: HARNESS_IDS.CLAUDE_CLI },
+        workflow,
+        context
+      );
+      assert.strictEqual(explicitSameHarness.properties.model, "sonnet");
+
+      const otherHarness = resolveExecutionProperties(
+        { prompt: "implement", harness: HARNESS_IDS.ANTIGRAVITY_CLI },
+        workflow,
+        context
+      );
+      assert.strictEqual(otherHarness.properties.model, "gemini-3-pro");
+      assert.strictEqual(otherHarness.sources.model, "defaults");
+      assert.strictEqual(otherHarness.properties.additionalArgs, "--agy-flag");
+      assert.strictEqual(otherHarness.sources.additionalArgs, "defaults");
+
+      const otherHarnessOverride = resolveExecutionProperties(
+        {
+          prompt: "implement",
+          harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+          model: "gemini-3-flash",
+        },
+        workflow,
+        context
+      );
+      assert.strictEqual(
+        otherHarnessOverride.properties.model,
+        "gemini-3-flash"
+      );
+
+      const workflowWithoutHarness: PromptFile = {
+        steps: [],
+        model: "gpt-copilot",
+      };
+      const onDefaultHarness = resolveExecutionProperties(
+        { prompt: "plan", harness: HARNESS_IDS.COPILOT_CLI },
+        workflowWithoutHarness,
+        context
+      );
+      assert.strictEqual(onDefaultHarness.properties.model, "gpt-copilot");
+    });
   });
 
   suite("resolveAgent", () => {
@@ -1345,7 +1417,9 @@ suite("PropertyResolver Tests", () => {
 
       const workflow: PromptFile = {
         steps: [],
-        // harness: not specified - prompt overrides anyway
+        // Same harness as the prompt: the workflow model only applies to
+        // steps on the workflow's harness.
+        harness: HARNESS_IDS.CLAUDE_CLI,
         model: "opus", // Should be used
         // agent: not specified - prompt overrides anyway
         resumeSession: true, // Should be used

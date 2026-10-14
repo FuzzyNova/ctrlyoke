@@ -79,7 +79,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
       clearBulkPatchField("harness");
       clearBulkCascadeCompanions();
     } else {
-      setHarnessCascade(buildHarnessChangeCascade(newHarness, globalSettings));
+      setHarnessCascade(buildHarnessChangeCascade(newHarness));
     }
     setFooterOpenPicker(null);
   };

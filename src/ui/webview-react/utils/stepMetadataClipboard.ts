@@ -3,7 +3,10 @@ import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
 import type { PriorContext } from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
-import { PRIOR_CONTEXT_DETAILS } from "@root/types/DashboardConstants";
+import {
+  PRIOR_CONTEXT_DETAILS,
+  isHarnessId,
+} from "@root/types/DashboardConstants";
 import { isScriptWorkflowStep } from "./stepClipboard";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
@@ -203,9 +206,15 @@ export function buildStepMetadataClipboardText({
   ];
 
   if (!isScript) {
+    const stepHarness = isHarnessId(step.harness) ? step.harness : undefined;
     lines.push(
       resolvedLine("harness", step.harness, getEffectiveHarness(), fmtString),
-      resolvedLine("model", step.model, getEffectiveModel(), fmtString),
+      resolvedLine(
+        "model",
+        step.model,
+        getEffectiveModel(stepHarness),
+        fmtString
+      ),
       resolvedLine("agent", step.agent, getEffectiveAgent(), fmtString),
       resolvedLine("skills", step.skills, getEffectiveSkills(), fmtStringArray),
       resolvedLine(
@@ -259,7 +268,7 @@ export function buildStepMetadataClipboardText({
       resolvedLine(
         "additionalArgs",
         step.additionalArgs,
-        getEffectiveAdditionalArgs(),
+        getEffectiveAdditionalArgs(stepHarness),
         fmtString
       ),
       resolvedLine(

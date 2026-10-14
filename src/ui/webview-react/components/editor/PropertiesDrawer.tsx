@@ -113,6 +113,8 @@ const MIXED_AWARE_DRAWER_KEYS: ReadonlySet<string> = new Set([
   PROMPT_PROPERTIES.ADDITIONAL_ARGS,
 ]);
 import { buildHarnessChangeCascade } from "../../utils/harnessChangeCascade";
+import { harnessScopedFallbackLabel } from "../../utils/harnessScopedFallback";
+import { inheritsWorkflowHarnessScopedValues } from "@root/types/ExecutionPropertyResolver";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -159,6 +161,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     globalSettings,
     workflowProperties,
     getModelsForHarness,
+    getEffectiveModel,
+    getEffectiveAdditionalArgs,
   } = useSettingsStore();
   const steps = useWorkflowStore((s) => s.steps);
   const bulkGates = useBulkSelectionGates();
@@ -229,15 +233,33 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     globalSettings.harness) as HarnessId;
   const defaultHarnessLabel = `Inherit (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
 
-  const resolvedModels = getModelsForHarness(resolvedHarness);
-  const resolvedModelValue =
-    workflowProperties.model ??
-    globalSettings.harnessDefaultModels[resolvedHarness] ??
-    globalSettings.model;
+  // The harness this step runs on. Model and Additional Args fall back to the
+  // workflow's values only on the workflow's own harness (see
+  // inheritsWorkflowHarnessScopedValues); `null` marks a bulk selection whose
+  // steps run on different harnesses.
+  const isHarnessMixed =
+    (displayedProperties.harness as unknown) === MIXED_VALUE;
+  const currentHarness = (
+    isHarnessMixed
+      ? resolvedHarness
+      : (displayedProperties.harness ?? resolvedHarness)
+  ) as HarnessId;
+  const fallbackHarness = isHarnessMixed ? null : currentHarness;
+  const inheritsWorkflowHarnessScoped = inheritsWorkflowHarnessScopedValues(
+    currentHarness,
+    resolvedHarness
+  );
+
+  const models = getModelsForHarness(currentHarness);
+  const resolvedModelValue = getEffectiveModel(currentHarness);
   const resolvedModelLabel =
-    resolvedModels.find((m) => m.value === resolvedModelValue)?.label ??
+    models.find((m) => m.value === resolvedModelValue)?.label ??
     resolvedModelValue;
-  const defaultModelLabel = `Inherit (${resolvedModelLabel || "None"})`;
+  const defaultModelLabel = harnessScopedFallbackLabel(
+    fallbackHarness,
+    resolvedHarness,
+    resolvedModelLabel || "None"
+  );
 
   const resolvedAgent =
     workflowProperties.agent === undefined
@@ -272,11 +294,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     ],
     [promptText]
   );
-  const resolvedAdditionalArgs =
-    workflowProperties.additionalArgs === undefined
-      ? (globalSettings.harnessDefaultAdditionalArgs[resolvedHarness] ?? "")
-      : workflowProperties.additionalArgs;
-  const defaultAdditionalArgsLabel = `Inherit (${resolvedAdditionalArgs ? "Custom" : "None"})`;
+  const resolvedAdditionalArgs = getEffectiveAdditionalArgs(currentHarness);
+  const defaultAdditionalArgsLabel = harnessScopedFallbackLabel(
+    fallbackHarness,
+    resolvedHarness,
+    resolvedAdditionalArgs ? "Custom" : "None"
+  );
 
   const resolvedExecutionMode =
     workflowProperties.executionMode ?? globalSettings.executionMode;
@@ -355,7 +378,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const additionalArgsTooltip = isAdditionalArgsActive
     ? undefined
     : additionalArgsMode === INHERIT_DEFAULT_OPTION
-      ? "Inheriting from workflow settings. Select Custom to override."
+      ? inheritsWorkflowHarnessScoped || isHarnessMixed
+        ? "Inheriting from workflow settings. Select Custom to override."
+        : `Using the settings default for ${HARNESS_DISPLAY_NAMES[currentHarness] ?? currentHarness}. Select Custom to override.`
       : "Set to None — no additional args will be passed";
 
   const resolvedMcpServers =
@@ -440,15 +465,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     ].label
   })`;
 
-  // Get models for current harness
-  const currentHarness = (
-    (displayedProperties.harness as unknown) === MIXED_VALUE
-      ? resolvedHarness
-      : (displayedProperties.harness ??
-        workflowProperties.harness ??
-        globalSettings.harness)
-  ) as HarnessId;
-  const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
   const modelWarn =
     (displayedProperties.model as unknown) === MIXED_VALUE
@@ -472,13 +488,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     currentHarness
   );
 
-  // Handle harness change - also set model and additionalArgs to global defaults for the new harness
+  // Handle harness change - also clear the step's model and additionalArgs overrides
   const handleHarnessChange = (newHarness: string) => {
     if (newHarness === BULK_MIXED_OPTION) {
       clearBulkPatchField(PROMPT_PROPERTIES.HARNESS);
       clearBulkCascadeCompanions();
     } else {
-      setHarnessCascade(buildHarnessChangeCascade(newHarness, globalSettings));
+      setHarnessCascade(buildHarnessChangeCascade(newHarness));
     }
   };
 

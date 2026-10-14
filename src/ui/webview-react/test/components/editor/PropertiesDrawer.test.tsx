@@ -126,6 +126,52 @@ describe("PropertiesDrawer landmark", () => {
   });
 });
 
+describe("PropertiesDrawer harness-scoped fallbacks", () => {
+  beforeEach(() => {
+    resetStores();
+    const settings = useSettingsStore.getState();
+    settings.updateGlobalSetting("harness", HARNESS_IDS.CLAUDE_CLI);
+    settings.updateGlobalSetting("harnessDefaultModels", {
+      [HARNESS_IDS.ANTIGRAVITY_CLI]: "agy-default-model",
+    });
+    settings.updateGlobalSetting("harnessDefaultAdditionalArgs", {
+      [HARNESS_IDS.ANTIGRAVITY_CLI]: "--agy-flag",
+    });
+    settings.updateWorkflowProperty("model", "workflow-model");
+    settings.updateWorkflowProperty("additionalArgs", "--workflow-flag");
+  });
+
+  afterEach(cleanup);
+
+  it("labels the fallback Inherit on the workflow's harness", () => {
+    renderHarnessDrawer();
+
+    expect(screen.getByRole("button", { name: /^Model/ })).toHaveTextContent(
+      "Inherit (workflow-model)"
+    );
+    expect(
+      screen.getByRole("button", { name: /^Additional Args/ })
+    ).toHaveTextContent("Inherit (Custom)");
+  });
+
+  it("labels the fallback Default with the step harness's setting on another harness", () => {
+    useEditorStore
+      .getState()
+      .setProperty("harness", HARNESS_IDS.ANTIGRAVITY_CLI);
+    renderHarnessDrawer();
+
+    expect(screen.getByRole("button", { name: /^Model/ })).toHaveTextContent(
+      "Default (agy-default-model)"
+    );
+    expect(
+      screen.getByRole("button", { name: /^Additional Args/ })
+    ).toHaveTextContent("Default (Custom)");
+    expect(
+      screen.getAllByTitle(/^Using the settings default for /).length
+    ).toBeGreaterThan(0);
+  });
+});
+
 describe("PropertiesDrawer execution mode", () => {
   beforeEach(() => {
     resetStores();
