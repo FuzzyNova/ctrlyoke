@@ -62,9 +62,11 @@ describe("workflow-aware prompt completions", () => {
     const result = await source(
       new CompletionContext(state, state.doc.length, true)
     );
-    expect(result?.options.map((item) => [item.label, item.detail])).toEqual([
-      ["step:1", "Step 1: Setup"],
+    expect(result?.options.map((item) => item.label)).toEqual([
+      "step:1",
+      "step:summary:",
     ]);
+    expect(result?.options[0].detail).toBe("Step 1: Setup");
   });
 
   it("offers declared variables after `{{`", async () => {
@@ -87,7 +89,7 @@ describe("workflow-aware prompt completions", () => {
     ).toBe("project_name");
   });
 
-  it("gates retry and condition-output completions consistently", async () => {
+  it("withholds only end-condition output outside a retry prompt", async () => {
     const promptState = EditorState.create({ doc: "$" });
     const promptSource = createWorkflowContextCompletionSource(
       { customSource: () => null },
@@ -100,7 +102,7 @@ describe("workflow-aware prompt completions", () => {
     expect(result?.options.map((item) => item.label)).not.toContain(
       "endCondition:stdout"
     );
-    expect(result?.options.map((item) => item.label)).not.toContain(
+    expect(result?.options.map((item) => item.label)).toContain(
       "preCondition:stdout"
     );
   });

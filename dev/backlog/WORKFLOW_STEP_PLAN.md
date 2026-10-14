@@ -1,5 +1,11 @@
 # Workflow Step Plan
 
+> **Syntax note (2026-10-13):** D12b was superseded by
+> [`PRIOR_CONTEXT_DETAIL_PLAN.md`](../implemented/PRIOR_CONTEXT_DETAIL_PLAN.md), and the summary
+> detail now follows the kind instead of prefixing it: `$previous:summary`,
+> `$previous:summary:3`, `$step:summary:1,3-5`. Read every `$summary:<selector>` below as
+> `$<kind>:summary…`; `PRIOR_CONTEXT_SUMMARY_PREFIX` is now `PRIOR_CONTEXT_SUMMARY_SEGMENT`.
+>
 > **2026-10-13:** The pre-release slice of D12 landed: `PriorContextItem.scriptVerdict` and its
 > `<verdict/>` rendering (D12a, for every script step), and `PRIOR_CONTEXT_SUMMARY_PREFIX`,
 > reserved by an editor warning but not yet parsed or expanded (D12b).

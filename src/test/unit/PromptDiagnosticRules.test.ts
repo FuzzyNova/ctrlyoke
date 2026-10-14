@@ -150,12 +150,13 @@ suite("PromptDiagnosticRules", () => {
       assert.strictEqual(text.slice(diagnostic.from, diagnostic.to), "$step:9");
     });
 
-    test("accepts summary selectors and diagnoses an unknown summary body", () => {
+    test("accepts summary selectors and diagnoses a malformed summary body", () => {
       const text =
-        "Merge $summary:step:1,2, then $summary:previous; $summary:nope; $summary.";
+        "Merge $step:summary:1,2, then $previous:summary; $previous:summary:2 " +
+        "and $all:summary; $step:summary, $step:summary:x or $preCondition:summary.";
       assert.deepStrictEqual(
         summarize(text, getPriorContextDiagnostics(text, baseContext)),
-        ["$summary:nope", "$summary"].map((token) => ({
+        ["$step:summary", "$step:summary:x"].map((token) => ({
           code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_INVALID,
           severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
           text: token,
@@ -163,10 +164,28 @@ suite("PromptDiagnosticRules", () => {
       );
     });
 
-    test("ignores summary text in code, mid-word, or without the colon", () => {
+    test("offers the kind-first order as a fix for the retired summary prefix", () => {
+      const text =
+        "See $summary:previous:3, $summary:step:1,2, and $summary:nope.";
+      const diagnostics = getPriorContextDiagnostics(text, baseContext);
+      assert.deepStrictEqual(
+        diagnostics.map((diagnostic) => [
+          text.slice(diagnostic.from, diagnostic.to),
+          diagnostic.replacements,
+        ]),
+        [
+          ["$summary:previous:3", ["$previous:summary:3"]],
+          ["$summary:step:1,2", ["$step:summary:1,2"]],
+        ]
+      );
+    });
+
+    test("ignores summary text in code or mid-word", () => {
       for (const text of [
+        "`$previous:summary`",
+        "```\n$all:summary\n```",
+        "price$all:summary",
         "`$summary:previous`",
-        "```\n$summary:all\n```",
         "price$summary:all",
       ]) {
         assert.deepStrictEqual(

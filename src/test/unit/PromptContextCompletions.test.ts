@@ -11,25 +11,45 @@ import {
 import { PROMPT_DIAGNOSTIC_FIELDS } from "../../types/DashboardConstants";
 
 suite("PromptContextCompletions", () => {
+  const twoSteps = {
+    stepNames: ["Setup", "Build"],
+    vars: {},
+    field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
+    hasPreCondition: false,
+    stepCount: 2,
+    hasFinalStep: false,
+  };
+
   test("names only the prior steps in step completions", () => {
-    const items = getContextualPriorCompletions("step:", {
-      stepNames: ["Setup", "Build"],
-      vars: {},
-      field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
-      hasPreCondition: false,
-      stepCount: 2,
-      hasFinalStep: false,
-    });
+    const items = getContextualPriorCompletions("step:", twoSteps);
     assert.deepStrictEqual(
-      items.map(({ label, detail }) => [label, detail]),
+      items.map(({ label, detail }) => [label, detail?.split(" — ")[0]]),
       [
         ["step:1", "Step 1: Setup"],
         ["step:2", "Step 2: Build"],
+        ["step:summary:", "Summary form, e.g. $step:summary:1,3-5"],
+      ]
+    );
+    assert.deepStrictEqual(
+      getContextualPriorCompletions("step:2", twoSteps).map(
+        ({ label }) => label
+      ),
+      ["step:2"]
+    );
+  });
+
+  test("names the prior steps after step:summary:", () => {
+    const items = getContextualPriorCompletions("step:summary:", twoSteps);
+    assert.deepStrictEqual(
+      items.map(({ label, detail }) => [label, detail]),
+      [
+        ["step:summary:1", "Step 1: Setup (summary)"],
+        ["step:summary:2", "Step 2: Build (summary)"],
       ]
     );
   });
 
-  test("scopes condition outputs to the field and effective pre-condition", () => {
+  test("offers pre-condition output before a pre-condition exists", () => {
     const prompt = getContextualPriorCompletions("", {
       stepNames: [],
       vars: {},
@@ -39,7 +59,7 @@ suite("PromptContextCompletions", () => {
       hasFinalStep: false,
     });
     assert.ok(!prompt.some((item) => item.label.startsWith("endCondition:")));
-    assert.ok(!prompt.some((item) => item.label.startsWith("preCondition:")));
+    assert.ok(prompt.some((item) => item.label.startsWith("preCondition:")));
 
     const retry = getContextualPriorCompletions("", {
       stepNames: [],
@@ -63,7 +83,7 @@ suite("PromptContextCompletions", () => {
     );
   });
 
-  test("hides context completions that are invalid at the current position", () => {
+  test("offers references a later edit could make valid, full and summary alike", () => {
     const firstStep = getContextualPriorCompletions("", {
       stepNames: [],
       vars: {},
@@ -72,27 +92,20 @@ suite("PromptContextCompletions", () => {
       stepCount: 0,
       hasFinalStep: false,
     });
-    assert.ok(
-      !firstStep.some((item) =>
-        /^(previous|all|step:|previous:)$/.test(item.label)
-      )
-    );
-    assert.ok(
-      !firstStep.some((item) => /^(finalStep|allFinalStep)$/.test(item.label))
-    );
-
-    const laterStep = getContextualPriorCompletions("", {
-      stepNames: ["First"],
-      vars: {},
-      field: PROMPT_DIAGNOSTIC_FIELDS.PROMPT,
-      hasPreCondition: false,
-      stepCount: 1,
-      hasFinalStep: true,
-    });
-    assert.ok(
-      laterStep.some((item) => item.label === PRIOR_CONTEXT_KEYWORDS.PREVIOUS)
-    );
-    assert.ok(laterStep.some((item) => item.label === "finalStep"));
+    const labels = new Set(firstStep.map((item) => item.label));
+    for (const label of [
+      PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
+      "previous:",
+      "all",
+      "step:",
+      "finalStep",
+      "allFinalStep",
+      "previous:summary",
+      "finalStep:summary",
+      "step:summary:",
+    ]) {
+      assert.ok(labels.has(label), label);
+    }
   });
 
   test("derives visible step names and vars from the workflow document", () => {

@@ -89,9 +89,9 @@ the captured file contents. Failed file operations are marked as failed and do n
 A script step's output includes its pass/fail verdict; see
 [Using script output in later prompts](/workflows/script-steps#using-script-output-in-later-prompts).
 
-Prefix any selector with `$summary:` to request a deterministic excerpt:
-`$summary:previous`, `$summary:previous:3`, `$summary:all`,
-`$summary:finalStep`, `$summary:allFinalStep`, or `$summary:step:1,3-5`.
+Add `:summary` after the kind of any selector, before its arguments, to request a deterministic
+excerpt: `$previous:summary`, `$previous:summary:3`, `$all:summary`,
+`$finalStep:summary`, `$allFinalStep:summary`, or `$step:summary:1,3-5`.
 The excerpt contains the authored prompt head, changed files, and text tail.
 It does not call an AI model. Use it for hand-offs and commit-style prompts
 where the full transcript would add noise. Keep the full form for review work
@@ -99,7 +99,7 @@ that needs diffs, commands, or tool-call details.
 
 The workflow or prompt property `priorContextDetail: summary` applies the same
 detail level to its `priorContext` selectors; the default is `full`. An inline
-`$summary:` selector requests summary for that reference even when the property
+`:summary` selector requests summary for that reference even when the property
 uses the full form.
 
 ## Context at a parallel boundary

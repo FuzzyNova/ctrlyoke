@@ -931,7 +931,7 @@ suite("RunOutputResolver", () => {
     assert.ok(!summary.includes("failed.ts"), summary);
     assert.ok(!summary.includes("reasoning"), summary);
     const summaryPreview = await PriorContextPreviewBuilder.buildPreview(
-      "summary:step:1",
+      "step:summary:1",
       1,
       revisionOne.steps,
       resolver,

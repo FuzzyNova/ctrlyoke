@@ -36,6 +36,12 @@
 >     `priorContextDetail: summary`.
 >     Still open:
 >     [`inline-step-reference-renumbered-to-empty-token.md`](../bugs/backlog/inline-step-reference-renumbered-to-empty-token.md).
+> - **Syntax changed after implementation (2026-10-13):** the detail now follows the kind instead
+>   of prefixing it, to match the chip label ("previous · summary"): `$previous:summary`,
+>   `$previous:summary:3`, `$step:summary:1,3-5`, `$all:summary`, `$finalStep:summary`,
+>   `$allFinalStep:summary`. The rule is kind, then an optional `:summary`, then the arguments.
+>   Read every `$summary:<selector>` in this plan as that form. The editor flags the old order
+>   with a quick fix to the new one.
 >
 > The file and line citations below describe the code as it was before implementation.
 >

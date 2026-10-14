@@ -3176,7 +3176,8 @@ export const PRIOR_CONTEXT_REFERENCE_KINDS = {
 export type PriorContextReferenceKind =
   (typeof PRIOR_CONTEXT_REFERENCE_KINDS)[keyof typeof PRIOR_CONTEXT_REFERENCE_KINDS];
 
-export const PRIOR_CONTEXT_SUMMARY_PREFIX = "summary:";
+/** Detail segment that follows the kind: `$previous:summary`, `$step:summary:1,3`. */
+export const PRIOR_CONTEXT_SUMMARY_SEGMENT = ":summary";
 export const PRIOR_CONTEXT_DETAILS = {
   FULL: "full",
   SUMMARY: "summary",

@@ -247,7 +247,7 @@ How many of the most recent earlier outputs to include
 - **Type:** `"full" | "summary"`
 - **Default:** `"full"`
 
-How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference.
+How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference.
 
 ### `additionalArgs` {#execution-properties-additionalargs}
 

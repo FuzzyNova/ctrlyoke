@@ -1,4 +1,4 @@
-import { PRIOR_CONTEXT_SUMMARY_PREFIX } from "../types/DashboardConstants";
+import { PRIOR_CONTEXT_SUMMARY_SEGMENT } from "../types/DashboardConstants";
 import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
 
 /** Shared unquoted @ path body. A colon is valid only in the drive prefix. */
@@ -19,10 +19,27 @@ const UNQUOTED_REFERENCE_END = String.raw`(?=$|[\s:"]|[^\p{L}\p{N}/\\\s:"]+(?:[\
  * `$previous: fix it` or `$previous:3x` falls back to the bare `$previous`
  * alternative instead of swallowing the colon — the same bare-keyword
  * behaviour those texts had before counts existed.
+ *
+ * The optional `:summary` detail segment sits right after the kind and before
+ * any arguments (`$previous:summary:3`, `$step:summary:1,3-5`). On a bare
+ * keyword it must be a whole word, so `$previous:summary2` is `$previous`.
  */
 export function createInlinePriorContextReferencePattern(): RegExp {
+  const summary = PRIOR_CONTEXT_SUMMARY_SEGMENT;
   return new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$((?:${PRIOR_CONTEXT_SUMMARY_PREFIX.replace(":", "")}(?::(?:[A-Za-z][A-Za-z0-9_]*(?::[A-Za-z0-9,_\\-]*)?)?)?|step:[A-Za-z0-9,_\\-]*|previous:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9_]*))`,
+    `${NOT_AFTER_BOUNDARY}\\$((?:step(?:${summary})?:[A-Za-z0-9,_\\-]*|previous(?:${summary})?:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9_]*(?:${summary}(?![A-Za-z0-9_]))?))`,
+    "gu"
+  );
+}
+
+/**
+ * Build the pattern for the retired detail-first order (`$summary:previous`),
+ * which the editor flags with a quick fix to the current order. Capture 1 =
+ * the selector after `summary:`.
+ */
+export function createLegacySummaryPrefixPattern(): RegExp {
+  return new RegExp(
+    `${NOT_AFTER_BOUNDARY}\\$summary:((?:step:[0-9,\\-]*[0-9]|previous:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9_]*))`,
     "gu"
   );
 }

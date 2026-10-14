@@ -302,14 +302,14 @@ describe("atomic reference presentation", () => {
   });
 
   it("recognizes summary prior-context references as summary chips", () => {
-    expect(findAtomicReferences("Use $summary:step:1,3-4 here")).toMatchObject([
+    expect(findAtomicReferences("Use $step:summary:1,3-4 here")).toMatchObject([
       {
         icon: "book",
         label: "step 1,3-4 · summary",
-        title: "$summary:step:1,3-4",
+        title: "$step:summary:1,3-4",
         attrs: {
           "data-type": "priorContext",
-          "data-ref": "summary:step:1,3,4",
+          "data-ref": "step:summary:1,3,4",
         },
       },
     ]);

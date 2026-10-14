@@ -166,7 +166,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "summary"
         ],
         "default": "full",
-        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference."
+        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference."
       },
       "additionalArgs": {
         "valueKind": "oneOf",
@@ -450,7 +450,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "summary"
         ],
         "default": "full",
-        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline $summary: references select summary for that reference."
+        "description": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference."
       },
       "additionalArgs": {
         "valueKind": "oneOf",

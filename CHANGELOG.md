@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard Copy Output copies assistant-authored text; Copy Full Output includes the complete
   structured transcript. Script search matches use `matchField: "output"` and come from
   recorded stdout and stderr.
-- Prior-context references support `$summary:` for deterministic prompt-head, changed-file, and
-  text-tail excerpts. `priorContextDetail` adds the same Full / Summary choice in workflow and
+- Prior-context references take a `:summary` detail after the kind (`$previous:summary`,
+  `$step:summary:1,3-5`) for deterministic prompt-head, changed-file, and text-tail excerpts. `priorContextDetail` adds the same Full / Summary choice in workflow and
   prompt properties; the default remains full detail.
 
 ## [0.1.2] - 2026-09-25

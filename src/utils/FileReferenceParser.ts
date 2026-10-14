@@ -21,7 +21,7 @@
 import {
   GIT_CHANGE_KINDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
-  PRIOR_CONTEXT_SUMMARY_PREFIX,
+  PRIOR_CONTEXT_SUMMARY_SEGMENT,
   PRIOR_CONTEXT_DETAILS,
   type PriorContextDetail,
   SCRIPT_OUTPUT_SOURCES,
@@ -906,7 +906,7 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
 
 /**
  * Parse one inline prior-context reference body (the text after `$`, e.g.
- * "previous", "previous:3", "step:1,3-5") — the single parser behind the
+ * "previous", "previous:summary:3", "step:1,3-5") — the single parser behind the
  * runtime ({@link parseInlinePriorContextRefs}), the editor's chips and lint,
  * and the Ctrl+click preview, so they can never disagree about what a token
  * means.
@@ -920,9 +920,16 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
 export function parseInlinePriorContextBody(
   body: string
 ): { ref: InlinePriorContextRef; length: number } | null {
-  const summary = body.startsWith(PRIOR_CONTEXT_SUMMARY_PREFIX);
+  // The detail segment follows the kind: "previous:summary:3" → "previous:3".
+  const colon = body.indexOf(":");
+  const kindEnd = colon < 0 ? body.length : colon;
+  const afterKind = body.slice(kindEnd);
+  const summary =
+    afterKind === PRIOR_CONTEXT_SUMMARY_SEGMENT ||
+    afterKind.startsWith(`${PRIOR_CONTEXT_SUMMARY_SEGMENT}:`);
   const selector = summary
-    ? body.slice(PRIOR_CONTEXT_SUMMARY_PREFIX.length)
+    ? body.slice(0, kindEnd) +
+      afterKind.slice(PRIOR_CONTEXT_SUMMARY_SEGMENT.length)
     : body;
   const detail = summary
     ? PRIOR_CONTEXT_DETAILS.SUMMARY
@@ -959,7 +966,7 @@ export function parseInlinePriorContextBody(
     return {
       ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices, detail },
       length:
-        (summary ? PRIOR_CONTEXT_SUMMARY_PREFIX.length : 0) +
+        (summary ? PRIOR_CONTEXT_SUMMARY_SEGMENT.length : 0) +
         stepPrefix.length +
         rangeText.length,
     };
@@ -976,17 +983,18 @@ export function parseInlinePriorContextBody(
 export function formatInlinePriorContextBody(
   ref: InlinePriorContextRef
 ): string {
-  const prefix =
+  const head = `${ref.kind}${
     ref.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
-      ? PRIOR_CONTEXT_SUMMARY_PREFIX
-      : "";
+      ? PRIOR_CONTEXT_SUMMARY_SEGMENT
+      : ""
+  }`;
   switch (ref.kind) {
     case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
-      return `${prefix}${ref.count === undefined ? ref.kind : `${ref.kind}:${ref.count}`}`;
+      return ref.count === undefined ? head : `${head}:${ref.count}`;
     case PRIOR_CONTEXT_REFERENCE_KINDS.STEP:
-      return `${prefix}${ref.kind}:${ref.indices.join(",")}`;
+      return `${head}:${ref.indices.join(",")}`;
     default:
-      return `${prefix}${ref.kind}`;
+      return head;
   }
 }
 
@@ -997,8 +1005,8 @@ export function formatInlinePriorContextBody(
  * editor, which works on viewport slices).
  *
  * Recognized tokens: $previous, $previous:N, $all, $finalStep, $allFinalStep,
- * $step:N,M,A-B. Unknown $tokens are ignored so future syntaxes can pass
- * through unchanged.
+ * $step:N,M,A-B, each with an optional `:summary` after the kind. Unknown
+ * $tokens are ignored so future syntaxes can pass through unchanged.
  */
 export function scanInlinePriorContextRefs(
   text: string

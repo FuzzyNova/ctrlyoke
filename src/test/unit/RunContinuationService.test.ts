@@ -1007,7 +1007,7 @@ suite("RunContinuationService addressed step mutations", () => {
       { prompt: "three" },
       { prompt: "four" },
       {
-        prompt: "five uses $step:1-4 and $summary:step:2",
+        prompt: "five uses $step:1-4 and $step:summary:2",
         priorContext: [1, 2, 3, 4],
         sessionId: 3,
         endCondition: { script: "true", retryPrompt: "retry with $step:4" },

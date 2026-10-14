@@ -101,7 +101,7 @@ describe("useAttachmentTokenCount", () => {
 
   it("keeps each reference's summary detail in the preview request", () => {
     renderHook(() =>
-      useAttachmentTokenCount("$summary:previous:3 $summary:previous:3", 5)
+      useAttachmentTokenCount("$previous:summary:3 $previous:summary:3", 5)
     );
 
     act(() => {

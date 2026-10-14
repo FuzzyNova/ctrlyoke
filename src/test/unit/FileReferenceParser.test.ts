@@ -891,12 +891,12 @@ suite("FileReferenceParser", () => {
         "finalStep",
         "allFinalStep",
         "step:1-3,5",
-        "summary:previous",
-        "summary:previous:3",
-        "summary:step:1,4-5",
-        "summary:all",
-        "summary:finalStep",
-        "summary:allFinalStep",
+        "previous:summary",
+        "previous:summary:3",
+        "step:summary:1,4-5",
+        "all:summary",
+        "finalStep:summary",
+        "allFinalStep:summary",
       ]) {
         const parsed = parseInlinePriorContextBody(body);
         assert.ok(parsed, body);
@@ -909,7 +909,7 @@ suite("FileReferenceParser", () => {
         assert.strictEqual(
           parseInlinePriorContextBody(formatInlinePriorContextBody(parsed.ref))
             ?.ref.detail,
-          body.startsWith("summary:") ? "summary" : "full",
+          /:summary(:|$)/.test(body) ? "summary" : "full",
           body
         );
       }
@@ -923,7 +923,7 @@ suite("FileReferenceParser", () => {
           indices: [1, 4, 5],
           detail: "summary",
         }),
-        "summary:step:1,4,5"
+        "step:summary:1,4,5"
       );
     });
 
@@ -940,11 +940,59 @@ suite("FileReferenceParser", () => {
         "previous:",
         "previous:-1",
         "step:",
-        "summary:",
-        "summary:nope",
+        "summary:previous",
+        "step:summary",
+        "step:summary:",
+        "previous:summary:0",
+        "preCondition:summary",
       ]) {
         assert.strictEqual(parseInlinePriorContextBody(body), null, body);
       }
+    });
+
+    test("excludes a trailing step comma after the summary segment", () => {
+      assert.strictEqual(
+        parseInlinePriorContextBody("step:summary:1,4,")?.length,
+        "step:summary:1,4".length
+      );
+    });
+  });
+
+  suite("summary detail in inline references", () => {
+    test("reads the detail between the kind and its arguments", () => {
+      const text =
+        "Use $previous:summary, $previous:summary:3 and $step:summary:1,3-4, then $all:summary.";
+      assert.deepStrictEqual(
+        parseInlinePriorContextRefs(text).map(({ token, ref }) => [
+          token,
+          ref.detail,
+        ]),
+        [
+          ["$previous:summary", "summary"],
+          ["$previous:summary:3", "summary"],
+          ["$step:summary:1,3-4", "summary"],
+          ["$all:summary", "summary"],
+        ]
+      );
+    });
+
+    test("falls back to the bare keyword when summary is not a whole word", () => {
+      assert.deepStrictEqual(
+        parseInlinePriorContextRefs(
+          "$previous:summary2 $previous:summary: done"
+        ).map(({ token, ref }) => [token, ref.detail]),
+        [
+          ["$previous", "full"],
+          ["$previous:summary", "summary"],
+        ]
+      );
+    });
+
+    test("does not expand the retired detail-first order", () => {
+      assert.deepStrictEqual(
+        parseInlinePriorContextRefs("$summary:previous $summary:step:2"),
+        []
+      );
     });
   });
 

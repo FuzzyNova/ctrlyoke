@@ -4,16 +4,18 @@ import { getPriorContextCompletionItems } from "../../completions/PriorContextCo
 
 suite("PriorContextCompletions", () => {
   test("offers every summary selector with deterministic detail", () => {
-    const items = getPriorContextCompletionItems("summary:");
+    const items = getPriorContextCompletionItems("").filter((item) =>
+      item.label.includes(":summary")
+    );
     assert.deepStrictEqual(
       items.map((item) => item.label),
       [
-        "summary:previous",
-        "summary:previous:",
-        "summary:all",
-        "summary:finalStep",
-        "summary:allFinalStep",
-        "summary:step:",
+        "previous:summary",
+        "previous:summary:",
+        "all:summary",
+        "finalStep:summary",
+        "allFinalStep:summary",
+        "step:summary:",
       ]
     );
     assert.ok(

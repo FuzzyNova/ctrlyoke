@@ -16,7 +16,7 @@ export interface StepReferenceShiftOptions {
 }
 
 /**
- * Positional references — inline `$step:N` / `$summary:step:N`, numeric
+ * Positional references — inline `$step:N` / `$step:summary:N`, numeric
  * `priorContext` lists, and numeric `sessionId` — are authored settings. An
  * insert, move, or removal never rewrites them, on any step or at workflow
  * level: position N always means whatever step is at position N.

@@ -14,7 +14,7 @@
 import {
   PRIOR_CONTEXT_REFERENCE_KINDS,
   PRIOR_CONTEXT_DETAILS,
-  PRIOR_CONTEXT_SUMMARY_PREFIX,
+  PRIOR_CONTEXT_SUMMARY_SEGMENT,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_DIAGNOSTIC_FIELDS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -34,8 +34,14 @@ import {
   type ContextReferenceMatch,
 } from "./PromptReferenceScanner";
 import { formatRangeNotation } from "./RangeNotationParser";
-import { createInlinePriorContextReferencePattern } from "./ReferencePatterns";
-import { parseInlinePriorContextBody } from "./FileReferenceParser";
+import {
+  createInlinePriorContextReferencePattern,
+  createLegacySummaryPrefixPattern,
+} from "./ReferencePatterns";
+import {
+  formatInlinePriorContextBody,
+  parseInlinePriorContextBody,
+} from "./FileReferenceParser";
 import {
   findVariablePlaceholders,
   isVariableDefined,
@@ -215,9 +221,28 @@ export function checkPriorContextRefs(
   return checks;
 }
 
+const PRIOR_CONTEXT_KIND_NAMES: ReadonlySet<string> = new Set(
+  Object.values(PRIOR_CONTEXT_REFERENCE_KINDS)
+);
+
+/** True for a body whose kind carries the `:summary` segment (`step:summary:x`). */
+function hasSummarySegment(body: string): boolean {
+  const colon = body.indexOf(":");
+  if (colon < 0 || !PRIOR_CONTEXT_KIND_NAMES.has(body.slice(0, colon))) {
+    return false;
+  }
+  const end = colon + PRIOR_CONTEXT_SUMMARY_SEGMENT.length;
+  return (
+    body.startsWith(PRIOR_CONTEXT_SUMMARY_SEGMENT, colon) &&
+    (body.length === end || body[end] === ":")
+  );
+}
+
 /**
- * Diagnose malformed `$summary:` selectors. Valid forms are handled by the
- * normal prior-context parser and receive the same position diagnostics.
+ * Diagnose malformed `:summary` selectors (`$step:summary` with no range) and
+ * the retired detail-first order (`$summary:previous`, with a quick fix). Valid
+ * forms are handled by the normal prior-context parser and receive the same
+ * position diagnostics.
  */
 export function getInvalidPriorContextSummaryDiagnostics(
   text: string
@@ -227,23 +252,37 @@ export function getInvalidPriorContextSummaryDiagnostics(
   for (const match of text.matchAll(
     createInlinePriorContextReferencePattern()
   )) {
-    if (
-      !(
-        match[1] === PRIOR_CONTEXT_DETAILS.SUMMARY ||
-        match[1].startsWith(PRIOR_CONTEXT_SUMMARY_PREFIX)
-      ) ||
-      parseInlinePriorContextBody(match[1])
-    )
-      continue;
+    // A trailing comma is sentence punctuation, as in the parser.
+    const body = match[1].replace(/,+$/, "");
+    if (!hasSummarySegment(body) || parseInlinePriorContextBody(body)) continue;
     const from = match.index;
-    const to = from + match[0].length;
+    const to = from + match[0].length - (match[1].length - body.length);
     if (isInCodeRange(from, to, codeRanges)) continue;
     diagnostics.push({
       from,
       to,
       severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_INVALID,
-      message: `Unknown or invalid prior-context selector: $${match[1]}`,
+      message: `Unknown or invalid prior-context selector: $${body}`,
+    });
+  }
+  for (const match of text.matchAll(createLegacySummaryPrefixPattern())) {
+    const parsed = parseInlinePriorContextBody(match[1]);
+    if (!parsed || parsed.ref.detail !== PRIOR_CONTEXT_DETAILS.FULL) continue;
+    const from = match.index;
+    const to = from + match[0].length - match[1].length + parsed.length;
+    if (isInCodeRange(from, to, codeRanges)) continue;
+    const replacement = `$${formatInlinePriorContextBody({
+      ...parsed.ref,
+      detail: PRIOR_CONTEXT_DETAILS.SUMMARY,
+    })}`;
+    diagnostics.push({
+      from,
+      to,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      code: PROMPT_DIAGNOSTIC_CODES.PRIOR_CONTEXT_INVALID,
+      message: `Summary goes after the kind — it will not be expanded. Did you mean ${replacement}?`,
+      replacements: [replacement],
     });
   }
   return diagnostics;

@@ -268,7 +268,7 @@ Use these patterns when relevant:
 - Manual workflow files and `.prompt.md` files are advanced/power-user paths. They are useful for versioned workflows, reusable automation, CI-style generation, or running from context menus, but new users usually do not need to create files by hand.
 - To make the AI keep checking its work: add an end condition with a real command such as `npm test`, `npm run compile`, or a custom script.
 - To keep context between adjacent steps: set `resumeSession: true`, but only for small related chains that fit one conversation. For larger work, write a plan file and reference it from fresh sessions.
-- To include previous outputs without resuming the same conversation: use `priorContext: previous`, `priorContext: all`, or `$previous` / `$all` references. Use `$summary:previous` or `priorContextDetail: summary` when a hand-off needs the prompt, changed files, and text outcome without the full transcript; keep full detail for reviews of diffs, commands, or tool calls.
+- To include previous outputs without resuming the same conversation: use `priorContext: previous`, `priorContext: all`, or `$previous` / `$all` references. Use `$previous:summary` or `priorContextDetail: summary` when a hand-off needs the prompt, changed files, and text outcome without the full transcript; keep full detail for reviews of diffs, commands, or tool calls.
 - To let the AI append more work: use a `finalStep` with `mcpServers: [ctrlyoke]` and ask it to call the queue append tool only when follow-up work is required.
 - To choose where defaults are stored: open Global Settings, use the User/Workspace scope toggle, then edit Workflow Defaults or the relevant settings section.
   </commonAnswers>
