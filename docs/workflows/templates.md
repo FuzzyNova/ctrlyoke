@@ -170,6 +170,46 @@ _templateMeta:
 
 A key under `_templateMeta.variables` only takes effect if a matching `{token}` exists in the body — the meta block enriches extracted variables, it does not create them.
 
+Fields appear in the dialog in the order their tokens first appear in the body, not
+the order of `_templateMeta.variables`. This custom template uses a required
+multi-line text variable, a directory, a select, and a harness with its model:
+
+```yaml
+_templateMeta:
+  name: Bug Fix
+  description: "Fix → Review on a second harness"
+  variables:
+    bugReport:
+      type: text
+      multiline: true
+      required: true
+      description: What is broken, and how to reproduce it.
+    area:
+      type: directory
+      description: Where the bug probably lives.
+    severity:
+      type: select
+      options: [low, medium, high]
+    reviewHarness:
+      type: harness
+      default: codex-cli
+    reviewModel:
+      type: model
+      harness: reviewHarness
+
+steps:
+  - name: fix
+    prompt: |
+      Fix this {severity}-severity bug in @{area}:
+      {bugReport}
+  - name: review
+    harness: "{reviewHarness}"
+    model: "{reviewModel}"
+    prompt: Review the fix in $previous and run the tests.
+```
+
+![The Create Workflow from Template dialog for the Bug Fix template: a severity dropdown set to medium, an area directory field with Browse…, a required bugReport box marked with an asterisk, and reviewHarness (Codex) beside reviewModel (GPT 6 Luna)](/screenshots/template-modal-variable-types-840x965.png)
+
 ## Defaults and blank fields
 
 If a variable declares a `default`, that value is pre-filled in the UI and used when the field is left empty. A `select` variable without a default starts on its first option. Blank optional fields become empty text in the generated workflow. Required fields must be filled before creation: the dialog blocks creation, and the API rejects a missing or blank value. A required field with a `default` is pre-filled.

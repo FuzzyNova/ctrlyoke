@@ -57,6 +57,20 @@ steps:
   - prompt: Review @src/cli.ts and simplify the option parsing where practical.
 ```
 
+## Model selection {#model-selection}
+
+Codex has no command that lists its models, so the **Model** picker shows a fixed list:
+`gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra` and
+`gpt-5.6-luna`.
+
+Set `model` on the workflow or on a step. Without one, ctrlyoke uses
+[`defaults.models["codex-cli"]`](/reference/settings#defaults-models), which is `gpt-6-luna` out of
+the box. A model that isn't on the list is replaced by that default, with a warning in the log.
+
+`model: none` passes no `--model` flag, so Codex uses the model from its own configuration. To use
+a model the list doesn't have, set `model: none` and put `--model <id>` in `additionalArgs`. See
+[How step properties inherit](/workflows/yaml-format#property-inheritance).
+
 ## Notes
 
 - Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` / `deniedTools` are **not enforced** on this harness. The permission `mode` maps to Codex flags:
@@ -81,3 +95,19 @@ tooltip, and on the [**Stats & Usage**](/guide/usage-and-stats) settings tab. If
 [`usageTracking.warningPercentUsed`](/reference/settings#usagetracking-warningpercentused) (80% by
 default), ctrlyoke warns when the run starts but doesn't stop it. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).
+
+## Sign-in problems {#sign-in}
+
+If your Codex sign-in expires during a run, the next step that starts Codex fails, and the
+workflow stops unless `errorBehavior` retries it. A headless step shows Codex's error in its
+output; for an interactive step, look at the **Terminal** tab. Retries fail the same way until you
+sign in again. When ctrlyoke's usage check finds you signed out, Codex's tooltip in the harness
+picker reads **Needs auth** instead of a quota.
+
+To recover, run `codex` in a terminal and sign in again, then click **Resume** in the dashboard to
+retry the failed step.
+
+From the `ctrlyoke` CLI, a sign-in failure exits with code `1`, not `3`. ctrlyoke can't tell an
+expired sign-in from any other error Codex reports, so it counts as a failed step. Code `3` means
+only that the `codex` executable wasn't found. See [Exit codes](/cli/ci#exit-codes), and
+[Harness sign-in](/cli/ci#harness-sign-in) for CI runners.

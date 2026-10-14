@@ -58,9 +58,53 @@ steps:
   - prompt: Audit @src/utils/ for duplicated logic and recommend one shared helper.
 ```
 
+## Model selection {#model-selection}
+
+The **Model** picker lists the model IDs under `modelProviders` in `~/.qwen/settings.json`.
+ctrlyoke reads that file when it starts, so reload the window after you add a model there. If the
+file is missing or lists no models, the picker shows only `qwen3.5-plus`.
+
+Set `model` on the workflow or on a step. Without one, ctrlyoke uses
+[`defaults.models["qwen-cli"]`](/reference/settings#defaults-models), which is `qwen3.5-plus` out
+of the box. ctrlyoke passes any value to Qwen Code as is, even one the list doesn't show, and Qwen
+Code checks it against your configured providers.
+
+`model: none` passes no `--model` flag, so Qwen Code uses the model from its own settings. See
+[How step properties inherit](/workflows/yaml-format#property-inheritance).
+
+## Permissions {#permissions}
+
+The permission `mode` maps to Qwen Code flags:
+
+- `dangerouslyAllowAll` → `-y`. The deny list is ignored.
+- `allowAll` → `--approval-mode auto-edit`, plus `--exclude-tools` with the deny list
+- `custom` → `--approval-mode default`, plus `--allowed-tools` with the allow list and
+  `--exclude-tools` with the deny list
+- `none` → no permission flags (Qwen Code's own settings)
+
+Each list is passed as one comma-separated value, translated to Qwen's tool names:
+
+| ctrlyoke pattern                           | Qwen Code                 |
+| ------------------------------------------ | ------------------------- |
+| `shell(git push:*)`                        | `ShellTool(git push *)`   |
+| `shell(git status)`                        | `ShellTool(git status *)` |
+| `shell`, `shell(*)`                        | `ShellTool`               |
+| `write`                                    | `WriteFile`               |
+| `edit`                                     | `Edit`                    |
+| `read`                                     | `Read`                    |
+| `webfetch`                                 | `WebFetch`                |
+| `websearch`                                | `WebSearch`               |
+| `mcp__github`, `mcp__github__create_issue` | unchanged                 |
+
+A shell pattern without `:*` gets a trailing `*` too, as the `git status` row shows, so on Qwen
+Code it also covers the command with extra arguments. The default deny list therefore reaches Qwen as
+`--exclude-tools ShellTool(rm *),ShellTool(del *),…`. Qwen Code has no file-delete tool, so
+`delete` and `remove` patterns are skipped with a warning; use `shell(rm:*)` to control deleting
+files instead. See [Permissions](/workflows/permissions) for the modes, the pattern syntax and
+[the default lists](/workflows/permissions#the-default-lists).
+
 ## Notes
 
-- The model list comes from the `modelProviders` in `~/.qwen/settings.json`; `qwen3.5-plus` is the fallback.
 - ctrlyoke registers its completion hooks in the workspace `.qwen/settings.json` for the duration of a run, then restores the file. MCP servers are passed per process with `--mcp-config`. See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#qwen-code).
 - Image references are not attached on this harness, and `error` hooks do not fire. See the [compatibility matrix](/harnesses/compatibility).
 - `permissions.trustedExternalRoots` is not passed to Qwen; it has no `--add-dir` equivalent.
@@ -74,6 +118,28 @@ cost. Those totals are on the [**Stats & Usage**](/guide/usage-and-stats) settin
 count in the steps panel. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).
 
-ctrlyoke also installs a status line command in `~/.qwen/settings.json` so Qwen's own terminal UI
-shows the model, context and usage. See
+## Status line {#status-line}
+
+ctrlyoke changes your global Qwen Code settings: the first time it runs Qwen Code, it points the
+`ui.statusLine` key in `~/.qwen/settings.json` at its own status line command, so Qwen's terminal
+UI shows the model, context and usage. The change stays in place between runs, in every project.
+If you already had a status line command, ctrlyoke keeps running it underneath.
+
+To undo it, turn Qwen Code off in [**Settings → Status Line**](/guide/usage-and-stats#status-line).
+ctrlyoke then puts your original command back. See
 [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line).
+
+## Sign-in problems {#sign-in}
+
+If your Qwen Code authentication expires during a run, the next step that starts Qwen Code fails,
+and the workflow stops unless `errorBehavior` retries it. A headless step shows Qwen's error in
+its output; for an interactive step, look at the **Terminal** tab. Retries fail the same way until
+you sign in again.
+
+To recover, run `qwen` in a terminal and complete the authentication it asks for, then click
+**Resume** in the dashboard to retry the failed step.
+
+From the `ctrlyoke` CLI, a sign-in failure exits with code `1`, not `3`. ctrlyoke can't tell an
+expired sign-in from any other error Qwen Code reports, so it counts as a failed step. Code `3`
+means only that the `qwen` executable wasn't found. See [Exit codes](/cli/ci#exit-codes), and
+[Harness sign-in](/cli/ci#harness-sign-in) for CI runners.

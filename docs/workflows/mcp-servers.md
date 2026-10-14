@@ -107,7 +107,7 @@ In the dashboard, the **MCP** tab of the
 [workflow properties panel](/workflows/properties-panel#mcp) lists your
 registry's servers to tick.
 
-![MCP tab: the built-in ctrlyoke server with 11 of 12 tools enabled (Remove step unticked), and two installed servers, cclsp off and playwright on and expanded](/screenshots/mcp-tab-800x1600.png){.panel-shot}
+![MCP tab: the built-in ctrlyoke server with 11 of 12 tools enabled (Remove step unticked), and the installed playwright server on and expanded](/screenshots/mcp-tab-800x1600.png){.panel-shot}
 
 ### Denying individual tools
 

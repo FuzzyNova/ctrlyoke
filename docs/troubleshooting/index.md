@@ -16,6 +16,24 @@ Use this section when a workflow does not start, does not resume, or does not sa
 4. The harness and model you expect are the ones in effect. A step's `harness` or `model` overrides the
    workflow's, which overrides the `defaults` settings.
 
+## Ask the tech support agent {#tech-support-agent}
+
+ctrlyoke ships with a `ctrlyoke-tech-support` agent that knows how ctrlyoke is set up, how
+workflows are written, and where the logs and run files are, and it has its own troubleshooting
+checklist. To ask it a question, pick **ctrlyoke-tech-support** in
+the **Agent** picker under the prompt editor (see
+[the footer quick pickers](/guide/prompt-editor#quick-pickers)), type your question, and click
+**Run**. In a workflow file, set:
+
+```yaml
+agent: ctrlyoke-tech-support
+prompt: My end condition retries every time. What should I check?
+```
+
+The agent answers from what it was given and from files you reference in the prompt. Attach the
+relevant log or workflow file with `@` so it can see your setup. For anything it doesn't know, it
+points you to these docs or to support.
+
 ## Logs
 
 Logs are written to `.ctrlyoke/logs/` in the workspace:

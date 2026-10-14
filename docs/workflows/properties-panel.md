@@ -53,7 +53,7 @@ Field details: [`worktree`](/reference/workflow-schema#worktree).
 
 ## Context
 
-![Context tab with Resume Session, Prior Context, and a workflow variable](/screenshots/context-tab-800x1600.png){.panel-shot}
+![Context tab with Resume Session, Prior Context set to Previous 2 with Summary detail, and a workflow variable](/screenshots/context-tab-800x1600.png){.panel-shot}
 
 - **Resume Session** — continue an earlier harness session instead of starting
   fresh. Leave the session field blank to auto-resume, or enter a session ID or a
@@ -95,7 +95,7 @@ option.
 
 ## MCP
 
-![MCP tab: the built-in ctrlyoke server with 11 of 12 tools enabled (Remove step unticked), and two installed servers, cclsp off and playwright on and expanded](/screenshots/mcp-tab-800x1600.png){.panel-shot}
+![MCP tab: the built-in ctrlyoke server with 11 of 12 tools enabled (Remove step unticked), and the installed playwright server on and expanded](/screenshots/mcp-tab-800x1600.png){.panel-shot}
 
 The MCP tab picks which MCP servers are attached to the harness. The built-in
 **ctrlyoke** server lets the AI read workflow status and append steps (see

@@ -6,7 +6,7 @@ reference syntax as you type: it completes file paths, symbols, commits, earlier
 steps, secrets and skills, and it flags references that won't resolve before
 you run anything.
 
-<!-- SHOT D10/#9: the prompt editor with the @ completion list open, a few atomic reference chips in the text, and the footer quick pickers below -->
+![The prompt editor with notes.ts, notesStore.ts and previous shown as reference chips, the @ completion list open on "@tes" with tests/ and notes.test.ts at the top and the matched letters in bold, and the footer quick pickers below](/screenshots/prompt-editor-completions-998x525.png)
 
 This page covers the editor itself. For what each reference sends to the
 harness, see [Context references](/workflows/context-files).

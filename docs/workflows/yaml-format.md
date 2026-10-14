@@ -77,6 +77,161 @@ workflow file first, then in the workspace root, then in `.ctrlyoke/`. Anything
 else, including `prompts/review.prompt.md` without the `./`, is sent as inline
 prompt text.
 
+## How step properties inherit {#property-inheritance}
+
+Most step fields can also be set once at the root of the workflow. These are
+the [execution properties](/reference/workflow-schema#execution-properties):
+`harness`, `model`, `executionMode`, `agent`, `skills`, `secrets`,
+`resumeSession`, `sessionId`, `mcpServers`, `hooks`, `endCondition`,
+`preCondition`, `priorContext`, `additionalArgs`, `toolPermissions` and
+`errorBehavior`. A step takes each one from the first level that sets it:
+
+1. the step itself
+2. the workflow root
+3. the matching `defaults.*` setting, such as
+   [`defaults.executionMode`](/reference/settings#defaults-executionmode) or
+   [`defaults.models`](/reference/settings#defaults-models). See
+   [Settings](/guide/settings).
+
+```yaml
+harness: claude-cli
+model: sonnet
+executionMode: headless
+
+steps:
+  - name: plan
+    model: opus
+    prompt: Write a plan for the change to plan.md.
+  - name: implement
+    prompt: Implement plan.md.
+  - name: review
+    executionMode: interactive
+    prompt: Walk me through the change.
+```
+
+Here `plan` runs on `opus` and the other two on `sonnet`. Only `review` opens a
+terminal.
+
+The winning value is used as a whole. Lists and objects such as `skills`,
+`mcpServers` and `toolPermissions` are not merged with the levels below. The
+one exception is `hooks`: a step's hooks replace the workflow's hooks only for
+the events the step lists.
+
+### Leaving a field out vs `null`
+
+Leaving a field out means "inherit". Setting it to `null`, on a step or at the
+root, means "none" and stops inheritance from the levels below:
+
+```yaml
+agent: reviewer
+mcpServers: [github]
+
+steps:
+  - name: draft
+    prompt: Draft the release notes.
+  - name: format
+    agent: null # no agent for this step
+    mcpServers: null # and no MCP servers
+    prompt: Reformat CHANGELOG.md.
+```
+
+`agent`, `skills`, `secrets`, `mcpServers`, `hooks`, `endCondition`,
+`preCondition`, `additionalArgs` and `errorBehavior` accept `null`.
+`toolPermissions: null` is the same as `mode: none`: ctrlyoke passes no
+permission flags. Fields that only take a value, such as `model`,
+`executionMode` and `resumeSession`, have no `null`; set the value you want
+instead. In the dashboard, `null` is the **None** option in the step's
+properties.
+
+### Where settings defaults come in
+
+When you open a workflow file, ctrlyoke makes its own working copy (your file
+is not changed) and fills in the current `defaults.*` value for each root field
+the file leaves out. Those values show in
+[Workflow Properties](/workflows/properties-panel), and the run uses them. A
+settings change therefore applies the next time you open the file. It doesn't
+change a workflow that is already open, or a run you continue.
+
+`defaults.errorBehavior` works only this way: it is copied into a new workflow,
+not looked up while the run is going. See
+[Error handling](/workflows/error-handling).
+
+A root `toolPermissions` that sets only some of `mode`, `allowedTools` and
+`deniedTools` gets the missing ones from `defaults.toolPermissions`. A step's
+`toolPermissions` doesn't. See [Permissions](/workflows/permissions#which-level-wins).
+
+### Steps on another harness
+
+`defaults.models` and `defaults.additionalArgs` hold one value per harness, but
+`model` and `additionalArgs` at the root hold one value for the whole workflow.
+A step that switches to another harness should set its own `model` and
+`additionalArgs`. Otherwise it inherits the workflow's, which may not exist on
+that harness. The dashboard does this for you: picking a harness for a step
+also sets the step's model and additional arguments to that harness's
+defaults.
+
+```yaml
+harness: claude-cli
+model: sonnet
+
+steps:
+  - prompt: Plan the change.
+  - harness: codex-cli
+    model: gpt-6-sol
+    prompt: Implement the plan.
+```
+
+### `model: none`
+
+`model: none` (**None** in the model picker) passes no model flag, so the
+harness uses its own default model. Use it when you pass the model yourself in
+`additionalArgs`, for example a custom model string your harness accepts. Each
+harness page has a **Model selection** section listing where its models come
+from.
+
+### `executionMode`
+
+`interactive` runs the step in a terminal on the **Terminal** tab;
+`headless` runs it in the background. It inherits like the fields above, with
+two exceptions: pre-conditions and end conditions always run headless, and
+`ctrlyoke run` without a terminal runs every step headless. See
+[Interactive and headless](/guide/terminal#interactive-and-headless).
+
+### `resumeSession`
+
+`resumeSession` defaults to `true` through
+[`defaults.resumeSession`](/reference/settings#defaults-resumesession), so each
+step continues the previous step's conversation on the same harness. Set
+`resumeSession: false` on a step, or at the root for every step, to start fresh.
+See [Session management](/workflows/session-management).
+
+### `additionalArgs`
+
+`additionalArgs` is a string of extra flags for the harness command, such as
+`--effort high`. ctrlyoke still manages the model, permission, folder and
+session flags; your flags go in before the permission flags. Set it to `null`
+on a step to drop arguments inherited from the workflow or settings.
+
+Changing `additionalArgs` from one step to the next means the harness has to
+start again: the next step can't be typed into the previous step's terminal,
+so it gets a new one. See
+[What happens when a step ends](/guide/terminal#what-happens-when-a-step-ends).
+
+A `defaults.additionalArgs` value in a workspace settings file needs your
+approval first. See
+[Workspace settings that run programs](/guide/settings#workspace-settings-that-run-programs).
+
+### Step-only fields: `enabled` and `color`
+
+`enabled` and `color` belong to one step and are never inherited:
+
+- `enabled: false` keeps the step in the workflow but skips it when the
+  workflow runs. Leaving it out means the step runs.
+- `color` sets the step's identity colour as a hex value, such as
+  `color: "#4f9dff"`. It overrides the **Harness** and
+  **Unique** colour modes, and isn't shown when step colours are off. See
+  [Step colours](/guide/output#step-colours).
+
 ## Script steps {#script-steps}
 
 Set `type: script` to run a shell command or script file as a step, with no AI

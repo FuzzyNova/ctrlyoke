@@ -14,6 +14,31 @@ the `PATH` that VS Code (or your terminal) sees, and sign in with the harness CL
 running a workflow. After changing `PATH`, restart VS Code so the extension host picks it up. The
 standalone CLI exits with code `3` in this case.
 
+## The harness works in my terminal, but ctrlyoke says it is unavailable {#harness-not-on-vscode-path}
+
+ctrlyoke checks a harness by running its version command, such as `claude --version`, with the
+`PATH` that VS Code started with. It does not run your shell profile first. So a CLI that your
+profile puts on `PATH` works in a terminal but is missing for ctrlyoke. This is common with
+Node version managers (nvm, Volta, fnm), because the harness lives inside one Node version's
+folder.
+
+- **Windows.** ctrlyoke looks the command up the way PowerShell does, without loading your
+  PowerShell profile. A `.exe`, `.cmd`, `.bat`, or `.ps1` file in a `PATH` folder is found,
+  including npm's `.cmd` shims (see the [FAQ](/troubleshooting/faq) for how they are run).
+  An alias or function defined in your profile is not. Add the folder that holds the CLI to your
+  user `PATH` in Windows settings, not in your profile.
+- **macOS and Linux.** VS Code reads your login shell's environment when it starts, so a `PATH`
+  set in your shell profile usually reaches ctrlyoke. If it doesn't, start VS Code from a
+  terminal where the CLI works, for example with `code .`.
+- **Node version managers.** A global npm install belongs to the Node version that was active
+  when you installed it. After you switch versions, either switch back or install the harness
+  again under the new version.
+
+ctrlyoke remembers where it found each CLI until VS Code restarts. After changing `PATH` or
+installing a harness, quit VS Code completely (every window) and start it again. To compare, run
+the harness's version command in a terminal; the standalone `ctrlyoke` CLI uses that terminal's
+`PATH`, so it can find a harness that the extension can't.
+
 ## A step never completes
 
 ctrlyoke detects that a harness finished a turn through that harness's hook or notification
@@ -34,6 +59,27 @@ run storage (see [Troubleshooting](/troubleshooting/#run-storage)). A lock is tr
 reclaimed automatically, when its owner process has exited or it has missed its heartbeat for 30
 seconds. If the message persists while no ctrlyoke process is running — for example, a lock written
 by another machine that syncs the same history — delete that lineage's `runner.json`.
+
+## Why can't I edit this workflow? {#read-only-workflow}
+
+A red banner with a lock icon under the header tells you why the editing controls are disabled.
+
+**"Read-only — workflow is running via ctrlyoke CLI"** (or **another ctrlyoke window**). The
+[CLI](/cli/) or another VS Code window is running this workflow, and only the process that owns
+the run can change it. You can still watch its output, and the header's **Stop** button stops the
+run in the CLI or the other window. Once the run ends, the lock goes away and you can edit the
+workflow again. See [Runs started somewhere else](/guide/history#external-runs).
+
+![A two-step script workflow started with ctrlyoke run, mirrored in the dashboard. A banner under the header reads "Read-only — workflow is running via ctrlyoke CLI", step 1 has passed, and step 2's output is streaming](/screenshots/cli-run-read-only-banner-1600x750.png)
+
+**"Read-only — managed automatically by commit message generation"**. This is the
+`commit-message-generation` workflow, which ctrlyoke writes each time it generates a commit
+message. You can open its runs, but not edit it. Its **Edit in settings** link opens the
+**Commit Message** settings tab, which is where you change how it runs. See
+[Commit messages](/guide/commit-messages#generation-runs-in-the-dashboard).
+
+A workflow file written by a newer version of ctrlyoke doesn't open at all. The message says it
+"uses workflow format N, which needs a newer ctrlyoke". Update ctrlyoke to open it.
 
 ## "This workspace requests external file roots that have not been approved yet"
 
@@ -127,3 +173,33 @@ CLI does not auto-select headless mode.
 
 `ctrlyoke run` takes either a workflow file or `--prompt <text>`, not both. To change one step of a
 workflow, edit the file or use `--var` for values the workflow references.
+
+## The extension host crashes shortly after a workflow completes {#extension-host-crash}
+
+If VS Code reports that the extension host terminated unexpectedly, or the window disappears, a
+few seconds after a run finishes, the extension host most likely ran out of JavaScript memory.
+That is usually one large allocation on a heap that was already big, such as loading a long run's
+output, rather than a slow leak.
+
+**Confirm it.** VS Code writes a crash dump for each crash. On Windows they are in
+`%APPDATA%\Code\Crashpad\reports\`; on other systems, look in the `Crashpad` folder inside VS
+Code's user data folder. A dump from a memory crash contains the text `is_heap_oom=1`. In
+PowerShell:
+
+```powershell
+Select-String -Path "$env:APPDATA\Code\Crashpad\reports\*.dmp" -Pattern "is_heap_oom=1" -SimpleMatch -List
+```
+
+**See what led up to it.** With `diagnostics.verboseLogging` turned on, the session log
+(`.ctrlyoke/logs/ctrlyoke-<timestamp>.log`) records memory use while ctrlyoke runs.
+`[MemoryWatchdog]` lines track the extension host and `[PanelMemory]` lines track the dashboard.
+A new line is written only when memory moves by a large step, and each one names what ran since
+the previous line. After a memory crash, the log usually stops mid-line with no error. The last
+few memory lines show how big the heap had grown and what was loading. Include them, and the
+dump check above, when you report the problem.
+
+**If other apps crash too**, the whole machine probably ran out of memory, and ctrlyoke may be
+only a bystander. This is likely when a window closes with `renderer process gone (reason: oom)`
+while the ctrlyoke memory lines look normal. On Windows, open Event Viewer and look in the
+**System** log for event 2004 from **Resource-Exhaustion-Detector**. Its details list the
+processes that were using the most memory.

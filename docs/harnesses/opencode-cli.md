@@ -60,10 +60,25 @@ steps:
   - prompt: Summarize the responsibilities of @src/platform/ and suggest one cleanup.
 ```
 
+## Model selection {#model-selection}
+
+The **Model** picker lists the models that `opencode models` reports for the providers you have
+connected. ctrlyoke reads that list when it starts, so reload the window after you connect a
+provider. If the command fails, ctrlyoke falls back to `opencode/big-pickle`,
+`opencode/claude-haiku-4-5` and `opencode/claude-sonnet-4-6`.
+
+Models use OpenCode's `provider/model` form. Set `model` on the workflow or on a step. Without one,
+ctrlyoke uses [`defaults.models["opencode-cli"]`](/reference/settings#defaults-models), which is
+`opencode/big-pickle`, OpenCode's free model, out of the box. Any `provider/model` value is passed
+to OpenCode as is, even one the list doesn't show. A value without a `/` is replaced by your
+default, with a warning in the log.
+
+`model: none` passes no `-m` flag, so OpenCode uses the model from its own configuration. See
+[How step properties inherit](/workflows/yaml-format#property-inheritance).
+
 ## Notes
 
 - The workflow surface is the same as the other CLI harnesses.
-- Models use OpenCode's `provider/model` form. The dashboard lists what `opencode models` reports for your setup.
 - Tool permissions (`mode`, `allowedTools`, `deniedTools`), MCP servers, and ctrlyoke's completion plugin are delivered per process through `OPENCODE_CONFIG_CONTENT`; ctrlyoke does not write a workspace `opencode.json`. OpenCode's own categories are coarser than tool patterns (for example, `write` and `edit` both map to OpenCode's `edit` permission). See [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
 - `permissions.trustedExternalRoots` is not passed to OpenCode; it has no `--add-dir` equivalent.
 
@@ -75,3 +90,18 @@ model's pricing is known (see [`modelPricing`](/reference/settings#modelpricing)
 cost. Those totals are on the [**Stats & Usage**](/guide/usage-and-stats) settings tab, and each step shows its
 own token count in the steps panel. Turn collection off with
 [`usageTracking.enabled`](/reference/settings#usagetracking-enabled).
+
+## Sign-in problems {#sign-in}
+
+If a provider's credentials expire during a run, the next step that uses a model from that
+provider fails, and the workflow stops unless `errorBehavior` retries it. A headless step shows
+OpenCode's error in its output; for an interactive step, look at the **Terminal** tab. Retries fail
+the same way until you reconnect the provider.
+
+To recover, reconnect the provider in OpenCode and check that `opencode models` lists the model
+again, then click **Resume** in the dashboard to retry the failed step.
+
+From the `ctrlyoke` CLI, a sign-in failure exits with code `1`, not `3`. ctrlyoke can't tell
+expired credentials from any other error OpenCode reports, so it counts as a failed step. Code `3`
+means only that the `opencode` executable wasn't found. See [Exit codes](/cli/ci#exit-codes), and
+[Harness sign-in](/cli/ci#harness-sign-in) for CI runners.

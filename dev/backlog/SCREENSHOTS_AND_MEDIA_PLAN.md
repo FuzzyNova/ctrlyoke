@@ -1,5 +1,16 @@
 # Marketing & Docs Media Plan — Screenshots and GIFs
 
+**Captures done 2026-10-14:** #8 as `template-yaml-snippet-1792x1594.png`. It is the demo
+project's custom Bug Fix template (`.ctrlyoke/templates/bug-fix.ctrlyoke.yaml`), drawn in the
+landing page's code-window style at 2× and transparent outside the rounded corners. It isn't
+slotted anywhere yet, because a picture of code doesn't belong in docs: `templates.md` has the
+same template as a real code block plus `template-modal-variable-types-840x965.png`. #12: the
+Context tab is retaken for the new Prior Context detail dropdown (Previous 2, Summary), and the
+MCP tab no longer has the `cclsp` row. The Permissions tab still shows the old capture, because
+the live tab carries the false "Ignored by" warning from
+`dev/bugs/backlog/claude-allowed-tools-warning-says-ignored.md`. Retake it after that fix. Until
+then, other tab shots hide the warning badge on the Permissions tab icon.
+
 **Recaptures done 2026-10-12:** `secrets-tab-810x360` (the demo's `DEMO_API_KEY` has a
 dummy managed value again) and `template-modal-full-feature-840x1119` (default
 `planDocument`, a changed `testCommand` showing **Save as default**), both with updated alt
@@ -357,6 +368,10 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** new landing "Templates" section; `docs/workflows/templates.md` itself currently has no
   visual treatment of its own code blocks beyond plain markdown.
 - **Dimensions:** category F — see "Target dimensions" above.
+- **Status — done 2026-10-14** as `template-yaml-snippet-1792x1594.png` (see the note at the
+  top). Landing use is still open. To change it, render a one-off HTML page with the landing
+  code-window markup in Playwright at `deviceScaleFactor: 2`, and screenshot the card with
+  `omitBackground: true`.
 
 ### 9. GIF: prompt editor context-expansion, all trigger types
 
