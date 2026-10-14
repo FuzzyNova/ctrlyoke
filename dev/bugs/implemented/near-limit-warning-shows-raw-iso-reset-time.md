@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code (capturing the D19 near-limit warning for `docs/guide/usage-and-stats.md`)
 - **Area:** `src/core/harness/shared/usage/UsageSelectionAssist.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

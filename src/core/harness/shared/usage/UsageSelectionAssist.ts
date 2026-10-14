@@ -12,6 +12,7 @@ import {
   isHarnessQuotaStale,
   isHarnessUsageWindowStale,
 } from "../../../../types/UsageTypes";
+import { formatFutureTime } from "../../../../utils/TimeUtils";
 
 export interface QueuedHarnessAttempt {
   harnessId: HarnessId;
@@ -47,10 +48,10 @@ function normalizeThreshold(value: number): number {
   return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 80;
 }
 
-function formatResetTime(resetAt: number | undefined): string {
+function formatResetTime(resetAt: number | undefined, now: number): string {
   return resetAt === undefined
     ? "an unknown time"
-    : new Date(resetAt).toISOString();
+    : formatFutureTime(resetAt, now);
 }
 
 /**
@@ -100,7 +101,7 @@ export function buildUsageSelectionWarning(
 
   const triggeringHarnessName = HARNESS_INFO[trigger.harnessId].name;
   const queueContext = `${input.queuedAttempts.length} remaining AI attempt${input.queuedAttempts.length === 1 ? "" : "s"} queued`;
-  const message = `Quota warning: ${queueContext}. ${triggeringHarnessName}'s ${trigger.window.label} window is ${trigger.window.percentUsed}% used and resets at ${formatResetTime(trigger.window.resetAt)}.`;
+  const message = `Quota warning: ${queueContext}. ${triggeringHarnessName}'s ${trigger.window.label} window is ${trigger.window.percentUsed}% used and resets at ${formatResetTime(trigger.window.resetAt, now)}.`;
 
   return {
     triggeringHarnessId: trigger.harnessId,
