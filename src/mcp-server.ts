@@ -39,6 +39,11 @@ import type {
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
+import { configService } from "./config/CtrlYokeConfigService";
+import {
+  createUserConfigBackend,
+  createWorkspaceConfigBackend,
+} from "./config/FileConfigBackend";
 import {
   BOOLEAN_STRING_VALUES,
   CAPABILITIES_FILE,
@@ -1991,6 +1996,21 @@ export async function initializeMcpStorage(
   await new ProjectStateRegistry().initialize(root, gitToplevel ?? undefined);
 }
 
+/**
+ * Bootstrap this process as the MCP server binary: read the same user and
+ * workspace settings files as the extension and CLI, then prepare storage.
+ *
+ * Without the backends `configService` answers with built-in defaults, so the
+ * coordination tools would ignore every `coordination.*` setting. This stays
+ * out of {@link initializeMcpStorage} because tests call that in-process,
+ * where the extension host's own `configService` must not be repointed.
+ */
+async function bootstrapMcpProcess(root: string): Promise<void> {
+  configService.setUserBackend(createUserConfigBackend());
+  configService.setWorkspaceBackend(createWorkspaceConfigBackend(root));
+  await initializeMcpStorage(root);
+}
+
 export interface McpToolCliOptions {
   tool: string;
   argsJson: string;
@@ -2109,7 +2129,7 @@ async function runMcpToolCli(argv: readonly string[]): Promise<void> {
     delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
   }
 
-  await initializeMcpStorage(options.workspace ?? workspaceRoot);
+  await bootstrapMcpProcess(options.workspace ?? workspaceRoot);
   const result = await new CtrlYokeMCPServer({
     workspaceRoot: options.workspace,
   }).invokeTool(options.tool, JSON.parse(options.argsJson));
@@ -2133,7 +2153,7 @@ if (require.main === module) {
     });
   } else {
     log("Initializing ctrlyoke MCP Server...");
-    initializeMcpStorage()
+    bootstrapMcpProcess(workspaceRoot)
       .then(() => new CtrlYokeMCPServer().start())
       .catch((error) => {
         log("FATAL ERROR: Failed to start MCP server");

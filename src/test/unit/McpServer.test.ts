@@ -991,6 +991,86 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
+  suite("CLI coordination honours coordination settings", () => {
+    async function writeSettings(root: string, settings: object) {
+      await fs.mkdir(path.join(root, ".ctrlyoke"), { recursive: true });
+      await fs.writeFile(
+        path.join(root, ".ctrlyoke", "settings.json"),
+        JSON.stringify(settings),
+        "utf8"
+      );
+    }
+
+    /** Spawn env whose user settings live in `home`, not the real profile. */
+    async function isolatedHomeEnv(
+      userSettings?: object
+    ): Promise<NodeJS.ProcessEnv> {
+      const home = path.join(workspaceRoot, "home");
+      await fs.mkdir(home, { recursive: true });
+      if (userSettings) await writeSettings(home, userSettings);
+      return { ...process.env, HOME: home, USERPROFILE: home };
+    }
+
+    test("refuses an external participant when workspace settings disable them", async () => {
+      await setup();
+      await writeSettings(workspaceRoot, {
+        coordination: { allowExternalParticipants: false },
+      });
+      const result = runMcpToolCli(
+        [
+          "--tool",
+          MCP_POST_NOTE_TOOL_NAME,
+          "--args",
+          JSON.stringify({ text: "external note" }),
+          "--workspace",
+          workspaceRoot,
+          "--execution-root",
+          workspaceRoot,
+        ],
+        await isolatedHomeEnv(),
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.status, 1, `stdout=${result.stdout}`);
+      assert.match(
+        result.stderr,
+        /External coordination participants are disabled/
+      );
+    });
+
+    test("enforces maxNoteLength from user settings", async () => {
+      await setup();
+      await new ProjectStateRegistry().initialize(workspaceRoot);
+      const run = await createRun(
+        "cli-coordination-note-length",
+        "2026-01-01T00-00-00-000Z",
+        {
+          currentIndex: 0,
+          executionState: EXECUTION_STATES.RUNNING,
+        }
+      );
+      const result = runMcpToolCli(
+        [
+          "--tool",
+          MCP_POST_NOTE_TOOL_NAME,
+          "--args",
+          JSON.stringify({ text: "longer than ten characters" }),
+          "--workspace",
+          workspaceRoot,
+          "--working-file",
+          run.runFilePath,
+          "--execution-root",
+          workspaceRoot,
+        ],
+        await isolatedHomeEnv({ coordination: { maxNoteLength: 10 } }),
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.status, 1, `stdout=${result.stdout}`);
+      assert.match(result.stderr, /exceeds maxNoteLength \(10 characters\)/);
+    });
+  });
+
   test("writes commit output when CTRLYOKE_COMMIT_OUTPUT is set", async () => {
     await setup();
     const outputPath = path.join(workspaceRoot, "commit-output-env.txt");

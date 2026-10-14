@@ -2,7 +2,11 @@
 
 - **Found:** 2026-10-14 by Claude (writing `docs/workflows/coordination.md`)
 - **Area:** `src/mcp-server.ts`, `src/core/orchestration/ExecutionRootCoordination*.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit — `bootstrapMcpProcess()` configures the user and workspace
+  settings backends for both the stdio server and `--tool` mode. It is separate from
+  `initializeMcpStorage()` because tests call that in-process, where it would repoint the
+  extension host's `configService`. A long-lived stdio server still reads settings only once,
+  at startup.
 
 ## Symptom
 
