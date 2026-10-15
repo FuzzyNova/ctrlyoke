@@ -1028,12 +1028,12 @@ export interface ModelOptionsUpdateMessage {
 
 /**
  * What a detected harness integration publishes about itself (extension side).
- * `installHint` and `version.updateCommand` come from the provider, so no
+ * `installCommand` and `version.updateCommand` come from the provider, so no
  * dashboard surface keeps its own copy of a harness command.
  */
 export interface HarnessAvailabilityReport {
   available: boolean;
-  installHint: string;
+  installCommand: string;
   /** Absent until a CLI is found; an unavailable CLI has no version. */
   version?: HarnessVersionAssessment;
 }
@@ -1043,7 +1043,7 @@ export interface HarnessStatusInfo {
   available: boolean;
   status: HarnessStatusString;
   message?: string;
-  installHint?: string;
+  installCommand?: string;
   version?: HarnessVersionAssessment;
 }
 

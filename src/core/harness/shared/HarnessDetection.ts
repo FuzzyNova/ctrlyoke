@@ -59,7 +59,7 @@ export function toHarnessStatusInfo(
     status: report.available
       ? HARNESS_STATUS_STRINGS.AVAILABLE
       : HARNESS_STATUS_STRINGS.UNAVAILABLE,
-    installHint: report.installHint,
+    installCommand: report.installCommand,
     ...(report.version ? { version: report.version } : {}),
   };
 }

@@ -3,7 +3,7 @@ import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { installHintFor } from "../shared/HarnessInstallHint";
+import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -149,7 +149,7 @@ export class ClaudeCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.CLAUDE_CLI,
     displayName: "Claude Code CLI",
     terminalName: "Claude",
-    installHint: installHintFor({
+    installCommand: installCommandFor({
       posix: "curl -fsSL https://claude.ai/install.sh | bash",
       windows: "irm https://claude.ai/install.ps1 | iex",
     }),

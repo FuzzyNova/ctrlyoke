@@ -72,7 +72,7 @@ describe("HarnessDropdown", () => {
           [HARNESS_IDS.COPILOT_CLI]: {
             available: false,
             status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
-            installHint: "Install via: npm install -g @github/copilot",
+            installCommand: "npm install -g @github/copilot",
           },
         }}
       />
@@ -296,7 +296,7 @@ describe("HarnessDropdown", () => {
           {
             available: false,
             status: "unavailable",
-            installHint: `Install ${id}`,
+            installCommand: `Install ${id}`,
           },
         ])
       ) as typeof originalHarnessStatus,
@@ -308,6 +308,14 @@ describe("HarnessDropdown", () => {
       screen.getByText("No AI harness CLI is available")
     ).toBeInTheDocument();
     expect(screen.getByText("Install codex-cli")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Copy install command for Codex",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /^Copy install command for / })
+    ).toHaveLength(Object.values(HARNESS_IDS).length);
   });
 
   it("flags an outdated harness with a warning dot and update guidance", () => {
@@ -349,7 +357,7 @@ describe("HarnessDropdown", () => {
           {
             available: false,
             status: "unavailable",
-            installHint: `Install ${id}`,
+            installCommand: `Install ${id}`,
             ...(id === HARNESS_IDS.CODEX_CLI
               ? {
                   version: {
@@ -369,6 +377,9 @@ describe("HarnessDropdown", () => {
     render(<HarnessPreflightPanel />);
 
     expect(screen.getByText("codex update")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy update command for Codex" })
+    ).toBeInTheDocument();
     expect(screen.queryByText("Install codex-cli")).toBeNull();
     expect(screen.getByText("Install claude-cli")).toBeInTheDocument();
   });

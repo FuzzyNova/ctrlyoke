@@ -303,7 +303,7 @@ describe("getHarnessAvailabilityPhrase version guidance", () => {
       getHarnessAvailabilityPhrase({
         status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
         available: false,
-        installHint: "Install via: npm install -g @github/copilot",
+        installCommand: "npm install -g @github/copilot",
         version: version(HARNESS_VERSION_STATUSES.UNSUPPORTED),
       })
     ).toBe(
@@ -328,7 +328,7 @@ describe("getHarnessAvailabilityPhrase version guidance", () => {
       getHarnessAvailabilityPhrase({
         status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
         available: false,
-        installHint: "Install via: npm install -g @github/copilot",
+        installCommand: "npm install -g @github/copilot",
       })
     ).toBe("Install via: npm install -g @github/copilot");
   });

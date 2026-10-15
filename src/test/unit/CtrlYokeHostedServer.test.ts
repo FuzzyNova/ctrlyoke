@@ -96,7 +96,9 @@ class RemoteRequestTestHostedServer extends CtrlYokeHostedServer {
 class FailedListenHttpServer extends EventEmitter {
   listen(): void {
     queueMicrotask(() => {
-      const error = new Error("cannot assign requested address") as NodeJS.ErrnoException;
+      const error = new Error(
+        "cannot assign requested address"
+      ) as NodeJS.ErrnoException;
       error.code = "EADDRNOTAVAIL";
       this.emit("error", error);
     });
@@ -1248,13 +1250,13 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
 });
 
 suite("HostedServerMessageFactory", () => {
-  const codexInstallHint = new CodexCliProvider().config.installHint;
+  const codexInstallCommand = new CodexCliProvider().config.installCommand;
 
   test("creates harness updates in the webview message shape", () => {
     assert.deepStrictEqual(
       createHostedHarnessStatusUpdate(HARNESS_IDS.CODEX_CLI, {
         available: true,
-        installHint: codexInstallHint,
+        installCommand: codexInstallCommand,
       }),
       {
         type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
@@ -1263,7 +1265,7 @@ suite("HostedServerMessageFactory", () => {
             [HARNESS_IDS.CODEX_CLI]: {
               available: true,
               status: HARNESS_STATUS_STRINGS.AVAILABLE,
-              installHint: codexInstallHint,
+              installCommand: codexInstallCommand,
             },
           },
         },
@@ -1281,13 +1283,13 @@ suite("HostedServerMessageFactory", () => {
     };
     const update = createHostedHarnessStatusUpdate(HARNESS_IDS.CODEX_CLI, {
       available: false,
-      installHint: codexInstallHint,
+      installCommand: codexInstallCommand,
       version,
     });
     assert.deepStrictEqual(update.data.harnessStatus[HARNESS_IDS.CODEX_CLI], {
       available: false,
       status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
-      installHint: codexInstallHint,
+      installCommand: codexInstallCommand,
       version,
     });
   });

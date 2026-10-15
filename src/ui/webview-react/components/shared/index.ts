@@ -16,6 +16,7 @@ export {
   type KeyValueRowsEditorProps,
 } from "./KeyValueRowsEditor";
 export { ExitButton } from "./ExitButton";
+export { CopyButton } from "./CopyButton";
 export {
   LabelActionLink,
   FieldLabelRow,

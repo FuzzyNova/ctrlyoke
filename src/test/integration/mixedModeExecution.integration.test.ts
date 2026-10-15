@@ -42,7 +42,7 @@ function createProvider(): ICliProvider {
       harnessId: HARNESS_IDS.COPILOT_CLI,
       displayName: "Test CLI",
       terminalName: "Test",
-      installHint: "",
+      installCommand: "",
       versionPolicy: TEST_VERSION_POLICY,
       shouldStreamHeadlessOutput: false,
     },

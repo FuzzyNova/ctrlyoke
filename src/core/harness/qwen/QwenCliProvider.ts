@@ -1,7 +1,7 @@
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { installHintFor } from "../shared/HarnessInstallHint";
+import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -144,7 +144,7 @@ export class QwenCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.QWEN_CLI,
     displayName: "Qwen Code CLI",
     terminalName: "Qwen Code",
-    installHint: installHintFor({
+    installCommand: installCommandFor({
       posix:
         "curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash",
       windows:

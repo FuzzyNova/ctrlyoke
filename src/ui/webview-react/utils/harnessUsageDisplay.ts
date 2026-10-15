@@ -11,7 +11,10 @@ import {
   HARNESS_VERSION_STATUSES,
   type HarnessStatusInfo,
 } from "../types/messages";
-import { formatHarnessVersionGuidance } from "@root/utils/HarnessVersion";
+import {
+  formatHarnessInstallGuidance,
+  formatHarnessVersionGuidance,
+} from "@root/utils/HarnessVersion";
 import {
   STATUS_LINE_USAGE_DIRECTIONS,
   formatUsagePercentForDisplay,
@@ -140,7 +143,7 @@ export function getHarnessUsageDisplay(
 /** The subset of a harness status the availability surfaces read. */
 export type HarnessAvailabilityStatus = Pick<
   HarnessStatusInfo,
-  "status" | "installHint" | "version"
+  "status" | "installCommand" | "version"
 > & { available?: boolean };
 
 /**
@@ -159,7 +162,12 @@ export function getHarnessAvailabilityPhrase(
     status.version
   );
   if (status.available === false) {
-    return versionGuidance ?? status.installHint ?? "Not available";
+    return (
+      versionGuidance ??
+      (status.installCommand
+        ? formatHarnessInstallGuidance(status.installCommand)
+        : "Not available")
+    );
   }
   return versionGuidance ? `Available — ${versionGuidance}` : "Available";
 }

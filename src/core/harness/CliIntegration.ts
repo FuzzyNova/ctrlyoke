@@ -84,6 +84,7 @@ import { SETTINGS_JSON_INSTALL_KIND_WRITTEN } from "./shared/SettingsJsonMcpTrac
 import { resolveSecretEnvironment } from "../../utils/SecretResolver";
 import { type RunSecretRedactor } from "../../utils/SecretRedactionService";
 import {
+  formatHarnessInstallGuidance,
   formatHarnessVersionGuidance,
   type HarnessVersionAssessment,
 } from "../../utils/HarnessVersion";
@@ -1883,7 +1884,7 @@ export class CliIntegration extends HarnessIntegration {
   getAvailabilityReport(): HarnessAvailabilityReport {
     return {
       available: this.isAvailable,
-      installHint: this.provider.config.installHint,
+      installCommand: this.provider.config.installCommand,
       ...(this.versionAssessment ? { version: this.versionAssessment } : {}),
     };
   }
@@ -1946,14 +1947,14 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private getUnavailableGuidance(): string {
-    const { displayName, installHint } = this.provider.config;
+    const { displayName, installCommand } = this.provider.config;
     const versionGuidance = formatHarnessVersionGuidance(
       displayName,
       this.versionAssessment
     );
     return versionGuidance
       ? `❌ ${versionGuidance}`
-      : `❌ ${displayName} unavailable. ${installHint}. Then sign in with the CLI before running a workflow.`;
+      : `❌ ${displayName} unavailable. ${formatHarnessInstallGuidance(installCommand)}. Then sign in with the CLI before running a workflow.`;
   }
 
   // ============================================================

@@ -67,7 +67,7 @@ class StubProvider implements CapabilityProvider {
       harnessId,
       displayName: harnessId,
       terminalName: harnessId,
-      installHint: "",
+      installCommand: "",
       versionPolicy: TEST_VERSION_POLICY,
       shouldStreamHeadlessOutput: false,
     };

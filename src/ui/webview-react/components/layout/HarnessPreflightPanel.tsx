@@ -7,6 +7,7 @@ import {
 } from "@/types/messages";
 import { HARNESS_DISPLAY_ORDER } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import { CopyButton } from "../shared/CopyButton";
 
 /**
  * Non-blocking first-run guidance shown after every supported CLI has been
@@ -45,6 +46,10 @@ export function HarnessPreflightPanel() {
           const status = harnessStatus[harnessId];
           const isUnsupported =
             status?.version?.status === HARNESS_VERSION_STATUSES.UNSUPPORTED;
+          const command = isUnsupported
+            ? status?.version?.updateCommand
+            : status?.installCommand;
+          const displayName = HARNESS_DISPLAY_NAMES[harnessId];
           return (
             <li
               key={harnessId}
@@ -52,20 +57,25 @@ export function HarnessPreflightPanel() {
             >
               <HarnessIcon harnessId={harnessId} size={14} />
               <span className="shrink-0 text-xs font-medium">
-                {HARNESS_DISPLAY_NAMES[harnessId]}
+                {displayName}
               </span>
               <code
-                className="min-w-0 truncate text-xxs text-description-fg"
+                className="min-w-0 flex-1 truncate text-xxs text-description-fg"
                 title={
                   isUnsupported
-                    ? `${status?.version?.installedVersion} is below the supported minimum ${status?.version?.minimumVersion}`
-                    : undefined
+                    ? `${status?.version?.installedVersion} is below the supported minimum ${status?.version?.minimumVersion}. Update with: ${command}`
+                    : command
                 }
               >
-                {isUnsupported
-                  ? status?.version?.updateCommand
-                  : (status?.installHint ?? "Installation command unavailable")}
+                {command ?? "Installation command unavailable"}
               </code>
+              {command && (
+                <CopyButton
+                  text={command}
+                  label={`Copy ${isUnsupported ? "update" : "install"} command for ${displayName}`}
+                  className="icon-btn shrink-0 py-0 px-0.5"
+                />
+              )}
             </li>
           );
         })}

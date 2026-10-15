@@ -35,7 +35,7 @@ function createProvider(options?: {
       name: "test",
       displayName: "Test CLI",
       terminalName: "Test",
-      installHint: "",
+      installCommand: "",
       shouldStreamHeadlessOutput: false,
     },
     notificationMonitor: {
@@ -156,8 +156,9 @@ function createRunner(options?: {
         const planned = await options?.onRetryPlan?.(session.resolvedSessionId);
         return {
           cliArgs: planned?.args ?? [],
-          resolvedCommand:
-            planned?.resolvedCommand ?? { args: planned?.args ?? [] },
+          resolvedCommand: planned?.resolvedCommand ?? {
+            args: planned?.args ?? [],
+          },
           tempFilePaths: planned?.tempFilePaths ?? [],
           deferredHookEnvironmentFilePaths: [],
         } as never;
@@ -438,50 +439,47 @@ suite("CliExecutionRunner", () => {
     assert.strictEqual(attempts, 1);
   });
 
-  test(
-    "clears a rejected session ID before a retry that cannot discover a new ID",
-    async () => {
-      const persistedIds: string[] = [];
-      const counters = createRunner({
-        recoverableSessionError: true,
-        headlessResponses: [
-          {
-            stdout: "",
-            stderr: "No conversation found with session ID dead-session",
-            exitCode: 1,
-          },
-          { stdout: "", stderr: "retry failed", exitCode: 1 },
-        ],
-        collectedHeadlessResponse: { success: false, error: "retry failed" },
-        onRetryPlan: async (resolvedSessionId) => {
-          assert.strictEqual(resolvedSessionId, undefined);
-          return { args: ["fresh launch"] };
+  test("clears a rejected session ID before a retry that cannot discover a new ID", async () => {
+    const persistedIds: string[] = [];
+    const counters = createRunner({
+      recoverableSessionError: true,
+      headlessResponses: [
+        {
+          stdout: "",
+          stderr: "No conversation found with session ID dead-session",
+          exitCode: 1,
         },
-      });
-      const session = new CliExecutionSession({
-        prompt: { prompt: "retry" },
-        resolvedSessionId: "dead-session",
-        workflowContext: {
-          promptIndex: 0,
-          allPrompts: [{ prompt: "retry" }],
-          workingFilePersistence: {
-            updateWorkingFile: async () => {},
-            persistSessionId: async (_promptIndex, sessionId) => {
-              persistedIds.push(sessionId);
-            },
+        { stdout: "", stderr: "retry failed", exitCode: 1 },
+      ],
+      collectedHeadlessResponse: { success: false, error: "retry failed" },
+      onRetryPlan: async (resolvedSessionId) => {
+        assert.strictEqual(resolvedSessionId, undefined);
+        return { args: ["fresh launch"] };
+      },
+    });
+    const session = new CliExecutionSession({
+      prompt: { prompt: "retry" },
+      resolvedSessionId: "dead-session",
+      workflowContext: {
+        promptIndex: 0,
+        allPrompts: [{ prompt: "retry" }],
+        workingFilePersistence: {
+          updateWorkingFile: async () => {},
+          persistSessionId: async (_promptIndex, sessionId) => {
+            persistedIds.push(sessionId);
           },
         },
-      });
+      },
+    });
 
-      assert.strictEqual(
-        await counters.runner.executeHeadless(session, ["-r"]),
-        false
-      );
-      assert.strictEqual(session.resolvedSessionId, undefined);
-      assert.strictEqual(session.effectiveSessionId, undefined);
-      assert.deepStrictEqual(persistedIds, [""]);
-    }
-  );
+    assert.strictEqual(
+      await counters.runner.executeHeadless(session, ["-r"]),
+      false
+    );
+    assert.strictEqual(session.resolvedSessionId, undefined);
+    assert.strictEqual(session.effectiveSessionId, undefined);
+    assert.deepStrictEqual(persistedIds, [""]);
+  });
 
   test("cleans prompt files once when a recoverable-session provider does not retry", async () => {
     const tempPath = path.join(

@@ -11,12 +11,14 @@ export interface HarnessInstallCommands {
 }
 
 /**
- * The install hint for the OS the harness will run on. The extension host,
- * not the dashboard viewer, spawns the CLI, so resolve against this process.
+ * The bare install command for the OS the harness will run on, ready to paste
+ * into a terminal. The extension host, not the dashboard viewer, spawns the
+ * CLI, so resolve against this process. Prose around it comes from
+ * `formatHarnessInstallGuidance`.
  */
-export function installHintFor(
+export function installCommandFor(
   commands: HarnessInstallCommands,
   platform: NodeJS.Platform = process.platform
 ): string {
-  return `Install via: ${platform === "win32" ? commands.windows : commands.posix}`;
+  return platform === "win32" ? commands.windows : commands.posix;
 }

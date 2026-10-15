@@ -3,7 +3,7 @@ import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { installHintFor } from "../shared/HarnessInstallHint";
+import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HARNESS_IDS,
   CAPABILITY_VERIFICATION_STATUSES,
@@ -126,7 +126,7 @@ export class CopilotCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.COPILOT_CLI,
     displayName: "GitHub Copilot CLI",
     terminalName: "Copilot",
-    installHint: installHintFor({
+    installCommand: installCommandFor({
       posix: "curl -fsSL https://gh.io/copilot-install | bash",
       windows: "winget install GitHub.Copilot",
     }),
@@ -386,10 +386,7 @@ export class CopilotCliProvider implements ICliProvider {
                 );
                 continue;
               }
-              args.push(
-                "--allow-tool",
-                copilotPattern
-              );
+              args.push("--allow-tool", copilotPattern);
             }
             Log.debug(
               `[CopilotCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`

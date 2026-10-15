@@ -187,3 +187,12 @@ export function formatHarnessVersionGuidance(
       return undefined;
   }
 }
+
+/**
+ * User-facing guidance for a missing CLI, wrapping the provider's bare
+ * `installCommand`. Shared by the run-time refusal message and the dashboard
+ * tooltips.
+ */
+export function formatHarnessInstallGuidance(installCommand: string): string {
+  return `Install via: ${installCommand}`;
+}

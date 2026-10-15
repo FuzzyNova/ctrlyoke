@@ -79,7 +79,7 @@ function makeOrchestrator(
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 suite("WebviewSettingsSync", () => {
-  const codexInstallHint = new CodexCliProvider().config.installHint;
+  const codexInstallCommand = new CodexCliProvider().config.installCommand;
   const tempPaths: string[] = [];
   const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -622,7 +622,7 @@ suite("WebviewSettingsSync", () => {
 
       sync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, {
         available: false,
-        installHint: codexInstallHint,
+        installCommand: codexInstallCommand,
       });
 
       const update = messages.find(
@@ -631,7 +631,7 @@ suite("WebviewSettingsSync", () => {
       assert.deepStrictEqual(update.data.harnessStatus[HARNESS_IDS.CODEX_CLI], {
         available: false,
         status: "unavailable",
-        installHint: codexInstallHint,
+        installCommand: codexInstallCommand,
       });
     });
 
@@ -732,7 +732,7 @@ suite("WebviewSettingsSync", () => {
         );
         sync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, {
           available: true,
-          installHint: "",
+          installCommand: "",
         });
 
         let writtenCapabilities: CapabilitiesFile | undefined;

@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
 import { STEP_STATUS } from "../../types/messages";
 import type { HarnessId, StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { StepDetails } from "./WorkflowStep";
 import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { Icon } from "../shared/Icon";
+import { CopyButton } from "../shared/CopyButton";
 import { formatRetryDenominator } from "../../../../utils/LimitUtils";
 import { formatClockDuration } from "../../utils/time";
 
@@ -72,28 +73,6 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
     details?.duration ?? latestOutput?.elapsed ?? runtimeMeta?.elapsed;
   const sessionId =
     latestOutput?.structured?.metadata?.sessionId ?? runtimeMeta?.sessionId;
-  const [copied, setCopied] = useState(false);
-  const handleCopySessionId = useCallback(async () => {
-    if (!sessionId) return;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(sessionId);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = sessionId;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-9999px";
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
-      }
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
-    } catch {
-      // ignore
-    }
-  }, [sessionId]);
 
   return (
     <>
@@ -175,21 +154,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                   className="inline-flex items-center gap-0.5"
                 >
                   <span>{sessionId.slice(-6)}</span>
-                  <button
-                    type="button"
-                    className="icon-btn py-0 px-0.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleCopySessionId();
-                    }}
-                    title="Copy session ID"
-                    aria-label="Copy session ID"
-                  >
-                    <Icon
-                      name={copied ? "codicon-check" : "codicon-copy"}
-                      className="text-xxs"
-                    />
-                  </button>
+                  <CopyButton text={sessionId} label="Copy session ID" />
                 </span>
               ) : null,
             ]

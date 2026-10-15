@@ -7,7 +7,7 @@ import {
   HarnessConfig,
   type CliExecutionSidecarDeps,
 } from "../shared/interfaces/ICliProvider";
-import { installHintFor } from "../shared/HarnessInstallHint";
+import { installCommandFor } from "../shared/HarnessInstallCommand";
 import {
   HOOK_CONFIG_TYPES,
   INotificationMonitor,
@@ -149,7 +149,7 @@ export class AntigravityCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
     displayName: "Antigravity CLI",
     terminalName: "Antigravity",
-    installHint: installHintFor({
+    installCommand: installCommandFor({
       posix: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
       windows: "irm https://antigravity.google/cli/install.ps1 | iex",
     }),

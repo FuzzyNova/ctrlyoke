@@ -96,7 +96,7 @@ export interface HarnessStatus {
   status: HarnessStatusString;
   message?: string;
   /** Provider-owned CLI install command shown by the dashboard. */
-  installHint?: string;
+  installCommand?: string;
 }
 
 /**

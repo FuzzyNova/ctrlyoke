@@ -104,7 +104,7 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
       name: "test",
       displayName: "Test CLI",
       terminalName: "Test",
-      installHint: "",
+      installCommand: "",
       versionPolicy: TEST_VERSION_POLICY,
       shouldStreamHeadlessOutput: false,
     },
@@ -393,7 +393,7 @@ suite("CliIntegration", () => {
   test("should include install and sign-in guidance when unavailable", async () => {
     const integration = createHeadlessIntegration({
       config: {
-        installHint: "Install via: npm install -g test-cli",
+        installCommand: "npm install -g test-cli",
       } as ICliProvider["config"],
       checkAvailability: async () => false,
     });
@@ -416,7 +416,7 @@ suite("CliIntegration", () => {
       createHeadlessIntegration({
         config: {
           displayName: "Test CLI",
-          installHint: "Install via: npm install -g test-cli",
+          installCommand: "npm install -g test-cli",
           versionPolicy,
         } as ICliProvider["config"],
         checkAvailability: async () => true,
@@ -439,7 +439,7 @@ suite("CliIntegration", () => {
       );
       assert.deepStrictEqual(integration.getAvailabilityReport(), {
         available: false,
-        installHint: "Install via: npm install -g test-cli",
+        installCommand: "npm install -g test-cli",
         version: {
           status: HARNESS_VERSION_STATUSES.UNSUPPORTED,
           installedVersion: "1.3.9",
@@ -1064,7 +1064,7 @@ suite("CliIntegration", () => {
         harnessId: HARNESS_IDS.QWEN_CLI,
         displayName: "Qwen Code CLI",
         terminalName: "Qwen Code",
-        installHint: "",
+        installCommand: "",
         versionPolicy: TEST_VERSION_POLICY,
         shouldStreamHeadlessOutput: false,
       },
@@ -1119,7 +1119,7 @@ suite("CliIntegration", () => {
           harnessId: harness.id,
           displayName: harness.terminalName,
           terminalName: harness.terminalName,
-          installHint: "",
+          installCommand: "",
           versionPolicy: TEST_VERSION_POLICY,
           shouldStreamHeadlessOutput: false,
         },
@@ -1164,7 +1164,7 @@ suite("CliIntegration", () => {
         harnessId: HARNESS_IDS.CLAUDE_CLI,
         displayName: "Claude Code CLI",
         terminalName: "Claude",
-        installHint: "",
+        installCommand: "",
         versionPolicy: TEST_VERSION_POLICY,
         shouldStreamHeadlessOutput: false,
       },
