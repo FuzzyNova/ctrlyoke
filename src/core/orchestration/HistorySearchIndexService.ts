@@ -171,6 +171,9 @@ export type PartialSearchResultsCallback = (
 ) => void;
 
 export class HistorySearchIndexService {
+  protected get maxSnapshotResults(): number {
+    return MAX_SNAPSHOT_RESULTS;
+  }
   private loadedWorkspacePath?: string;
   private loadedManifest?: HistorySearchIndexManifest;
   // Insertion order doubles as recency order (oldest first): a hit is
@@ -444,6 +447,7 @@ export class HistorySearchIndexService {
       newResults,
       complete,
       cursor,
+      addedDedupeKeys,
       cancelled,
       deepScannedRuns,
       totalMatchCount,
@@ -480,7 +484,14 @@ export class HistorySearchIndexService {
       throw new HistorySearchCancelledError();
     }
     const combined = snapshot.results.concat(newResults);
-    this.storeSnapshot(snapshotKey, combined, complete, cursor);
+    if (!this.storeSnapshot(snapshotKey, combined, complete, cursor)) {
+      // The previous snapshot remains available with its old cursor. Since a
+      // resumed scan shares that cursor's Set, undo its admissions so the next
+      // extension can rescan them rather than silently skipping matches.
+      for (const key of addedDedupeKeys) {
+        cursor.seenDedupeKeys.delete(key);
+      }
+    }
 
     Log.info(
       `[HistorySearchIndexService] search extended snapshot: query="${normalizedQuery}" deep=${deep} deepScannedRuns=${deepScannedRuns} resumedAtShard=${snapshot.cursor?.nextShardIndex ?? 0} newDocumentsScanned=${cursor.documentsScanned - (snapshot.cursor?.documentsScanned ?? 0)} totalDocumentsScanned=${cursor.documentsScanned} newMatches=${newResults.length} totalMatches=${totalMatchCount} countState=${complete ? HISTORY_SEARCH_COUNT_STATES.EXACT : HISTORY_SEARCH_COUNT_STATES.AT_LEAST} matchMs=${Date.now() - matchStart} totalMs=${Date.now() - searchStart}`
@@ -523,12 +534,12 @@ export class HistorySearchIndexService {
     results: HistorySearchResult[],
     complete: boolean,
     cursor: HistorySearchScanCursor | undefined
-  ): void {
-    if (results.length > MAX_SNAPSHOT_RESULTS) {
+  ): boolean {
+    if (results.length > this.maxSnapshotResults) {
       Log.info(
-        `[HistorySearchIndexService] match snapshot not retained: matches=${results.length} exceeds ${MAX_SNAPSHOT_RESULTS}`
+        `[HistorySearchIndexService] match snapshot not retained: matches=${results.length} exceeds ${this.maxSnapshotResults}`
       );
-      return;
+      return false;
     }
     const existing = this.matchSnapshots.get(key);
     if (existing) {
@@ -554,6 +565,7 @@ export class HistorySearchIndexService {
       this.matchSnapshots.delete(oldestKey);
       this.matchSnapshotResultTotal -= oldest?.results.length ?? 0;
     }
+    return true;
   }
 
   private dropSnapshots(): void {
@@ -612,6 +624,7 @@ export class HistorySearchIndexService {
     newResults: HistorySearchResult[];
     complete: boolean;
     cursor: HistorySearchScanCursor;
+    addedDedupeKeys: string[];
     cancelled: boolean;
     deepScannedRuns: number;
     totalMatchCount: number;
@@ -805,6 +818,14 @@ export class HistorySearchIndexService {
           break;
         }
       }
+      if (!cancelled && !stoppedEarly) {
+        // Reached the true end of the index: fold in the trailing group before
+        // committing admissions, so failures here still roll them back.
+        finalizeGroup();
+      }
+      if (!cancelled) {
+        admissionsCommitted = true;
+      }
     } catch (error) {
       if (error instanceof HistorySearchCancelledError) {
         cancelled = true;
@@ -833,26 +854,21 @@ export class HistorySearchIndexService {
         newResults: [],
         complete: false,
         cursor,
+        addedDedupeKeys,
         cancelled: true,
         deepScannedRuns,
         totalMatchCount: alreadyCollectedCount,
       };
     }
-    if (!stoppedEarly) {
-      // Reached the true end of the index: the trailing group (the only one
-      // never followed by a "next shard" transition to finalize it) still
-      // needs to be folded in.
-      finalizeGroup();
-    }
     const result = {
       newResults,
       complete: !stoppedEarly,
       cursor,
+      addedDedupeKeys,
       cancelled: false,
       deepScannedRuns,
       totalMatchCount,
     };
-    admissionsCommitted = true;
     disposeHistorySearchMatcher(matcher);
     return result;
   }
