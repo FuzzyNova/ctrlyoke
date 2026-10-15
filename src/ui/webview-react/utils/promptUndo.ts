@@ -248,6 +248,41 @@ export function resolveSnapshotFileMatch<T extends { path: string }>(
     )[0];
 }
 
+/** Remove candidates that already have redo instructions for this prompt. */
+export function excludeUndoneCandidates(
+  candidates: UndoFileCandidate[],
+  redoInstructions: UndoFileInstruction[],
+  workspaceRoot?: string
+): UndoFileCandidate[] {
+  if (redoInstructions.length === 0) return candidates;
+
+  const normalizeWorkspaceKey = (path: string): string | undefined => {
+    if (workspaceRoot && isAbsolutePath(path)) {
+      const relativePath = relativizeToWorkspace(path, workspaceRoot);
+      return relativePath === undefined ? undefined : normalizePath(relativePath);
+    }
+    return normalizePath(path);
+  };
+
+  const redoKeys = new Set(
+    redoInstructions
+      .map((instruction) => normalizeWorkspaceKey(instruction.path))
+      .filter((key): key is string => key !== undefined)
+  );
+
+  return candidates.filter((candidate) => {
+    const path = candidate.instruction?.path ?? candidate.path;
+    const key = normalizeWorkspaceKey(path);
+    if (key !== undefined && redoKeys.has(key)) return false;
+
+    // Without a workspace root, retain sameFilePath's absolute/relative
+    // suffix matching for paths that cannot be reduced to a shared key.
+    return workspaceRoot != null || !redoInstructions.some((instruction) =>
+      sameFilePath(instruction.path, path)
+    );
+  });
+}
+
 function getOutputWorkspaceRoot(cliOutputs: CliOutput[]): string | undefined {
   return cliOutputs.find((output) => output.workingDirectory)?.workingDirectory;
 }
@@ -1064,15 +1099,10 @@ export function buildUndoDialogInputForPrompt(
   );
 
   // Strip out files already undone (present in redo instructions).
-  const excludedCandidates = new Set(
-    (excludePaths ?? [])
-      .map((instruction) =>
-        resolveSnapshotFileMatch(allCandidates, instruction.path, workspacePath)
-      )
-      .filter((candidate): candidate is UndoFileCandidate => candidate != null)
-  );
-  const candidates = allCandidates.filter(
-    (candidate) => !excludedCandidates.has(candidate)
+  const candidates = excludeUndoneCandidates(
+    allCandidates,
+    excludePaths ?? [],
+    workspacePath
   );
 
   const tier2Paths = new Set(
@@ -1290,27 +1320,11 @@ export function computePromptChangeSummary(
     allStepOutputs,
     effectiveSnapshot
   );
-  const candidates =
-    redoInstructions.length > 0
-      ? (() => {
-          const excludedCandidates = new Set(
-            redoInstructions
-              .map((instruction) =>
-                resolveSnapshotFileMatch(
-                  allCandidates,
-                  instruction.path,
-                  getOutputWorkspaceRoot(allStepOutputs)
-                )
-              )
-              .filter(
-                (candidate): candidate is UndoFileCandidate => candidate != null
-              )
-          );
-          return allCandidates.filter(
-            (candidate) => !excludedCandidates.has(candidate)
-          );
-        })()
-      : allCandidates;
+  const candidates = excludeUndoneCandidates(
+    allCandidates,
+    redoInstructions,
+    getOutputWorkspaceRoot(allStepOutputs)
+  );
   const { undoableCount, blockedCount } = getPromptUndoSummary(candidates);
   return createPromptChangeSummary(
     undoableCount + blockedCount + undone,

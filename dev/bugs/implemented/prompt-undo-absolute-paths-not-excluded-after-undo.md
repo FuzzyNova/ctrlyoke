@@ -40,3 +40,5 @@ Add a shared helper, such as `excludeUndoneCandidates(candidates, redoInstructio
 A simpler alternative is to match each redo instruction against the snapshot-derived instruction path (`candidate.instruction?.path`, which is already relative) instead of `candidate.path`.
 
 Add tests for both `buildUndoDialogInputForPrompt` and `computePromptChangeSummary` that use an absolute Windows event path, a `workingDirectory`, and a relative snapshot and redo path.
+
+**Resolution:** fixed in this commit

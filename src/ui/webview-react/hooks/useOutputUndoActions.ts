@@ -18,6 +18,7 @@ import {
   buildUndoDialogInputForSpecificEvent,
   aggregateWorkflowUndoFiles,
   createPromptChangeSummary,
+  excludeUndoneCandidates,
   hasFileRedoInstruction,
   sameFilePath,
   resolveSnapshotFileMatch,
@@ -228,25 +229,11 @@ export function useOutputUndoActions({
           effectiveSnapshot,
           workspaceRoot
         );
-        const candidates =
-          redoInstructions.length > 0
-            ? (() => {
-                const excludedCandidates = new Set(
-                  redoInstructions
-                    .map((instruction) =>
-                      resolveSnapshotFileMatch(
-                        allCandidates,
-                        instruction.path,
-                        workspaceRoot
-                      )
-                    )
-                    .filter((candidate) => candidate != null)
-                );
-                return allCandidates.filter(
-                  (candidate) => !excludedCandidates.has(candidate)
-                );
-              })()
-            : allCandidates;
+        const candidates = excludeUndoneCandidates(
+          allCandidates,
+          redoInstructions,
+          workspaceRoot
+        );
         if (candidates.length > 0 || redoInstructions.length > 0) {
           entries.push({
             target: undoTarget,
