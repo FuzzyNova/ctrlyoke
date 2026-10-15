@@ -21,6 +21,12 @@ modal Escape, file picker, language-server editor, script-step execution
 preview), and two build scripts (`dev-host.mjs` / `package-install.mjs`
 quoting, `strip-dev-commands.mjs` backup). 24 bugs, about 27 effort points.
 
+**Orchestrator note (2026-10-14):** Steps 5 and 14 were already fixed on this
+branch before the drain started (`730b164ed fix: reload settings after
+external file changes`, `1d7841123 fix: format quota reset warnings for local
+time`; both docs are in `dev/bugs/implemented/`). They are not queued. 22 bugs
+remain across the other 16 steps.
+
 ## File ownership
 
 Plans 2, 3 and 4 run **at the same time** in other worktrees and own other
@@ -177,6 +183,8 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
   rejection is awaited.
 
 ### Step 5: Settings file hand edits picked up live
+
+**Already done** in `730b164ed` before this drain ran; not queued.
 
 - **Fixes:** `dev/bugs/backlog/settings-file-hand-edits-ignored-until-reload.md` [M]
 - **Files:** `src/config/FileConfigBackend.ts`, `src/config/CtrlYokeConfigService.ts`,
@@ -356,6 +364,8 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
 
 ### Step 14: Near-limit warning reset time in local time
 
+**Already done** in `1d7841123` before this drain ran; not queued.
+
 - **Fixes:** `dev/bugs/backlog/near-limit-warning-shows-raw-iso-reset-time.md`
 - **Files:** new `src/utils/FutureTimeFormat.ts`,
   `src/ui/webview-react/utils/time.ts`,
@@ -427,8 +437,9 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
   `package.json` stripped.
 - **Tests:** `scripts/spawn-windows-shim.test.mjs` (paths with spaces, `&`,
   `^`, quotes produce the right command line; wire it into whatever runner the
-  other `scripts/*.test.mjs` use), `src/test/unit/StripDevCommands.test.ts`
-  (existing backup is never overwritten).
+  other `scripts/*.test.mjs` use: the `test:packaging` list in `package.json`),
+  and a new `scripts/strip-dev-commands.test.mjs` in the same list (existing
+  backup is never overwritten). There is no `StripDevCommands.test.ts`.
 - **Tricky:** do not change `contributes.configuration` in `package.json`
   here (Step 18 owns that edit). `npm test` cannot exercise a real
   `code` launch; test the command-line builder, not the spawn.
@@ -503,6 +514,7 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
 ## Done criteria
 
 - Every bug doc listed under Steps is in `dev/bugs/implemented/` or
-  `dev/bugs/rejected/` (24 docs, including Step 18).
+  `dev/bugs/rejected/` (24 docs, including Step 18; steps 5 and 14's two
+  were already in `implemented/` when the drain started).
 - `npm test` passes on the final commit, and no file owned by plans 2-4 was
   edited except where a commit message calls it out.
