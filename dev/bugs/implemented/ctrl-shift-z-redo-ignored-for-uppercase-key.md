@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/hooks/useUndoRedoKeyHandler.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -45,3 +45,8 @@ Add Vitest cases under `src/ui/webview-react/test/hooks/`:
 
 - `{ key: "Z", ctrlKey: true, shiftKey: true }` triggers redo.
 - `{ key: "Z", ctrlKey: true }` with no Shift (the Caps Lock case) triggers undo.
+
+## Decision
+
+Normalize `e.key` once before classifying shortcuts, so uppercase `Z` works
+for undo and redo without changing the documented key combinations.

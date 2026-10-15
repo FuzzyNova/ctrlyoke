@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -28,3 +28,10 @@ Modals mounted inside the drawer include `SecretsSection.tsx:288`, `WorktreesSec
 Make Modal's Escape handling take priority and consume the event. One option is to register Modal's listener in the capture phase (`document.addEventListener("keydown", h, true)`) and call `e.preventDefault()` before `onClose`, adding `e.stopPropagation()` if needed. The drawer's existing `e.defaultPrevented` guard then skips the event. Another option is to have the drawer ignore Escape whenever a dialog is open (for example, `document.querySelector('[role="dialog"][aria-modal="true"]')`), or to keep a shared modal stack. Either way, Modal should also skip the event if `e.defaultPrevented` is already set, so nested modals close one at a time.
 
 Add a Vitest case that opens the Secrets dialog inside `GlobalSettingsDrawer`, fires Escape, and asserts that the dialog closes and the drawer stays open.
+
+## Decision
+
+Modal Escape handling runs during capture, ignores an already-consumed event,
+and consumes Escape before closing. An open CodeMirror completion popup keeps
+the first Escape for itself; nested modal listeners then close one dialog per
+keypress.

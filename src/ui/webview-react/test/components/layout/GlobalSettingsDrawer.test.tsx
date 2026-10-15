@@ -151,6 +151,21 @@ describe("GlobalSettingsDrawer", () => {
     expect(useUiStore.getState().globalSettingsOpen).toBe(false);
   });
 
+  it("closes the Set secret dialog without closing the settings drawer", () => {
+    useUiStore.setState({ globalSettingsActiveTab: "secrets" });
+    render(<GlobalSettingsDrawer />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set secret" }));
+    expect(
+      screen.getByRole("dialog", { name: "Set secret" })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog", { name: "Set secret" })).toBeNull();
+    expect(useUiStore.getState().globalSettingsOpen).toBe(true);
+  });
+
   it("moves a search match to its Workflow Defaults tab and sub-page", () => {
     render(<GlobalSettingsDrawer />);
     fireEvent.click(screen.getByRole("button", { name: "Search settings" }));

@@ -71,13 +71,25 @@ export const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === KEYBOARD_KEYS.ESCAPE && isOpen) {
-        onClose();
+      if (e.defaultPrevented || e.key !== KEYBOARD_KEYS.ESCAPE || !isOpen) {
+        return;
       }
+
+      const activeElement = document.activeElement;
+      const modal = modalRef.current;
+      const completionIsOpen =
+        activeElement instanceof HTMLElement &&
+        modal?.contains(activeElement) &&
+        activeElement.closest(".cm-editor") !== null &&
+        modal.querySelector(".cm-tooltip-autocomplete") !== null;
+      if (completionIsOpen) return;
+
+      e.preventDefault();
+      onClose();
     };
 
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
+    document.addEventListener("keydown", handleEscape, true);
+    return () => document.removeEventListener("keydown", handleEscape, true);
   }, [isOpen, onClose]);
 
   useEffect(() => {

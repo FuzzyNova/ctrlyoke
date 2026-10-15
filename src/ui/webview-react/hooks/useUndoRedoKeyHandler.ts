@@ -157,10 +157,10 @@ export function clearUndoRedoRuntimeCacheForTests(): void {
 export function useUndoRedoKeyHandler() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
       // Only log undo/redo-related keys to avoid spam
       const mightBeUndoRedo =
-        (e.ctrlKey || e.metaKey) &&
-        (e.key === "z" || e.key === "y" || e.key === "Z");
+        (e.ctrlKey || e.metaKey) && (key === "z" || key === "y");
       if (!mightBeUndoRedo) return;
 
       // Don't intercept if a text input or CodeMirror editor is focused —
@@ -171,10 +171,10 @@ export function useUndoRedoKeyHandler() {
         target instanceof HTMLTextAreaElement ||
         target.closest(".cm-editor") !== null;
 
-      const isUndo = (e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey;
+      const isUndo = (e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey;
       const isRedo =
         (e.ctrlKey || e.metaKey) &&
-        (e.key === "y" || (e.key === "z" && e.shiftKey));
+        (key === "y" || (key === "z" && e.shiftKey));
 
       const temporal = useWorkflowStore.temporal.getState();
       WebviewLog.debug(
