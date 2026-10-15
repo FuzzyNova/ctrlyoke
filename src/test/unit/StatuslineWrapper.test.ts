@@ -320,9 +320,9 @@ suite("Shared statusline wrappers", function () {
     );
     assert.match(claudeLine, /claude-test/);
     assert.match(claudeLine, /12\.4k\/1\.0M ctx \(1\.2%\)/);
-    assert.match(claudeLine, /rate 75%/);
+    assert.match(claudeLine, /usage 75%/);
     assert.doesNotMatch(claudeLine, /idle/);
-    assert.match(agyLine, /quota 2%/);
+    assert.match(agyLine, /usage 2%/);
     assert.doesNotMatch(agyLine, /idle/);
   });
 
@@ -560,7 +560,7 @@ suite("Shared statusline wrappers", function () {
         shared.formatBrandedStatusLine(provider, {}, [
           { type: "field", field: "usage" },
         ]),
-        "quota —"
+        "usage —"
       );
       assert.strictEqual(
         shared.formatBrandedStatusLine(provider, {}, [
@@ -583,14 +583,14 @@ suite("Shared statusline wrappers", function () {
       {
         provider: shared.STATUSLINE_PROVIDERS.CLAUDE,
         payload: { rate_limits: { five_hour: { used_percentage: 25 } } },
-        used: "rate 25%",
-        remaining: "rate 75%",
+        used: "usage 25%",
+        remaining: "usage 75%",
       },
       {
         provider: shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
         payload: { quota: { weekly: { remaining_fraction: 0.8 } } },
-        used: "quota 20%",
-        remaining: "quota 80%",
+        used: "usage 20%",
+        remaining: "usage 80%",
       },
     ];
 
@@ -1241,7 +1241,7 @@ suite("Shared statusline wrappers", function () {
 
       assert.strictEqual(result.code, 0);
       assert.strictEqual(await fs.readFile(marker, "utf8"), "ran");
-      assert.match(result.stdout, /^ctrlyoke /);
+      assert.match(result.stdout, /edit in ctrlyoke/);
       assert.doesNotMatch(result.stdout, /custom/);
       const filename =
         provider === "claude"
@@ -1329,7 +1329,7 @@ suite("Shared statusline wrappers", function () {
         JSON.stringify({ model: { id: `${provider}-model` } }),
         { HOME: tempHome, USERPROFILE: tempHome }
       );
-      assert.match(missing.stdout, /^ctrlyoke /);
+      assert.match(missing.stdout, /edit in ctrlyoke/);
 
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
       await fs.writeFile(settingsPath, "{}");
@@ -1338,7 +1338,7 @@ suite("Shared statusline wrappers", function () {
         JSON.stringify({ model: { id: `${provider}-model` } }),
         { HOME: tempHome, USERPROFILE: tempHome }
       );
-      assert.match(empty.stdout, /^ctrlyoke /);
+      assert.match(empty.stdout, /edit in ctrlyoke/);
 
       await fs.writeFile(settingsPath, "{ malformed");
       const malformed = await runWrapper(
@@ -1346,7 +1346,7 @@ suite("Shared statusline wrappers", function () {
         JSON.stringify({ model: { id: `${provider}-model` } }),
         { HOME: tempHome, USERPROFILE: tempHome }
       );
-      assert.match(malformed.stdout, /^ctrlyoke /);
+      assert.match(malformed.stdout, /edit in ctrlyoke/);
     });
 
     test(`${provider} disables ctrlyoke output for newer settings formats`, async () => {

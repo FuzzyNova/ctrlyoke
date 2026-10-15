@@ -108,9 +108,9 @@ suite("Antigravity statusline script", () => {
       agent_state: "idle",
     });
 
-    assert.match(line, /ctrlyoke gemini-test/);
+    assert.match(line, /^gemini-test /);
     assert.match(line, /12\.4k\/1\.0M ctx \(1\.2%\)/);
-    assert.match(line, /quota 2%/);
+    assert.match(line, /usage 2% · \u001b\[90medit in ctrlyoke\u001b\[0m$/);
     assert.doesNotMatch(line, /idle/);
     assert.match(line, /\u001b\[36m/);
   });
@@ -121,7 +121,7 @@ suite("Antigravity statusline script", () => {
     assert.deepStrictEqual(statusline.parsePayload("[]"), {});
     assert.match(
       statusline.formatBrandedStatusLine(statusline.parsePayload("")),
-      /^ctrlyoke unknown-model · .* · quota —$/
+      /^unknown-model · .* · usage — · \u001b\[90medit in ctrlyoke\u001b\[0m$/
     );
   });
 });

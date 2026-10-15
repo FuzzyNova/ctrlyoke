@@ -155,12 +155,12 @@ export type StatusLineSegment =
     };
 
 /**
- * Shared default format for both statusline providers. The leading brand
- * segment is a plain literal (not a field) so it renders as an editable text
- * box from the start, hinting that it can be customized in place.
+ * Shared default format for every statusline provider. ctrlyoke installs it
+ * into the harness's global settings unprompted, so the trailing gray hint
+ * tells the user where to change it. It is a plain literal (not a field) so it
+ * renders as an editable text box in the format editor and can be deleted.
  */
 export const DEFAULT_STATUS_LINE_FORMAT = [
-  { type: STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL, text: "ctrlyoke" },
   {
     type: STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD,
     field: STATUS_LINE_FIELD_IDS.MODEL,
@@ -174,6 +174,12 @@ export const DEFAULT_STATUS_LINE_FORMAT = [
   {
     type: STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD,
     field: STATUS_LINE_FIELD_IDS.USAGE,
+  },
+  { type: STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL, text: "·" },
+  {
+    type: STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL,
+    text: "edit in ctrlyoke",
+    color: "gray",
   },
 ] satisfies readonly StatusLineSegment[];
 
@@ -672,7 +678,7 @@ export function formatBrandedStatusLine(
               value === undefined
                 ? "—"
                 : `${formatUsagePercentForDisplay(value, direction)}%`;
-            text = `${label || (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE ? "rate" : "quota")} ${display}`;
+            text = `${label || "usage"} ${display}`;
             break;
           }
           case STATUS_LINE_FIELD_IDS.USAGE_1:

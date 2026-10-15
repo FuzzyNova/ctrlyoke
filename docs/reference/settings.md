@@ -1429,10 +1429,6 @@ Statusline format every harness renders while 'useDifferentFormatPerHarness' is 
 ```json
 [
   {
-    "type": "literal",
-    "text": "ctrlyoke"
-  },
-  {
     "type": "field",
     "field": "model"
   },
@@ -1451,6 +1447,15 @@ Statusline format every harness renders while 'useDifferentFormatPerHarness' is 
   {
     "type": "field",
     "field": "usage"
+  },
+  {
+    "type": "literal",
+    "text": "·"
+  },
+  {
+    "type": "literal",
+    "text": "edit in ctrlyoke",
+    "color": "gray"
   }
 ]
 ```
@@ -1478,10 +1483,6 @@ Statusline settings for Claude CLI.
   "useCtrlyokeStyle": true,
   "format": [
     {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
       "type": "field",
       "field": "model"
     },
@@ -1500,6 +1501,15 @@ Statusline settings for Claude CLI.
     {
       "type": "field",
       "field": "usage"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "literal",
+      "text": "edit in ctrlyoke",
+      "color": "gray"
     }
   ]
 }
@@ -1522,10 +1532,6 @@ Statusline settings for Copilot CLI.
   "useCtrlyokeStyle": true,
   "format": [
     {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
       "type": "field",
       "field": "model"
     },
@@ -1544,6 +1550,15 @@ Statusline settings for Copilot CLI.
     {
       "type": "field",
       "field": "usage"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "literal",
+      "text": "edit in ctrlyoke",
+      "color": "gray"
     }
   ]
 }
@@ -1566,10 +1581,6 @@ Statusline settings for Qwen Code.
   "useCtrlyokeStyle": true,
   "format": [
     {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
       "type": "field",
       "field": "model"
     },
@@ -1588,6 +1599,15 @@ Statusline settings for Qwen Code.
     {
       "type": "field",
       "field": "usage"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "literal",
+      "text": "edit in ctrlyoke",
+      "color": "gray"
     }
   ]
 }
@@ -1610,10 +1630,6 @@ Statusline settings for Antigravity CLI.
   "useCtrlyokeStyle": true,
   "format": [
     {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
       "type": "field",
       "field": "model"
     },
@@ -1632,6 +1648,15 @@ Statusline settings for Antigravity CLI.
     {
       "type": "field",
       "field": "usage"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "literal",
+      "text": "edit in ctrlyoke",
+      "color": "gray"
     }
   ]
 }

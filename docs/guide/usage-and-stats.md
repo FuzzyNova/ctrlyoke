@@ -162,7 +162,9 @@ the files they change are shared by every project.
 The status line is a row of segments. Drag a row by its handle to reorder it,
 pick a color, or delete it. Add a field from **Available fields**, or add your
 own text with **Add custom text**. **Reset to default** goes back to the
-built-in format.
+built-in format: model, context usage and peak usage, ending with a gray
+"edit in ctrlyoke" reminder of where to change it. Delete that segment like
+any other.
 
 | Field                                  | Shows                                                             |
 | -------------------------------------- | ----------------------------------------------------------------- |

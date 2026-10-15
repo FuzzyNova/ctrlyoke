@@ -175,7 +175,7 @@ describe("StatusLineFormatEditor", () => {
       />
     );
 
-    expect(screen.getByText(/rate 41%/)).toBeInTheDocument();
+    expect(screen.getByText(/usage 41%/)).toBeInTheDocument();
     expect(screen.getByText(/representative fixture/i)).toBeInTheDocument();
 
     rerender(
@@ -185,7 +185,7 @@ describe("StatusLineFormatEditor", () => {
         percentDirection="remaining"
       />
     );
-    expect(screen.getByText(/rate 59%/)).toBeInTheDocument();
+    expect(screen.getByText(/usage 59%/)).toBeInTheDocument();
     expect(
       screen.getByText(
         /uses your Stats & Usage percent-direction setting \(remaining\)/i
@@ -358,6 +358,6 @@ describe("StatusLineFormatEditor", () => {
     expect(
       screen.getByText(/preview project preview- feature\/statusline/)
     ).toBeInTheDocument();
-    expect(screen.getByText(/rate 33%/)).toBeInTheDocument();
+    expect(screen.getByText(/usage 33%/)).toBeInTheDocument();
   });
 });

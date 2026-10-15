@@ -16,10 +16,9 @@ suite("Statusline format helpers", () => {
   });
 
   test("treats an explicitly undefined optional color as absent", () => {
-    const format = DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
-      ...segment,
-      color: undefined,
-    })) as StatusLineSegment[];
+    const format = DEFAULT_STATUS_LINE_FORMAT.map((segment) =>
+      "color" in segment ? { ...segment } : { ...segment, color: undefined }
+    ) as StatusLineSegment[];
 
     assert.strictEqual(isDefaultStatusLineFormat(format), true);
   });

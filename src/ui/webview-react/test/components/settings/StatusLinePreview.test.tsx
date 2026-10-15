@@ -31,7 +31,7 @@ describe("StatusLinePreview", () => {
     ).toBeInTheDocument();
   });
 
-  it("uses the provider-specific default usage label", () => {
+  it("uses the same default usage label for every provider", () => {
     const { rerender } = render(
       <StatusLinePreview
         format={[{ type: "field", field: STATUS_LINE_FIELD_IDS.USAGE }]}
@@ -39,7 +39,7 @@ describe("StatusLinePreview", () => {
       />
     );
 
-    expect(screen.getByText("rate 41%")).toBeInTheDocument();
+    expect(screen.getByText("usage 41%")).toBeInTheDocument();
 
     rerender(
       <StatusLinePreview
@@ -48,7 +48,7 @@ describe("StatusLinePreview", () => {
       />
     );
 
-    expect(screen.getByText("quota 41%")).toBeInTheDocument();
+    expect(screen.getByText("usage 41%")).toBeInTheDocument();
   });
 
   it("labels a Claude snapshot containing only the seven-day window as weekly", () => {
