@@ -330,9 +330,9 @@ each other.
 
 ### Step 12: Permissions tab says Claude ignores Allowed Tools
 
-> **Status (2026-10-14):** the code fix already landed in `6e9880e9a` before this drain
-> started, and the doc is in `dev/bugs/implemented/`. This step only verifies the fix
-> survived Steps 4 and 11 and retakes the screenshot if Playwright is attached.
+> **Status (2026-10-15):** the code fix already landed in `6e9880e9a` before this drain
+> started, and the doc is in `dev/bugs/implemented/`. The fix survived Steps 4 and 11.
+> The screenshot still needs retaking because Playwright MCP was not attached.
 
 - **Fixes:** `dev/bugs/implemented/claude-allowed-tools-warning-says-ignored.md`
 - **Files:** `src/ui/webview-react/utils/compatibilityDiagnostics.ts`,
