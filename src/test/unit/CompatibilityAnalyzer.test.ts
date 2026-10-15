@@ -899,6 +899,66 @@ suite("CompatibilityAnalyzer", () => {
     );
   });
 
+  test("reports advisory partial Claude tool lists as enforced information", () => {
+    const claude = installed(
+      HARNESS_IDS.CLAUDE_CLI,
+      true,
+      "partial",
+      "verified"
+    );
+    claude.descriptor.permissions!.allowedTools = {
+      ...claude.descriptor.permissions!.allowedTools,
+      caveatCode: "permissions.claudePreapprovedSettings",
+    };
+    const diagnostics = analyze(
+      mixedWorkflow({
+        steps: [{ prompt: "Claude target", harness: HARNESS_IDS.CLAUDE_CLI }],
+      }),
+      snapshot({ [HARNESS_IDS.CLAUDE_CLI]: claude })
+    );
+    const allowedTools = diagnostics.find(
+      (diagnostic) => diagnostic.capability === "allowedTools"
+    );
+
+    assert.ok(allowedTools);
+    assert.strictEqual(
+      allowedTools.code,
+      COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT
+    );
+    assert.strictEqual(
+      allowedTools.severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+    );
+    assert.match(
+      allowedTools.message,
+      /Allowed Tools are enforced by the Claude Code harness/
+    );
+    assert.match(
+      allowedTools.message,
+      /Claude's own settings allow rules can add to this list/
+    );
+    assert.ok(!allowedTools.message.includes("partially translated"));
+    assert.strictEqual(allowedTools.remediation, undefined);
+
+    const codex = installed(HARNESS_IDS.CODEX_CLI, true, "partial", "verified");
+    codex.descriptor.permissions!.allowedTools = {
+      ...codex.descriptor.permissions!.allowedTools,
+      caveatCode: "permissions.coarsePermissionModes",
+    };
+    const nonAdvisoryDiagnostics = analyze(
+      mixedWorkflow({
+        steps: [{ prompt: "Codex target", harness: HARNESS_IDS.CODEX_CLI }],
+      }),
+      snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
+    );
+    assert.strictEqual(
+      nonAdvisoryDiagnostics.find(
+        (diagnostic) => diagnostic.capability === "allowedTools"
+      )?.severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+    );
+  });
+
   test("warns only for configured hook events and preserves source pointers", () => {
     const workflow = mixedWorkflow({
       steps: [

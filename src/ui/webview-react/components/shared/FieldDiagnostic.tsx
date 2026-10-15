@@ -1,5 +1,8 @@
 import React from "react";
-import { HARNESS_INFO } from "@root/types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  HARNESS_INFO,
+} from "@root/types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import type { FieldDiagnostic as FieldDiagnosticItem } from "@utils/fieldValidation";
 import { Icon } from "./Icon";
@@ -64,12 +67,16 @@ export const CompatibilitySummary: React.FC<CompatibilitySummaryProps> = ({
   diagnostics,
   onReview,
 }) => {
-  if (diagnostics.length === 0) return null;
+  const warnings = diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+  );
+  if (warnings.length === 0) return null;
 
   const harnesses = [
-    ...new Set(diagnostics.map((diagnostic) => diagnostic.harnessId)),
+    ...new Set(warnings.map((diagnostic) => diagnostic.harnessId)),
   ];
-  const count = diagnostics.length;
+  const count = warnings.length;
   const warningLabel = `compatibility warning${count === 1 ? "" : "s"}`;
   const harnessLabel =
     harnesses.length === 1

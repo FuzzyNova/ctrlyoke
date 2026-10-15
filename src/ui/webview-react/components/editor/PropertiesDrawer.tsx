@@ -25,6 +25,7 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
   STEP_TYPES,
@@ -1368,7 +1369,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       "toolPermissions.mode"
                     ),
                   ]}
-                  warning={modeDiagnostics[0]?.message}
+                  warning={
+                    modeDiagnostics.find(
+                      (diagnostic) =>
+                        diagnostic.severity ===
+                        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                    )?.message
+                  }
                   warningId="prop-permission-mode-diagnostic"
                   disabled={
                     fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||

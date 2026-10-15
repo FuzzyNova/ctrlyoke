@@ -18,7 +18,10 @@ Both files are optional. A setting that neither file names uses its built-in def
 
 The files accept comments and trailing commas. Saving a setting from the Settings drawer rewrites
 the file as plain JSON, so comments in it don't survive an edit from the dashboard. VS Code
-validates both files against ctrlyoke's settings schema as you type.
+validates both files against ctrlyoke's settings schema as you type. Changes made by hand, the CLI,
+or another VS Code window are picked up by running commands and refresh the open Settings drawer.
+Settings used to start the hosted server take effect the next time it starts; `server.autoStart`
+is read when the extension activates, so changing it requires reloading the window.
 
 If a file isn't valid JSON, ctrlyoke ignores it (as if it were empty) and refuses to save changes
 to it, so it never overwrites the only copy of your settings. Fix the file by hand.

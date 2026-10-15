@@ -257,10 +257,10 @@ export async function activate(context: vscode.ExtensionContext) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const userConfigBackend = createUserConfigBackend();
     configService.setUserBackend(userConfigBackend);
-    if (workspaceFolders && workspaceFolders.length > 0) {
-      const workspaceConfigBackend = createWorkspaceConfigBackend(
-        getVsCodeWorkspaceRoot()
-      );
+    const workspaceConfigBackend = workspaceFolders?.length
+      ? createWorkspaceConfigBackend(getVsCodeWorkspaceRoot())
+      : undefined;
+    if (workspaceConfigBackend) {
       configService.setWorkspaceBackend(workspaceConfigBackend);
     }
     context.subscriptions.push(
@@ -438,6 +438,21 @@ export async function activate(context: vscode.ExtensionContext) {
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
     const dashboardHostActions = new VsCodeDashboardHostActions();
     const fileWatcherFactory = new VsCodeFileWatcherFactory();
+    const settingsFilePaths = [
+      userConfigBackend.filePath,
+      ...(workspaceConfigBackend ? [workspaceConfigBackend.filePath] : []),
+    ];
+    for (const settingsFilePath of new Set(settingsFilePaths)) {
+      const settingsWatcher = fileWatcherFactory.create(
+        path.dirname(settingsFilePath),
+        path.basename(settingsFilePath)
+      );
+      const notifySettingsChanged = (): void => configService.notify();
+      settingsWatcher.onDidCreate(notifySettingsChanged);
+      settingsWatcher.onDidChange(notifySettingsChanged);
+      settingsWatcher.onDidDelete(notifySettingsChanged);
+      context.subscriptions.push(settingsWatcher);
+    }
     const templateManager = new TemplateManager(
       context.extensionPath,
       () => getVsCodeWorkspaceFolder()?.uri.fsPath,

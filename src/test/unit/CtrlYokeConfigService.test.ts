@@ -845,6 +845,77 @@ suite("FileConfigBackend", () => {
     assert.strictEqual(result.diagnostics?.verboseLogging, true);
   });
 
+  test("getAll() reloads settings changed outside this backend", () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ usageTracking: { warningPercentUsed: 80 } }),
+      "utf-8"
+    );
+    const backend = new FileConfigBackend(configPath);
+
+    assert.strictEqual(backend.getAll().usageTracking?.warningPercentUsed, 80);
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ usageTracking: { warningPercentUsed: 5 } }),
+      "utf-8"
+    );
+
+    assert.strictEqual(backend.getAll().usageTracking?.warningPercentUsed, 5);
+  });
+
+  test("getAll() reloads when the settings file is deleted", () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ defaults: { harness: "claude-cli" } }),
+      "utf-8"
+    );
+    const backend = new FileConfigBackend(configPath);
+
+    assert.strictEqual(backend.getAll().defaults?.harness, "claude-cli");
+    fs.unlinkSync(configPath);
+
+    assert.deepStrictEqual(backend.getAll(), {});
+  });
+
+  test("getAll() reloads when the settings file appears", () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const backend = new FileConfigBackend(configPath);
+
+    assert.deepStrictEqual(backend.getAll(), {});
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ defaults: { harness: "claude-cli" } }),
+      "utf-8"
+    );
+
+    assert.strictEqual(backend.getAll().defaults?.harness, "claude-cli");
+  });
+
+  test("getAll() treats externally edited invalid JSON as empty", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ ui: { showCostEstimates: true } }),
+      "utf-8"
+    );
+    const backend = new FileConfigBackend(configPath);
+
+    assert.strictEqual(backend.getAll().ui?.showCostEstimates, true);
+    fs.writeFileSync(
+      configPath,
+      "{ invalid json with a changed size }",
+      "utf-8"
+    );
+
+    assert.deepStrictEqual(backend.getAll(), {});
+    await assert.rejects(
+      backend.set("ui.showCostEstimates", false),
+      /invalid JSON/
+    );
+  });
+
   test("getAll() returns {} on invalid JSON", () => {
     const configPath = path.join(tmpDir, "settings.json");
     fs.writeFileSync(configPath, "{ invalid json }", "utf-8");

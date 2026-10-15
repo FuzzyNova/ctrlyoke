@@ -180,6 +180,7 @@ export const MCP_GLOBAL_STATUS_TOOL_NAME = "global_status";
 
 /** Tool used by the structured commit-message capture path. */
 export const MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME = "submit_commit_message";
+export const MCP_SCRIPT_STEP_PROMPT_MARKER = "(script) ";
 
 /** Tool used to edit a pending step in the workflow. */
 export const MCP_EDIT_STEP_TOOL_NAME = "edit_step";
@@ -313,13 +314,13 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending, its sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). metadata shows the workflow's harness, model, and resumeSession, which steps you append inherit unless you set them. Each step's prompt is shortened to its first line (promptTruncated marks a shortened one); call read_output with a step's index to read its full prompt.",
+      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, and resumeSession, which appended prompt steps inherit unless you set them. Call read_output with a step's index to read its full prompt or script.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more steps or future parallel groups to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
+      "Add one or more prompt steps or future parallel groups to your workflow's queue. Script steps cannot be appended through MCP. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {

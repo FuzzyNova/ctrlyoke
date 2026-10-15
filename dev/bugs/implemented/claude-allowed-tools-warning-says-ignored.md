@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code (retaking the Permissions tab screenshot)
 - **Area:** `src/ui/webview-react/utils/compatibilityDiagnostics.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

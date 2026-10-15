@@ -21,7 +21,14 @@ import { foldPathForCompare } from "../utils/PathCasing";
 const warnedNewerSettingsPaths = new Set<string>();
 interface FileConfigBackendState {
   cache?: PartialCtrlYokeSettings;
+  fileSignature?: FileSignature;
   writeQueue: AsyncWriteQueue;
+}
+
+interface FileSignature {
+  exists: boolean;
+  mtimeMs?: number;
+  size?: number;
 }
 
 const backendStatesByPath = new Map<string, FileConfigBackendState>();
@@ -76,10 +83,15 @@ export class FileConfigBackend implements ConfigBackend {
 
   /** Load and parse the config file. Returns {} if file doesn't exist or is invalid JSON. */
   getAll(): PartialCtrlYokeSettings {
-    if (this.state.cache !== undefined) {
+    const signature = this.getFileSignature();
+    if (
+      this.state.cache !== undefined &&
+      this.signaturesMatch(this.state.fileSignature, signature)
+    ) {
       return this.state.cache;
     }
     this.state.cache = this.load();
+    this.state.fileSignature = signature;
     return this.state.cache;
   }
 
@@ -172,6 +184,27 @@ export class FileConfigBackend implements ConfigBackend {
       );
       return {};
     }
+  }
+
+  private getFileSignature(): FileSignature {
+    try {
+      const stat = fs.statSync(this.resolvedConfigPath);
+      return { exists: true, mtimeMs: stat.mtimeMs, size: stat.size };
+    } catch {
+      return { exists: false };
+    }
+  }
+
+  private signaturesMatch(
+    previous: FileSignature | undefined,
+    current: FileSignature
+  ): boolean {
+    return (
+      previous !== undefined &&
+      previous.exists === current.exists &&
+      previous.mtimeMs === current.mtimeMs &&
+      previous.size === current.size
+    );
   }
 
   private async save(data: PartialCtrlYokeSettings): Promise<void> {

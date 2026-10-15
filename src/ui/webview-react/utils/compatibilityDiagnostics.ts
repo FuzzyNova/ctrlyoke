@@ -5,6 +5,7 @@ import {
   PERMISSION_MODES,
   CAPABILITY_FIDELITIES,
   CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
   HOOK_EVENT_ORDER,
   MCP_CAPABILITY_KEYS,
@@ -13,6 +14,8 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   getCompatibilityCaveatMessage,
+  isAdvisoryCaveat,
+  type CompatibilityCaveatCode,
   type CompatibilityDiagnostic,
   type HarnessCapabilityRegistrySnapshot,
 } from "@root/types/CompatibilityTypes";
@@ -78,13 +81,13 @@ export function permissionCapabilitySummary(
 
   if (supported.length > 0) {
     diagnostics.push({
-      severity: "info",
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
       message: `${label} are currently supported by ${joinLabels(supported)}.`,
     });
   }
   if (notEnforced.length > 0) {
     diagnostics.push({
-      severity: "warning",
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       message: `${joinLabels(notEnforced)} only support an overall permission mode, not individual tool patterns; ${label} are NOT ENFORCED by these harnesses.`,
     });
   }
@@ -128,6 +131,16 @@ function isLossy(state: { fidelity: string; verification: string }): boolean {
   );
 }
 
+function hasAdvisoryCaveat(
+  state: { fidelity: string; verification: string },
+  caveatCode: CompatibilityCaveatCode | undefined
+): boolean {
+  return (
+    state.fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
+    isAdvisoryCaveat(caveatCode)
+  );
+}
+
 function harnessLabel(harnessId: HarnessId): string {
   return HARNESS_INFO[harnessId]?.shortName ?? harnessId;
 }
@@ -142,10 +155,14 @@ function reasonForHarness(
   field: Exclude<PermissionField, "mode">,
   capabilities: HarnessCapabilityRegistrySnapshot
 ): string {
-  const caveat = getCompatibilityCaveatMessage(
+  const caveatCode =
     capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
-      ?.caveatCode
-  );
+      ?.caveatCode;
+  // Reason caveats are already "because …" clauses; an advisory note does not
+  // explain why a list is ignored, so it falls back to the generic reason.
+  const caveat = isAdvisoryCaveat(caveatCode)
+    ? undefined
+    : getCompatibilityCaveatMessage(caveatCode);
   return (
     caveat ??
     "because this harness does not provide verified individual tool-pattern enforcement"
@@ -174,13 +191,24 @@ export function workflowPermissionDiagnostic(
   });
   if (relevant.length === 0) return undefined;
 
-  const grouped = new Map<HarnessId, { supported: number; affected: number }>();
+  const grouped = new Map<
+    HarnessId,
+    { supported: number; caveated: number; affected: number }
+  >();
   for (const target of relevant) {
     const harnessId = target.resolved.properties.harness;
-    const group = grouped.get(harnessId) ?? { supported: 0, affected: 0 };
+    const group = grouped.get(harnessId) ?? {
+      supported: 0,
+      caveated: 0,
+      affected: 0,
+    };
     const state =
       capabilities.harnesses[harnessId]?.effective?.permissions?.[field];
-    if (state && !isLossy(state)) group.supported += 1;
+    const caveatCode =
+      capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
+        ?.caveatCode;
+    if (state && hasAdvisoryCaveat(state, caveatCode)) group.caveated += 1;
+    else if (state && !isLossy(state)) group.supported += 1;
     else group.affected += 1;
     grouped.set(harnessId, group);
   }
@@ -198,14 +226,27 @@ export function workflowPermissionDiagnostic(
         `Ignored by ${counts.affected} ${harnessLabel(harnessId)} step${counts.affected === 1 ? "" : "s"} ${reasonForHarness(harnessId, field, capabilities)}`
     );
 
-  if (ignored.length === 0) return undefined;
+  const caveated = [...grouped.entries()]
+    .filter(([, counts]) => counts.caveated > 0)
+    .map(([harnessId, counts]) => {
+      const caveat = getCompatibilityCaveatMessage(
+        capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
+          ?.caveatCode
+      );
+      return `Enforced for ${counts.caveated} ${harnessLabel(harnessId)} step${counts.caveated === 1 ? "" : "s"}${caveat ? `, but ${caveat}` : ""}`;
+    });
+
+  if (ignored.length === 0 && caveated.length === 0) return undefined;
   const deniedRuleWarning =
     field === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
       ? " Denied Tools are NOT ENFORCED by the affected consumers."
       : "";
   return {
-    severity: "warning",
-    message: `${enforced.concat(ignored).join(". ")}.${deniedRuleWarning}`,
+    severity:
+      ignored.length > 0
+        ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+        : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+    message: `${enforced.concat(caveated, ignored).join(". ")}.${deniedRuleWarning}`,
   };
 }
 

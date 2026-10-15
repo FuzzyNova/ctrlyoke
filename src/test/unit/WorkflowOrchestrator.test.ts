@@ -2590,10 +2590,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       "browser:connect"
     );
 
-    assert.deepStrictEqual(operations, [
-      "run-view",
-      `terminals:${workflowId}`,
-    ]);
+    assert.deepStrictEqual(operations, ["run-view", `terminals:${workflowId}`]);
   });
 
   test("loadRunSummariesForClient sends a request-correlated summary snapshot without binding a client view", async () => {

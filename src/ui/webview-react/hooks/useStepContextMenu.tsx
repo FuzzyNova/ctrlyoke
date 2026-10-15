@@ -34,6 +34,7 @@ import {
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import type { CliOutput } from "@store/workflowStore";
+import { useLatestStepPrompt } from "@hooks/useLatestStepOutput";
 import {
   postRunLifecycleMutation,
   postSetStartPositionMutation,
@@ -92,6 +93,7 @@ interface OpenContextMenuParams {
   outputText?: string;
   /** Latest CLI output for this step, used to build the Copy Metadata text (session ID, tokens, cost) */
   latestOutput?: CliOutput | null;
+  latestPrompt?: string;
   /** Cached runtime metadata (session ID, elapsed, context window) — used before/without a full CliOutput */
   runtimeMeta?: StepRuntimeMetaSnapshot;
   /** Live context-window telemetry while this step is currently running */
@@ -151,6 +153,7 @@ export function useStepContextMenu({
     () => getPresentOutputTargetKeys(outputEntries),
     [outputEntries]
   );
+  const getLatestPrompt = useLatestStepPrompt();
   const outputFilterWorkflowKey = displayedViewAddress
     ? workflowViewAddressKey(displayedViewAddress)
     : SHELL_WORKFLOW_ID;
@@ -275,6 +278,7 @@ export function useStepContextMenu({
         direction,
         outputText,
         latestOutput,
+        latestPrompt,
         runtimeMeta,
         liveContextWindow,
       }: OpenContextMenuParams
@@ -507,6 +511,7 @@ export function useStepContextMenu({
             slotNumber: deleteIndex + 1,
             outputText,
             latestOutput,
+            latestPrompt: latestPrompt ?? getLatestPrompt(deleteIndex),
             runtimeMeta,
             liveContextWindow,
           }),
@@ -726,6 +731,7 @@ export function useStepContextMenu({
       toggleHiddenOutputTarget,
       parallelGroups,
       steps,
+      getLatestPrompt,
     ]
   );
 

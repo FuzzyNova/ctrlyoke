@@ -55,6 +55,7 @@ import {
   StepOutputTextMode,
   LOGS_DIR,
   QUEUE_POSITION,
+  STEP_TYPES,
   type ExecutionState,
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
@@ -135,6 +136,7 @@ import {
   MCP_CLAIM_PATHS_TOOL_NAME,
   MCP_COORDINATION_TOOL_NAMES,
   MCP_LIST_HARNESSES_TOOL_NAME,
+  MCP_SCRIPT_STEP_PROMPT_MARKER,
   MCP_EDIT_STEP_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
@@ -1091,23 +1093,30 @@ export class CtrlYokeMCPServer {
       queueData.resumeSession ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.resumeSession;
     // One row per step, so a long-running orchestrator's status stays small no
-    // matter how many steps it has appended. Full prompts are a read_output
-    // call away.
+    // matter how many steps it has appended. Full prompts and scripts are a
+    // read_output call away.
     const steps = allSteps.map((p, index) => {
-      const prompt = isScriptStep(p) ? `(script) ${p.script}` : p.prompt;
+      const scriptStep = isScriptStep(p);
+      const prompt = scriptStep ? p.script : p.prompt;
       const preview = promptFirstLinePreview(
         prompt,
         STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
       );
       return {
         index,
+        ...(scriptStep
+          ? { type: STEP_TYPES.SCRIPT, script: preview }
+          : { prompt: preview }),
         ...(p.name?.trim() ? { name: p.name.trim() } : {}),
-        prompt: preview,
-        ...(preview !== prompt ? { promptTruncated: true } : {}),
+        ...(preview !== prompt
+          ? scriptStep
+            ? { scriptTruncated: true }
+            : { promptTruncated: true }
+          : {}),
         status: stepStatuses[index],
-        model: isScriptStep(p) ? undefined : p.model,
-        sessionId: isScriptStep(p) ? null : (p.sessionId ?? null),
-        resumeSession: isScriptStep(p)
+        model: scriptStep ? undefined : p.model,
+        sessionId: scriptStep ? null : (p.sessionId ?? null),
+        resumeSession: scriptStep
           ? false
           : (p.resumeSession ?? workflowResumeSession),
       };
@@ -1181,6 +1190,18 @@ export class CtrlYokeMCPServer {
       log("ERROR: Invalid steps array", steps);
       throw new Error(
         `${MCP_APPEND_STEP_TOOL_NAME}: steps must be a non-empty array, so nothing was added.`
+      );
+    }
+    const promptSteps = steps.flatMap((item) =>
+      "parallel" in item ? item.parallel : [item]
+    );
+    if (
+      promptSteps.some((step) =>
+        step.prompt.startsWith(MCP_SCRIPT_STEP_PROMPT_MARKER)
+      )
+    ) {
+      throw new Error(
+        "Script steps cannot be appended through MCP; append_step only accepts prompt steps."
       );
     }
     if (
@@ -1341,6 +1362,11 @@ export class CtrlYokeMCPServer {
   /** Handle edit_step for a zero-based pending step index. */
   private async handleStepEdit(args: McpEditStepArguments) {
     const { index, updates, clearProperties } = args;
+    if (updates.prompt?.startsWith(MCP_SCRIPT_STEP_PROMPT_MARKER)) {
+      throw new Error(
+        "Script steps cannot be edited through MCP; edit_step only accepts prompt steps."
+      );
+    }
     if (!Number.isInteger(index)) {
       throw new Error(
         `${MCP_EDIT_STEP_TOOL_NAME}: index must be a non-negative integer`
@@ -1693,7 +1719,9 @@ export class CtrlYokeMCPServer {
           : null;
         const baseOutput = {
           index: i,
-          prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
+          ...(isScriptStep(p)
+            ? { type: STEP_TYPES.SCRIPT, script: p.script }
+            : { prompt: p.prompt }),
           status: stepStatuses[i],
           responseText: fullResponseText,
         };

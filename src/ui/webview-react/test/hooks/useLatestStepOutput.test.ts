@@ -4,7 +4,9 @@ import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   useFinalStepLatestOutput,
+  useFinalStepLatestPrompt,
   useLatestStepOutput,
+  useLatestStepPrompt,
 } from "@hooks/useLatestStepOutput";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
@@ -54,6 +56,7 @@ describe("useLatestStepOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
+      prompt: "queue prompt",
       cliOutput: makeOutput({
         structured: {
           events: [{ type: "text", data: { text: "ai output" } }],
@@ -84,6 +87,7 @@ describe("useLatestStepOutput", () => {
     });
 
     const { result } = renderHook(() => useLatestStepOutput());
+    const { result: promptResult } = renderHook(() => useLatestStepPrompt());
     const latest = result.current(0);
 
     expect(
@@ -94,6 +98,7 @@ describe("useLatestStepOutput", () => {
     ).toBe("ai output");
     expect(latest?.elapsed).toBe(138.4);
     expect(latest?.tokens?.contextWindowSize).toBe(1000000);
+    expect(promptResult.current(0)).toBe("queue prompt");
   });
 
   it("still returns the newest prompt output across retries", () => {
@@ -165,6 +170,7 @@ describe("useFinalStepLatestOutput", () => {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       attemptIndex: 0,
+      prompt: "final prompt",
       cliOutput: makeOutput({
         structured: {
           events: [{ type: "text", data: { text: "final ai output" } }],
@@ -191,6 +197,9 @@ describe("useFinalStepLatestOutput", () => {
     });
 
     const { result } = renderHook(() => useFinalStepLatestOutput());
+    const { result: promptResult } = renderHook(() =>
+      useFinalStepLatestPrompt()
+    );
     expect(
       getStepOutputText(
         { output: result.current },
@@ -198,6 +207,7 @@ describe("useFinalStepLatestOutput", () => {
       )
     ).toBe("final ai output");
     expect(result.current?.tokens?.contextWindowSize).toBe(1000000);
+    expect(promptResult.current).toBe("final prompt");
   });
 
   it("keeps the previous pass's output once a new pass starts", () => {

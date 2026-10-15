@@ -11,7 +11,10 @@ import type {
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
 import { EXECUTION_PROPERTY_KEYS } from "@root/types/CtrlYokeTypes";
-import { TRUST_DECISIONS } from "@root/types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  TRUST_DECISIONS,
+} from "@root/types/DashboardConstants";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -536,6 +539,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const deniedFieldDiagnostics = deniedAggregate
     ? [deniedAggregate]
     : deniedDiagnostics;
+  const hasPermissionWarning = [
+    ...modeDiagnostics,
+    ...allowedFieldDiagnostics,
+    ...deniedFieldDiagnostics,
+  ].some(
+    (diagnostic) =>
+      diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+  );
 
   // Local input state for Additional Args — committed on blur/Enter to avoid
   // flooding the undo stack with every keystroke.
@@ -1399,7 +1410,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     workflowProperties,
     globalSettings,
     undefined,
-    permissionDiagnostics.length > 0,
+    hasPermissionWarning,
     hookDiagnostics.length > 0,
     mcpDiagnostics.length > 0
   );
@@ -2471,7 +2482,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       PERMISSION_MODE_OPTIONS_META,
                       "toolPermissions.mode"
                     )}
-                    warning={modeDiagnostics[0]?.message}
+                    warning={
+                      modeDiagnostics.find(
+                        (diagnostic) =>
+                          diagnostic.severity ===
+                          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+                      )?.message
+                    }
                     warningId="settings-permission-mode-diagnostic"
                   />
                 </FormField>

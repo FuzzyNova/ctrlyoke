@@ -1019,10 +1019,10 @@ suite("VsCodeSymbolIndex completion golden", () => {
     try {
       const index = new LspSymbolIndex(root, async () => files, host);
       await index.workspaceSymbols("Widget", 10);
-      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      await waitForCondition(() => starts === 1, "first LSP warm-up attempt");
       assert.strictEqual(starts, 1);
       await index.workspaceSymbols("Widget", 10);
-      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      await waitForCondition(() => starts === 2, "retried LSP warm-up attempt");
       assert.strictEqual(starts, 2, "failed warm-up should be retried");
       await index.workspaceSymbols("Widget", 10);
       assert.strictEqual(requests, 1);

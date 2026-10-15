@@ -25,10 +25,14 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   ALLOWED_TOOLS_NOT_ENFORCED:
     "compatibility.permissions.allowedTools.notEnforced",
   ALLOWED_TOOLS_PARTIAL: "compatibility.permissions.allowedTools.partial",
+  ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT:
+    "compatibility.permissions.allowedTools.enforcedWithCaveat",
   ALLOWED_TOOLS_UNVERIFIED: "compatibility.permissions.allowedTools.unverified",
   DENIED_TOOLS_NOT_ENFORCED:
     "compatibility.permissions.deniedTools.notEnforced",
   DENIED_TOOLS_PARTIAL: "compatibility.permissions.deniedTools.partial",
+  DENIED_TOOLS_ENFORCED_WITH_CAVEAT:
+    "compatibility.permissions.deniedTools.enforcedWithCaveat",
   DENIED_TOOLS_UNVERIFIED: "compatibility.permissions.deniedTools.unverified",
   MCP_FILTERING_UNSUPPORTED:
     "compatibility.mcp.perServerToolFiltering.unsupported",
@@ -75,7 +79,7 @@ export interface CapabilityDeclaration {
     /** Ranges for which this exact capability claim has evidence. */
     readonly verifiedVersions: readonly HarnessVersionRange[];
   };
-  caveatCode?: string;
+  caveatCode?: CompatibilityCaveatCode;
   remediationCode?: string;
 }
 
@@ -176,7 +180,7 @@ export interface CompatibilityDiagnosticMessageContext {
    * the "why", so an unsupported capability reads as a known architectural
    * fact rather than an open question.
    */
-  caveatCode?: string;
+  caveatCode?: CompatibilityCaveatCode;
 }
 
 /**
@@ -220,8 +224,27 @@ export type PromptInputCaveatCode =
 export type HookCaveatCode =
   (typeof HOOK_CAVEAT_CODES)[keyof typeof HOOK_CAVEAT_CODES];
 
+export type CompatibilityCaveatCode =
+  PermissionCaveatCode | McpCaveatCode | PromptInputCaveatCode | HookCaveatCode;
+
 /**
- * Resolve a declaration's `caveatCode` into a trailing "because ..." clause.
+ * Caveats that explain a risk alongside a capability that is enforced. Every
+ * other caveat is a reason the capability is limited, and its message must be
+ * a "because …" clause so it reads after any sentence it is appended to.
+ */
+export const ADVISORY_CAVEAT_CODES = {
+  CLAUDE_PREAPPROVED_SETTINGS:
+    PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS,
+} as const;
+
+export function isAdvisoryCaveat(
+  code: CompatibilityCaveatCode | undefined
+): boolean {
+  return code === ADVISORY_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS;
+}
+
+/**
+ * Resolve a declaration's `caveatCode` into shared explanatory prose.
  * Returns undefined when the declaration carries no caveat, so callers can
  * omit the clause rather than inventing a reason.
  */
@@ -234,7 +257,7 @@ export function getCompatibilityCaveatMessage(
     case PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES:
       return "because this harness uses coarse permission modes instead of individual tool patterns";
     case PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS:
-      return "because Claude's existing settings allow rules also count as pre-approved in headless mode";
+      return "Claude's own settings allow rules can add to this list in headless mode";
     case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT:
@@ -273,7 +296,9 @@ export function getCompatibilityDiagnosticMessage(
   // limitation, not an open question, so the reason belongs in the same
   // sentence rather than a separate lookup.
   const withCaveat = (sentence: string): string =>
-    caveat ? `${sentence} ${caveat}.` : `${sentence}.`;
+    caveat
+      ? `${sentence}${isAdvisoryCaveat(context.caveatCode) ? `; ${caveat}` : ` ${caveat}`}.`
+      : `${sentence}.`;
 
   switch (code) {
     case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
@@ -297,6 +322,11 @@ export function getCompatibilityDiagnosticMessage(
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL:
       return withCaveat(
         `${capabilityLabel} are only partially translated by the ${harness} harness`
+      );
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_ENFORCED_WITH_CAVEAT:
+      return withCaveat(
+        `${capabilityLabel} are enforced by the ${harness} harness`
       );
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
@@ -355,6 +385,9 @@ export function getCompatibilityDiagnosticRemediation(
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL:
       return "Narrow the rule to the supported subset or select a harness with exact list support.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_ENFORCED_WITH_CAVEAT:
+      return undefined;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
@@ -398,7 +431,8 @@ export function getCompatibilityDeclarationRemediation(
   const code = getDeclarationDiagnosticCode(
     domain,
     capability,
-    declaration.fidelity
+    declaration.fidelity,
+    declaration.caveatCode
   );
   return code ? getCompatibilityDiagnosticRemediation(code) : undefined;
 }
@@ -406,7 +440,8 @@ export function getCompatibilityDeclarationRemediation(
 function getDeclarationDiagnosticCode(
   domain: CapabilityDomain,
   capability: string,
-  fidelity: CapabilityFidelity
+  fidelity: CapabilityFidelity,
+  caveatCode?: CompatibilityCaveatCode
 ): string | undefined {
   if (fidelity === CAPABILITY_FIDELITIES.EXACT) {
     return undefined;
@@ -420,10 +455,22 @@ function getDeclarationDiagnosticCode(
             ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
             : COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED;
         case PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS:
+          if (
+            fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
+            isAdvisoryCaveat(caveatCode)
+          ) {
+            return COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT;
+          }
           return fidelity === CAPABILITY_FIDELITIES.PARTIAL
             ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
             : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED;
         case PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS:
+          if (
+            fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
+            isAdvisoryCaveat(caveatCode)
+          ) {
+            return COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_ENFORCED_WITH_CAVEAT;
+          }
           return fidelity === CAPABILITY_FIDELITIES.PARTIAL
             ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL
             : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED;

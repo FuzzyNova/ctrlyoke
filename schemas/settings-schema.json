@@ -904,14 +904,14 @@
       "properties": {
         "autoStart": {
           "type": "boolean",
-          "description": "Automatically start the hosted dashboard server when the VS Code extension activates.",
+          "description": "Automatically start the hosted dashboard server when the VS Code extension activates. This is read at activation time; change it before reloading the window to affect startup.",
           "default": false
         },
         "port": {
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
-          "description": "Port for the ctrlyoke hosted server.",
+          "description": "Port for the ctrlyoke hosted server. The port is selected when the server starts; restart the hosted server after changing it.",
           "default": 4747
         },
         "fallbackPorts": {
@@ -921,7 +921,7 @@
             "minimum": 1,
             "maximum": 65535
           },
-          "description": "Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance.",
+          "description": "Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance. These ports are selected when the server starts; restart the hosted server after changing them.",
           "default": []
         },
         "theme": {
@@ -932,7 +932,7 @@
         },
         "bindAddress": {
           "type": "string",
-          "description": "Network interface to bind the server to. Use '127.0.0.1' for localhost only or '0.0.0.0' for all interfaces.",
+          "description": "Network interface to bind the server to. Use '127.0.0.1' for localhost only or '0.0.0.0' for all interfaces. The address is selected when the server starts; restart the hosted server after changing it.",
           "default": "127.0.0.1"
         },
         "publicHostname": {

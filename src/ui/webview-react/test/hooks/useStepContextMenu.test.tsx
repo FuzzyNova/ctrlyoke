@@ -8,6 +8,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
 
 function TestHarness({
   step,
@@ -498,6 +499,42 @@ describe("useStepContextMenu", () => {
     expect(copiedText).toContain("Execution properties:");
     expect(copiedText).toContain("harness:");
     expect(copiedText).toContain("model:");
+  });
+
+  it("includes the attempt prompt in copied full output markdown", () => {
+    const latestOutput: CliOutput = {
+      structured: {
+        events: [{ type: "text", data: { text: "step response" } }],
+        metadata: {},
+      },
+      elapsed: 1,
+      isStreaming: false,
+    };
+    useWorkflowStore.setState({
+      liveOrderedEntries: [
+        {
+          kind: OUTPUT_HISTORY_KINDS.CLI,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          attemptIndex: 0,
+          prompt: "the actual attempt prompt",
+          cliOutput: latestOutput,
+          timestampMs: 1,
+          sequence: 1,
+        },
+      ],
+    });
+    render(
+      <TestHarness
+        step={{ prompt: "Original prompt" }}
+        latestOutput={latestOutput}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
+
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain("### Prompt");
+    expect(copiedText).toContain("the actual attempt prompt");
   });
 
   it("copies the running step's session ID and token/usage data before completion", () => {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code (capturing D26 for `docs/workflows/dynamic-workflows.md`)
 - **Area:** `src/mcp-server.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

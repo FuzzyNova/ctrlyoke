@@ -35,12 +35,12 @@ Step indices are **zero-based** everywhere in these tools, except `sessionId` in
 Returns `workflowKey`, `runRef`, a `metadata` object, and `steps`.
 
 - `metadata`: `workflowName`, `harness`, `model`, `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxSteps` and `remainingSteps` (numbers, or `"unlimited"`), `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`. The limit fields report the effective cap after applying the workflow's `maxSteps` override to the global `queue.maxSteps` setting; `remainingSteps` is based on the current total step count.
-- `steps[]`: `index`, `prompt` (script steps show as `(script) <command>`), `status` (`completed`, `failed`, `cancelled`, `skipped`, `running`, or `pending`), `model`.
+- `steps[]`: `index`, `prompt` for prompt steps, or `type: "script"` and `script` for script steps, `status` (`completed`, `failed`, `cancelled`, `skipped`, `running`, or `pending`), and `model` for prompt steps. Script steps do not have a harness or model.
 
 ## `append_step`
 
 - `steps`: one or more queue items, in order. Each item is either a step or a future parallel group.
-  - A step takes `prompt` (required), `name`, `model`, `harness`, `resumeSession`, and `sessionId` (1-based step number; needs `resumeSession: true`). No other fields are accepted, and script steps cannot be appended.
+  - A prompt step takes `prompt` (required), `name`, `model`, `harness`, `resumeSession`, and `sessionId` (1-based step number; needs `resumeSession: true`). No other fields are accepted, and script steps cannot be appended through MCP.
   - A parallel group is `{ "parallel": [step, step, ...], "failFast": true }` with at least two steps. `failFast` defaults to `true`.
 - `position`:
   - `"next"` — after the current step, or after the running parallel group. Never joins that group.
@@ -90,7 +90,8 @@ Returns `generatedAt` and `harnesses[]` with `id`, `displayName`, `available`, a
 
 By default this returns every requested step's full response text. `indices` selects
 zero-based step numbers; omit it to read them all. The response has `workflowKey`,
-`runRef`, and `outputs[]` with `index`, `prompt`, `status`, and `responseText`
+`runRef`, and `outputs[]` with `index`, `prompt` for prompt steps or
+`type: "script"` and `script` for script steps, `status`, and `responseText`
 (`null` when the step has no recorded output). `responseText` is derived from the step's
 events or script execution record; it is not stored as a duplicate output field. Naming a
 step that does not exist is an error. Only queue steps are readable, not the `finalStep`.

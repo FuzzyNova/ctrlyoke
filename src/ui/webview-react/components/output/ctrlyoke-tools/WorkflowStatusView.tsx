@@ -52,7 +52,6 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
     .split("\n")
     .filter(Boolean);
   const rows = bodyLines.slice(0, status.steps.length);
-  const harness = workflowStatusHarnessLabel(status);
   let offset = 0;
   return (
     <div className="space-y-2 text-(length:--cy-output-font-size-sm)">
@@ -108,7 +107,9 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
                       )
                     )}
                   </td>
-                  <td className="whitespace-nowrap p-1">{harness}</td>
+                  <td className="whitespace-nowrap p-1">
+                    {workflowStatusHarnessLabel(status, step)}
+                  </td>
                 </tr>
               );
             })}

@@ -12,6 +12,7 @@ import type {
   HarnessUsageSnapshot,
 } from "../../types/UsageTypes";
 import { buildUsageSelectionWarning } from "../../core/harness/shared/usage/UsageSelectionAssist";
+import { formatFutureTime } from "../../utils/TimeUtils";
 
 suite("UsageSelectionAssist", () => {
   const now = 1_800_000_000_000;
@@ -170,7 +171,7 @@ suite("UsageSelectionAssist", () => {
     );
     assert.ok(warning);
     assert.match(warning.message, /5h/);
-    assert.ok(warning.message.includes(new Date(resetAt).toISOString()));
+    assert.ok(warning.message.includes(formatFutureTime(resetAt, now)));
   });
 
   test("does not warn when no AI attempt remains queued", () => {

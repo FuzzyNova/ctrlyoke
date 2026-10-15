@@ -4,6 +4,7 @@ import {
   tryParseJson,
   type ToolTerminalLine,
 } from "./shared";
+import { STEP_TYPES } from "../../types/DashboardConstants";
 export interface ReadOutputParams {
   indices?: number[];
   cursor?: string;
@@ -12,7 +13,9 @@ export interface ReadOutputParams {
 }
 export interface ReadOutputItem {
   index: number;
-  prompt: string;
+  type?: (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
+  prompt?: string;
+  script?: string;
   status: string;
   responseText: string | null;
   nextCursor?: string;
@@ -61,7 +64,12 @@ export function parseReadOutputResultText(
         (o) =>
           isRecord(o) &&
           Number.isInteger(o.index) &&
-          typeof o.prompt === "string" &&
+          (o.type === undefined ||
+            o.type === STEP_TYPES.PROMPT ||
+            o.type === STEP_TYPES.SCRIPT) &&
+          (o.type === STEP_TYPES.SCRIPT
+            ? typeof o.script === "string"
+            : typeof o.prompt === "string") &&
           typeof o.status === "string" &&
           (typeof o.responseText === "string" || o.responseText === null) &&
           (o.nextCursor === undefined || typeof o.nextCursor === "string")
@@ -99,7 +107,13 @@ export function readOutputSearchText(
 }
 
 export function readOutputHeading(output: ReadOutputItem): string {
-  return `${formatIndex(output.index)} · ${toolViewPromptPreview(output.prompt)} · ${output.status}`;
+  return `${formatIndex(output.index)} · ${toolViewPromptPreview(readOutputItemText(output))} · ${output.status}`;
+}
+
+export function readOutputItemText(output: ReadOutputItem): string {
+  return output.type === STEP_TYPES.SCRIPT
+    ? (output.script ?? "")
+    : (output.prompt ?? "");
 }
 
 export function readOutputItemSearchText(

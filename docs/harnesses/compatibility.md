@@ -39,7 +39,7 @@ declarations that drive the dashboard's compatibility warnings.
 
 ### Notes
 
-<a id="note-1"></a>**1.** Partially supported because Claude's existing settings allow rules also count as pre-approved in headless mode. _What to do:_ Narrow the rule to the supported subset or select a harness with exact list support.<br>
+<a id="note-1"></a>**1.** Partially supported: Claude's own settings allow rules can add to this list in headless mode.<br>
 Applies to **Claude Code**: Allowed Tools.
 
 <a id="note-2"></a>**2.** Not supported because this harness uses sandbox/approval modes instead of individual tool patterns. _What to do:_ Remove the rule or select a harness that enforces individual tool patterns.<br>

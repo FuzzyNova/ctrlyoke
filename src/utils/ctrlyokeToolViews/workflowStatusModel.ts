@@ -9,14 +9,19 @@ import {
   getHarnessDisplayName,
   getHarnessShortName,
   STEP_STATUS,
+  STEP_TYPES,
 } from "../../types/DashboardConstants";
 
 export interface WorkflowStatusStep {
   index: number;
+  type?: (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
   name?: string;
   /** The prompt's first line; `promptTruncated` marks a shortened one. */
-  prompt: string;
+  prompt?: string;
   promptTruncated?: boolean;
+  /** The script's first line; `scriptTruncated` marks a shortened one. */
+  script?: string;
+  scriptTruncated?: boolean;
   status: string;
   model?: string;
 }
@@ -74,9 +79,16 @@ export function parseWorkflowStatusResultText(
           isRecord(step) &&
           Number.isInteger(step.index) &&
           (step.name === undefined || typeof step.name === "string") &&
-          typeof step.prompt === "string" &&
+          (step.type === undefined ||
+            step.type === STEP_TYPES.PROMPT ||
+            step.type === STEP_TYPES.SCRIPT) &&
+          (step.type === STEP_TYPES.SCRIPT
+            ? typeof step.script === "string"
+            : typeof step.prompt === "string") &&
           (step.promptTruncated === undefined ||
             typeof step.promptTruncated === "boolean") &&
+          (step.scriptTruncated === undefined ||
+            typeof step.scriptTruncated === "boolean") &&
           typeof step.status === "string" &&
           (step.model === undefined || typeof step.model === "string")
       )
@@ -110,22 +122,31 @@ export function workflowStatusSummary(
 
 export function workflowStatusStepName(step: WorkflowStatusStep): string {
   return (
-    step.name || toolViewPromptPreview(step.prompt) || `Step ${step.index + 1}`
+    step.name ||
+    toolViewPromptPreview(workflowStatusStepText(step)) ||
+    `Step ${step.index + 1}`
   );
+}
+
+export function workflowStatusStepText(step: WorkflowStatusStep): string {
+  return step.type === STEP_TYPES.SCRIPT
+    ? (step.script ?? "")
+    : (step.prompt ?? "");
 }
 
 /** Hover text for a step's row, when the row hides part of its prompt. */
 export function workflowStatusStepTitle(
   step: WorkflowStatusStep
 ): string | undefined {
-  return step.name || isToolViewPromptTruncated(step.prompt)
-    ? step.prompt
-    : undefined;
+  const text = workflowStatusStepText(step);
+  return step.name || isToolViewPromptTruncated(text) ? text : undefined;
 }
 
 export function workflowStatusHarnessLabel(
-  result: WorkflowStatusResult
+  result: WorkflowStatusResult,
+  step?: WorkflowStatusStep
 ): string {
+  if (step?.type === STEP_TYPES.SCRIPT) return "Script";
   const harness = result.metadata.harness;
   return harness ? getHarnessShortName(harness) : "workflow harness";
 }
@@ -139,7 +160,7 @@ export function workflowStatusRowLine(
   step: WorkflowStatusStep,
   result: WorkflowStatusResult
 ): string {
-  return `${workflowStatusRowPrefix(step)}${workflowStatusStepName(step)} · ${workflowStatusHarnessLabel(result)}`;
+  return `${workflowStatusRowPrefix(step)}${workflowStatusStepName(step)} · ${workflowStatusHarnessLabel(result, step)}`;
 }
 
 export function workflowStatusSearchText(
