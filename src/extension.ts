@@ -23,6 +23,8 @@ import {
   getVsCodeWorkspaceFolder,
   getVsCodeNamedWorkspaceRoots,
   getVsCodeTrustedWorkspaceRoots,
+  getVsCodeRequestedExternalWorkspaceRoot,
+  getVsCodeFileAccessWorkspaceRoot,
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
@@ -101,13 +103,16 @@ import {
   getPtyProcessManager,
 } from "./core/harness/PtyProcessManager";
 import { configService } from "./config/CtrlYokeConfigService";
-import { externalRootsTrustStore } from "./config/ExternalRootsTrustStore";
+import {
+  ExternalRootsTrustStore,
+  externalRootsTrustStore,
+} from "./config/ExternalRootsTrustStore";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
 import { NotificationManager } from "./ui/NotificationManager";
-import { promptBatchApprovalForPendingWorkspaceExternalRoots } from "./ui/ExternalRootsApproval";
+import { promptBatchApprovalForPendingRoots } from "./ui/ExternalRootsApproval";
 import {
   confirmExternalFileTrustAndOpen,
   openResolvedTarget,
@@ -264,19 +269,41 @@ export async function activate(context: vscode.ExtensionContext) {
     if (workspaceConfigBackend) {
       configService.setWorkspaceBackend(workspaceConfigBackend);
     }
+    const promptPendingExternalRoots = async (): Promise<void> => {
+      if (!vscode.workspace.isTrusted) return;
+      const stateRoot = getVsCodeWorkspaceRoot();
+      const workspaceIdentity =
+        ExternalRootsTrustStore.canonicalizeRoot(stateRoot);
+      const requestedStateRoot = getVsCodeRequestedExternalWorkspaceRoot();
+      const configuredRoots =
+        ConfigurationUtils.getTrustedExternalRootsByScope().workspace;
+      const seenRoots = new Set<string>();
+      const requestedRoots = [
+        ...configuredRoots,
+        ...(requestedStateRoot ? [requestedStateRoot] : []),
+      ].filter((root) => {
+        const canonical = ExternalRootsTrustStore.canonicalizeRoot(root);
+        if (seenRoots.has(canonical)) return false;
+        seenRoots.add(canonical);
+        return true;
+      });
+      const pendingRoots = externalRootsTrustStore.getPendingRoots(
+        workspaceIdentity,
+        requestedRoots
+      );
+      await promptBatchApprovalForPendingRoots(
+        workspaceIdentity,
+        pendingRoots,
+        `This workspace requests ${pendingRoots.length} external file root(s)`,
+        webviewProvider.getUserInteractionPort()
+      );
+    };
     context.subscriptions.push(
       vscode.workspace.onDidGrantWorkspaceTrust(() => {
         if (vscode.workspace.workspaceFolders?.length) {
           void webviewProvider
             .awaitPanelReady()
-            .then(() =>
-              promptBatchApprovalForPendingWorkspaceExternalRoots(
-                getVsCodeWorkspaceRoot(),
-                webviewProvider.getUserInteractionPort(),
-                undefined,
-                () => vscode.workspace.isTrusted
-              )
-            )
+            .then(promptPendingExternalRoots)
             .catch((error) => {
               Log.warn(
                 `[Extension] ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
@@ -544,14 +571,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (workspaceFolders && workspaceFolders.length > 0) {
       void webviewProvider
         .awaitPanelReady()
-        .then(() =>
-          promptBatchApprovalForPendingWorkspaceExternalRoots(
-            getVsCodeWorkspaceRoot(),
-            webviewProvider.getUserInteractionPort(),
-            undefined,
-            () => vscode.workspace.isTrusted
-          )
-        )
+        .then(promptPendingExternalRoots)
         .catch((error) => {
           Log.warn(
             `[Extension] ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
@@ -1719,11 +1739,12 @@ function registerCommands(
         return;
       }
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
-      const workspaceRoot = getVsCodeWorkspaceRoot();
+      const stateRoot = getVsCodeWorkspaceRoot();
+      const workspaceRoot = getVsCodeFileAccessWorkspaceRoot() ?? stateRoot;
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
         machineSecretStore,
-        workspaceRoot
+        stateRoot
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);

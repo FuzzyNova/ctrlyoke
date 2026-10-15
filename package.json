@@ -47,6 +47,13 @@
     "workspaceContains:**/*.prompt.md"
   ],
   "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "restrictedConfigurations": [
+        "ctrlyoke.workspaceDirectory"
+      ]
+    }
+  },
   "bin": {
     "ctrlyoke-mcp": "./out/mcp-server.js",
     "ctrlyoke": "./out/cli.js"

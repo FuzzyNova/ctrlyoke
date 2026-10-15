@@ -146,4 +146,7 @@ this order:
 `ctrlyoke.workspaceDirectory` is the only ctrlyoke setting kept in VS Code's own settings, because
 ctrlyoke needs it to find `.ctrlyoke/settings.json` in the first place. It accepts an absolute
 path or a path relative to the `.code-workspace` file, and supports `${workspaceFolder}` and
-`${workspaceFolder:Name}`.
+`${workspaceFolder:Name}`. If it resolves outside the open workspace folders and the
+`.code-workspace` file's directory, ctrlyoke keeps using it for state but asks for a one-time
+external-root approval before it can grant file access under that location. An untrusted VS Code
+workspace cannot set this value.

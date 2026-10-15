@@ -152,6 +152,34 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     assert.deepStrictEqual(effective, ["/shared/logs"]);
   });
 
+  test("getEffectiveApprovedExternalFileRoots includes the state root only after its own approval", () => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+    const stateRoot = path.resolve("/home/user/project-state");
+    const identity = ExternalRootsTrustStore.canonicalizeRoot(stateRoot);
+    const deniedStore = makeFakeTrustStore({});
+    assert.deepStrictEqual(
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        identity,
+        undefined,
+        deniedStore
+      ),
+      []
+    );
+
+    const approvedStore = makeFakeTrustStore({
+      [`${identity}::${identity}`]: "allow",
+    });
+    assert.deepStrictEqual(
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        identity,
+        undefined,
+        approvedStore
+      ),
+      [identity]
+    );
+  });
+
   test("getPendingWorkspaceExternalFileRoots reports only never-decided workspace roots", () => {
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(

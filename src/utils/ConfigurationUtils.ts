@@ -692,7 +692,18 @@ export const ConfigurationUtils = {
       workspaceIdentity,
       workspace
     );
-    const baseRoots = dedupeExternalRoots([...user, ...approvedWorkspaceRoots]);
+    // An out-of-folder ctrlyoke.workspaceDirectory is also an explicit
+    // workspace external-root request. Its approval is recorded against the
+    // state-root identity itself, independent of shared settings.json.
+    const approvedWorkspaceStateRoot = trustStore.getApprovedRoots(
+      workspaceIdentity,
+      [workspaceIdentity]
+    );
+    const baseRoots = dedupeExternalRoots([
+      ...user,
+      ...approvedWorkspaceRoots,
+      ...approvedWorkspaceStateRoot,
+    ]);
 
     if (!workflow || workflow.declaredRoots === undefined) {
       return baseRoots;

@@ -1,6 +1,6 @@
 # Bug Drain 1: Host Lifecycle, Settings & Dashboard Interaction Plan
 
-**Status:** Backlog, ready to run
+**Status:** All steps have run
 **Priority:** P1
 **Runs as:** plan 1 of 4 in a parallel bug drain. Each plan runs through
 `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git worktree.
