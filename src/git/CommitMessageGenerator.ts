@@ -66,6 +66,11 @@ export const MAX_DIFF_BYTES = 750 * 1024;
 const GIT_DIFF_MAX_BUFFER = 100 * 1024 * 1024;
 const BINARY_DETECTION_BYTES = 8 * 1024;
 const COMMIT_MESSAGE_MCP_TOOL = MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME;
+const COMMIT_MESSAGE_ALLOWED_READ_TOOLS = ["read", "grep", "glob"];
+const COMMIT_MESSAGE_MCP_PERMISSION_PATTERN = `mcp__${MCP_SERVER_IDS.CTRLYOKE_COMMIT}__${COMMIT_MESSAGE_MCP_TOOL}`;
+const COMMIT_MESSAGE_SKILL_COMMAND_PATTERN =
+  "shell(node:*--tool*submit_commit_message*)";
+const COMMIT_MESSAGE_DENIED_TOOLS = ["write", "edit", "multiedit"];
 const COMMIT_MESSAGE_LINEAGE_POINTER = ".commit-message-lineage.json";
 const COMMIT_MESSAGE_WORKFLOW_NAME = "commit-message-generation";
 
@@ -259,9 +264,17 @@ export function buildCommitWorkflowOverrides(
     additionalArgs: null,
     hooks: null,
     toolPermissions: {
-      mode: PERMISSION_MODES.ALLOW_ALL,
-      allowedTools: [],
-      deniedTools: [],
+      mode: PERMISSION_MODES.CUSTOM,
+      allowedTools: [
+        ...COMMIT_MESSAGE_ALLOWED_READ_TOOLS,
+        ...(ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.NATIVE
+          ? [COMMIT_MESSAGE_MCP_PERMISSION_PATTERN]
+          : [COMMIT_MESSAGE_SKILL_COMMAND_PATTERN]),
+      ],
+      deniedTools:
+        ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.NATIVE
+          ? ["shell", ...COMMIT_MESSAGE_DENIED_TOOLS]
+          : COMMIT_MESSAGE_DENIED_TOOLS,
     },
   };
 }

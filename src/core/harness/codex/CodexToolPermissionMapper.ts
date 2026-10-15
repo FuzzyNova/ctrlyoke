@@ -128,8 +128,8 @@ export class CodexToolPermissionMapper
    */
   buildCodexSpecificArgs(
     config: ToolPermissionConfig,
-    sandboxMode?: string,
-    approvalPolicy?: string,
+    _sandboxMode?: string,
+    _approvalPolicy?: string,
     isInteractive?: boolean
   ): string[] {
     // Warn if tool patterns are configured (unsupported by Codex)
@@ -158,22 +158,10 @@ export class CodexToolPermissionMapper
         return ["--sandbox", "workspace-write"];
 
       case PERMISSION_MODES.CUSTOM:
-        // Use Codex-specific sandbox and approval settings.
-        // -a / --ask-for-approval is interactive-only; omit for headless exec.
-        if (sandboxMode && approvalPolicy) {
-          if (includeApprovalFlag) {
-            return ["-s", sandboxMode, "-a", approvalPolicy];
-          }
-          return ["-s", sandboxMode];
-        } else {
-          Log.warn(
-            "[CodexToolPermissionMapper] Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to the Auto preset."
-          );
-          if (includeApprovalFlag) {
-            return [...this.AUTO_PRESET_ARGS];
-          }
-          return ["--sandbox", "workspace-write"];
-        }
+        // Codex cannot enforce ctrlyoke's per-tool allow/deny patterns. Custom
+        // must therefore fail closed to its read-only sandbox instead of
+        // inheriting workspace-write from the user's broader Codex settings.
+        return ["--sandbox", "read-only"];
 
       case PERMISSION_MODES.NONE:
         return [];

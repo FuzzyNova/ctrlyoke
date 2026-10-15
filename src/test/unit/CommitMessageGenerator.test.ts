@@ -234,9 +234,14 @@ suite("CommitMessageGenerator", () => {
     assert.strictEqual(overrides.skills, null);
     assert.strictEqual(overrides.additionalArgs, null);
     assert.deepStrictEqual(overrides.toolPermissions, {
-      mode: PERMISSION_MODES.ALLOW_ALL,
-      allowedTools: [],
-      deniedTools: [],
+      mode: PERMISSION_MODES.CUSTOM,
+      allowedTools: [
+        "read",
+        "grep",
+        "glob",
+        "mcp__ctrlyoke-commit__submit_commit_message",
+      ],
+      deniedTools: ["shell", "write", "edit", "multiedit"],
     });
     assert.strictEqual(overrides.hooks, null);
   });
@@ -251,6 +256,16 @@ suite("CommitMessageGenerator", () => {
 
     assert.strictEqual(overrides.mcpServers, null);
     assert.deepStrictEqual(overrides.skills, [MCP_SKILL_NAMES.COMMIT_MESSAGE]);
+    assert.deepStrictEqual(overrides.toolPermissions, {
+      mode: PERMISSION_MODES.CUSTOM,
+      allowedTools: [
+        "read",
+        "grep",
+        "glob",
+        "shell(node:*--tool*submit_commit_message*)",
+      ],
+      deniedTools: ["write", "edit", "multiedit"],
+    });
   });
 
   test("explicitly disables inherited MCP servers without capture", () => {

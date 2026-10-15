@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/git/CommitMessageGenerator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -46,3 +46,16 @@ Settled by Nathan on 2026-10-14. Use least privilege on every harness, and never
 - Explicitly deny shell and write tools.
 
 If a harness's permission mapper can't express that allowlist, extend the mapper minimally and test it, rather than giving that harness a broader mode.
+
+Claude maps the pattern list to its headless `dontAsk` allowlist. OpenCode
+emits an `ask` catch-all, then read-only tools and the selected capture pattern,
+with denials last. Qwen uses default approval with explicit allow and exclude
+lists. Copilot already maps custom allow/deny patterns; its mapper is owned by
+plan 2 and was not changed here. Codex cannot translate tool patterns, so its
+custom mode now forces a read-only sandbox regardless of broader workspace
+settings; native MCP access remains restricted by the commit server's
+exhaustive denied-tool list, and skill mode can fall back to response text if
+the scoped shell command is unavailable. Antigravity has no granular flags;
+its custom mode enables the CLI sandbox and never uses a permission bypass, so
+headless tool actions can be refused or blocked instead of silently approved.
+No harness receives allow-all permissions for this run.

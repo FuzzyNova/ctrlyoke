@@ -559,27 +559,17 @@ suite("HarnessToolPermissionMappers", () => {
         ]);
       });
 
-      test("custom with no sandbox/approval → fallback to explicit Auto preset flags", async () => {
+      test("custom with no sandbox/approval → read-only sandbox", async () => {
         const args = await mapperArgs(mapper, cfg(PERMISSION_MODES.CUSTOM));
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
+        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
       });
 
-      test("custom with tool patterns still falls back to Auto preset flags (Codex ignores patterns)", async () => {
+      test("custom with tool patterns still uses read-only sandbox (Codex ignores patterns)", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], ["edit"])
         );
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
+        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
       });
 
       test("none mode returns no permission flags", async () => {
@@ -614,68 +604,48 @@ suite("HarnessToolPermissionMappers", () => {
         ]);
       });
 
-      test("custom with sandbox=workspace-write, approval=on-request → -s workspace-write -a on-request", async () => {
+      test("custom cannot inherit a broader configured sandbox", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           "workspace-write",
           "on-request"
         );
-        assert.deepStrictEqual(args, [
-          "-s",
-          "workspace-write",
-          "-a",
-          "on-request",
-        ]);
+        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
       });
 
-      test("custom with sandbox=read-only, approval=untrusted → -s read-only -a untrusted", async () => {
+      test("custom stays read-only", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           "read-only",
           "untrusted"
         );
-        assert.deepStrictEqual(args, ["-s", "read-only", "-a", "untrusted"]);
+        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
       });
 
-      test("custom with sandbox=danger-full-access, approval=never → -s danger-full-access -a never", async () => {
+      test("custom ignores danger-full-access and never approval settings", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           "danger-full-access",
           "never"
         );
-        assert.deepStrictEqual(args, [
-          "-s",
-          "danger-full-access",
-          "-a",
-          "never",
-        ]);
+        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
       });
 
-      test("custom with only sandboxMode (no approvalPolicy) → fallback to explicit Auto preset flags", async () => {
+      test("custom with only sandboxMode stays read-only", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           "workspace-write"
         );
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
+        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
       });
 
-      test("custom with only approvalPolicy (no sandboxMode) → fallback to explicit Auto preset flags", async () => {
+      test("custom with only approvalPolicy stays read-only", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           undefined,
           "on-request"
         );
-        assert.deepStrictEqual(args, [
-          "--sandbox",
-          "workspace-write",
-          "--ask-for-approval",
-          "on-request",
-        ]);
+        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
       });
     });
 
@@ -704,14 +674,14 @@ suite("HarnessToolPermissionMappers", () => {
           assert.deepStrictEqual(args, ["--sandbox", "workspace-write"]);
         });
 
-        test("custom with sandbox+approval → -s only (no -a)", async () => {
+        test("custom with sandbox+approval stays read-only", async () => {
           const args = mapper.buildCodexSpecificArgs(
             cfg(PERMISSION_MODES.CUSTOM),
             "workspace-write",
             "on-request",
             false
           );
-          assert.deepStrictEqual(args, ["-s", "workspace-write"]);
+          assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
         });
 
         test("custom with read-only sandbox+approval → -s read-only only (no -a)", async () => {
@@ -721,17 +691,17 @@ suite("HarnessToolPermissionMappers", () => {
             "untrusted",
             false
           );
-          assert.deepStrictEqual(args, ["-s", "read-only"]);
+          assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
         });
 
-        test("custom missing sandbox/approval → fallback without --ask-for-approval", async () => {
+        test("custom missing sandbox/approval stays read-only", async () => {
           const args = mapper.buildCodexSpecificArgs(
             cfg(PERMISSION_MODES.CUSTOM),
             undefined,
             undefined,
             false
           );
-          assert.deepStrictEqual(args, ["--sandbox", "workspace-write"]);
+          assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
         });
 
         test("none mode → no flags (unchanged)", async () => {
