@@ -388,6 +388,14 @@ node scripts/dev-host.mjs start shared
 node scripts/dev-host.mjs restart onboarding
 ```
 
+Add `--no-harnesses` to any mode (`npm run dev:host:start:no-harnesses` is
+onboarding plus this flag) to launch with every `PATH` entry that holds a
+harness CLI removed, so all six harnesses show as missing. Use it for the
+missing-harness preflight and the first-run screenshots. Only the dev host's
+environment changes; your shell and everyday VS Code keep their `PATH`. The
+script refuses if a harness shares a directory with `node`, `git` or `code`,
+since stripping that directory would break the host.
+
 It runs on win32/darwin/linux; the process-discovery and graceful-close
 mechanism differ per OS (PowerShell CIM queries + `taskkill` on Windows,
 `ps` parsing + `SIGTERM` elsewhere) — see the closing section below for which

@@ -711,6 +711,7 @@
     "dev:host:restart:shared": "node scripts/dev-host.mjs restart shared",
     "dev:host:start:onboarding": "node scripts/dev-host.mjs start onboarding",
     "dev:host:restart:onboarding": "node scripts/dev-host.mjs restart onboarding",
+    "dev:host:start:no-harnesses": "node scripts/dev-host.mjs start onboarding --no-harnesses",
     "predocs:dev": "node scripts/sync-docs-screenshots.mjs",
     "docs:dev": "vitepress dev docs",
     "predocs:build": "npm run check:docs && node scripts/sync-docs-screenshots.mjs",

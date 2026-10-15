@@ -14,15 +14,21 @@
  * for which of those is empirically confirmed vs. the standard-idiom default.
  *
  * Usage:
- *   node scripts/dev-host.mjs start [isolated|shared|onboarding]
+ *   node scripts/dev-host.mjs start [isolated|shared|onboarding] [--no-harnesses]
  *   node scripts/dev-host.mjs stop
- *   node scripts/dev-host.mjs restart [isolated|shared|onboarding]
+ *   node scripts/dev-host.mjs restart [isolated|shared|onboarding] [--no-harnesses]
  *
  * The default `isolated` mode preserves the original behavior. `shared` omits
  * CTRLYOKE_HOME so ctrlyoke uses the normal user-scoped directory. `onboarding`
  * mirrors .vscode/launch.json's isolated onboarding config: it resets the temp
  * workspace, uses independent VS Code and ctrlyoke state, and disables all
  * extensions.
+ *
+ * `--no-harnesses` launches the host with every PATH directory that holds a
+ * harness CLI removed, so all six harnesses detect as missing. Harness
+ * detection is a plain `<cli> --version` against the inherited PATH
+ * (`CliProviderUtils.runVersionCommand`), so this reproduces a machine with no
+ * CLIs installed, e.g. for the missing-harness preflight screenshots.
  */
 
 import { execFileSync } from "node:child_process";
@@ -92,6 +98,20 @@ const USER_DATA_MARKERS = [
 const IS_WINDOWS = process.platform === "win32";
 const CODE_BIN = IS_WINDOWS ? "code.cmd" : "code";
 const NPM_BIN = IS_WINDOWS ? "npm.cmd" : "npm";
+const NO_HARNESSES_FLAG = "--no-harnesses";
+
+// Each provider's CLI_COMMAND (src/core/harness/<harness>/*CliProvider.ts).
+const HARNESS_BINARIES = [
+  "copilot",
+  "claude",
+  "codex",
+  "opencode",
+  "qwen",
+  "agy",
+];
+// A PATH directory holding one of these is never stripped: the dev host needs
+// them, and losing them would break the host, not just hide the harnesses.
+const REQUIRED_BINARIES = ["node", "git", "code"];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -242,17 +262,60 @@ function resetOnboardingTempDir() {
   );
 }
 
-function buildEnvironment(mode) {
+function executableNames(binary) {
+  if (!IS_WINDOWS) return [binary];
+  const extensions = (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .filter(Boolean);
+  return [binary, ...extensions.map((ext) => binary + ext.toLowerCase())];
+}
+
+function directoryHolds(directory, binaries) {
+  return binaries.find((binary) =>
+    executableNames(binary).some((name) =>
+      existsSync(path.join(directory, name))
+    )
+  );
+}
+
+/** Removes every PATH entry that holds a harness CLI, in place. */
+function stripHarnessesFromPath(environment) {
+  // A spread copy of process.env loses Windows' case-insensitive lookup, and
+  // Windows usually spells the variable `Path`.
+  const pathKey =
+    Object.keys(environment).find((key) => key.toUpperCase() === "PATH") ??
+    "PATH";
+  const kept = [];
+  for (const directory of (environment[pathKey] ?? "").split(path.delimiter)) {
+    const harness = directory && directoryHolds(directory, HARNESS_BINARIES);
+    if (!harness) {
+      kept.push(directory);
+      continue;
+    }
+    const required = directoryHolds(directory, REQUIRED_BINARIES);
+    if (required) {
+      console.error(
+        `cannot hide '${harness}': ${directory} also holds '${required}', which the dev host needs. Move the harness CLI out of that directory first.`
+      );
+      process.exit(1);
+    }
+    console.log(`hiding harness PATH entry (${harness}): ${directory}`);
+  }
+  environment[pathKey] = kept.join(path.delimiter);
+}
+
+function buildEnvironment(mode, { noHarnesses }) {
   const environment = { ...process.env };
   if (mode.ctrlyokeHome) {
     environment.CTRLYOKE_HOME = mode.ctrlyokeHome;
   } else {
     delete environment.CTRLYOKE_HOME;
   }
+  if (noHarnesses) stripHarnessesFromPath(environment);
   return environment;
 }
 
-async function start(mode) {
+async function start(mode, launchOptions) {
   if (findInstancePids().length > 0) {
     console.error(
       "dev host already running — run `node scripts/dev-host.mjs stop` first."
@@ -260,6 +323,9 @@ async function start(mode) {
     process.exitCode = 1;
     return;
   }
+
+  // Before compile, so a refusal costs nothing.
+  const environment = buildEnvironment(mode, launchOptions);
 
   if (mode.resetTempDir) resetOnboardingTempDir();
 
@@ -273,7 +339,9 @@ async function start(mode) {
     ? statSync(serverUrlFile).mtimeMs
     : 0;
 
-  console.log(`launching dev host (${mode.name})...`);
+  console.log(
+    `launching dev host (${mode.name}${launchOptions.noHarnesses ? ", no harnesses" : ""})...`
+  );
   const args = [
     `--user-data-dir=${mode.userDataDir}`,
     `--extensionDevelopmentPath=${REPO_ROOT}`,
@@ -290,7 +358,7 @@ async function start(mode) {
 
   const child = spawnShim(CODE_BIN, args, {
     cwd: REPO_ROOT,
-    env: buildEnvironment(mode),
+    env: environment,
     detached: true,
     stdio: "ignore",
   });
@@ -315,22 +383,23 @@ async function start(mode) {
 }
 
 async function main() {
-  const command = process.argv[2];
-  const mode = getMode(process.argv[3]);
+  const [command, ...rest] = process.argv.slice(2);
+  const launchOptions = { noHarnesses: rest.includes(NO_HARNESSES_FLAG) };
+  const mode = getMode(rest.find((arg) => arg !== NO_HARNESSES_FLAG));
   switch (command) {
     case "start":
-      await start(mode);
+      await start(mode, launchOptions);
       break;
     case "stop":
       await stop();
       break;
     case "restart":
       await stop();
-      await start(mode);
+      await start(mode, launchOptions);
       break;
     default:
       console.error(
-        "usage: node scripts/dev-host.mjs <start|stop|restart> [isolated|shared|onboarding]"
+        `usage: node scripts/dev-host.mjs <start|stop|restart> [isolated|shared|onboarding] [${NO_HARNESSES_FLAG}]`
       );
       process.exit(1);
   }
