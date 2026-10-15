@@ -1,6 +1,6 @@
 # Bug Drain 4: Core Utilities, CLI/MCP Surfaces and Workspace Viewer
 
-**Status:** Backlog, not started
+**Status:** In progress (queued 2026-10-14; step 7 was already fixed)
 **Runs as:** plan 4 of 4 in a parallel bug drain. Each plan runs through
 `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git
 worktree. The orchestrator reads this plan, queues one `append_step` per step
@@ -250,6 +250,12 @@ steps; and the three `workspaceViewerStore` bugs in steps 13 and 14.
 
 ### Step 7: MCP reports script steps as `(script) <cmd>` prompts (M)
 
+> **Already fixed before this drain started** in commit `e45a21ab8`
+> ("fix: distinguish script steps in MCP output"); the doc is in
+> `dev/bugs/implemented/`. The orchestrator did not queue this step. The final
+> review checks that `ReadOutputView.tsx`/`heightEstimators.ts` render
+> script rows consistently.
+
 - **Fixes:** `dev/bugs/backlog/mcp-script-step-prompt-format-invites-fake-script-appends.md`
 - **Files:** `src/mcp-server.ts`, `src/utils/McpToolDefinitions.ts`,
   `src/utils/ctrlyokeToolViews/workflowStatusModel.ts`,
@@ -433,7 +439,8 @@ skip or defer a bug.
 2. **Fix and test.** Fix the root cause and add or update tests that would have
    caught the bug.
 3. **`npm test` passes.** Run it once and read the `TEST SUMMARY:` block at the
-   end (`npm test 2>&1 | Select-Object -Last 40`). Never run
+   end (`npm test 2>&1 | tail -40` in a POSIX shell, or
+   `npm test 2>&1 | Select-Object -Last 40` in PowerShell). Never run
    `npm run test:harness`. Also run `npm run lint` and `npm run typecheck`, plus
    `npm run check:docs` if a doc changed.
 4. **Move the bug doc.** `git mv` each fixed doc from `dev/bugs/backlog/` to
