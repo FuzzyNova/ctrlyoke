@@ -80,7 +80,7 @@ export class AntigravityNotificationMonitor
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    _workspaceRoot: string,
+    workspaceRoot: string,
     userHooks?: UserHookConfig[],
     ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
@@ -123,7 +123,7 @@ export class AntigravityNotificationMonitor
     // the native event name as argv[3]. Supported ctrlyoke logical events map
     // 1:1 to a single native event for agy; unsupported ones are skipped.
     const addHandler = (eventKey: AntigravityHookKey) => {
-      pushHandler(eventKey, `${baseCommand} ${eventKey}`);
+      pushHandler(eventKey, `${baseCommand} ${eventKey} ${workspaceRoot}`);
     };
 
     if (selectedEvents.has("sessionStart")) {

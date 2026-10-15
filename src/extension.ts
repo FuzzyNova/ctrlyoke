@@ -4,6 +4,7 @@ ensureMinFsThreadpoolSize(64);
 import * as vscode from "vscode";
 import * as path from "path";
 import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
+import { AntigravityCliProvider } from "./core/harness/antigravity/AntigravityCliProvider";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { WorkflowFileCompletionProvider } from "./completions/WorkflowFileCompletionProvider";
 import { getCtrlYokeFileGlobs } from "./completions/CtrlYokeFileKind";
@@ -290,6 +291,8 @@ export async function activate(context: vscode.ExtensionContext) {
       context,
       workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
     );
+    // Reclaim groups left by killed Antigravity runs without delaying startup.
+    void AntigravityCliProvider.sweepOrphanedGlobalHooks();
     // Samples heap growth into the session log. The one-time heap snapshot is
     // opt-in (CTRLYOKE_HEAP_SNAPSHOT_MB) and only written while a session log
     // file exists (dev or verbose logging).
