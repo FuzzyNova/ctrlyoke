@@ -1,5 +1,21 @@
 import * as fs from "fs/promises";
+import * as path from "node:path";
 import { randomBytes } from "crypto";
+
+/** Read an editable file, treating only a missing file as an empty document. */
+export async function readFileForEdit(
+  filePath: string,
+  missingContents: string
+): Promise<string> {
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return missingContents;
+    }
+    throw error;
+  }
+}
 
 /**
  * Atomic file replacement, hardened against the transient sharing failures
@@ -179,4 +195,20 @@ export async function writeFileAtomic(
     }
     throw error;
   }
+}
+
+/** Atomically replace a text file while preserving a symlink at its path. */
+export async function writeTextFileAtomic(
+  filePath: string,
+  contents: string
+): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  let targetPath = filePath;
+  try {
+    targetPath = await fs.realpath(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  await writeFileAtomic(targetPath, contents);
 }

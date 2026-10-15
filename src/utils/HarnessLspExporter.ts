@@ -1,6 +1,3 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import { randomUUID } from "node:crypto";
 import { applyEdits, modify, parse } from "jsonc-parser";
 import type { LanguageServerDefinition } from "../types/CtrlYokeSettings";
 import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
@@ -19,6 +16,7 @@ import {
   getQwenWorkspaceLspConfigPath,
 } from "./LspConfigPaths";
 import { detectFormattingOptions } from "./WorkflowSourceEditor";
+import { readFileForEdit, writeTextFileAtomic } from "./AtomicFileUtils";
 
 type JsonObject = Record<string, unknown>;
 export interface HarnessLspExportResult {
@@ -28,31 +26,6 @@ export interface HarnessLspExportResult {
 
 function isObject(value: unknown): value is JsonObject {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-async function read(pathname: string): Promise<string> {
-  try {
-    return await fs.readFile(pathname, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "{}";
-    throw error;
-  }
-}
-async function write(pathname: string, text: string): Promise<void> {
-  await fs.mkdir(path.dirname(pathname), { recursive: true });
-  let target = pathname;
-  try {
-    target = await fs.realpath(pathname);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  const temp = `${target}.${process.pid}.${randomUUID()}.tmp`;
-  try {
-    await fs.writeFile(temp, text, "utf8");
-    await fs.rename(temp, target);
-  } catch (error) {
-    await fs.unlink(temp).catch(() => undefined);
-    throw error;
-  }
 }
 function languageMap(
   definition: LanguageServerDefinition,
@@ -190,7 +163,7 @@ export class HarnessLspExporter {
     scope: SettingWriteScope
   ): Promise<HarnessLspExportResult> {
     const filePath = resolvePath(targetId, scope, this.workspaceRoot);
-    let text = await read(filePath);
+    let text = await readFileForEdit(filePath, "{}");
     const options = detectFormattingOptions(text, 2);
     const catalogMap = LANGUAGE_SERVER_CATALOG.find(
       (entry) => entry.id === id
@@ -270,7 +243,7 @@ export class HarnessLspExporter {
         text = applyEdits(text, edits);
       }
     }
-    await write(filePath, text);
+    await writeTextFileAtomic(filePath, text);
     return { filePath, exportedCount: 1 };
   }
 }

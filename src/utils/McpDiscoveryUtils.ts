@@ -515,6 +515,32 @@ function parseTomlMcpServerKey(
   return id ? { id, table } : null;
 }
 
+/** Return the owning MCP server id for a Codex TOML section or subtable. */
+export function getTomlMcpServerSectionId(sectionName: string): string | null {
+  const parsed = parseTomlMcpServerKey(sectionName);
+  if (parsed) return parsed.id;
+  if (!sectionName.startsWith("mcp_servers.")) return null;
+
+  const remainder = sectionName.slice("mcp_servers.".length).trim();
+  if (!remainder) return null;
+  if (remainder.startsWith('"') || remainder.startsWith("'")) {
+    const quote = remainder[0]!;
+    let escaped = false;
+    for (let index = 1; index < remainder.length; index += 1) {
+      const char = remainder[index]!;
+      if (char === quote && !escaped) {
+        const suffix = remainder.slice(index + 1);
+        return suffix.startsWith(".") ? unquoteTomlString(remainder.slice(0, index + 1)) : null;
+      }
+      escaped = char === "\\" && !escaped;
+      if (char !== "\\") escaped = false;
+    }
+    return null;
+  }
+  const dot = remainder.indexOf(".");
+  return dot < 0 ? remainder : remainder.slice(0, dot);
+}
+
 function normalizeCodexToml(
   text: string,
   source: LocalSource,
