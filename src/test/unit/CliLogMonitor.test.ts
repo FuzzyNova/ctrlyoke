@@ -69,6 +69,89 @@ async function withZeroDrainDeadline(body: () => Promise<void>): Promise<void> {
   }
 }
 
+interface FakeTimerClock {
+  capture(delay: number): (() => void) | undefined;
+  tickAsync(milliseconds: number): Promise<void>;
+}
+
+async function withFakeTimers(
+  body: (clock: FakeTimerClock) => Promise<void>
+): Promise<void> {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  const originalDateNow = Date.now;
+  let now = 0;
+  let nextId = 0;
+  const timers = new Map<
+    number,
+    { callback: (...args: unknown[]) => void; at: number; interval?: number }
+  >();
+  const schedule = (
+    callback: (...args: unknown[]) => void,
+    delay: number,
+    interval?: number
+  ): number => {
+    const id = ++nextId;
+    timers.set(id, { callback, at: now + Math.max(0, delay), interval });
+    return id;
+  };
+  const clear = (timer: unknown): void => {
+    timers.delete(Number(timer));
+  };
+  const flushMicrotasks = async (): Promise<void> => {
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  };
+
+  Date.now = () => now;
+  globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay = 0) =>
+    schedule(callback, delay)) as unknown as typeof setTimeout;
+  globalThis.clearTimeout = clear as typeof clearTimeout;
+  globalThis.setInterval = ((callback: (...args: unknown[]) => void, delay = 0) =>
+    schedule(callback, delay, Math.max(1, delay))) as unknown as typeof setInterval;
+  globalThis.clearInterval = clear as typeof clearInterval;
+
+  const clock: FakeTimerClock = {
+    capture: (delay) => {
+      const timer = [...timers.values()].find(
+        (candidate) => candidate.at - now === delay
+      );
+      return timer?.callback;
+    },
+    tickAsync: async (milliseconds) => {
+      const end = now + milliseconds;
+      while (true) {
+        const next = [...timers.entries()]
+          .filter(([, timer]) => timer.at <= end)
+          .sort((a, b) => a[1].at - b[1].at)[0];
+        if (!next) break;
+        const [id, timer] = next;
+        now = timer.at;
+        if (timer.interval) {
+          timer.at += timer.interval;
+        } else {
+          timers.delete(id);
+        }
+        timer.callback();
+        await flushMicrotasks();
+      }
+      now = end;
+      await flushMicrotasks();
+    },
+  };
+
+  try {
+    await body(clock);
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+    Date.now = originalDateNow;
+  }
+}
+
 suite("CliLogMonitor", () => {
   test("does not time out an unlimited prompt", async () => {
     const originalTimeoutReader =
@@ -132,6 +215,66 @@ suite("CliLogMonitor", () => {
         assert.strictEqual(result.success, false);
         assert.strictEqual(result.failureKind, FAILURE_KINDS.TIMEOUT);
         assert.strictEqual(result.timedOut, true);
+      } finally {
+        ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
+      }
+    });
+  });
+
+  test("keeps completion successful when timeout, cancellation, or PTY exit races the drain", async () => {
+    await withFakeTimers(async (clock) => {
+      const originalTimeoutReader =
+        ConfigurationUtils.getMaxPromptExecutionTimeMs;
+      ConfigurationUtils.getMaxPromptExecutionTimeMs = () => 500;
+      try {
+        for (const race of ["timeout", "cancellation", "pty-exit"] as const) {
+          let cancelling = false;
+          let ptyExit: { exitCode: number } | null = null;
+          let completeNotification!: () => void;
+          const monitor = new CliLogMonitor({
+            logParser: createParser(),
+            notificationMonitor: createNotificationMonitor({
+              monitorForCompletion: () =>
+                new Promise((resolve) => {
+                  completeNotification = () =>
+                    resolve({ completed: true, kind: "completion", data: {} });
+                }),
+            }),
+            runtimeState: {
+              getWorkspaceRoot: () => os.tmpdir(),
+              isCancelling: () => cancelling,
+              isPtyTerminated: () => ptyExit,
+            },
+            hostCallbacks: {
+              onStreamingEvents: () => undefined,
+              onResponseComplete: () => undefined,
+              logResponse: () => undefined,
+            },
+          });
+
+          const resultPromise = monitor.monitor(
+            "session.jsonl",
+            "session-1",
+            new Date(0),
+            "test-model"
+          );
+          for (let i = 0; i < 8 && !completeNotification; i++) {
+            await Promise.resolve();
+          }
+          const raceCallback = clock.capture(race === "timeout" ? 500 : 100);
+          assert.ok(raceCallback, `expected ${race} timer to be armed`);
+          completeNotification();
+          for (let i = 0; i < 8; i++) await Promise.resolve();
+
+          if (race === "cancellation") cancelling = true;
+          if (race === "pty-exit") ptyExit = { exitCode: 137 };
+          raceCallback();
+
+          await clock.tickAsync(2200);
+          const result = await resultPromise;
+          assert.strictEqual(result.success, true, `${race} changed completion`);
+          assert.strictEqual(result.failureKind, undefined);
+        }
       } finally {
         ConfigurationUtils.getMaxPromptExecutionTimeMs = originalTimeoutReader;
       }
