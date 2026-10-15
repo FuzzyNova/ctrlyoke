@@ -565,6 +565,7 @@ const OutputSectionInner: React.FC = () => {
     fileName,
     finalStep,
     historyOrderedEntries: historyOutputs?.orderedEntries,
+    liveOrderedEntries,
     hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
     isViewingHistory,
     steps,

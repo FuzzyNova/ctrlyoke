@@ -4,7 +4,11 @@ import { useOutputExport } from "@hooks/useOutputExport";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import type { OutputMessage } from "@utils/outputProjection";
 import { FINAL_STEP_PHASES } from "@/types/messages";
-import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_HISTORY_KINDS,
+  OUTPUT_MESSAGE_TYPES,
+} from "@root/types/DashboardConstants";
+import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 
 function makeCliMessage(
   index: number,
@@ -26,13 +30,42 @@ function makeCliMessage(
   };
 }
 
-const allMessages = [
-  makeCliMessage(0, "output one", 1),
-  makeCliMessage(1, "output two", 2),
-  makeCliMessage(2, "output three", 3),
-];
+const allMessages = [1, 2, 3].map((timestamp) => ({
+  ...makeCliMessage(0, "activity slice", timestamp),
+  isActivity: true,
+}));
 
-function renderExportHook() {
+const liveOrderedEntries: OrderedHistoryEntry[] = [0, 1, 2].map((index) => ({
+  kind: OUTPUT_HISTORY_KINDS.CLI,
+  target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index },
+  timestampMs: index + 1,
+  sequence: index + 1,
+  attemptIndex: 0,
+  prompt: ["one", "two", "three"][index],
+  cliOutput: {
+    structured: {
+      events: [
+        {
+          type: "text",
+          data: { text: `output ${["one", "two", "three"][index]}` },
+        },
+      ],
+      metadata: {},
+    },
+    elapsed: 1,
+    isStreaming: false,
+  },
+}));
+
+function renderExportHook({
+  isViewingHistory = false,
+  historyOrderedEntries,
+  liveEntries = liveOrderedEntries,
+}: {
+  isViewingHistory?: boolean;
+  historyOrderedEntries?: OrderedHistoryEntry[];
+  liveEntries?: OrderedHistoryEntry[];
+} = {}) {
   return renderHook(() =>
     useOutputExport({
       allMessages,
@@ -40,9 +73,10 @@ function renderExportHook() {
       executionState: "completed",
       fileName: "workflow",
       finalStep: null,
-      historyOrderedEntries: undefined,
+      historyOrderedEntries,
+      liveOrderedEntries: isViewingHistory ? undefined : liveEntries,
       hiddenTargetKeys: ["queue:1"],
-      isViewingHistory: false,
+      isViewingHistory,
       steps: [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
       totalSteps: 3,
     })
@@ -76,5 +110,33 @@ describe("useOutputExport", () => {
       content: string;
     };
     expect(message.content).toContain("output two");
+  });
+
+  it("exports one aggregate section for live activity slices", () => {
+    const { result } = renderExportHook({
+      liveEntries: [liveOrderedEntries[0]],
+    });
+
+    act(() => result.current.confirmExport());
+
+    const message = postMessage.mock.calls[0][0] as { content: string };
+    expect(message.content.match(/^## Step 1/m)).toHaveLength(1);
+    expect(message.content).toContain("output one");
+    expect(message.content).not.toContain("activity slice");
+    expect(result.current.totalCliSteps).toBe(1);
+  });
+
+  it("keeps history export on the aggregate ordered entries", () => {
+    const { result } = renderExportHook({
+      isViewingHistory: true,
+      historyOrderedEntries: liveOrderedEntries,
+    });
+
+    act(() => result.current.confirmExport());
+
+    const message = postMessage.mock.calls[0][0] as { content: string };
+    expect(message.content.match(/^## Step 1/m)).toHaveLength(1);
+    expect(message.content).toContain("output one");
+    expect(message.content).not.toContain("activity slice");
   });
 });
