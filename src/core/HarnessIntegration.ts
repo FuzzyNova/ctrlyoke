@@ -464,7 +464,7 @@ export abstract class HarnessIntegration {
   protected promptReadyEmitter = new TypedEmitter<{
     fullPrompt: string;
     cliCommand?: string;
-    cliCommandWasInjected?: boolean;
+    cliCommandSentToRunningTerminal?: boolean;
   }>();
   public readonly onPromptReady = this.promptReadyEmitter.event;
 
@@ -497,7 +497,7 @@ export abstract class HarnessIntegration {
    *
    * Asked of every other integration in the workflow before a dispatch resumes
    * that session: harnesses reject or corrupt `--resume` against a session another
-   * process still has open, including an idle inject-mode TUI left running for a
+   * process still has open, including an idle terminal-reuse TUI left running for a
    * later step. Default false — only PTY-backed integrations can hold one.
    */
   ownsLiveAiSession(_aiSessionId: string): boolean {
@@ -566,12 +566,12 @@ export abstract class HarnessIntegration {
 
   /**
    * Returns true if this integration can be reused for the next run without disposing
-   * and recreating it. True when inject mode is configured and the underlying PTY
-   * session is still alive with a known inject context.
+   * and recreating it. True when terminal reuse is configured and the underlying PTY
+   * session is still alive with a known running-terminal context.
    *
    * Overridden by CliIntegration; all other harnesses return false (default).
    */
-  canReuseForInject(): boolean {
+  canReuseRunningTerminal(): boolean {
     return false;
   }
 
@@ -582,8 +582,8 @@ export abstract class HarnessIntegration {
    * or a human typing directly into a still-open chat) rather than being
    * disposed the moment a run ends.
    *
-   * Distinct from `canReuseForInject()`, which is specifically about resuming
-   * a live PTY session for the *next prompt's* inject-mode dispatch — this is
+   * Distinct from `canReuseRunningTerminal()`, which is specifically about resuming
+   * a live PTY session for the *next prompt's* terminal-reuse dispatch — this is
    * about keeping a non-PTY integration's own long-lived watcher alive.
    *
    * Default: false. Overridden by non-PTY harness integrations that need a
@@ -596,7 +596,7 @@ export abstract class HarnessIntegration {
   /**
    * Reset per-run mutable state so the integration can be handed to a new workflow
    * execution without side-effects from the previous run.
-   * Called by WorkflowInstance when reusing a live integration via liveInjectIntegration.
+   * Called by WorkflowInstance when reusing a live integration via liveReusableIntegration.
    */
   resetForNewRun(): void {
     this.isCancelling = false;
@@ -607,7 +607,7 @@ export abstract class HarnessIntegration {
    * Register a one-shot callback that fires when the PTY session underlying this
    * integration exits (user killed the terminal, process crashed, etc.).
    * The callback is responsible for disposing the integration and clearing the
-   * WorkflowInstance.liveInjectIntegration reference.
+   * WorkflowInstance.liveReusableIntegration reference.
    *
    * Default: no-op for non-PTY harnesses. Overridden by CliIntegration.
    */
@@ -620,7 +620,7 @@ export abstract class HarnessIntegration {
    * integration is retained for reuse. Most harnesses load their hooks when
    * the process starts, so their workspace artifacts can be cleaned as soon as
    * execution completes. Harnesses that re-read hook configuration for an
-   * injected turn override this and defer cleanup until the integration exits.
+   * sent turn override this and defer cleanup until the integration exits.
    */
   shouldRetainWorkflowArtifactsForReuse(): boolean {
     return false;
@@ -805,7 +805,7 @@ export abstract class HarnessIntegration {
         });
         splitContext = await expander.expandContextSplit(rawPromptText);
         // Rewrite folder-name-prefixed refs to their resolved form inline,
-        // for consumers (simple-prompt fast path, direct PTY injection) that
+        // for consumers (simple-prompt fast path, prompts sent to a running terminal) that
         // send userPromptText verbatim instead of going through splitContext.
         userPromptText = await expander.sanitizeReferences(
           rawPromptText,
@@ -1074,9 +1074,9 @@ export abstract class HarnessIntegration {
   }
 
   /**
-   * Check if a prompt is safe to inject directly into a running TUI via PTY stdin.
+   * Check if a prompt is safe to send directly to a running TUI via PTY stdin.
    *
-   * Inject mode writes text to the PTY's stdin directly — no shell spawning, no
+   * Terminal reuse writes text to the PTY's stdin directly — no shell spawning, no
    * CreateProcess, no argument parsing. The only characters that must be excluded
    * are ASCII control codes that could disrupt the TUI or trigger input submission:
    *
@@ -1089,12 +1089,12 @@ export abstract class HarnessIntegration {
    * parsing occurs.
    *
    * @param promptText The prompt text to check
-   * @returns true if the prompt can be injected directly into the running TUI
+   * @returns true if the prompt can be sent directly to the running TUI
    */
-  protected isInjectablePrompt(promptText: string): boolean {
+  protected canSendToRunningTerminal(promptText: string): boolean {
     if (/[\x00-\x1f\x7f]/.test(promptText)) {
       Log.debug(
-        "[HarnessIntegration] Prompt contains control characters, using file-based passing for inject mode"
+        "[HarnessIntegration] Prompt contains control characters, using file-based passing for terminal reuse"
       );
       return false;
     }
@@ -1322,7 +1322,7 @@ export abstract class HarnessIntegration {
     return undefined;
   }
 
-  getLastCliCommandWasInjected(): boolean | undefined {
+  getLastCliCommandSentToRunningTerminal(): boolean | undefined {
     return undefined;
   }
 

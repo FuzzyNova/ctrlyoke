@@ -548,7 +548,7 @@ export class ContextExpander {
   /**
    * Rewrite `@file`, `#selection:`, and `#sym:` reference tokens in prompt text
    * so they carry a resolvable path even when the text is sent to the harness
-   * as-is (simple-prompt fast path, direct PTY injection) instead of going
+   * as-is (simple-prompt fast path, prompts sent to a running terminal) instead of going
    * through {@link expandContextSplit}'s attachment pipeline.
    *
    * Folder-name-prefixed refs (`root2/src/index.ts`, from a multi-root

@@ -215,7 +215,7 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Default no-op implementation — every event is `"other"`.
    * Harnesses whose log uses a `user` role for multiple distinct purposes
-   * (tool results, injected prompts, resume signals, genuine human follow-ups)
+   * (tool results, prompts sent to a running terminal, resume signals, genuine human follow-ups)
    * should override this. See `UserEventClassification` for details.
    */
   classifyUserEvent(

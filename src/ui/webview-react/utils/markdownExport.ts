@@ -484,7 +484,7 @@ export function generateMarkdownExport(
     } else if (item.type === OUTPUT_MESSAGE_TYPES.CLI) {
       const output = item.data as {
         cliCommand?: string;
-        cliCommandWasInjected?: boolean;
+        cliCommandSentToRunningTerminal?: boolean;
         workingDirectory?: string;
         source?: CliOutputType["source"];
         tokens?: {
@@ -536,11 +536,14 @@ export function generateMarkdownExport(
         const { header, body } = getCliCommandDisplayParts(
           output.cliCommand,
           output.workingDirectory,
-          output.cliCommandWasInjected
+          output.cliCommandSentToRunningTerminal
         );
         if (header) lines.push(`**${header}**`, "");
         lines.push(
-          fenceLiteral(body, output.cliCommandWasInjected ? "" : "bash")
+          fenceLiteral(
+            body,
+            output.cliCommandSentToRunningTerminal ? "" : "bash"
+          )
         );
         lines.push("");
       }

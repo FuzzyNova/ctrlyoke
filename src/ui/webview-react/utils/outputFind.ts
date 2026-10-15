@@ -185,7 +185,7 @@ export function getOutputRowSearchSegments(
           text: getCliCommandDisplayParts(
             row.command,
             row.workingDirectory,
-            row.wasInjected
+            row.sentToRunningTerminal
           ).body,
         },
       ]);

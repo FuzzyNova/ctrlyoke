@@ -124,7 +124,7 @@ export class WorkflowTaggedSink implements IDashboardSink {
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean,
+    reusesRunningTerminal?: boolean,
     executionMode?: ExecutionMode
   ): void {
     // workflowId is already the first param here — pass through as-is.
@@ -136,10 +136,10 @@ export class WorkflowTaggedSink implements IDashboardSink {
         totalSteps,
         isContinuation,
         preserveStepCount,
-        isInjectMode,
+        reusesRunningTerminal,
         executionMode
       );
-    } else if (isInjectMode) {
+    } else if (reusesRunningTerminal) {
       this.inner.updateExecutionStarted(
         workflowId,
         fileName,

@@ -205,7 +205,7 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
-    // Injected turns do not rebuild CLI arguments or hook registration, and
+    // Turns sent to a running terminal do not rebuild CLI arguments or hook registration, and
     // agy re-reads its global hook file when firing completion events.
     return true;
   }

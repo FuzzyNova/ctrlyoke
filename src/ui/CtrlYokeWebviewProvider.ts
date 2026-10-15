@@ -518,7 +518,7 @@ export class CtrlYokeWebviewProvider
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean,
+    reusesRunningTerminal?: boolean,
     executionMode?: ExecutionMode
   ): void {
     this.sink.updateExecutionStarted(
@@ -527,7 +527,7 @@ export class CtrlYokeWebviewProvider
       totalSteps,
       isContinuation,
       preserveStepCount,
-      isInjectMode,
+      reusesRunningTerminal,
       executionMode
     );
   }

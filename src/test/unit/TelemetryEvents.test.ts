@@ -123,7 +123,7 @@ suite("TelemetryEvents", () => {
       outcome: "completed",
       endConditionUsed: false,
       resumeSession: false,
-      injectMode: false,
+      reuseRunningTerminal: false,
     });
 
     assert.strictEqual(
@@ -145,7 +145,7 @@ suite("TelemetryEvents", () => {
       failureKind: "timeout",
       endConditionUsed: false,
       resumeSession: false,
-      injectMode: false,
+      reuseRunningTerminal: false,
     });
 
     assert.strictEqual(fake.calls[0].properties?.failureKind, "timeout");

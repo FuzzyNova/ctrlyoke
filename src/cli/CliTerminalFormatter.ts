@@ -870,7 +870,7 @@ export class CliTerminalFormatter {
           border,
           output.cliCommand,
           output.workingDirectory,
-          output.cliCommandWasInjected
+          output.cliCommandSentToRunningTerminal
         );
       }
       return;
@@ -1721,12 +1721,12 @@ export class CliTerminalFormatter {
     border: string,
     command: string,
     workingDirectory: string | undefined,
-    wasInjected: boolean | undefined
+    sentToRunningTerminal: boolean | undefined
   ): void {
     const { header, body } = getCliCommandDisplayParts(
       command,
       workingDirectory,
-      wasInjected
+      sentToRunningTerminal
     );
     if (header) console.log(`${border} ${chalk.bold.dim(header)}`);
     console.log(`${border} ${chalk.dim(body)}`);
@@ -1749,7 +1749,7 @@ export class CliTerminalFormatter {
       runIndex,
       cliCommand,
       workingDirectory,
-      cliCommandWasInjected,
+      cliCommandSentToRunningTerminal,
       includeStepPosition = true,
     } = data;
 
@@ -1759,7 +1759,7 @@ export class CliTerminalFormatter {
         chalk.yellow("│"),
         cliCommand,
         workingDirectory,
-        cliCommandWasInjected
+        cliCommandSentToRunningTerminal
       );
       return;
     }

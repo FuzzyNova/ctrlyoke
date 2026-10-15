@@ -141,7 +141,7 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.GENERAL,
     label: "Auto-focus output on execution",
     description:
-      "Automatically expand the output section when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal.",
+      "Automatically expand the output section when a prompt starts. Headless runs show Output; interactive and terminal-reuse runs show Terminal.",
   },
   "ui.openPromptsInSecondGroup": {
     id: "ui.openPromptsInSecondGroup",
@@ -358,13 +358,13 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.EXECUTION,
     label: "Close terminal on completion",
     description:
-      "Automatically close the terminal when a workflow completes. Turns off inject mode.",
+      "Automatically close the terminal when a workflow completes. Turns off terminal reuse.",
   },
-  "execution.injectMode": {
-    id: "execution.injectMode",
-    path: "execution.injectMode",
+  "execution.reuseRunningTerminal": {
+    id: "execution.reuseRunningTerminal",
+    path: "execution.reuseRunningTerminal",
     tab: GLOBAL_SETTINGS_TABS.EXECUTION,
-    label: "Inject mode (interactive)",
+    label: "Reuse running terminal (interactive)",
   },
   "commit.harness": {
     id: "commit.harness",

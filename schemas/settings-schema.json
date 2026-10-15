@@ -484,14 +484,14 @@
       "description": "Execution settings.",
       "additionalProperties": false,
       "properties": {
-        "injectMode": {
+        "reuseRunningTerminal": {
           "type": "boolean",
-          "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug. Interactive steps only, and only when the step resumes the previous session. Has no effect while `execution.closeTerminalOnComplete` is on.",
+          "description": "When true, keeps the TUI alive between prompts and sends follow-up prompts to the running terminal instead of restarting the harness. Faster, and avoids the Claude Code resume cache bug. Interactive steps only, and only when the step resumes the previous session. Has no effect while `execution.closeTerminalOnComplete` is on.",
           "default": true
         },
         "closeTerminalOnComplete": {
           "type": "boolean",
-          "description": "Automatically close the interactive terminal when execution completes. Turning this on disables `execution.injectMode`.",
+          "description": "Automatically close the interactive terminal when execution completes. Turning this on disables `execution.reuseRunningTerminal`.",
           "default": false
         },
         "autoDeleteTempFiles": {
@@ -748,7 +748,7 @@
         },
         "autoFocusOutputOnExecution": {
           "type": "boolean",
-          "description": "Automatically expand the output section and switch to the relevant output view when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal.",
+          "description": "Automatically expand the output section and switch to the relevant output view when a prompt starts. Headless runs show Output; interactive and terminal-reuse runs show Terminal.",
           "default": true
         },
         "openPromptsInSecondGroup": {

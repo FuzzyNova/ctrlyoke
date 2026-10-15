@@ -180,7 +180,7 @@ suite("mixed-mode workflow execution", () => {
       lastInteractiveContext = undefined;
     };
 
-    (integration as any).shouldUseInjectMode = () => false;
+    (integration as any).shouldReuseRunningTerminal = () => false;
     (integration as any).transportCoordinator.terminateCurrentPtySession = (
       reason: string
     ) => {

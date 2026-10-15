@@ -18,7 +18,7 @@ export interface CliExecutionSessionParams {
 
 export interface CliExecutionSessionSnapshot {
   cliCommand?: string;
-  cliCommandWasInjected?: boolean;
+  cliCommandSentToRunningTerminal?: boolean;
   parsedOutput?: UniversalCliOutput;
   result?: CliResult;
 }
@@ -37,11 +37,11 @@ export class CliExecutionSession {
   private attachedSkillNames?: string[];
   private actualPromptSentText?: string;
   private command?: string;
-  private commandWasInjected = false;
+  private commandSentToRunningTerminal = false;
   private parsed?: UniversalCliOutput;
   private cliResult?: CliResult;
   private extractedSessionIdValue?: string;
-  private injectModePrepared = false;
+  private terminalReusePrepared = false;
   private failureKindValue?: FailureKind;
   private failureMessageValue?: string;
 
@@ -74,7 +74,7 @@ export class CliExecutionSession {
     this.imageFiles = [...imageFileRefs];
     this.attachedSkillNames =
       attachedSkills === undefined ? undefined : [...attachedSkills];
-    this.injectModePrepared = false;
+    this.terminalReusePrepared = false;
   }
 
   addTempFilePath(tempFilePath: string): void {
@@ -93,12 +93,12 @@ export class CliExecutionSession {
     return [...this.deferredHookEnvironmentFiles];
   }
 
-  markInjectModePrepared(): void {
-    this.injectModePrepared = true;
+  markTerminalReusePrepared(): void {
+    this.terminalReusePrepared = true;
   }
 
-  get wasInjectModePrepared(): boolean {
-    return this.injectModePrepared;
+  get wasTerminalReusePrepared(): boolean {
+    return this.terminalReusePrepared;
   }
 
   recordCommandPrepared(info: {
@@ -107,13 +107,13 @@ export class CliExecutionSession {
   }): void {
     this.actualPromptSentText = info.promptArgument;
     this.command = info.cliCommand;
-    this.commandWasInjected = false;
+    this.commandSentToRunningTerminal = false;
   }
 
-  recordInjectedPrompt(promptArgument: string): void {
+  recordSentPrompt(promptArgument: string): void {
     this.actualPromptSentText = promptArgument;
     this.command = promptArgument;
-    this.commandWasInjected = true;
+    this.commandSentToRunningTerminal = true;
   }
 
   recordHeadlessResponse(collected: CollectedHeadlessResponse): void {
@@ -195,7 +195,8 @@ export class CliExecutionSession {
   toSnapshot(): CliExecutionSessionSnapshot {
     return {
       cliCommand: this.command,
-      cliCommandWasInjected: this.commandWasInjected || undefined,
+      cliCommandSentToRunningTerminal:
+        this.commandSentToRunningTerminal || undefined,
       parsedOutput: this.parsed,
       result: this.cliResult,
     };

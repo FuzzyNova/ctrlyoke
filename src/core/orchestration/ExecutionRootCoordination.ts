@@ -613,7 +613,7 @@ export class CoordinationParticipantRegistry {
 
   /**
    * Close ctrlyoke participants for a settled run target. Sequential
-   * participants are run-scoped because an injected PTY can retain an older
+   * participants are run-scoped because a reused PTY can retain an older
    * step index; grouped participants are narrowed by their group and step.
    */
   async closeRunParticipants(

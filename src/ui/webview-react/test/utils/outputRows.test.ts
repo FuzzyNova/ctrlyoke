@@ -1518,7 +1518,7 @@ describe("outputRows", () => {
     expect(result.lastCliIndexPerStep.get("queue:0")).toBe(0);
   });
 
-  it("marks injected prompt rows so they render without a workspace command prefix", () => {
+  it("marks sent prompt rows so they render without a workspace command prefix", () => {
     const result = buildOutputRows({
       allMessages: [
         {
@@ -1528,8 +1528,8 @@ describe("outputRows", () => {
           attemptIndex: 0,
           runIndex: 0,
           data: {
-            cliCommand: "Actual injected prompt text",
-            cliCommandWasInjected: true,
+            cliCommand: "Actual sent prompt text",
+            cliCommandSentToRunningTerminal: true,
             structured: {
               events: [{ type: "text", data: { text: "" } }],
               metadata: {},
@@ -1560,8 +1560,8 @@ describe("outputRows", () => {
       result.rows.find((row) => row.rowKind === OUTPUT_ROW_KINDS.CLI_COMMAND)
     ).toMatchObject({
       rowKind: OUTPUT_ROW_KINDS.CLI_COMMAND,
-      command: "Actual injected prompt text",
-      wasInjected: true,
+      command: "Actual sent prompt text",
+      sentToRunningTerminal: true,
     });
   });
 
@@ -2890,7 +2890,7 @@ describe("outputRows", () => {
         rowKind: OUTPUT_ROW_KINDS.CLI_COMMAND,
         target,
         command: text,
-        wasInjected: true,
+        sentToRunningTerminal: true,
         estimateSize: 0,
       }) as const;
 

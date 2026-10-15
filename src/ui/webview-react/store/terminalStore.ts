@@ -116,7 +116,7 @@ interface TerminalActions {
   /** Called on new run start — clears only ai-cli sessions; shell sessions survive */
   clearAiCliSessions: (workflowId: string) => void;
 
-  /** Revive a previously ended ai-cli session back to RUNNING (inject mode resume) */
+  /** Revive a previously ended ai-cli session back to RUNNING (terminal reuse resume) */
   resumeSession: (workflowId: string, sessionId: string) => void;
 
   /** Replace the global active-terminal set (ACTIVE_TERMINAL_WORKFLOWS broadcast) */

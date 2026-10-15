@@ -1419,7 +1419,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           prompt._runtime.resumeSession ??
           (isScript ? false : prompt.resumeSession)
         ),
-        injectMode: ConfigurationUtils.isInjectModeEnabled(),
+        reuseRunningTerminal:
+          ConfigurationUtils.isReuseRunningTerminalEnabled(),
       });
     }
     // Update in-memory fast-lookup cache (key = prompt index as string)

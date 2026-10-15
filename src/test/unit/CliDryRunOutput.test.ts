@@ -831,7 +831,7 @@ CliTerminalFormatter.renderParallelGroupProgress("research", 0, 1, 1);`);
   test("renders shared command lines for prompts and scripts", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "command", promptText: "do work", attemptIndex: 0, runIndex: 0, cliCommand: "codex exec", workingDirectory: "src/worktree" });
-CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "injected", promptText: "do work", attemptIndex: 0, runIndex: 0, cliCommand: "the injected prompt", cliCommandWasInjected: true });
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "sent", promptText: "do work", attemptIndex: 0, runIndex: 0, cliCommand: "the sent prompt", cliCommandSentToRunningTerminal: true });
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true, cliCommand: "npm test", workingDirectory: "scripts" }, { stepIndex: 0, stepName: "script", key: "script-directory" });`);
 
     assert.ok(output.includes("src/worktree> codex exec"));
@@ -840,7 +840,7 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
       line.includes("Prompt sent to running terminal:")
     );
     assert.ok(headerIndex >= 0);
-    assert.ok(lines[headerIndex + 1].includes("the injected prompt"));
+    assert.ok(lines[headerIndex + 1].includes("the sent prompt"));
     assert.ok(output.includes("scripts> npm test"));
   });
 

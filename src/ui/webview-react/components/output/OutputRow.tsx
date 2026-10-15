@@ -1876,7 +1876,7 @@ function OutputRowComponent({
       const { header, body } = getCliCommandDisplayParts(
         row.command,
         row.workingDirectory,
-        row.wasInjected
+        row.sentToRunningTerminal
       );
       content = (
         <div

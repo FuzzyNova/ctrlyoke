@@ -95,7 +95,7 @@ export class FileConfigBackend implements ConfigBackend {
     return this.state.cache;
   }
 
-  /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
+  /** Write a setting using dot-notation path (e.g. "execution.reuseRunningTerminal") */
   set(settingPath: string, value: unknown): Promise<PartialCtrlYokeSettings> {
     const pathParts = settingPath.split(".");
     const forbiddenSegment = pathParts.find((part) =>

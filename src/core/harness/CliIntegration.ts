@@ -565,22 +565,22 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
-   * Returns true when inject mode should be used for the given session.
+   * Returns true when terminal reuse should be used for the given session.
    *
    * Conditions:
-   * 1. The global injectMode setting is enabled.
+   * 1. The global reuseRunningTerminal setting is enabled.
    * 2. There is a previous interactive context (PTY + log file). This is set either
    *    by a previous prompt in the same integration run, or carried over from a prior
    *    run when WorkflowInstance re-inserts the live integration into executionIntegrations.
-   * 3. The prompt has resumeSession: true. Inject mode continues the existing
+   * 3. The prompt has resumeSession: true. Terminal reuse continues the existing
    *    conversation, which is semantically equivalent to resumeSession: true. A
    *    prompt with resumeSession: false requires a fresh process.
    * 4. The spawn-time configuration is compatible — model, tool permissions, hooks,
    *    MCP servers, and additional args must all match the spawned process. Any
    *    prompt-level override that changes these requires a fresh process instead.
    */
-  private shouldUseInjectMode(session: CliExecutionSession): boolean {
-    if (!ConfigurationUtils.isInjectModeEnabled()) {
+  private shouldReuseRunningTerminal(session: CliExecutionSession): boolean {
+    if (!ConfigurationUtils.isReuseRunningTerminalEnabled()) {
       return false;
     }
     const ctx = this.executionRunner.getLastInteractiveContext();
@@ -588,7 +588,7 @@ export class CliIntegration extends HarnessIntegration {
       return false;
     }
     const promptIndex = session.workflowContext?.promptIndex ?? 0;
-    const reason = CliIntegration.getInjectIncompatibilityReason(
+    const reason = CliIntegration.getTerminalReuseIncompatibilityReason(
       ctx,
       session.resolvedProperties,
       session.resolvedSessionId,
@@ -596,7 +596,7 @@ export class CliIntegration extends HarnessIntegration {
     );
     if (reason) {
       Log.info(
-        `[CliIntegration] Inject mode skipped for prompt ${promptIndex + 1}: ${reason} — using restart`
+        `[CliIntegration] Terminal reuse skipped for prompt ${promptIndex + 1}: ${reason} — using restart`
       );
       return false;
     }
@@ -604,14 +604,14 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Returns a human-readable reason why inject mode cannot be used, or null if compatible.
+   * Returns a human-readable reason why terminal reuse cannot be used, or null if compatible.
    *
    * Checks the spawn-time configuration fields that are fixed for the lifetime of a
    * Claude process. Any prompt-level override of these requires killing the current
    * process and restarting with the new args.
    */
-  private static getInjectIncompatibilityReason(
-    ctx: import("./shared/CliExecutionRunner").InteractiveInjectContext,
+  private static getTerminalReuseIncompatibilityReason(
+    ctx: import("./shared/CliExecutionRunner").RunningTerminalContext,
     curr: ResolvedProperties | undefined,
     currSessionId: string | undefined,
     parallelGroupId?: string
@@ -641,7 +641,7 @@ export class CliIntegration extends HarnessIntegration {
       return "parallel-group identity requires a fresh process";
     }
 
-    // Inject mode keeps the TUI alive and continues the existing conversation,
+    // Terminal reuse keeps the TUI alive and continues the existing conversation,
     // which is semantically equivalent to resumeSession: true. If the prompt
     // requests a fresh session, we must spawn a new process instead.
     if (!curr.resumeSession) {
@@ -820,12 +820,12 @@ export class CliIntegration extends HarnessIntegration {
     });
   }
 
-  private handleInjectedPromptPrepared(promptArgument: string): void {
-    this.activeSession?.recordInjectedPrompt(promptArgument);
+  private handleSentPromptPrepared(promptArgument: string): void {
+    this.activeSession?.recordSentPrompt(promptArgument);
     this.promptReadyEmitter.fire({
       fullPrompt: promptArgument,
       cliCommand: promptArgument,
-      cliCommandWasInjected: true,
+      cliCommandSentToRunningTerminal: true,
     });
   }
 
@@ -854,7 +854,7 @@ export class CliIntegration extends HarnessIntegration {
     this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
 
     // Notify WorkflowInstance that the PTY session is gone so it can clean up
-    // liveInjectIntegration and dispose this integration.
+    // liveReusableIntegration and dispose this integration.
     const endedCb = this.ptySessionEndedCallback;
     if (endedCb) {
       this.ptySessionEndedCallback = undefined;
@@ -942,7 +942,8 @@ export class CliIntegration extends HarnessIntegration {
       extractLeadingSlashCommand: (promptText) =>
         this.extractLeadingSlashCommand(promptText),
       isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
-      isInjectablePrompt: (promptText) => this.isInjectablePrompt(promptText),
+      canSendToRunningTerminal: (promptText) =>
+        this.canSendToRunningTerminal(promptText),
       buildPriorContextXmlFromItems: (items) =>
         this.buildPriorContextXmlFromItems(items),
       getWorkspaceRoot: () => this.getExecutionRoot(),
@@ -1076,14 +1077,14 @@ export class CliIntegration extends HarnessIntegration {
 
   private async initializeExecutionSession(
     session: CliExecutionSession,
-    injectMode = false
+    reuseRunningTerminal = false
   ): Promise<void> {
     const prepared = await this.promptPreparer.preparePrompt(
       session.prompt,
       session.workflowContext,
       session.resolvedProperties,
       session.resolvedSessionId,
-      injectMode
+      reuseRunningTerminal
     );
 
     if (prepared.diagnostics.length > 0) {
@@ -1145,8 +1146,8 @@ export class CliIntegration extends HarnessIntegration {
       }
     }
 
-    if (injectMode) {
-      session.markInjectModePrepared();
+    if (reuseRunningTerminal) {
+      session.markTerminalReusePrepared();
     }
   }
 
@@ -1188,34 +1189,34 @@ export class CliIntegration extends HarnessIntegration {
     const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
     const workspaceRoot = this.getExecutionRoot();
 
-    // Inject mode: write directly into the running TUI instead of killing and
+    // Terminal reuse: write directly into the running TUI instead of killing and
     // restarting with --resume. Works for sequential follow-up prompts within a
     // run AND for the first prompt of a resumed workflow — when the integration is
-    // reused via WorkflowInstance.liveInjectIntegration, lastInteractiveContext is
-    // already populated and shouldUseInjectMode passes without needing promptIndex > 0.
-    if (isInteractive && this.shouldUseInjectMode(session)) {
-      this.handleInjectedPromptPrepared(session.promptArgument);
+    // reused via WorkflowInstance.liveReusableIntegration, lastInteractiveContext is
+    // already populated and shouldReuseRunningTerminal passes without needing promptIndex > 0.
+    if (isInteractive && this.shouldReuseRunningTerminal(session)) {
+      this.handleSentPromptPrepared(session.promptArgument);
       const executionSidecar = this.startProviderExecutionSidecar(
         session,
         workspaceRoot
       );
-      let injectResult;
+      let reuseResult;
       try {
-        injectResult =
-          await this.executionRunner.executeInteractiveInject(session);
+        reuseResult =
+          await this.executionRunner.executeInRunningTerminal(session);
       } finally {
         executionSidecar?.stop();
       }
-      if (injectResult.injected) {
-        return injectResult.success;
+      if (reuseResult.sent) {
+        return reuseResult.success;
       }
       // Fall through to restart mode if the PTY is no longer available.
       Log.info(
-        "[CliIntegration] Inject mode unavailable — falling back to restart mode"
+        "[CliIntegration] Terminal reuse unavailable — falling back to restart mode"
       );
       await this.retireInteractivePtyForRestartFallback();
     } else if (isInteractive && this.transportCoordinator.hasLivePtySession()) {
-      // Inject mode was preemptively skipped (settings changed, resumeSession: false,
+      // Terminal reuse was preemptively skipped (settings changed, resumeSession: false,
       // etc.) but a live PTY from the previous step is still running. Gracefully signal
       // it before spawning a fresh one so the CLI TUI can clean up.
       //
@@ -1234,15 +1235,18 @@ export class CliIntegration extends HarnessIntegration {
       await this.retireInteractivePtyForRestartFallback();
     }
 
-    // If the session was prepared with inject-lenient rules (which can leave
+    // If the session was prepared with reuse-lenient rules (which can leave
     // prompts inline that contain shell-unsafe characters), re-prepare strictly
-    // before any non-inject execution path (restart or headless). This covers:
-    //   1. Inject attempted but PTY died → fell through above.
-    //   2. shouldUseInjectMode was true in sendPrompt (prep was lenient) but
+    // before any non-reuse execution path (restart or headless). This covers:
+    //   1. Terminal reuse attempted but PTY died → fell through above.
+    //   2. shouldReuseRunningTerminal was true in sendPrompt (prep was lenient) but
     //      returned false here (context changed between prep and dispatch).
     // Only text-only prompts (no temp files) can reach this branch, so there
     // are no orphaned files to clean up.
-    if (session.wasInjectModePrepared && session.tempFilePaths.length === 0) {
+    if (
+      session.wasTerminalReusePrepared &&
+      session.tempFilePaths.length === 0
+    ) {
       await this.initializeExecutionSession(session, false);
     }
 
@@ -1393,7 +1397,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Inject mode failed (PTY unavailable) so we are doing a full interactive restart
+   * Terminal reuse failed (PTY unavailable) so we are doing a full interactive restart
    * for this prompt. The old PTY session may still be alive or may exit soon; either
    * way its exit must not be treated as a failure for the new step — which is
    * why this is the one caller that suppresses the *last known* PTY's exit and
@@ -1401,7 +1405,7 @@ export class CliIntegration extends HarnessIntegration {
    */
   private async retireInteractivePtyForRestartFallback(): Promise<void> {
     await this.retireInteractivePty({
-      reason: "inject fallback restart",
+      reason: "reuse fallback restart",
       suppressLastKnownPty: true,
       resetFailureTracker: true,
     });
@@ -1409,7 +1413,7 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * Shared teardown for every reason this integration abandons its interactive
-   * PTY: terminate it, stop inject mode from retrying against the dead session,
+   * PTY: terminate it, stop terminal reuse from retrying against the dead session,
    * and mark the pending exit as an intentional handoff rather than a step
    * failure. Returns the terminated PTY session id, if one was still live.
    */
@@ -1418,7 +1422,7 @@ export class CliIntegration extends HarnessIntegration {
     reason: string;
     /**
      * Also suppress the exit of a PTY the coordinator has already forgotten.
-     * Only the inject-fallback path wants this: it gets here precisely because
+     * Only the reuse-fallback path wants this: it gets here precisely because
      * the PTY may have died on its own moments earlier.
      */
     suppressLastKnownPty?: boolean;
@@ -1481,7 +1485,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Inject mode intentionally leaves the interactive TUI alive between prompts.
+   * Terminal reuse intentionally leaves the interactive TUI alive between prompts.
    * If the user switches to headless before a resume prompt, that headless
    * process must become the only owner of the resumed AI session; otherwise
    * some harnesses reject or corrupt concurrent access to the same session.
@@ -1659,7 +1663,7 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * Prepare and write a steer turn without entering the workflow execution
-   * pipeline. The PTY writer owns serialization with ordinary inject turns.
+   * pipeline. The PTY writer owns serialization with ordinary sent turns.
    */
   override async sendSteerMessage(text: string): Promise<boolean> {
     // During a monitored prompt, CliLogMonitor already owns the parser. Only
@@ -1765,8 +1769,8 @@ export class CliIntegration extends HarnessIntegration {
     return this.lastExecutionSnapshot?.cliCommand;
   }
 
-  override getLastCliCommandWasInjected(): boolean | undefined {
-    return this.lastExecutionSnapshot?.cliCommandWasInjected;
+  override getLastCliCommandSentToRunningTerminal(): boolean | undefined {
+    return this.lastExecutionSnapshot?.cliCommandSentToRunningTerminal;
   }
 
   override getLastFailureOutput(): string | undefined {
@@ -2019,19 +2023,20 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Returns true when inject mode is configured AND the last run left a live PTY
-   * session with known inject context. WorkflowInstance checks this in the
+   * Returns true when terminal reuse is configured AND the last run left a live PTY
+   * session with known running-terminal context. WorkflowInstance checks this in the
    * startWorkflowExecution finally block to decide whether to keep this integration
    * alive for the next run instead of disposing it.
    */
-  override canReuseForInject(): boolean {
-    const injectMode = ConfigurationUtils.isInjectModeEnabled();
+  override canReuseRunningTerminal(): boolean {
+    const reuseRunningTerminal =
+      ConfigurationUtils.isReuseRunningTerminalEnabled();
     const hasCtx = this.executionRunner.hasInteractiveContext();
     const hasPty = this.transportCoordinator.hasLivePtySession();
     Log.debug(
-      `[canReuseForInject] injectMode=${injectMode} hasCtx=${hasCtx} hasPty=${hasPty}`
+      `[canReuseRunningTerminal] reuseRunningTerminal=${reuseRunningTerminal} hasCtx=${hasCtx} hasPty=${hasPty}`
     );
-    return injectMode && hasCtx && hasPty;
+    return reuseRunningTerminal && hasCtx && hasPty;
   }
 
   /**
@@ -2049,7 +2054,7 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * Register a one-shot callback that fires when the PTY session underlying this
-   * integration exits. Used by WorkflowInstance to clean up liveInjectIntegration
+   * integration exits. Used by WorkflowInstance to clean up liveReusableIntegration
    * when the user kills the terminal between runs.
    */
   override onPtySessionEnded(callback: () => void): void {
@@ -2190,7 +2195,7 @@ export class CliIntegration extends HarnessIntegration {
       this.resetCancellationFlag();
       this.failureTracker.reset();
 
-      // Create session without prompt preparation so we can check inject mode
+      // Create session without prompt preparation so we can check terminal reuse
       // before deciding which inline-check rules to apply.
       executionSession = this.createUnpreparedExecutionSession(
         prompt,
@@ -2201,9 +2206,12 @@ export class CliIntegration extends HarnessIntegration {
       const isInteractive =
         this.sessionExecutionMode(executionSession) ===
         CLI_EXECUTION_MODE.INTERACTIVE;
-      const injectMode =
-        isInteractive && this.shouldUseInjectMode(executionSession);
-      await this.initializeExecutionSession(executionSession, injectMode);
+      const reuseRunningTerminal =
+        isInteractive && this.shouldReuseRunningTerminal(executionSession);
+      await this.initializeExecutionSession(
+        executionSession,
+        reuseRunningTerminal
+      );
 
       // Log prompt
       this.logPrompt(executionSession.promptArgument);

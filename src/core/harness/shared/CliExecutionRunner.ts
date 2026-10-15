@@ -88,15 +88,15 @@ export interface CliExecutionRunnerDeps {
   };
 }
 
-/** State captured after a successful interactive execution, used by inject mode. */
-export interface InteractiveInjectContext {
+/** State captured after a successful interactive execution, used by terminal reuse. */
+export interface RunningTerminalContext {
   /** Absolute path to the session log file being monitored. */
   logPath: string;
   /** Claude / AI session ID (null if not yet extracted). */
   sessionId: string | null;
   /**
    * The resolved properties used when the process was spawned.
-   * Inject mode compares these against the next prompt's resolved properties to
+   * Terminal reuse compares these against the next prompt's resolved properties to
    * detect incompatible spawn-time config changes (model, permissions, hooks, etc.)
    * that would require a fresh process instead.
    */
@@ -106,21 +106,21 @@ export interface InteractiveInjectContext {
 }
 
 export class CliExecutionRunner {
-  private static readonly INJECT_FOCUS_PULSE_COUNT = 2;
-  private static readonly INJECT_PROMPT_CHUNK_SIZE = 256;
-  private static readonly INJECT_FOCUS_SETTLE_DELAY_MS = 50;
-  private static readonly INJECT_CHUNK_DELAY_MS = 20;
-  private static readonly INJECT_PRE_SUBMIT_DELAY_MS = 200;
-  private static readonly INJECT_SUBMIT_PULSE_COUNT = 2;
-  private static readonly INJECT_SUBMIT_DELAY_MS = 75;
+  private static readonly TERMINAL_SEND_FOCUS_PULSE_COUNT = 2;
+  private static readonly TERMINAL_SEND_PROMPT_CHUNK_SIZE = 256;
+  private static readonly TERMINAL_SEND_FOCUS_SETTLE_DELAY_MS = 50;
+  private static readonly TERMINAL_SEND_CHUNK_DELAY_MS = 20;
+  private static readonly TERMINAL_SEND_PRE_SUBMIT_DELAY_MS = 200;
+  private static readonly TERMINAL_SEND_SUBMIT_PULSE_COUNT = 2;
+  private static readonly TERMINAL_SEND_SUBMIT_DELAY_MS = 75;
 
   /**
    * Context from the most recent successful interactive execution.
    * Set after `executeInTerminal` succeeds and cleared on reset/cancel.
-   * When inject mode is active, the next prompt reuses this instead of spawning
+   * When terminal reuse is active, the next prompt reuses this instead of spawning
    * a fresh PTY session.
    */
-  private lastInteractiveContext?: InteractiveInjectContext;
+  private lastInteractiveContext?: RunningTerminalContext;
   private readonly persistedSessionIds = new WeakMap<
     CliExecutionSession,
     string
@@ -164,7 +164,7 @@ export class CliExecutionRunner {
   }
 
   /**
-   * Returns true when there is a previous interactive context available for inject mode.
+   * Returns true when there is a previous interactive context available for terminal reuse.
    * Callers should also check `getLastInteractiveContext()` to verify spawn-arg compatibility.
    */
   hasInteractiveContext(): boolean {
@@ -175,13 +175,13 @@ export class CliExecutionRunner {
    * Returns the context captured from the most recent successful interactive execution,
    * or undefined if no prior interactive execution has completed.
    */
-  getLastInteractiveContext(): InteractiveInjectContext | undefined {
+  getLastInteractiveContext(): RunningTerminalContext | undefined {
     return this.lastInteractiveContext;
   }
 
   /**
    * Clear the retained interactive context after its PTY has been intentionally
-   * retired. Without this, a later run can incorrectly believe inject mode is
+   * retired. Without this, a later run can incorrectly believe terminal reuse is
    * still available.
    */
   clearInteractiveContext(): void {
@@ -189,33 +189,33 @@ export class CliExecutionRunner {
   }
 
   /**
-   * Execute the next prompt by injecting it into the already-running PTY session.
+   * Execute the next prompt by sending it to the already-running PTY session.
    *
-   * Inject mode skips PTY spawn and SessionStart waiting. It writes the prepared
+   * Terminal reuse skips PTY spawn and SessionStart waiting. It writes the prepared
    * prompt text directly into the TUI (as if the user typed it and pressed Enter),
    * then monitors the existing log file from the current time forward.
    *
    * Prerequisites: `hasInteractiveContext()` must return true and the PTY session
    * from the prior prompt must still be running.
    *
-   * @returns `{ injected: false }` when the PTY is unavailable (caller should fall back).
-   *          `{ injected: true, success }` when the inject and monitoring completed.
+   * @returns `{ sent: false }` when the PTY is unavailable (caller should fall back).
+   *          `{ sent: true, success }` when the send and monitoring completed.
    */
-  async executeInteractiveInject(
+  async executeInRunningTerminal(
     session: CliExecutionSession
-  ): Promise<{ injected: false } | { injected: true; success: boolean }> {
+  ): Promise<{ sent: false } | { sent: true; success: boolean }> {
     if (!this.lastInteractiveContext) {
       Log.warn(
-        "[CliExecutionRunner] Inject mode: no previous interactive context — PTY may not be running"
+        "[CliExecutionRunner] Terminal reuse: no previous interactive context — PTY may not be running"
       );
-      return { injected: false };
+      return { sent: false };
     }
 
     const startTime = new Date();
 
     const written = await this.writeTurnToLivePty(session.promptArgument);
     if (!written) {
-      return { injected: false };
+      return { sent: false };
     }
 
     this.deps.transportCoordinator.updateCurrentPtySessionMetadata?.(
@@ -223,7 +223,7 @@ export class CliExecutionRunner {
     );
 
     Log.info(
-      `[CliExecutionRunner] Injected prompt into existing PTY session (${session.promptArgument.length} chars)`
+      `[CliExecutionRunner] Sent prompt to existing PTY session (${session.promptArgument.length} chars)`
     );
 
     try {
@@ -245,12 +245,12 @@ export class CliExecutionRunner {
         result.sessionId ?? this.lastInteractiveContext.sessionId ?? undefined
       );
 
-      // Propagate any updated session ID into the inject context for the next prompt.
+      // Propagate any updated session ID into the running-terminal context for the next prompt.
       if (result.sessionId) {
         this.lastInteractiveContext.sessionId = result.sessionId;
       }
 
-      return { injected: true, success: result.success };
+      return { sent: true, success: result.success };
     } finally {
       await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
     }
@@ -278,28 +278,30 @@ export class CliExecutionRunner {
       // while an occasional dropped submit is not.
       const focusIn = "\x1b[I";
       const submit = "\r";
-      const promptChunks = this.chunkInjectPrompt(
+      const promptChunks = this.chunkTerminalPrompt(
         text,
-        CliExecutionRunner.INJECT_PROMPT_CHUNK_SIZE
+        CliExecutionRunner.TERMINAL_SEND_PROMPT_CHUNK_SIZE
       );
       Log.trace(
-        `[inject] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT) + text + submit.repeat(CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT)).toString("hex")}`
+        `[reuse] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.TERMINAL_SEND_FOCUS_PULSE_COUNT) + text + submit.repeat(CliExecutionRunner.TERMINAL_SEND_SUBMIT_PULSE_COUNT)).toString("hex")}`
       );
 
       for (
         let pulse = 0;
-        pulse < CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT;
+        pulse < CliExecutionRunner.TERMINAL_SEND_FOCUS_PULSE_COUNT;
         pulse += 1
       ) {
         const focused =
           this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
         if (!focused) {
           Log.warn(
-            "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
+            "[CliExecutionRunner] Terminal reuse: PTY session not active — TUI may have exited"
           );
           return false;
         }
-        await this.delay(CliExecutionRunner.INJECT_FOCUS_SETTLE_DELAY_MS);
+        await this.delay(
+          CliExecutionRunner.TERMINAL_SEND_FOCUS_SETTLE_DELAY_MS
+        );
       }
 
       for (const chunk of promptChunks) {
@@ -307,18 +309,18 @@ export class CliExecutionRunner {
           this.deps.transportCoordinator.writeToCurrentPtySession(chunk);
         if (!promptWritten) {
           Log.warn(
-            "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
+            "[CliExecutionRunner] Terminal reuse: PTY session not active — TUI may have exited"
           );
           return false;
         }
-        await this.delay(CliExecutionRunner.INJECT_CHUNK_DELAY_MS);
+        await this.delay(CliExecutionRunner.TERMINAL_SEND_CHUNK_DELAY_MS);
       }
 
-      await this.delay(CliExecutionRunner.INJECT_PRE_SUBMIT_DELAY_MS);
+      await this.delay(CliExecutionRunner.TERMINAL_SEND_PRE_SUBMIT_DELAY_MS);
 
       for (
         let pulse = 0;
-        pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT;
+        pulse < CliExecutionRunner.TERMINAL_SEND_SUBMIT_PULSE_COUNT;
         pulse += 1
       ) {
         const submitWritten =
@@ -326,13 +328,13 @@ export class CliExecutionRunner {
 
         if (!submitWritten) {
           Log.warn(
-            "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
+            "[CliExecutionRunner] Terminal reuse: PTY session not active — TUI may have exited"
           );
           return false;
         }
 
-        if (pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT - 1) {
-          await this.delay(CliExecutionRunner.INJECT_SUBMIT_DELAY_MS);
+        if (pulse < CliExecutionRunner.TERMINAL_SEND_SUBMIT_PULSE_COUNT - 1) {
+          await this.delay(CliExecutionRunner.TERMINAL_SEND_SUBMIT_DELAY_MS);
         }
       }
 
@@ -345,7 +347,7 @@ export class CliExecutionRunner {
 
       if (this.deps.failureTracker.getPtyTermination()) {
         Log.warn(
-          "[CliExecutionRunner] Inject mode: PTY process exited immediately after write — TUI does not support injection (prompt sent to dead process). Falling back to restart mode."
+          "[CliExecutionRunner] Terminal reuse: PTY process exited immediately after write — TUI does not accept prompts sent to a running terminal (prompt sent to dead process). Falling back to restart mode."
         );
         return false;
       }
@@ -697,10 +699,10 @@ export class CliExecutionRunner {
         return { success: false };
       }
 
-      // Capture context for potential inject-mode follow-up prompts. A
+      // Capture context for potential terminal-reuse follow-up prompts. A
       // standalone TUI is ended after every turn, so it leaves nothing to
-      // inject into.
-      const injectContext: InteractiveInjectContext | undefined =
+      // send into.
+      const runningTerminalContext: RunningTerminalContext | undefined =
         usesInheritedStdio
           ? undefined
           : {
@@ -709,7 +711,7 @@ export class CliExecutionRunner {
               spawnedWith: session.resolvedProperties,
               spawnedWithSessionId: session.resolvedSessionId,
             };
-      this.lastInteractiveContext = injectContext;
+      this.lastInteractiveContext = runningTerminalContext;
 
       await this.persistResolvedSessionId(
         session,
@@ -721,10 +723,10 @@ export class CliExecutionRunner {
         startTime,
       });
 
-      // Keep the inject context in sync with the latest session ID in case
+      // Keep the running-terminal context in sync with the latest session ID in case
       // the log monitor extracted a new one during this run.
-      if (injectContext && result.sessionId) {
-        injectContext.sessionId = result.sessionId;
+      if (runningTerminalContext && result.sessionId) {
+        runningTerminalContext.sessionId = result.sessionId;
       }
 
       return result;
@@ -1044,7 +1046,7 @@ export class CliExecutionRunner {
     return undefined;
   }
 
-  private chunkInjectPrompt(prompt: string, chunkSize: number): string[] {
+  private chunkTerminalPrompt(prompt: string, chunkSize: number): string[] {
     if (prompt.length <= chunkSize) {
       return [prompt];
     }

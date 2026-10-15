@@ -167,7 +167,7 @@ export interface WorkflowContext {
    * the AI session this prompt is about to resume, and close its terminal.
    *
    * Harnesses reject or corrupt a `--resume` of a session another process still
-   * holds open — including a finished inject-mode TUI left running for a later
+   * holds open — including a finished terminal-reuse TUI left running for a later
    * step — so the takeover has to be ordered: kill, await exit, then spawn.
    * `requester` is excluded; it retires its own PTY through its own paths.
    */

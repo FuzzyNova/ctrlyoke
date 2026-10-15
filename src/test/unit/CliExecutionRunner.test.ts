@@ -13,7 +13,7 @@ import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import {
   CliExecutionRunner,
-  type InteractiveInjectContext,
+  type RunningTerminalContext,
 } from "../../core/harness/shared/CliExecutionRunner";
 import { CliFailureTracker } from "../../core/harness/shared/CliFailureTracker";
 import { CliTransportError } from "../../core/harness/shared/CliTransportError";
@@ -535,8 +535,8 @@ suite("CliExecutionRunner", () => {
 
     try {
       assert.deepStrictEqual(
-        await counters.runner.executeInteractiveInject(session),
-        { injected: true, success: true }
+        await counters.runner.executeInRunningTerminal(session),
+        { sent: true, success: true }
       );
       await fs.access(tempPath);
     } finally {
@@ -660,7 +660,7 @@ suite("CliExecutionRunner", () => {
     assert.match(failureReason, /discovering the session log/iu);
   });
 
-  test("should send inject prompt in chunks with repeated focus and submit pulses", async function () {
+  test("should send a running-terminal prompt in chunks with repeated focus and submit pulses", async function () {
     const writes: string[] = [];
     const prompt = "x".repeat(300);
     const { runner, failureTracker } = createRunner({
@@ -675,14 +675,14 @@ suite("CliExecutionRunner", () => {
 
     (
       runner as unknown as {
-        lastInteractiveContext?: InteractiveInjectContext;
+        lastInteractiveContext?: RunningTerminalContext;
       }
     ).lastInteractiveContext = {
       logPath: "test.log",
       sessionId: "test-session",
     };
 
-    const result = await runner.executeInteractiveInject(
+    const result = await runner.executeInRunningTerminal(
       new CliExecutionSession({ prompt: { prompt } })
     );
 
@@ -694,7 +694,7 @@ suite("CliExecutionRunner", () => {
       "\r",
       "\r",
     ]);
-    assert.deepStrictEqual(result, { injected: false });
+    assert.deepStrictEqual(result, { sent: false });
   });
 
   test("should return false when a live PTY write fails", async function () {
@@ -968,7 +968,7 @@ suite("CliExecutionRunner", () => {
       // The TUI is ended only once the monitor has drained the session log.
       assert.strictEqual(terminationsWhileMonitoring, 0);
       assert.strictEqual(getStandaloneTerminations(), 1);
-      // Nothing is left running to inject a later step into.
+      // Nothing is left running to send a later step to.
       assert.strictEqual(runner.hasInteractiveContext(), false);
     });
 

@@ -94,7 +94,7 @@ export function reportPromptCompleted(props: {
   failureKind?: FailureKind;
   endConditionUsed: boolean;
   resumeSession: boolean;
-  injectMode: boolean;
+  reuseRunningTerminal: boolean;
 }): void {
   const reporter = getTelemetry();
   if (!reporter) {

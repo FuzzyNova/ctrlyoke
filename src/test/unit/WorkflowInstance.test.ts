@@ -625,7 +625,7 @@ suite("WorkflowInstance steer dispatch", () => {
     integration.setActivitySessionId(session.id);
     const ptyManager = initPtyProcessManager(() => undefined);
     ptyManager.getSession = () => session;
-    (instance as any).liveInjectIntegrations.set(
+    (instance as any).liveReusableIntegrations.set(
       integrationCacheKey(
         createResolvedProperties({ harness: HARNESS_IDS.COPILOT_CLI })
       ),
@@ -3574,7 +3574,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
       disposeCalls = 0;
       private ptyEndedCallback: (() => void) | undefined;
 
-      override canReuseForInject(): boolean {
+      override canReuseRunningTerminal(): boolean {
         return true;
       }
 
@@ -3628,7 +3628,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
     assert.strictEqual(
       integration.cleanupCalls,
       0,
-      "completion hooks must remain installed while the integration can receive another injected prompt"
+      "completion hooks must remain installed while the integration can receive another sent prompt"
     );
     assert.strictEqual(integration.disposeCalls, 0);
 
@@ -3649,7 +3649,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
       disposeCalls = 0;
       private ptyEndedCallback: (() => void) | undefined;
 
-      override canReuseForInject(): boolean {
+      override canReuseRunningTerminal(): boolean {
         return true;
       }
 
@@ -3704,7 +3704,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
     assert.strictEqual(
       integration.disposeCalls,
       0,
-      "the reusable PTY integration should remain available for injection"
+      "the reusable PTY integration should remain available for terminal reuse"
     );
 
     integration.firePtyEnded();
@@ -3784,13 +3784,13 @@ suite("WorkflowInstance retained integration artifacts", () => {
     );
   });
 
-  test("retains the PTY and worktree reservation when a named-worktree run settles with an injectable PTY", async () => {
-    class InjectableIntegration extends MockHarnessIntegration {
+  test("retains the PTY and worktree reservation when a named-worktree run settles with a reusable PTY", async () => {
+    class ReusableTerminalIntegration extends MockHarnessIntegration {
       disposeCalls = 0;
       gracefulCloseCalls = 0;
       private ptyEndedCallback: (() => void) | undefined;
 
-      override canReuseForInject(): boolean {
+      override canReuseRunningTerminal(): boolean {
         return true;
       }
 
@@ -3822,7 +3822,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
       () => {},
       process.cwd()
     );
-    const integration = new InjectableIntegration(undefined, false);
+    const integration = new ReusableTerminalIntegration(undefined, false);
     let leaseReleaseCalls = 0;
     let runnerLockReleaseCalls = 0;
     let runtimeTrustReleaseCalls = 0;
@@ -3868,13 +3868,13 @@ suite("WorkflowInstance retained integration artifacts", () => {
     );
     assert.strictEqual(integration.gracefulCloseCalls, 0);
     assert.strictEqual(
-      (instance as any).liveInjectIntegrations.get(
+      (instance as any).liveReusableIntegrations.get(
         integrationCacheKey(
           createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
         )
       ),
       integration,
-      "the integration must be parked so the next run can reuse it via inject"
+      "the integration must be parked so the next run can reuse its terminal"
     );
     assert.ok(
       (instance as any).activeWorktree,
@@ -3904,10 +3904,10 @@ suite("WorkflowInstance retained integration artifacts", () => {
       }
     }
 
-    class InjectableIntegration extends MockHarnessIntegration {
+    class ReusableTerminalIntegration extends MockHarnessIntegration {
       private ptyEndedCallback: (() => void) | undefined;
 
-      override canReuseForInject(): boolean {
+      override canReuseRunningTerminal(): boolean {
         return true;
       }
 
@@ -3930,7 +3930,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
       () => {},
       process.cwd()
     );
-    const injectable = new InjectableIntegration(undefined, false);
+    const injectable = new ReusableTerminalIntegration(undefined, false);
     const ordinary = new DisposableIntegration(undefined, false);
     let leaseReleaseCalls = 0;
     let runnerLockReleaseCalls = 0;
@@ -3974,7 +3974,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
       "a non-reusable integration must be disposed at worktree settlement"
     );
     assert.strictEqual(
-      (instance as any).liveInjectIntegrations.size,
+      (instance as any).liveReusableIntegrations.size,
       1,
       "only the reusable PTY may remain parked"
     );
@@ -4021,7 +4021,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
     const disposedPrevious = new RetainedTerminalIntegration(undefined, false);
     const livePrevious = new RetainedTerminalIntegration(undefined, false);
     (instance as any).lastRunIntegrations = [disposedPrevious];
-    (instance as any).liveInjectIntegrations.set(
+    (instance as any).liveReusableIntegrations.set(
       integrationCacheKey(
         createResolvedProperties({ harness: HARNESS_IDS.OPENCODE_CLI })
       ),
@@ -4034,7 +4034,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
     assert.strictEqual(livePrevious.gracefulCloseCalls, 1);
     assert.strictEqual(livePrevious.disposeCalls, 1);
     assert.strictEqual((instance as any).lastRunIntegrations.length, 0);
-    assert.strictEqual((instance as any).liveInjectIntegrations.size, 0);
+    assert.strictEqual((instance as any).liveReusableIntegrations.size, 0);
   });
 });
 

@@ -74,7 +74,7 @@ export interface IDashboardSink {
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean,
+    reusesRunningTerminal?: boolean,
     executionMode?: ExecutionMode
   ): void;
 

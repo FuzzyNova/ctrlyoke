@@ -884,9 +884,9 @@ export class WorkflowStartupPipeline {
     if (this.port.dashboardSink && startup.totalSteps > 0) {
       if (continueFromCurrent || startup.isIdleContinuation) {
         const currentIndex = startup.currentQueueState.currentIndex;
-        const willInject = integration.canReuseForInject();
+        const willReuseTerminal = integration.canReuseRunningTerminal();
         Log.debug(
-          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${startup.totalSteps}, isInjectMode=${willInject}`
+          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${startup.totalSteps}, reusesRunningTerminal=${willReuseTerminal}`
         );
         this.port.dashboardSink.updateExecutionStarted(
           this.port.id,
@@ -894,13 +894,13 @@ export class WorkflowStartupPipeline {
           startup.totalSteps,
           true,
           currentIndex,
-          willInject ? true : undefined,
+          willReuseTerminal ? true : undefined,
           startup.executionMode
         );
       } else if (startup.isAppendContinuation) {
-        const willInject = integration.canReuseForInject();
+        const willReuseTerminal = integration.canReuseRunningTerminal();
         Log.debug(
-          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${startup.prevSettledStepCount}, totalSteps=${startup.totalSteps}, isInjectMode=${willInject}`
+          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${startup.prevSettledStepCount}, totalSteps=${startup.totalSteps}, reusesRunningTerminal=${willReuseTerminal}`
         );
         this.port.dashboardSink.updateExecutionStarted(
           this.port.id,
@@ -908,7 +908,7 @@ export class WorkflowStartupPipeline {
           startup.totalSteps,
           true,
           startup.prevSettledStepCount,
-          willInject ? true : undefined,
+          willReuseTerminal ? true : undefined,
           startup.executionMode
         );
       }

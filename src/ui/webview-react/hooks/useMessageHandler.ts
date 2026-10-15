@@ -1351,13 +1351,13 @@ export function createMessageHandlers(
       // skipPrompt and no PTY is ever created. Interactive focus therefore
       // belongs to whoever knows a terminal exists: TERMINAL_STARTED (see
       // terminalMessageHandlers, which covers script PTYs too) for a fresh
-      // spawn, and the inject branch below for a reused one.
+      // spawn, and the terminal-reuse branch below for a reused one.
       if (message.executionMode === EXECUTION_MODES.HEADLESS) {
         autoFocusOutputOnExecution(wfId, "output");
       }
 
-      if (message.isInjectMode) {
-        // Inject mode reuses the existing PTY — unfreeze and resume the existing
+      if (message.reusesRunningTerminal) {
+        // Terminal reuse keeps the existing PTY — unfreeze and resume the existing
         // ai-cli session(s) instead of destroying and recreating them.
         const termStore = useTerminalStore.getState();
         const aiCliSessions = (termStore.sessions[wfId] ?? []).filter(
@@ -1375,15 +1375,15 @@ export function createMessageHandlers(
           autoFocusOutputOnExecution(wfId, "terminal");
         }
       } else if (!isContinuation) {
-        // Fresh non-inject run start: clear old ai-cli sessions so the new PTY
+        // Fresh non-reuse run start: clear old ai-cli sessions so the new PTY
         // gets a fresh xterm instance. Shell sessions survive run boundaries.
         //
         // Continuations intentionally keep the current ai-cli xterm until
-        // TERMINAL_STARTED arrives. If the continuation injects into the same
+        // TERMINAL_STARTED arrives. If the continuation is sent to the same
         // PTY, TERMINAL_STARTED updates the existing session in place. If it
         // spawns a new PTY, the terminal handler replaces the old ai-cli session
         // at that point. Clearing here creates a visible blank flash during
-        // append-to-completed inject runs because isInjectMode can be unknown
+        // append-to-completed terminal-reuse runs because reusesRunningTerminal can be unknown
         // until the prompt-specific harness is selected.
         const aiCliSessionIds = (
           useTerminalStore.getState().sessions[wfId] ?? []

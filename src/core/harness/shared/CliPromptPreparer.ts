@@ -107,7 +107,7 @@ export interface CliPromptPreparerDeps {
   ) => Promise<PromptSections>;
   extractLeadingSlashCommand: (promptText: string) => string | null;
   isSimplePrompt: (promptText: string) => boolean;
-  isInjectablePrompt?: (promptText: string) => boolean;
+  canSendToRunningTerminal?: (promptText: string) => boolean;
   buildPriorContextXmlFromItems: (items: PriorContextItem[]) => string;
   getWorkspaceRoot: () => string | undefined;
   getTempFileSplitConfig: () => SplitConfig | undefined;
@@ -139,7 +139,7 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
-    injectMode = false
+    reuseRunningTerminal = false
   ): Promise<PromptPreparationPlan> {
     const conditionOutputSubstitution = substituteConditionOutputRefs(
       prompt.prompt.trim(),
@@ -346,7 +346,7 @@ export class CliPromptPreparer {
       hasPriorContext ||
       inlineSkillNames.length > 0 ||
       secretNames.length > 0;
-    const inlineCheck = this.makeInlineCheck(injectMode);
+    const inlineCheck = this.makeInlineCheck(reuseRunningTerminal);
 
     if (!hasExtras && inlineCheck(outgoingSections.userPromptText)) {
       return {
@@ -465,14 +465,14 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
-    injectMode = false
+    reuseRunningTerminal = false
   ): Promise<PromptFileResult> {
     const plan = await this.planPrompt(
       prompt,
       workflowContext,
       resolvedProperties,
       resolvedSessionId,
-      injectMode
+      reuseRunningTerminal
     );
     const appliedMutations: PreparedMutation[] = [];
     try {
@@ -496,9 +496,11 @@ export class CliPromptPreparer {
   }
 
   /** Returns the appropriate inline-check function based on execution mode. */
-  private makeInlineCheck(injectMode: boolean): (text: string) => boolean {
-    return injectMode && this.deps.isInjectablePrompt
-      ? this.deps.isInjectablePrompt
+  private makeInlineCheck(
+    reuseRunningTerminal: boolean
+  ): (text: string) => boolean {
+    return reuseRunningTerminal && this.deps.canSendToRunningTerminal
+      ? this.deps.canSendToRunningTerminal
       : this.deps.isSimplePrompt;
   }
 

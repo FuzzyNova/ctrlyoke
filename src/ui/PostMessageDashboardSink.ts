@@ -143,7 +143,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean,
+    reusesRunningTerminal?: boolean,
     executionMode?: ExecutionMode
   ): void {
     this.send({
@@ -152,7 +152,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       fileName,
       totalSteps,
       ...(isContinuation ? { isContinuation: true, preserveStepCount } : {}),
-      ...(isInjectMode ? { isInjectMode: true } : {}),
+      ...(reusesRunningTerminal ? { reusesRunningTerminal: true } : {}),
       ...(executionMode !== undefined ? { executionMode } : {}),
     });
   }

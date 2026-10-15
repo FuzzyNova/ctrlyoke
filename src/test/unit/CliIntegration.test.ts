@@ -36,7 +36,7 @@ import {
 } from "../../platform/PlatformAdapter";
 import type { McpServerConfig, PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
-import type { InteractiveInjectContext } from "../../core/harness/shared/CliExecutionRunner";
+import type { RunningTerminalContext } from "../../core/harness/shared/CliExecutionRunner";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
@@ -197,9 +197,9 @@ function createResolvedProperties(
   };
 }
 
-function createInteractiveInjectContext(
+function createRunningTerminalContext(
   spawnedWith?: ResolvedProperties
-): InteractiveInjectContext {
+): RunningTerminalContext {
   return {
     logPath: "session.log",
     sessionId: "session-existing",
@@ -208,13 +208,13 @@ function createInteractiveInjectContext(
   };
 }
 
-function getInjectIncompatibilityReason(
-  ctx: InteractiveInjectContext,
+function getTerminalReuseIncompatibilityReason(
+  ctx: RunningTerminalContext,
   curr: ResolvedProperties | undefined,
   currSessionId: string | undefined,
   parallelGroupId?: string
 ): string | null {
-  return (CliIntegration as any).getInjectIncompatibilityReason(
+  return (CliIntegration as any).getTerminalReuseIncompatibilityReason(
     ctx,
     curr,
     currSessionId,
@@ -251,10 +251,10 @@ suite("CliIntegration", () => {
     configService.setCliOverlay({});
   });
 
-  suite("inject compatibility", () => {
+  suite("terminal reuse compatibility", () => {
     test("forces a restart when the spawnedWith snapshot is missing", () => {
-      const reason = getInjectIncompatibilityReason(
-        createInteractiveInjectContext(),
+      const reason = getTerminalReuseIncompatibilityReason(
+        createRunningTerminalContext(),
         createResolvedProperties(),
         "session-existing"
       );
@@ -263,8 +263,8 @@ suite("CliIntegration", () => {
     });
 
     test("forces a restart when current resolved properties are missing", () => {
-      const reason = getInjectIncompatibilityReason(
-        createInteractiveInjectContext(createResolvedProperties()),
+      const reason = getTerminalReuseIncompatibilityReason(
+        createRunningTerminalContext(createResolvedProperties()),
         undefined,
         "session-existing"
       );
@@ -272,12 +272,12 @@ suite("CliIntegration", () => {
       assert.match(reason ?? "", /current resolved properties are missing/u);
     });
 
-    test("permits inject when the spawn-time snapshot fully matches", () => {
+    test("permits terminal reuse when the spawn-time snapshot fully matches", () => {
       const properties = createResolvedProperties();
 
       assert.strictEqual(
-        getInjectIncompatibilityReason(
-          createInteractiveInjectContext(properties),
+        getTerminalReuseIncompatibilityReason(
+          createRunningTerminalContext(properties),
           properties,
           "session-existing"
         ),
@@ -290,8 +290,8 @@ suite("CliIntegration", () => {
       const current = createResolvedProperties({ secrets: [] });
 
       assert.strictEqual(
-        getInjectIncompatibilityReason(
-          createInteractiveInjectContext(previous),
+        getTerminalReuseIncompatibilityReason(
+          createRunningTerminalContext(previous),
           current,
           "session-existing"
         ),
@@ -299,13 +299,13 @@ suite("CliIntegration", () => {
       );
     });
 
-    test("permits inject when mcpServers changes from absent to null", () => {
+    test("permits terminal reuse when mcpServers changes from absent to null", () => {
       const previous = createResolvedProperties();
       delete (previous as Partial<ResolvedProperties>).mcpServers;
 
       assert.strictEqual(
-        getInjectIncompatibilityReason(
-          createInteractiveInjectContext(previous),
+        getTerminalReuseIncompatibilityReason(
+          createRunningTerminalContext(previous),
           createResolvedProperties({ mcpServers: null }),
           "session-existing"
         ),
@@ -317,8 +317,8 @@ suite("CliIntegration", () => {
       const properties = createResolvedProperties();
 
       assert.strictEqual(
-        getInjectIncompatibilityReason(
-          createInteractiveInjectContext(properties),
+        getTerminalReuseIncompatibilityReason(
+          createRunningTerminalContext(properties),
           properties,
           "session-existing",
           "group-1"
@@ -355,8 +355,8 @@ suite("CliIntegration", () => {
       assert.deepStrictEqual(initial.mcpServers, []);
       assert.deepStrictEqual(queued.mcpServers, [playwright]);
       assert.strictEqual(
-        getInjectIncompatibilityReason(
-          createInteractiveInjectContext(initial),
+        getTerminalReuseIncompatibilityReason(
+          createRunningTerminalContext(initial),
           queued,
           "session-existing"
         ),
@@ -1211,14 +1211,14 @@ suite("CliIntegration", () => {
     integration.dispose();
   });
 
-  test("keeps hook env files through an injected turn", async () => {
+  test("keeps hook env files through an sent turn", async () => {
     configService.setCliOverlay({
       defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
     });
     const lifecycle: string[] = [];
     const envFilePath = path.join(
       os.tmpdir(),
-      `ctrlyoke-injected-hook-env-${Date.now()}.json`
+      `ctrlyoke-sent-hook-env-${Date.now()}.json`
     );
     fs.writeFileSync(envFilePath, "{}");
     const integration = createTestIntegration({
@@ -1234,11 +1234,11 @@ suite("CliIntegration", () => {
       resolvedSessionId: "session-existing",
     });
     (integration as any).deferredHookEnvironmentFilePaths.add(envFilePath);
-    (integration as any).shouldUseInjectMode = () => true;
-    (integration as any).executionRunner.executeInteractiveInject =
+    (integration as any).shouldReuseRunningTerminal = () => true;
+    (integration as any).executionRunner.executeInRunningTerminal =
       async () => {
         lifecycle.push("execute");
-        return { injected: true, success: true };
+        return { sent: true, success: true };
       };
 
     assert.strictEqual(
@@ -1275,20 +1275,20 @@ suite("CliIntegration", () => {
     }
   });
 
-  test("should skip inject mode for a headless session", async () => {
+  test("should skip terminal reuse for a headless session", async () => {
     configService.setCliOverlay({
       defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },
     });
     const integration = createTestIntegration();
-    let shouldUseInjectModeCalled = false;
+    let shouldReuseRunningTerminalCalled = false;
     let headlessCalled = false;
 
     (integration as any).sessionResolverAdapter.resolve = () => ({
       resolvedProperties: { executionMode: EXECUTION_MODES.HEADLESS },
       resolvedSessionId: undefined,
     });
-    (integration as any).shouldUseInjectMode = () => {
-      shouldUseInjectModeCalled = true;
+    (integration as any).shouldReuseRunningTerminal = () => {
+      shouldReuseRunningTerminalCalled = true;
       return true;
     };
     (integration as any).executionRunner.executeHeadless = async () => {
@@ -1300,7 +1300,7 @@ suite("CliIntegration", () => {
 
     assert.strictEqual(success, true);
     assert.strictEqual(headlessCalled, true);
-    assert.strictEqual(shouldUseInjectModeCalled, false);
+    assert.strictEqual(shouldReuseRunningTerminalCalled, false);
   });
 
   test("should use the global execution mode when no session properties exist", () => {
@@ -1590,7 +1590,7 @@ suite("CliIntegration", () => {
     });
     (integration as any).initializeExecutionSession = async () => {};
     (integration as any).resumeSessionActivityWatcher = () => {};
-    (integration as any).shouldUseInjectMode = () => false;
+    (integration as any).shouldReuseRunningTerminal = () => false;
     (integration as any).transportCoordinator.hasLivePtySession = () =>
       options.hasLivePtySession ?? true;
     (integration as any).executionPlanBuilder.plan = async () => ({
@@ -1627,7 +1627,7 @@ suite("CliIntegration", () => {
     const integration = createTestIntegration();
     const lifecycle: string[] = [];
     (integration as any).executionRunner.getLastInteractiveContext = () =>
-      createInteractiveInjectContext(
+      createRunningTerminalContext(
         createResolvedProperties({ model: "old-model" })
       );
     (integration as any).transportCoordinator.terminateCurrentPtySession =
@@ -1660,7 +1660,7 @@ suite("CliIntegration", () => {
       releaseExit = resolve;
     });
     (integration as any).executionRunner.getLastInteractiveContext = () =>
-      createInteractiveInjectContext(createResolvedProperties());
+      createRunningTerminalContext(createResolvedProperties());
     (integration as any).transportCoordinator.terminateCurrentPtySession =
       async () => {
         lifecycle.push("kill");
@@ -1694,7 +1694,7 @@ suite("CliIntegration", () => {
     const integration = createTestIntegration();
     const lifecycle: string[] = [];
     (integration as any).executionRunner.getLastInteractiveContext = () =>
-      createInteractiveInjectContext(createResolvedProperties());
+      createRunningTerminalContext(createResolvedProperties());
     (integration as any).transportCoordinator.terminateCurrentPtySession =
       async () => {
         lifecycle.push("kill");
@@ -1724,7 +1724,7 @@ suite("CliIntegration", () => {
     const integration = createTestIntegration();
     let killed = false;
     (integration as any).executionRunner.getLastInteractiveContext = () =>
-      createInteractiveInjectContext(createResolvedProperties());
+      createRunningTerminalContext(createResolvedProperties());
     (integration as any).transportCoordinator.terminateCurrentPtySession =
       async () => {
         killed = true;
@@ -1832,7 +1832,7 @@ suite("CliIntegration", () => {
     const integration = createTestIntegration();
     let terminatedReason: string | undefined;
     (integration as any).executionRunner.getLastInteractiveContext = () =>
-      createInteractiveInjectContext(createResolvedProperties());
+      createRunningTerminalContext(createResolvedProperties());
     (integration as any).transportCoordinator.hasLivePtySession = () => true;
     (integration as any).transportCoordinator.terminateCurrentPtySession =
       async (reason: string) => {
@@ -1870,7 +1870,7 @@ suite("CliIntegration", () => {
   test("does not claim an AI session once its PTY is gone", () => {
     const integration = createTestIntegration();
     (integration as any).executionRunner.getLastInteractiveContext = () =>
-      createInteractiveInjectContext(createResolvedProperties());
+      createRunningTerminalContext(createResolvedProperties());
     (integration as any).transportCoordinator.hasLivePtySession = () => false;
 
     try {

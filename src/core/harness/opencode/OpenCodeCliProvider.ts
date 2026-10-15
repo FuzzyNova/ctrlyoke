@@ -64,7 +64,7 @@ import {
  * plugin submits the prompt through OpenCode's server instead. Switch this to
  * `ARGUMENT` to go back to `--session … --prompt …` once the fix ships.
  *
- * Only relaunches are affected: inject mode types follow-up prompts into the
+ * Only relaunches are affected: terminal reuse types follow-up prompts into the
  * running TUI and never resumes by argument.
  */
 const OPENCODE_RESUMED_PROMPT_DELIVERY: OpenCodeResumedPromptDelivery =
@@ -510,13 +510,13 @@ export class OpenCodeCliProvider implements ICliProvider {
   /**
    * Format a file path for OpenCode file references.
    *
-   * OpenCode's TUI treats a leading `@` as an agent-mention trigger: in inject
-   * mode we write text straight into the running TUI, so an `@path` prefix gets
+   * OpenCode's TUI treats a leading `@` as an agent-mention trigger: with terminal
+   * reuse we write text straight into the running TUI, so an `@path` prefix gets
    * intercepted and rewritten to an agent invocation (e.g. `@explore`) before it
    * ever reaches the model. OpenCode does not auto-read `@`-prefixed paths anyway
    * — it decides to read referenced files on its own from the plain path — so we
    * drop the `@` entirely, mirroring Codex. This applies uniformly to simple,
-   * injected, and categorized prompts because every ref routes through here.
+   * sent-to-terminal, and categorized prompts because every ref routes through here.
    *
    * @param relativeFilePath Relative or absolute file path
    * @returns File path without an `@` prefix

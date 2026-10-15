@@ -972,7 +972,7 @@ line two`,
     assert.strictEqual(spawnedEnv?.CTRLYOKE_RUN_ID, "run-123");
   });
 
-  test("should refresh active PTY session metadata for inject reuse", async () => {
+  test("should refresh active PTY session metadata for terminal reuse", async () => {
     const postedMessages: Array<{
       type?: string;
       workflowId?: string;

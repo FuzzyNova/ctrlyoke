@@ -504,7 +504,7 @@ export const terminalRegistry = {
   },
 
   /**
-   * Unfreeze a previously frozen ai-cli session for inject-mode resume.
+   * Unfreeze a previously frozen ai-cli session for terminal-reuse resume.
    * Clears the frozen flag so TerminalInstance can re-register onData on next
    * mount, and so future TERMINAL_OUTPUT writes render immediately.
    * The FrozenOverlay disappears when the store's session status is set back

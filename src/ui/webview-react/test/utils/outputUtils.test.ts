@@ -830,7 +830,7 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("Fix the failing auth test please");
   });
 
-  it("renders injected prompts in the command section using the injected text", () => {
+  it("renders prompts sent to a running terminal in the command section using the sent text", () => {
     const outputs = [
       {
         type: "cli" as const,
@@ -839,7 +839,7 @@ describe("generateMarkdownExport", () => {
         attemptIndex: 0,
         data: {
           cliCommand: "Open the referenced file and summarize it.",
-          cliCommandWasInjected: true,
+          cliCommandSentToRunningTerminal: true,
         },
       },
     ];

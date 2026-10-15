@@ -258,7 +258,7 @@ export class OpenCodeLogParser extends BaseLogParser {
    * Classify a synthetic `user_text` event (see `extractNewEventsFromExport`,
    * which emits these for `user`-role message text parts — a shape OpenCode's
    * export never mixes with tool results or resume signals, so the only
-   * distinction needed is against ctrlyoke's own injected prompt).
+   * distinction needed is against ctrlyoke's own sent prompt).
    */
   override classifyUserEvent(
     event: BaseCliEvent,
@@ -636,7 +636,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       const messageTimestamp = message.info.time?.created ?? Date.now();
 
       // User messages carry no displayable AI output, but their `text` parts
-      // are candidate user-steer events (ctrlyoke's own injected prompt, or a
+      // are candidate user-steer events (ctrlyoke's own sent prompt, or a
       // genuine follow-up typed into the live TUI) — see classifyUserEvent.
       // Unlike assistant parts, user text is already final the moment it
       // appears in the export, so isPartCompleted's streaming check doesn't apply.

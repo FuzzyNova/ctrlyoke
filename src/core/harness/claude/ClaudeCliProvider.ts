@@ -136,7 +136,7 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
-    // Injected turns do not rebuild CLI arguments. Keep the prompt-scoped
+    // Turns sent to a running terminal do not rebuild CLI arguments. Keep the prompt-scoped
     // --settings file and statusline lease alive with the reusable PTY because
     // Claude hot-reloads settings in running sessions; restoring the user
     // settings file would otherwise reload after the --settings file is gone

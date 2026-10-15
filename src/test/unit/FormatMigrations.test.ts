@@ -16,6 +16,16 @@ import {
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
 
+/**
+ * Settings removed or renamed since the frozen fixtures were captured. They load
+ * unchanged but now draw an `additionalProperties` warning in the editor.
+ */
+const RETIRED_SETTINGS: ReadonlyArray<readonly [section: string, key: string]> =
+  [
+    ["general", "includeFullDiffsInPriorContext"],
+    ["execution", "injectMode"],
+  ];
+
 suite("FormatMigrations", () => {
   test("every store has a contiguous chain from its baseline to current", () => {
     for (const store of Object.values(PERSISTED_STORES)) {
@@ -94,24 +104,27 @@ suite("FormatMigrations", () => {
             );
           } else if (store === PERSISTED_STORES.SETTINGS) {
             const loadedSettings = new FileConfigBackend(fixturePath).getAll();
-            const hasRetiredPriorContextSetting = Boolean(
-              loadedSettings.general &&
-              "includeFullDiffsInPriorContext" in loadedSettings.general
+            const presentRetiredSettings = RETIRED_SETTINGS.filter(
+              ([section, key]) => {
+                const values = (
+                  loadedSettings as Record<string, object | undefined>
+                )[section];
+                return Boolean(values && key in values);
+              }
             );
             assert.strictEqual(
               validateSettings(loadedSettings),
-              !hasRetiredPriorContextSetting,
+              presentRetiredSettings.length === 0,
               JSON.stringify(validateSettings.errors)
             );
-            if (hasRetiredPriorContextSetting) {
+            for (const [, key] of presentRetiredSettings) {
               assert.ok(
                 validateSettings.errors?.some(
                   (error) =>
                     error.keyword === "additionalProperties" &&
-                    error.params.additionalProperty ===
-                      "includeFullDiffsInPriorContext"
+                    error.params.additionalProperty === key
                 ),
-                "retired setting should produce an editor schema warning"
+                `retired setting ${key} should produce an editor schema warning`
               );
             }
             assert.deepStrictEqual(loadedSettings, migrated);

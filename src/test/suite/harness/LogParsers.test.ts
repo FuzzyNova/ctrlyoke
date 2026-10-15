@@ -2142,7 +2142,7 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(classification, "resume-signal");
     });
 
-    test("should classify string dispatched prompts as injected prompts", () => {
+    test("should classify string dispatched prompts as prompts sent to a running terminal", () => {
       const classification = parser.classifyUserEvent(
         {
           type: "user",
@@ -2219,7 +2219,7 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.extractUserSteerText(nonHuman), undefined);
     });
 
-    test("should classify a queued copy of the dispatched prompt as an injected prompt", () => {
+    test("should classify a queued copy of the dispatched prompt as an sent prompt", () => {
       assert.strictEqual(
         parser.classifyUserEvent(midTurnSteer({}), {
           dispatchedPromptText: "in celcius",
@@ -3902,7 +3902,7 @@ suite("CopilotLogParser", () => {
   });
 
   suite("classifyUserEvent", () => {
-    test("classifies the dispatched idle message as an injected prompt", () => {
+    test("classifies the dispatched idle message as an sent prompt", () => {
       const prompt = "Please inspect the terminal resize behavior.";
       const event: BaseCliEvent = {
         type: "user.message",

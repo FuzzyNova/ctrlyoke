@@ -181,7 +181,7 @@ export class DashboardBroadcastHub
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean,
+    reusesRunningTerminal?: boolean,
     executionMode?: ExecutionMode
   ): void {
     for (const client of this.clients) {
@@ -192,17 +192,17 @@ export class DashboardBroadcastHub
           totalSteps,
           isContinuation,
           preserveStepCount,
-          isInjectMode,
+          reusesRunningTerminal,
           executionMode
         );
-      } else if (isInjectMode !== undefined) {
+      } else if (reusesRunningTerminal !== undefined) {
         client.updateExecutionStarted?.(
           workflowId,
           fileName,
           totalSteps,
           isContinuation,
           preserveStepCount,
-          isInjectMode
+          reusesRunningTerminal
         );
       } else {
         client.updateExecutionStarted?.(

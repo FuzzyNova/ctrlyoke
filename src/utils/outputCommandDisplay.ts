@@ -13,9 +13,9 @@ export interface CliCommandDisplayParts {
 export function getCliCommandDisplayParts(
   command: string,
   workingDirectory?: string,
-  wasInjected?: boolean
+  sentToRunningTerminal?: boolean
 ): CliCommandDisplayParts {
-  if (wasInjected) {
+  if (sentToRunningTerminal) {
     return { header: SENT_PROMPT_HEADER, body: command };
   }
 
@@ -25,12 +25,12 @@ export function getCliCommandDisplayParts(
 export function formatCliCommandDisplay(
   command: string,
   workingDirectory?: string,
-  wasInjected?: boolean
+  sentToRunningTerminal?: boolean
 ): string {
   const { header, body } = getCliCommandDisplayParts(
     command,
     workingDirectory,
-    wasInjected
+    sentToRunningTerminal
   );
   return header ? `${header}\n${body}` : body;
 }

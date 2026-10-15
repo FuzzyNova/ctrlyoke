@@ -103,7 +103,7 @@ export function getShellCompactLabel(
  * A session is closeable unless it is the live PTY a currently-running step is
  * driving right now. Retention (see TERMINAL_SESSION_RETENTION_PLAN.md) keeps
  * ai-cli sessions alive beyond the step that spawned them so a later step can
- * inject into them, so "workflow is executing" is not the right gate — only
+ * send prompts to them, so "workflow is executing" is not the right gate — only
  * *this* session's own `stepIndex` matching one of the steps currently running
  * means closing it would kill work in progress. `activeStepIndices`
  * (WorkflowInstance.getActiveStepIndices()) uses the signed convention for

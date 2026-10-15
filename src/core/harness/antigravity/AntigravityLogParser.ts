@@ -908,7 +908,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * Classify a synthetic `user_input` event from the incremental transcript.
    * The transcript's completion/resume marker is a `SYSTEM`/`SYSTEM_MESSAGE`
    * entry (see `hasPendingBackgroundWork`), never `USER_EXPLICIT`/`USER_INPUT`,
-   * so the only distinction needed here is against ctrlyoke's own injected prompt.
+   * so the only distinction needed here is against ctrlyoke's own sent prompt.
    */
   override classifyUserEvent(
     event: BaseCliEvent,

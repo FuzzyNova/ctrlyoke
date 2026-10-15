@@ -991,7 +991,7 @@ suite("FileConfigBackend", () => {
       configPath,
       `\uFEFF${JSON.stringify({
         worktrees: { root: "D:/worktrees" },
-        execution: { injectMode: "append" },
+        execution: { reuseRunningTerminal: "append" },
       })}`,
       "utf-8"
     );
@@ -1001,7 +1001,9 @@ suite("FileConfigBackend", () => {
 
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.deepStrictEqual(content.worktrees, { root: "D:/worktrees" });
-    assert.deepStrictEqual(content.execution, { injectMode: "append" });
+    assert.deepStrictEqual(content.execution, {
+      reuseRunningTerminal: "append",
+    });
     assert.strictEqual(content.ui.showCostEstimates, false);
   });
 
@@ -1197,12 +1199,12 @@ suite("FileConfigBackend", () => {
 
     await Promise.all([
       userBackend.set("ui.showCliCommand", false),
-      workspaceBackend.set("execution.injectMode", false),
+      workspaceBackend.set("execution.reuseRunningTerminal", false),
     ]);
 
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.strictEqual(content.ui.showCliCommand, false);
-    assert.strictEqual(content.execution.injectMode, false);
+    assert.strictEqual(content.execution.reuseRunningTerminal, false);
   });
 
   test("shares cached reads across scopes backed by the same file", async () => {

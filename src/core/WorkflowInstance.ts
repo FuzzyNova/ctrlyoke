@@ -380,7 +380,7 @@ export class WorkflowInstance
    * provisional ones created before the executor resolved a prompt, and ones
    * superseded by a newer conversation for the same spawn identity. Their
    * terminals stay open for the rest of the run — retention is the point — but
-   * no prompt can select them again, so they are never parked for inject.
+   * no prompt can select them again, so they are never parked for reuse.
    */
   private readonly unkeyedExecutionIntegrations = new Set<HarnessIntegration>();
   /** Target-keyed integrations used by a future parallel group fan-out. */
@@ -408,14 +408,14 @@ export class WorkflowInstance
 
   /**
    * Live integrations retained between `startWorkflowExecution` passes when
-   * inject mode is active, keyed by the same harness/spawn-identity key used in
+   * terminal reuse is active, keyed by the same harness/spawn-identity key used in
    * executionIntegrations. Each entry represents a compatible process that
    * completed a prompt with an active PTY session.
    *
    * **This retention never crosses a RunRef.** "Pass" here means another
    * `startWorkflowExecution` call on the *same* run — appending a prompt to a
    * completed workflow and continuing it, which is what keeps the TUI alive so
-   * the appended prompt injects instead of restarting. A new RunRef (Re-run,
+   * the appended prompt is sent to it instead of restarting. A new RunRef (Re-run,
    * restart-from-beginning) disposes every entry first via
    * `closeRetainedTerminalsForFreshRun`, so a fresh run never inherits a
    * terminal or a conversation from the previous one.
@@ -427,7 +427,7 @@ export class WorkflowInstance
    * lastInteractiveContext are fully intact. Each entry is removed and disposed
    * when its PTY process exits.
    */
-  private readonly liveInjectIntegrations = new Map<
+  private readonly liveReusableIntegrations = new Map<
     string,
     HarnessIntegration
   >();
@@ -1123,7 +1123,7 @@ export class WorkflowInstance
       ...this.executionIntegrations.values(),
       ...this.unkeyedExecutionIntegrations,
       ...this.targetExecutionIntegrations.values(),
-      ...this.liveInjectIntegrations.values(),
+      ...this.liveReusableIntegrations.values(),
       ...this.lastRunIntegrations,
       ...[...this.activeTargetResources.values()]
         .map((resource) => resource.integration)
@@ -1153,12 +1153,12 @@ export class WorkflowInstance
       prev.closeTerminal(TERMINAL_END_REASONS.CLOSED);
     }
     this.lastRunIntegrations = [];
-    // Dispose all live inject integrations held across runs (PTY still alive).
-    for (const [harnessKey, integration] of this.liveInjectIntegrations) {
+    // Dispose all live reusable integrations held across runs (PTY still alive).
+    for (const [harnessKey, integration] of this.liveReusableIntegrations) {
       void this.cleanupRetainedIntegrationArtifacts(harnessKey, integration);
       integration.dispose();
     }
-    this.liveInjectIntegrations.clear();
+    this.liveReusableIntegrations.clear();
     for (const integration of this.unkeyedExecutionIntegrations) {
       integration.closeTerminal(TERMINAL_END_REASONS.CLOSED);
       integration.dispose();
@@ -1199,7 +1199,7 @@ export class WorkflowInstance
     }
     this.lastRunIntegrations = [];
 
-    for (const [harnessKey, liveIntegration] of this.liveInjectIntegrations) {
+    for (const [harnessKey, liveIntegration] of this.liveReusableIntegrations) {
       await this.cleanupRetainedIntegrationArtifacts(
         harnessKey,
         liveIntegration
@@ -1207,7 +1207,7 @@ export class WorkflowInstance
       liveIntegration.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
       liveIntegration.dispose();
     }
-    this.liveInjectIntegrations.clear();
+    this.liveReusableIntegrations.clear();
     await this.releaseNamedWorktreeRetentionAfterPtyExit();
   }
 
@@ -1822,7 +1822,7 @@ export class WorkflowInstance
         stepIndex,
         prompt,
         cliCommand,
-        cliCommandWasInjected,
+        cliCommandSentToRunningTerminal,
         workingDirectory,
         timestampMs,
         attemptIndex,
@@ -1833,7 +1833,7 @@ export class WorkflowInstance
           stepIndex,
           prompt,
           cliCommand,
-          cliCommandWasInjected,
+          cliCommandSentToRunningTerminal,
           workingDirectory,
           timestampMs,
           attemptIndex,
@@ -1875,7 +1875,7 @@ export class WorkflowInstance
         loopIndex,
         prompt,
         cliCommand,
-        cliCommandWasInjected,
+        cliCommandSentToRunningTerminal,
         workingDirectory,
         timestampMs,
         attemptIndex,
@@ -1886,7 +1886,7 @@ export class WorkflowInstance
           loopIndex,
           prompt,
           cliCommand,
-          cliCommandWasInjected,
+          cliCommandSentToRunningTerminal,
           workingDirectory,
           timestampMs,
           attemptIndex,
@@ -3859,7 +3859,7 @@ export class WorkflowInstance
   /**
    * Every integration this instance could still own a live PTY for, in
    * most-specific-first order: the per-target ones registered by the running
-   * attempt, the target- and harness-keyed execution caches, the inject-mode
+   * attempt, the target- and harness-keyed execution caches, the terminal-reuse
    * integrations retained between runs, and the unkeyed ones whose terminals
    * are retained for the rest of the run.
    */
@@ -3871,7 +3871,7 @@ export class WorkflowInstance
     }
     yield* this.targetExecutionIntegrations.values();
     yield* this.executionIntegrations.values();
-    yield* this.liveInjectIntegrations.values();
+    yield* this.liveReusableIntegrations.values();
     yield* this.unkeyedExecutionIntegrations;
   }
 
@@ -4020,14 +4020,14 @@ export class WorkflowInstance
       return fresh;
     }
 
-    // If a live integration from the previous run is waiting in liveInjectIntegrations,
+    // If a live integration from the previous run is waiting in liveReusableIntegrations,
     // promote it into executionIntegrations immediately — before checking the cache or
     // creating a new instance. This ensures the live one wins even when
     // executeLoadedPromptFile calls createIntegrationForMode() before startWorkflowExecution
     // has a chance to run its own restore loop.
-    const live = this.liveInjectIntegrations.get(integrationKey);
+    const live = this.liveReusableIntegrations.get(integrationKey);
     if (live) {
-      this.liveInjectIntegrations.delete(integrationKey);
+      this.liveReusableIntegrations.delete(integrationKey);
       if (!this.canReuseExecutionIntegration(live)) {
         void this.cleanupRetainedIntegrationArtifacts(integrationKey, live);
         live.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
@@ -4037,7 +4037,7 @@ export class WorkflowInstance
         live.setSourceDefinitionPath(this.sourceDefinitionPath);
         this.executionIntegrations.set(integrationKey, live);
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] Reusing live inject integration (key=${integrationKey}) from previous run`
+          `[inst:${this.id.slice(0, 8)}] Reusing live reusable integration (key=${integrationKey}) from previous run`
         );
         return live;
       }
@@ -4072,10 +4072,10 @@ export class WorkflowInstance
   ): void {
     const superseded =
       this.executionIntegrations.get(integrationKey) ??
-      this.liveInjectIntegrations.get(integrationKey);
+      this.liveReusableIntegrations.get(integrationKey);
     if (superseded && superseded !== integration) {
       this.executionIntegrations.delete(integrationKey);
-      this.liveInjectIntegrations.delete(integrationKey);
+      this.liveReusableIntegrations.delete(integrationKey);
       if (
         this.retainedIntegrationArtifactContexts.get(integrationKey)
           ?.integration === superseded
@@ -4159,7 +4159,7 @@ export class WorkflowInstance
     // Wired once at creation (not per-run) so `SessionActivityWatcher` activity
     // captured between step completions — not just after the whole workflow
     // finishes — reaches the dashboard/history. The integration instance
-    // persists across runs when parked in `liveInjectIntegrations`, so this
+    // persists across runs when parked in `liveReusableIntegrations`, so this
     // subscription persists with it.
     integration.onSessionActivityResumed((payload) => {
       void this.handleSessionActivityResumed(
@@ -4444,7 +4444,7 @@ export class WorkflowInstance
     // Any PTY retained across the pause for reuse belongs to the worktree
     // being abandoned and cannot follow execution to the new workspace —
     // settlement below must not race a still-live process in that directory.
-    for (const [harnessKey, liveIntegration] of this.liveInjectIntegrations) {
+    for (const [harnessKey, liveIntegration] of this.liveReusableIntegrations) {
       await this.cleanupRetainedIntegrationArtifacts(
         harnessKey,
         liveIntegration
@@ -4454,7 +4454,7 @@ export class WorkflowInstance
       );
       liveIntegration.dispose();
     }
-    this.liveInjectIntegrations.clear();
+    this.liveReusableIntegrations.clear();
 
     this.worktreeManager.releaseRuntimeTrust(worktree);
 
@@ -4528,12 +4528,12 @@ export class WorkflowInstance
 
   private async restoreRetainedExecutionIntegrations(): Promise<void> {
     Log.debug(
-      `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: retained same-run integrations available=${this.liveInjectIntegrations.size}`
+      `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: retained same-run integrations available=${this.liveReusableIntegrations.size}`
     );
     for (const [integrationKey, liveIntegration] of this
-      .liveInjectIntegrations) {
+      .liveReusableIntegrations) {
       if (!this.canReuseExecutionIntegration(liveIntegration)) {
-        this.liveInjectIntegrations.delete(integrationKey);
+        this.liveReusableIntegrations.delete(integrationKey);
         await this.cleanupRetainedIntegrationArtifacts(
           integrationKey,
           liveIntegration
@@ -4547,10 +4547,10 @@ export class WorkflowInstance
       liveIntegration.resetForNewRun();
       this.executionIntegrations.set(integrationKey, liveIntegration);
       Log.info(
-        `[inst:${this.id.slice(0, 8)}] Restored live inject integration (key=${integrationKey}) at workflow start`
+        `[inst:${this.id.slice(0, 8)}] Restored live reusable integration (key=${integrationKey}) at workflow start`
       );
     }
-    this.liveInjectIntegrations.clear();
+    this.liveReusableIntegrations.clear();
   }
 
   private async settleWorkflowExecution(options: {
@@ -4562,15 +4562,15 @@ export class WorkflowInstance
       this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
     const pausedWorktreeReservation =
       paused && Boolean(this.executionWorkspace.worktree);
-    const namedWorktreeInjectRetention =
+    const namedWorktreeReuseRetention =
       !paused &&
       this.activeWorktree?.mode === "named" &&
-      ConfigurationUtils.isInjectModeEnabled() &&
+      ConfigurationUtils.isReuseRunningTerminalEnabled() &&
       Array.from(this.executionIntegrations.values()).some((integration) =>
-        integration.canReuseForInject()
+        integration.canReuseRunningTerminal()
       );
     const preserveWorktreeReservation =
-      pausedWorktreeReservation || namedWorktreeInjectRetention;
+      pausedWorktreeReservation || namedWorktreeReuseRetention;
     const terminalWorktreeRun =
       !preserveWorktreeReservation && Boolean(this.activeWorktree);
     const managedTerminalRun =
@@ -4632,19 +4632,20 @@ export class WorkflowInstance
         this.unkeyedExecutionIntegrations.has(execIntegration);
       const retainIntegration =
         !isUnkeyedIntegration &&
-        ((preserveWorktreeReservation && execIntegration.canReuseForInject()) ||
+        ((preserveWorktreeReservation &&
+          execIntegration.canReuseRunningTerminal()) ||
           (!this.executionWorkspace.worktree &&
-            (execIntegration.canReuseForInject() ||
+            (execIntegration.canReuseRunningTerminal() ||
               execIntegration.shouldPersistForSessionActivity())));
       if (retainIntegration) {
-        // Either the PTY is still alive with inject context set (CLI), or the
+        // Either the PTY is still alive with running-terminal context set (CLI), or the
         // integration wants to stay alive for its own post-completion session
         // watcher (non-PTY harness). Keep it alive for the next run rather
         // than destroying it. Store under the same map key so the restore code
         // can insert it where createIntegrationForMode looks. Register a
         // one-shot exit callback so we dispose it if the terminal is killed
         // between runs (no-op for non-PTY harnesses).
-        this.liveInjectIntegrations.set(harnessKey, execIntegration);
+        this.liveReusableIntegrations.set(harnessKey, execIntegration);
         if (
           workspaceRoot &&
           execIntegration.shouldRetainWorkflowArtifactsForReuse()
@@ -4663,8 +4664,10 @@ export class WorkflowInstance
           );
         }
         execIntegration.onPtySessionEnded(() => {
-          if (this.liveInjectIntegrations.get(harnessKey) === execIntegration) {
-            this.liveInjectIntegrations.delete(harnessKey);
+          if (
+            this.liveReusableIntegrations.get(harnessKey) === execIntegration
+          ) {
+            this.liveReusableIntegrations.delete(harnessKey);
           }
           void this.cleanupRetainedIntegrationArtifacts(
             harnessKey,
@@ -4701,7 +4704,7 @@ export class WorkflowInstance
             .filter(Boolean)
             .join("; ");
         }
-        // Normal path: terminal closed or inject mode not active — dispose now
+        // Normal path: terminal closed or terminal reuse not active — dispose now
         // and save so the next run can close any VS Code terminal tab left open.
         if (!terminalWorktreeRun) {
           this.lastRunIntegrations.push(execIntegration);
@@ -4744,7 +4747,7 @@ export class WorkflowInstance
     // not reinserted into executionIntegrations. It is still part of the
     // worktree cleanup barrier and must never outlive the lease.
     if (terminalWorktreeRun) {
-      for (const [harnessKey, retained] of this.liveInjectIntegrations) {
+      for (const [harnessKey, retained] of this.liveReusableIntegrations) {
         retained.closeTerminalGracefully(
           TERMINAL_END_REASONS.WORKTREE_RELEASED
         );
@@ -4766,7 +4769,7 @@ export class WorkflowInstance
             .join("; ");
         }
       }
-      this.liveInjectIntegrations.clear();
+      this.liveReusableIntegrations.clear();
     }
 
     return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
@@ -4884,12 +4887,12 @@ export class WorkflowInstance
       status === EXECUTION_STATES.PAUSED ||
       status === EXECUTION_STATES.CANCELLING;
     const worktree = this.activeWorktree;
-    const hasReusableInjectIntegration = Array.from(
-      this.liveInjectIntegrations.values()
-    ).some((integration) => integration.canReuseForInject());
+    const hasReusableTerminalIntegration = Array.from(
+      this.liveReusableIntegrations.values()
+    ).some((integration) => integration.canReuseRunningTerminal());
     if (
       executionStillOwnsReservation ||
-      hasReusableInjectIntegration ||
+      hasReusableTerminalIntegration ||
       worktree?.mode !== WORKTREE_MODES.NAMED
     ) {
       return;

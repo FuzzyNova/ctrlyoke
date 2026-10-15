@@ -122,7 +122,7 @@ export interface CliExecutionTransportCoordinator {
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
-  /** Refresh display metadata for the current PTY session when it is reused by inject mode. */
+  /** Refresh display metadata for the current PTY session when it is reused by terminal reuse. */
   updateCurrentPtySessionMetadata?(workflowContext?: WorkflowContext): boolean;
   /**
    * Terminate the current PTY when another execution mode needs exclusive
@@ -133,7 +133,7 @@ export interface CliExecutionTransportCoordinator {
 
 export class CliTransportCoordinator implements CliExecutionTransportCoordinator {
   private currentPtySession?: PtySession;
-  /** ID of the last PTY spawned — persists after currentPtySession is cleared so inject-fallback suppression can find it. */
+  /** ID of the last PTY spawned — persists after currentPtySession is cleared so reuse-fallback suppression can find it. */
   private lastPtySessionId?: string;
   /**
    * Log tail of the headless run currently in flight. Held so `cancel()` can
@@ -340,7 +340,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   }
 
   /**
-   * Refresh the active PTY's display metadata when inject mode submits another
+   * Refresh the active PTY's display metadata when terminal reuse submits another
    * workflow step into the same terminal instead of spawning a new session.
    */
   updateCurrentPtySessionMetadata(workflowContext?: WorkflowContext): boolean {
@@ -375,7 +375,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     postMessage(terminalStartedMessage);
 
     Log.debug(
-      `[inject] refreshed PTY session metadata: session=${this.currentPtySession.id.slice(0, 8)} step="${metadata.stepName}"`
+      `[reuse] refreshed PTY session metadata: session=${this.currentPtySession.id.slice(0, 8)} step="${metadata.stepName}"`
     );
     return true;
   }
@@ -578,7 +578,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
   /**
    * Write text directly into the currently active PTY session.
-   * Used by inject mode to submit follow-up prompts without restarting the TUI.
+   * Used by terminal reuse to submit follow-up prompts without restarting the TUI.
    * @returns true if the write succeeded, false if no PTY session is active.
    */
   writeToCurrentPtySession(text: string): boolean {
@@ -594,7 +594,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   }
 
   /**
-   * Store the inject context (log path + AI session ID) on the currently active PTY session.
+   * Store the running-terminal context (log path + AI session ID) on the currently active PTY session.
    * Called by CliExecutionRunner after session startup so the context survives integration
    * lifecycle changes and can be retrieved on workflow resume.
    */
@@ -604,7 +604,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
   /**
    * Returns the ID of the last PTY session that was spawned, even if it has since
-   * exited and currentPtySession was cleared. Used by inject-fallback logic to
+   * exited and currentPtySession was cleared. Used by reuse-fallback logic to
    * suppress the stale exit event from the abandoned PTY.
    */
   getLastPtySessionId(): string | undefined {
@@ -652,7 +652,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
     const sessionId = this.currentPtySession.id;
     const ptySession = this.currentPtySession;
-    this.currentPtySession = undefined; // clear immediately so inject mode won't see a stale session
+    this.currentPtySession = undefined; // clear immediately so terminal reuse won't see a stale session
     const ptyManager = this.resolvePtyManager();
     // Fire-and-forget: send Ctrl+C and schedule the kill — callers are sync so we can't await here.
     if (ptyManager) {

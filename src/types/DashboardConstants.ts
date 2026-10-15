@@ -756,7 +756,7 @@ export const MESSAGE_TYPES = {
   GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]
   SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
   RUN_IN_NEW_WORKFLOW: "runInNewWorkflow",
-  // Steer messages — webview → extension: inject a categorized prompt directly
+  // Steer messages — webview → extension: send a categorized prompt directly
   // into an already-running interactive PTY session. Never queued; ignores all
   // prompt overrides (harness/model/agent/skills/permissions).
   SEND_STEER_MESSAGE: "sendSteerMessage", // { workflowId, sessionId, text }
@@ -2672,7 +2672,7 @@ export const WORKTREE_MODE_SELECTIONS = {
 } as const;
 
 export const EXECUTION_MODE_HELP_TEXT =
-  "Interactive spawns a live terminal you can steer; headless runs in the background with output in the Output panel. Pre- and end-condition scripts always run headless. With inject mode on, inserting a headless step between interactive steps retires and respawns the PTY, so TUI continuity is lost across that boundary.";
+  "Interactive spawns a live terminal you can steer; headless runs in the background with output in the Output panel. Pre- and end-condition scripts always run headless. With terminal reuse on, inserting a headless step between interactive steps retires and respawns the PTY, so TUI continuity is lost across that boundary.";
 
 export const TRUSTED_ROOTS_MODES = {
   INHERIT: "inherit",

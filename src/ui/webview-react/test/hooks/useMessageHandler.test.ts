@@ -4774,7 +4774,7 @@ describe("EXECUTION_STARTED", () => {
     );
   });
 
-  it("expands the output section and keeps terminal visible for inject-mode runs", () => {
+  it("expands the output section and keeps terminal visible for terminal-reuse runs", () => {
     renderHook(() => useMessageHandler());
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
@@ -4796,7 +4796,7 @@ describe("EXECUTION_STARTED", () => {
         workflowId: "workflow-1",
         fileName: "wf.yaml",
         totalSteps: 2,
-        isInjectMode: true,
+        reusesRunningTerminal: true,
         executionMode: "interactive",
       });
     });
@@ -4920,7 +4920,7 @@ describe("EXECUTION_STARTED", () => {
     expect(useUiStore.getState().pendingRewind).toBeNull();
   });
 
-  it("clears ai-cli sessions on fresh non-inject starts", () => {
+  it("clears ai-cli sessions on fresh non-reuse starts", () => {
     renderHook(() => useMessageHandler());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useTerminalStore.getState().addSession({
@@ -5061,7 +5061,7 @@ describe("TERMINAL_STARTED", () => {
     expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
   });
 
-  it("updates existing session metadata when inject mode reuses the PTY", () => {
+  it("updates existing session metadata when terminal reuse reuses the PTY", () => {
     renderHook(() => useMessageHandler());
 
     act(() => {

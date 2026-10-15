@@ -292,7 +292,7 @@ export interface WorkflowExecutionContext {
     stepIndex: number,
     prompt: string,
     cliCommand: string | undefined,
-    cliCommandWasInjected: boolean | undefined,
+    cliCommandSentToRunningTerminal: boolean | undefined,
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
@@ -333,7 +333,7 @@ export interface WorkflowExecutionContext {
     loopIndex: number,
     prompt: string,
     cliCommand: string | undefined,
-    cliCommandWasInjected: boolean | undefined,
+    cliCommandSentToRunningTerminal: boolean | undefined,
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
@@ -3287,7 +3287,7 @@ export class WorkflowExecutor {
     signedStepIndex: number | undefined,
     prompt: string,
     cliCommand: string | undefined,
-    cliCommandWasInjected: boolean | undefined,
+    cliCommandSentToRunningTerminal: boolean | undefined,
     timestampMs: number,
     runIndex: number,
     attemptIndex: number,
@@ -3298,7 +3298,7 @@ export class WorkflowExecutor {
       tokens: undefined,
       isStreaming: true,
       cliCommand,
-      cliCommandWasInjected,
+      cliCommandSentToRunningTerminal,
       workingDirectory: context.executionWorkspace.executionRoot,
       timestampMs,
       runIndex,
@@ -3320,7 +3320,7 @@ export class WorkflowExecutor {
         signedStepIndex,
         prompt,
         cliCommand,
-        cliCommandWasInjected,
+        cliCommandSentToRunningTerminal,
         context.executionWorkspace.executionRoot,
         timestampMs,
         attemptIndex,
@@ -3338,7 +3338,7 @@ export class WorkflowExecutor {
         target.loopIndex,
         prompt,
         cliCommand,
-        cliCommandWasInjected,
+        cliCommandSentToRunningTerminal,
         context.executionWorkspace.executionRoot,
         timestampMs,
         attemptIndex,
@@ -3866,9 +3866,9 @@ export class WorkflowExecutor {
       cliCommand: context.shouldShowCliCommand
         ? (integration.getLastCliCommand() ?? bufferedOutput?.cliCommand)
         : undefined,
-      cliCommandWasInjected: context.shouldShowCliCommand
-        ? (integration.getLastCliCommandWasInjected() ??
-          bufferedOutput?.cliCommandWasInjected)
+      cliCommandSentToRunningTerminal: context.shouldShowCliCommand
+        ? (integration.getLastCliCommandSentToRunningTerminal() ??
+          bufferedOutput?.cliCommandSentToRunningTerminal)
         : undefined,
       workingDirectory:
         bufferedOutput?.workingDirectory ??
@@ -4305,7 +4305,7 @@ export class WorkflowExecutor {
         signedStepIndex,
         promptStep.prompt,
         cliCommand,
-        data.cliCommandWasInjected,
+        data.cliCommandSentToRunningTerminal,
         initTimestampMs,
         runIndex,
         attemptIndex,
@@ -5294,8 +5294,8 @@ export class WorkflowExecutor {
       cliCommand: context.shouldShowCliCommand
         ? integration.getLastCliCommand()
         : undefined,
-      cliCommandWasInjected: context.shouldShowCliCommand
-        ? integration.getLastCliCommandWasInjected()
+      cliCommandSentToRunningTerminal: context.shouldShowCliCommand
+        ? integration.getLastCliCommandSentToRunningTerminal()
         : undefined,
       workingDirectory: context.executionWorkspace.executionRoot,
       timestampMs: this.getPromptPhaseStartedAt(target) ?? Date.now(),
@@ -5550,8 +5550,8 @@ export class WorkflowExecutor {
     const cliCommand = context.shouldShowCliCommand
       ? integration.getLastCliCommand()
       : undefined;
-    const cliCommandWasInjected = context.shouldShowCliCommand
-      ? integration.getLastCliCommandWasInjected()
+    const cliCommandSentToRunningTerminal = context.shouldShowCliCommand
+      ? integration.getLastCliCommandSentToRunningTerminal()
       : undefined;
 
     const cliOutputObj: CliOutput = {
@@ -5567,7 +5567,7 @@ export class WorkflowExecutor {
       tokens,
       isStreaming: false,
       cliCommand,
-      cliCommandWasInjected,
+      cliCommandSentToRunningTerminal,
       workingDirectory: context.executionWorkspace.executionRoot,
       timestampMs: this.getPromptPhaseStartedAt(target) ?? Date.now(),
     };

@@ -838,7 +838,7 @@ export class CtrlYokeHostedServer
     totalSteps: number,
     isContinuation?: boolean,
     preserveStepCount?: number,
-    isInjectMode?: boolean,
+    reusesRunningTerminal?: boolean,
     executionMode?: ExecutionMode
   ): void {
     this.sink.updateExecutionStarted(
@@ -847,7 +847,7 @@ export class CtrlYokeHostedServer
       totalSteps,
       isContinuation,
       preserveStepCount,
-      isInjectMode,
+      reusesRunningTerminal,
       executionMode
     );
   }

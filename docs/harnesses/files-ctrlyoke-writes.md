@@ -75,7 +75,7 @@ value you have set globally.
 
 Claude Code layers a `--settings` file over your own settings for that process only, so ctrlyoke
 writes nothing outside `.ctrlyoke/` in the workspace. When a later step is typed into the same
-running Claude session (inject mode), the hook file is kept until that terminal closes, because
+running Claude session (terminal reuse), the hook file is kept until that terminal closes, because
 Claude rereads it during the session.
 
 ### Codex CLI
@@ -132,7 +132,7 @@ servers.
 
 `agy` only reads hooks from the global `~/.gemini/config/hooks.json`. ctrlyoke adds one named group
 per workflow, `ctrlyoke-<id>`, and removes that group when the run ends. When a later step is
-typed into the same running `agy` session (inject mode), the group is kept until that terminal
+typed into the same running `agy` session (terminal reuse), the group is kept until that terminal
 closes, because `agy` rereads the file whenever a hook fires.
 
 ## Parallel runs

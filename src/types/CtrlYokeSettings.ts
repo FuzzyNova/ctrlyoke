@@ -252,7 +252,7 @@ export interface CtrlYokeGlobalSettings {
   // Execution
   execution: {
     /** When true, keep the TUI alive and write follow-up prompts directly into the PTY. */
-    injectMode: boolean;
+    reuseRunningTerminal: boolean;
     maxPromptTimeoutSec: number; // seconds, -1 = unlimited
     scriptTimeoutSec: number; // seconds
     regexTimeoutSec: number; // seconds
@@ -591,7 +591,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     },
   },
   execution: {
-    injectMode: true,
+    reuseRunningTerminal: true,
     maxPromptTimeoutSec: -1,
     scriptTimeoutSec: 3600,
     regexTimeoutSec: 10,

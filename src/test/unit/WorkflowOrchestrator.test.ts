@@ -3006,7 +3006,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
     }
   });
 
-  test("keeps completed-run property edits on the resident instance while its inject PTY retains the lock", async () => {
+  test("keeps completed-run property edits on the resident instance while its reusable PTY retains the lock", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-retained-run-properties-")
     );

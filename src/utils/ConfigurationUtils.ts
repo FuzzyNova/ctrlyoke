@@ -879,19 +879,19 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Returns true when inject mode is enabled.
+   * Returns true when terminal reuse is enabled.
    * Keeps the TUI alive and writes follow-up prompts directly into the PTY,
    * avoiding terminal restart latency and the Claude Code resume cache bug.
    *
    * closeTerminalOnComplete takes precedence: if terminals are closed on
-   * completion, injection is impossible regardless of the injectMode setting.
+   * completion, injection is impossible regardless of the reuseRunningTerminal setting.
    */
-  isInjectModeEnabled(): boolean {
+  isReuseRunningTerminalEnabled(): boolean {
     const exec = configService.get(CONFIG_KEYS.EXECUTION);
     if (exec.closeTerminalOnComplete) {
       return false;
     }
-    return exec.injectMode;
+    return exec.reuseRunningTerminal;
   },
 
   /**

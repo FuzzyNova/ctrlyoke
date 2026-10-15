@@ -26,7 +26,7 @@ export interface BaseCliEvent {
  * Most harnesses' resume/completion markers are never `user`-typed events (Copilot's
  * `system.notification`, Antigravity's `SYSTEM` `SYSTEM_MESSAGE`), so this classification
  * only matters for harnesses whose log uses a `user` role for multiple distinct purposes
- * (Claude: tool results, injected prompts, resume signals, and genuine human follow-ups
+ * (Claude: tool results, prompts sent to a running terminal, resume signals, and genuine human follow-ups
  * all arrive as `user` events).
  *
  * - `"tool-result"` — not a prompt at all (tool_result content block).
@@ -374,7 +374,7 @@ export interface ILogParser {
   /**
    * Classify a single log event to decide whether it represents genuine human input
    * typed into the live TUI (a "user steer"), as opposed to a tool result, ctrlyoke's
-   * own injected prompt being echoed back, or a harness-internal resume signal.
+   * own sent prompt being echoed back, or a harness-internal resume signal.
    *
    * Called by `CliLogEventPump` for every event as it streams in. The default
    * (`BaseLogParser`) always returns `"other"` — safe for harnesses whose resume/

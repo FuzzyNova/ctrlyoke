@@ -7,7 +7,7 @@ import {
   HARNESS_IDS,
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
-import type { InteractiveInjectContext } from "../../core/harness/shared/CliExecutionRunner";
+import type { RunningTerminalContext } from "../../core/harness/shared/CliExecutionRunner";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { spawnIdentityHash } from "../../types/ExecutionSpawnIdentity";
 
@@ -26,9 +26,9 @@ function createResolvedProperties(
   };
 }
 
-function createInteractiveInjectContext(
+function createRunningTerminalContext(
   spawnedWith: ResolvedProperties
-): InteractiveInjectContext {
+): RunningTerminalContext {
   return {
     logPath: "session.log",
     sessionId: "session-existing",
@@ -37,11 +37,11 @@ function createInteractiveInjectContext(
   };
 }
 
-function getInjectIncompatibilityReason(
-  ctx: InteractiveInjectContext,
+function getTerminalReuseIncompatibilityReason(
+  ctx: RunningTerminalContext,
   curr: ResolvedProperties
 ): string | null {
-  return (CliIntegration as any).getInjectIncompatibilityReason(
+  return (CliIntegration as any).getTerminalReuseIncompatibilityReason(
     ctx,
     curr,
     "session-existing"
@@ -137,7 +137,7 @@ suite("ExecutionSpawnIdentity", () => {
     assert.strictEqual(spawnIdentityHash(base), spawnIdentityHash(changed));
   });
 
-  test("equal hashes imply no inject field change", () => {
+  test("equal hashes imply no terminal-reuse field change", () => {
     const previous = createResolvedProperties({
       hooks: [{ event: "stop", command: "node hook.js" }],
       mcpServers: [{ id: "server", command: "node server.js" }],
@@ -155,8 +155,8 @@ suite("ExecutionSpawnIdentity", () => {
 
     assert.strictEqual(spawnIdentityHash(previous), spawnIdentityHash(current));
     assert.strictEqual(
-      getInjectIncompatibilityReason(
-        createInteractiveInjectContext(previous),
+      getTerminalReuseIncompatibilityReason(
+        createRunningTerminalContext(previous),
         current
       ),
       null

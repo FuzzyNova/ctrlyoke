@@ -262,10 +262,10 @@ export interface CliOutput {
   /** The CLI command executed (for debugging) */
   cliCommand?: string;
   /**
-   * When true, `cliCommand` is the exact prompt text injected into a running
+   * When true, `cliCommand` is the exact prompt text sent to a running
    * terminal session rather than a spawned harness command line.
    */
-  cliCommandWasInjected?: boolean;
+  cliCommandSentToRunningTerminal?: boolean;
   /** The working directory where the command was executed */
   workingDirectory?: string;
   /** Timestamp when the output was created (milliseconds since epoch) */
@@ -739,11 +739,11 @@ export interface ExecutionStartedMessage {
    */
   preserveStepCount?: number;
   /**
-   * When true, this run reuses the existing PTY via inject mode.
+   * When true, this run reuses the existing PTY via terminal reuse.
    * The webview must NOT clear the existing ai-cli terminal session — it should
    * unfreeze and resume it instead so the same xterm instance shows the new output.
    */
-  isInjectMode?: boolean;
+  reusesRunningTerminal?: boolean;
   /** Resolved execution mode for the step that started this execution. */
   executionMode?: ExecutionMode;
   /** Queue step indices with an active attempt. */
@@ -2382,7 +2382,7 @@ export interface AppendFileMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
-/** Webview → Extension: inject a prompt into a live interactive PTY session. */
+/** Webview → Extension: send a prompt to a live interactive PTY session. */
 export interface SendSteerMessage {
   type: typeof MESSAGE_TYPES.SEND_STEER_MESSAGE;
   workflowId: string;

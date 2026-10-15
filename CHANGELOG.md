@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `execution.injectMode` setting is now `execution.reuseRunningTerminal`. If you turned it
+  off, turn off the new setting instead; the old key is ignored. A prompt sent to a running
+  terminal now shows under a "Prompt sent to running terminal:" header in Output.
 - Prior output references now include commands, tool calls and results, search results, file
   changes, and other structured events consistently across machines. Command output is
   tail-truncated and file reads include only their path and line range. The

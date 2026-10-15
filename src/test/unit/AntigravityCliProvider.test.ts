@@ -193,7 +193,7 @@ suite("AntigravityCliProvider", () => {
     assert.fail("statusline snapshot was not observed by the sidecar");
   }
 
-  test("retains hook artifacts while its process can receive injected turns", () => {
+  test("retains hook artifacts while its process can receive sent turns", () => {
     const provider = new AntigravityCliProvider();
 
     assert.strictEqual(provider.shouldRetainWorkflowArtifactsForReuse(), true);

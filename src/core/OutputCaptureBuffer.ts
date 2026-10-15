@@ -33,8 +33,8 @@ export interface PromptStartData {
   parallelGroupId?: string;
   /** The harness CLI command string, populated only on the second fire. */
   cliCommand?: string;
-  /** True when cliCommand is injected prompt text instead of a spawned command. */
-  cliCommandWasInjected?: boolean;
+  /** True when cliCommand is sent prompt text instead of a spawned command. */
+  cliCommandSentToRunningTerminal?: boolean;
   /** Working directory used by the command, populated with the second fire. */
   workingDirectory?: string;
 }
@@ -79,7 +79,7 @@ function getAttemptStats(output: any): PromptAttemptStats {
 interface StepOutputBufferEntry {
   prompt: string;
   cliCommand: string | undefined;
-  cliCommandWasInjected?: boolean;
+  cliCommandSentToRunningTerminal?: boolean;
   workingDirectory: string | undefined;
   timestampMs: number;
   attemptIndex: number;
@@ -258,7 +258,7 @@ export class OutputCaptureBuffer {
     stepIndex: number,
     prompt: string,
     cliCommand: string | undefined,
-    cliCommandWasInjected: boolean | undefined,
+    cliCommandSentToRunningTerminal: boolean | undefined,
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
@@ -280,7 +280,7 @@ export class OutputCaptureBuffer {
     this.stepOutputBuffer.set(stepIndex, {
       prompt,
       cliCommand,
-      cliCommandWasInjected,
+      cliCommandSentToRunningTerminal,
       workingDirectory,
       timestampMs,
       attemptIndex,
@@ -302,7 +302,7 @@ export class OutputCaptureBuffer {
       runIndex,
       parallelGroupId: this.callbacks.getParallelGroupId(stepIndex),
       cliCommand,
-      cliCommandWasInjected,
+      cliCommandSentToRunningTerminal,
       workingDirectory,
     });
   }
@@ -405,7 +405,7 @@ export class OutputCaptureBuffer {
     loopIndex: number,
     prompt: string,
     cliCommand: string | undefined,
-    cliCommandWasInjected: boolean | undefined,
+    cliCommandSentToRunningTerminal: boolean | undefined,
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
@@ -427,7 +427,7 @@ export class OutputCaptureBuffer {
     this.finalStepOutputBuffer.set(loopIndex, {
       prompt,
       cliCommand,
-      cliCommandWasInjected,
+      cliCommandSentToRunningTerminal,
       workingDirectory,
       timestampMs,
       attemptIndex,
@@ -521,7 +521,7 @@ export class OutputCaptureBuffer {
       tokens: undefined,
       isStreaming: false,
       cliCommand: buffer.cliCommand,
-      cliCommandWasInjected: buffer.cliCommandWasInjected,
+      cliCommandSentToRunningTerminal: buffer.cliCommandSentToRunningTerminal,
       workingDirectory: buffer.workingDirectory,
       timestampMs: buffer.timestampMs,
       attemptIndex: buffer.attemptIndex,

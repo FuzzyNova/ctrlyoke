@@ -268,7 +268,7 @@ describe("outputFind", () => {
         rowKind: OUTPUT_ROW_KINDS.CLI_COMMAND,
         target,
         command: "summarize the running terminal output",
-        wasInjected: true,
+        sentToRunningTerminal: true,
         estimateSize: 24,
       };
 

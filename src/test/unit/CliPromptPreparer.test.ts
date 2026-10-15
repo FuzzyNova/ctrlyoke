@@ -179,14 +179,15 @@ suite("CliPromptPreparer", () => {
     }
   });
 
-  test("uses inject-safe temp files for multiline prompts but keeps plain prompts inline", async () => {
+  test("uses terminal-safe temp files for multiline prompts but keeps plain prompts inline", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async (prompt) =>
         createSections({ userPromptText: prompt.prompt }),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
-      isInjectablePrompt: (promptText) => !/[\x00-\x1f\x7f]/u.test(promptText),
+      canSendToRunningTerminal: (promptText) =>
+        !/[\x00-\x1f\x7f]/u.test(promptText),
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -1727,7 +1728,7 @@ suite("CliPromptPreparer", () => {
     );
   });
 
-  suite("inject mode", () => {
+  suite("terminal reuse", () => {
     function makeBasePreparer(
       overrides: Partial<
         ConstructorParameters<typeof CliPromptPreparer>[0]
@@ -1739,7 +1740,7 @@ suite("CliPromptPreparer", () => {
           createSections({ userPromptText: p.prompt.trim() }),
         extractLeadingSlashCommand: () => null,
         isSimplePrompt: (text) => text.length <= 50,
-        isInjectablePrompt: (text) => !/[\x00-\x1f\x7f]/.test(text),
+        canSendToRunningTerminal: (text) => !/[\x00-\x1f\x7f]/.test(text),
         buildPriorContextXmlFromItems: () => "",
         getWorkspaceRoot: () => process.cwd(),
         getTempFileSplitConfig: () => undefined,
@@ -1750,7 +1751,7 @@ suite("CliPromptPreparer", () => {
       });
     }
 
-    test("long prompt (>simple limit) goes inline in inject mode", async () => {
+    test("long prompt (>simple limit) goes inline in terminal reuse", async () => {
       const longPrompt = "a".repeat(200);
       const preparer = makeBasePreparer();
 
@@ -1771,7 +1772,7 @@ suite("CliPromptPreparer", () => {
       });
     });
 
-    test("prompt with shell-special characters goes inline in inject mode", async () => {
+    test("prompt with shell-special characters goes inline in terminal reuse", async () => {
       const prompt = `fix the "async" error and replace \`await\` with $var`;
       const preparer = makeBasePreparer();
 
@@ -1792,7 +1793,7 @@ suite("CliPromptPreparer", () => {
       });
     });
 
-    test("prompt with control characters uses file-based path even in inject mode", async () => {
+    test("prompt with control characters uses file-based path even in terminal reuse", async () => {
       const promptWithNewline = "line one\nline two";
       let categorizedRefsCalled = false;
       const preparer = makeBasePreparer({
@@ -1819,7 +1820,7 @@ suite("CliPromptPreparer", () => {
       assert.strictEqual(result.promptWithInstruction, "categorized");
     });
 
-    test("inject mode with only file refs uses injectable check on remaining text", async () => {
+    test("terminal reuse with only file refs uses the running-terminal check on remaining text", async () => {
       const prompt = `implement the "feature" described in @Plan.md`;
       const preparer = makeBasePreparer({
         buildPromptSections: async () =>
@@ -1846,7 +1847,7 @@ suite("CliPromptPreparer", () => {
       });
     });
 
-    test("non-inject mode still rejects shell-special characters", async () => {
+    test("non-terminal reuse still rejects shell-special characters", async () => {
       const prompt = `fix the "async" error`;
       let categorizedRefsCalled = false;
       const preparer = makeBasePreparer({

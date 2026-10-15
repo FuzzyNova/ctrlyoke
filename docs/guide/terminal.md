@@ -69,7 +69,7 @@ Message** in the Run menu (see
 A finished interactive step leaves its terminal open, with its session still
 live, so the next step can continue the same conversation:
 
-- **Inject mode** (`execution.injectMode`, on by default) types the next
+- **Reuse running terminal** (`execution.reuseRunningTerminal`, on by default) types the next
   step's prompt straight into that terminal instead of starting the harness
   again. This only happens when the next step is interactive, uses the same
   harness, resumes the previous session, and doesn't change anything the
@@ -97,7 +97,7 @@ in these cases, and a strip at the bottom of an ended terminal says why:
 | **Process stopped**                            | You stopped the run.                                                                  |
 
 Turn on `execution.closeTerminalOnComplete` to close every AI terminal when its
-work is done. That also turns inject mode off, since there is no terminal left
+work is done. That also turns terminal reuse off, since there is no terminal left
 to type into. Both settings are on the **Execution** tab of Settings.
 
 ### Background work

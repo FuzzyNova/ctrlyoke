@@ -701,19 +701,19 @@ Whether quota percentages are displayed as used or remaining.
 
 Execution settings.
 
-### `execution.injectMode` {#execution-injectmode}
+### `execution.reuseRunningTerminal` {#execution-reuserunningterminal}
 
 - **Type:** `boolean`
 - **Default:** `true`
 
-When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug. Interactive steps only, and only when the step resumes the previous session. Has no effect while `execution.closeTerminalOnComplete` is on.
+When true, keeps the TUI alive between prompts and sends follow-up prompts to the running terminal instead of restarting the harness. Faster, and avoids the Claude Code resume cache bug. Interactive steps only, and only when the step resumes the previous session. Has no effect while `execution.closeTerminalOnComplete` is on.
 
 ### `execution.closeTerminalOnComplete` {#execution-closeterminaloncomplete}
 
 - **Type:** `boolean`
 - **Default:** `false`
 
-Automatically close the interactive terminal when execution completes. Turning this on disables `execution.injectMode`.
+Automatically close the interactive terminal when execution completes. Turning this on disables `execution.reuseRunningTerminal`.
 
 ### `execution.autoDeleteTempFiles` {#execution-autodeletetempfiles}
 
@@ -983,7 +983,7 @@ Show a warning when headless execution uses limited tool permissions.
 - **Type:** `boolean`
 - **Default:** `true`
 
-Automatically expand the output section and switch to the relevant output view when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal.
+Automatically expand the output section and switch to the relevant output view when a prompt starts. Headless runs show Output; interactive and terminal-reuse runs show Terminal.
 
 ### `ui.openPromptsInSecondGroup` {#ui-openpromptsinsecondgroup}
 

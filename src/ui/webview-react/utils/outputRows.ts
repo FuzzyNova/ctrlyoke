@@ -266,7 +266,7 @@ interface CommandRowBase<
   target: OutputMessageTarget;
   workingDirectory?: string;
   command: string;
-  wasInjected?: boolean;
+  sentToRunningTerminal?: boolean;
 }
 
 export interface CliCommandRow extends CommandRowBase<
@@ -2025,7 +2025,11 @@ function estimateCliCommandRowHeight(
   outputFontSize: number
 ): number {
   return estimateTextBlockHeight(
-    formatCliCommandDisplay(row.command, row.workingDirectory, row.wasInjected),
+    formatCliCommandDisplay(
+      row.command,
+      row.workingDirectory,
+      row.sentToRunningTerminal
+    ),
     outputContentWidth,
     outputFontSize - 1,
     {
@@ -2663,7 +2667,7 @@ export function buildOutputRows(
         target,
         workingDirectory: output.workingDirectory,
         command: output.cliCommand,
-        wasInjected: output.cliCommandWasInjected,
+        sentToRunningTerminal: output.cliCommandSentToRunningTerminal,
         estimateSize: 32,
       });
     }

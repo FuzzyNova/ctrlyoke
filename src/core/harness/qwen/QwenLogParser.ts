@@ -408,7 +408,7 @@ export class QwenLogParser extends BaseLogParser {
    * Classify a `user` log event. Qwen's `user` type is only ever the initial
    * prompt or a genuine follow-up typed into the live TUI (tool results arrive
    * as a separate `tool_result` event type — see `extractResponse`), so the
-   * only distinction needed is against ctrlyoke's own injected prompt.
+   * only distinction needed is against ctrlyoke's own sent prompt.
    */
   override classifyUserEvent(
     event: BaseCliEvent,

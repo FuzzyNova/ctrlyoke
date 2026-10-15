@@ -46,7 +46,7 @@ export class SessionActivityWatcher {
       onContextWindowUpdate: deps.onContextWindowUpdate,
       // No active dispatch while this watcher runs — every `user` event is
       // either a genuine human steer or a harness resume signal, never
-      // ctrlyoke's own injected prompt (that case is only ever observed by
+      // ctrlyoke's own sent prompt (that case is only ever observed by
       // the per-prompt CliLogMonitor, which is paused/resumed around this).
       dispatchedPromptText: undefined,
     });
