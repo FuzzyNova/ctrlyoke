@@ -2,7 +2,12 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/utils/WorkflowLockManager.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
+
+## Decision
+
+`updateHeartbeat` keeps its existing `Promise<void>` contract; stale reclamation now
+preserves successor ownership without requiring changes to its callers.
 
 ## Symptom
 
