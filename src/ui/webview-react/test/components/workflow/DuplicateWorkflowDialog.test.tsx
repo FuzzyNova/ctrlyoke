@@ -142,6 +142,19 @@ describe("DuplicateWorkflowDialog", () => {
     );
   });
 
+  it("posts only one request for repeated Enter presses while pending", () => {
+    render(<DuplicateWorkflowDialog />);
+    openDialog();
+    const input = screen.getByLabelText("Name");
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(
+      postMessageSpy.mock.calls.filter(
+        ([message]) => message.type === MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT
+      )
+    ).toHaveLength(1);
+  });
+
   it("keeps the dialog and typed name after a failed request", () => {
     render(<DuplicateWorkflowDialog />);
     openDialog();

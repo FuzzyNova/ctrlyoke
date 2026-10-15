@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
@@ -6,6 +7,7 @@ import {
   EMPTY_MCP_SERVER_FORM_STATE,
   findLiteralCredentialEnvKeys,
   McpServerForm,
+  type McpServerFormState,
   mcpServerFormStateToServer,
   serverToMcpServerFormState,
 } from "@components/shared/McpServerForm";
@@ -71,6 +73,53 @@ describe("McpServerForm round trips", () => {
     expect(
       mcpServerFormStateToServer(serverToMcpServerFormState(server))
     ).toEqual(server);
+  });
+
+  it("preserves spaced and empty args through an unrelated edit", () => {
+    const server: McpServerConfig = {
+      id: "server",
+      command: "node",
+      args: ["--label", "two words", "", "tail"],
+    };
+    const form = serverToMcpServerFormState(server);
+    expect(form.args).toBe("--label two words  tail");
+    expect(
+      mcpServerFormStateToServer({ ...form, description: "Updated" }).args
+    ).toEqual(server.args);
+  });
+
+  it("commits bulk environment edits before Save submits", () => {
+    let submitted: McpServerConfig | undefined;
+    function StatefulForm() {
+      const [value, setValue] = useState<McpServerFormState>({
+        ...EMPTY_MCP_SERVER_FORM_STATE,
+        id: "server",
+        command: "node",
+        env: { FIRST: "one" },
+      });
+      return createElement(McpServerForm, {
+        value,
+        onChange: setValue,
+        onSubmit: () => {
+          submitted = mcpServerFormStateToServer(value);
+        },
+        onCancel: vi.fn(),
+        submitLabel: "Save",
+      });
+    }
+    render(createElement(StatefulForm));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enter bulk edit mode" })
+    );
+    const bulkEditor = screen.getByLabelText(
+      "Environment variables bulk editor"
+    );
+    fireEvent.change(bulkEditor, {
+      target: { value: "FIRST=updated\nSECOND=two" },
+    });
+    fireEvent.blur(bulkEditor);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(submitted?.env).toEqual({ FIRST: "updated", SECOND: "two" });
   });
 
   it("persists headers authored in the remote form", () => {

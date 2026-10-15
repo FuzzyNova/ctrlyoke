@@ -221,6 +221,8 @@ export function KeyValueRowsEditor({
     keyValueMapObjectToString(value)
   );
   const bulkValueRef = useRef(bulkValue);
+  const isBulkEditRef = useRef(isBulkEdit);
+  const commitBulkEditRef = useRef<() => void>(() => {});
   const [openPickerRowId, setOpenPickerRowId] = useState<string | null>(null);
   const entriesByScope = useSecretRegistryStore(
     (state) => state.entriesByScope
@@ -230,6 +232,7 @@ export function KeyValueRowsEditor({
   );
 
   rowsRef.current = rows;
+  isBulkEditRef.current = isBulkEdit;
 
   useEffect(() => {
     if (!allowSecretReferences) return;
@@ -308,6 +311,21 @@ export function KeyValueRowsEditor({
     setOpenPickerRowId(null);
     commitRows(nextRows);
   }, [commitRows]);
+
+  const commitBulkEdit = useCallback(() => {
+    const nextRows = rowsFromRecord(
+      keyValueMapStringToObject(bulkValueRef.current) ?? {}
+    );
+    commitRows(nextRows);
+  }, [commitRows]);
+  commitBulkEditRef.current = commitBulkEdit;
+
+  useEffect(
+    () => () => {
+      if (isBulkEditRef.current) commitBulkEditRef.current();
+    },
+    []
+  );
 
   const updateRow = useCallback(
     (rowId: string, field: "key" | "value", nextValue: string) => {
@@ -513,6 +531,7 @@ export function KeyValueRowsEditor({
               bulkValueRef.current = event.target.value;
               setBulkValue(event.target.value);
             }}
+            onBlur={commitBulkEdit}
             disabled={disabled}
             rows={Math.max(3, rows.length)}
             className="w-full resize-none rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"

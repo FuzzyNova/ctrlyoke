@@ -141,6 +141,27 @@ describe("KeyValueRowsEditor", () => {
     });
   });
 
+  it("commits the bulk-edit record on blur and unmount", () => {
+    const onChange = vi.fn();
+    const { unmount } = renderEditor({ FIRST: "one" }, onChange);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enter bulk edit mode" })
+    );
+    const editor = screen.getByLabelText("Environment variables bulk editor");
+    fireEvent.change(editor, {
+      target: { value: "FIRST=blurred\nSECOND=two" },
+    });
+    fireEvent.blur(editor);
+    expect(onChange).toHaveBeenLastCalledWith({
+      FIRST: "blurred",
+      SECOND: "two",
+    });
+
+    fireEvent.change(editor, { target: { value: "FIRST=unmounted" } });
+    unmount();
+    expect(onChange).toHaveBeenLastCalledWith({ FIRST: "unmounted" });
+  });
+
   it("preserves equals signs in values through bulk mode", () => {
     const onChange = vi.fn();
     renderEditor({ TOKEN: "part-one=part-two" }, onChange);

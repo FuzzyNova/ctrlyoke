@@ -136,6 +136,13 @@ export const DuplicateWorkflowDialog: React.FC = () => {
   );
 
   const handleSubmit = useCallback(() => {
+    const currentRequestState = useUiStore.getState();
+    if (
+      currentRequestState.duplicateWorkflowRequest !== null &&
+      currentRequestState.duplicateWorkflowError === null
+    ) {
+      return;
+    }
     if (!dialogData) return;
     const workflowName = name.trim();
     if (!workflowName) {

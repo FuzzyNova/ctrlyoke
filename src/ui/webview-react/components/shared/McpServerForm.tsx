@@ -145,9 +145,13 @@ export function mcpServerFormStateToServer(
   delete server.headers;
   server.command = form.command.trim();
 
-  delete server.args;
-  if (form.args.trim()) {
-    server.args = form.args.trim().split(/\s+/);
+  const originalArgs = form.originalServer?.args;
+  const originalArgsText = originalArgs ? originalArgs.join(" ") : "";
+  if (form.args !== originalArgsText) {
+    delete server.args;
+    if (form.args.trim()) {
+      server.args = form.args.trim().split(/\s+/);
+    }
   }
 
   delete server.env;
