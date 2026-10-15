@@ -1,7 +1,11 @@
 import * as assert from "assert";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { suite, test, setup, teardown } from "mocha";
 import {
+  clearFilesCache,
+  getCompletionCore,
   getOutputChannelSlug,
   toVSCodeCompletionItem,
 } from "../../completions/CompletionHelpers";
@@ -18,6 +22,69 @@ import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { snapshotProperty } from "../helpers/propertySnapshot";
+
+suite("CompletionHelpers workspace roots", () => {
+  let workspaceFolders: vscode.WorkspaceFolder[];
+  let restoreWorkspaceFolders: (() => void) | undefined;
+  let tempDir: string;
+
+  setup(() => {
+    tempDir = makeTempDir("ctrlyoke-completion-roots-");
+    const folders = ["root-a", "root-b", "root-c"].map((name, index) => {
+      const fsPath = path.join(tempDir, name);
+      fs.mkdirSync(fsPath, { recursive: true });
+      return {
+        name,
+        uri: vscode.Uri.file(fsPath),
+        index,
+      } as vscode.WorkspaceFolder;
+    });
+    workspaceFolders = folders.slice(0, 2);
+    restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      get: () => workspaceFolders,
+    });
+  });
+
+  teardown(() => {
+    restoreWorkspaceFolders?.();
+    restoreWorkspaceFolders = undefined;
+    clearFilesCache();
+    removeTempDir(tempDir);
+  });
+
+  test("resolves symbols from a workspace folder added after first use", async () => {
+    const core = getCompletionCore();
+    await core.getHashCompletions("ExistingSymbol");
+
+    workspaceFolders = [
+      ...workspaceFolders,
+      {
+        name: "root-c",
+        uri: vscode.Uri.file(path.join(tempDir, "root-c")),
+        index: 2,
+      } as vscode.WorkspaceFolder,
+    ];
+    fs.mkdirSync(path.join(tempDir, "root-c", "src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempDir, "root-c", "src", "NewWorkspaceSymbol.js"),
+      "export class NewWorkspaceSymbol {}\n"
+    );
+    clearFilesCache();
+
+    const items = await core.getHashCompletions("NewWorkspaceSymbol");
+    assert.ok(
+      items.some((item) => item.label.includes("NewWorkspaceSymbol")),
+      "a symbol in the newly added folder should be offered"
+    );
+  });
+});
 
 suite("CompletionHelpers VS Code adapters", () => {
   test("converts an ordinary item without attaching a capture command", () => {

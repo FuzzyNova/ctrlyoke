@@ -42,14 +42,20 @@ interface FileCacheEntry {
 export class RegexSymbolIndex implements SymbolIndex {
   private readonly fileCache = new Map<string, FileCacheEntry>();
   private readonly realWorkspaceRoots = new Map<string, Promise<string>>();
+  private readonly getWorkspaceRoot: () => string;
 
   constructor(
-    private readonly workspaceRoot: string,
+    workspaceRoot: string | (() => string),
     private readonly getFiles: () => Promise<string[]>,
     private readonly resolveViewerPath?: (
       viewerPath: string
     ) => { absolutePath: string; workspaceRoot: string } | undefined
-  ) {}
+  ) {
+    this.getWorkspaceRoot =
+      typeof workspaceRoot === "function"
+        ? workspaceRoot
+        : () => workspaceRoot;
+  }
 
   async workspaceSymbols(
     query: string,
@@ -93,9 +99,9 @@ export class RegexSymbolIndex implements SymbolIndex {
       return [];
     const resolved = this.resolveViewerPath?.(viewerPath);
     if (this.resolveViewerPath && !resolved) return [];
-    const workspaceRoot = resolved?.workspaceRoot ?? this.workspaceRoot;
+    const workspaceRoot = resolved?.workspaceRoot ?? this.getWorkspaceRoot();
     const absolutePath =
-      resolved?.absolutePath ?? path.resolve(this.workspaceRoot, viewerPath);
+      resolved?.absolutePath ?? path.resolve(workspaceRoot, viewerPath);
     const relativeCheck = path.relative(workspaceRoot, absolutePath);
     if (relativeCheck === ".." || relativeCheck.startsWith(`..${path.sep}`))
       return [];

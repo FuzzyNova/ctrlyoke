@@ -64,26 +64,30 @@ async function getCompletionFiles(): Promise<string[]> {
 /** VS Code composition root for the host-neutral completion engine. */
 export function getCompletionCore(): CompletionCore {
   if (!completionCore) {
-    const root = getVsCodeWorkspaceRoot();
-    const roots = getVsCodeNamedWorkspaceRoots();
     vsCodeSymbolIndex = new VsCodeSymbolIndex(getCompletionFiles);
     completionCore = new CompletionCore({
       isMultiRoot: isMultiRootWorkspace,
       getFiles: getCompletionFiles,
       symbols: new FallbackSymbolIndex(
         vsCodeSymbolIndex,
-        new RegexSymbolIndex(root, getCompletionFiles, (viewerPath) => {
-          const namedRoot = rootForViewerPath(viewerPath, roots);
-          const workspaceRoot = namedRoot?.fsPath ?? root;
-          const absolutePath = fromViewerPath(viewerPath, {
-            primaryRoot: root,
-            namedRoots: roots,
-          });
-          const relative = path.relative(workspaceRoot, absolutePath);
-          return relative === ".." || relative.startsWith(`..${path.sep}`)
-            ? undefined
-            : { absolutePath, workspaceRoot };
-        })
+        new RegexSymbolIndex(
+          getVsCodeWorkspaceRoot,
+          getCompletionFiles,
+          (viewerPath) => {
+            const primaryRoot = getVsCodeWorkspaceRoot();
+            const namedRoots = getVsCodeNamedWorkspaceRoots();
+            const namedRoot = rootForViewerPath(viewerPath, namedRoots);
+            const workspaceRoot = namedRoot?.fsPath ?? primaryRoot;
+            const absolutePath = fromViewerPath(viewerPath, {
+              primaryRoot,
+              namedRoots,
+            });
+            const relative = path.relative(workspaceRoot, absolutePath);
+            return relative === ".." || relative.startsWith(`..${path.sep}`)
+              ? undefined
+              : { absolutePath, workspaceRoot };
+          }
+        )
       ),
       editorContext: new VsCodeEditorContextSource(),
     });
