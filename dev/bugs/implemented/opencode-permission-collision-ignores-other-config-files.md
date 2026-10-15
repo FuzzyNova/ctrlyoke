@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/harness/opencode/OpenCodeInlineConfig.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -36,6 +36,10 @@ OpenCode 1.19 loads more layers below `OPENCODE_CONFIG_CONTENT`, and the resolve
 Line 112 has a separate defect. It resolves a relative `OPENCODE_CONFIG` against the extension host's `process.cwd()`, not against the OpenCode process cwd (the workspace root).
 
 `OpenCodeToolPermissionMapper.allocateKey` (`src/core/harness/opencode/OpenCodeToolPermissionMapper.ts:369-392`) renames only keys that are in this incomplete set. `buildPermissionPolicy` (lines 149-210) therefore emits bare `*` and tool keys. Those keys merge into the positions the user's keys already hold. That breaks the ordering the mapper relies on, which its doc comment (lines 141-148) describes as allow rules first and deny rules last.
+
+## Decision
+
+Verified against the installed OpenCode 1.18.15 config docs and upstream config source: collision discovery covers the global `config.json`, `opencode.json`, and `opencode.jsonc` files, `OPENCODE_CONFIG`, ancestor project config files, `.opencode` config files, and `OPENCODE_CONFIG_DIR`. System-managed config is excluded because OpenCode applies it after `OPENCODE_CONFIG_CONTENT`, so it is not a lower-precedence layer whose permission keys can reorder ctrlyoke's rules. OpenCode merges config layers in precedence order while retaining existing object key positions, which reproduces the permission collision described above.
 
 ## Suggested Fix
 

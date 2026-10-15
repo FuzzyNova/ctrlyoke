@@ -14,6 +14,10 @@ import {
   CTRLYOKE_ENV_VARS,
   MCP_SECRET_CONFIG_MODES,
 } from "../../../types/DashboardConstants";
+import {
+  OPENCODE_CONFIG_FILENAMES,
+  OPENCODE_PROJECT_CONFIG_FILENAMES,
+} from "./OpenCodeProtocolConstants";
 
 export interface OpenCodeLocalMcpServer {
   type: "local";
@@ -92,28 +96,71 @@ async function readPermissionLayer(
   return isPlainObject(parsed.permission) ? parsed.permission : undefined;
 }
 
+async function getProjectConfigDirectories(
+  workspaceRoot: string
+): Promise<string[]> {
+  const directories: string[] = [];
+  let current = path.resolve(workspaceRoot);
+  while (true) {
+    directories.push(current);
+    try {
+      await fs.access(path.join(current, ".git"));
+      break;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+  return directories.reverse();
+}
+
 /**
  * Resolve the effective permission key set beneath OpenCode's inline config.
  * The order mirrors OpenCode's lower-precedence sources: global, OPENCODE_CONFIG,
- * then project config. Values are merged per key so type replacement is preserved.
+ * ancestor project files, then .opencode and OPENCODE_CONFIG_DIR. Values are
+ * merged per key so type replacement is preserved.
  */
 export async function resolveOpenCodePermissionCollisionContext(
   workspaceRoot?: string,
   environment: NodeJS.ProcessEnv = process.env
 ): Promise<OpenCodePermissionCollisionContext> {
-  const configPaths = [
-    path.join(os.homedir(), ".config", "opencode", "opencode.json"),
-  ];
+  const globalConfigDir = path.join(
+    environment.XDG_CONFIG_HOME?.trim() || path.join(os.homedir(), ".config"),
+    "opencode"
+  );
+  const configPaths = OPENCODE_CONFIG_FILENAMES.map((filename) =>
+    path.join(globalConfigDir, filename)
+  );
   const configuredPath = environment.OPENCODE_CONFIG?.trim();
   if (configuredPath) {
     configPaths.push(
       path.isAbsolute(configuredPath)
         ? configuredPath
-        : path.resolve(process.cwd(), configuredPath)
+        : path.resolve(workspaceRoot ?? process.cwd(), configuredPath)
     );
   }
   if (workspaceRoot) {
-    configPaths.push(path.join(workspaceRoot, "opencode.json"));
+    const directories = await getProjectConfigDirectories(workspaceRoot);
+    for (const directory of directories) {
+      for (const filename of OPENCODE_PROJECT_CONFIG_FILENAMES) {
+        configPaths.push(path.join(directory, filename));
+      }
+    }
+    for (const directory of directories) {
+      for (const filename of OPENCODE_PROJECT_CONFIG_FILENAMES) {
+        configPaths.push(path.join(directory, ".opencode", filename));
+      }
+    }
+  }
+  const configDirectory = environment.OPENCODE_CONFIG_DIR?.trim();
+  if (configDirectory) {
+    const resolvedDirectory = path.isAbsolute(configDirectory)
+      ? configDirectory
+      : path.resolve(workspaceRoot ?? process.cwd(), configDirectory);
+    for (const filename of OPENCODE_PROJECT_CONFIG_FILENAMES) {
+      configPaths.push(path.join(resolvedDirectory, filename));
+    }
   }
 
   const effectivePermission: Record<string, unknown> = {};

@@ -325,6 +325,85 @@ suite("OpenCodeCliProvider", () => {
     }
   });
 
+  test("renames permission keys found in every discovered OpenCode config layer", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-permission-discovery-")
+    );
+    const globalConfigDir = path.join(workspaceRoot, "global", "opencode");
+    const repositoryRoot = path.join(workspaceRoot, "repo");
+    const projectRoot = path.join(repositoryRoot, "packages", "app");
+    const cases = [
+      {
+        file: path.join(projectRoot, "opencode.jsonc"),
+        environment: { XDG_CONFIG_HOME: path.join(workspaceRoot, "global") },
+      },
+      {
+        file: path.join(globalConfigDir, "config.json"),
+        environment: { XDG_CONFIG_HOME: path.join(workspaceRoot, "global") },
+      },
+      {
+        file: path.join(repositoryRoot, "opencode.json"),
+        environment: { XDG_CONFIG_HOME: path.join(workspaceRoot, "global") },
+      },
+      {
+        file: path.join(repositoryRoot, ".opencode", "opencode.json"),
+        environment: { XDG_CONFIG_HOME: path.join(workspaceRoot, "global") },
+      },
+    ];
+    try {
+      await fs.mkdir(path.join(repositoryRoot, ".git"), { recursive: true });
+      for (const { file, environment } of cases) {
+        await fs.mkdir(path.dirname(file), { recursive: true });
+        await fs.writeFile(
+          file,
+          '{"permission":{"bash":"ask"}}',
+          "utf8"
+        );
+        const context = await resolveOpenCodePermissionCollisionContext(
+          projectRoot,
+          environment
+        );
+        const config = new OpenCodeCliProvider().buildInlineConfig({
+          extensionPath: workspaceRoot,
+          toolPermissions: {
+            mode: PERMISSION_MODES.ALLOW_ALL,
+            allowedTools: [],
+            deniedTools: ["bash"],
+          },
+          permissionCollisionContext: context,
+        });
+        assert.ok(context.topLevelKeys.has("bash"), file);
+        assert.ok(config.permission && "bash*" in config.permission, file);
+        await fs.unlink(file);
+      }
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves a relative OPENCODE_CONFIG from the workspace root", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-relative-config-")
+    );
+    try {
+      await fs.writeFile(
+        path.join(workspaceRoot, "custom.json"),
+        '{"permission":{"relative-config-tool":"ask"}}',
+        "utf8"
+      );
+      const context = await resolveOpenCodePermissionCollisionContext(
+        workspaceRoot,
+        {
+          XDG_CONFIG_HOME: path.join(workspaceRoot, "empty-global"),
+          OPENCODE_CONFIG: "custom.json",
+        }
+      );
+      assert.ok(context.topLevelKeys.has("relative-config-tool"));
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("builds MCP entries for inline delivery without writing a workspace file", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "opencode-inline-mcp-")

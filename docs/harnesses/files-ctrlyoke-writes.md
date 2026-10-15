@@ -88,9 +88,10 @@ settings are all passed as `-c key=value` overrides on the command line. ctrlyok
 
 Permissions, MCP servers and ctrlyoke's completion plugin are passed to each OpenCode process in
 the `OPENCODE_CONFIG_CONTENT` environment variable, and your hooks in another environment
-variable. ctrlyoke reads your `~/.config/opencode/opencode.json` to merge permissions with your own,
-but never writes it, and never writes a workspace `opencode.json`. The plugin is loaded straight
-from ctrlyoke's install folder.
+variable. To avoid permission-key collisions, ctrlyoke reads OpenCode's global config files,
+`OPENCODE_CONFIG`, project `opencode.json`/`opencode.jsonc` files from the worktree root through
+the workspace, their `.opencode/` counterparts, and `OPENCODE_CONFIG_DIR`. It never writes these
+files or a workspace `opencode.json`. The plugin is loaded straight from ctrlyoke's install folder.
 
 One fallback writes files: if OpenCode cannot load the plugin from the install folder, ctrlyoke
 copies it to `.opencode/plugin/ctrlyoke-completion-hook.ts` (with your hooks in
