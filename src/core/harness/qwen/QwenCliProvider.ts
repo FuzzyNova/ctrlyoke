@@ -20,7 +20,10 @@ import {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
-import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
+import {
+  isCtrlYokeQwenHookGroup,
+  QwenNotificationMonitor,
+} from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
 import {
@@ -672,7 +675,8 @@ export class QwenCliProvider implements ICliProvider {
         workflowKey,
         workspaceRoot,
         ctrlyokeHooksSection,
-        workflowUserHooks
+        workflowUserHooks,
+        { discardHookGroup: isCtrlYokeQwenHookGroup }
       );
     });
 

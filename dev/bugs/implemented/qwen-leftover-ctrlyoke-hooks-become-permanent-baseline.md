@@ -36,3 +36,5 @@ The user's own `qwen` sessions in that workspace keep running the trusted ctrlyo
 - Remove a leftover ctrlyoke `.qwen/.gitignore` when the sanitized baseline shows the file held only discarded groups. One option: recognize the gitignore by its `# ctrlyoke temp files` header and set `gitignorePath` so restore deletes it.
 - Add a `SettingsJsonHooksTracker`/`QwenCliProvider` test that seeds `settings.json` with a stale ctrlyoke group plus a user group, runs register/unregister, and checks that only the user group remains. Also check that the file is deleted when it held only ctrlyoke groups.
 - If the policy is still unused after that, remove the optional parameter instead.
+
+**Resolution:** fixed in this commit

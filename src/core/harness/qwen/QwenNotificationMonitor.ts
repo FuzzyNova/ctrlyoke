@@ -17,6 +17,37 @@ import {
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 
+const CTRLYOKE_QWEN_HOOK_SCRIPT = "ctrlyoke-qwen-hook.js";
+const QWEN_COMMAND_HOOK_TYPE = "command";
+
+/** Identify a leftover ctrlyoke Qwen hook group across extension versions. */
+export function isCtrlYokeQwenHookGroup(group: unknown): boolean {
+  if (!group || typeof group !== "object" || Array.isArray(group)) {
+    return false;
+  }
+
+  const hooks = (group as { hooks?: unknown }).hooks;
+  return (
+    Array.isArray(hooks) &&
+    hooks.length > 0 &&
+    hooks.every((hook) => {
+      if (!hook || typeof hook !== "object" || Array.isArray(hook)) {
+        return false;
+      }
+      const candidate = hook as { type?: unknown; command?: unknown };
+      const escapedScriptName = CTRLYOKE_QWEN_HOOK_SCRIPT.replace(".", "\\.");
+      return (
+        candidate.type === QWEN_COMMAND_HOOK_TYPE &&
+        typeof candidate.command === "string" &&
+        new RegExp(
+          `(?:^|[\\\\/])${escapedScriptName}(?=$|[\\s\"'])`,
+          "i"
+        ).test(candidate.command)
+      );
+    })
+  );
+}
+
 /**
  * Qwen Code CLI Notification Monitor
  *
@@ -135,7 +166,9 @@ export class QwenNotificationMonitor
           ? `${command} ${encodedDecisionHook}`
           : command;
       hooks[nativeEvent] = [
-        { hooks: [{ type: "command", command: eventCommand }] },
+        {
+          hooks: [{ type: QWEN_COMMAND_HOOK_TYPE, command: eventCommand }],
+        },
       ];
     }
 

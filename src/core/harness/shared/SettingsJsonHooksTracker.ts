@@ -111,7 +111,7 @@ export class SettingsJsonHooksTracker {
           hooks: snapshot.hooks,
           fileExisted: snapshot.fileExisted,
           dirExisted,
-          gitignorePath: undefined,
+          gitignorePath: snapshot.gitignorePath,
         };
         this.baselines.set(resolvedSettingsPath, baseline);
       }
@@ -215,6 +215,7 @@ export class SettingsJsonHooksTracker {
   ): Promise<{
     fileExisted: boolean;
     hooks: Record<string, unknown> | null;
+    gitignorePath?: string;
   }> {
     let content: string;
     try {
@@ -255,13 +256,31 @@ export class SettingsJsonHooksTracker {
       );
       const containedOnlyDiscardedGroups =
         discardedGroup && !hasRetainedHookData && !hasOtherSettings;
+      const gitignorePath = containedOnlyDiscardedGroups
+        ? await this.findCtrlYokeGitignore(settingsPath)
+        : undefined;
 
       return {
         fileExisted: !containedOnlyDiscardedGroups,
         hooks: containedOnlyDiscardedGroups ? null : sanitizedHooks,
+        gitignorePath,
       };
     } catch {
       return { fileExisted: true, hooks: null };
+    }
+  }
+
+  private async findCtrlYokeGitignore(
+    settingsPath: string
+  ): Promise<string | undefined> {
+    const gitignorePath = path.join(path.dirname(settingsPath), ".gitignore");
+    try {
+      const content = await fs.readFile(gitignorePath, "utf-8");
+      return content.startsWith("# ctrlyoke temp files")
+        ? gitignorePath
+        : undefined;
+    } catch {
+      return undefined;
     }
   }
 
