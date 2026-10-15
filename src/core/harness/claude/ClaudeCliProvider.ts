@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
@@ -594,7 +595,7 @@ export class ClaudeCliProvider implements ICliProvider {
   ): string {
     let stem: string;
     if (workingFilePath) {
-      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
+      stem = WorkflowPaths.runArtifactStem(workingFilePath);
     } else {
       stem = String(Date.now());
     }

@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { isValidSecretName } from "../../../platform/SecretKey";
@@ -331,7 +332,7 @@ export class CliMcpConfigGenerator {
     filenamePrefix: string
   ): string {
     const configSuffix = workingFilePath
-      ? path.basename(workingFilePath, ".ctrlyoke.json")
+      ? WorkflowPaths.runArtifactStem(workingFilePath)
       : "default";
     return path.join(
       workspaceRoot,

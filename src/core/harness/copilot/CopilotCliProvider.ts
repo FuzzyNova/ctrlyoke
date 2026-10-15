@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
@@ -957,13 +958,10 @@ export class CopilotCliProvider implements ICliProvider {
    * Build a unique hook filename for a prompt.
    *
    * Format: `ctrlyoke-<stem>-p<promptIndex>.json`
-   * where stem is derived from the working file basename (already contains a
-   * timestamp and workflow name), or falls back to a timestamp.
+   * where stem identifies the working file's workflow lineage and run.
    *
    * Examples:
-   * - `ctrlyoke-1774891046-my-workflow-p0.json`
-   * - `ctrlyoke-1774891046-my-workflow-p1.json`
-   * - `ctrlyoke-1774891200-p0.json` (fallback when no workingFilePath)
+   * - `ctrlyoke-my-workflow-run-2026-07-20T10-30-00-000Z-p0.json`
    */
   private static buildHookFileName(
     promptIndex: number,
@@ -971,9 +969,7 @@ export class CopilotCliProvider implements ICliProvider {
   ): string {
     let stem: string;
     if (workingFilePath) {
-      // Working file is like "1774891046-my-workflow.ctrlyoke.json"
-      // Strip extensions to get "1774891046-my-workflow"
-      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
+      stem = WorkflowPaths.runArtifactStem(workingFilePath);
     } else {
       stem = String(Date.now());
     }
@@ -984,7 +980,7 @@ export class CopilotCliProvider implements ICliProvider {
 
   /**
    * Build a unique OTel export filename for a prompt, mirroring buildHookFileName()'s
-   * naming convention (same collision profile — accepted there already).
+   * run-specific naming convention.
    *
    * Format: `ctrlyoke-otel-<stem>-p<promptIndex>.jsonl`
    */
@@ -994,7 +990,7 @@ export class CopilotCliProvider implements ICliProvider {
   ): string {
     let stem: string;
     if (workingFilePath) {
-      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
+      stem = WorkflowPaths.runArtifactStem(workingFilePath);
     } else {
       stem = String(Date.now());
     }

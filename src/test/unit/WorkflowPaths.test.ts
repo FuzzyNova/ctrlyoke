@@ -92,6 +92,43 @@ suite("WorkflowPaths", () => {
     });
   });
 
+  suite("runArtifactStem", () => {
+    const workspaceRoot = path.join("C:", "dev", "some-workspace");
+    const workflowKey = "my-workflow-2026-07-20T10-30-00" as WorkflowKey;
+    const firstRun = "run-2026-07-20T10-30-00-000Z" as RunRef;
+    const secondRun = "run-2026-07-20T10-31-00-000Z" as RunRef;
+
+    test("distinguishes run files and the draft working file", () => {
+      const first = WorkflowPaths.runArtifactStem(
+        WorkflowPaths.runFilePath(workspaceRoot, workflowKey, firstRun)
+      );
+      const second = WorkflowPaths.runArtifactStem(
+        WorkflowPaths.runFilePath(workspaceRoot, workflowKey, secondRun)
+      );
+      const draft = WorkflowPaths.runArtifactStem(
+        WorkflowPaths.draftFilePath(workspaceRoot, workflowKey)
+      );
+
+      assert.strictEqual(first, `${workflowKey}-${firstRun}`);
+      assert.strictEqual(second, `${workflowKey}-${secondRun}`);
+      assert.strictEqual(draft, `${workflowKey}-draft`);
+      assert.strictEqual(new Set([first, second, draft]).size, 3);
+    });
+
+    test("returns a stable safe stem for nonstandard working-file paths", () => {
+      const first = WorkflowPaths.runArtifactStem(
+        path.join(workspaceRoot, "workflow.ctrlyoke.json")
+      );
+      assert.strictEqual(
+        first,
+        WorkflowPaths.runArtifactStem(
+          path.join(workspaceRoot, ".", "workflow.ctrlyoke.json")
+        )
+      );
+      assert.match(first, /^[a-f0-9]{16}$/);
+    });
+  });
+
   suite("parseRunFilePath / parseRunArtifactPath", () => {
     const workspaceRoot = path.join("C:", "dev", "some-workspace");
     const workflowKey = "my-workflow-2026-07-20T10-30-00" as WorkflowKey;

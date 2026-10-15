@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as crypto from "crypto";
 import * as path from "path";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { isPathWithinDirectory } from "./PathSecurity";
@@ -544,6 +545,25 @@ export function parseWorkingFileAddressFromPath(
  */
 export function runDirectoryForWorkingFile(workingFilePath: string): string {
   return path.dirname(path.resolve(workingFilePath));
+}
+
+/**
+ * Stable, filesystem-safe identity for temporary artifacts owned by a working file.
+ * Run and draft files share the same basename, so include their lineage/run address.
+ * Nonstandard working-file paths use a short hash of their normalized absolute path.
+ */
+export function runArtifactStem(workingFilePath: string): string {
+  const address = parseWorkingFileAddressFromPath(workingFilePath);
+  if (address) {
+    return `${address.workflowKey}-${address.runRef ?? DRAFT_DIR_NAME}`;
+  }
+
+  const normalizedPath = path.normalize(path.resolve(workingFilePath));
+  return crypto
+    .createHash("sha256")
+    .update(normalizedPath)
+    .digest("hex")
+    .slice(0, 16);
 }
 
 // ---- WorkflowKey allocation ----
