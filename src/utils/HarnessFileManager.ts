@@ -601,13 +601,24 @@ export class HarnessFileManager {
     );
 
     if (type === HARNESS_FILE_TYPES.AGENT) {
-      const isHarnessId = harnessId in HARNESS_AGENT_EXTENSION;
-      const ext = isHarnessId
-        ? HARNESS_AGENT_EXTENSION[harnessId as HarnessId]
-        : ".agent.md";
-      const filePath = path.join(targetDir, `${name}${ext}`);
-      await fs.promises.rm(filePath, { force: true });
-      Log.info(`[HarnessFileManager] Deleted agent "${name}" from ${filePath}`);
+      const agent = (await collectAgentLocations(workspaceRoot)).find(
+        (file) => file.name === name
+      );
+      const locations = agent?.locations.filter(
+        (location) =>
+          location.harnessId === harnessId && location.scope === scope
+      );
+      if (!locations?.length) {
+        throw new Error(
+          `Agent "${name}" was not found for ${harnessId} (${scope})`
+        );
+      }
+      for (const location of locations) {
+        await fs.promises.rm(location.path);
+        Log.info(
+          `[HarnessFileManager] Deleted agent "${name}" from ${location.path}`
+        );
+      }
     } else {
       const dirPath = path.join(targetDir, name);
       await fs.promises.rm(dirPath, { recursive: true, force: true });
@@ -631,17 +642,18 @@ export class HarnessFileManager {
         : await collectSkillLocations(workspaceRoot);
 
     for (const file of files) {
-      if (
-        file.locations.some(
-          (l) => l.harnessId === harnessId && l.scope === scope
-        )
-      ) {
-        await HarnessFileManager.deleteFromHarness(
-          file.name,
-          harnessId,
-          workspaceRoot,
-          type,
-          scope
+      const locations = file.locations.filter(
+        (location) =>
+          location.harnessId === harnessId && location.scope === scope
+      );
+      for (const location of locations) {
+        if (type === HARNESS_FILE_TYPES.SKILL) {
+          await fs.promises.rm(location.path, { recursive: true, force: true });
+        } else {
+          await fs.promises.rm(location.path);
+        }
+        Log.info(
+          `[HarnessFileManager] Deleted ${type} "${file.name}" from ${location.path}`
         );
       }
     }
