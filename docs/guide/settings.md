@@ -106,6 +106,10 @@ The drawer has 19 tabs:
 | Insights     | Notifications, Stats & Usage                                  |
 | Account      | License                                                       |
 
+In **Language Servers**, the Command field accepts quoted arguments. Wrap an argument that
+contains spaces in single or double quotes, for example:
+`"C:\Program Files\nodejs\node.exe" server.js --stdio`.
+
 **Workflow Defaults** uses the same Harness, Context, Validation, MCP, Hooks and Permissions tabs
 as the [workflow properties panel](/workflows/properties-panel). Values there are the `defaults.*`
 settings, which every workflow inherits unless the workflow or step sets its own.

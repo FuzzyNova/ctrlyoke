@@ -56,6 +56,8 @@ type Props = { activeScope: SettingWriteScope };
 type FormState = {
   id: string;
   command: string;
+  originalCommand: string[] | null;
+  commandModified: boolean;
   languages: string;
   extensions: string;
   rootMarkers: string;
@@ -64,11 +66,66 @@ type FormState = {
 const EMPTY_FORM: FormState = {
   id: "",
   command: "",
+  originalCommand: null,
+  commandModified: false,
   languages: "",
   extensions: "",
   rootMarkers: "",
   env: "",
 };
+const COMMAND_FIELD = "command";
+
+function formatArgv(argv: string[]): string {
+  return argv
+    .map((argument) =>
+      /[\s"']/u.test(argument)
+        ? `"${argument.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"`
+        : argument
+    )
+    .join(" ");
+}
+
+function parseArgv(value: string): string[] {
+  const argv: string[] = [];
+  let argument = "";
+  let quote: "'" | '"' | null = null;
+  let started = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]!;
+    if (quote === '"' && character === "\\") {
+      const next = value[index + 1];
+      if (next === '"' || next === "\\") {
+        argument += next;
+        index += 1;
+      } else {
+        argument += character;
+      }
+      started = true;
+    } else if (quote === "'" && character === "'") {
+      quote = null;
+      started = true;
+    } else if (quote === '"' && character === '"') {
+      quote = null;
+      started = true;
+    } else if (!quote && (character === '"' || character === "'")) {
+      quote = character;
+      started = true;
+    } else if (!quote && /\s/u.test(character)) {
+      if (started) {
+        argv.push(argument);
+        argument = "";
+        started = false;
+      }
+    } else {
+      argument += character;
+      started = true;
+    }
+  }
+
+  if (started) argv.push(argument);
+  return argv;
+}
 
 export function LanguageServersSection({ activeScope }: Props) {
   const definitions = useLanguageServerStore((s) => s.definitions);
@@ -152,7 +209,10 @@ export function LanguageServersSection({ activeScope }: Props) {
   const saveForm = () => {
     if (!form?.id.trim() || !form.command.trim()) return;
     const definition: LanguageServerDefinition = {
-      command: form.command.trim().split(/\s+/),
+      command:
+        form.originalCommand && !form.commandModified
+          ? form.originalCommand
+          : parseArgv(form.command),
       languages: form.languages.split(/[\s,]+/).filter(Boolean),
       extensions: form.extensions
         .split(/[\s,]+/)
@@ -468,8 +528,12 @@ export function LanguageServersSection({ activeScope }: Props) {
                             onClick={() =>
                               setForm({
                                 id: row.id,
-                                command:
-                                  row.managed!.definition.command.join(" "),
+                                command: formatArgv(
+                                  row.managed!.definition.command
+                                ),
+                                originalCommand:
+                                  row.managed!.definition.command,
+                                commandModified: false,
                                 languages:
                                   row.managed!.definition.languages.join(", "),
                                 extensions:
@@ -528,7 +592,8 @@ export function LanguageServersSection({ activeScope }: Props) {
                   {expanded === row.id && (
                     <div className="grid gap-1 border-t border-panel-border px-2 py-2 text-xxs text-description-fg sm:grid-cols-2">
                       <div>
-                        Command: <code>{definition?.command.join(" ")}</code>
+                        Command:{" "}
+                        <code>{formatArgv(definition?.command ?? [])}</code>
                       </div>
                       <div>
                         Resolved:{" "}
@@ -583,7 +648,13 @@ export function LanguageServersSection({ activeScope }: Props) {
                       aria-label={field}
                       value={form[field]}
                       onChange={(event) =>
-                        setForm({ ...form, [field]: event.target.value })
+                        setForm({
+                          ...form,
+                          [field]: event.target.value,
+                          ...(field === COMMAND_FIELD
+                            ? { commandModified: true }
+                            : {}),
+                        })
                       }
                       className="mt-0.5 w-full rounded-sm border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg"
                     />
