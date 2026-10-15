@@ -1081,9 +1081,8 @@ export class EndConditionEvaluator {
     });
     return {
       ...comparisonResult,
-      errored: comparisonResult.reason !== undefined,
-      error: comparisonResult.reason,
-      comparisonReason: comparisonResult.reason,
+      errored: comparisonResult.error !== undefined,
+      comparisonReason: comparisonResult.error,
       stdout: result.stdout ?? result.result,
       stderr: result.stderr ?? "",
       result: result.result,

@@ -212,7 +212,9 @@ suite("LifetimeUsageStore", () => {
 
     const freshStore = new LifetimeUsageStore(workspaceRoot);
     const revised = contribution(readableRunRef, 15);
-    revised.byHarness[HARNESS_IDS.CLAUDE_CLI]!.costSources = ["harness-reported"];
+    revised.byHarness[HARNESS_IDS.CLAUDE_CLI]!.costSources = [
+      "harness-reported",
+    ];
     await freshStore.upsertRunContribution(revised, baseTime + 2000);
 
     const afterRescan = await freshStore.read(baseTime + 2000);
@@ -225,11 +227,23 @@ suite("LifetimeUsageStore", () => {
     await store.upsertRunContribution(contribution(formatRunRef(baseTime), 10));
     const stored = await store.read(baseTime);
     const legacy = JSON.parse(JSON.stringify(stored)) as typeof stored;
-    delete (legacy.lineages[workflowKey] as Partial<typeof legacy.lineages[typeof workflowKey]>).skippedRunCount;
+    delete (
+      legacy.lineages[workflowKey] as Partial<
+        (typeof legacy.lineages)[typeof workflowKey]
+      >
+    ).skippedRunCount;
     await fs.writeFile(store.getPath(), JSON.stringify(legacy), "utf8");
 
-    const rebuilt = await new LifetimeUsageStore(workspaceRoot).read(baseTime + 1);
+    const reader = new LifetimeUsageStore(workspaceRoot);
+    const rebuilt = await reader.read(baseTime + 1);
     assert.strictEqual(rebuilt.runCount, 0);
     assert.strictEqual(rebuilt.skippedRunCount, 0);
+    // An older shape is not corruption: no error, nothing quarantined.
+    assert.strictEqual(reader.getLastErrorCode(), undefined);
+    const siblings = await fs.readdir(path.dirname(store.getPath()));
+    assert.ok(
+      !siblings.some((name) => name.includes(".corrupt-")),
+      siblings.join(", ")
+    );
   });
 });

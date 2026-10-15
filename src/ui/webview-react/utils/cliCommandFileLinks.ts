@@ -47,14 +47,14 @@ const CLI_FILE_PATH_SOURCE =
   "/" +
   "[A-Za-z]:/" + // 3. Slash-prefixed Windows absolute /c:/
   "|" +
-  "(?<![\\w./:-])/(?!/)" + // 4. POSIX absolute, not a URL path
+  "(?<![\\w./:~-])/(?!/)" + // 4. POSIX absolute, not a URL path or ~/ home path
   "|" +
   "\\.{1,2}" +
-  SEP + // 4. Relative prefix   ./   or  ../
+  SEP + // 5. Relative prefix   ./   or  ../
   "|" +
   "(?<![\\w./:-])" + // Bare-relative references also need a path boundary
   "\\.?[a-zA-Z][\\w-]*" +
-  SEP + // 5. Bare relative, optional single leading dot segment (.ctrlyoke\, src\, …)
+  SEP + // 6. Bare relative, optional single leading dot segment (.ctrlyoke\, src\, …)
   ")" +
   "(?:[\\w.\\-]+" +
   SEP +

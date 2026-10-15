@@ -42,8 +42,6 @@ export function useLocalValue<T>(
             ? externalValueRef.current
             : value
         );
-      } else {
-        setValue(externalValueRef.current);
       }
       dirty.current = false;
     },

@@ -71,6 +71,10 @@ describe("findCliFileReferenceRanges", () => {
       "/home/u/repo/.ctrlyoke/temp/x.md",
     ]);
   });
+
+  it("does not link a home-relative path as a root-absolute one", () => {
+    expect(findCliFileReferenceRanges("cat ~/notes/plan.md")).toEqual([]);
+  });
 });
 
 describe("renderCommandTextWithFileLinks", () => {

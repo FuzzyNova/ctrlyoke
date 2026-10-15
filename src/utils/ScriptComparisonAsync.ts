@@ -18,6 +18,7 @@ interface RegexWorkerResult {
   failure?: string;
 }
 interface PendingComparison {
+  id: number;
   actual: string;
   pattern: string;
   timeoutMs: number;
@@ -33,8 +34,10 @@ function resolveRegexWorkerPath(): string {
 }
 
 let worker: Worker | undefined;
+let workerOnline = false;
 let active: PendingComparison | undefined;
 let activeTimeout: ReturnType<typeof setTimeout> | undefined;
+let nextRequestId = 0;
 const pending: PendingComparison[] = [];
 
 function clearActiveTimer(): void {
@@ -42,25 +45,38 @@ function clearActiveTimer(): void {
   activeTimeout = undefined;
 }
 
-function finishActive(result: RegexWorkerResult): void {
+/**
+ * Settle the active comparison and move on. With `discardWorker`, the worker
+ * is terminated first so a pattern still backtracking cannot block the next
+ * one; messages it already queued are ignored because it is no longer
+ * `worker`.
+ */
+function settleActive(result: RegexWorkerResult, discardWorker: boolean): void {
   const completed = active;
-  if (!completed) return;
   clearActiveTimer();
   active = undefined;
-  worker?.unref();
-  completed.resolve(result);
+  if (discardWorker) {
+    const discarded = worker;
+    worker = undefined;
+    workerOnline = false;
+    if (discarded) void discarded.terminate();
+  } else {
+    worker?.unref();
+  }
+  completed?.resolve(result);
   runNext();
 }
 
-function resetWorker(failure: string): void {
-  const failedWorker = worker;
-  worker = undefined;
-  clearActiveTimer();
-  if (failedWorker) void failedWorker.terminate();
-  const completed = active;
-  active = undefined;
-  completed?.resolve({ passed: false, timedOut: false, failure });
-  runNext();
+/**
+ * Start the deadline only once the worker can run the pattern, so a cold
+ * start (first use, or the replacement after a timeout) is not billed to it.
+ */
+function armDeadline(current: PendingComparison): void {
+  if (active !== current || activeTimeout) return;
+  activeTimeout = setTimeout(() => {
+    if (active === current)
+      settleActive({ passed: false, timedOut: true }, true);
+  }, current.timeoutMs);
 }
 
 function getWorker(): Worker {
@@ -68,43 +84,60 @@ function getWorker(): Worker {
   const created = new Worker(resolveRegexWorkerPath());
   created.unref();
   worker = created;
-  created.on("message", (message: { id: number; passed: unknown }) => {
-    if (!active || message.id !== 0) return;
-    finishActive({ passed: message.passed === true, timedOut: false });
+  workerOnline = false;
+  created.once("online", () => {
+    if (worker !== created) return;
+    workerOnline = true;
+    if (active) armDeadline(active);
   });
-  created.on("error", (error: Error) => resetWorker(error.message));
+  created.on("message", (message: { id: unknown; passed: unknown }) => {
+    if (worker !== created || !active || message.id !== active.id) return;
+    settleActive({ passed: message.passed === true, timedOut: false }, false);
+  });
+  created.on("error", (error: Error) => {
+    if (worker !== created) return;
+    settleActive(
+      { passed: false, timedOut: false, failure: error.message },
+      true
+    );
+  });
   created.on("exit", (code: number) => {
-    if (worker === created)
-      resetWorker(
-        `regex worker exited with code ${code} before reporting a result`
-      );
+    if (worker !== created) return;
+    settleActive(
+      {
+        passed: false,
+        timedOut: false,
+        failure: `regex worker exited with code ${code} before reporting a result`,
+      },
+      true
+    );
   });
   return created;
 }
 
 function runNext(): void {
   if (active || pending.length === 0) return;
-  active = pending.shift();
-  if (!active) return;
-  const current = active;
-  worker?.ref();
-  activeTimeout = setTimeout(() => {
-    const timedOutWorker = worker;
-    worker = undefined;
-    clearActiveTimer();
-    active = undefined;
-    if (timedOutWorker) void timedOutWorker.terminate();
-    current.resolve({ passed: false, timedOut: true });
-    runNext();
-  }, current.timeoutMs);
+  const current = pending.shift();
+  if (!current) return;
+  active = current;
   try {
-    getWorker().postMessage({
-      id: 0,
+    const target = getWorker();
+    target.ref();
+    target.postMessage({
+      id: current.id,
       actual: current.actual,
       pattern: current.pattern,
     });
+    if (workerOnline) armDeadline(current);
   } catch (error) {
-    resetWorker(error instanceof Error ? error.message : String(error));
+    settleActive(
+      {
+        passed: false,
+        timedOut: false,
+        failure: error instanceof Error ? error.message : String(error),
+      },
+      true
+    );
   }
 }
 
@@ -114,7 +147,8 @@ function compareRegexInWorker(
   timeoutMs: number
 ): Promise<RegexWorkerResult> {
   return new Promise((resolve) => {
-    pending.push({ actual, pattern, timeoutMs, resolve });
+    nextRequestId += 1;
+    pending.push({ id: nextRequestId, actual, pattern, timeoutMs, resolve });
     runNext();
   });
 }
@@ -140,7 +174,7 @@ export async function compareScriptOutputAsync(
     return {
       passed: false,
       actual,
-      reason: `Regex /${expected}/ ${detail} on input of ${actual.length} chars; the pattern likely backtracks catastrophically.`,
+      error: `Regex /${expected}/ ${detail} on input of ${actual.length} chars; the pattern likely backtracks catastrophically.`,
     };
   }
   return { passed: result.passed, actual };

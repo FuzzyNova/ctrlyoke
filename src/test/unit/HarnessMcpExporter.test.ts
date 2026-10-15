@@ -9,6 +9,7 @@ import {
   SPECIAL_TARGET_IDS,
 } from "../../types/DashboardConstants";
 import { HarnessMcpExporter } from "../../utils/HarnessMcpExporter";
+import { parse as parseToml } from "smol-toml";
 
 suite("HarnessMcpExporter", () => {
   let tempRoot: string;
@@ -469,12 +470,19 @@ suite("HarnessMcpExporter", () => {
     await fs.writeFile(path.join(target, "sentinel"), "preserve");
 
     await assert.rejects(
-      exporter.export([{ id: "new", command: "node" }], HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.WORKSPACE)
+      exporter.export(
+        [{ id: "new", command: "node" }],
+        HARNESS_IDS.CLAUDE_CLI,
+        SETTING_SCOPES.WORKSPACE
+      )
     );
     await assert.rejects(
       exporter.remove(["old"], HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.WORKSPACE)
     );
-    assert.strictEqual(await fs.readFile(path.join(target, "sentinel"), "utf8"), "preserve");
+    assert.strictEqual(
+      await fs.readFile(path.join(target, "sentinel"), "utf8"),
+      "preserve"
+    );
   });
 
   test("updates a symlinked JSON config without replacing the link", async function () {
@@ -485,9 +493,16 @@ suite("HarnessMcpExporter", () => {
     await fs.writeFile(target, '{"theme":"dark"}', "utf8");
     await fs.symlink(target, link);
 
-    await exporter.export([{ id: "new", command: "node" }], HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.WORKSPACE);
+    await exporter.export(
+      [{ id: "new", command: "node" }],
+      HARNESS_IDS.CLAUDE_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
     assert.strictEqual((await fs.lstat(link)).isSymbolicLink(), true);
-    assert.strictEqual(JSON.parse(await fs.readFile(target, "utf8")).theme, "dark");
+    assert.strictEqual(
+      JSON.parse(await fs.readFile(target, "utf8")).theme,
+      "dark"
+    );
     assert.ok(JSON.parse(await fs.readFile(target, "utf8")).mcpServers.new);
   });
 
@@ -495,19 +510,93 @@ suite("HarnessMcpExporter", () => {
     const exporter = new HarnessMcpExporter(workspaceRoot);
     const config = path.join(workspaceRoot, ".codex", "config.toml");
     await fs.mkdir(path.dirname(config), { recursive: true });
-    await fs.writeFile(config, '[mcp_servers.foo]\ncommand = "old"\n[mcp_servers.foo.env]\nAPI_KEY = "old"\n\n[mcp_servers.a]\ncommand = "a"\n[mcp_servers.bar] # keep this\ncommand = "bar"\n');
+    await fs.writeFile(
+      config,
+      '[mcp_servers.foo]\ncommand = "old"\n[mcp_servers.foo.env]\nAPI_KEY = "old"\n\n[mcp_servers.a]\ncommand = "a"\n[mcp_servers.bar] # keep this\ncommand = "bar"\n'
+    );
 
-    await exporter.export([{ id: "foo", command: "new", env: { API_KEY: "new" } }], HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.WORKSPACE);
+    await exporter.export(
+      [{ id: "foo", command: "new", env: { API_KEY: "new" } }],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
     let text = await fs.readFile(config, "utf8");
     assert.strictEqual((text.match(/env\s*=/g) ?? []).length, 1);
     assert.ok(!text.includes("[mcp_servers.foo.env]"));
     assert.ok(text.includes("[mcp_servers.bar] # keep this"));
 
-    await exporter.remove(["foo", "a"], HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.WORKSPACE);
+    await exporter.remove(
+      ["foo", "a"],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
     text = await fs.readFile(config, "utf8");
     assert.ok(!text.includes("[mcp_servers.foo.env]"));
     assert.ok(!text.includes("[mcp_servers.a]"));
     assert.ok(text.includes("[mcp_servers.bar] # keep this"));
+  });
+
+  test("removes every Codex table a server owns and leaves valid TOML", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const config = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.mkdir(path.dirname(config), { recursive: true });
+    await fs.writeFile(
+      config,
+      [
+        'model = "o3"',
+        "",
+        "[mcp_servers.foo]",
+        'command = "foo"',
+        "[mcp_servers.foo.http_headers]",
+        'X = "1"',
+        "[mcp_servers . foo . tools.search]",
+        "enabled = true",
+        "[[mcp_servers.foo.list]]",
+        'name = "x"',
+        '[mcp_servers."foo".env_http_headers]',
+        'Y = "ENV_Y"',
+        "",
+        "[mcp_servers.bar] # keep this",
+        'command = "bar"',
+        "args = [",
+        '  ["nested"],',
+        "]",
+        "notes = '''",
+        "[mcp_servers.foo]",
+        "'''",
+        "",
+      ].join("\n")
+    );
+
+    await exporter.remove(
+      ["foo"],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+    const parsed = parseToml(await fs.readFile(config, "utf8")) as {
+      model: string;
+      mcp_servers: Record<string, { command: string; notes: string }>;
+    };
+    assert.deepStrictEqual(Object.keys(parsed.mcp_servers), ["bar"]);
+    assert.strictEqual(parsed.model, "o3");
+    assert.strictEqual(parsed.mcp_servers.bar.command, "bar");
+    assert.strictEqual(parsed.mcp_servers.bar.notes, "[mcp_servers.foo]\n");
+  });
+
+  test("keeps a private Codex config private after an export", async function () {
+    if (process.platform === "win32") this.skip();
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const config = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.mkdir(path.dirname(config), { recursive: true });
+    await fs.writeFile(config, 'model = "o3"\n', { mode: 0o600 });
+    await fs.chmod(config, 0o600);
+
+    await exporter.export(
+      [{ id: "foo", command: "node", env: { TOKEN: "secret" } }],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+    assert.strictEqual((await fs.stat(config)).mode & 0o777, 0o600);
   });
 
   test("removes a single exported OpenCode MCP server", async () => {

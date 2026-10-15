@@ -218,46 +218,51 @@ suite("WorkspaceStatsService", () => {
     assert.strictEqual(resumed.totals.total, 34);
   });
 
-  test("counts pending batches after a live append extends the interval", async () => {
-    const workflowKey = "append-during-backfill-workflow" as WorkflowKey;
-    await createLineage(workflowKey);
-    for (let index = 0; index < 40; index++) {
-      await writeRun(workflowKey, baseTime + index * 1000, 1);
-    }
-    const appendedRun = await writeRun(workflowKey, baseTime + 50000, 1);
-    class AppendingStore extends LifetimeUsageStore {
-      private calls = 0;
-
-      override async applyBackfillBatch(
-        batch: LifetimeBackfillBatch,
-        now?: number
-      ): Promise<void> {
-        this.calls++;
-        if (this.calls === 1) {
-          await this.upsertRunContribution(
-            {
-              workflowKey,
-              runRef: appendedRun,
-              updatedAt: baseTime + 51000,
-              startedAt: baseTime + 50000,
-              completedAt: baseTime + 51000,
-              executionState: EXECUTION_STATES.COMPLETED,
-              stepCount: 1,
-              activeExecutionMs: 0,
-              byHarness: {},
-            },
-            baseTime + 51000
-          );
-        }
-        await super.applyBackfillBatch(batch, now);
+  // Before batch 1 the upsert creates the lineage; before batch 2 it extends a
+  // lineage that is still mid-backfill and must not let batch 2 be skipped.
+  for (const appendBeforeBatch of [1, 2]) {
+    test(`counts pending batches after a live append before batch ${appendBeforeBatch}`, async () => {
+      const workflowKey =
+        `append-during-backfill-${appendBeforeBatch}` as WorkflowKey;
+      await createLineage(workflowKey);
+      for (let index = 0; index < 40; index++) {
+        await writeRun(workflowKey, baseTime + index * 1000, 1);
       }
-    }
+      const appendedRun = await writeRun(workflowKey, baseTime + 50000, 1);
+      class AppendingStore extends LifetimeUsageStore {
+        private calls = 0;
 
-    const snapshot = await new WorkspaceStatsService(
-      workspaceRoot,
-      new AppendingStore(workspaceRoot)
-    ).refresh();
-    assert.strictEqual(snapshot.runCount, 41);
-    assert.strictEqual(snapshot.totals.total, 41);
-  });
+        override async applyBackfillBatch(
+          batch: LifetimeBackfillBatch,
+          now?: number
+        ): Promise<void> {
+          this.calls++;
+          if (this.calls === appendBeforeBatch) {
+            await this.upsertRunContribution(
+              {
+                workflowKey,
+                runRef: appendedRun,
+                updatedAt: baseTime + 51000,
+                startedAt: baseTime + 50000,
+                completedAt: baseTime + 51000,
+                executionState: EXECUTION_STATES.COMPLETED,
+                stepCount: 1,
+                activeExecutionMs: 0,
+                byHarness: {},
+              },
+              baseTime + 51000
+            );
+          }
+          await super.applyBackfillBatch(batch, now);
+        }
+      }
+
+      const snapshot = await new WorkspaceStatsService(
+        workspaceRoot,
+        new AppendingStore(workspaceRoot)
+      ).refresh();
+      assert.strictEqual(snapshot.runCount, 41);
+      assert.strictEqual(snapshot.totals.total, 41);
+    });
+  }
 });

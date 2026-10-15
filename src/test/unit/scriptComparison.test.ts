@@ -11,11 +11,20 @@ import {
   resolveScriptComparison,
 } from "../../utils/ScriptComparison";
 import { compareScriptOutputAsync } from "../../utils/ScriptComparisonAsync";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import * as os from "os";
+import * as path from "path";
+import {
+  CONFIG_KEYS,
+  ConfigurationUtils,
+} from "../../utils/ConfigurationUtils";
+import { configService } from "../../config/CtrlYokeConfigService";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import {
   COMPARE_SOURCES,
   DEFAULT_COMPARE_SOURCE,
   DEFAULT_SCRIPT_OPERATOR,
+  INTERACTIVE_TERMINAL_MODES,
   SCRIPT_OPERATORS,
 } from "../../types/DashboardConstants";
 import { SCRIPT_OPERATOR_OPTIONS_META } from "../../types/SchemaUiMetadata";
@@ -197,7 +206,7 @@ suite("ScriptComparison", () => {
         ok("needle")
       );
       assert.strictEqual(result.passed, false);
-      assert.match(result.reason ?? "", /must use compareScriptOutputAsync/);
+      assert.match(result.error ?? "", /must use compareScriptOutputAsync/);
     });
 
     test("an invalid regex fails rather than throwing", () => {
@@ -235,10 +244,10 @@ suite("ScriptComparison", () => {
           ok(actual)
         );
         assert.strictEqual(result.passed, false);
-        assert.match(result.reason ?? "", /timed out after 0.01s/);
-        assert.match(result.reason ?? "", /\^\(a\+\)\+\$/);
-        assert.match(result.reason ?? "", new RegExp(`${actual.length} chars`));
-        assert.match(result.reason ?? "", /backtracks catastrophically/);
+        assert.match(result.error ?? "", /timed out after 0.01s/);
+        assert.match(result.error ?? "", /\^\(a\+\)\+\$/);
+        assert.match(result.error ?? "", new RegExp(`${actual.length} chars`));
+        assert.match(result.error ?? "", /backtracks catastrophically/);
       } finally {
         ConfigurationUtils.getRegexTimeoutSeconds = originalTimeout;
       }
@@ -254,22 +263,107 @@ suite("ScriptComparison", () => {
         ok("short needle")
       );
       assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.reason, undefined);
+      assert.strictEqual(result.error, undefined);
     });
 
-    test("configured deadline is used", async () => {
+    test("matches is an unanchored search unless the pattern anchors it", async () => {
+      const compare = (expected: string) =>
+        compareScriptOutputAsync(
+          {
+            compareSource: COMPARE_SOURCES.STDOUT,
+            operator: SCRIPT_OPERATORS.MATCHES,
+            expected,
+          },
+          ok("build ok: 12 passing")
+        );
+      assert.strictEqual((await compare("[0-9]+ passing")).passed, true);
+      assert.strictEqual((await compare("^[0-9]+ passing$")).passed, false);
+    });
+
+    test("regexTimeoutSec comes from settings and falls back on invalid values", () => {
+      const originalGet = configService.get;
+      try {
+        for (const [configured, expected] of [
+          [0.5, 0.5],
+          [0, CTRLYOKE_SETTINGS_DEFAULTS.execution.regexTimeoutSec],
+          [-1, CTRLYOKE_SETTINGS_DEFAULTS.execution.regexTimeoutSec],
+        ] as const) {
+          configService.get = ((key: string) =>
+            key === CONFIG_KEYS.EXECUTION
+              ? {
+                  ...CTRLYOKE_SETTINGS_DEFAULTS.execution,
+                  regexTimeoutSec: configured,
+                }
+              : originalGet.call(
+                  configService,
+                  key as never
+                )) as typeof configService.get;
+          assert.strictEqual(
+            ConfigurationUtils.getRegexTimeoutSeconds(),
+            expected
+          );
+        }
+      } finally {
+        configService.get = originalGet;
+      }
+    });
+
+    test("the worker recovers after a timeout and keeps queued results in order", async () => {
+      const originalTimeout = ConfigurationUtils.getRegexTimeoutSeconds;
+      ConfigurationUtils.getRegexTimeoutSeconds = () => 0.05;
+      const compare = (expected: string, actual: string) =>
+        compareScriptOutputAsync(
+          {
+            compareSource: COMPARE_SOURCES.STDOUT,
+            operator: SCRIPT_OPERATORS.MATCHES,
+            expected,
+          },
+          ok(actual)
+        );
+      try {
+        const [timedOut, first, second, third] = await Promise.all([
+          compare("^(a+)+$", `${"a".repeat(40)}!`),
+          compare("needle", "a needle"),
+          compare("needle", "no match"),
+          compare("^x", "xyz"),
+        ]);
+        assert.match(timedOut.error ?? "", /timed out/);
+        assert.deepStrictEqual(
+          [first, second, third].map((result) => [result.passed, result.error]),
+          [
+            [true, undefined],
+            [false, undefined],
+            [true, undefined],
+          ]
+        );
+      } finally {
+        ConfigurationUtils.getRegexTimeoutSeconds = originalTimeout;
+      }
+    });
+
+    test("an end-condition regex timeout is an evaluation error, not a mismatch", async () => {
       const originalTimeout = ConfigurationUtils.getRegexTimeoutSeconds;
       ConfigurationUtils.getRegexTimeoutSeconds = () => 0.01;
       try {
-        const result = await compareScriptOutputAsync(
+        const evaluator = new EndConditionEvaluator({
+          interactiveTerminal: INTERACTIVE_TERMINAL_MODES.EMBEDDED_PTY,
+          getWorkspaceRoot: () => os.tmpdir(),
+          getWorkspaceRoots: () => [os.tmpdir()],
+          getNamedWorkspaceRoots: () => [],
+          getExtensionPath: () => path.resolve(__dirname, "../../.."),
+        });
+        const actual = `${"a".repeat(40)}!`;
+        const result = await evaluator.evaluateResult(
+          { result: actual, stdout: actual, success: true, exitCode: 0 },
           {
             compareSource: COMPARE_SOURCES.STDOUT,
             operator: SCRIPT_OPERATORS.MATCHES,
             expected: "^(a+)+$",
-          },
-          ok(`${"a".repeat(40)}!`)
+          }
         );
-        assert.match(result.reason ?? "", /timed out after 0.01s/);
+        assert.strictEqual(result.passed, false);
+        assert.strictEqual(result.errored, true);
+        assert.match(result.comparisonReason ?? "", /timed out after 0.01s/);
       } finally {
         ConfigurationUtils.getRegexTimeoutSeconds = originalTimeout;
       }

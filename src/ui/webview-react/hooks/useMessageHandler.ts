@@ -770,17 +770,20 @@ export function createMessageHandlers(
     if (typeof message.entryId !== "string") return;
     const uiState = useUiStore.getState();
     const displayedWorkflowKey = uiState.displayedViewAddress?.workflowKey;
-    if (
-      displayedWorkflowKey &&
-      Array.isArray(message.workflowKeys) &&
-      message.workflowKeys.includes(displayedWorkflowKey)
-    ) {
-      const workflowName = uiState.recentWorkflows.find(
-        (workflow) => workflow.address.workflowKey === displayedWorkflowKey
-      )?.workflowName;
+    const trashedDisplayed = Array.isArray(message.trashedLineages)
+      ? message.trashedLineages.find(
+          (lineage: { workflowKey?: unknown }) =>
+            lineage.workflowKey === displayedWorkflowKey
+        )
+      : undefined;
+    if (displayedWorkflowKey && trashedDisplayed) {
       uiState.setViewingDeletedWorkflow({
         workflowKey: displayedWorkflowKey,
-        workflowName: workflowName ?? displayedWorkflowKey,
+        workflowName:
+          typeof trashedDisplayed.workflowName === "string" &&
+          trashedDisplayed.workflowName
+            ? trashedDisplayed.workflowName
+            : displayedWorkflowKey,
       });
     }
     const entryId = message.entryId;

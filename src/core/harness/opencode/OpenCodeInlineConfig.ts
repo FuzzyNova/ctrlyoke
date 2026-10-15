@@ -118,7 +118,8 @@ async function getProjectConfigDirectories(
 /**
  * Resolve the effective permission key set beneath OpenCode's inline config.
  * The order mirrors OpenCode's lower-precedence sources: global, OPENCODE_CONFIG,
- * ancestor project files, then .opencode and OPENCODE_CONFIG_DIR. Values are
+ * ancestor project files, then .opencode folders (workspace up, then home) and
+ * OPENCODE_CONFIG_DIR. Values are
  * merged per key so type replacement is preserved.
  */
 export async function resolveOpenCodePermissionCollisionContext(
@@ -147,11 +148,16 @@ export async function resolveOpenCodePermissionCollisionContext(
         configPaths.push(path.join(directory, filename));
       }
     }
-    for (const directory of directories) {
+    // OpenCode walks .opencode folders up from the workspace, innermost first,
+    // unlike the project files above, which it reads from the root down.
+    for (const directory of [...directories].reverse()) {
       for (const filename of OPENCODE_PROJECT_CONFIG_FILENAMES) {
         configPaths.push(path.join(directory, ".opencode", filename));
       }
     }
+  }
+  for (const filename of OPENCODE_PROJECT_CONFIG_FILENAMES) {
+    configPaths.push(path.join(os.homedir(), ".opencode", filename));
   }
   const configDirectory = environment.OPENCODE_CONFIG_DIR?.trim();
   if (configDirectory) {

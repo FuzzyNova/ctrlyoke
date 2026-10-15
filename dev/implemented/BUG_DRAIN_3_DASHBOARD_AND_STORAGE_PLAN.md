@@ -1,6 +1,11 @@
 # Bug Drain 3: Dashboard State and Local Storage I/O
 
 > **Status:** Implemented 2026-10-14 (`946577ef6`..`feaa2df10`). Written 2026-10-14 against current `main`.
+> Reviewed 2026-10-15; the review's fixes landed in one follow-up commit. Three
+> follow-up bugs are filed in `dev/bugs/backlog/`:
+> `lifetime-usage-lineage-rescan-holds-store-lock.md`,
+> `lifetime-usage-skips-unfinished-runs-inside-counted-interval.md` and
+> `codex-toml-export-duplicates-inline-mcp-servers-entry.md`.
 >
 > **Plan 3 of 4.** The four bug-drain plans run **in parallel**, each through
 > `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git worktree. The

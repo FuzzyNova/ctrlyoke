@@ -479,66 +479,134 @@ function parseTomlStringArray(value: string): string[] | undefined {
   return items;
 }
 
-function parseTomlSectionName(line: string): string | null {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
-    return null;
-  }
-  return trimmed.slice(1, -1).trim();
+/**
+ * The dotted key inside a `[table]` or `[[array]]` header line, or null when
+ * the line is not a header. A trailing `# comment` is allowed.
+ */
+export function parseTomlTableHeader(line: string): string | null {
+  const match = line.match(/^\s*(\[\[?)(.*?)(\]\]?)(?:\s*#.*)?\s*$/);
+  if (!match) return null;
+  const isArray = match[1] === "[[";
+  if (isArray ? match[3] !== "]]" : match[3] !== "]") return null;
+  return match[2]!.trim();
 }
+
+/**
+ * Split a TOML dotted key into its unquoted parts, allowing whitespace around
+ * the dots and quoted parts that contain dots. Null when it does not parse.
+ */
+function splitTomlDottedKey(key: string): string[] | null {
+  const parts: string[] = [];
+  let index = 0;
+  const skipSpace = () => {
+    while (index < key.length && /[ \t]/.test(key[index]!)) index += 1;
+  };
+  while (true) {
+    skipSpace();
+    const quote = key[index];
+    if (quote === '"' || quote === "'") {
+      let close = index + 1;
+      while (close < key.length && key[close] !== quote) {
+        close += quote === '"' && key[close] === "\\" ? 2 : 1;
+      }
+      if (close >= key.length) return null;
+      parts.push(unquoteTomlString(key.slice(index, close + 1)));
+      index = close + 1;
+    } else {
+      const bare = /^[A-Za-z0-9_-]+/.exec(key.slice(index));
+      if (!bare) return null;
+      parts.push(bare[0]);
+      index += bare[0].length;
+    }
+    skipSpace();
+    if (index === key.length) return parts;
+    if (key[index] !== ".") return null;
+    index += 1;
+  }
+}
+
+/**
+ * Line indices of the real table headers in a TOML document. Lines inside a
+ * multi-line string or a multi-line array are content, even when they look
+ * like `[header]`.
+ */
+export function findTomlTableHeaderLines(lines: readonly string[]): number[] {
+  const headers: number[] = [];
+  let multilineQuote: string | null = null;
+  let arrayDepth = 0;
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex]!;
+    if (
+      multilineQuote === null &&
+      arrayDepth === 0 &&
+      parseTomlTableHeader(line) !== null
+    ) {
+      headers.push(lineIndex);
+      continue;
+    }
+    let index = 0;
+    while (index < line.length) {
+      if (multilineQuote !== null) {
+        const close = line.indexOf(multilineQuote, index);
+        if (close < 0) break;
+        index = close + 3;
+        multilineQuote = null;
+        continue;
+      }
+      const char = line[index]!;
+      if (char === "#") break;
+      const triple = line.slice(index, index + 3);
+      if (triple === '"""' || triple === "'''") {
+        multilineQuote = triple;
+        index += 3;
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        let close = index + 1;
+        while (close < line.length && line[close] !== char) {
+          close += char === '"' && line[close] === "\\" ? 2 : 1;
+        }
+        index = close + 1;
+        continue;
+      }
+      if (char === "[") arrayDepth += 1;
+      else if (char === "]" && arrayDepth > 0) arrayDepth -= 1;
+      index += 1;
+    }
+  }
+  return headers;
+}
+
+/** Which part of an `[mcp_servers.<id>...]` server a TOML table header opens. */
+const TOML_MCP_SERVER_TABLES = {
+  SERVER: "server",
+  ENV: MCP_CONFIG_KEYS.ENV,
+  HEADERS: MCP_CONFIG_KEYS.HEADERS,
+  /** Any other subtable; it belongs to the server but discovery ignores it. */
+  OTHER: "other",
+} as const;
+type TomlMcpServerTable =
+  (typeof TOML_MCP_SERVER_TABLES)[keyof typeof TOML_MCP_SERVER_TABLES];
 
 function parseTomlMcpServerKey(
   sectionName: string
-): { id: string; table: "server" | "env" | "headers" } | null {
-  if (!sectionName.startsWith("mcp_servers.")) {
-    return null;
+): { id: string; table: TomlMcpServerTable } | null {
+  const parts = splitTomlDottedKey(sectionName);
+  if (!parts || parts[0] !== "mcp_servers" || !parts[1]) return null;
+  const id = parts[1];
+  if (parts.length === 2) return { id, table: TOML_MCP_SERVER_TABLES.SERVER };
+  if (parts.length === 3 && parts[2] === TOML_MCP_SERVER_TABLES.ENV) {
+    return { id, table: TOML_MCP_SERVER_TABLES.ENV };
   }
-
-  let remainder = sectionName.slice("mcp_servers.".length).trim();
-  if (!remainder) {
-    return null;
+  if (parts.length === 3 && parts[2] === TOML_MCP_SERVER_TABLES.HEADERS) {
+    return { id, table: TOML_MCP_SERVER_TABLES.HEADERS };
   }
-
-  let table: "server" | "env" | "headers" = "server";
-  if (remainder.endsWith(`.${MCP_CONFIG_KEYS.ENV}`)) {
-    table = MCP_CONFIG_KEYS.ENV;
-    remainder = remainder.slice(0, -`.${MCP_CONFIG_KEYS.ENV}`.length);
-  } else if (remainder.endsWith(".headers")) {
-    table = "headers";
-    remainder = remainder.slice(0, -".headers".length);
-  }
-
-  const id =
-    remainder.startsWith(`"`) || remainder.startsWith(`'`)
-      ? unquoteTomlString(remainder)
-      : remainder;
-  return id ? { id, table } : null;
+  return { id, table: TOML_MCP_SERVER_TABLES.OTHER };
 }
 
 /** Return the owning MCP server id for a Codex TOML section or subtable. */
 export function getTomlMcpServerSectionId(sectionName: string): string | null {
-  const parsed = parseTomlMcpServerKey(sectionName);
-  if (parsed) return parsed.id;
-  if (!sectionName.startsWith("mcp_servers.")) return null;
-
-  const remainder = sectionName.slice("mcp_servers.".length).trim();
-  if (!remainder) return null;
-  if (remainder.startsWith('"') || remainder.startsWith("'")) {
-    const quote = remainder[0]!;
-    let escaped = false;
-    for (let index = 1; index < remainder.length; index += 1) {
-      const char = remainder[index]!;
-      if (char === quote && !escaped) {
-        const suffix = remainder.slice(index + 1);
-        return suffix.startsWith(".") ? unquoteTomlString(remainder.slice(0, index + 1)) : null;
-      }
-      escaped = char === "\\" && !escaped;
-      if (char !== "\\") escaped = false;
-    }
-    return null;
-  }
-  const dot = remainder.indexOf(".");
-  return dot < 0 ? remainder : remainder.slice(0, dot);
+  return parseTomlMcpServerKey(sectionName)?.id ?? null;
 }
 
 function normalizeCodexToml(
@@ -549,7 +617,7 @@ function normalizeCodexToml(
   const results = new Map<string, LocalMcpServerEntry>();
   const lines = text.split(/\r?\n/);
   let currentId: string | null = null;
-  let currentTable: "server" | "env" | "headers" = "server";
+  let currentTable: TomlMcpServerTable = TOML_MCP_SERVER_TABLES.SERVER;
   let currentConfig: {
     command?: string;
     args?: string[];
@@ -569,8 +637,11 @@ function normalizeCodexToml(
     }
   };
 
-  for (const rawLine of lines) {
-    const sectionName = parseTomlSectionName(rawLine);
+  const headerLines = new Set(findTomlTableHeaderLines(lines));
+  for (const [lineIndex, rawLine] of lines.entries()) {
+    const sectionName = headerLines.has(lineIndex)
+      ? parseTomlTableHeader(rawLine)
+      : null;
     if (sectionName) {
       const nextSection = parseTomlMcpServerKey(sectionName);
       if (!nextSection || nextSection.id !== currentId) {
@@ -578,11 +649,15 @@ function normalizeCodexToml(
         currentId = nextSection?.id ?? null;
         currentConfig = nextSection ? {} : null;
       }
-      currentTable = nextSection?.table ?? "server";
+      currentTable = nextSection?.table ?? TOML_MCP_SERVER_TABLES.SERVER;
       continue;
     }
 
-    if (!currentId || !currentConfig) {
+    if (
+      !currentId ||
+      !currentConfig ||
+      currentTable === TOML_MCP_SERVER_TABLES.OTHER
+    ) {
       continue;
     }
 

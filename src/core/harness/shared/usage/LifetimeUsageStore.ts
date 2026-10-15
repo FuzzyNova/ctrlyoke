@@ -482,6 +482,21 @@ function validateContributionTotals(value: unknown): boolean {
   return true;
 }
 
+/**
+ * A document written before lineages carried their own `skippedRunCount`.
+ * Its totals are not wrong data, just an older shape, so it is rebuilt from
+ * the run history quietly instead of being quarantined as corrupt.
+ */
+function predatesLineageSkippedRunCounts(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isRecord(value.lineages) &&
+    Object.values(value.lineages).some(
+      (lineage) => isRecord(lineage) && !("skippedRunCount" in lineage)
+    )
+  );
+}
+
 function validateStore(value: unknown): LifetimeUsageStoreData {
   if (
     !isRecord(value) ||
@@ -1014,7 +1029,9 @@ export class LifetimeUsageStore {
   private async readOrReset(now: number): Promise<LifetimeUsageStoreData> {
     try {
       const parsed = await this.readExisting();
-      return parsed === undefined ? emptyStore(now) : validateStore(parsed);
+      return parsed === undefined || predatesLineageSkippedRunCounts(parsed)
+        ? emptyStore(now)
+        : validateStore(parsed);
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
       this.lastErrorCode = LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA;

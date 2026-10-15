@@ -630,7 +630,12 @@ suite("HistoryTrashRepository", () => {
       kind: HISTORY_TRASH_ENTRY_KINDS.LINEAGE,
       message: 'Moved "message" to Recently deleted',
       skippedLive: [],
-      workflowKeys: [entry.items[0].workflowKey],
+      trashedLineages: [
+        {
+          workflowKey: entry.items[0].workflowKey,
+          workflowName: "message",
+        },
+      ],
     });
   });
 });

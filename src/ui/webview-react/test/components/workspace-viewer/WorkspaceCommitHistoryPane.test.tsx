@@ -548,6 +548,45 @@ describe("WorkspaceCommitHistoryPane", () => {
     expect(paneRefresh).toHaveBeenCalledOnce();
   });
 
+  it("shows a commit checkout failure in the same banner, replacing an older error", async () => {
+    vi.mocked(workspaceCheckoutBranch).mockRejectedValue(
+      new Error("branch failed")
+    );
+    vi.mocked(workspaceCheckoutCommit).mockRejectedValue(
+      new Error("commit failed")
+    );
+    useWorkspaceViewerStore.setState({
+      currentBranch: null,
+      detached: true,
+      previousBranch: "main",
+    });
+    render(
+      <WorkspaceCommitHistoryPane
+        onRefresh={vi.fn()}
+        controller={testController([{ ...commit, isHead: false }], {
+          currentBranch: null,
+          detached: true,
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to main" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("branch failed");
+
+    fireEvent.contextMenu(commitRow());
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Checkout Commit (Detach HEAD)",
+      })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Checkout" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("commit failed")
+    );
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
   it("keeps sparse placeholder rows indexed in the full virtual sequence", () => {
     const commits = [commit, { ...commit, hash: "second", subject: "second" }];
     const controller = testController(commits, {

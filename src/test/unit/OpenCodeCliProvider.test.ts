@@ -354,11 +354,7 @@ suite("OpenCodeCliProvider", () => {
       await fs.mkdir(path.join(repositoryRoot, ".git"), { recursive: true });
       for (const { file, environment } of cases) {
         await fs.mkdir(path.dirname(file), { recursive: true });
-        await fs.writeFile(
-          file,
-          '{"permission":{"bash":"ask"}}',
-          "utf8"
-        );
+        await fs.writeFile(file, '{"permission":{"bash":"ask"}}', "utf8");
         const context = await resolveOpenCodePermissionCollisionContext(
           projectRoot,
           environment
@@ -378,6 +374,50 @@ suite("OpenCodeCliProvider", () => {
       }
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("reads the home .opencode folder, OPENCODE_CONFIG_DIR and commented jsonc", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-home-layers-")
+    );
+    const home = path.join(root, "home");
+    const workspaceRoot = path.join(root, "workspace");
+    const configDir = path.join(root, "config-dir");
+    const previousHome = process.env.HOME;
+    const previousUserProfile = process.env.USERPROFILE;
+    try {
+      await fs.mkdir(path.join(home, ".opencode"), { recursive: true });
+      await fs.mkdir(path.join(workspaceRoot, ".git"), { recursive: true });
+      await fs.mkdir(configDir, { recursive: true });
+      await fs.writeFile(
+        path.join(home, ".opencode", "opencode.json"),
+        '{"permission":{"home-tool":"ask"}}',
+        "utf8"
+      );
+      await fs.writeFile(
+        path.join(configDir, "opencode.jsonc"),
+        '{\n  // comment\n  "permission": {"dir-tool": "ask",},\n}',
+        "utf8"
+      );
+      process.env.HOME = home;
+      process.env.USERPROFILE = home;
+
+      const context = await resolveOpenCodePermissionCollisionContext(
+        workspaceRoot,
+        {
+          XDG_CONFIG_HOME: path.join(root, "empty-global"),
+          OPENCODE_CONFIG_DIR: configDir,
+        }
+      );
+      assert.ok(context.topLevelKeys.has("home-tool"));
+      assert.ok(context.topLevelKeys.has("dir-tool"));
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = previousUserProfile;
+      await fs.rm(root, { recursive: true, force: true });
     }
   });
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import {
   act,
   fireEvent,
@@ -30,8 +31,12 @@ const commit: WorkspaceCommitLogEntry = {
 };
 
 function TestHarness({ onRefresh }: { onRefresh: () => void }) {
-  const { openContextMenu, commitHistoryContextMenuPortal, checkoutError } =
-    useCommitHistoryContextMenu({ onRefresh });
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const { openContextMenu, commitHistoryContextMenuPortal } =
+    useCommitHistoryContextMenu({
+      onRefresh,
+      onCheckoutError: setCheckoutError,
+    });
   return (
     <>
       <button onClick={() => openContextMenu(20, 20, commit)}>Open menu</button>

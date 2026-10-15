@@ -719,9 +719,8 @@ export const WorkspaceCommitHistoryPane: React.FC<
     fetchPage,
   });
   const controller = controllerOverride ?? hookController;
-  const [branchCheckoutError, setBranchCheckoutError] = useState<string | null>(
-    null
-  );
+  // One banner for every git mutation in this pane; the latest outcome wins.
+  const [gitError, setGitError] = useState<string | null>(null);
   const detached = controller.detached;
   const currentBranch = controller.currentBranch;
 
@@ -730,12 +729,11 @@ export const WorkspaceCommitHistoryPane: React.FC<
     onRefresh();
   }, [controller, onRefresh]);
 
-  const {
-    openContextMenu,
-    commitHistoryContextMenuPortal,
-    checkoutError,
-    dismissCheckoutError,
-  } = useCommitHistoryContextMenu({ onRefresh: handleRefresh });
+  const { openContextMenu, commitHistoryContextMenuPortal } =
+    useCommitHistoryContextMenu({
+      onRefresh: handleRefresh,
+      onCheckoutError: setGitError,
+    });
 
   const handleRowContextMenu = useCallback(
     (e: React.MouseEvent, commit: WorkspaceCommitLogEntry) => {
@@ -763,7 +761,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
   const handleReturnToBranch = useCallback(async () => {
     const branch = previousBranch ?? currentBranch;
     if (!branch) return;
-    setBranchCheckoutError(null);
+    setGitError(null);
     await runWorkspaceGitMutation({
       action: "branch checkout",
       mutate: () =>
@@ -772,7 +770,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
           repo: selectedRepoId ?? undefined,
         }),
       onSuccess: () => setPreviousBranch(null),
-      onError: setBranchCheckoutError,
+      onError: setGitError,
       onRefresh: handleRefresh,
     });
   }, [
@@ -915,20 +913,17 @@ export const WorkspaceCommitHistoryPane: React.FC<
         </div>
       )}
 
-      {(checkoutError || branchCheckoutError) && (
+      {gitError && (
         <div
           role="alert"
-          className="flex items-start justify-between gap-2 px-3 py-2 text-xs text-error-fg bg-error-bg border-b border-error-fg/20 shrink-0"
+          className="flex items-start justify-between gap-2 px-3 py-2 text-xs text-error-fg bg-severity-error-bg border-b border-error-fg/20 shrink-0"
         >
-          <span>{checkoutError ?? branchCheckoutError}</span>
+          <span>{gitError}</span>
           <button
             type="button"
             aria-label="Dismiss checkout error"
             className="codicon codicon-close shrink-0"
-            onClick={() => {
-              dismissCheckoutError();
-              setBranchCheckoutError(null);
-            }}
+            onClick={() => setGitError(null)}
           />
         </div>
       )}

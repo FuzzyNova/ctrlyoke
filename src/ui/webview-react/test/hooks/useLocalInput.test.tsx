@@ -79,7 +79,7 @@ describe("useLocalInput", () => {
     fireEvent.blur(input);
 
     expect(onCommit.mock.calls).toEqual([[2]]);
-    expect(input).toHaveValue(1);
+    expect(input).toHaveValue(2);
   });
 
   it("ignores external updates while the user is editing", () => {

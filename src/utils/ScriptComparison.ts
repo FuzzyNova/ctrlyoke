@@ -45,8 +45,11 @@ export interface ScriptComparisonResult {
   passed: boolean;
   /** The trimmed value taken from `compareSource` and compared. */
   actual: string;
-  /** Present when a guarded comparison could not finish. */
-  reason?: string;
+  /**
+   * Present when the comparison could not finish (a regex timeout or worker
+   * failure). Callers treat it as an evaluation error, never a mismatch.
+   */
+  error?: string;
 }
 
 /** Fill in the defaults so every consumer reads the same resolved triple. */
@@ -200,7 +203,7 @@ export function compareScriptOutputInline(
     return {
       passed: false,
       actual,
-      reason: "Regex comparisons must use compareScriptOutputAsync.",
+      error: "Regex comparisons must use compareScriptOutputAsync.",
     };
   }
 

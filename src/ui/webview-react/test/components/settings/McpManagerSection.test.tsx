@@ -156,6 +156,9 @@ describe("McpManagerSection", () => {
           args: ["server-a"],
         },
         scope: SETTING_SCOPES.USER,
+        // Saving over an existing copy must update it, not be rejected as a
+        // duplicate add.
+        previousId: "server-a",
       }
     );
   });

@@ -157,18 +157,31 @@ suite("AntigravityLogParser", () => {
       const logPath = path.join(tempDir, "cli-20261014_120000.log");
       const sessionId = "11111111-2222-3333-4444-555555555555";
       try {
-        fs.writeFileSync(logPath, "Starting conversation update stream for 11111111-2222-3333-", "utf8");
+        fs.writeFileSync(
+          logPath,
+          "Starting conversation update stream for 11111111-2222-3333-",
+          "utf8"
+        );
         assert.deepStrictEqual(await parser.readNewLines(logPath), []);
         fs.appendFileSync(logPath, "4444-555555555555\n", "utf8");
         const sessionEvents = await parser.readNewLines(logPath);
-        assert.strictEqual(sessionEvents.filter((event) => event.type === "session.created").length, 1);
+        assert.strictEqual(
+          sessionEvents.filter((event) => event.type === "session.created")
+            .length,
+          1
+        );
         assert.strictEqual(parser.extractSessionId(sessionEvents), sessionId);
 
         fs.appendFileSync(logPath, "Stream completed, clearing Respon", "utf8");
         assert.deepStrictEqual(await parser.readNewLines(logPath), []);
         fs.appendFileSync(logPath, "sePending\n", "utf8");
         const completionEvents = await parser.readNewLines(logPath);
-        assert.strictEqual(completionEvents.filter((event) => event.type === "response.completed").length, 1);
+        assert.strictEqual(
+          completionEvents.filter(
+            (event) => event.type === "response.completed"
+          ).length,
+          1
+        );
         assert.deepStrictEqual(await parser.readNewLines(logPath), []);
       } finally {
         removeTempDir(tempDir);
@@ -835,7 +848,7 @@ suite("AntigravityLogParser", () => {
           source: "MODEL",
           type: "GENERIC",
           status: "DONE",
-          content: 'log output: exit code: 1',
+          content: "log output: exit code: 1",
         },
         timestamp: 1,
       });
@@ -851,7 +864,7 @@ suite("AntigravityLogParser", () => {
           source: "MODEL",
           type: "GENERIC",
           status: "DONE",
-          content: "Output:\nExit code: 1\n",
+          content: "Exit code: 1\nOutput:\n",
         },
         timestamp: 2,
       });
@@ -859,6 +872,21 @@ suite("AntigravityLogParser", () => {
       assert.strictEqual(
         (command[0].data as { status: string }).status,
         OPERATION_STATUS.FAILED
+      );
+
+      const loggedFailure = AntigravityToolEventBuilder.build({
+        call: { name: "run_command", args: { CommandLine: "cat ci.log" } },
+        result: {
+          source: "MODEL",
+          type: "GENERIC",
+          status: "DONE",
+          content: "Exit code: 0\nOutput:\nExit code: 1\n",
+        },
+        timestamp: 3,
+      });
+      assert.strictEqual(
+        (loggedFailure[0].data as { status: string }).status,
+        OPERATION_STATUS.COMPLETED
       );
     });
 

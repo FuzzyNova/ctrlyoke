@@ -29,7 +29,11 @@ import {
 } from "./McpConfigPaths";
 import { detectFormattingOptions } from "./WorkflowSourceEditor";
 import { readFileForEdit, writeTextFileAtomic } from "./AtomicFileUtils";
-import { getTomlMcpServerSectionId } from "./McpDiscoveryUtils";
+import {
+  findTomlTableHeaderLines,
+  getTomlMcpServerSectionId,
+  parseTomlTableHeader,
+} from "./McpDiscoveryUtils";
 
 type JsonObject = Record<string, unknown>;
 
@@ -267,16 +271,8 @@ function toCodexBlock(server: McpServerConfig): string | null {
   return lines.join("\n");
 }
 
-function parseTomlHeader(line: string): string | null {
-  const match = line.match(/^\s*(\[\[?)(.*?)(\]\]?)(?:\s*#.*)?\s*$/);
-  if (!match) return null;
-  const isArray = match[1] === "[[";
-  if (isArray ? match[3] !== "]]" : match[3] !== "]") return null;
-  return match[2]!.trim();
-}
-
 function tomlServerIdAtLine(line: string): string | null {
-  const sectionName = parseTomlHeader(line);
+  const sectionName = parseTomlTableHeader(line);
   return sectionName ? getTomlMcpServerSectionId(sectionName) : null;
 }
 
@@ -351,12 +347,7 @@ async function writeCodexTomlFile(
 
   const targetIds = new Set(blocks.keys());
   const lines = existingText.split(/\r?\n/);
-  const sectionStartIndices: number[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    if (parseTomlHeader(lines[index]!) !== null) {
-      sectionStartIndices.push(index);
-    }
-  }
+  const sectionStartIndices = findTomlTableHeaderLines(lines);
 
   const keptSegments: string[] = [];
   let cursor = 0;
@@ -409,12 +400,7 @@ async function removeCodexTomlServers(
   const existingText = await readFileForEdit(filePath, "");
   const targetIds = new Set(ids);
   const lines = existingText.split(/\r?\n/);
-  const sectionStartIndices: number[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    if (parseTomlHeader(lines[index]!) !== null) {
-      sectionStartIndices.push(index);
-    }
-  }
+  const sectionStartIndices = findTomlTableHeaderLines(lines);
 
   const keptSegments: string[] = [];
   let cursor = 0;

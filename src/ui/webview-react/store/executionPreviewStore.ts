@@ -106,9 +106,13 @@ export const useExecutionPreviewStore = create<
       return;
     }
     const key = workflowViewAddressKey(message.address);
-    // The preview response is the server's current definition head. A
-    // continuation discard can legitimately restore an older revision.
-    const currentHead = message.displayedDefinitionRevision;
+    // A push that overtook this response may already have moved the head
+    // past the previewed revision. Only authoritative view pushes lower it
+    // (a discarded continuation restores an older revision).
+    const currentHead = Math.max(
+      state.definitionRevisionHeads[key] ?? message.displayedDefinitionRevision,
+      message.displayedDefinitionRevision
+    );
     set({
       preview: message.preview,
       status: PREVIEW_STATUSES.READY,
@@ -122,7 +126,11 @@ export const useExecutionPreviewStore = create<
     });
   },
 
-  observeDefinitionRevision: (address, definitionRevision, authoritative = false) =>
+  observeDefinitionRevision: (
+    address,
+    definitionRevision,
+    authoritative = false
+  ) =>
     set((state) => {
       const key = workflowViewAddressKey(address);
       const head = authoritative

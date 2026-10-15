@@ -566,8 +566,10 @@ export class AntigravityToolEventBuilder {
       return undefined;
     }
     const content = this.stringContent(entry);
+    // agy puts "Exit code: N" on the first line of a run_command result; a
+    // later line is command output and may say anything.
     const match = isRunCommand
-      ? content.match(/^Exit code:\s*(-?\d+)\s*$/im)
+      ? content.split(/\r?\n/, 1)[0]!.match(/^Exit code:\s*(-?\d+)\s*$/i)
       : content.match(/\bexited with code\s+(-?\d+)\b/i);
     if (!match) {
       return undefined;

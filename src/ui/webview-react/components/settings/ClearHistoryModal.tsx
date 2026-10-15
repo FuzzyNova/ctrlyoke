@@ -2,8 +2,6 @@ import { useEffect } from "react";
 import { TypedConfirmModal } from "../shared/TypedConfirmModal";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useHistoryTrashStore } from "@store/historyTrashStore";
-import { useUiStore } from "@store/uiStore";
-import { useWorkflowStore } from "@store/workflowStore";
 import { generateId } from "@utils/string";
 import { formatBytes } from "@utils/number";
 import {
@@ -50,19 +48,7 @@ export function ClearHistoryModal({ isOpen, retentionDays, onClose }: Props) {
       type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
       confirmation: CLEAR_HISTORY_CONFIRMATION_PHRASE,
     });
-    // The workflow on screen goes too unless it is one of the kept live ones.
-    const displayed = useUiStore.getState().displayedViewAddress;
-    if (
-      displayed &&
-      !preview?.liveLineages.some(
-        (live) => live.workflowKey === displayed.workflowKey
-      )
-    ) {
-      useUiStore.getState().setViewingDeletedWorkflow({
-        workflowKey: displayed.workflowKey,
-        workflowName: useWorkflowStore.getState().workflowName ?? "",
-      });
-    }
+    // The HISTORY_TRASHED reply locks the displayed workflow if it was cleared.
     onClose();
   };
 

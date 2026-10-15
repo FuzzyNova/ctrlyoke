@@ -124,4 +124,19 @@ describe("executionPreviewStore", () => {
       isStale: false,
     });
   });
+
+  it("marks a response stale when a newer push overtook it", () => {
+    const token = useExecutionPreviewStore
+      .getState()
+      .open({ kind: "workflow" });
+    useExecutionPreviewStore.getState().observeDefinitionRevision(address, 3);
+
+    useExecutionPreviewStore.getState().resolve(result(token, 2));
+
+    expect(useExecutionPreviewStore.getState()).toMatchObject({
+      displayedDefinitionRevision: 2,
+      definitionRevisionHeads: { [workflowViewAddressKey(address)]: 3 },
+      isStale: true,
+    });
+  });
 });

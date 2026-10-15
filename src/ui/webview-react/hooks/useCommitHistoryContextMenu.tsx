@@ -19,17 +19,19 @@ import { sendMessage } from "@hooks/useMessageHandler";
 
 interface UseCommitHistoryContextMenuOptions {
   onRefresh: () => void;
+  /** Reports a failed checkout's message, or `null` when a new one starts. */
+  onCheckoutError: (message: string | null) => void;
 }
 
 export function useCommitHistoryContextMenu({
   onRefresh,
+  onCheckoutError,
 }: UseCommitHistoryContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
   const [pendingCheckout, setPendingCheckout] =
     useState<WorkspaceCommitLogEntry | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const detached = useWorkspaceViewerStore((s) => s.detached);
 
@@ -57,7 +59,7 @@ export function useCommitHistoryContextMenu({
     async (commit: WorkspaceCommitLogEntry) => {
       const store = useWorkspaceViewerStore.getState();
       const branchBeforeCheckout = store.currentBranch;
-      setCheckoutError(null);
+      onCheckoutError(null);
       await runWorkspaceGitMutation({
         action: "commit checkout",
         mutate: () =>
@@ -73,11 +75,11 @@ export function useCommitHistoryContextMenu({
           // the checked-out point.
           store.setDetached(true);
         },
-        onError: setCheckoutError,
+        onError: onCheckoutError,
         onRefresh,
       });
     },
-    [onRefresh]
+    [onCheckoutError, onRefresh]
   );
 
   const openContextMenu = useCallback(
@@ -178,10 +180,5 @@ export function useCommitHistoryContextMenu({
     </>
   );
 
-  return {
-    openContextMenu,
-    commitHistoryContextMenuPortal,
-    checkoutError,
-    dismissCheckoutError: () => setCheckoutError(null),
-  };
+  return { openContextMenu, commitHistoryContextMenuPortal };
 }

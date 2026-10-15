@@ -140,6 +140,7 @@ import type {
 import type {
   HistoryClearPreview,
   HistoryTrashEntrySummary,
+  HistoryTrashItem,
   HistoryTrashOutcome,
 } from "./HistoryTrashTypes";
 export type {
@@ -2206,7 +2207,11 @@ export interface HistoryTrashedMessage {
   kind: HistoryTrashEntryKind;
   message: string;
   skippedLive: WorkflowKey[];
-  workflowKeys: WorkflowKey[];
+  /**
+   * Lineages this entry removed entirely. A run-only delete leaves its lineage
+   * in place, so it is not listed here and never locks the view.
+   */
+  trashedLineages: Pick<HistoryTrashItem, "workflowKey" | "workflowName">[];
 }
 
 /** Webview → Extension: list Recently deleted. */
