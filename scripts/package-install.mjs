@@ -6,19 +6,18 @@
 // daily-driver window, so this script never does it automatically. See
 // dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md.
 
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnShimSync } from "./spawn-windows-shim.mjs";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 function run(command, args) {
   console.log(`\n> ${command} ${args.join(" ")}`);
-  const result = spawnSync(command, args, {
+  const result = spawnShimSync(command, args, {
     cwd: repoRoot,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
   if (result.error) {
     console.error(`Failed to run '${command}': ${result.error.message}`);

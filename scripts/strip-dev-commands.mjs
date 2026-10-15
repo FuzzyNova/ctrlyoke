@@ -30,15 +30,24 @@ const DEV_COMMAND_IDS = [
   "ctrlyoke.devMenu",
 ];
 
-function stripDevCommands() {
+export function stripDevCommands({
+  packagePath = packageJsonPath,
+  backup = backupPath,
+} = {}) {
   console.log("📦 Stripping dev commands from package.json...");
 
+  if (fs.existsSync(backup)) {
+    throw new Error(
+      `Refusing to overwrite existing backup at ${backup}. Run npm run restore-package first.`
+    );
+  }
+
   // Read package.json
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+  const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 
   // Backup original
-  fs.writeFileSync(backupPath, JSON.stringify(packageJson, null, 2) + "\n");
-  console.log(`✅ Created backup at ${backupPath}`);
+  fs.writeFileSync(backup, JSON.stringify(packageJson, null, 2) + "\n");
+  console.log(`✅ Created backup at ${backup}`);
 
   // Filter out dev commands
   const removedCommandIds = new Set();
@@ -94,31 +103,39 @@ function stripDevCommands() {
 
   // Write modified package.json
   fs.writeFileSync(
-    packageJsonPath,
+    packagePath,
     JSON.stringify(packageJson, null, 2) + "\n"
   );
   console.log(`✅ Updated package.json for production build\n`);
 }
 
-function restorePackageJson() {
+export function restorePackageJson({
+  packagePath = packageJsonPath,
+  backup = backupPath,
+} = {}) {
   console.log("📦 Restoring original package.json...");
 
-  if (!fs.existsSync(backupPath)) {
-    console.error("❌ No backup found at", backupPath);
-    process.exit(1);
+  if (!fs.existsSync(backup)) {
+    throw new Error(`No backup found at ${backup}`);
   }
 
-  fs.copyFileSync(backupPath, packageJsonPath);
-  fs.unlinkSync(backupPath);
+  fs.copyFileSync(backup, packagePath);
+  fs.unlinkSync(backup);
 
   console.log("✅ Restored original package.json\n");
 }
 
 // Main
-const args = process.argv.slice(2);
-
-if (args.includes("--restore")) {
-  restorePackageJson();
-} else {
-  stripDevCommands();
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  const args = process.argv.slice(2);
+  try {
+    if (args.includes("--restore")) {
+      restorePackageJson();
+    } else {
+      stripDevCommands();
+    }
+  } catch (error) {
+    console.error(`❌ ${error.message}`);
+    process.exitCode = 1;
+  }
 }
