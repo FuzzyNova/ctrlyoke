@@ -458,6 +458,40 @@ suite("WorkflowExecutor token totals", () => {
 });
 
 suite("WorkflowExecutor condition shell reporting", () => {
+  test("routes a regex timeout through errorBehavior instead of onFail retry", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      {
+        ...shellEvaluationResult(false),
+        errored: true,
+        error:
+          "Regex /^(a+)+$/ timed out after 0.01s on input of 41 chars; the pattern likely backtracks catastrophically.",
+      },
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "run once",
+          errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, ["run once"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
   test("shows retry detail only when an end-condition retry will be scheduled", async () => {
     const run = async (
       endCondition: NonNullable<PromptStep["endCondition"]>,

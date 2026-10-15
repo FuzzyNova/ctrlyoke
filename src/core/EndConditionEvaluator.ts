@@ -85,6 +85,8 @@ export interface EvaluationResult {
 export interface EvaluationComparison {
   passed: boolean;
   actual: string;
+  errored?: boolean;
+  error?: string;
   comparisonReason?: string;
   stdout: string;
   stderr: string;
@@ -356,11 +358,11 @@ export class EndConditionEvaluator {
 
       return {
         ...comparison,
-        errored: result.errored ?? false,
+        errored: comparison.errored ?? result.errored ?? false,
         stdout: comparison.stdout,
         stderr: comparison.stderr,
         result: comparison.result,
-        error: result.error,
+        error: comparison.error ?? result.error,
         timeout: result.timeout,
         cancelled: result.cancelled,
         duration: Date.now() - startTime,
@@ -1079,6 +1081,8 @@ export class EndConditionEvaluator {
     });
     return {
       ...comparisonResult,
+      errored: comparisonResult.reason !== undefined,
+      error: comparisonResult.reason,
       comparisonReason: comparisonResult.reason,
       stdout: result.stdout ?? result.result,
       stderr: result.stderr ?? "",

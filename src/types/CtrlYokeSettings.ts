@@ -255,6 +255,7 @@ export interface CtrlYokeGlobalSettings {
     injectMode: boolean;
     maxPromptTimeoutSec: number; // seconds, -1 = unlimited
     scriptTimeoutSec: number; // seconds
+    regexTimeoutSec: number; // seconds
     closeTerminalOnComplete: boolean;
     autoDeleteTempFiles: boolean;
     contextResolutionFailure: ContextResolutionFailureMode;
@@ -593,6 +594,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     injectMode: true,
     maxPromptTimeoutSec: -1,
     scriptTimeoutSec: 3600,
+    regexTimeoutSec: 10,
     ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.NATIVE,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,

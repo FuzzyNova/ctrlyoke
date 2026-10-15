@@ -84,6 +84,20 @@ export function ExecutionSection({
           className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
         />
       </SettingInputRow>
+      <SettingInputRow
+        settingKey="execution.regexTimeoutSec"
+        id="exec-regex-timeout"
+        {...rowProps}
+      >
+        <LocalNumberInput
+          id="exec-regex-timeout"
+          min={1}
+          value={exec.regexTimeoutSec}
+          onCommit={(v) => onUpdate("execution.regexTimeoutSec", v)}
+          parse={(v) => parseInt(v, 10) || 10}
+          className="w-full bg-input-bg border border-input-border rounded-sm px-2 py-1 text-sm text-foreground focus:outline-hidden focus:border-focus-border"
+        />
+      </SettingInputRow>
       <SettingToggleRow
         settingKey="execution.closeTerminalOnComplete"
         checked={exec.closeTerminalOnComplete}

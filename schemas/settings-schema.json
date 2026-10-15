@@ -524,6 +524,12 @@
           "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts, and for a worktree's setup command, to run. This setting must be greater than zero and has no unlimited value. A script's own `timeoutSec` (in seconds) overrides it.",
           "default": 3600
         },
+        "regexTimeoutSec": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Maximum time in seconds for each `matches` regex comparison. A timeout is an evaluation error handled by the step's `errorBehavior`.",
+          "default": 10
+        },
         "ctrlyokeMcpMode": {
           "type": "string",
           "enum": ["native", "skill"],

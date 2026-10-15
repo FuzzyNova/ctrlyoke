@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
-  MAX_REGEX_INPUT_LENGTH,
   compareScriptOutputInline as compareScriptOutput,
   describeComparison,
   describeIncompleteComparison,
@@ -11,10 +10,8 @@ import {
   resolveReportedScriptProperties,
   resolveScriptComparison,
 } from "../../utils/ScriptComparison";
-import {
-  compareScriptOutputAsync,
-  REGEX_WORKER_TIMEOUT_MS,
-} from "../../utils/ScriptComparisonAsync";
+import { compareScriptOutputAsync } from "../../utils/ScriptComparisonAsync";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   COMPARE_SOURCES,
   DEFAULT_COMPARE_SOURCE,
@@ -191,20 +188,16 @@ suite("ScriptComparison", () => {
       assert.strictEqual(stdout("none", SCRIPT_OPERATORS.GTE)("80"), false);
     });
 
-    test("matches is an unanchored regex", () => {
-      const anchored = stdout(
-        "^\\d+ passing, 0 failing$",
-        SCRIPT_OPERATORS.MATCHES
+    test("synchronous comparison refuses to evaluate a regex", () => {
+      const result = compareScriptOutput(
+        {
+          operator: SCRIPT_OPERATORS.MATCHES,
+          expected: "needle",
+        },
+        ok("needle")
       );
-      assert.strictEqual(anchored("12 passing, 0 failing"), true);
-      assert.strictEqual(anchored("ran 12 passing, 0 failing"), false);
-      assert.strictEqual(
-        stdout(
-          "\\d+ passing",
-          SCRIPT_OPERATORS.MATCHES
-        )("ran 12 passing, 3 failing"),
-        true
-      );
+      assert.strictEqual(result.passed, false);
+      assert.match(result.reason ?? "", /must use compareScriptOutputAsync/);
     });
 
     test("an invalid regex fails rather than throwing", () => {
@@ -216,7 +209,7 @@ suite("ScriptComparison", () => {
 
     test("a long regex sees the full output including a trailing test summary", async () => {
       const log = `${"build output line\n".repeat(9_000)}3000 passing (12s)`;
-      assert.ok(log.length > MAX_REGEX_INPUT_LENGTH);
+      assert.ok(log.length > 100_000);
       const result = await compareScriptOutputAsync(
         {
           compareSource: COMPARE_SOURCES.STDOUT,
@@ -228,24 +221,30 @@ suite("ScriptComparison", () => {
       assert.strictEqual(result.passed, true);
     });
 
-    test("a catastrophic regex times out with a clear comparison reason", async () => {
-      const actual = `${"a".repeat(MAX_REGEX_INPUT_LENGTH + 1)}!`;
-      const result = await compareScriptOutputAsync(
-        {
-          compareSource: COMPARE_SOURCES.STDOUT,
-          operator: SCRIPT_OPERATORS.MATCHES,
-          expected: "(a+)+$",
-        },
-        ok(actual)
-      );
-      assert.strictEqual(result.passed, false);
-      assert.strictEqual(
-        result.reason,
-        `regex timed out after ${REGEX_WORKER_TIMEOUT_MS / 1000}s on ${actual.length} chars`
-      );
+    test("a short catastrophic regex times out as an error", async () => {
+      const actual = `${"a".repeat(40)}!`;
+      const originalTimeout = ConfigurationUtils.getRegexTimeoutSeconds;
+      ConfigurationUtils.getRegexTimeoutSeconds = () => 0.01;
+      try {
+        const result = await compareScriptOutputAsync(
+          {
+            compareSource: COMPARE_SOURCES.STDOUT,
+            operator: SCRIPT_OPERATORS.MATCHES,
+            expected: "^(a+)+$",
+          },
+          ok(actual)
+        );
+        assert.strictEqual(result.passed, false);
+        assert.match(result.reason ?? "", /timed out after 0.01s/);
+        assert.match(result.reason ?? "", /\^\(a\+\)\+\$/);
+        assert.match(result.reason ?? "", new RegExp(`${actual.length} chars`));
+        assert.match(result.reason ?? "", /backtracks catastrophically/);
+      } finally {
+        ConfigurationUtils.getRegexTimeoutSeconds = originalTimeout;
+      }
     });
 
-    test("short regex input stays on the inline comparison path", async () => {
+    test("matches regex is evaluated in the worker for short inputs", async () => {
       const result = await compareScriptOutputAsync(
         {
           compareSource: COMPARE_SOURCES.STDOUT,
@@ -256,6 +255,24 @@ suite("ScriptComparison", () => {
       );
       assert.strictEqual(result.passed, true);
       assert.strictEqual(result.reason, undefined);
+    });
+
+    test("configured deadline is used", async () => {
+      const originalTimeout = ConfigurationUtils.getRegexTimeoutSeconds;
+      ConfigurationUtils.getRegexTimeoutSeconds = () => 0.01;
+      try {
+        const result = await compareScriptOutputAsync(
+          {
+            compareSource: COMPARE_SOURCES.STDOUT,
+            operator: SCRIPT_OPERATORS.MATCHES,
+            expected: "^(a+)+$",
+          },
+          ok(`${"a".repeat(40)}!`)
+        );
+        assert.match(result.reason ?? "", /timed out after 0.01s/);
+      } finally {
+        ConfigurationUtils.getRegexTimeoutSeconds = originalTimeout;
+      }
     });
 
     test("isEmpty and isNotEmpty ignore `expected`", () => {
