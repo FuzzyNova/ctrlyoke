@@ -50,6 +50,7 @@ import {
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
 import {
   hydrateSnapshot,
+  reportWorkspaceSnapshotContentFailure,
   useWorkspaceSnapshotContent,
 } from "@hooks/useWorkspaceSnapshotContent";
 import { WebviewLog } from "@utils/logger";
@@ -302,12 +303,18 @@ export function useOutputUndoActions({
       mode = UNDO_REDO_DIRECTIONS.UNDO,
     }: OpenMinimapDialogInput) => {
       if (!runAddress) return;
-      const hydratedSnapshot = await hydrateSnapshot(
-        requestSnapshotContent,
-        runAddress,
-        target,
-        snapshot
-      );
+      let hydratedSnapshot: WorkspaceSnapshot | undefined;
+      try {
+        hydratedSnapshot = await hydrateSnapshot(
+          requestSnapshotContent,
+          runAddress,
+          target,
+          snapshot
+        );
+      } catch {
+        reportWorkspaceSnapshotContentFailure();
+        return;
+      }
       const hydratedInput = input
         ? {
             ...input,
@@ -344,12 +351,18 @@ export function useOutputUndoActions({
     ) => {
       if (!promptUndo || !runAddress) return;
       const undoTarget = toUndoExecutionTarget(target);
-      const workspaceSnapshot = await hydrateSnapshot(
-        requestSnapshotContent,
-        runAddress,
-        undoTarget,
-        promptUndo.workspaceSnapshot
-      );
+      let workspaceSnapshot: WorkspaceSnapshot | undefined;
+      try {
+        workspaceSnapshot = await hydrateSnapshot(
+          requestSnapshotContent,
+          runAddress,
+          undoTarget,
+          promptUndo.workspaceSnapshot
+        );
+      } catch {
+        reportWorkspaceSnapshotContentFailure();
+        return;
+      }
       const alreadyUndone =
         promptUndo.undoRecord != null && promptUndo.undoRecord.isRedone !== true
           ? promptUndo.undoRecord.redoInstructions
@@ -418,15 +431,20 @@ export function useOutputUndoActions({
             workspacePath
           )
         : undefined;
-      const workspaceSnapshot =
-        indexedChange?.contentAvailableOnDemand && runAddress
-          ? await hydrateSnapshot(
-              requestSnapshotContent,
-              runAddress,
-              target,
-              row.workspaceSnapshot
-            )
-          : row.workspaceSnapshot;
+      let workspaceSnapshot = row.workspaceSnapshot;
+      if (indexedChange?.contentAvailableOnDemand && runAddress) {
+        try {
+          workspaceSnapshot = await hydrateSnapshot(
+            requestSnapshotContent,
+            runAddress,
+            target,
+            row.workspaceSnapshot
+          );
+        } catch {
+          reportWorkspaceSnapshotContentFailure();
+          return;
+        }
+      }
 
       const input = buildUndoDialogInputForSpecificEvent(
         target,
@@ -537,7 +555,9 @@ export function useOutputUndoActions({
         );
         return { ...entry, undoCandidates: candidates };
       })
-    ).then(openWorkflowDialog);
+    )
+      .then(openWorkflowDialog)
+      .catch(() => reportWorkspaceSnapshotContentFailure());
   }, [
     historyOutputs,
     isViewingHistory,

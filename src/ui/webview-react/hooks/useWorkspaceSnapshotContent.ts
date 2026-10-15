@@ -9,6 +9,13 @@ import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 import { getVsCodeApi } from "./useVsCodeApi";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { notifyUser } from "@utils/notifyUser";
+
+const SNAPSHOT_CONTENT_RETRY_INTERVAL_MS = 5000;
+const SNAPSHOT_CONTENT_MAX_RETRIES = 4;
+const SNAPSHOT_CONTENT_FAILURE_MESSAGE =
+  "Couldn't load the file snapshot — check the connection and try again.";
 
 type SnapshotContent = Pick<
   WorkspaceSnapshotContentMessage,
@@ -26,7 +33,9 @@ export class WorkspaceSnapshotContentClient {
       message: RequestWorkspaceSnapshotContentMessage
     ) => void,
     private readonly makeRequestId: () => string = () =>
-      `snapshot-content-${++this.nextRequestId}-${generateId()}`
+      `snapshot-content-${++this.nextRequestId}-${generateId()}`,
+    private readonly retryIntervalMs = SNAPSHOT_CONTENT_RETRY_INTERVAL_MS,
+    private readonly maxRetries = SNAPSHOT_CONTENT_MAX_RETRIES
   ) {}
 
   request(
@@ -46,7 +55,19 @@ export class WorkspaceSnapshotContentClient {
     if (existing) return existing;
 
     const requestId = this.makeRequestId();
-    const response = new Promise<SnapshotContent>((resolve) => {
+    let startRequest: () => void = () => undefined;
+    const response = new Promise<SnapshotContent>((resolve, reject) => {
+      let retries = 0;
+      let retryTimer: ReturnType<typeof setInterval> | undefined;
+      const cleanup = () => {
+        window.removeEventListener("message", listener);
+        if (retryTimer !== undefined) clearInterval(retryTimer);
+        if (this.pending.get(key) === response) this.pending.delete(key);
+      };
+      const fail = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
       const listener = (event: MessageEvent) => {
         const message = event.data as Partial<WorkspaceSnapshotContentMessage>;
         if (
@@ -55,7 +76,6 @@ export class WorkspaceSnapshotContentClient {
         ) {
           return;
         }
-        window.removeEventListener("message", listener);
         const content: SnapshotContent = {
           ...(message.beforeContent !== undefined
             ? { beforeContent: message.beforeContent }
@@ -68,26 +88,58 @@ export class WorkspaceSnapshotContentClient {
             : {}),
         };
         if (
-          content.beforeContent !== undefined ||
-          content.contentToRestore !== undefined
+          content.beforeContent === undefined &&
+          content.contentToRestore === undefined &&
+          content.contentCaptureSkipped !== true
         ) {
-          this.cache.set(key, content);
+          cleanup();
+          resolve(content);
+          return;
         }
-        this.pending.delete(key);
+        cleanup();
+        this.cache.set(key, content);
         resolve(content);
       };
       window.addEventListener("message", listener);
-      this.send({
+      const request = {
         type: MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
         requestId,
         address,
         target,
         path,
-      });
+      };
+      const sendRequest = () => {
+        try {
+          this.send(request);
+        } catch (error) {
+          fail(
+            error instanceof Error
+              ? error
+              : new Error("Could not send snapshot content request.")
+          );
+        }
+      };
+      startRequest = () => {
+        retryTimer = setInterval(() => {
+          if (retries >= this.maxRetries) {
+            fail(new Error("Snapshot content request timed out."));
+            return;
+          }
+          retries += 1;
+          sendRequest();
+        }, this.retryIntervalMs);
+        sendRequest();
+      };
     });
     this.pending.set(key, response);
+    startRequest();
     return response;
   }
+}
+
+/** Shared failure feedback for every surface that hydrates on-demand content. */
+export function reportWorkspaceSnapshotContentFailure(): void {
+  notifyUser(SNAPSHOT_CONTENT_FAILURE_MESSAGE, USER_FEEDBACK_SEVERITY.ERROR);
 }
 
 const snapshotContentClient = new WorkspaceSnapshotContentClient((message) =>

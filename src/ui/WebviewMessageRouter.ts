@@ -34,6 +34,7 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { WorkspaceSnapshotContentMessage } from "../types/WebviewMessageTypes";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type {
@@ -1696,6 +1697,15 @@ export class WebviewMessageRouter {
           typeof message.path !== "string" ||
           !isValidOutputExecutionTarget(message.target)
         ) {
+          if (typeof message.requestId === "string") {
+            ctx.emit({
+              type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+              requestId: message.requestId,
+              address: message.address,
+              target: message.target,
+              path: message.path,
+            } as WorkspaceSnapshotContentMessage);
+          }
           return;
         }
 

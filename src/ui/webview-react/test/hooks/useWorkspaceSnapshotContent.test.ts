@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MESSAGE_TYPES, FINAL_STEP_PHASES } from "@/types/messages";
 import type { WorkflowKey, RunRef } from "@root/types/CtrlYokeTypes";
 import {
@@ -7,6 +7,8 @@ import {
 } from "@hooks/useWorkspaceSnapshotContent";
 
 describe("WorkspaceSnapshotContentClient", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("hydrates every on-demand snapshot entry", async () => {
     const sent: any[] = [];
     const client = new WorkspaceSnapshotContentClient(
@@ -127,11 +129,14 @@ describe("WorkspaceSnapshotContentClient", () => {
     await expect(differentPath).resolves.toEqual({});
   });
 
-  it("retries empty replies and caches the later content reply", async () => {
+  it("reissues dropped requests, rejects, and lets a later call start fresh", async () => {
+    vi.useFakeTimers();
     const sent: any[] = [];
     const client = new WorkspaceSnapshotContentClient(
       (message) => sent.push(message),
-      () => `request-${sent.length + 1}`
+      () => `request-${sent.length + 1}`,
+      100,
+      2
     );
     const address = {
       workflowKey: "workflow-a" as WorkflowKey,
@@ -139,24 +144,23 @@ describe("WorkspaceSnapshotContentClient", () => {
     };
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 } as const;
 
-    const failedLookup = client.request(address, target, "src/file.ts");
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
-          requestId: sent[0].requestId,
-        },
-      })
+    const failedLookup = client.request(address, target, "src/retry.ts");
+    const failedExpectation = expect(failedLookup).rejects.toThrow("timed out");
+    await vi.advanceTimersByTimeAsync(300);
+    await failedExpectation;
+    expect(sent).toHaveLength(3);
+    expect(new Set(sent.map((message) => message.requestId))).toEqual(
+      new Set([sent[0].requestId])
     );
-    await expect(failedLookup).resolves.toEqual({});
 
-    const retriedLookup = client.request(address, target, "src/file.ts");
-    expect(sent).toHaveLength(2);
+    const retriedLookup = client.request(address, target, "src/retry.ts");
+    expect(sent).toHaveLength(4);
+    expect(sent[3].requestId).not.toBe(sent[0].requestId);
     window.dispatchEvent(
       new MessageEvent("message", {
         data: {
           type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
-          requestId: sent[1].requestId,
+          requestId: sent[3].requestId,
           beforeContent: "original",
         },
       })
@@ -165,8 +169,46 @@ describe("WorkspaceSnapshotContentClient", () => {
       beforeContent: "original",
     });
     await expect(
-      client.request(address, target, "src/file.ts")
+      client.request(address, target, "src/retry.ts")
     ).resolves.toEqual({ beforeContent: "original" });
+    expect(sent).toHaveLength(4);
+  });
+
+  it("settles empty replies without caching them", async () => {
+    const sent: any[] = [];
+    const client = new WorkspaceSnapshotContentClient((message) =>
+      sent.push(message)
+    );
+    const address = {
+      workflowKey: "workflow-empty" as WorkflowKey,
+      runRef: "run-2026-01-01T00-00-00-000Z" as RunRef,
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const lookup = client.request(address, target, "src/missing.ts");
+    const expectation = expect(lookup).resolves.toEqual({});
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+          requestId: sent[0].requestId,
+        },
+      })
+    );
+    await expectation;
+
+    const retry = client.request(address, target, "src/missing.ts");
     expect(sent).toHaveLength(2);
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+          requestId: sent[1].requestId,
+          contentToRestore: "restored content",
+        },
+      })
+    );
+    await expect(retry).resolves.toEqual({
+      contentToRestore: "restored content",
+    });
   });
 });
