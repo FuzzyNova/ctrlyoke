@@ -4,6 +4,7 @@ import {
   USER_FEEDBACK_SEVERITY,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import type { DashboardHostActions } from "../HostPorts";
 
@@ -66,7 +67,7 @@ export class WorkflowCommandHandler {
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
-        `ctrlyoke: Failed to open file: ${error}`
+        `ctrlyoke: Failed to open file: ${getErrorMessage(error)}`
       );
     }
   }
@@ -78,25 +79,18 @@ export class WorkflowCommandHandler {
    * @param filePath Path to the prompt file to open
    */
   private async openPromptFile(filePath: string): Promise<void> {
-    try {
-      const result = await this.hostActions.openWorkspaceTarget({
-        path: filePath,
-        openAsText: true,
-        ...(ConfigurationUtils.shouldOpenPromptsInSecondGroup()
-          ? { viewColumn: 2 }
-          : {}),
-      });
-      if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.FAILED)
-        throw new Error(result.message);
-      if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED)
-        throw new Error(
-          result.message ?? "Opening files is not supported by this host."
-        );
-    } catch (error) {
-      Log.error(
-        "[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:",
-        error
+    const result = await this.hostActions.openWorkspaceTarget({
+      path: filePath,
+      openAsText: true,
+      ...(ConfigurationUtils.shouldOpenPromptsInSecondGroup()
+        ? { viewColumn: 2 }
+        : {}),
+    });
+    if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.FAILED)
+      throw new Error(result.message);
+    if (result.status === DASHBOARD_ACTION_RESULT_STATUSES.UNSUPPORTED)
+      throw new Error(
+        result.message ?? "Opening files is not supported by this host."
       );
-    }
   }
 }
