@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/extension.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -28,3 +28,7 @@ The `languageIntelligenceHost` is built at :1714 and attached with `dashboardApp
 - In the catch block at `src/extension.ts:1772`, call `hostedServer?.dispose()` before setting `hostedServer = undefined`. A cleaner version is one local cleanup helper that both failure branches call. Then the dispose, the reference reset and the token unprotect all live in one place.
 - Consider making `listen()` roll back its own constructor-time registrations when it rejects. Another option is to move `hub.addClient` and `setupHeartbeat` out of the constructor and into the on-listening path. Either change would also protect the CLI and MCP callers.
 - Add a unit test where `listen()` rejects (for example, a stubbed `httpServer` that emits `EADDRNOTAVAIL`) and assert that the hub no longer holds the client.
+
+## Decision
+
+When `listen()` rejects, it disposes the server itself so standalone CLI and MCP callers also release constructor-time registrations. Extension cleanup is idempotent and handles its module-scoped reference and token redaction state.

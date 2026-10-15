@@ -335,6 +335,7 @@ export class CtrlYokeHostedServer
   private readonly beginRemoteAccess: (() => Promise<boolean>) | undefined;
   private readonly onRemoteAccessBlocked: (() => void) | undefined;
   private remoteAccessUpsellShown = false;
+  private disposed = false;
   private readonly hub: DashboardBroadcastHub;
   private readonly dashboardClient: DashboardClientEndpoint;
   private readonly getOrchestrator: () => WorkflowOrchestrator;
@@ -2998,64 +2999,83 @@ export class CtrlYokeHostedServer
     this.requestedPort = this.port;
     this.portFellBack = false;
     this.bindAddressFallback = undefined;
-    await this.enforceRemoteBindBeforeListen();
-    // In strict mode, try only the requested port. Otherwise try configured
-    // fallbacks in order, then an OS-assigned port.
-    const candidatePorts = this.strictPort
-      ? [this.port]
-      : [
-          this.port,
-          ...this.fallbackPorts.filter((port) => port !== this.port),
-          0,
-        ];
-    let candidateIndex = 0;
-    return new Promise((resolve, reject) => {
-      const attemptListen = (port: number) => {
-        const onError = (err: NodeJS.ErrnoException) => {
-          this.httpServer.removeListener("listening", onListening);
-          if (err.code === "EADDRINUSE") {
-            if (candidateIndex >= candidatePorts.length - 1) {
+    if (this.disposed) return undefined;
+    try {
+      await this.enforceRemoteBindBeforeListen();
+      if (this.disposed) return undefined;
+      // In strict mode, try only the requested port. Otherwise try configured
+      // fallbacks in order, then an OS-assigned port.
+      const candidatePorts = this.strictPort
+        ? [this.port]
+        : [
+            this.port,
+            ...this.fallbackPorts.filter((port) => port !== this.port),
+            0,
+          ];
+      let candidateIndex = 0;
+      return await new Promise((resolve, reject) => {
+        const attemptListen = (port: number) => {
+          if (this.disposed) {
+            resolve(undefined);
+            return;
+          }
+          const onError = (err: NodeJS.ErrnoException) => {
+            this.httpServer.removeListener("listening", onListening);
+            if (err.code === "EADDRINUSE") {
+              if (candidateIndex >= candidatePorts.length - 1) {
+                reject(err);
+                return;
+              }
+              const tryNextCandidate = () => {
+                this.portFellBack = true;
+                candidateIndex += 1;
+                const nextPort = candidatePorts[candidateIndex] ?? 0;
+                setImmediate(() => attemptListen(nextPort));
+              };
+              void this.probeExistingServer(port)
+                .then((existingServer) => {
+                  if (existingServer) {
+                    this.onSiblingServerDetected?.(this.buildPublicUrl(port));
+                  }
+                  tryNextCandidate();
+                })
+                .catch(tryNextCandidate);
+            } else {
               reject(err);
+            }
+          };
+          const onListening = () => {
+            this.httpServer.removeListener("error", onError);
+            if (this.disposed) {
+              this.httpServer.close();
+              resolve(undefined);
               return;
             }
-            const tryNextCandidate = () => {
-              this.portFellBack = true;
-              candidateIndex += 1;
-              const nextPort = candidatePorts[candidateIndex] ?? 0;
-              setImmediate(() => attemptListen(nextPort));
-            };
-            void this.probeExistingServer(port)
-              .then((existingServer) => {
-                if (existingServer) {
-                  this.onSiblingServerDetected?.(this.buildPublicUrl(port));
-                }
-                tryNextCandidate();
-              })
-              .catch(tryNextCandidate);
-          } else {
-            reject(err);
-          }
+            const addr = this.httpServer.address() as import("net").AddressInfo;
+            this.port = addr.port;
+            const scheme = this.isTls ? "https" : "http";
+            this.availableIps =
+              this.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
+                ? this.getLanIps()
+                : [];
+            const host = this.availableIps[0] ?? "localhost";
+            this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
+            this.writeDevServerUrlFile(this.publicUrl);
+            resolve(this.publicUrl);
+          };
+          this.httpServer.once("error", onError);
+          this.httpServer.once("listening", onListening);
+          this.httpServer.listen(port, this.bindAddress);
         };
-        const onListening = () => {
-          this.httpServer.removeListener("error", onError);
-          const addr = this.httpServer.address() as import("net").AddressInfo;
-          this.port = addr.port;
-          const scheme = this.isTls ? "https" : "http";
-          this.availableIps =
-            this.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
-              ? this.getLanIps()
-              : [];
-          const host = this.availableIps[0] ?? "localhost";
-          this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
-          this.writeDevServerUrlFile(this.publicUrl);
-          resolve(this.publicUrl);
-        };
-        this.httpServer.once("error", onError);
-        this.httpServer.once("listening", onListening);
-        this.httpServer.listen(port, this.bindAddress);
-      };
-      attemptListen(candidatePorts[0]);
-    });
+        attemptListen(candidatePorts[0]);
+      });
+    } catch (error) {
+      // Constructor-time hub, heartbeat and memory registrations must not
+      // survive a failed bind for CLI or MCP callers that have no extension
+      // command to clean them up.
+      this.dispose();
+      throw error;
+    }
   }
 
   private async enforceRemoteBindBeforeListen(): Promise<void> {
@@ -3277,6 +3297,8 @@ export class CtrlYokeHostedServer
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.unregisterMemoryContext();
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();

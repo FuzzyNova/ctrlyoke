@@ -73,8 +73,10 @@ interface HostedServerListenInternals {
   canUseRemoteAccess?: () => Promise<boolean>;
   beginRemoteAccess?: () => Promise<boolean>;
   onRemoteAccessBlocked?: () => void;
+  disposed: boolean;
   remoteAccessUpsellShown: boolean;
-  listen(): Promise<string>;
+  listen(): Promise<string | undefined>;
+  dispose(): void;
   getPortFallbackInfo(): { requestedPort: number; actualPort: number } | null;
   getBindAddressFallbackInfo(): {
     requestedBindAddress: string;
@@ -98,8 +100,18 @@ function createListenHarness(
   server.token = "test-token";
   server.workspaceRoot = process.cwd();
   server.availableIps = [];
+  server.disposed = false;
   server.remoteAccessUpsellShown = false;
+  server.dispose = () => {
+    server.disposed = true;
+  };
   return server;
+}
+
+async function listenForUrl(server: HostedServerListenInternals): Promise<string> {
+  const url = await server.listen();
+  if (!url) throw new Error("Hosted server did not start");
+  return url;
 }
 
 function listenHttpServer(server: HttpServer): Promise<number> {
@@ -173,11 +185,28 @@ function setDevMode(value: boolean): () => void {
 }
 
 suite("CtrlYokeHostedServer.listen port fallback", () => {
+  test("does not listen when disposed during the remote-access check", async () => {
+    let resolveRemoteAccess!: (allowed: boolean) => void;
+    const remoteAccessCheck = new Promise<boolean>((resolve) => {
+      resolveRemoteAccess = resolve;
+    });
+    const fakeHttpServer = new FakeHttpServer(null, 51234);
+    const server = createListenHarness(4747, fakeHttpServer);
+    server.canUseRemoteAccess = () => remoteAccessCheck;
+
+    const listenPromise = server.listen();
+    server.dispose();
+    resolveRemoteAccess(true);
+
+    assert.strictEqual(await listenPromise, undefined);
+    assert.deepStrictEqual(fakeHttpServer.listenCalls, []);
+  });
+
   test("retries on port 0 and records fallback info when the configured port is taken", async () => {
     const fakeHttpServer = new FakeHttpServer(4747, 51234);
     const server = createListenHarness(4747, fakeHttpServer);
 
-    const url = await server.listen();
+    const url = await listenForUrl(server);
 
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 0]);
     assert.strictEqual(server.port, 51234);
@@ -193,7 +222,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     const fakeHttpServer = new FakeHttpServer([4747, 4749], 4750);
     const server = createListenHarness(4747, fakeHttpServer, [4749, 4750]);
 
-    const url = await server.listen();
+    const url = await listenForUrl(server);
 
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749, 4750]);
     assert.strictEqual(server.port, 4750);
@@ -208,7 +237,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     const fakeHttpServer = new FakeHttpServer(4747, 4749);
     const server = createListenHarness(4747, fakeHttpServer, [4749, 4750]);
 
-    const url = await server.listen();
+    const url = await listenForUrl(server);
 
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749]);
     assert.strictEqual(server.port, 4749);
@@ -223,7 +252,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     const fakeHttpServer = new FakeHttpServer([4747, 4749, 4750], 51234);
     const server = createListenHarness(4747, fakeHttpServer, [4749, 4750]);
 
-    const url = await server.listen();
+    const url = await listenForUrl(server);
 
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749, 4750, 0]);
     assert.strictEqual(server.port, 51234);
@@ -238,7 +267,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     const fakeHttpServer = new FakeHttpServer([4747], 4749);
     const server = createListenHarness(4747, fakeHttpServer, [4747, 4749]);
 
-    const url = await server.listen();
+    const url = await listenForUrl(server);
 
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749]);
     assert.strictEqual(server.port, 4749);
@@ -249,7 +278,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     const fakeHttpServer = new FakeHttpServer(null, 4747);
     const server = createListenHarness(4747, fakeHttpServer);
 
-    const url = await server.listen();
+    const url = await listenForUrl(server);
 
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747]);
     assert.strictEqual(server.port, 4747);

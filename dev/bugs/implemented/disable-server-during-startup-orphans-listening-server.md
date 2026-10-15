@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/extension.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -34,3 +34,7 @@ Make the server lifecycle safe to cancel at both layers.
 2. **`extension.ts` `enableServer`:** hold the instance in a local `const server` and use it for every call after the await. Once `listen()` resolves, check `hostedServer === server`. If it is not (the server was disabled or replaced), dispose `server` and return without posting `SERVER_STARTED`. Another option is to track a `serverStarting` promise so that disable waits for startup or cancels it.
 
 Add a test that stubs `canUseRemoteAccess` with a delayed promise, calls `dispose()` during the delay, and asserts that the HTTP server never ends up listening.
+
+## Decision
+
+Disposal during the entitlement wait makes `listen()` resolve `undefined`; if disposal races with the actual bind, the listening callback closes the socket before reporting startup. The extension checks that it still owns the same server before publishing the started state.

@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { EventEmitter } from "events";
 import * as fs from "fs";
 import { request as httpRequest } from "http";
 import * as path from "path";
@@ -72,6 +73,48 @@ class TestableHostedServer extends CtrlYokeHostedServer {
     return this.isClientAllowed(remoteAddress);
   }
 }
+
+class FailedListenHttpServer extends EventEmitter {
+  listen(): void {
+    queueMicrotask(() => {
+      const error = new Error("cannot assign requested address") as NodeJS.ErrnoException;
+      error.code = "EADDRNOTAVAIL";
+      this.emit("error", error);
+    });
+  }
+
+  close(): void {}
+}
+
+suite("CtrlYokeHostedServer listen cleanup", () => {
+  test("removes its hub client and clears heartbeat when listen rejects", async () => {
+    const hub = new DashboardBroadcastHub();
+    let clientCount = 0;
+    const addClient = hub.addClient.bind(hub);
+    const removeClient = hub.removeClient.bind(hub);
+    hub.addClient = (client) => {
+      clientCount++;
+      addClient(client);
+    };
+    hub.removeClient = (client) => {
+      clientCount--;
+      removeClient(client);
+    };
+    const server = createHostedServer({ hub });
+    const internals = server as unknown as {
+      httpServer: FailedListenHttpServer;
+      heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+    };
+    internals.httpServer = new FailedListenHttpServer();
+
+    assert.strictEqual(clientCount, 1);
+    assert.ok(internals.heartbeatInterval);
+    await assert.rejects(server.listen(), { code: "EADDRNOTAVAIL" });
+
+    assert.strictEqual(clientCount, 0);
+    assert.strictEqual(internals.heartbeatInterval, undefined);
+  });
+});
 
 suite("CtrlYokeHostedServer authentication", () => {
   test("rejects an empty access token", () => {

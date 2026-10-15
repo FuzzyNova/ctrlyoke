@@ -1741,8 +1741,9 @@ function registerCommands(
       dashboardApplication.setLanguageIntelligenceHost(
         languageIntelligenceHost
       );
+      let server: CtrlYokeHostedServer;
       try {
-        hostedServer = new CtrlYokeHostedServer(
+        server = new CtrlYokeHostedServer(
           createHostedServerOptions({
             hub,
             endpoint: dashboardApplication,
@@ -1765,6 +1766,7 @@ function registerCommands(
             languageIntelligenceHost,
           })
         );
+        hostedServer = server;
       } catch (err) {
         unprotectServerToken?.();
         unprotectServerToken = undefined;
@@ -1773,30 +1775,41 @@ function registerCommands(
         );
         return;
       }
-      let url: string;
-      try {
-        const serverUrl = await hostedServer.listen();
-        if (!serverUrl) {
-          hostedServer.dispose();
+      const cleanupServer = (): void => {
+        server.dispose();
+        if (hostedServer === server) {
           hostedServer = undefined;
           unprotectServerToken?.();
           unprotectServerToken = undefined;
+        }
+      };
+      let url: string;
+      try {
+        const serverUrl = await server.listen();
+        if (hostedServer !== server) {
+          server.dispose();
+          return;
+        }
+        if (!serverUrl) {
+          cleanupServer();
           return;
         }
         url = serverUrl;
       } catch (err) {
-        hostedServer = undefined;
-        unprotectServerToken?.();
-        unprotectServerToken = undefined;
+        if (hostedServer !== server) {
+          server.dispose();
+          return;
+        }
+        cleanupServer();
         vscode.window.showErrorMessage(
           `ctrlyoke: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`
         );
         return;
       }
-      const availableIps = hostedServer.getAvailableIps();
-      const portFallback = hostedServer.getPortFallbackInfo() ?? undefined;
+      const availableIps = server.getAvailableIps();
+      const portFallback = server.getPortFallbackInfo() ?? undefined;
       const bindAddressFallback =
-        hostedServer.getBindAddressFallbackInfo() ?? undefined;
+        server.getBindAddressFallbackInfo() ?? undefined;
       webviewProvider.setRunningServerUrl(
         url,
         availableIps,
