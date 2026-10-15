@@ -177,7 +177,23 @@ interface CredentialBackend {
 export interface OsCredentialStoreOptions {
   readonly platform?: NodeJS.Platform;
   readonly runCommand?: CommandRunner;
+  /** Waits between retries of a torn key-index read; tests shorten them. */
+  readonly indexReadRetryDelaysMs?: readonly number[];
 }
+
+/**
+ * Waits before re-reading a key index another process may be mid-way through
+ * rewriting. Each Windows chunk write is its own `powershell.exe` spawn, so
+ * a multi-chunk rewrite can take the better part of a second.
+ */
+const INDEX_READ_RETRY_DELAYS_MS: readonly number[] = [250, 500, 1000];
+
+/**
+ * A chunked value whose chunks disagree with their recorded count or
+ * integrity tag. A concurrent rewrite produces this transiently; a write that
+ * died partway leaves it permanently.
+ */
+class TornCredentialReadError extends Error {}
 
 /**
  * CLI/server SecretStore backed by the native credential store for the host.
@@ -187,11 +203,14 @@ export class OsCredentialStore implements SecretStore {
   private readonly platform: NodeJS.Platform;
   private readonly runCommand: CommandRunner;
   private readonly backend: CredentialBackend;
-  private indexMutationChain: Promise<void> = Promise.resolve();
+  private readonly indexReadRetryDelaysMs: readonly number[];
+  private indexOperationChain: Promise<void> = Promise.resolve();
 
   constructor(options: OsCredentialStoreOptions = {}) {
     this.platform = options.platform ?? process.platform;
     this.runCommand = options.runCommand ?? runCommand;
+    this.indexReadRetryDelaysMs =
+      options.indexReadRetryDelaysMs ?? INDEX_READ_RETRY_DELAYS_MS;
     this.backend = this.createBackend();
   }
 
@@ -202,38 +221,67 @@ export class OsCredentialStore implements SecretStore {
   async store(key: string, value: string): Promise<void> {
     await this.withAvailability(async () => {
       await this.backend.store(key, value);
-      await this.enqueueIndexMutation(() => this.addKeyToIndex(key));
+      await this.enqueueIndexOperation(() => this.addKeyToIndex(key));
     });
   }
 
   async delete(key: string): Promise<void> {
     await this.withAvailability(async () => {
       await this.backend.delete(key);
-      await this.enqueueIndexMutation(() => this.removeKeyFromIndex(key));
+      await this.enqueueIndexOperation(() => this.removeKeyFromIndex(key));
     });
   }
 
   async keys(): Promise<string[]> {
-    return this.withAvailability(async () => {
-      const index = await this.backend.get(CREDENTIAL_INDEX_KEY);
-      if (!index) {
-        return [];
+    // Reads share the mutation queue: once the index outgrows one CredMan
+    // blob, a rewrite lands as several credentials, and a read interleaved
+    // with it pairs the new integrity tag with old chunks. That is what a
+    // brand-new workspace hit at startup, when storing its server token
+    // raced the dashboard's first secret-registry request.
+    return this.withAvailability(() =>
+      this.enqueueIndexOperation(() => this.readIndex())
+    );
+  }
+
+  private async readIndex(): Promise<string[]> {
+    const index = await this.readIndexValue();
+    if (!index) {
+      return [];
+    }
+    try {
+      const parsed: unknown = JSON.parse(index);
+      if (
+        !Array.isArray(parsed) ||
+        !parsed.every((key) => typeof key === "string")
+      ) {
+        throw new Error("Credential-store key index is invalid.");
       }
+      return parsed;
+    } catch (error) {
+      throw new Error("Could not read credential-store key index.", {
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * The in-process queue cannot see another window, the CLI, or
+   * `ctrlyoke server` rewriting the shared index, so a torn read is retried
+   * after a short wait. A tear that outlasts every retry is real damage and
+   * still surfaces.
+   */
+  private async readIndexValue(): Promise<string | undefined> {
+    for (const delayMs of this.indexReadRetryDelaysMs) {
       try {
-        const parsed: unknown = JSON.parse(index);
-        if (
-          !Array.isArray(parsed) ||
-          !parsed.every((key) => typeof key === "string")
-        ) {
-          throw new Error("Credential-store key index is invalid.");
-        }
-        return parsed;
+        return await this.backend.get(CREDENTIAL_INDEX_KEY);
       } catch (error) {
-        throw new Error("Could not read credential-store key index.", {
-          cause: error,
-        });
+        if (!(error instanceof TornCredentialReadError)) {
+          throw error;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
       }
-    });
+    }
+    return this.backend.get(CREDENTIAL_INDEX_KEY);
   }
 
   private createBackend(): CredentialBackend {
@@ -253,7 +301,7 @@ export class OsCredentialStore implements SecretStore {
     if (key === CREDENTIAL_INDEX_KEY) {
       return;
     }
-    const keys = new Set(await this.keys());
+    const keys = new Set(await this.readIndex());
     keys.add(key);
     await this.backend.store(
       CREDENTIAL_INDEX_KEY,
@@ -265,7 +313,7 @@ export class OsCredentialStore implements SecretStore {
     if (key === CREDENTIAL_INDEX_KEY) {
       return;
     }
-    const keys = new Set(await this.keys());
+    const keys = new Set(await this.readIndex());
     keys.delete(key);
     await this.backend.store(
       CREDENTIAL_INDEX_KEY,
@@ -273,10 +321,13 @@ export class OsCredentialStore implements SecretStore {
     );
   }
 
-  private enqueueIndexMutation(mutation: () => Promise<void>): Promise<void> {
-    const operation = this.indexMutationChain.then(mutation);
-    this.indexMutationChain = operation.catch(() => {});
-    return operation;
+  private enqueueIndexOperation<T>(operation: () => Promise<T>): Promise<T> {
+    const queued = this.indexOperationChain.then(operation);
+    this.indexOperationChain = queued.then(
+      () => {},
+      () => {}
+    );
+    return queued;
   }
 
   private async withAvailability<T>(operation: () => Promise<T>): Promise<T> {
@@ -450,7 +501,7 @@ class WindowsCredentialBackend implements CredentialBackend {
       (chunk) => chunk === undefined
     );
     if (missingIndex >= 0) {
-      throw new Error(
+      throw new TornCredentialReadError(
         `CredMan credential "${key}" claims ${count} chunks but chunk ` +
           `${missingIndex + 1} is missing. Re-store the secret to repair it.`
       );
@@ -460,7 +511,7 @@ class WindowsCredentialBackend implements CredentialBackend {
       chunkMetadata.integrityTag !== undefined &&
       createIntegrityTag(value) !== chunkMetadata.integrityTag
     ) {
-      throw new Error(
+      throw new TornCredentialReadError(
         `CredMan credential "${key}" failed its integrity check. ` +
           "Re-store the secret to repair it."
       );

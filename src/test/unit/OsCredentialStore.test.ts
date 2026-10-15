@@ -26,13 +26,20 @@ class FakeWindowsCredentialVault {
   commandCount = 0;
   failWriteFor: string | undefined;
   failReadFor: { target: string; exitCode: number } | undefined;
+  /** Yield a macrotask per command, as a real subprocess would. */
+  yieldPerCommand = false;
+  /** Runs before each read, standing in for another process's writes. */
+  beforeRead: ((target: string) => void) | undefined;
 
-  run = (
+  run = async (
     command: string,
     args: readonly string[],
     input?: string
   ): Promise<FakeCommandResult> => {
     this.commandCount += 1;
+    if (this.yieldPerCommand) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
     assert.strictEqual(command, "powershell.exe");
     const { operation, target, script } = decodeScript(args);
     assert.match(
@@ -46,6 +53,7 @@ class FakeWindowsCredentialVault {
     );
 
     if (operation === "get") {
+      this.beforeRead?.(target);
       if (target === this.failReadFor?.target) {
         return result(
           this.failReadFor.exitCode,
@@ -116,9 +124,34 @@ function createWindowsStore(): {
 } {
   const vault = new FakeWindowsCredentialVault();
   return {
-    store: new OsCredentialStore({ platform: "win32", runCommand: vault.run }),
+    store: new OsCredentialStore({
+      platform: "win32",
+      runCommand: vault.run,
+      indexReadRetryDelaysMs: [1, 1, 1],
+    }),
     vault,
   };
+}
+
+/**
+ * A store whose key index spans several credential blobs, as a machine with a
+ * server token per opened workspace eventually has.
+ */
+async function createStoreWithChunkedIndex(): Promise<{
+  store: OsCredentialStore;
+  vault: FakeWindowsCredentialVault;
+  existingKeys: string[];
+}> {
+  const { store, vault } = createWindowsStore();
+  const existingKeys = Array.from(
+    { length: 60 },
+    (_unused, index) => `ctrlyoke.server.token.workspace-${index}`
+  );
+  for (const key of existingKeys) {
+    await store.store(key, "token");
+  }
+  assert.ok(vault.credentials.has("ctrlyoke.ctrlyoke.secret.index#count"));
+  return { store, vault, existingKeys };
 }
 
 function textOfLength(length: number): string {
@@ -354,6 +387,62 @@ suite("OsCredentialStore", () => {
       "ctrlyoke.pro.license-file",
       "ctrlyoke.pro.license-key",
     ]);
+  });
+
+  test("never reads a chunked index while this process is rewriting it", async () => {
+    const { store, vault, existingKeys } = await createStoreWithChunkedIndex();
+    vault.yieldPerCommand = true;
+
+    let storing = true;
+    const pending = store
+      .store("ctrlyoke.server.token.new-workspace", "token")
+      .finally(() => {
+        storing = false;
+      });
+    const reads: Promise<string[]>[] = [];
+    while (storing) {
+      reads.push(store.keys());
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    await pending;
+
+    assert.ok(reads.length > 1, "reads should overlap the rewrite");
+    for (const keys of await Promise.all(reads)) {
+      assert.ok(existingKeys.every((key) => keys.includes(key)));
+    }
+  });
+
+  test("retries an index read torn by another process's rewrite", async () => {
+    const { store, vault } = await createStoreWithChunkedIndex();
+    const countTarget = "ctrlyoke.ctrlyoke.secret.index#count";
+    const settledCount = vault.credentials.get(countTarget)!;
+    // Another process has written its new tag but not yet its chunks.
+    vault.credentials.set(countTarget, settledCount.replace(/:.*/, ":stale"));
+    let indexReads = 0;
+    vault.beforeRead = (target) => {
+      if (target === "ctrlyoke.ctrlyoke.secret.index" && ++indexReads === 2) {
+        vault.credentials.set(countTarget, settledCount);
+      }
+    };
+
+    assert.strictEqual((await store.keys()).length, 60);
+    assert.strictEqual(indexReads, 2);
+  });
+
+  test("surfaces an index tear that outlasts every retry", async () => {
+    const { store, vault } = await createStoreWithChunkedIndex();
+    const countTarget = "ctrlyoke.ctrlyoke.secret.index#count";
+    vault.credentials.set(
+      countTarget,
+      vault.credentials.get(countTarget)!.replace(/:.*/, ":stale")
+    );
+    let indexReads = 0;
+    vault.beforeRead = (target) => {
+      if (target === "ctrlyoke.ctrlyoke.secret.index") indexReads++;
+    };
+
+    await assert.rejects(store.keys(), /integrity check/);
+    assert.strictEqual(indexReads, 4);
   });
 
   for (const exitCode of [45, 1]) {

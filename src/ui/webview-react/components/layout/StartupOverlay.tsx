@@ -129,8 +129,8 @@ export const StartupOverlay: React.FC = () => {
           </span>
           <span className="text-xs text-description-fg select-none leading-relaxed">
             ctrlyoke will create a <code className="font-mono">.ctrlyoke/</code>{" "}
-            directory in this workspace to store session history and runtime
-            working files.
+            directory in this workspace for project settings, skills, agents,
+            MCP servers, and working files such as prompt attachments.
           </span>
           <button
             className={`mt-1 ${PRIMARY_BUTTON_CLASS}`}
