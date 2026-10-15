@@ -50,4 +50,38 @@ suite("CopilotCliProvider", () => {
       assert.strictEqual(preparation.cliArgs[allowedToolIndex + 1], "ctrlyoke");
     });
   }
+
+  test("uses a unique OTel path per invocation and cleans up every path", async () => {
+    const provider = new CopilotCliProvider();
+    const plan = () =>
+      provider.planCliArgs(
+        { prompt: "use the queue" } as PromptStep,
+        false,
+        process.cwd(),
+        process.cwd(),
+        undefined,
+        {
+          promptIndex: 3,
+          allPrompts: [],
+          workingFilePath: "workflow.ctrlyoke.json",
+          resolvedProperties: createProperties(),
+        }
+      );
+    const first = await plan();
+    for (const mutation of first.mutations) await mutation.apply();
+    const firstPath = provider.getHeadlessSpawnEnv()
+      .COPILOT_OTEL_FILE_EXPORTER_PATH;
+
+    const second = await plan();
+    for (const mutation of second.mutations) await mutation.apply();
+    const secondPath = provider.getHeadlessSpawnEnv()
+      .COPILOT_OTEL_FILE_EXPORTER_PATH;
+
+    assert.ok(firstPath);
+    assert.ok(secondPath);
+    assert.notStrictEqual(firstPath, secondPath);
+    const cleanupPaths = provider.getAdditionalCleanupFilePaths(process.cwd());
+    assert.ok(cleanupPaths.includes(firstPath));
+    assert.ok(cleanupPaths.includes(secondPath));
+  });
 });

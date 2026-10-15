@@ -183,6 +183,8 @@ export class CopilotCliProvider implements ICliProvider {
    * OTel section) since Copilot CLI 1.0.x removed every other per-turn context signal.
    */
   private otelFilePath: string | undefined;
+  /** Every invocation's OTel export file, retained for end-of-workflow cleanup. */
+  private readonly otelFilePaths: string[] = [];
   private statusLineToken: string | undefined;
   private readonly statusLineSnapshotPaths = new Set<string>();
   private statusLineDirectory: string | undefined;
@@ -286,6 +288,7 @@ export class CopilotCliProvider implements ICliProvider {
           PATH_CONSTANTS.TEMP_DIR,
           CopilotCliProvider.buildOtelFileName(
             workflowContext?.promptIndex ?? 0,
+            statusLineToken,
             workflowContext?.workingFilePath
           )
         )
@@ -437,6 +440,9 @@ export class CopilotCliProvider implements ICliProvider {
           apply: async () => {
             this.enablePromptModeRepoHooksForHeadlessRun = false;
             this.otelFilePath = otelFilePath;
+            if (otelFilePath) {
+              this.otelFilePaths.push(otelFilePath);
+            }
             this.logParser.setOtelFilePath(otelFilePath);
           },
         },
@@ -822,7 +828,7 @@ export class CopilotCliProvider implements ICliProvider {
    * Return additional file paths to delete after workflow cleanup.
    *
    * Includes all per-prompt hook files created during this workflow's
-   * interactive and headless sessions, plus this invocation's Copilot OTel
+   * interactive and headless sessions, plus every invocation's Copilot OTel
    * telemetry file (see buildOtelSpawnEnv()).
    *
    * Note: the .gitignore is NOT deleted here. Deletion is deferred to
@@ -833,7 +839,7 @@ export class CopilotCliProvider implements ICliProvider {
     return [
       ...this.hookFilePaths,
       ...this.statusLineSnapshotPaths,
-      ...(this.otelFilePath ? [this.otelFilePath] : []),
+      ...this.otelFilePaths,
       // Defensive: some environments have COPILOT_OTEL_FILE_EXPORTER_PATH set globally
       // to the relative path "NUL" (observed pointed at the Windows null device via
       // \\.\nul). buildOtelSpawnEnv() always overrides this for our own spawns, but
@@ -982,10 +988,11 @@ export class CopilotCliProvider implements ICliProvider {
    * Build a unique OTel export filename for a prompt, mirroring buildHookFileName()'s
    * run-specific naming convention.
    *
-   * Format: `ctrlyoke-otel-<stem>-p<promptIndex>.jsonl`
+   * Format: `ctrlyoke-otel-<stem>-p<promptIndex>-<invocationId>.jsonl`
    */
   private static buildOtelFileName(
     promptIndex: number,
+    invocationId: string,
     workingFilePath?: string
   ): string {
     let stem: string;
@@ -995,7 +1002,7 @@ export class CopilotCliProvider implements ICliProvider {
       stem = String(Date.now());
     }
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
-    return `ctrlyoke-otel-${safeStem}-p${promptIndex}.jsonl`;
+    return `ctrlyoke-otel-${safeStem}-p${promptIndex}-${invocationId}.jsonl`;
   }
 
   /**
