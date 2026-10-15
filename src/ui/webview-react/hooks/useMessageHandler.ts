@@ -43,6 +43,7 @@ import {
   type UndoRecordUpdatedMessage,
   type HistorySearchResult,
 } from "../types/messages";
+import { HISTORY_TRASH_ACTIONS } from "@root/types/DashboardConstants";
 import type {
   OrderedCliHistoryEntry,
   OrderedStatusHistoryEntry,
@@ -767,6 +768,21 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.HISTORY_TRASHED] = (message) => {
     if (typeof message.entryId !== "string") return;
+    const uiState = useUiStore.getState();
+    const displayedWorkflowKey = uiState.displayedViewAddress?.workflowKey;
+    if (
+      displayedWorkflowKey &&
+      Array.isArray(message.workflowKeys) &&
+      message.workflowKeys.includes(displayedWorkflowKey)
+    ) {
+      const workflowName = uiState.recentWorkflows.find(
+        (workflow) => workflow.address.workflowKey === displayedWorkflowKey
+      )?.workflowName;
+      uiState.setViewingDeletedWorkflow({
+        workflowKey: displayedWorkflowKey,
+        workflowName: workflowName ?? displayedWorkflowKey,
+      });
+    }
     const entryId = message.entryId;
     // Keep an on-screen Recently deleted summary current.
     if (useHistoryTrashStore.getState().listing) {
@@ -804,6 +820,17 @@ export function createMessageHandlers(
   };
 
   handlers[MESSAGE_TYPES.HISTORY_TRASH_RESULT] = (message) => {
+    const displayedWorkflowKey =
+      useUiStore.getState().displayedViewAddress?.workflowKey;
+    if (
+      message.action === HISTORY_TRASH_ACTIONS.RESTORE &&
+      message.ok === true &&
+      displayedWorkflowKey &&
+      Array.isArray(message.workflowKeys) &&
+      message.workflowKeys.includes(displayedWorkflowKey)
+    ) {
+      useUiStore.getState().setViewingDeletedWorkflow(null);
+    }
     if (typeof message.entryId === "string") {
       useHistoryTrashStore.getState().clearEntryPending(message.entryId);
     }

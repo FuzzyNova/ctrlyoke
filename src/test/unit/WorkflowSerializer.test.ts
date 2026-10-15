@@ -2327,6 +2327,7 @@ suite("WorkflowSerializer", () => {
           );
           assert.ok(trashed, "the client should get an Undo toast");
           assert.deepStrictEqual(trashed.skippedLive, [paused.workflowKey]);
+          assert.deepStrictEqual(trashed.workflowKeys, [idle.workflowKey]);
         } finally {
           await cleanUpStateRoot(workspaceRoot);
         }

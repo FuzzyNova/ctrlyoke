@@ -1607,13 +1607,18 @@ export class WorkflowSerializer {
       WorkflowPaths.isValidTrashEntryId(request.entryId)
         ? request.entryId
         : undefined;
-    const reply = (ok: boolean, message: string) =>
+    const reply = (
+      ok: boolean,
+      message: string,
+      workflowKeys?: WorkflowKey[]
+    ) =>
       postMessage({
         type: MESSAGE_TYPES.HISTORY_TRASH_RESULT,
         action,
         ...(entryId ? { entryId } : {}),
         ok,
         message,
+        ...(workflowKeys ? { workflowKeys } : {}),
       });
     try {
       const workspaceRoot = this.resolveHistoryWorkspaceRoot();
@@ -1625,7 +1630,11 @@ export class WorkflowSerializer {
         case HISTORY_TRASH_ACTIONS.RESTORE: {
           if (!entryId) throw new Error(TRASH_ENTRY_GONE_MESSAGE);
           const restored = await trash.restore(entryId);
-          reply(true, describeRestoreResult(restored));
+          reply(
+            true,
+            describeRestoreResult(restored),
+            restored.restoredWorkflowKeys
+          );
           await this.getManager()?.refreshRunViewsForLineages?.(
             restored.restoredWorkflowKeys,
             postMessage,

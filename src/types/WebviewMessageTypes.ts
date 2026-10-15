@@ -2206,6 +2206,7 @@ export interface HistoryTrashedMessage {
   kind: HistoryTrashEntryKind;
   message: string;
   skippedLive: WorkflowKey[];
+  workflowKeys: WorkflowKey[];
 }
 
 /** Webview → Extension: list Recently deleted. */
@@ -2241,6 +2242,8 @@ export interface HistoryTrashEmptyMessage {
 /** Extension → Webview: outcome of a restore/purge/empty action. */
 export interface HistoryTrashResultMessage extends HistoryTrashOutcome {
   type: typeof MESSAGE_TYPES.HISTORY_TRASH_RESULT;
+  /** Lineages restored by a successful restore action. */
+  workflowKeys?: WorkflowKey[];
 }
 
 /** Start the currently viewed draft through its explicit address. */

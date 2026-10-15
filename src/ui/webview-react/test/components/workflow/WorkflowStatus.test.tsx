@@ -445,13 +445,13 @@ describe("WorkflowStatus — loaded state", () => {
     );
   });
 
-  it("uses the existing lineage delete path for the header target", () => {
+  it("does not lock the displayed lineage before delete confirmation", () => {
     const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
     useUiStore.setState({ displayedViewAddress: address });
     useSettingsStore.setState({
       globalSettings: {
         ...useSettingsStore.getState().globalSettings,
-        confirmDeleteOperations: false,
+        confirmDeleteOperations: true,
       },
     });
 
@@ -461,18 +461,13 @@ describe("WorkflowStatus — loaded state", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
 
-    expect(postMessageSpy).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
-      address,
-    });
-    // Deleting the lineage currently on screen records it so the deleted-
-    // workflow banner/lockdown (Header, WorkflowPropertiesPanel, etc.) can
-    // pick it up — see useIsViewingDeletedWorkflow.
-    expect(useUiStore.getState().viewingDeletedWorkflow).toEqual({
-      workflowKey: address.workflowKey,
-      // Set by this describe block's own beforeEach (line ~164).
-      workflowName: "My Workflow",
-    });
+    expect(postMessageSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+        address,
+      })
+    );
+    expect(useUiStore.getState().viewingDeletedWorkflow).toBeNull();
   });
 
   it("does not record a deletion for a lineage other than the one on screen", () => {
