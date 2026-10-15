@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import {
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SecretsSection } from "@components/settings/SecretsSection";
 import {
@@ -192,6 +198,32 @@ describe("SecretsSection", () => {
     const valueField = screen.getByLabelText("Secret value (multi-line)");
     expect(valueField.tagName).toBe("TEXTAREA");
     expect(valueField).toHaveAttribute("autocomplete", "new-password");
+  });
+
+  it("preserves newlines when pasting into the default password field", async () => {
+    const user = userEvent.setup();
+    const secretValue = "-----BEGIN KEY-----\nline-two\r\n-----END KEY-----";
+    renderSecretsSection();
+
+    await user.click(screen.getByRole("button", { name: "Set secret" }));
+    await user.type(screen.getByLabelText("Name"), "PEM_KEY");
+    const passwordInput = screen.getByLabelText("Secret value");
+    const pasteEvent = createEvent.paste(passwordInput, {
+      clipboardData: { getData: () => secretValue },
+    });
+    const preventDefault = vi.spyOn(pasteEvent, "preventDefault");
+    fireEvent(passwordInput, pasteEvent);
+
+    const multilineInput = screen.getByLabelText("Secret value (multi-line)");
+    expect(preventDefault).toHaveBeenCalled();
+    expect(multilineInput).toHaveValue(secretValue.replace(/\r\n/g, "\n"));
+    expect(multilineInput).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Set value" }));
+    const setMessage = postMessageSpy.mock.calls
+      .map(([message]) => message as { type?: string; value?: string })
+      .find((message) => message.type === MESSAGE_TYPES.SET_SECRET);
+    expect(setMessage?.value).toBe(secretValue);
   });
 
   it("clears component state after the one write submission and does not echo the value", async () => {

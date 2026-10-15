@@ -1315,6 +1315,21 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
 });
 
 describe("CodeMirrorEditor orphaned mouse-selection guard", () => {
+  it("removes the window blur listener when the editor unmounts", () => {
+    const removeEventListener = vi.spyOn(window, "removeEventListener");
+    const { unmount } = render(
+      <CodeMirrorEditor value="" onChange={vi.fn()} affUri="" dicUri="" />
+    );
+
+    unmount();
+
+    expect(removeEventListener).toHaveBeenCalledWith(
+      "blur",
+      expect.any(Function)
+    );
+    removeEventListener.mockRestore();
+  });
+
   it("tears down a lingering MouseSelection (the stuck-caret orphan)", () => {
     const destroy = vi.fn();
     const view = {

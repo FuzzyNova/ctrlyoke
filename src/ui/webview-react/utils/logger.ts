@@ -5,13 +5,44 @@ import {
   type WebviewLogLevel,
 } from "@/types/messages";
 
+function formatArgument(arg: unknown): string {
+  if (arg instanceof Error) {
+    const name = arg.name || "Error";
+    const details = `${name}: ${arg.message}`;
+    return arg.stack ? `${details}\n${arg.stack}` : details;
+  }
+  if (typeof arg === "string") return arg;
+
+  try {
+    const seen = new WeakSet<object>();
+    const serialized = JSON.stringify(arg, (_key, value: unknown) => {
+      if (typeof value === "bigint") return value.toString();
+      if (value && typeof value === "object") {
+        if (seen.has(value)) return "[Circular]";
+        seen.add(value);
+      }
+      return value;
+    });
+    return serialized ?? String(arg);
+  } catch {
+    try {
+      return String(arg);
+    } catch {
+      return "[Unserializable argument]";
+    }
+  }
+}
+
 function log(
   level: WebviewLogLevel,
   message: string,
   ...args: unknown[]
 ): void {
-  const text = args.length > 0 ? `${message} ${JSON.stringify(args)}` : message;
+  let text = message;
   try {
+    if (args.length > 0) {
+      text = `${message} ${args.map(formatArgument).join(" ")}`;
+    }
     getVsCodeApi().postMessage({
       type: MESSAGE_TYPES.LOG_MESSAGE,
       level,
