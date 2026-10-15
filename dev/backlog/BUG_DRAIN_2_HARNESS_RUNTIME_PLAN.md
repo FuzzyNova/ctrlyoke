@@ -330,7 +330,11 @@ each other.
 
 ### Step 12: Permissions tab says Claude ignores Allowed Tools
 
-- **Fixes:** `dev/bugs/backlog/claude-allowed-tools-warning-says-ignored.md`
+> **Status (2026-10-14):** the code fix already landed in `6e9880e9a` before this drain
+> started, and the doc is in `dev/bugs/implemented/`. This step only verifies the fix
+> survived Steps 4 and 11 and retakes the screenshot if Playwright is attached.
+
+- **Fixes:** `dev/bugs/implemented/claude-allowed-tools-warning-says-ignored.md`
 - **Files:** `src/ui/webview-react/utils/compatibilityDiagnostics.ts`,
   `src/types/CompatibilityTypes.ts`, `images/screenshots/permissions-tab-800x1600.png`
 - **Approach:** split `isLossy` into "not enforced" (unsupported or no mechanism) and
