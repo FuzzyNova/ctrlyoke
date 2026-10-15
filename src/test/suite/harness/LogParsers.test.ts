@@ -4092,6 +4092,9 @@ suite("CopilotLogParser", () => {
             delivery: "steering",
           },
         };
+        // macOS arms an fs.watch asynchronously, so an append in the same tick
+        // that created the watcher is never reported; give it a moment first.
+        await new Promise((resolve) => setTimeout(resolve, 200));
         fs.appendFileSync(filePath, "\n" + JSON.stringify(event), "utf8");
 
         const tailed = await observed;

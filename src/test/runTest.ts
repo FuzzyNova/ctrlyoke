@@ -63,10 +63,20 @@ async function runShard(
   const stateHome = await fs.mkdtemp(
     path.join(os.tmpdir(), `ctrlyoke-extension-test-home-${index}-`)
   );
+  // Deliberately short name: VS Code puts a unix socket (`<dir>/1.14-main.sock`)
+  // inside this dir, and macOS caps socket paths at 103 chars. `os.tmpdir()` there
+  // is already ~50 chars (`/var/folders/xx/<hash>/T`), so a long prefix makes
+  // VS Code fail to start with `listen EINVAL`.
   const userDataDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), `ctrlyoke-extension-test-user-data-${index}-`)
+    path.join(os.tmpdir(), `ctrlyoke-ud-${index}-`)
   );
   const stallReportPath = path.join(stateHome, "event-loop-stall.txt");
+  // On macOS `os.tmpdir()` is `/var/folders/...`, a symlink to `/private/var/...`,
+  // and Git (like `fs.realpath`) always reports the resolved form. Tests that
+  // build a path under `os.tmpdir()` and compare it with Git output would fail on
+  // that prefix alone, so hand the extension host the resolved temp dir; `os.tmpdir()`
+  // reads `TMPDIR` on every call. A no-op wherever tmpdir is not a symlink.
+  const resolvedTmpDir = await fs.realpath(os.tmpdir());
   const sharded = SHARD_COUNT > 1;
   const sink = sharded ? createShardSink() : undefined;
 
@@ -79,6 +89,7 @@ async function runShard(
       launchArgs: ["--user-data-dir", userDataDir],
       extensionTestsEnv: {
         CTRLYOKE_HOME: stateHome,
+        TMPDIR: resolvedTmpDir,
         CTRLYOKE_TEST_SHARD_INDEX: String(index),
         CTRLYOKE_TEST_SHARD_COUNT: String(SHARD_COUNT),
         [STALL_REPORT_ENV_VAR]: stallReportPath,
