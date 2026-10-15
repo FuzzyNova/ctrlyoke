@@ -227,7 +227,11 @@ export type HookCaveatCode =
 export type CompatibilityCaveatCode =
   PermissionCaveatCode | McpCaveatCode | PromptInputCaveatCode | HookCaveatCode;
 
-/** Caveats that explain a risk alongside a capability that is enforced. */
+/**
+ * Caveats that explain a risk alongside a capability that is enforced. Every
+ * other caveat is a reason the capability is limited, and its message must be
+ * a "because …" clause so it reads after any sentence it is appended to.
+ */
 export const ADVISORY_CAVEAT_CODES = {
   CLAUDE_PREAPPROVED_SETTINGS:
     PERMISSION_CAVEAT_CODES.CLAUDE_PREAPPROVED_SETTINGS,

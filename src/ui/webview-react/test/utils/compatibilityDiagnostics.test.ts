@@ -5,7 +5,15 @@ import {
   HARNESS_IDS,
 } from "@root/types/DashboardConstants";
 import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
-import type { HarnessCapabilityRegistrySnapshot } from "@root/types/CompatibilityTypes";
+import {
+  HOOK_CAVEAT_CODES,
+  MCP_CAVEAT_CODES,
+  PERMISSION_CAVEAT_CODES,
+  PROMPT_INPUT_CAVEAT_CODES,
+  getCompatibilityCaveatMessage,
+  isAdvisoryCaveat,
+  type HarnessCapabilityRegistrySnapshot,
+} from "@root/types/CompatibilityTypes";
 import type { HarnessId } from "@root/types/DashboardConstants";
 
 function target(
@@ -125,6 +133,54 @@ describe("workflowPermissionDiagnostic", () => {
     expect(
       workflowPermissionDiagnostic("allowedTools", targets, unsupportedSnapshot)
     ).toBeDefined();
+  });
+
+  it("words a reason caveat as a single because clause", () => {
+    const harness = unsupportedSnapshot.harnesses[HARNESS_IDS.CODEX_CLI]!;
+    const snapshot = {
+      ...unsupportedSnapshot,
+      harnesses: {
+        [HARNESS_IDS.CODEX_CLI]: {
+          ...harness,
+          descriptor: {
+            harnessId: HARNESS_IDS.CODEX_CLI,
+            permissions: {
+              allowedTools: {
+                fidelity: "unsupported",
+                mechanism: "none",
+                verification: "verified",
+                caveatCode: PERMISSION_CAVEAT_CODES.SANDBOX_APPROVAL_MODES,
+              },
+            },
+          },
+        },
+      } as unknown as HarnessCapabilityRegistrySnapshot["harnesses"],
+    };
+    const message = workflowPermissionDiagnostic(
+      "allowedTools",
+      [target("custom", ["shell(git:*)"], [])],
+      snapshot
+    )?.message;
+    expect(message).toContain(
+      "Ignored by 1 Codex step because this harness uses sandbox/approval modes"
+    );
+    expect(message).not.toContain("because because");
+  });
+
+  it("writes every reason caveat as a because clause", () => {
+    const codes = [
+      ...Object.values(PERMISSION_CAVEAT_CODES),
+      ...Object.values(MCP_CAVEAT_CODES),
+      ...Object.values(PROMPT_INPUT_CAVEAT_CODES),
+      ...Object.values(HOOK_CAVEAT_CODES),
+    ];
+    for (const code of codes) {
+      const message = getCompatibilityCaveatMessage(code);
+      expect(message, code).toBeDefined();
+      expect(message!.startsWith("because "), code).toBe(
+        !isAdvisoryCaveat(code)
+      );
+    }
   });
 
   it("reports Claude partial allowed tools as enforced with an informational caveat", () => {

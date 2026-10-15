@@ -155,19 +155,18 @@ function reasonForHarness(
   field: Exclude<PermissionField, "mode">,
   capabilities: HarnessCapabilityRegistrySnapshot
 ): string {
-  const caveat = getCompatibilityCaveatMessage(
+  const caveatCode =
     capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
-      ?.caveatCode
+      ?.caveatCode;
+  // Reason caveats are already "because …" clauses; an advisory note does not
+  // explain why a list is ignored, so it falls back to the generic reason.
+  const caveat = isAdvisoryCaveat(caveatCode)
+    ? undefined
+    : getCompatibilityCaveatMessage(caveatCode);
+  return (
+    caveat ??
+    "because this harness does not provide verified individual tool-pattern enforcement"
   );
-  if (caveat) {
-    return isAdvisoryCaveat(
-      capabilities.harnesses[harnessId]?.descriptor?.permissions?.[field]
-        ?.caveatCode
-    )
-      ? caveat
-      : `because ${caveat}`;
-  }
-  return "because this harness does not provide verified individual tool-pattern enforcement";
 }
 
 /**
