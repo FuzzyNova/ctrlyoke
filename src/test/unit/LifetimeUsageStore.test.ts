@@ -131,6 +131,31 @@ suite("LifetimeUsageStore", () => {
     assert.strictEqual(data.totals.attemptCount, 1);
   });
 
+  test("rebuilds a live-upsert lineage when a backfill batch has older refs", async () => {
+    const olderRefs = [0, 1, 2].map((index) =>
+      formatRunRef(baseTime + index * 1000)
+    );
+    for (const [index, runRef] of olderRefs.entries()) {
+      await writeManifest(runRef, index + 1);
+    }
+    const newestRunRef = formatRunRef(baseTime + 3000);
+    await writeManifest(newestRunRef, 4);
+    await store.upsertRunContribution(contribution(newestRunRef, 4));
+
+    await store.applyBackfillBatch({
+      workflowKey,
+      runRefs: olderRefs,
+      contributions: olderRefs.map((runRef, index) =>
+        contribution(runRef, index + 1)
+      ),
+      skippedRunCount: 0,
+    });
+
+    const data = await store.read(baseTime + 1);
+    assert.strictEqual(data.runCount, 4);
+    assert.strictEqual(data.totals.total, 10);
+  });
+
   test("revises an old run after its recent cache entry is evicted", async () => {
     const oldRunRef = formatRunRef(baseTime);
     await writeManifest(oldRunRef, 10);

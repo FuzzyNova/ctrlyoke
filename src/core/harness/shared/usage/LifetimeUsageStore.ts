@@ -683,6 +683,14 @@ export class LifetimeUsageStore {
           if (normalized.runRef < existingLineage.countedFrom) {
             const rescanned = await this.scanLineage(normalized.workflowKey);
             this.replaceLineage(data, normalized.workflowKey, rescanned);
+          } else if (existingLineage.backfillComplete === false) {
+            const rescanned = await this.scanLineage(normalized.workflowKey);
+            this.replaceLineage(data, normalized.workflowKey, rescanned);
+            const rebuilt = data.lineages[normalized.workflowKey];
+            if (rebuilt) {
+              rebuilt.backfillComplete = false;
+              delete rebuilt.dirMtimeMs;
+            }
           } else {
             applyRunToLineage(existingLineage, normalized, 1);
             existingLineage.countedThrough = normalized.runRef;
@@ -768,6 +776,22 @@ export class LifetimeUsageStore {
       await withFileLock(this.filePath, async () => {
         const data = await this.readOrReset(now);
         let lineage = data.lineages[batch.workflowKey];
+        if (
+          lineage &&
+          batch.runRefs.some((runRef) => runRef < lineage!.countedFrom)
+        ) {
+          const rescanned = await this.scanLineage(batch.workflowKey);
+          this.replaceLineage(data, batch.workflowKey, rescanned);
+          lineage = data.lineages[batch.workflowKey];
+          if (lineage) {
+            lineage.backfillComplete = false;
+            if (batch.dirMtimeMs === undefined) delete lineage.dirMtimeMs;
+            else lineage.dirMtimeMs = batch.dirMtimeMs;
+          }
+          data.updatedAt = now;
+          await this.writeAtomic(data);
+          return;
+        }
         for (const runRef of batch.runRefs) {
           if (
             lineage &&
@@ -776,7 +800,6 @@ export class LifetimeUsageStore {
           ) {
             continue;
           }
-
           const contribution = contributions.get(runRef);
           if (!lineage) {
             lineage = contribution
@@ -810,6 +833,27 @@ export class LifetimeUsageStore {
           if (batch.dirMtimeMs === undefined) delete lineage.dirMtimeMs;
           else lineage.dirMtimeMs = batch.dirMtimeMs;
         }
+        data.updatedAt = now;
+        await this.writeAtomic(data);
+      });
+    } catch (error) {
+      const wrapped = new Error(LIFETIME_USAGE_ERROR_CODES.WRITE_FAILED);
+      wrapped.cause = error;
+      throw wrapped;
+    }
+  }
+
+  /** Rebuild a lineage from its manifests when the persisted interval has gaps. */
+  async rebuildLineage(
+    workflowKey: WorkflowKey,
+    now: number = Date.now()
+  ): Promise<void> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    try {
+      await withFileLock(this.filePath, async () => {
+        const data = await this.readOrReset(now);
+        const rescanned = await this.scanLineage(workflowKey);
+        this.replaceLineage(data, workflowKey, rescanned);
         data.updatedAt = now;
         await this.writeAtomic(data);
       });

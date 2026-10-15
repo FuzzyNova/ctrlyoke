@@ -287,10 +287,24 @@ export class WorkspaceStatsService {
       this.backfillErrorCode = WORKSPACE_STATS_ERROR_CODES.BACKFILL_FAILED;
       return;
     }
-    const runRefs = entries
+    const allRunRefs = entries
       .filter(isRunDirEntry)
       .map((entry) => entry.name as RunRef)
-      .sort((left, right) => left.localeCompare(right))
+      .sort((left, right) => left.localeCompare(right));
+    const hasOlderRun =
+      existing !== undefined &&
+      allRunRefs.some((runRef) => runRef < existing.countedFrom);
+    const wasLiveUpsert =
+      existing !== undefined &&
+      existing.dirMtimeMs === undefined &&
+      existing.backfillComplete !== false;
+    if (hasOlderRun || wasLiveUpsert) {
+      await this.lifetimeStore.rebuildLineage(workflowKey, Date.now());
+      this.progress.total += allRunRefs.length;
+      this.progress.scanned += allRunRefs.length;
+      return;
+    }
+    const runRefs = allRunRefs
       .filter(
         (runRef) =>
           !existing ||
