@@ -14,6 +14,14 @@ import {
 } from "../utils/ModelConstants";
 import type { DashboardHostActions } from "../core/HostPorts";
 
+/** VS Code's default files.watcherExclude patterns, shared by Node watchers. */
+export const DEFAULT_FILE_WATCHER_EXCLUDES = [
+  "**/node_modules/**",
+  "**/.git/objects/**",
+  "**/.git/subtree-cache/**",
+  "**/.hg/store/**",
+] as const;
+
 /** Stable run-level codes for execution guardrail stops. */
 export const GUARDRAIL_STOP_CODES = {
   QUEUE_SIZE_LIMIT: "queue-size-limit",

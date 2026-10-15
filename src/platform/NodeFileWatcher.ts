@@ -1,6 +1,7 @@
 import * as path from "path";
 import { watch, type FSWatcher } from "chokidar";
 import { minimatch } from "minimatch";
+import { DEFAULT_FILE_WATCHER_EXCLUDES } from "../types/DashboardConstants";
 import type {
   Disposable,
   FileWatcher,
@@ -19,7 +20,41 @@ class NodeFileWatcher implements FileWatcher {
 
   constructor(basePath: string, glob: string) {
     const normalizedBasePath = normalizeAbsolutePath(basePath);
-    this.watcher = watch(normalizedBasePath, { ignoreInitial: true });
+    const segments = glob.split("/");
+    const hasRecursiveGlob = glob.includes("**");
+    const isLiteralBasename =
+      segments.length === 1 &&
+      ![...glob].some((character) => "*?[]{}".includes(character));
+    const depth = hasRecursiveGlob
+      ? undefined
+      : Math.max(0, segments.length - 1);
+    const excluded = (relativePath: string): boolean =>
+      DEFAULT_FILE_WATCHER_EXCLUDES.some(
+        (pattern) =>
+          minimatch(relativePath, pattern, { dot: true }) ||
+          minimatch(`${relativePath}/sentinel`, pattern, { dot: true })
+      );
+    this.watcher = watch(
+      isLiteralBasename
+        ? path.join(normalizedBasePath, glob)
+        : normalizedBasePath,
+      {
+        ignoreInitial: true,
+        ...(depth === undefined ? {} : { depth }),
+        followSymlinks: false,
+        ignored: (watchedPath, stats) => {
+          const absolutePath = normalizeAbsolutePath(watchedPath);
+          const relativePath = path
+            .relative(normalizedBasePath, absolutePath)
+            .split(path.sep)
+            .join("/");
+          if (!relativePath || relativePath === ".") return false;
+          if (excluded(relativePath)) return true;
+          if (!stats?.isDirectory()) return false;
+          return !minimatch(relativePath, glob, { dot: true, partial: true });
+        },
+      }
+    );
     this.watcher.on("all", (eventName, watchedPath) => {
       const absolutePath = normalizeAbsolutePath(watchedPath);
       const relativePath = path

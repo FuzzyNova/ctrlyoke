@@ -13,7 +13,7 @@ import { pathsEqual } from "../../utils/PathCasing";
 
 const EVENT_TIMEOUT_MS = 5_000;
 
-function waitForPathEvent(
+export function waitForPathEvent(
   register: (listener: (filePath: string) => void) => Disposable,
   eventName: "create" | "change" | "delete",
   expectedPath: string
@@ -61,7 +61,7 @@ function waitForAnyCreateOrChange(
   });
 }
 
-async function withWatcher(
+export async function withWatcher(
   factory: FileWatcherFactory,
   glob: string,
   run: (root: string, watcher: FileWatcher) => Promise<void>
@@ -151,6 +151,22 @@ export function registerFileWatcherContractTests(
         await matched;
         await new Promise((resolve) => setTimeout(resolve, 200));
         assert.strictEqual(unmatchedEvents, 0);
+      });
+    });
+
+    test("a basename watch does not report changes in subdirectories", async () => {
+      await withWatcher(factory, "target.json", async (root, watcher) => {
+        const nestedPath = path.join(root, "nested", "target.json");
+        await fs.mkdir(path.dirname(nestedPath));
+        await fs.writeFile(nestedPath, "ignored");
+        await assert.rejects(
+          waitForPathEvent(
+            (listener) => watcher.onDidCreate(listener),
+            "create",
+            nestedPath
+          ),
+          /Timed out waiting for watcher create event/
+        );
       });
     });
 

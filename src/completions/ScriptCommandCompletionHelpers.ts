@@ -421,26 +421,33 @@ const STATIC_CANDIDATES: CompletionCandidate[] = [
 ];
 
 const packageScriptsCache = new Map<string, ScriptRecord[]>();
-const watchedRootsByFactory = new WeakMap<FileWatcherFactory, Set<string>>();
+const watchedRootsByFactory = new WeakMap<
+  FileWatcherFactory,
+  Map<string, ReturnType<FileWatcherFactory["create"]>>
+>();
+const watcherRegistries = new Set<
+  Map<string, ReturnType<FileWatcherFactory["create"]>>
+>();
 
 function ensurePackageJsonWatchers(
   roots: readonly NamedRoot[],
   fileWatcherFactory?: FileWatcherFactory
 ): void {
   if (!fileWatcherFactory) return;
-  let watchedRoots = watchedRootsByFactory.get(fileWatcherFactory);
-  if (!watchedRoots) {
-    watchedRoots = new Set<string>();
-    watchedRootsByFactory.set(fileWatcherFactory, watchedRoots);
+  let watchersByRoot = watchedRootsByFactory.get(fileWatcherFactory);
+  if (!watchersByRoot) {
+    watchersByRoot = new Map();
+    watchedRootsByFactory.set(fileWatcherFactory, watchersByRoot);
+    watcherRegistries.add(watchersByRoot);
   }
   for (const root of roots) {
     const normalizedRoot = path.resolve(root.fsPath);
-    if (watchedRoots.has(normalizedRoot)) continue;
-    watchedRoots.add(normalizedRoot);
+    if (watchersByRoot.has(normalizedRoot)) continue;
     const watcher = fileWatcherFactory.create(
       normalizedRoot,
       "**/package.json"
     );
+    watchersByRoot.set(normalizedRoot, watcher);
     const invalidate = (filePath: string): void => {
       packageScriptsCache.delete(path.resolve(filePath));
     };
@@ -453,6 +460,11 @@ function ensurePackageJsonWatchers(
 /** Clear package-script cache state; intended for tests and workspace resets. */
 export function clearScriptCommandCompletionCache(): void {
   packageScriptsCache.clear();
+  for (const registry of watcherRegistries) {
+    for (const watcher of registry.values()) watcher.dispose();
+    registry.clear();
+  }
+  watcherRegistries.clear();
 }
 
 /**

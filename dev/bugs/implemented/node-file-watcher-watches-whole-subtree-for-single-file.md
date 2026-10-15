@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/platform/NodeFileWatcher.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -33,3 +33,9 @@ The standalone host wires `NodeFileWatcherFactory` into all of these (`src/platf
 - In every case, pass chokidar an `ignored` predicate that prunes directories that cannot match the glob. It should also always exclude `node_modules`, `.git` and similar heavy directories, mirroring VS Code's default `files.watcherExclude` set from a single shared constant. Also set `followSymlinks: false`.
 - In `ScriptCommandCompletionHelpers`, either exclude `node_modules` from the `**/package.json` watch or watch only the `package.json` files that were actually discovered. Keep the watcher handle so it can be disposed.
 - Add a contract test in `src/test/helpers/fileWatcherContract.ts` asserting that a basename watch does not report changes in subdirectories. Add a Node-specific test asserting that `node_modules` is not watched.
+
+## Decision
+
+Use the default `files.watcherExclude` patterns as one shared constant. The
+completion cache reset disposes its retained package watchers, and Chokidar
+prunes excluded paths and non-matching directories before traversal.
