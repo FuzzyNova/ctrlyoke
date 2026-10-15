@@ -1,6 +1,6 @@
 # Bug Drain 3: Dashboard State and Local Storage I/O
 
-> **Status:** Proposed. Written 2026-10-14 against current `main`.
+> **Status:** Implemented 2026-10-14 (`946577ef6`..`feaa2df10`). Written 2026-10-14 against current `main`.
 >
 > **Plan 3 of 4.** The four bug-drain plans run **in parallel**, each through
 > `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git worktree. The
@@ -23,7 +23,8 @@ lifetime usage store, the workspace git snapshot, the execution-root lease file,
 Windows credential store, the MCP/LSP config exporters and the MCP registry, the
 end-condition regex guard, `ParallelGroupRun` worker dispatch, OpenCode permission
 collision discovery, and the Antigravity log/tool parsers. Every fix is local to the files
-listed in §2. None of them changes the workflow schema or the settings schema.
+listed in §2, except step 3, which adds the `execution.regexTimeoutSec` setting and
+rewrites the workflow schema's `operator` description.
 
 ---
 
