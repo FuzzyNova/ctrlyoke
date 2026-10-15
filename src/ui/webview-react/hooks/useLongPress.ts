@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 
 export function getContextMenuOpener(
   currentTarget: EventTarget | null,
@@ -52,8 +52,12 @@ export function useLongPress(
     startPosRef.current = null;
   }, []);
 
+  useEffect(() => cancel, [cancel]);
+
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
+      cancel();
+      if (e.touches.length > 1) return;
       if (!callback) return;
       if (requireSelf && e.target !== e.currentTarget) return;
       const touch = e.touches[0];
@@ -67,7 +71,7 @@ export function useLongPress(
         callback(x, y, opener);
       }, delay);
     },
-    [callback, delay, requireSelf]
+    [callback, cancel, delay, requireSelf]
   );
 
   const onTouchMove = useCallback(

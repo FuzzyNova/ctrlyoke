@@ -2,7 +2,12 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/hooks/useLongPress.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
+
+## Decision
+
+Every touchstart cancels the prior gesture, and multi-touch starts do not arm
+a new timer. Unmount cleanup clears any remaining timer.
 
 ## Symptom
 
