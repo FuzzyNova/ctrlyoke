@@ -543,6 +543,70 @@ suite("ParallelGroupRun", () => {
     assert.strictEqual(outcome.settledCount, 3);
   });
 
+  test("starts the next pending member when an adopted anchor settles", async () => {
+    const oneStarted = deferred();
+    const oneRelease = deferred();
+    const twoStarted = deferred();
+    const harness = makeRun({
+      ids: ["anchor", "one", "two"],
+      pendingIds: ["one", "two"],
+      adoptedMemberIds: ["anchor"],
+      width: 2,
+      execute: async (stepId, target) => {
+        if (stepId === "one") {
+          oneStarted.resolve();
+          await oneRelease.promise;
+        } else {
+          assert.strictEqual(stepId, "two");
+          twoStarted.resolve();
+        }
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+    });
+
+    const completion = harness.run.run();
+    await oneStarted.promise;
+    await harness.run.settleAdoptedMember("anchor", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      status: PROMPT_TERMINAL_STATUS.COMPLETED,
+    });
+
+    await twoStarted.promise;
+    oneRelease.resolve();
+    const outcome = await completion;
+    assert.strictEqual(outcome.settledCount, 3);
+  });
+
+  test("does not start pending members when an adopted anchor triggers fail-fast", async () => {
+    const oneStarted = deferred();
+    const oneRelease = deferred();
+    const started: string[] = [];
+    const harness = makeRun({
+      ids: ["anchor", "one", "two"],
+      pendingIds: ["one", "two"],
+      adoptedMemberIds: ["anchor"],
+      width: 2,
+      onCancel: () => oneRelease.resolve(),
+      execute: async (stepId, target) => {
+        started.push(stepId);
+        oneStarted.resolve();
+        await oneRelease.promise;
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+    });
+
+    const completion = harness.run.run();
+    await oneStarted.promise;
+    await harness.run.settleAdoptedMember("anchor", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      status: PROMPT_TERMINAL_STATUS.FAILED,
+    });
+
+    const outcome = await completion;
+    assert.deepStrictEqual(started, ["one"]);
+    assert.strictEqual(outcome.terminalFailure, true);
+  });
+
   test("retains the existing behavior when no member is admitted late", async () => {
     const harness = makeRun({ ids: ["first", "second"], width: 2 });
     const outcome = await harness.run.run();

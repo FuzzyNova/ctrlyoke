@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/ParallelGroupRun.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -28,3 +28,7 @@ A group that starts by promoting around a running sequential step does not use t
 - In `settleAdoptedMember`, after `releaseAdoptionWaiter()`, call `this.startAvailableWorkers()` when `runStarted` is true and fail-fast has not been triggered. Either put the call ahead of the fail-fast branch guarded by `!this.failFastTriggered`, or put it in an `else` of that branch. The freed slot then dispatches queued members right away.
 - Alternative: have `drainWorkers` wait with `Promise.race(outstanding)` and call `startAvailableWorkers()` on every pass. Then any settlement, whether a worker's or an adopted member's, re-checks capacity.
 - Add a regression test to `ParallelGroupRun.test.ts` with width 2, an adopted anchor, and pending `["one", "two"]`. Settle the anchor while `"one"` is still blocked, then assert that `"two"` starts before `"one"` is released.
+
+## Decision
+
+Recheck worker capacity directly when the adopted anchor settles, unless that settlement triggers fail-fast.
