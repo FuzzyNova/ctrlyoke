@@ -31,6 +31,8 @@ import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import {
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
@@ -47,7 +49,10 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
-import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
+import type {
+  CompatibilityDiagnostic,
+  HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
@@ -807,60 +812,62 @@ export class CodexCliProvider implements ICliProvider {
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
-    try {
-      const configArgs: string[] = [];
+    const configArgs: string[] = [];
+    const diagnostics: CompatibilityDiagnostic[] = [];
 
-      if (mcpServerPath) {
-        configArgs.push(
-          "-c",
-          CliMcpConfigGenerator.generateInlineTomlConfig(
-            MCP_SERVER_IDS.CTRLYOKE,
-            mcpServerPath,
-            workspaceRoot,
-            workingFilePath,
-            additionalEnv,
-            stateRoot
-          )
-        );
+    if (mcpServerPath) {
+      configArgs.push(
+        "-c",
+        CliMcpConfigGenerator.generateInlineTomlConfig(
+          MCP_SERVER_IDS.CTRLYOKE,
+          mcpServerPath,
+          workspaceRoot,
+          workingFilePath,
+          additionalEnv,
+          stateRoot
+        )
+      );
 
-        configArgs.push(
-          "-c",
-          `mcp_servers.${MCP_SERVER_IDS.CTRLYOKE}.default_tools_approval_mode=${quoteTomlBasicString("approve")}`
+      configArgs.push(
+        "-c",
+        `mcp_servers.${MCP_SERVER_IDS.CTRLYOKE}.default_tools_approval_mode=${quoteTomlBasicString("approve")}`
+      );
+    }
+
+    const usedServerKeys = new Set<string>(
+      mcpServerPath
+        ? [sanitizeCodexConfigKeySegment(MCP_SERVER_IDS.CTRLYOKE)]
+        : []
+    );
+    for (const server of userServers ?? []) {
+      const serverKey = sanitizeCodexConfigKeySegment(server.id);
+      if (server.url && server.transport === MCP_TRANSPORTS.SSE) {
+        Log.warn(
+          `[CodexCliProvider] Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
         );
+        continue;
       }
 
-      const usedServerKeys = new Set<string>(
-        mcpServerPath
-          ? [sanitizeCodexConfigKeySegment(MCP_SERVER_IDS.CTRLYOKE)]
-          : []
-      );
-      for (const server of userServers ?? []) {
-        const serverKey = sanitizeCodexConfigKeySegment(server.id);
-        if (server.url && server.transport === MCP_TRANSPORTS.SSE) {
-          Log.warn(
-            `[CodexCliProvider] Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
-          );
-          continue;
-        }
+      if (!server.url && !server.command) {
+        Log.warn(
+          `[CodexCliProvider] Codex CLI MCP server "${server.id}" is missing a command or URL. Skipping.`
+        );
+        continue;
+      }
 
-        if (!server.url && !server.command) {
-          Log.warn(
-            `[CodexCliProvider] Codex CLI MCP server "${server.id}" is missing a command or URL. Skipping.`
-          );
-          continue;
-        }
+      if (usedServerKeys.has(serverKey)) {
+        Log.warn(
+          `[CodexCliProvider] Codex MCP server ID "${server.id}" collides after key sanitization as "${serverKey}". Skipping server.`
+        );
+        continue;
+      }
+      usedServerKeys.add(serverKey);
 
-        if (usedServerKeys.has(serverKey)) {
-          Log.warn(
-            `[CodexCliProvider] Codex MCP server ID "${server.id}" collides after key sanitization as "${serverKey}". Skipping server.`
-          );
-          continue;
-        }
-        usedServerKeys.add(serverKey);
-
+      try {
+        const serverArgs: string[] = [];
         if (server.url) {
           const headers = splitCodexHeaders(server.headers);
-          configArgs.push(
+          serverArgs.push(
             "-c",
             CliMcpConfigGenerator.generateInlineTomlRemoteServerConfig(
               server.id,
@@ -878,7 +885,7 @@ export class CodexCliProvider implements ICliProvider {
         } else {
           const codexEnvironment = splitCodexEnvironment(server.env);
 
-          configArgs.push(
+          serverArgs.push(
             "-c",
             CliMcpConfigGenerator.generateInlineTomlStdioServerConfig(
               server.id,
@@ -895,27 +902,39 @@ export class CodexCliProvider implements ICliProvider {
           );
         }
 
-        configArgs.push(...this.buildToolApprovalOverrideArgs(server));
-      }
-
-      if (configArgs.length > 0) {
-        Log.debug(
-          `[CodexCliProvider] Codex MCP config overrides added for ${configArgs.length / 2} server(s)`
+        serverArgs.push(...this.buildToolApprovalOverrideArgs(server));
+        configArgs.push(...serverArgs);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        Log.warn(
+          `[CodexCliProvider] Failed to generate MCP config for server "${server.id}": ${reason}`
         );
+        diagnostics.push({
+          code: "mcp.server.skipped",
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          harnessId: HARNESS_IDS.CODEX_CLI,
+          capability: "mcp.server",
+          state: {
+            fidelity: "exact",
+            mechanism: "native",
+            verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+          },
+          message: `Codex CLI skipped MCP server "${server.id}": ${reason}`,
+        });
       }
-
-      return {
-        cliArgs: configArgs,
-        mutations: [],
-        diagnostics: [],
-      };
-    } catch (error) {
-      Log.error(
-        "[CodexCliProvider] Failed to generate MCP config for Codex CLI",
-        error
-      );
-      return { cliArgs: [], mutations: [], diagnostics: [] };
     }
+
+    if (configArgs.length > 0) {
+      Log.debug(
+        `[CodexCliProvider] Codex MCP config overrides added for ${configArgs.length / 2} server(s)`
+      );
+    }
+
+    return {
+      cliArgs: configArgs,
+      mutations: [],
+      diagnostics,
+    };
   }
 
   /**

@@ -67,6 +67,10 @@ export class CopilotToolPermissionMapper
 {
   readonly capabilities = COPILOT_PERMISSION_CAPABILITIES;
 
+  static toCopilotMcpToolPattern(serverId: string, tool: string): string {
+    return `${serverId}(${tool})`;
+  }
+
   /**
    * Read-only tools that don't require explicit permission
    * (Copilot CLI auto-grants these)
@@ -194,6 +198,9 @@ export class CopilotToolPermissionMapper
     const serverId = rest.slice(0, sepIdx);
     const toolName = rest.slice(sepIdx + 2);
     if (!serverId || !toolName) return null;
-    return `${serverId}(${toolName})`;
+    return CopilotToolPermissionMapper.toCopilotMcpToolPattern(
+      serverId,
+      toolName
+    );
   }
 }

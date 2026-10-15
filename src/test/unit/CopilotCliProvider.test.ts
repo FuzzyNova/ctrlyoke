@@ -51,6 +51,55 @@ suite("CopilotCliProvider", () => {
     });
   }
 
+  test("qualifies MCP autoApprove tool names with their server ID", async () => {
+    const provider = new CopilotCliProvider();
+    const preparation = await provider.planCliArgs(
+      { prompt: "create an issue" } as PromptStep,
+      false,
+      process.cwd(),
+      process.cwd(),
+      undefined,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: createProperties([
+          { id: "github", command: "npx", autoApprove: ["create_issue"] },
+        ]),
+      }
+    );
+
+    assert.ok(
+      preparation.cliArgs.some(
+        (arg, index, args) =>
+          arg === "--allow-tool" && args[index + 1] === "github(create_issue)"
+      )
+    );
+  });
+
+  test("never emits a bare built-in permission for an MCP autoApprove tool", async () => {
+    const provider = new CopilotCliProvider();
+    const preparation = await provider.planCliArgs(
+      { prompt: "write" } as PromptStep,
+      false,
+      process.cwd(),
+      process.cwd(),
+      undefined,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: createProperties([
+          { id: "github", command: "npx", autoApprove: ["write"] },
+        ]),
+      }
+    );
+
+    for (let index = 0; index < preparation.cliArgs.length; index++) {
+      if (preparation.cliArgs[index] === "--allow-tool") {
+        assert.notStrictEqual(preparation.cliArgs[index + 1], "write");
+      }
+    }
+  });
+
   test("uses a unique OTel path per invocation and cleans up every path", async () => {
     const provider = new CopilotCliProvider();
     const plan = () =>

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/harness/codex/CodexCliProvider.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -38,3 +38,7 @@ Handle each server on its own:
 Another option is to fail the step on a hard error, by returning an error-severity diagnostic, instead of silently launching with no MCP config.
 
 Add a unit test in `src/test/unit/CodexCliProvider.test.ts`. A composite env value on one server should leave the ctrlyoke entry and the other servers in `cliArgs`, and should produce a diagnostic.
+
+## Decision
+
+An unrepresentable user server is skipped with a warning diagnostic that names the server and reason. Other user servers and the ctrlyoke server remain in the generated arguments.

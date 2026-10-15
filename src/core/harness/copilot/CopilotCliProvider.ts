@@ -344,7 +344,13 @@ export class CopilotCliProvider implements ICliProvider {
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
             for (const pattern of server.autoApprove) {
-              args.push("--allow-tool", pattern);
+              args.push(
+                "--allow-tool",
+                CopilotToolPermissionMapper.toCopilotMcpToolPattern(
+                  server.id,
+                  pattern
+                )
+              );
             }
             Log.debug(
               `[CopilotCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
