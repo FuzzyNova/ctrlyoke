@@ -2730,20 +2730,10 @@ interface CommitCommandOptions {
 
 async function commitCommand(options: CommitCommandOptions): Promise<void> {
   const workingDir = options.cwd ? path.resolve(options.cwd) : process.cwd();
-
-  Log.initializeCli(workingDir, false);
-
-  const userBackend = createUserConfigBackend();
-  const workspaceBackend = createWorkspaceConfigBackend(workingDir);
-  configService.setUserBackend(userBackend);
-  configService.setWorkspaceBackend(workspaceBackend);
-
-  if (options.model) {
-    const overlay: PartialCtrlYokeSettings = {
-      commit: { model: options.model },
-    };
-    configService.setCliOverlay(overlay);
-  }
+  const overlay: PartialCtrlYokeSettings = options.model
+    ? { commit: { model: options.model } }
+    : {};
+  await bootstrapCliWorkspace({ cwd: workingDir }, overlay);
 
   const {
     CommitMessageGenerationError,

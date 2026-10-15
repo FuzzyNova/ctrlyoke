@@ -3,7 +3,18 @@ import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { suite, test } from "mocha";
+import { setup, suite, teardown, test } from "mocha";
+import {
+  bootstrapCliWorkspace,
+  type CliWorkspaceBootstrapDependencies,
+} from "../../cli/CliWorkspaceBootstrap";
+import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
+import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
+import {
+  initializeRunHistoryLocation,
+  isRunHistoryLocationInitialized,
+  resetRunHistoryLocationForTests,
+} from "../../utils/RunHistoryStoragePolicy";
 import {
   commitGeneratedChanges,
   generateCommitMessageForChanges,
@@ -12,6 +23,40 @@ import { CommitMessageGenerator } from "../../git/CommitMessageGenerator";
 import { GitCommitter } from "../../git/GitCommitter";
 
 suite("CLI commit command", () => {
+  setup(() => resetRunHistoryLocationForTests());
+
+  teardown(() => {
+    resetRunHistoryLocationForTests();
+    initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
+  });
+
+  test("commit workspace bootstrap initializes run-history location", async () => {
+    const backend = {} as ConfigBackend;
+    const dependencies: CliWorkspaceBootstrapDependencies = {
+      configService: {
+        setUserBackend: () => {},
+        setWorkspaceBackend: () => {},
+        setCliOverlay: () => {},
+        get: () => ({ runHistoryLocation: RUN_HISTORY_LOCATIONS.WORKSPACE }),
+      },
+      initializeCliLog: () => {},
+      createUserConfigBackend: () => backend,
+      createWorkspaceConfigBackend: () => backend,
+      repoToplevel: async () => null,
+      createProjectStateRegistry: () => ({
+        initialize: async () => ({ projectRoot: path.resolve("workspace") }),
+      }),
+    };
+
+    await bootstrapCliWorkspace(
+      { cwd: "workspace" },
+      { commit: { model: "test-model" } },
+      dependencies
+    );
+
+    assert.strictEqual(isRunHistoryLocationInitialized(), true);
+  });
+
   test("--all generates its message from staged, unstaged, and untracked changes", async () => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-cli-commit-all-"));
     const runGit = (args: string[]): string =>

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/cli.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -44,3 +44,8 @@ The VS Code path works because `activate()` freezes the location. Tests miss the
   Guard the call with `isRunHistoryLocationInitialized()` if needed.
 - **Better fix:** move config bootstrap and the run-history freeze into one shared helper, or route `commit` through `bootstrapCliWorkspace`. Then every CLI subcommand that touches run storage freezes the location in one place.
 - **Regression test:** call `resetRunHistoryLocationForTests()`, then run the commit command's bootstrap path. This keeps the global freeze in `src/test/suite/index.ts` from hiding the bug again.
+
+
+## Decision
+
+Routed `commitCommand` through `bootstrapCliWorkspace` so commit shares config bootstrap, the guarded run-history freeze, and project-state initialization with history commands. Commit-message generation persists a run and therefore needs that workspace state; keeping a separate lightweight bootstrap would leave the same freeze easy to omit again.
