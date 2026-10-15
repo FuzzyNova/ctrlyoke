@@ -2491,11 +2491,6 @@ export function createMessageHandlers(
       isSystemGenerated,
     } = message;
     if (!address) return;
-    if (typeof definitionRevision === "number") {
-      useExecutionPreviewStore
-        .getState()
-        .observeDefinitionRevision(address, definitionRevision);
-    }
     const ui = useUiStore.getState();
     // A run view switch that is still in flight owns the address, so identity
     // for a *different* address would re-point the client at the run it is
@@ -2509,6 +2504,11 @@ export function createMessageHandlers(
       !areWorkflowAddressesEqual(address, ui.displayedViewAddress)
     ) {
       return;
+    }
+    if (typeof definitionRevision === "number") {
+      useExecutionPreviewStore
+        .getState()
+        .observeDefinitionRevision(address, definitionRevision, true);
     }
     ui.setDisplayedViewIdentity(
       address,
@@ -2625,9 +2625,6 @@ export function createMessageHandlers(
     } = message;
     if (!address || !workingFile) return;
     const incomingDefinitionRevision = workingFile.definitionRevision ?? 1;
-    useExecutionPreviewStore
-      .getState()
-      .observeDefinitionRevision(address, incomingDefinitionRevision);
     // A late response from a previous selector click must not overwrite the
     // most recently requested address.
     const uiStore = useUiStore.getState();
@@ -2703,6 +2700,9 @@ export function createMessageHandlers(
       }
       return;
     }
+    useExecutionPreviewStore
+      .getState()
+      .observeDefinitionRevision(address, incomingDefinitionRevision, true);
     const openSaveDialog = useUiStore.getState().saveWorkflowDialogData;
     if (
       openSaveDialog &&
