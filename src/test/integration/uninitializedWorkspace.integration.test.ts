@@ -175,7 +175,7 @@ suite("Uninitialized workspace startup", function () {
     await orchestrator.getCoordinationScopeSnapshot();
     dashboard.settingsSync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, {
       available: true,
-      installHint: "",
+      installCommand: "",
     });
     dashboard.settingsSync.sendModelOptionsUpdate();
     await dashboard.settingsSync.refreshCapabilitiesFile();
