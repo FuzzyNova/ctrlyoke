@@ -41,3 +41,7 @@ No test covers the array branch for Copilot.
 - Better: share one helper with `CopilotToolPermissionMapper`'s MCP conversion (e.g. a static `toCopilotMcpToolPattern(serverId, tool)`) so the format lives in one place.
 - Add a `CopilotCliProvider` unit test for `autoApprove: ['create_issue']` that asserts `github(create_issue)`, and checks that an MCP server's list can never emit a bare built-in kind such as `write`.
 - Consider tightening the schema description to say entries are tool names of that server.
+
+## Follow-up (review)
+
+Copilot now skips auto-approvals when a server ID could match a built-in permission or contains permission syntax delimiters; tool names with parentheses or commas are also skipped. Each skipped approval is logged and returned as a warning diagnostic.

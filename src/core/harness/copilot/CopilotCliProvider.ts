@@ -6,6 +6,8 @@ import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HARNESS_IDS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HEADLESS_SOURCE_MODES,
   PERSISTENT_VALUE_INSTALL_RESULT_KINDS,
   STATUS_LINE_HARNESS_IDS,
@@ -44,7 +46,10 @@ import {
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
-import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
+import {
+  type CompatibilityDiagnostic,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -317,6 +322,24 @@ export class CopilotCliProvider implements ICliProvider {
           workflowContext?.secretEnvironment
         )
     );
+    const diagnostics: CompatibilityDiagnostic[] = [
+      ...mcpPreparation.diagnostics,
+    ];
+    const warnSkippedAutoApproval = (message: string): void => {
+      Log.warn(`[CopilotCliProvider] ${message}`);
+      diagnostics.push({
+        code: "mcp.autoApprove.skipped",
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId: HARNESS_IDS.COPILOT_CLI,
+        capability: "mcp.server",
+        state: {
+          fidelity: "partial",
+          mechanism: "translated-cli",
+          verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+        },
+        message,
+      });
+    };
     if (
       mcpPreparation.cliArgs.length > 0 ||
       mcpPreparation.mutations.length > 0
@@ -335,6 +358,14 @@ export class CopilotCliProvider implements ICliProvider {
       const mcpServers = workflowContext?.resolvedProperties?.mcpServers ?? [];
       for (const server of mcpServers) {
         if (typeof server === "object" && server.autoApprove) {
+          const permissionServerPattern =
+            CopilotToolPermissionMapper.isSafeMcpServerId(server.id);
+          if (!permissionServerPattern) {
+            warnSkippedAutoApproval(
+              `Copilot CLI skipped auto-approval for MCP server "${server.id}": its ID conflicts with a built-in permission or contains unsupported characters.`
+            );
+            continue;
+          }
           if (server.autoApprove === true) {
             // Approve all tools from this server
             args.push("--allow-tool", server.id);
@@ -344,12 +375,20 @@ export class CopilotCliProvider implements ICliProvider {
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
             for (const pattern of server.autoApprove) {
-              args.push(
-                "--allow-tool",
+              const copilotPattern =
                 CopilotToolPermissionMapper.toCopilotMcpToolPattern(
                   server.id,
                   pattern
-                )
+                );
+              if (!copilotPattern) {
+                warnSkippedAutoApproval(
+                  `Copilot CLI skipped auto-approval for tool "${pattern}" from MCP server "${server.id}": tool names cannot contain parentheses or commas.`
+                );
+                continue;
+              }
+              args.push(
+                "--allow-tool",
+                copilotPattern
               );
             }
             Log.debug(
@@ -454,7 +493,7 @@ export class CopilotCliProvider implements ICliProvider {
         },
         ...mcpPreparation.mutations,
       ],
-      diagnostics: mcpPreparation.diagnostics,
+      diagnostics,
     };
   }
 
@@ -865,8 +904,8 @@ export class CopilotCliProvider implements ICliProvider {
    * we still clean it up if it's ours and the directory is now empty.
    */
   async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
-    const hookDir = path.join(workspaceRoot, ".github", "hooks");
     try {
+      const hookDir = path.join(workspaceRoot, ".github", "hooks");
       const files = await fs.readdir(hookDir);
       const hasOtherHookFiles = files.some(
         (f) => f.startsWith("ctrlyoke-") && f.endsWith(".json")
@@ -884,6 +923,9 @@ export class CopilotCliProvider implements ICliProvider {
     } catch {
       // Directory doesn't exist — nothing to clean up
       this.hooksDirGitignorePath = undefined;
+    } finally {
+      // getAdditionalCleanupFilePaths() has already handed these paths to cleanup.
+      this.otelFilePaths.length = 0;
     }
   }
 

@@ -86,6 +86,7 @@ suite("CodexCliProvider", () => {
     );
     assert.strictEqual(preparation.diagnostics.length, 1);
     assert.match(preparation.diagnostics[0].message, /invalid-server/);
+    assert.strictEqual(preparation.diagnostics[0].state.fidelity, "partial");
     assert.match(
       preparation.diagnostics[0].message,
       /composite secret interpolation/

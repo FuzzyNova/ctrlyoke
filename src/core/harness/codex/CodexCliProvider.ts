@@ -918,7 +918,7 @@ export class CodexCliProvider implements ICliProvider {
           harnessId: HARNESS_IDS.CODEX_CLI,
           capability: "mcp.server",
           state: {
-            fidelity: "exact",
+            fidelity: "partial",
             mechanism: "native",
             verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
           },

@@ -285,7 +285,7 @@ Fields:
 - `command` · `string` — Command to run the MCP server process (stdio servers, e.g. "npx" or "node")
 - `args` · `string[]` — Arguments to pass to the command (stdio servers only)
 - `env` · map of `string` — Environment variables for the server process (stdio servers only)
-- `autoApprove` · `boolean` or `string[]` — Tools to auto-approve: true = all tools, string[] = specific tools
+- `autoApprove` · `boolean` or `string[]` — Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.
 - `url` · `string` — Remote endpoint URL for streamable-http or SSE servers (e.g. "https://mcp.example.com")
 - `transport` · `"streamable-http" | "sse"` — Transport protocol for remote servers. Defaults to "streamable-http".
 - `headers` · map of `string` — HTTP headers to send with every request (remote servers only, e.g. { "Authorization": "Bearer token" }). Secret references are allowed as ${secret:NAME} values.

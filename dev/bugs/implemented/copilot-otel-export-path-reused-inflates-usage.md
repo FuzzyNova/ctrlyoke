@@ -36,3 +36,7 @@ Stale `ctrlyoke-otel-workflow-p<N>.jsonl` files also pile up in `.ctrlyoke/temp/
 ## Decision
 
 Each OTel export filename adds the invocation UUID already created by planCliArgs to the Step 1 run-specific stem. This keeps concurrent invocations isolated while preserving the workflow/run identity in temp filenames.
+
+## Follow-up (review)
+
+The provider clears its tracked OTel paths after workflow artifact cleanup, preventing the list from growing when the provider is reused across workflows.

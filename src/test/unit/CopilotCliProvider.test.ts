@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
 import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
@@ -76,10 +79,10 @@ suite("CopilotCliProvider", () => {
     );
   });
 
-  test("never emits a bare built-in permission for an MCP autoApprove tool", async () => {
+  test("skips unsafe MCP autoApprove server IDs and reports diagnostics", async () => {
     const provider = new CopilotCliProvider();
     const preparation = await provider.planCliArgs(
-      { prompt: "write" } as PromptStep,
+      { prompt: "create an issue" } as PromptStep,
       false,
       process.cwd(),
       process.cwd(),
@@ -88,16 +91,50 @@ suite("CopilotCliProvider", () => {
         promptIndex: 0,
         allPrompts: [],
         resolvedProperties: createProperties([
-          { id: "github", command: "npx", autoApprove: ["write"] },
+          { id: "shell", command: "npx", autoApprove: ["rm:*"] },
+          { id: "write", command: "npx", autoApprove: true },
+          { id: "github", command: "npx", autoApprove: ["create_issue"] },
         ]),
       }
     );
 
-    for (let index = 0; index < preparation.cliArgs.length; index++) {
-      if (preparation.cliArgs[index] === "--allow-tool") {
-        assert.notStrictEqual(preparation.cliArgs[index + 1], "write");
+    const allowedTools = preparation.cliArgs.flatMap((arg, index, args) =>
+      arg === "--allow-tool" ? [args[index + 1]] : []
+    );
+    assert.ok(!allowedTools.includes("shell(rm:*)"));
+    assert.ok(!allowedTools.includes("write"));
+    assert.ok(allowedTools.includes("github(create_issue)"));
+    assert.strictEqual(preparation.diagnostics.length, 2);
+    assert.match(preparation.diagnostics[0].message, /shell/);
+    assert.match(preparation.diagnostics[1].message, /write/);
+  });
+
+  test("skips MCP autoApprove tool names containing permission delimiters", async () => {
+    const preparation = await new CopilotCliProvider().planCliArgs(
+      { prompt: "approve tool" } as PromptStep,
+      false,
+      process.cwd(),
+      process.cwd(),
+      undefined,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: createProperties([
+          {
+            id: "github",
+            command: "npx",
+            autoApprove: ["create(issue)", "a,b"],
+          },
+        ]),
       }
-    }
+    );
+
+    assert.ok(!preparation.cliArgs.includes("github(create(issue))"));
+    assert.ok(!preparation.cliArgs.includes("github(a,b)"));
+    assert.strictEqual(preparation.diagnostics.length, 2);
+    assert.ok(
+      preparation.diagnostics.every((diagnostic) => /github/.test(diagnostic.message))
+    );
   });
 
   test("uses a unique OTel path per invocation and cleans up every path", async () => {
@@ -132,5 +169,22 @@ suite("CopilotCliProvider", () => {
     const cleanupPaths = provider.getAdditionalCleanupFilePaths(process.cwd());
     assert.ok(cleanupPaths.includes(firstPath));
     assert.ok(cleanupPaths.includes(secondPath));
+
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "copilot-cleanup-")
+    );
+    try {
+      await provider.cleanupWorkspaceArtifacts(workspaceRoot);
+      assert.ok(
+        !provider
+          .getAdditionalCleanupFilePaths(workspaceRoot)
+          .some(
+            (cleanupPath) =>
+              cleanupPath === firstPath || cleanupPath === secondPath
+          )
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });

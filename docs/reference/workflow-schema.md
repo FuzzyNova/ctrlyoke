@@ -908,7 +908,7 @@ Environment variables for the server process (stdio servers only)
 
 - **Type:** `boolean` or `string[]`
 
-Tools to auto-approve: true = all tools, string[] = specific tools
+Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.
 
 ### `url` {#mcp-server-entry-url}
 
