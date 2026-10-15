@@ -1032,6 +1032,7 @@ export class CliIntegration extends HarnessIntegration {
 
     const executionRunner = new CliExecutionRunner({
       provider: this.provider,
+      executionPlanBuilder,
       transportCoordinator,
       failureTracker: this.failureTracker,
       factories: {

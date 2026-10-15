@@ -14,7 +14,7 @@ import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { CliLogMonitor } from "../CliLogMonitor";
-import type { CliExecutionSession } from "./CliExecutionSession";
+import { CliExecutionSession } from "./CliExecutionSession";
 import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import {
@@ -36,6 +36,7 @@ import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
 import { CliTransportError } from "./CliTransportError";
+import type { ExecutionPlanBuilder } from "./ExecutionPlanBuilder";
 
 interface CliInteractiveStartupCoordinatorLike {
   resolveSession(params: {
@@ -61,6 +62,7 @@ interface CliResponseCollectorLike {
 
 export interface CliExecutionRunnerDeps {
   provider: ICliProvider;
+  executionPlanBuilder: Pick<ExecutionPlanBuilder, "plan" | "apply">;
   transportCoordinator: CliExecutionTransportCoordinator;
   failureTracker: CliFailureTracker;
   factories: {
@@ -413,20 +415,39 @@ export class CliExecutionRunner {
           error.failureKind === FAILURE_KINDS.SESSION_REJECTED &&
           deferTempFileCleanup
         ) {
+          const rejectedSessionId = session.resolvedSessionId;
           Log.warn(
-            `[CliExecutionRunner] ${this.deps.provider.config.displayName} rejected session ID "${session.resolvedSessionId}". Retrying without resume flag.`
+            `[CliExecutionRunner] ${this.deps.provider.config.displayName} rejected session ID "${rejectedSessionId}". Retrying without resume flag.`
           );
 
-          const argsWithoutResume = await this.deps.provider.buildCliArgs(
-            session.prompt,
-            false,
-            this.deps.runtimeState.getExtensionPath(),
-            this.deps.runtimeState.getWorkspaceRoot() || "",
-            undefined,
-            session.workflowContext,
-            this.deps.runtimeState.getWorkspaceRoots?.(),
-            this.deps.runtimeState.getApprovedExternalRoots?.()
+          // The rejected ID must not be reused by later steps, even if retry
+          // planning or the fresh launch fails before discovering a new ID.
+          Reflect.set(session, "resolvedSessionId", undefined);
+          await this.clearPersistedSessionId(session);
+
+          const retrySession = new CliExecutionSession({
+            prompt: session.prompt,
+            workflowContext: session.workflowContext,
+            resolvedProperties: session.resolvedProperties,
+            resolvedSessionId: undefined,
+            executionStartTime: session.executionStartTime,
+          });
+          retrySession.preparePrompt(
+            session.promptArgument,
+            session.tempFilePaths,
+            session.imageFileRefs,
+            session.attachedSkills
           );
+          const retryPlan = await this.deps.executionPlanBuilder.plan(
+            retrySession
+          );
+          await this.deps.executionPlanBuilder.apply(retryPlan);
+          for (const tempFilePath of retryPlan.tempFilePaths) {
+            session.addTempFilePath(tempFilePath);
+          }
+          for (const tempFilePath of retryPlan.deferredHookEnvironmentFilePaths) {
+            session.addDeferredHookEnvironmentFilePath(tempFilePath);
+          }
 
           const retryCallback = this.buildHeadlessResponseCallback(
             session,
@@ -436,13 +457,13 @@ export class CliExecutionRunner {
 
           // The old session's log is not a source for the fresh session.
           return await this.deps.transportCoordinator.executeHeadless(
-            argsWithoutResume,
+            retryPlan.cliArgs,
             session.promptArgument,
             session.tempFilePaths,
             retryCallback,
             headlessEnv,
             undefined,
-            undefined,
+            retryPlan.resolvedCommand,
             session.resolvedProperties?.secrets,
             true
           );
@@ -860,6 +881,7 @@ export class CliExecutionRunner {
       if (
         result.exitCode !== 0 &&
         !result.terminationSignal &&
+        session.resolvedSessionId !== undefined &&
         this.deps.provider.isRecoverableSessionError?.(result)
       ) {
         throw new CliTransportError(
@@ -1069,5 +1091,22 @@ export class CliExecutionRunner {
       }
     }
     this.persistedSessionIds.set(session, sessionId);
+  }
+
+  private async clearPersistedSessionId(
+    session: CliExecutionSession
+  ): Promise<void> {
+    const context = session.workflowContext;
+    const persistence = context?.workingFilePersistence;
+    if (context && persistence?.persistSessionId) {
+      try {
+        await persistence.persistSessionId(context.promptIndex, "");
+      } catch (error) {
+        Log.warn(
+          "[CliExecutionRunner] Failed to clear rejected live session ID:",
+          error
+        );
+      }
+    }
   }
 }

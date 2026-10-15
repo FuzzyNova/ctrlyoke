@@ -42,3 +42,11 @@ Detect the rejection from the process result rather than from an exception:
 ## Decision
 
 Any provider implementing `isRecoverableSessionError` uses this recovery path, including Qwen. The runner owns temp-file cleanup across both attempts; the retry starts without the rejected session log source, and a newly extracted session ID is persisted for later steps.
+
+## Follow-up (review)
+
+The retry now rebuilds the launch through `ExecutionPlanBuilder`, preserving
+permission flags, headless hook arguments and suffix arguments while omitting
+the rejected resume ID. Session rejection is recognized only for resumed
+steps. The rejected ID is cleared before retry planning and response
+collection, including when the retry cannot produce a replacement ID.
