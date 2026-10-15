@@ -23,8 +23,8 @@ import { RegexSymbolIndex } from "../completions/RegexSymbolIndex";
 import { LspSymbolIndex } from "../completions/LspSymbolIndex";
 import { FallbackSymbolIndex } from "../completions/FallbackSymbolIndex";
 import type { EditorContextSource } from "../completions/EditorContextSource";
+import { listCompletionFiles } from "../utils/CompletionFileDiscovery";
 import { getGitTrackedFiles } from "../utils/GitUtils";
-import { walkSearchFiles } from "../utils/WorkspaceSearchFileWalker";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { configService } from "../config/CtrlYokeConfigService";
@@ -135,15 +135,9 @@ export async function createNodeHostServices(options: {
     new HostedWebSocketUserFeedbackSink((message) => hub.postMessage(message)),
   ]);
   const getCompletionFiles = async (): Promise<string[]> => {
-    try {
-      return await getGitTrackedFiles(cwd);
-    } catch (error) {
-      Log.warn(
-        "[Completions] git ls-files failed; falling back to workspace walk:",
-        error
-      );
-      return (await walkSearchFiles(cwd, Date.now(), 100_000, 10_000)).files;
-    }
+    return listCompletionFiles(cwd, {
+      respectGitignore: configService.get("ui").respectGitignoreForCompletions,
+    });
   };
   const editorContext: EditorContextSource = {
     getSelections: () => [],
@@ -155,6 +149,9 @@ export async function createNodeHostServices(options: {
     getFiles: getCompletionFiles,
     symbols: regexSymbolIndex,
     editorContext,
+  });
+  disposables.push({
+    dispose: configService.subscribe(() => completionCore.clearCache()),
   });
 
   return {

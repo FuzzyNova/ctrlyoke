@@ -76,4 +76,34 @@ suite("WorkspaceSearchFileWalker", () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  test("can walk ignored build and dependency directories when requested", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-search-all-files-")
+    );
+    try {
+      await fs.mkdir(path.join(root, "node_modules", "pkg"), {
+        recursive: true,
+      });
+      await fs.mkdir(path.join(root, "dist"), { recursive: true });
+      await fs.writeFile(path.join(root, "node_modules", "pkg", "index.js"), "");
+      await fs.writeFile(path.join(root, "dist", "bundle.js"), "");
+
+      const result = await walkSearchFiles(
+        root,
+        Date.now(),
+        10,
+        10_000,
+        new Set([".git"]),
+        false
+      );
+
+      assert.deepStrictEqual(result.files.sort(), [
+        path.join("dist", "bundle.js"),
+        path.join("node_modules", "pkg", "index.js"),
+      ]);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });

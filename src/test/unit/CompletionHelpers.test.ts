@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import * as vscode from "vscode";
 import { suite, test, setup, teardown } from "mocha";
 import {
@@ -24,6 +25,7 @@ import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { snapshotProperty } from "../helpers/propertySnapshot";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("CompletionHelpers workspace roots", () => {
   let workspaceFolders: vscode.WorkspaceFolder[];
@@ -83,6 +85,59 @@ suite("CompletionHelpers workspace roots", () => {
       items.some((item) => item.label.includes("NewWorkspaceSymbol")),
       "a symbol in the newly added folder should be offered"
     );
+  });
+});
+
+suite("CompletionHelpers gitignore setting", () => {
+  const originalShouldRespectGitignore =
+    ConfigurationUtils.shouldRespectGitignoreForCompletions;
+  let restoreWorkspaceFolders: (() => void) | undefined;
+  let tempDir: string;
+
+  setup(async () => {
+    tempDir = makeTempDir("ctrlyoke-completion-gitignore-");
+    execFileSync("git", ["init"], { cwd: tempDir, stdio: "pipe" });
+    fs.writeFileSync(path.join(tempDir, ".gitignore"), "ignored.txt\n");
+    fs.writeFileSync(path.join(tempDir, "ignored.txt"), "ignored");
+    restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      value: [
+        {
+          name: "workspace",
+          uri: vscode.Uri.file(tempDir),
+          index: 0,
+        } as vscode.WorkspaceFolder,
+      ],
+    });
+    clearFilesCache();
+  });
+
+  teardown(() => {
+    ConfigurationUtils.shouldRespectGitignoreForCompletions =
+      originalShouldRespectGitignore;
+    restoreWorkspaceFolders?.();
+    restoreWorkspaceFolders = undefined;
+    clearFilesCache();
+    removeTempDir(tempDir);
+  });
+
+  test("refreshes @ file completions when the setting changes", async () => {
+    ConfigurationUtils.shouldRespectGitignoreForCompletions = () => true;
+    const respecting = await getCompletionCore().getFileCompletions(
+      "ignored.txt"
+    );
+    assert.ok(!respecting.some((item) => item.label.includes("ignored.txt")));
+
+    ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
+    clearFilesCache();
+    const including = await getCompletionCore().getFileCompletions(
+      "ignored.txt"
+    );
+    assert.ok(including.some((item) => item.label.includes("ignored.txt")));
   });
 });
 

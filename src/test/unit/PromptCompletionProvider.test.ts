@@ -6,7 +6,6 @@ import * as vscode from "vscode";
 import { afterEach, suite, test } from "mocha";
 import { PromptCompletionProvider } from "../../completions/PromptCompletionProvider";
 import { clearFilesCache } from "../../completions/CompletionHelpers";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { PromptDocumentStub } from "../helpers/PromptDocumentStub";
 import { snapshotProperty } from "../helpers/propertySnapshot";
 
@@ -39,8 +38,6 @@ suite("PromptCompletionProvider", () => {
     "workspaceFolders"
   );
   const originalExecuteCommand = vscode.commands.executeCommand;
-  const originalShouldRespectGitignore =
-    ConfigurationUtils.shouldRespectGitignoreForCompletions;
 
   afterEach(() => {
     clearFilesCache();
@@ -58,13 +55,10 @@ suite("PromptCompletionProvider", () => {
       configurable: true,
       value: originalExecuteCommand,
     });
-    ConfigurationUtils.shouldRespectGitignoreForCompletions =
-      originalShouldRespectGitignore;
   });
 
   test("JSON prompt completions escape quoted paths for @, #selection, and #sym", async () => {
     clearFilesCache();
-    ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "completion-provider-")
     );
@@ -178,7 +172,6 @@ suite("PromptCompletionProvider", () => {
       marker: string
     ): Promise<vscode.CompletionList | undefined> => {
       clearFilesCache();
-      ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
       const root = path.join(os.tmpdir(), "completion-provider-code");
       Object.defineProperty(vscode.workspace, "workspaceFolders", {
         configurable: true,
@@ -268,7 +261,6 @@ suite("PromptCompletionProvider", () => {
       marker: string
     ): Promise<vscode.CompletionList | undefined> => {
       clearFilesCache();
-      ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
       const root = path.join(os.tmpdir(), "completion-provider-where");
       Object.defineProperty(vscode.workspace, "workspaceFolders", {
         configurable: true,

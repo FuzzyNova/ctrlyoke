@@ -2,11 +2,9 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
 import { Log } from "../utils/Log";
-import { getGitTrackedFiles } from "../utils/GitUtils";
-import {
-  isSearchPathIgnored,
-  walkSearchFiles,
-} from "../utils/WorkspaceSearchFileWalker";
+import { listCompletionFiles } from "../utils/CompletionFileDiscovery";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { isSearchPathIgnored } from "../utils/WorkspaceSearchFileWalker";
 import {
   getVsCodeNamedWorkspaceRoots,
   getVsCodeWorkspaceRoot,
@@ -40,18 +38,10 @@ async function getCompletionFiles(): Promise<string[]> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   const results: string[] = [];
   for (const folder of folders) {
-    let paths: string[];
-    try {
-      paths = await getGitTrackedFiles(folder.uri.fsPath);
-    } catch (error) {
-      Log.warn(
-        `[Completions] git ls-files failed for ${folder.name}, falling back to workspace walk:`,
-        error
-      );
-      paths = (
-        await walkSearchFiles(folder.uri.fsPath, Date.now(), 100_000, 10_000)
-      ).files;
-    }
+    const paths = await listCompletionFiles(folder.uri.fsPath, {
+      respectGitignore:
+        ConfigurationUtils.shouldRespectGitignoreForCompletions(),
+    });
     for (const file of paths) {
       results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
     }

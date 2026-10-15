@@ -83,7 +83,7 @@ For YAML, explicit replacement ranges are required; without them the YAML extens
 - git refs cache: 10s
 - cache invalidation comes from `initializeCompletionHelpers(context)` subscribing to `configService`
 
-`ctrlyoke.respectGitignoreForCompletions=true` switches file discovery to `git ls-files --cached --others --exclude-standard`; do not try to emulate gitignore with `findFiles()`.
+`ui.respectGitignoreForCompletions=true` switches file discovery to `git ls-files --cached --others --exclude-standard`; when it is false, completion discovery walks the workspace and skips only `.git`. Both hosts use `listCompletionFiles()` (`src/utils/CompletionFileDiscovery.ts`), which falls back to the bounded default-skip walk if Git fails. Do not try to emulate gitignore with `findFiles()`.
 
 **Fuzzy matching is single-sourced in `FuzzyRanking.ts` (fuzzysort).** Rank _then_ truncate — the path sources cap at 450–500 items, and truncating an unranked list silently drops the best match on large repos. `vscode.executeWorkspaceSymbolProvider` does no matching of its own (Ctrl+T's fuzziness is a post-filter over the same provider results), and tsserver's `navto` matches an all-lowercase query only as one contiguous substring (`usecontext` never returns `useFinalStepContextMenu`; `useContext` does). So `getSymbolCompletions()` also queries a 3-character prefix and fuzzy-ranks the union itself — don't "simplify" that back to a single provider query.
 
