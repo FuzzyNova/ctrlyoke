@@ -17,7 +17,8 @@ import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerT
 import type { PagedCommitHistoryController } from "@hooks/usePagedCommitHistory";
 import { GIT_REF_LABEL_TYPES } from "@root/types/DashboardConstants";
 
-vi.mock("@utils/hostedApi", () => ({
+vi.mock("@utils/hostedApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@utils/hostedApi")>()),
   workspaceCheckoutBranch: vi.fn(),
   workspaceCheckoutCommit: vi.fn(),
   workspaceGitRefDiff: vi.fn(),
@@ -224,6 +225,37 @@ describe("WorkspaceCommitHistoryPane", () => {
       })
     );
     expect(useWorkspaceViewerStore.getState().previousBranch).toBeNull();
+    expect(controllerRefresh).toHaveBeenCalledOnce();
+    expect(paneRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("shows branch checkout errors and refreshes after a rejection", async () => {
+    vi.mocked(workspaceCheckoutBranch).mockRejectedValue(
+      new Error("Your local changes would be overwritten")
+    );
+    const controllerRefresh = vi.fn();
+    const paneRefresh = vi.fn();
+    useWorkspaceViewerStore.setState({
+      currentBranch: null,
+      detached: true,
+      previousBranch: "main",
+    });
+    render(
+      <WorkspaceCommitHistoryPane
+        onRefresh={paneRefresh}
+        controller={testController([commit], {
+          currentBranch: null,
+          detached: true,
+          refresh: controllerRefresh,
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to main" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your local changes would be overwritten"
+    );
     expect(controllerRefresh).toHaveBeenCalledOnce();
     expect(paneRefresh).toHaveBeenCalledOnce();
   });

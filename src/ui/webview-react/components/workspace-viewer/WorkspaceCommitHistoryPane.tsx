@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type {
@@ -17,7 +17,10 @@ import {
   useVirtualizedListFoundation,
   type VirtualizedListRange,
 } from "@components/shared/VirtualizedListFoundation";
-import { workspaceCheckoutBranch } from "@utils/hostedApi";
+import {
+  runWorkspaceGitMutation,
+  workspaceCheckoutBranch,
+} from "@utils/hostedApi";
 import type { CommitGraphLane, CommitGraphRow } from "@utils/commitGraphLayout";
 import {
   computeCommitGraphLayout,
@@ -716,6 +719,9 @@ export const WorkspaceCommitHistoryPane: React.FC<
     fetchPage,
   });
   const controller = controllerOverride ?? hookController;
+  const [branchCheckoutError, setBranchCheckoutError] = useState<string | null>(
+    null
+  );
   const detached = controller.detached;
   const currentBranch = controller.currentBranch;
 
@@ -724,8 +730,12 @@ export const WorkspaceCommitHistoryPane: React.FC<
     onRefresh();
   }, [controller, onRefresh]);
 
-  const { openContextMenu, commitHistoryContextMenuPortal } =
-    useCommitHistoryContextMenu({ onRefresh: handleRefresh });
+  const {
+    openContextMenu,
+    commitHistoryContextMenuPortal,
+    checkoutError,
+    dismissCheckoutError,
+  } = useCommitHistoryContextMenu({ onRefresh: handleRefresh });
 
   const handleRowContextMenu = useCallback(
     (e: React.MouseEvent, commit: WorkspaceCommitLogEntry) => {
@@ -753,16 +763,18 @@ export const WorkspaceCommitHistoryPane: React.FC<
   const handleReturnToBranch = useCallback(async () => {
     const branch = previousBranch ?? currentBranch;
     if (!branch) return;
-    try {
-      await workspaceCheckoutBranch({
-        branch,
-        repo: selectedRepoId ?? undefined,
-      });
-      setPreviousBranch(null);
-      handleRefresh();
-    } catch {
-      // The parent status refresh remains the source of truth for failures.
-    }
+    setBranchCheckoutError(null);
+    await runWorkspaceGitMutation({
+      action: "branch checkout",
+      mutate: () =>
+        workspaceCheckoutBranch({
+          branch,
+          repo: selectedRepoId ?? undefined,
+        }),
+      onSuccess: () => setPreviousBranch(null),
+      onError: setBranchCheckoutError,
+      onRefresh: handleRefresh,
+    });
   }, [
     currentBranch,
     handleRefresh,
@@ -900,6 +912,24 @@ export const WorkspaceCommitHistoryPane: React.FC<
               Return to {returnBranchLabel}
             </button>
           )}
+        </div>
+      )}
+
+      {(checkoutError || branchCheckoutError) && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-2 px-3 py-2 text-xs text-error-fg bg-error-bg border-b border-error-fg/20 shrink-0"
+        >
+          <span>{checkoutError ?? branchCheckoutError}</span>
+          <button
+            type="button"
+            aria-label="Dismiss checkout error"
+            className="codicon codicon-close shrink-0"
+            onClick={() => {
+              dismissCheckoutError();
+              setBranchCheckoutError(null);
+            }}
+          />
         </div>
       )}
 

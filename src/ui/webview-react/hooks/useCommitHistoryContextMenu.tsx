@@ -5,7 +5,10 @@ import {
 } from "@components/shared/StepContextMenu";
 import { useEditorStore } from "@store/editorStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceCheckoutCommit } from "@utils/hostedApi";
+import {
+  runWorkspaceGitMutation,
+  workspaceCheckoutCommit,
+} from "@utils/hostedApi";
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { buildGitReference } from "@root/completions/ContextReferenceBuilder";
 import { PROMPT_EDITOR_INSERT_MODES, MESSAGE_TYPES } from "@/types/messages";
@@ -26,6 +29,7 @@ export function useCommitHistoryContextMenu({
   );
   const [pendingCheckout, setPendingCheckout] =
     useState<WorkspaceCommitLogEntry | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const detached = useWorkspaceViewerStore((s) => s.detached);
 
@@ -53,25 +57,25 @@ export function useCommitHistoryContextMenu({
     async (commit: WorkspaceCommitLogEntry) => {
       const store = useWorkspaceViewerStore.getState();
       const branchBeforeCheckout = store.currentBranch;
-      try {
-        await workspaceCheckoutCommit({
-          hash: commit.hash,
-          repo: store.selectedRepoId ?? undefined,
-        });
-        if (branchBeforeCheckout) {
-          store.setPreviousBranch(branchBeforeCheckout);
-        }
-        // Optimistically mark detached so the immediate refresh below passes the
-        // branch hint (detachedBranchHint requires `detached` to be true). The
-        // store's `detached` flag otherwise only flips once the refreshed
-        // response lands, which would be too late for this first request and
-        // would hide the commits ahead of the checked-out point until a manual
-        // refresh.
-        store.setDetached(true);
-        onRefresh();
-      } catch {
-        // errors surfaced via refresh
-      }
+      setCheckoutError(null);
+      await runWorkspaceGitMutation({
+        action: "commit checkout",
+        mutate: () =>
+          workspaceCheckoutCommit({
+            hash: commit.hash,
+            repo: store.selectedRepoId ?? undefined,
+          }),
+        onSuccess: () => {
+          if (branchBeforeCheckout) {
+            store.setPreviousBranch(branchBeforeCheckout);
+          }
+          // The refresh query needs detached state to include commits ahead of
+          // the checked-out point.
+          store.setDetached(true);
+        },
+        onError: setCheckoutError,
+        onRefresh,
+      });
     },
     [onRefresh]
   );
@@ -174,5 +178,10 @@ export function useCommitHistoryContextMenu({
     </>
   );
 
-  return { openContextMenu, commitHistoryContextMenuPortal };
+  return {
+    openContextMenu,
+    commitHistoryContextMenuPortal,
+    checkoutError,
+    dismissCheckoutError: () => setCheckoutError(null),
+  };
 }
