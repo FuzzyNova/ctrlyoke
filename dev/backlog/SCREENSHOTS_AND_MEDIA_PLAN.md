@@ -468,58 +468,125 @@ Each item: what to capture, what prep it needs, where it's used.
 
 ### 13. VS Code "Getting Started with ctrlyoke" walkthrough — one media asset per step
 
-The walkthrough (`package.json` → `contributes.walkthroughs`, id `ctrlyoke.gettingStarted`) currently
-uses `markdown` media for all six steps (`openPanel`, `verifyHarness`, `createWorkflow`,
-`runWorkflow`, `installCli`, `getHelp`), which is text plus a command link, so the large right-hand
-media pane is mostly empty. The table below predates `installCli`, which has no shot yet. A
-terminal running `ctrlyoke --version` after Install CLI would do. Each step needs one picture that matches what its copy
-(`walkthroughs/getting-started/*.md`) describes.
+**Status (2026-10-15):** decisions made, capture not started. This section is a self-contained
+runbook: follow it on the capture machine without the chat that produced it. Capture happens on the
+4K laptop; wiring and compression happen afterwards on the dev machine (or by an agent, from
+"Wiring" below).
 
-**Where the logo shows, and why it's missing from the walkthrough page.** The walkthrough `icon`
-(`images/ctrlyoke-icon-color.png`) _is_ wired up correctly, but VS Code only renders it on the
-**Welcome page's walkthrough list card** (`gettingStarted.ts` `iconWidgetFor(category)` inside the
-`button.getting-started-category` list entry). The walkthrough _detail_ page, which is the page users
-land on from "Open Walkthrough...", renders the header as a bare `h2.category-title` with no icon slot
-at all. So a missing logo there is VS Code behavior, not a ctrlyoke bug, and no manifest property
-changes it. (The title goes through `renderLabelWithIcons`, so a `$(codicon)` in `title` would render,
-but a custom logo would need a `contributes.icons` icon-font glyph, and it would be monochrome.
-Untested; probably not worth it.) The practical way to get branding onto the detail page is the
-step 1 media below: a shot of the panel where the ctrlyoke logo is visible.
+The walkthrough (`package.json` → `contributes.walkthroughs`, id `ctrlyoke.gettingStarted`) has six
+steps: `openPanel`, `verifyHarness`, `createWorkflow`, `runWorkflow`, `installCli`, `getHelp`. On
+`main` every step still uses `markdown` media (`walkthroughs/getting-started/*.md`): text plus a
+command link, with the large right-hand media pane mostly empty. The goal is one picture per step.
 
-**Media type decision (for when the assets are slotted in).** Switch each step from `markdown` to
-`image` media with `light`/`dark` variants (VS Code picks the variant from the active theme; `hc`/
-`hcLight` fall back sensibly if omitted), and move each step's command link into the step
-`description`. A link on its own line there renders as a button, so the call to action stays. Each
-`image` needs `altText`. Markdown media _can_ embed an image, but it has no per-theme variant, so a
-dark screenshot would sit inside a light-themed pane.
+#### Decisions
 
-**Capture two themes per still:** `dark 2026 (Default Dark)` (the primary set's theme) and
-`Light 2026 (Default Light)`. Same window, same demo project, same state. The GIF (13d) may ship
-dark-only if the byte cost of two variants is too high.
+- **Image media, two themes.** Each step switches to `image` media with `dark` and `light`
+  variants plus `altText`. VS Code picks the variant from the active theme (`hc`/`hcLight` fall back
+  if omitted). Markdown media can embed an image but has no per-theme variant, so it's out.
+- **The step text moves into `description`.** With image media the description is the only text
+  VS Code shows, beside the step title. A link alone on its own line renders as a button. The
+  final text is in "Step descriptions" below. Step 1 no longer describes where things sit ("steps on
+  the left…"): the side bar layout is narrow and the docs explain both layouts
+  (`docs/guide/dashboard.md#layout`).
+- **Themes:** `Dark 2026` and `Light 2026` (VS Code's defaults). Same window, same state, two
+  captures. The GIF (13d) ships dark-only.
+- **Size: 2400×1500 (16:10) at 200% scaling on the 4K laptop**, i.e. 1200×750 of VS Code UI. The
+  2560×1440 desktop can't do it: 1500 physical px don't fit on a 1440-tall screen. The GIF is the
+  exception, at ~1x (see 13d).
+- **Compression: pngquant** (a lossy palette quantizer, CLI). UI screenshots usually lose 60–70% with
+  no visible change. It runs on the dev machine after capture, not on the laptop (see "Wiring").
+- **Budget:** the walkthrough downloads with every install. Keep all walkthrough media together
+  under ~3 MB after pngquant. If it's over, drop the light variants of the busiest stills first.
+- **Naming:** `walkthrough-<step>-<theme>-<w>x<h>.<ext>` in `images/screenshots/`, e.g.
+  `walkthrough-open-panel-dark-2400x1500.png`.
 
-**Packaging:** `.vscodeignore` is an allowlist and does not include `images/screenshots/**`. Add an
-explicit `!images/screenshots/walkthrough-*` line or the published VSIX shows broken images even
-though the dev host works. Keep the walkthrough's total media well under ~3MB. It's downloaded with
-every install, unlike landing/docs assets.
+**Where the logo shows.** The walkthrough `icon` (`images/ctrlyoke-icon-color.png`) only renders on
+the Welcome page's walkthrough list card. The walkthrough detail page has no icon slot (VS Code
+behavior; no manifest property changes it). The way to get branding onto the detail page is 13a:
+include the ctrlyoke activity-bar icon in the frame.
 
-**Naming:** follow the existing `<name>-<w>x<h>.<ext>` convention, e.g.
-`walkthrough-open-panel-dark-2400x1500.png` / `walkthrough-open-panel-light-2400x1500.png`.
+#### Laptop setup (once)
 
-| Step (`id`)          | Shot                                                                                                                                                                                                                                                                                                                                                                                                                                   | Prep                                                                                                                                                                                             |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 13a `openPanel`      | The ctrlyoke panel open in VS Code with a workflow loaded: step list, output pane with real output, and the properties drawer open. This must match the step copy ("steps on the left, live output and the prompt editor in the middle, harness/context/validation settings on the right"), so capture the wide layout, not the narrow sidebar. Crop to include the activity-bar ctrlyoke icon so the logo appears on the detail page. | The #6 demo workflow after one completed step, so output isn't empty.                                                                                                                            |
-| 13b `verifyHarness`  | Two-up still: left half, the dashboard's "no supported CLI detected" state showing per-harness install commands; right half, the Harness tab / footer quick picker with detected harnesses listed.                                                                                                                                                                                                                                     | Left half: `npm run dev:host:start:no-harnesses` (onboarding mode with every harness CLI removed from the host's `PATH`). Right half: normal machine with several harnesses installed.           |
-| 13c `createWorkflow` | The New Workflow from Template flow: template picker with the built-in templates listed, and (second frame or inset) the variable form filled in with realistic values.                                                                                                                                                                                                                                                                | Onboarding-mode dev host (clean workspace) so the template list isn't cluttered with personal workflows.                                                                                         |
-| 13d `runWorkflow`    | Short looping GIF (≤ ~8s, target < 1MB): Run clicked → output streams → step completes, end condition passes, and the queue advances to step 2.                                                                                                                                                                                                                                                                                        | A trimmed-down 2-step variant of the #6 demo workflow with a fast model so the whole loop fits in a few seconds. This is a _separate_ capture from #6 (walkthrough pane size, VSIX byte budget). |
-| 13e `getHelp`        | The Agent picker open with `ctrlyoke-tech-support` highlighted, plus the start of an answer to a real question (e.g. "why did my end condition fail?") in the output pane.                                                                                                                                                                                                                                                             | Ask the question once beforehand so the answer is real; crop to picker + first few lines of the answer.                                                                                          |
+1. Pull the repo, `npm ci`, `npm run compile`.
+2. Install and sign in to at least two harness CLIs (Claude Code plus one more), so 13b's right half
+   has detected harnesses and 13d/13e can run real steps. Prefer a fast, cheap model for the runs.
+3. Windows display scaling **200%**, set **before** launching the dev host. Some Electron windows
+   don't fully re-render after a mid-session DPI change.
+4. In ShareX: PNG output, cursor capture off, and Task settings → Capture → Region capture →
+   **fixed region size 2400×1500** (switch it to 1200×1500 for 13b's halves).
+5. Dev host modes (`scripts/dev-host.mjs`; each start runs `npm run compile` first):
+   - `npm run dev:host:start:onboarding`: a fresh, empty workspace in `.vscode-dev-tempdir/workspace`,
+     wiped on every start. Use it for everything below unless a step says otherwise.
+   - `npm run dev:host:start:no-harnesses`: the same, with every harness CLI hidden from `PATH`.
+     Only for 13b's left half.
+   - `npm run dev:host:stop` between modes.
+6. In the dev host, set the theme with Ctrl+K Ctrl+T. Clear the frame of anything that isn't the
+   point of the shot: close other editor tabs, notifications and unrelated side bars.
 
-**Not a screenshot, but in the same pass:** `verifyHarness` and `getHelp` have no
-`completionEvents`, so they never get checked off (still true 2026-10-10; `featuredFor` is still
-unset too). Add `onLink:https://ctrlyoke.dev/docs` (or
-`stepSelected`) to `getHelp`, and an `onContext:` key that the extension sets when at least one
-harness is detected to `verifyHarness`. Also consider `featuredFor: ["**/*.ctrlyoke.{yaml,yml,json}",
-"**/*.prompt.md"]` so the walkthrough is promoted on the Welcome page in workspaces that already use
-ctrlyoke.
+#### Capture order
+
+The onboarding workspace starts empty, so capture in an order where each shot sets up the next:
+13c creates the workflow, 13d runs it, 13a shows it after a step, 13e asks the support agent about
+it. 13b and `installCli` are independent.
+
+#### Shots
+
+| Step (`id`)          | File(s)                                                                            | In the frame                                                                                                                                                                                                                                                                                                 | How                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 13c `createWorkflow` | `walkthrough-create-workflow-{dark,light}-2400x1500.png`                           | The New Workflow from Template dialog over the dashboard with a template selected and its variables filled in with realistic values. One frame; no inset.                                                                                                                                                    | Onboarding host, initialize the workspace, run **New Workflow from Template**. Pick a short built-in template so 13d's run is quick. Fill the variables, capture, then create it.                                                                                                                                                                                                                                                             |
+| 13d `runWorkflow`    | `walkthrough-run-workflow-dark-1200x750.gif` (dark only)                           | A loop of at most ~8 s: Run clicked → output streams → the step completes, its end condition passes, and the next step starts.                                                                                                                                                                               | Record the same 2400×1500 region as an MP4 with ShareX (Screen recording), with a fast model. Trim and convert on the dev machine: `ffmpeg -ss <start> -t 8 -i in.mp4 -vf "fps=10,scale=1200:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer" out.gif`, then `gifsicle -O3 --lossy=40`. Target under 1 MB; lower `fps` or `max_colors` if not. Hand over the MP4; the agent can do the conversion. |
+| 13a `openPanel`      | `walkthrough-open-panel-{dark,light}-2400x1500.png`                                | The dashboard in the **wide** layout (drag the ctrlyoke tab to the bottom panel, or the secondary side bar made wide) with the 13c workflow loaded after 13d: step list, real output, prompt editor. Include the ctrlyoke icon in the activity bar at the frame's left edge so the logo appears on the page. | Straight after 13d, with output on screen.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 13e `getHelp`        | `walkthrough-get-help-{dark,light}-2400x1500.png`                                  | The Agent picker open with `ctrlyoke-tech-support` highlighted, and the first few lines of its answer to a real question (e.g. "why did my end condition fail?") in the output.                                                                                                                              | Ask the question once so the answer is real, then reopen the picker over the answer and capture.                                                                                                                                                                                                                                                                                                                                              |
+| 13b `verifyHarness`  | `walkthrough-verify-harness-{dark,light}-2400x1500.png`, from two 1200×1500 halves | Left half: the **No AI harness CLI is available** panel listing all six install commands with their copy buttons. Right half: the footer harness picker (or the Harness tab's dropdown) open, with detected harnesses marked available.                                                                      | Left: `npm run dev:host:start:no-harnesses`, initialize, capture the side panel at the 1200×1500 fixed region. Right: `npm run dev:host:start:onboarding`, initialize, open the picker, capture at 1200×1500. Same theme for both halves. Combine with ShareX → Tools → Image combiner (horizontal), or leave both halves for the agent (`magick left.png right.png +append out.png`).                                                        |
+| `installCli`         | `walkthrough-install-cli-{dark,light}-2400x1500.png`                               | VS Code's integrated terminal running `ctrlyoke --version` and `ctrlyoke --help`, showing the CLI works there with no setup.                                                                                                                                                                                 | Any dev host. Make the terminal panel tall enough that the frame is mostly terminal.                                                                                                                                                                                                                                                                                                                                                          |
+
+Before capturing, check each frame for anything personal: usernames in paths (use the onboarding
+workspace, whose path is inside the repo), account names in status-bar items, and notifications.
+
+**Hand-off:** put the raw captures in `images/screenshots/` with their final names (the MP4 for 13d
+can go anywhere outside the repo; mention its path), commit and push from the laptop, or copy them
+across. Don't compress them on the laptop.
+
+#### Wiring (dev machine, after capture)
+
+1. **Compress** every walkthrough PNG with pngquant (install it with `scoop install pngquant`,
+   `choco install pngquant`, or the Windows binary from pngquant.org):
+   `pngquant --quality=65-90 --speed 1 --strip --skip-if-larger --force --ext .png images/screenshots/walkthrough-*.png`.
+   Look at each result at 100% for banding in gradients or dithering in text before keeping it,
+   and report the total size.
+2. **Manifest:** in `package.json`, give each step `image` media (`dark`, `light`, `altText`) and
+   the description below. For 13d, point both `dark` and `light` at the dark GIF.
+3. **`.vscodeignore`:** add `!images/screenshots/walkthrough-*`. It is an allowlist, so without
+   this the dev host works but the published VSIX shows broken images. Remove
+   `!walkthroughs/**` once the markdown files are gone.
+4. **Delete `walkthroughs/getting-started/*.md`** once nothing references them.
+   `scripts/check-docs-content.mjs` scans that folder; an empty or missing folder is fine.
+5. **Completion events.** `verifyHarness` never ticks itself today. Add a context key
+   (single-sourced as a constant in `src/types/DashboardConstants.ts`, e.g.
+   `ctrlyoke.harnessDetected`) that the extension sets with `setContext` whenever harness detection
+   finds at least one available harness. Set it wherever the extension already publishes harness
+   status to the dashboard, so the two can't disagree. Then add `onContext:ctrlyoke.harnessDetected`
+   to the step. `getHelp` gets `onLink:https://ctrlyoke.dev/docs`. Also consider `featuredFor:
+["**/*.ctrlyoke.{yaml,yml,json}", "**/*.prompt.md"]` on the walkthrough so the Welcome page
+   promotes it in workspaces that already use ctrlyoke.
+6. **Check the package**, not just the dev host: `npm run package`, then confirm the VSIX lists the
+   walkthrough images and open the walkthrough from the installed VSIX.
+7. **Then capture D9's walkthrough-page half** (`DOCUMENTATION_GAPS_PLAN.md` D9;
+   marker in `docs/guide/installation.md#walkthrough`). It shows the walkthrough with the new media.
+
+#### Step descriptions
+
+These replace the step descriptions and the markdown files. `\n` before a link puts it on its own
+line, where it renders as a button. Descriptions support `code`, **bold** and links only.
+
+| Step             | `description`                                                                                                                                                                                                                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openPanel`      | `ctrlyoke runs AI coding CLIs through multi-step workflows. Everything happens in one dashboard: your steps, live output, the prompt editor and workflow settings.\n[Open ctrlyoke Panel](command:ctrlyoke.openPanel)`                                                                                                            |
+| `verifyHarness`  | `ctrlyoke doesn't bundle an AI CLI. It drives one you install and sign in to: Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code or Antigravity. If none is found, the dashboard lists the install command for each, with a copy button.\n[Installation guide](https://ctrlyoke.dev/docs/guide/installation#install-a-harness)` |
+| `createWorkflow` | `A template builds a multi-step workflow from a few variables you fill in.\n[New Workflow from Template](command:ctrlyoke.newWorkflow)`                                                                                                                                                                                           |
+| `runWorkflow`    | `**Run** sends each step to your harness, checks its end condition, then moves on to the next step. Output, tool calls and diffs stream in live.\n[Run](command:ctrlyoke.run)`                                                                                                                                                    |
+| `installCli`     | ``The `ctrlyoke` command already works in VS Code's terminals. For other shells and CI, install the matching version from npm (needs Node.js 22.12 or later).\n[Install CLI](command:ctrlyoke.installCli)``                                                                                                                       |
+| `getHelp`        | `Pick the **ctrlyoke-tech-support** agent in the Agent picker and ask it anything about the dashboard, workflow files or harnesses.\n[Open the docs](https://ctrlyoke.dev/docs)`                                                                                                                                                  |
 
 ### 14. "Build visually or in code" — the same workflow in the dashboard and in VS Code
 
