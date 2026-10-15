@@ -1,11 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useUiStore } from "@store/uiStore";
 import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import type { OutputRowPromptUndoMeta } from "@utils/outputRows";
@@ -37,6 +38,8 @@ function renderUndoActions() {
 }
 
 describe("useOutputUndoActions", () => {
+  afterEach(() => vi.useRealTimers());
+
   beforeEach(() => {
     useUiStore.setState({ displayedViewAddress: RUN_ADDRESS });
   });
@@ -190,6 +193,63 @@ describe("useOutputUndoActions", () => {
     expect(
       result.current.minimapDialogState?.input?.snapshotOnlyFiles[0]
     ).toMatchObject({ changeType: "deleted" });
+  });
+
+  it("shows an error toast when snapshot content requests time out", async () => {
+    vi.useFakeTimers();
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const { result } = renderUndoActions();
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const promptUndo: OutputRowPromptUndoMeta = {
+      workspacePath: "/repo",
+      allStepOutputs: [],
+      workspaceSnapshot: {
+        capturedAt: 1,
+        strategy: "filesystem",
+        changedFiles: [
+          {
+            path: "src/timeout-toast.ts",
+            changeType: "deleted",
+            contentAvailableOnDemand: true,
+          },
+        ],
+      },
+      summary: {
+        total: 1,
+        undoable: 0,
+        undone: 0,
+        blocked: 1,
+        label: "View 1 change",
+        compactLabel: "View 1",
+        title: "1 file changed",
+      },
+    };
+
+    let opening!: Promise<void>;
+    act(() => {
+      opening = result.current.handlePromptViewMeta(target, promptUndo);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(25000);
+      await opening;
+    });
+
+    expect(
+      postMessage.mock.calls.some(([message]) => {
+        const feedback = message as {
+          type?: string;
+          severity?: string;
+          message?: string;
+        };
+        return (
+          feedback.type === MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK &&
+          feedback.severity === USER_FEEDBACK_SEVERITY.ERROR &&
+          feedback.message?.includes("file snapshot")
+        );
+      })
+    ).toBe(true);
+    expect(result.current.minimapDialogState).toBeNull();
   });
 
   it("hydrates a minimap snapshot before opening its dialog", async () => {

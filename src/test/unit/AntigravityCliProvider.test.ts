@@ -8,12 +8,13 @@ import { STATUS_LINE_HARNESS_IDS } from "../../types/DashboardConstants";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import { Log } from "../../utils/Log";
+import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
 import {
   packageStatuslineDirectory,
   statuslineScriptFileName,
 } from "../../core/harness/shared/StatuslineLauncher";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
-import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
 import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
@@ -100,6 +101,19 @@ suite("AntigravityCliProvider", () => {
 
   function settingsPath(): string {
     return path.join(tempHome, ".gemini", "antigravity-cli", "settings.json");
+  }
+
+  function hooksPath(): string {
+    return path.join(tempHome, ".gemini", "config", "hooks.json");
+  }
+
+  function hookOwnersPath(): string {
+    return path.join(
+      tempHome,
+      ".gemini",
+      "config",
+      "ctrlyoke-hooks-owners.json"
+    );
   }
 
   async function buildArgs(provider: AntigravityCliProvider) {
@@ -924,6 +938,112 @@ suite("AntigravityCliProvider", () => {
     assert.strictEqual(
       provider.getAdditionalCleanupFilePaths(workspaceRoot).length,
       1
+    );
+  });
+
+  test("does not replace invalid global hooks JSON when starting", async () => {
+    const provider = new AntigravityCliProvider();
+    const invalidContent = '{"user-hook": { trailing comma, }}';
+    await fs.writeFile(hooksPath(), invalidContent, "utf8");
+
+    await assert.rejects(
+      provider.buildNotificationHookArgs(
+        extensionPath,
+        workspaceRoot,
+        0,
+        path.join(workspaceRoot, "workflow.md"),
+        undefined,
+        ["stop"]
+      ),
+      new RegExp(`Cannot safely update .*${path.basename(hooksPath())}`)
+    );
+
+    assert.strictEqual(await fs.readFile(hooksPath(), "utf8"), invalidContent);
+  });
+
+  test("reclaims dead and unowned groups on the next hook write", async () => {
+    const provider = new AntigravityCliProvider();
+    const deadGroup = "ctrlyoke-dead-owner";
+    const unownedGroup = "ctrlyoke-no-owner";
+    const liveGroup = "ctrlyoke-live-owner";
+    const userGroup = "user-hooks";
+    await fs.writeFile(
+      hooksPath(),
+      JSON.stringify({
+        [deadGroup]: {},
+        [unownedGroup]: {},
+        [liveGroup]: {},
+        [userGroup]: {},
+      }),
+      "utf8"
+    );
+    await fs.writeFile(
+      hookOwnersPath(),
+      JSON.stringify({
+        [deadGroup]: {
+          pid: 2_147_483_647,
+          ownerToken: "dead-token",
+          workspaceRoot,
+          writtenAt: Date.now(),
+        },
+        [liveGroup]: {
+          pid: process.pid,
+          ownerToken: "live-token",
+          workspaceRoot,
+          writtenAt: Date.now(),
+        },
+      }),
+      "utf8"
+    );
+
+    await provider.buildNotificationHookArgs(
+      extensionPath,
+      workspaceRoot,
+      0,
+      path.join(workspaceRoot, "workflow.md"),
+      undefined,
+      ["stop"]
+    );
+
+    const hooks = JSON.parse(await fs.readFile(hooksPath(), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const owners = JSON.parse(
+      await fs.readFile(hookOwnersPath(), "utf8")
+    ) as Record<string, { pid: number; workspaceRoot: string }>;
+    assert.ok(!(deadGroup in hooks));
+    assert.ok(!(unownedGroup in hooks));
+    assert.ok(liveGroup in hooks);
+    assert.ok(userGroup in hooks);
+    assert.strictEqual(
+      Object.keys(hooks).filter((name) => name.startsWith("ctrlyoke-")).length,
+      2
+    );
+    assert.strictEqual(owners[liveGroup]?.pid, process.pid);
+    assert.strictEqual(owners[liveGroup]?.workspaceRoot, workspaceRoot);
+  });
+
+  test("logs invalid global hooks JSON during cleanup and resolves", async () => {
+    const provider = new AntigravityCliProvider();
+    const invalidContent = "not json";
+    const warnings: string[] = [];
+    const originalWarn = Log.warn;
+    Log.warn = (message: string) => warnings.push(message);
+    await fs.writeFile(hooksPath(), invalidContent, "utf8");
+
+    try {
+      await provider.cleanupWorkspaceArtifacts(
+        workspaceRoot,
+        path.join(workspaceRoot, "workflow.md")
+      );
+    } finally {
+      Log.warn = originalWarn;
+    }
+
+    assert.strictEqual(await fs.readFile(hooksPath(), "utf8"), invalidContent);
+    assert.ok(
+      warnings.some((warning) => warning.includes("Cannot safely update"))
     );
   });
 });

@@ -45,6 +45,12 @@ import {
   INDEX_SCHEMA_VERSION,
 } from "../../core/orchestration/HistorySearchIndexLayout";
 
+class SmallSnapshotHistorySearchIndexService extends HistorySearchIndexService {
+  protected override get maxSnapshotResults(): number {
+    return 10;
+  }
+}
+
 suite("HistorySearchIndexService", () => {
   let workspaceRoot: string;
   let recorder: TimelineRecorder;
@@ -844,6 +850,51 @@ suite("HistorySearchIndexService", () => {
     assert.ok(
       newDocumentsScanned <= 31,
       `expected resuming to scan only the ~30 shards past the retained prefix, scanned ${newDocumentsScanned}`
+    );
+  });
+
+  test("rolls back resumed dedupe keys when a completed snapshot extension is refused", async () => {
+    const term = "refused-snapshot-extend-term";
+    const totalRuns = 40;
+    for (let i = 0; i < totalRuns; i += 1) {
+      await createRun(
+        `refused-snapshot-run-${i}-2026-10-14T22-34-00`,
+        1,
+        26000 + i * 100,
+        [createStatusDraft(26050 + i * 100, term)]
+      );
+    }
+
+    const index = new SmallSnapshotHistorySearchIndexService();
+    const firstPage = await index.search(
+      { query: term, limit: 5 },
+      workspaceRoot
+    );
+    assert.strictEqual(firstPage.countState, "atLeast");
+
+    const refused = await index.search(
+      { query: term, limit: 20, offset: 30 },
+      workspaceRoot
+    );
+    assert.strictEqual(refused.countState, "exact");
+    assert.strictEqual(refused.totalCount, totalRuns);
+    assert.strictEqual(refused.results.length, 10);
+
+    const retried = await index.search(
+      { query: term, limit: 20, offset: 30 },
+      workspaceRoot
+    );
+    assert.strictEqual(retried.countState, "exact");
+    assert.strictEqual(retried.totalCount, refused.totalCount);
+    assert.deepStrictEqual(
+      retried.results.map((result) => result.workflowKey).sort(),
+      refused.results.map((result) => result.workflowKey).sort()
+    );
+    assert.deepStrictEqual(
+      retried.results.map((result) => result.workflowKey).sort(),
+      Array.from({ length: 10 }, (_, index) =>
+        `refused-snapshot-run-${index}-2026-10-14T22-34-00` as WorkflowKey
+      ).sort()
     );
   });
 

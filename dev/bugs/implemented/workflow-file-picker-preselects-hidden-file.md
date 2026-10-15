@@ -2,7 +2,13 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
+
+## Decision
+
+The picker keeps its current selection only while it remains visible; otherwise
+the first visible file becomes the effective selection. Manual paths continue
+to take precedence.
 
 ## Symptom
 

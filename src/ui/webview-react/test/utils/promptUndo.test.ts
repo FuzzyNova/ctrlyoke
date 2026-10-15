@@ -738,6 +738,26 @@ describe("computePromptChangeSummary", () => {
     });
   });
 
+  it("excludes an undone relative snapshot path for an absolute Windows event path", () => {
+    const output = {
+      ...makeCliOutput([makeFileEditEvent("C:\\Ws\\src\\undone.ts")]),
+      workingDirectory: "c:\\WS",
+    } as CliOutput;
+    const summary = computePromptChangeSummary(
+      [output],
+      recordWithRedo("src/undone.ts"),
+      makeSnapshot([makeModifiedSnap("src/undone.ts")])
+    );
+
+    expect(summary).toMatchObject({
+      total: 1,
+      undoable: 0,
+      undone: 1,
+      blocked: 0,
+      label: "View 1 change (all undone)",
+    });
+  });
+
   it("uses all-undone wording when every row is redoable", () => {
     const summary = computePromptChangeSummary(
       [],
@@ -800,6 +820,23 @@ describe("buildUndoDialogInputForPrompt", () => {
       "/my/workspace"
     );
     expect(result.workspacePath).toBe("/my/workspace");
+  });
+
+  it("excludes an undone relative snapshot path for an absolute Windows event path", () => {
+    const output = {
+      ...makeCliOutput([makeFileEditEvent("C:\\ws\\src\\undone.ts")]),
+      workingDirectory: "C:\\ws",
+    } as CliOutput;
+    const result = buildUndoDialogInputForPrompt(
+      TARGET,
+      [output],
+      makeSnapshot([makeModifiedSnap("src/undone.ts")]),
+      "c:\\WS",
+      [{ path: "src/undone.ts", action: UNDO_FILE_ACTIONS.DELETE }]
+    );
+
+    expect(result.eventAttributedFiles).toEqual([]);
+    expect(result.snapshotOnlyFiles).toEqual([]);
   });
 });
 

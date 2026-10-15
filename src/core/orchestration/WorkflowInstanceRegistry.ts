@@ -235,11 +235,7 @@ export class WorkflowInstanceRegistry
       );
       if (existing) {
         const existingStatus = existing.getQueueState().status;
-        if (
-          existingStatus === EXECUTION_STATES.RUNNING ||
-          existingStatus === EXECUTION_STATES.PAUSING ||
-          existingStatus === EXECUTION_STATES.PAUSED
-        ) {
+        if (isExecutionOwnerState(existingStatus)) {
           Log.info(
             `[WorkflowOrchestrator] createWorkflow: duplicate detected — existing inst:${existing.id.slice(0, 8)} is ${existingStatus}`
           );
@@ -268,10 +264,7 @@ export class WorkflowInstanceRegistry
       this.retiredInstances.delete(currentPanelId!);
     } else if (currentViewed) {
       const viewedStatus = currentViewed.getQueueState().status;
-      const isIdle =
-        viewedStatus !== EXECUTION_STATES.RUNNING &&
-        viewedStatus !== EXECUTION_STATES.PAUSING &&
-        viewedStatus !== EXECUTION_STATES.PAUSED;
+      const isIdle = !isExecutionOwnerState(viewedStatus);
       if (isIdle) {
         Log.debug(
           `[WorkflowOrchestrator] createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
@@ -554,10 +547,7 @@ export class WorkflowInstanceRegistry
     const instance = this.instances.get(workflowId);
     if (instance && !this.isWorkflowViewedByAnyClient(workflowId)) {
       const status = instance.getQueueState().status;
-      const isIdle =
-        status !== EXECUTION_STATES.RUNNING &&
-        status !== EXECUTION_STATES.PAUSING &&
-        status !== EXECUTION_STATES.PAUSED;
+      const isIdle = !isExecutionOwnerState(status);
       if (isIdle) {
         instance.dispose();
         this.instances.delete(workflowId);

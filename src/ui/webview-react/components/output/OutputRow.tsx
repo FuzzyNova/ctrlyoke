@@ -117,6 +117,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { getTargetKey } from "@utils/outputProjection";
 import {
   hydrateSnapshot,
+  reportWorkspaceSnapshotContentFailure,
   useWorkspaceSnapshotContent,
 } from "@hooks/useWorkspaceSnapshotContent";
 import { getStepKindIconClass } from "@utils/status";
@@ -702,24 +703,26 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         address,
         target,
         workspaceSnapshot
-      ).then((snapshot) => {
-        if (!snapshot) return;
-        setLoadedSnapshotContent((current) => {
-          const next = { ...current };
-          for (const change of snapshot.changedFiles) {
-            if (change.beforeContent !== undefined) {
-              next[
-                getLoadedSnapshotContentKey(
-                  workflowViewAddressKey(appliedViewAddress),
-                  row.target,
-                  change.path
-                )
-              ] = change.beforeContent;
+      )
+        .then((snapshot) => {
+          if (!snapshot) return;
+          setLoadedSnapshotContent((current) => {
+            const next = { ...current };
+            for (const change of snapshot.changedFiles) {
+              if (change.beforeContent !== undefined) {
+                next[
+                  getLoadedSnapshotContentKey(
+                    workflowViewAddressKey(appliedViewAddress),
+                    row.target,
+                    change.path
+                  )
+                ] = change.beforeContent;
+              }
             }
-          }
-          return next;
-        });
-      });
+            return next;
+          });
+        })
+        .catch(() => reportWorkspaceSnapshotContentFailure());
     }, [
       appliedViewAddress,
       isDiffExpanded,

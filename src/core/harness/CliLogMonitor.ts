@@ -200,10 +200,28 @@ export class CliLogMonitor {
 
     return new Promise(async (resolve) => {
       let completed = false;
+      let settled = false;
       let draining = false;
       let timeoutHandle: NodeJS.Timeout | undefined;
       let cancellationInterval: NodeJS.Timeout | undefined;
       let watcher: fs.FSWatcher | undefined;
+
+      const claimSettlement = (): boolean => {
+        if (settled) return false;
+        settled = true;
+        return true;
+      };
+
+      const clearMonitoringTimers = (): void => {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = undefined;
+        }
+        if (cancellationInterval) {
+          clearInterval(cancellationInterval);
+          cancellationInterval = undefined;
+        }
+      };
 
       const resolveFailure = async (params: {
         failureKind: FailureKind;
@@ -212,16 +230,12 @@ export class CliLogMonitor {
         timedOut?: boolean;
         sessionIdOverride?: string;
       }) => {
+        if (!claimSettlement()) return;
         // Marks the monitor settled so a background-work hold in progress
         // (see runBackgroundWorkHold) sees it on its next poll and releases
         // instead of racing this resolve() with its own later one.
         completed = true;
-        if (cancellationInterval) {
-          clearInterval(cancellationInterval);
-        }
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
+        clearMonitoringTimers();
         watcher?.close();
 
         try {
@@ -280,7 +294,9 @@ export class CliLogMonitor {
       // Completion finalization — single source of truth once genuinely done
       // ──────────────────────────────────────────────────────
       const finalizeCompletion = async () => {
+        if (!claimSettlement()) return;
         completed = true;
+        clearMonitoringTimers();
 
         // Drain any remaining log entries before final extraction (race-safe for fast prompts)
         await drainLogEvents();
@@ -394,12 +410,6 @@ export class CliLogMonitor {
         this.deps.hostCallbacks.logResponse(responseText, cliResult.statistics);
 
         watcher?.close();
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
-        if (cancellationInterval) {
-          clearInterval(cancellationInterval);
-        }
         this.deps.hostCallbacks.onResponseComplete();
 
         resolve({
@@ -787,6 +797,7 @@ export class CliLogMonitor {
 
       if (timeoutMs !== undefined) {
         timeoutHandle = setTimeout(() => {
+          if (settled) return;
           Log.warn(
             `[CliLogMonitor] Log monitoring timeout after ${timeoutMs}ms`
           );
@@ -820,15 +831,11 @@ export class CliLogMonitor {
         }
 
         if (this.deps.runtimeState.isCancelling()) {
+          if (!claimSettlement()) return;
           Log.info("[CliLogMonitor] Log monitoring cancelled by user");
           // Same as resolveFailure — unblocks a background-work hold in progress.
           completed = true;
-          if (cancellationInterval) {
-            clearInterval(cancellationInterval);
-          }
-          if (timeoutHandle) {
-            clearTimeout(timeoutHandle);
-          }
+          clearMonitoringTimers();
           watcher?.close();
           // Flush any remaining log events and extract partial output so the
           // stopped step shows what the AI had produced up to cancellation.
@@ -878,12 +885,7 @@ export class CliLogMonitor {
         }
         const ptyExit = this.deps.runtimeState.isPtyTerminated?.();
         if (ptyExit) {
-          if (cancellationInterval) {
-            clearInterval(cancellationInterval);
-          }
-          if (timeoutHandle) {
-            clearTimeout(timeoutHandle);
-          }
+          if (settled) return;
           watcher?.close();
 
           Log.warn(

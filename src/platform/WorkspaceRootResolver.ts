@@ -132,27 +132,63 @@ export function resolveWorkspaceRoot(
 }
 
 /**
- * Resolve every directory that should be trusted as "inside the workspace"
- * for path-containment checks (e.g. `@file` prompt references) — the primary
- * `.ctrlyoke` root from {@link resolveWorkspaceRoot} plus every open workspace
- * folder.
+ * Resolve directories trusted as "inside the workspace" for path-containment
+ * checks (e.g. `@file` prompt references). The primary `.ctrlyoke` root is
+ * included only when it is inside an open folder or the saved workspace-file
+ * directory; every open folder remains included.
  *
  * This matters for multi-root `.code-workspace` setups: the primary root is
- * often just the directory containing the `.code-workspace` file (or an
- * explicit `ctrlyoke.workspaceDirectory` override), which is not guaranteed to
- * be an ancestor of the actual folders — VS Code does not require multi-root
- * folders to live under a common parent. Without this, a legitimate `@file`
- * reference into a second workspace folder would be wrongly treated as
- * "outside the workspace."
+ * often just the directory containing the `.code-workspace` file, which is
+ * not guaranteed to be an ancestor of the actual folders — VS Code does not
+ * require multi-root folders to live under a common parent. Every open folder
+ * is included so references into those folders remain available.
  */
 export function resolveTrustedWorkspaceRoots(
   input: WorkspaceRootResolverInput
 ): string[] {
+  const { primary, folderPaths, primaryIsExternal } = classifyStateRoot(input);
+  if (folderPaths.length === 0 && !input.workspaceFileDir) {
+    return [primary];
+  }
+  return Array.from(
+    new Set(primaryIsExternal ? folderPaths : [primary, ...folderPaths])
+  );
+}
+
+/**
+ * Return the state root when it is outside the folders and saved workspace
+ * file directory. The caller must treat it as a requested external root and
+ * wait for an explicit trust decision before including it in file access.
+ */
+export function resolveRequestedExternalWorkspaceRoot(
+  input: WorkspaceRootResolverInput
+): string | undefined {
+  const { primary, primaryIsExternal } = classifyStateRoot(input);
+  return primaryIsExternal ? primary : undefined;
+}
+
+/**
+ * Single source for whether the resolved state root lies outside every open
+ * folder and the saved workspace-file directory. With neither present there
+ * is nothing to compare against, so the root is never external.
+ */
+function classifyStateRoot(input: WorkspaceRootResolverInput): {
+  primary: string;
+  folderPaths: string[];
+  primaryIsExternal: boolean;
+} {
   const primary = path.normalize(resolveWorkspaceRoot(input));
   const folderPaths = (input.workspaceFolders ?? []).map((folder) =>
     path.normalize(folder.fsPath)
   );
-  return Array.from(new Set([primary, ...folderPaths]));
+  const trustedBases = [
+    ...folderPaths,
+    ...(input.workspaceFileDir ? [path.normalize(input.workspaceFileDir)] : []),
+  ];
+  const primaryIsExternal =
+    trustedBases.length > 0 &&
+    !trustedBases.some((root) => isPathWithinDirectory(primary, root));
+  return { primary, folderPaths, primaryIsExternal };
 }
 
 export type ReferencePathBase =

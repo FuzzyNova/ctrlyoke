@@ -27,6 +27,25 @@ suite("FileAccessPolicy", () => {
     assert.strictEqual(decision.matchedRoot, externalRoot);
   });
 
+  test("an outside workspace state root needs external approval", () => {
+    const stateRoot = path.resolve("/home/user");
+    const candidate = path.join(stateRoot, ".ssh", "config");
+    const pending = evaluateFileAccess(candidate, {
+      workspaceRoots: [workspaceRoot],
+      approvedExternalRoots: [],
+    });
+    assert.strictEqual(pending.allowed, false);
+    assert.strictEqual(pending.reason, "outsideTrustedRoots");
+
+    const approved = evaluateFileAccess(candidate, {
+      workspaceRoots: [workspaceRoot],
+      approvedExternalRoots: [stateRoot],
+    });
+    assert.strictEqual(approved.allowed, true);
+    assert.strictEqual(approved.reason, "trustedExternalRoot");
+    assert.strictEqual(approved.matchedRoot, stateRoot);
+  });
+
   test("resolves approved external roots containing a parent segment", () => {
     const rootWithParentSegment = `${path.dirname(externalRoot)}${path.sep}unused${path.sep}..${path.sep}${path.basename(externalRoot)}`;
     const decision = evaluateFileAccess(path.join(externalRoot, "debug.log"), {

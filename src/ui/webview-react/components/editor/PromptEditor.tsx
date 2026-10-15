@@ -76,6 +76,7 @@ import {
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 
 import { buildPropertyUpdateValues } from "@utils/promptPropertyValues";
+import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
 import { Icon } from "../shared/Icon";
 
 interface PromptEditorProps {
@@ -840,42 +841,24 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // identical set, so it is built once here — a second copy drifts the moment
   // one path gains a script property and the other does not.
   const buildScriptProperties = useCallback(
-    (): Record<string, unknown> => ({
-      type: STEP_TYPES.SCRIPT,
-      ...(scriptEnv &&
-        Object.keys(scriptEnv).length > 0 && {
-          env: scriptEnv,
-        }),
-      ...(properties.secrets === null
-        ? { secrets: null }
-        : Array.isArray(properties.secrets) && properties.secrets.length > 0
-          ? { secrets: properties.secrets }
-          : {}),
-      ...(properties.errorBehavior !== undefined && {
+    () =>
+      getScriptStepPropertyUpdate({
+        env: scriptEnv,
+        secrets: properties.secrets,
         errorBehavior: properties.errorBehavior,
-      }),
-      ...(scriptTimeoutSec !== undefined && { timeoutSec: scriptTimeoutSec }),
-      ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
+        timeoutSec: scriptTimeoutSec,
         onPass: scriptOnPass,
-      }),
-      ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
         onFail: scriptOnFail,
-      }),
-      ...(scriptCompareSource !== DEFAULT_COMPARE_SOURCE && {
         compareSource: scriptCompareSource,
-      }),
-      ...(scriptOperator !== DEFAULT_SCRIPT_OPERATOR && {
         operator: scriptOperator,
-      }),
-      ...(scriptExpected && { expected: scriptExpected }),
-      ...(scriptIgnoreCase && { ignoreCase: scriptIgnoreCase }),
-      ...(scriptExecutionMode !== undefined && {
+        expected: scriptExpected,
+        ignoreCase: scriptIgnoreCase,
         executionMode: scriptExecutionMode,
-      }),
-      ...(scriptShell?.trim() && { shell: scriptShell }),
-      ...(properties.color !== undefined && { color: properties.color }),
-      ...(!stepEnabled && { enabled: false }),
-    }),
+        shell: scriptShell,
+        color: properties.color,
+        enabled: stepEnabled,
+        promptName,
+      }).properties,
     [
       properties,
       scriptCompareSource,
@@ -889,6 +872,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptShell,
       scriptTimeoutSec,
       stepEnabled,
+      promptName,
     ]
   );
 
@@ -1108,64 +1092,24 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       const command = scriptCommand.trim();
       if (!command) return;
 
-      const scriptProperties = {
-        type: STEP_TYPES.SCRIPT,
-        ...(scriptEnv &&
-          Object.keys(scriptEnv).length > 0 && {
-            env: scriptEnv,
-          }),
-        ...(properties.secrets === null
-          ? { secrets: null }
-          : Array.isArray(properties.secrets) && properties.secrets.length > 0
-            ? { secrets: properties.secrets }
-            : {}),
-        ...(properties.errorBehavior !== undefined && {
+      const { properties: scriptProperties, clearProperties } =
+        getScriptStepPropertyUpdate({
+          env: scriptEnv,
+          secrets: properties.secrets,
           errorBehavior: properties.errorBehavior,
-        }),
-        ...(scriptTimeoutSec !== undefined && { timeoutSec: scriptTimeoutSec }),
-        ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
+          timeoutSec: scriptTimeoutSec,
           onPass: scriptOnPass,
-        }),
-        ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
           onFail: scriptOnFail,
-        }),
-        ...(scriptCompareSource !== DEFAULT_COMPARE_SOURCE && {
           compareSource: scriptCompareSource,
-        }),
-        ...(scriptOperator !== DEFAULT_SCRIPT_OPERATOR && {
           operator: scriptOperator,
-        }),
-        ...(scriptExpected && { expected: scriptExpected }),
-        ...(scriptIgnoreCase && { ignoreCase: scriptIgnoreCase }),
-        ...(scriptExecutionMode !== undefined && {
+          expected: scriptExpected,
+          ignoreCase: scriptIgnoreCase,
           executionMode: scriptExecutionMode,
-        }),
-        ...(scriptShell?.trim() && { shell: scriptShell }),
-        ...(properties.color !== undefined && { color: properties.color }),
-        ...(!stepEnabled && { enabled: false }),
-      };
-      const clearProperties = [
-        ...(!scriptEnv || Object.keys(scriptEnv).length === 0 ? ["env"] : []),
-        ...(properties.secrets === undefined ||
-        (Array.isArray(properties.secrets) && properties.secrets.length === 0)
-          ? ["secrets"]
-          : []),
-        ...(properties.errorBehavior === undefined ? ["errorBehavior"] : []),
-        ...(scriptTimeoutSec === undefined ? ["timeoutSec"] : []),
-        ...(scriptOnPass === CONDITION_ACTIONS.CONTINUE ? ["onPass"] : []),
-        ...(scriptOnFail === CONDITION_ACTIONS.STOP_WORKFLOW ? ["onFail"] : []),
-        ...(scriptCompareSource === DEFAULT_COMPARE_SOURCE
-          ? ["compareSource"]
-          : []),
-        ...(scriptOperator === DEFAULT_SCRIPT_OPERATOR ? ["operator"] : []),
-        ...(!scriptExpected ? ["expected"] : []),
-        ...(!scriptIgnoreCase ? ["ignoreCase"] : []),
-        ...(scriptExecutionMode === undefined ? ["executionMode"] : []),
-        ...(!scriptShell?.trim() ? ["shell"] : []),
-        ...(properties.color === undefined ? ["color"] : []),
-        ...(stepEnabled ? ["enabled"] : []),
-        ...(!promptName.trim() ? ["name"] : []),
-      ];
+          shell: scriptShell,
+          color: properties.color,
+          enabled: stepEnabled,
+          promptName,
+        });
 
       const submittedStep = {
         ...scriptProperties,

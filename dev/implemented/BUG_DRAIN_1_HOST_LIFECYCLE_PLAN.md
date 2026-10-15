@@ -1,6 +1,7 @@
 # Bug Drain 1: Host Lifecycle, Settings & Dashboard Interaction Plan
 
-**Status:** Backlog, ready to run
+**Status:** Implemented (2026-10-15). All 24 bug docs are in
+`dev/bugs/implemented/`; steps 1-4 and 6-18 landed in `e5c52eb5f`..`56adc6659`.
 **Priority:** P1
 **Runs as:** plan 1 of 4 in a parallel bug drain. Each plan runs through
 `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git worktree.
@@ -20,6 +21,12 @@ React dashboard's undo/snapshot plumbing and input handling (keyboard, touch,
 modal Escape, file picker, language-server editor, script-step execution
 preview), and two build scripts (`dev-host.mjs` / `package-install.mjs`
 quoting, `strip-dev-commands.mjs` backup). 24 bugs, about 27 effort points.
+
+**Orchestrator note (2026-10-14):** Steps 5 and 14 were already fixed on this
+branch before the drain started (`730b164ed fix: reload settings after
+external file changes`, `1d7841123 fix: format quota reset warnings for local
+time`; both docs are in `dev/bugs/implemented/`). They are not queued. 22 bugs
+remain across the other 16 steps.
 
 ## File ownership
 
@@ -178,6 +185,8 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
 
 ### Step 5: Settings file hand edits picked up live
 
+**Already done** in `730b164ed` before this drain ran; not queued.
+
 - **Fixes:** `dev/bugs/backlog/settings-file-hand-edits-ignored-until-reload.md` [M]
 - **Files:** `src/config/FileConfigBackend.ts`, `src/config/CtrlYokeConfigService.ts`,
   `src/extension.ts` (watcher wiring), `src/ui/WebviewSettingsSync.ts` (push
@@ -209,7 +218,7 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
   `cleanupWorkspaceArtifacts`).
 - **Approach:** `readHooksFile` returns `{}` only on `ENOENT`; any other read
   error, parse error or non-object value throws `Cannot safely update
-  ${hooksPath}: ...` (same wording as `SettingsJsonMcpTracker.readProjectConfig`).
+${hooksPath}: ...` (same wording as `SettingsJsonMcpTracker.readProjectConfig`).
   The cleanup path catches and logs so teardown is never blocked. Write via
   temp file and rename; use the existing atomic write helper from
   `src/utils/AtomicFileUtils.ts` by import only.
@@ -293,7 +302,7 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
 - **Files:** `src/ui/webview-react/utils/promptUndo.ts`,
   `src/ui/webview-react/hooks/useOutputUndoActions.ts`.
 - **Approach:** add one `excludeUndoneCandidates(candidates, redoInstructions,
-  workspaceRoot)` helper in `promptUndo.ts` that normalizes both sides to
+workspaceRoot)` helper in `promptUndo.ts` that normalizes both sides to
   workspace-relative keys (prefer `candidate.instruction?.path` when present),
   and use it at all three call sites (`buildUndoDialogInputForPrompt`,
   `computePromptChangeSummary`, workflow change data in the hook).
@@ -355,6 +364,8 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
   command unchanged. Round-trip a quoted argument typed by the user.
 
 ### Step 14: Near-limit warning reset time in local time
+
+**Already done** in `1d7841123` before this drain ran; not queued.
 
 - **Fixes:** `dev/bugs/backlog/near-limit-warning-shows-raw-iso-reset-time.md`
 - **Files:** new `src/utils/FutureTimeFormat.ts`,
@@ -427,8 +438,9 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
   `package.json` stripped.
 - **Tests:** `scripts/spawn-windows-shim.test.mjs` (paths with spaces, `&`,
   `^`, quotes produce the right command line; wire it into whatever runner the
-  other `scripts/*.test.mjs` use), `src/test/unit/StripDevCommands.test.ts`
-  (existing backup is never overwritten).
+  other `scripts/*.test.mjs` use: the `test:packaging` list in `package.json`),
+  and a new `scripts/strip-dev-commands.test.mjs` in the same list (existing
+  backup is never overwritten). There is no `StripDevCommands.test.ts`.
 - **Tricky:** do not change `contributes.configuration` in `package.json`
   here (Step 18 owns that edit). `npm test` cannot exercise a real
   `code` launch; test the command-line builder, not the spawn.
@@ -503,6 +515,7 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
 ## Done criteria
 
 - Every bug doc listed under Steps is in `dev/bugs/implemented/` or
-  `dev/bugs/rejected/` (24 docs, including Step 18).
+  `dev/bugs/rejected/` (24 docs, including Step 18; steps 5 and 14's two
+  were already in `implemented/` when the drain started).
 - `npm test` passes on the final commit, and no file owned by plans 2-4 was
   edited except where a commit message calls it out.

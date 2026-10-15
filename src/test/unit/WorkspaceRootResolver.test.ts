@@ -6,6 +6,7 @@ import {
   getTrustedSourceDefinitionDir,
   resolveWorkspaceRoot,
   resolveTrustedWorkspaceRoots,
+  resolveRequestedExternalWorkspaceRoot,
   resolveNamedRelativePath,
   resolveReferencePath,
   resolveEffectiveAbsoluteReferences,
@@ -148,7 +149,7 @@ suite("WorkspaceRootResolver Tests", () => {
   });
 
   suite("resolveTrustedWorkspaceRoots", () => {
-    test("includes the primary root plus every workspace folder, even when the .code-workspace file lives outside all of them", () => {
+    test("includes the workspace file directory and every folder when unrelated", () => {
       // A completely ordinary multi-root layout: the .code-workspace file is
       // saved in a directory that is NOT an ancestor of either project folder
       // (VS Code does not require this). Before this helper existed, only
@@ -172,6 +173,33 @@ suite("WorkspaceRootResolver Tests", () => {
       );
     });
 
+    test("does not trust an absolute state root outside the folders and workspace file directory", () => {
+      const outsideRoot = path.resolve("/home/user");
+      const input = {
+        setting: outsideRoot,
+        workspaceFileDir: path.resolve("/configs"),
+        workspaceFolders: folders,
+      };
+      assert.deepStrictEqual(
+        new Set(resolveTrustedWorkspaceRoots(input)),
+        new Set([appFolder, docsFolder])
+      );
+      assert.strictEqual(
+        resolveRequestedExternalWorkspaceRoot(input),
+        outsideRoot
+      );
+      assert.strictEqual(resolveWorkspaceRoot(input), outsideRoot);
+    });
+
+    test("keeps a ../.. state root outside containment while resolving its location", () => {
+      const folder = { name: "repo", fsPath: path.resolve("/repos/evil") };
+      const input = { setting: "../..", workspaceFolders: [folder] };
+      const resolved = path.resolve(folder.fsPath, "../..");
+      assert.strictEqual(resolveWorkspaceRoot(input), resolved);
+      assert.deepStrictEqual(resolveTrustedWorkspaceRoots(input), [folder.fsPath]);
+      assert.strictEqual(resolveRequestedExternalWorkspaceRoot(input), resolved);
+    });
+
     test("dedupes when the primary root is also one of the workspace folders", () => {
       const roots = resolveTrustedWorkspaceRoots({
         workspaceFolders: folders, // no workspaceFileDir → primary root = folders[0] = appFolder
@@ -184,6 +212,7 @@ suite("WorkspaceRootResolver Tests", () => {
     test("returns just the cwd fallback when no folders are open", () => {
       const cwd = path.resolve("/some/cwd");
       assert.deepStrictEqual(resolveTrustedWorkspaceRoots({ cwd }), [cwd]);
+      assert.strictEqual(resolveRequestedExternalWorkspaceRoot({ cwd }), undefined);
     });
   });
 

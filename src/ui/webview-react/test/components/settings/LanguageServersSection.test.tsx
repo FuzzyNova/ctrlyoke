@@ -240,6 +240,69 @@ describe("LanguageServersSection", () => {
     );
   });
 
+  it("keeps a spaced executable path when editing another definition field", () => {
+    seed(LANGUAGE_SERVER_STATUSES.NEEDS_APPROVAL);
+    const command = [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "server.js",
+      "--stdio",
+    ];
+    useLanguageServerStore.setState((state) => ({
+      definitions: state.definitions.map((entry) => ({
+        ...entry,
+        definition: { ...entry.definition, command },
+      })),
+    }));
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.WORKSPACE} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText("extensions"), {
+      target: { value: "py, mjs" },
+    });
+    const saveButtons = screen.getAllByRole("button", { name: "Save" });
+    fireEvent.click(saveButtons[saveButtons.length - 1]!);
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.SAVE_LSP_DEFINITION,
+      expect.objectContaining({
+        id: "pyright",
+        definition: expect.objectContaining({ command }),
+        scope: SETTING_SCOPES.WORKSPACE,
+      })
+    );
+  });
+
+  it("parses quoted arguments entered in the command field", () => {
+    render(<LanguageServersSection activeScope={SETTING_SCOPES.USER} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add server" }));
+    fireEvent.change(screen.getByLabelText("id"), {
+      target: { value: "custom" },
+    });
+    fireEvent.change(screen.getByLabelText("command"), {
+      target: {
+        value:
+          '"C:\\Program Files\\language server.exe" --stdio "argument with spaces"',
+      },
+    });
+    const saveButtons = screen.getAllByRole("button", { name: "Save" });
+    fireEvent.click(saveButtons[saveButtons.length - 1]!);
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.SAVE_LSP_DEFINITION,
+      expect.objectContaining({
+        id: "custom",
+        definition: expect.objectContaining({
+          command: [
+            "C:\\Program Files\\language server.exe",
+            "--stdio",
+            "argument with spaces",
+          ],
+        }),
+        scope: SETTING_SCOPES.USER,
+      })
+    );
+  });
+
   it("shows install errors and a copyable command in the catalog row", () => {
     useLanguageServerStore
       .getState()

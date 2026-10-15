@@ -69,7 +69,7 @@ export const WorkflowFilePickerModal: React.FC<
         }));
         setFiles(nextFiles);
         setIsGitRepo(data.isGitRepo ?? false);
-        setSelectedPath(nextFiles[0]?.path ?? "");
+        setSelectedPath("");
       })
       .catch((err) => {
         if (cancelled) {
@@ -104,7 +104,12 @@ export const WorkflowFilePickerModal: React.FC<
     });
   }, [files, query, hideGitIgnoredFiles]);
 
-  const chosenPath = normalizeWorkflowPath(manualPath || selectedPath);
+  const effectiveSelectedPath = filteredFiles.some(
+    (file) => file.path === selectedPath
+  )
+    ? selectedPath
+    : (filteredFiles[0]?.path ?? "");
+  const chosenPath = normalizeWorkflowPath(manualPath || effectiveSelectedPath);
 
   const handleSubmit = () => {
     if (!chosenPath) {
@@ -210,7 +215,7 @@ export const WorkflowFilePickerModal: React.FC<
                   setManualPath("");
                 }}
                 className={`block w-full border-0 px-3 py-2 text-left text-sm ${
-                  selectedPath === file.path && !manualPath
+                  effectiveSelectedPath === file.path && !manualPath
                     ? "bg-list-active-bg text-list-active-fg"
                     : "bg-transparent text-foreground hover:bg-list-hover-bg hover:text-list-hover-fg"
                 }`}

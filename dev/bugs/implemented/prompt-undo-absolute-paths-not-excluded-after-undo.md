@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/utils/promptUndo.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -40,3 +40,5 @@ Add a shared helper, such as `excludeUndoneCandidates(candidates, redoInstructio
 A simpler alternative is to match each redo instruction against the snapshot-derived instruction path (`candidate.instruction?.path`, which is already relative) instead of `candidate.path`.
 
 Add tests for both `buildUndoDialogInputForPrompt` and `computePromptChangeSummary` that use an absolute Windows event path, a `workingDirectory`, and a relative snapshot and redo path.
+
+**Resolution:** fixed in this commit

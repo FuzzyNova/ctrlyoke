@@ -2450,6 +2450,85 @@ suite("WebviewSettingsSync bind-address licensing gate", () => {
   });
 });
 
+suite("WebviewSettingsSync global setting write failures", () => {
+  test("notifies the user and reloads settings when the write rejects", async () => {
+    const originalSet = configService.set;
+    const feedback: unknown[] = [];
+    let reloadCount = 0;
+    try {
+      configService.set = async () => {
+        throw new Error("settings file contains invalid JSON");
+      };
+      const sync = new WebviewSettingsSync(
+        () => {},
+        () =>
+          ({
+            getUserFeedbackSink: () => ({
+              notify: (message: unknown) => feedback.push(message),
+            }),
+          }) as any
+      );
+      sync.handleGlobalSettingsLoadRequest = async () => {
+        reloadCount++;
+      };
+
+      await sync.handleUpdateGlobalSetting(
+        "ui.showCostEstimates",
+        false,
+        "user",
+        () => {}
+      );
+
+      assert.strictEqual(feedback.length, 1);
+      assert.match(
+        JSON.stringify(feedback[0]),
+        /settings file contains invalid JSON/
+      );
+      assert.strictEqual(reloadCount, 1);
+    } finally {
+      configService.set = originalSet;
+    }
+  });
+});
+
+suite("WebviewMessageRouter — UPDATE_GLOBAL_SETTING handler", () => {
+  test("awaits a rejected settings handler before completing the route", async () => {
+    let rejectHandler!: (error: Error) => void;
+    const handlerPromise = new Promise<void>((_resolve, reject) => {
+      rejectHandler = reject;
+    });
+    const mockSettingsSync = {
+      handleUpdateGlobalSetting: () => handlerPromise,
+    } as any;
+    const router = new WebviewMessageRouter(
+      () => {},
+      mockSettingsSync,
+      {} as any,
+      () => undefined,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    let routeCompleted = false;
+    const routePromise = router
+      .route({
+        type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+        path: "ui.showCostEstimates",
+        value: false,
+        scope: "user",
+      })
+      .then(() => {
+        routeCompleted = true;
+      });
+
+    await Promise.resolve();
+    assert.strictEqual(routeCompleted, false);
+    rejectHandler(new Error("write rejected"));
+    await routePromise;
+    assert.strictEqual(routeCompleted, true);
+  });
+});
+
 suite("WebviewSettingsSync external root decisions", () => {
   test("approves a newly browsed workspace root immediately", async () => {
     const originalSet = configService.set;

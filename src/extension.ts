@@ -4,6 +4,7 @@ ensureMinFsThreadpoolSize(64);
 import * as vscode from "vscode";
 import * as path from "path";
 import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
+import { AntigravityCliProvider } from "./core/harness/antigravity/AntigravityCliProvider";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { WorkflowFileCompletionProvider } from "./completions/WorkflowFileCompletionProvider";
 import { getCtrlYokeFileGlobs } from "./completions/CtrlYokeFileKind";
@@ -22,6 +23,8 @@ import {
   getVsCodeWorkspaceFolder,
   getVsCodeNamedWorkspaceRoots,
   getVsCodeTrustedWorkspaceRoots,
+  getVsCodeRequestedExternalWorkspaceRoot,
+  getVsCodeFileAccessWorkspaceRoot,
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
@@ -100,13 +103,16 @@ import {
   getPtyProcessManager,
 } from "./core/harness/PtyProcessManager";
 import { configService } from "./config/CtrlYokeConfigService";
-import { externalRootsTrustStore } from "./config/ExternalRootsTrustStore";
+import {
+  ExternalRootsTrustStore,
+  externalRootsTrustStore,
+} from "./config/ExternalRootsTrustStore";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
 import { NotificationManager } from "./ui/NotificationManager";
-import { promptBatchApprovalForPendingWorkspaceExternalRoots } from "./ui/ExternalRootsApproval";
+import { promptBatchApprovalForPendingRoots } from "./ui/ExternalRootsApproval";
 import {
   confirmExternalFileTrustAndOpen,
   openResolvedTarget,
@@ -263,19 +269,41 @@ export async function activate(context: vscode.ExtensionContext) {
     if (workspaceConfigBackend) {
       configService.setWorkspaceBackend(workspaceConfigBackend);
     }
+    const promptPendingExternalRoots = async (): Promise<void> => {
+      if (!vscode.workspace.isTrusted) return;
+      const stateRoot = getVsCodeWorkspaceRoot();
+      const workspaceIdentity =
+        ExternalRootsTrustStore.canonicalizeRoot(stateRoot);
+      const requestedStateRoot = getVsCodeRequestedExternalWorkspaceRoot();
+      const configuredRoots =
+        ConfigurationUtils.getTrustedExternalRootsByScope().workspace;
+      const seenRoots = new Set<string>();
+      const requestedRoots = [
+        ...configuredRoots,
+        ...(requestedStateRoot ? [requestedStateRoot] : []),
+      ].filter((root) => {
+        const canonical = ExternalRootsTrustStore.canonicalizeRoot(root);
+        if (seenRoots.has(canonical)) return false;
+        seenRoots.add(canonical);
+        return true;
+      });
+      const pendingRoots = externalRootsTrustStore.getPendingRoots(
+        workspaceIdentity,
+        requestedRoots
+      );
+      await promptBatchApprovalForPendingRoots(
+        workspaceIdentity,
+        pendingRoots,
+        `This workspace requests ${pendingRoots.length} external file root(s)`,
+        webviewProvider.getUserInteractionPort()
+      );
+    };
     context.subscriptions.push(
       vscode.workspace.onDidGrantWorkspaceTrust(() => {
         if (vscode.workspace.workspaceFolders?.length) {
           void webviewProvider
             .awaitPanelReady()
-            .then(() =>
-              promptBatchApprovalForPendingWorkspaceExternalRoots(
-                getVsCodeWorkspaceRoot(),
-                webviewProvider.getUserInteractionPort(),
-                undefined,
-                () => vscode.workspace.isTrusted
-              )
-            )
+            .then(promptPendingExternalRoots)
             .catch((error) => {
               Log.warn(
                 `[Extension] ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
@@ -290,6 +318,8 @@ export async function activate(context: vscode.ExtensionContext) {
       context,
       workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
     );
+    // Reclaim groups left by killed Antigravity runs without delaying startup.
+    void AntigravityCliProvider.sweepOrphanedGlobalHooks();
     // Samples heap growth into the session log. The one-time heap snapshot is
     // opt-in (CTRLYOKE_HEAP_SNAPSHOT_MB) and only written while a session log
     // file exists (dev or verbose logging).
@@ -541,14 +571,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (workspaceFolders && workspaceFolders.length > 0) {
       void webviewProvider
         .awaitPanelReady()
-        .then(() =>
-          promptBatchApprovalForPendingWorkspaceExternalRoots(
-            getVsCodeWorkspaceRoot(),
-            webviewProvider.getUserInteractionPort(),
-            undefined,
-            () => vscode.workspace.isTrusted
-          )
-        )
+        .then(promptPendingExternalRoots)
         .catch((error) => {
           Log.warn(
             `[Extension] ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
@@ -1716,11 +1739,12 @@ function registerCommands(
         return;
       }
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
-      const workspaceRoot = getVsCodeWorkspaceRoot();
+      const stateRoot = getVsCodeWorkspaceRoot();
+      const workspaceRoot = getVsCodeFileAccessWorkspaceRoot() ?? stateRoot;
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
         machineSecretStore,
-        workspaceRoot
+        stateRoot
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
@@ -1741,8 +1765,9 @@ function registerCommands(
       dashboardApplication.setLanguageIntelligenceHost(
         languageIntelligenceHost
       );
+      let server: CtrlYokeHostedServer;
       try {
-        hostedServer = new CtrlYokeHostedServer(
+        server = new CtrlYokeHostedServer(
           createHostedServerOptions({
             hub,
             endpoint: dashboardApplication,
@@ -1765,6 +1790,7 @@ function registerCommands(
             languageIntelligenceHost,
           })
         );
+        hostedServer = server;
       } catch (err) {
         unprotectServerToken?.();
         unprotectServerToken = undefined;
@@ -1773,30 +1799,41 @@ function registerCommands(
         );
         return;
       }
-      let url: string;
-      try {
-        const serverUrl = await hostedServer.listen();
-        if (!serverUrl) {
-          hostedServer.dispose();
+      const cleanupServer = (): void => {
+        server.dispose();
+        if (hostedServer === server) {
           hostedServer = undefined;
           unprotectServerToken?.();
           unprotectServerToken = undefined;
+        }
+      };
+      let url: string;
+      try {
+        const serverUrl = await server.listen();
+        if (hostedServer !== server) {
+          server.dispose();
+          return;
+        }
+        if (!serverUrl) {
+          cleanupServer();
           return;
         }
         url = serverUrl;
       } catch (err) {
-        hostedServer = undefined;
-        unprotectServerToken?.();
-        unprotectServerToken = undefined;
+        if (hostedServer !== server) {
+          server.dispose();
+          return;
+        }
+        cleanupServer();
         vscode.window.showErrorMessage(
           `ctrlyoke: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`
         );
         return;
       }
-      const availableIps = hostedServer.getAvailableIps();
-      const portFallback = hostedServer.getPortFallbackInfo() ?? undefined;
+      const availableIps = server.getAvailableIps();
+      const portFallback = server.getPortFallbackInfo() ?? undefined;
       const bindAddressFallback =
-        hostedServer.getBindAddressFallbackInfo() ?? undefined;
+        server.getBindAddressFallbackInfo() ?? undefined;
       webviewProvider.setRunningServerUrl(
         url,
         availableIps,

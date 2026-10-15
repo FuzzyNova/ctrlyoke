@@ -25,10 +25,11 @@
  * extensions.
  */
 
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnShim, spawnShimSync } from "./spawn-windows-shim.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");
@@ -211,11 +212,12 @@ async function stop() {
 
 function compile() {
   console.log("npm run compile...");
-  execFileSync(NPM_BIN, ["run", "compile"], {
+  const result = spawnShimSync(NPM_BIN, ["run", "compile"], {
     cwd: REPO_ROOT,
     stdio: "inherit",
-    shell: IS_WINDOWS,
   });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
 function getMode(rawMode) {
@@ -286,12 +288,11 @@ async function start(mode) {
   if (mode.disableExtensions) args.unshift("--disable-extensions");
   args.push(mode.workspace);
 
-  const child = spawn(CODE_BIN, args, {
+  const child = spawnShim(CODE_BIN, args, {
     cwd: REPO_ROOT,
     env: buildEnvironment(mode),
     detached: true,
     stdio: "ignore",
-    shell: IS_WINDOWS,
   });
   child.unref();
 

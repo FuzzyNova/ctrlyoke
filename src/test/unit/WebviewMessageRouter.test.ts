@@ -1265,6 +1265,34 @@ suite("WebviewMessageRouter — workspace snapshot content", () => {
     assert.strictEqual(emitted[0].requestId, "snapshot-missing");
     assert.strictEqual(emitted[0].beforeContent, undefined);
   });
+
+  test("answers malformed requests when a request id is available", async () => {
+    const emitted: any[] = [];
+    const router = buildRouter(undefined, (message) => emitted.push(message));
+
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-malformed",
+      address: {
+        workflowKey: "workflow-a",
+        runRef: "run-2026-01-01T00-00-00-000Z",
+      },
+      target: { kind: "invalid-target" },
+      path: "src/example.ts",
+    });
+
+    assert.strictEqual(emitted.length, 1);
+    assert.deepStrictEqual(emitted[0], {
+      type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-malformed",
+      address: {
+        workflowKey: "workflow-a",
+        runRef: "run-2026-01-01T00-00-00-000Z",
+      },
+      target: { kind: "invalid-target" },
+      path: "src/example.ts",
+    });
+  });
 });
 
 suite("WebviewMessageRouter — license actions", () => {

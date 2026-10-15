@@ -69,6 +69,51 @@ suite("WorkflowInstanceRegistry", () => {
     assert.strictEqual(registry.getViewAddressRegistry().get("client-a"), null);
   });
 
+  test("keeps a cancelling instance registered after its last client leaves", () => {
+    const registry = new WorkflowInstanceRegistry(
+      new TestWorkflowInstanceRegistryHost()
+    );
+    const instance = fakeInstance(
+      "cancelling-instance",
+      "lineage-a",
+      EXECUTION_STATES.CANCELLING
+    );
+    let disposed = false;
+    instance.dispose = () => {
+      disposed = true;
+    };
+    registry.getInstances().set(instance.id, instance);
+    registry.registerClient("client-a");
+    registry.setViewedWorkflowId("client-a", instance.id);
+
+    registry.unregisterClient("client-a");
+
+    assert.strictEqual(registry.getInstances().get(instance.id), instance);
+    assert.strictEqual(disposed, false);
+  });
+
+  test("reuses a cancelling instance when creating its workflow again", async () => {
+    const host = new TestWorkflowInstanceRegistryHost();
+    const registry = new WorkflowInstanceRegistry(host);
+    const instance = fakeInstance(
+      "cancelling-instance",
+      "lineage-a",
+      EXECUTION_STATES.CANCELLING
+    );
+    Object.defineProperty(instance, "filePath", { value: "workflow.md" });
+    let disposed = false;
+    instance.dispose = () => {
+      disposed = true;
+    };
+    registry.getInstances().set(instance.id, instance);
+
+    const result = await registry.createWorkflow("workflow.md");
+
+    assert.strictEqual(result, instance);
+    assert.strictEqual(registry.getInstances().get(instance.id), instance);
+    assert.strictEqual(disposed, false);
+  });
+
   test("adopts the instance's new lineage identity for its bound clients", () => {
     const registry = new WorkflowInstanceRegistry(
       new TestWorkflowInstanceRegistryHost()

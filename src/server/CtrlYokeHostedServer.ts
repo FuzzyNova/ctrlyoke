@@ -44,6 +44,8 @@ import {
   HOSTED_CERT_DOWNLOAD,
   HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
+  EXECUTION_STATES,
+  STEP_STATUS,
   BROWSER_CLIENT_PREFIX,
   LANGUAGE_SERVER_REQUEST_ORIGINS,
   type FinalStepPhase,
@@ -76,6 +78,7 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
+  notificationIdentityPrefix,
   type CtrlYokeNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
@@ -335,6 +338,7 @@ export class CtrlYokeHostedServer
   private readonly beginRemoteAccess: (() => Promise<boolean>) | undefined;
   private readonly onRemoteAccessBlocked: (() => void) | undefined;
   private remoteAccessUpsellShown = false;
+  private disposed = false;
   private readonly hub: DashboardBroadcastHub;
   private readonly dashboardClient: DashboardClientEndpoint;
   private readonly getOrchestrator: () => WorkflowOrchestrator;
@@ -654,12 +658,11 @@ export class CtrlYokeHostedServer
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
-    this.workflowSummaries.delete(workflowId);
-    for (const key of [...this.notifiedEventIds]) {
-      if (key.startsWith(`${workflowId}:`)) {
-        this.notifiedEventIds.delete(key);
-      }
+    const summary = this.workflowSummaries.get(workflowId);
+    if (summary) {
+      this.clearNotificationEventIds(summary);
     }
+    this.workflowSummaries.delete(workflowId);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
   }
 
@@ -667,6 +670,14 @@ export class CtrlYokeHostedServer
     const previousSummary = this.workflowSummaries.get(summary.id);
     this.workflowSummaries.set(summary.id, summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+
+    if (
+      summary.executionState === EXECUTION_STATES.RUNNING &&
+      (previousSummary?.executionState === EXECUTION_STATES.COMPLETED ||
+        previousSummary?.executionState === EXECUTION_STATES.ERROR)
+    ) {
+      this.clearNotificationEventIds(summary);
+    }
 
     if (!isWorkflowCompletionTransition(previousSummary, summary)) {
       return;
@@ -884,6 +895,10 @@ export class CtrlYokeHostedServer
     const summary = this.workflowSummaries.get(workflowId);
     if (!summary) {
       return;
+    }
+
+    if (status.state === STEP_STATUS.RUNNING) {
+      this.clearNotificationEventIds(summary);
     }
 
     const steps = this.getOrchestrator()
@@ -1250,17 +1265,35 @@ export class CtrlYokeHostedServer
       const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
       void this.serveColorizedPng(svgPath, "large", res);
     });
+    // Remote-access entitlement gate shared by every token-checked route (the
+    // WebSocket upgrade path applies the same isClientAllowed check).
+    const continueIfClientAllowed = (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ): void => {
+      void this.isClientAllowed(req.socket.remoteAddress).then((allowed) => {
+        if (allowed) next();
+        else res.status(403).send("Forbidden");
+      });
+    };
     // Token is required for the HTML entry point and all API routes.
     const requireToken: express.RequestHandler = (req, res, next) => {
-      if (this.requestHasValidToken(req)) return next();
-      res.status(401).send("Unauthorized");
+      if (!this.requestHasValidToken(req)) {
+        res.status(401).send("Unauthorized");
+        return;
+      }
+      continueIfClientAllowed(req, res, next);
     };
     // Same check, but for browser-navigated page routes (entry HTML, SPA fallback)
     // rather than JSON API routes — these get the themed landing page instead of a
     // bare "Unauthorized" string, since a human is looking at this in a browser tab.
     const requireTokenForPage: express.RequestHandler = (req, res, next) => {
-      if (this.requestHasValidToken(req)) return next();
-      this.sendUnauthorizedPage(res, this.getThemeOverride(req));
+      if (!this.requestHasValidToken(req)) {
+        this.sendUnauthorizedPage(res, this.getThemeOverride(req));
+        return;
+      }
+      continueIfClientAllowed(req, res, next);
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);
@@ -2571,6 +2604,15 @@ export class CtrlYokeHostedServer
     }
   }
 
+  private clearNotificationEventIds(summary: WorkflowSummary): void {
+    const prefix = notificationIdentityPrefix(summary);
+    for (const eventId of this.notifiedEventIds) {
+      if (eventId.startsWith(prefix)) {
+        this.notifiedEventIds.delete(eventId);
+      }
+    }
+  }
+
   private sendPushAccessError(res: express.Response, error: unknown): boolean {
     if (!(error instanceof PushAccessDeniedError)) return false;
     res.status(403).json({
@@ -2998,64 +3040,83 @@ export class CtrlYokeHostedServer
     this.requestedPort = this.port;
     this.portFellBack = false;
     this.bindAddressFallback = undefined;
-    await this.enforceRemoteBindBeforeListen();
-    // In strict mode, try only the requested port. Otherwise try configured
-    // fallbacks in order, then an OS-assigned port.
-    const candidatePorts = this.strictPort
-      ? [this.port]
-      : [
-          this.port,
-          ...this.fallbackPorts.filter((port) => port !== this.port),
-          0,
-        ];
-    let candidateIndex = 0;
-    return new Promise((resolve, reject) => {
-      const attemptListen = (port: number) => {
-        const onError = (err: NodeJS.ErrnoException) => {
-          this.httpServer.removeListener("listening", onListening);
-          if (err.code === "EADDRINUSE") {
-            if (candidateIndex >= candidatePorts.length - 1) {
+    if (this.disposed) return undefined;
+    try {
+      await this.enforceRemoteBindBeforeListen();
+      if (this.disposed) return undefined;
+      // In strict mode, try only the requested port. Otherwise try configured
+      // fallbacks in order, then an OS-assigned port.
+      const candidatePorts = this.strictPort
+        ? [this.port]
+        : [
+            this.port,
+            ...this.fallbackPorts.filter((port) => port !== this.port),
+            0,
+          ];
+      let candidateIndex = 0;
+      return await new Promise((resolve, reject) => {
+        const attemptListen = (port: number) => {
+          if (this.disposed) {
+            resolve(undefined);
+            return;
+          }
+          const onError = (err: NodeJS.ErrnoException) => {
+            this.httpServer.removeListener("listening", onListening);
+            if (err.code === "EADDRINUSE") {
+              if (candidateIndex >= candidatePorts.length - 1) {
+                reject(err);
+                return;
+              }
+              const tryNextCandidate = () => {
+                this.portFellBack = true;
+                candidateIndex += 1;
+                const nextPort = candidatePorts[candidateIndex] ?? 0;
+                setImmediate(() => attemptListen(nextPort));
+              };
+              void this.probeExistingServer(port)
+                .then((existingServer) => {
+                  if (existingServer) {
+                    this.onSiblingServerDetected?.(this.buildPublicUrl(port));
+                  }
+                  tryNextCandidate();
+                })
+                .catch(tryNextCandidate);
+            } else {
               reject(err);
+            }
+          };
+          const onListening = () => {
+            this.httpServer.removeListener("error", onError);
+            if (this.disposed) {
+              this.httpServer.close();
+              resolve(undefined);
               return;
             }
-            const tryNextCandidate = () => {
-              this.portFellBack = true;
-              candidateIndex += 1;
-              const nextPort = candidatePorts[candidateIndex] ?? 0;
-              setImmediate(() => attemptListen(nextPort));
-            };
-            void this.probeExistingServer(port)
-              .then((existingServer) => {
-                if (existingServer) {
-                  this.onSiblingServerDetected?.(this.buildPublicUrl(port));
-                }
-                tryNextCandidate();
-              })
-              .catch(tryNextCandidate);
-          } else {
-            reject(err);
-          }
+            const addr = this.httpServer.address() as import("net").AddressInfo;
+            this.port = addr.port;
+            const scheme = this.isTls ? "https" : "http";
+            this.availableIps =
+              this.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
+                ? this.getLanIps()
+                : [];
+            const host = this.availableIps[0] ?? "localhost";
+            this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
+            this.writeDevServerUrlFile(this.publicUrl);
+            resolve(this.publicUrl);
+          };
+          this.httpServer.once("error", onError);
+          this.httpServer.once("listening", onListening);
+          this.httpServer.listen(port, this.bindAddress);
         };
-        const onListening = () => {
-          this.httpServer.removeListener("error", onError);
-          const addr = this.httpServer.address() as import("net").AddressInfo;
-          this.port = addr.port;
-          const scheme = this.isTls ? "https" : "http";
-          this.availableIps =
-            this.bindAddress === SERVER_BIND_ADDRESSES.ALL_INTERFACES
-              ? this.getLanIps()
-              : [];
-          const host = this.availableIps[0] ?? "localhost";
-          this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
-          this.writeDevServerUrlFile(this.publicUrl);
-          resolve(this.publicUrl);
-        };
-        this.httpServer.once("error", onError);
-        this.httpServer.once("listening", onListening);
-        this.httpServer.listen(port, this.bindAddress);
-      };
-      attemptListen(candidatePorts[0]);
-    });
+        attemptListen(candidatePorts[0]);
+      });
+    } catch (error) {
+      // Constructor-time hub, heartbeat and memory registrations must not
+      // survive a failed bind for CLI or MCP callers that have no extension
+      // command to clean them up.
+      this.dispose();
+      throw error;
+    }
   }
 
   private async enforceRemoteBindBeforeListen(): Promise<void> {
@@ -3277,6 +3338,8 @@ export class CtrlYokeHostedServer
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.unregisterMemoryContext();
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
@@ -3296,6 +3359,9 @@ export class CtrlYokeHostedServer
     for (const ws of this.connections) ws.close();
     this.connections.clear();
     this.wss.close();
+    for (const ws of this.lspWss.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.close(1001, "going away");
+    }
     this.lspWss.close();
     this.httpServer.close();
   }

@@ -2,7 +2,13 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/components/settings/LanguageServersSection.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
+
+## Decision
+
+The Command field uses single or double quotes to group arguments. Within double quotes,
+backslashes escape quotes and backslashes. Editing another field preserves the original argv
+array without formatting and parsing it again.
 
 ## Symptom
 

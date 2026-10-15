@@ -5,6 +5,7 @@ import { URI_SCHEMES } from "../types/DashboardConstants";
 import {
   resolveWorkspaceRoot,
   resolveTrustedWorkspaceRoots,
+  resolveRequestedExternalWorkspaceRoot,
   type ResolverWorkspaceFolder,
   type WorkspaceRootResolverInput,
 } from "./WorkspaceRootResolver";
@@ -65,6 +66,16 @@ export function getVsCodeWorkspaceRoot(): string {
  */
 export function getVsCodeTrustedWorkspaceRoots(): string[] {
   return resolveTrustedWorkspaceRoots(gatherResolverInput());
+}
+
+/** Return the resolved state root when it needs external-root approval. */
+export function getVsCodeRequestedExternalWorkspaceRoot(): string | undefined {
+  return resolveRequestedExternalWorkspaceRoot(gatherResolverInput());
+}
+
+/** First open folder for services whose workspace root defines file access. */
+export function getVsCodeFileAccessWorkspaceRoot(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
 /**

@@ -34,6 +34,7 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { WorkspaceSnapshotContentMessage } from "../types/WebviewMessageTypes";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type {
@@ -1696,6 +1697,15 @@ export class WebviewMessageRouter {
           typeof message.path !== "string" ||
           !isValidOutputExecutionTarget(message.target)
         ) {
+          if (typeof message.requestId === "string") {
+            ctx.emit({
+              type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+              requestId: message.requestId,
+              address: message.address,
+              target: message.target,
+              path: message.path,
+            } as WorkspaceSnapshotContentMessage);
+          }
           return;
         }
 
@@ -2310,8 +2320,8 @@ export class WebviewMessageRouter {
       await reload.call(this.hostDependencies.actions);
     });
 
-    table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message, ctx) => {
-      this.settingsSync.handleUpdateGlobalSetting(
+    table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, async (message, ctx) => {
+      await this.settingsSync.handleUpdateGlobalSetting(
         message.path,
         message.value,
         message.scope,

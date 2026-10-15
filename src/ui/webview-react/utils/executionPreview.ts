@@ -4,15 +4,13 @@ import {
   type WorkflowStep as WebviewWorkflowStep,
 } from "@store/workflowStore";
 import {
-  CONDITION_ACTIONS,
-  DEFAULT_COMPARE_SOURCE,
-  DEFAULT_SCRIPT_OPERATOR,
   EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { PromptStep, ScriptStep } from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
+import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
 
 /**
  * Capture the editor's current step without changing editor or workflow state.
@@ -47,46 +45,31 @@ export function getExecutionPreviewEditorSnapshot():
       existingStep?.type === STEP_TYPES.SCRIPT
         ? existingStep
         : { type: STEP_TYPES.SCRIPT, script: "" };
+    const { properties, clearProperties } = getScriptStepPropertyUpdate({
+      env: editor.scriptEnv,
+      secrets: editor.properties.secrets,
+      errorBehavior: editor.properties.errorBehavior,
+      timeoutSec: editor.scriptTimeoutSec,
+      onPass: editor.scriptOnPass,
+      onFail: editor.scriptOnFail,
+      compareSource: editor.scriptCompareSource,
+      operator: editor.scriptOperator,
+      expected: editor.scriptExpected,
+      ignoreCase: editor.scriptIgnoreCase,
+      executionMode: editor.scriptExecutionMode,
+      shell: editor.scriptShell,
+      color: editor.properties.color,
+      enabled: editor.stepEnabled,
+      promptName: editor.promptName,
+    });
     const step: ScriptStep = {
       ...base,
-      type: STEP_TYPES.SCRIPT,
+      ...properties,
       script: editor.scriptCommand,
       ...(editor.promptName.trim() ? { name: editor.promptName.trim() } : {}),
-      ...(editor.scriptTimeoutSec !== undefined
-        ? { timeoutSec: editor.scriptTimeoutSec }
-        : {}),
-      ...(editor.scriptOnPass !== CONDITION_ACTIONS.CONTINUE
-        ? { onPass: editor.scriptOnPass as ScriptStep["onPass"] }
-        : {}),
-      ...(editor.scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW
-        ? { onFail: editor.scriptOnFail as ScriptStep["onFail"] }
-        : {}),
-      ...(editor.scriptCompareSource !== DEFAULT_COMPARE_SOURCE
-        ? {
-            compareSource:
-              editor.scriptCompareSource as ScriptStep["compareSource"],
-          }
-        : {}),
-      ...(editor.scriptOperator !== DEFAULT_SCRIPT_OPERATOR
-        ? { operator: editor.scriptOperator as ScriptStep["operator"] }
-        : {}),
-      ...(editor.scriptExpected.trim()
-        ? { expected: editor.scriptExpected }
-        : {}),
-      ...(editor.scriptIgnoreCase ? { ignoreCase: true } : {}),
-      ...(editor.stepEnabled ? {} : { enabled: false }),
     };
-    if (!editor.promptName.trim()) delete step.name;
-    if (editor.stepEnabled) delete step.enabled;
-    if (editor.properties.executionMode === undefined) {
-      delete step.executionMode;
-    } else {
-      step.executionMode = editor.properties.executionMode;
-    }
-    if (editor.properties.errorBehavior === undefined) {
-      delete step.errorBehavior;
-    } else {
-      step.errorBehavior = editor.properties.errorBehavior;
+    for (const property of clearProperties) {
+      delete step[property as keyof ScriptStep];
     }
     return {
       step,

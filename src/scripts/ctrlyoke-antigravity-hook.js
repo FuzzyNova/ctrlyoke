@@ -35,6 +35,7 @@
  */
 
 const fs = require("fs");
+const path = require("path");
 const {
   initializeLogger,
   readStdinJson,
@@ -78,6 +79,7 @@ function getLogicalEvent(nativeEvent) {
 function main() {
   const notifyDir = process.argv[2];
   const nativeEventArg = process.argv[3];
+  const registeredWorkspaceRoot = process.argv[4];
   const debugLog = initializeLogger(SCRIPT_NAME, notifyDir);
 
   debugLog("🚀 Antigravity hook script invoked", {
@@ -85,6 +87,7 @@ function main() {
     argvLength: process.argv.length,
     cwd: process.cwd(),
     nativeEventArg,
+    registeredWorkspaceRoot,
   });
 
   requireNotifyDir(SCRIPT_PREFIX, debugLog);
@@ -92,9 +95,36 @@ function main() {
   debugLog("📁 Hook configuration", {
     notifyDir,
     nativeEventArg,
+    registeredWorkspaceRoot,
   });
 
   readStdinJson(SCRIPT_PREFIX, debugLog, (hookInput) => {
+    const payloadWorkspacePaths = Array.isArray(hookInput.workspacePaths)
+      ? hookInput.workspacePaths
+      : [];
+    const normalizeWorkspacePath = (workspacePath) => {
+      const normalized = path.resolve(workspacePath);
+      return process.platform === "win32"
+        ? normalized.toLowerCase()
+        : normalized;
+    };
+    if (
+      !registeredWorkspaceRoot ||
+      !payloadWorkspacePaths.some(
+        (workspacePath) =>
+          typeof workspacePath === "string" &&
+          normalizeWorkspacePath(workspacePath) ===
+            normalizeWorkspacePath(registeredWorkspaceRoot)
+      )
+    ) {
+      debugLog("⏭️ Workspace mismatch — emitting {} and exiting", {
+        registeredWorkspaceRoot,
+        payloadWorkspacePaths,
+      });
+      process.stdout.write("{}");
+      process.exit(0);
+    }
+
     // agy does not put the event name in the payload — trust argv[3], falling
     // back to any payload field for forward-compat.
     const hookEvent =
