@@ -81,6 +81,16 @@ suite("QwenTrustedHooksTracker", () => {
     assert.deepStrictEqual(trustFile[otherWorkspace], [":other-hook"]);
   });
 
+  test("reuses the workspace trust entry for env hooks across steps", async () => {
+    const command =
+      ':node "extension/out/scripts/ctrlyoke-hook-run.js" "state/temp/hook-environments/user-hook-env-run-123.json" hook-0 stop YQ==';
+
+    await tracker().registerWorkflow("run-123-step-0", workspaceRoot, [], [command]);
+    await tracker().registerWorkflow("run-123-step-1", workspaceRoot, [], [command]);
+
+    assert.deepStrictEqual((await readTrustFile())[workspaceRoot], [command]);
+  });
+
   test("reference-counts ctrlyoke keys by workflow key while retaining trust", async () => {
     const qwenTracker = tracker();
     await qwenTracker.registerWorkflow("wf-a", workspaceRoot, [":shared"]);

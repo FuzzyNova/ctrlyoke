@@ -162,6 +162,43 @@ suite("UserHookEnvironment", () => {
     }
   });
 
+  test("uses a stable run-scoped environment file when requested", () => {
+    const hooks = [
+      { event: "stop" as const, command: "echo hook", env: { TOKEN: "value" } },
+    ];
+    const first = prepareUserHookEnvironments({
+      harnessId: HARNESS_IDS.QWEN_CLI,
+      extensionPath,
+      hookTempDirectory: os.tmpdir(),
+      promptIndex: 0,
+      stableFileStem: "workflow-run-123",
+      hooks,
+    });
+    const nextStep = prepareUserHookEnvironments({
+      harnessId: HARNESS_IDS.QWEN_CLI,
+      extensionPath,
+      hookTempDirectory: os.tmpdir(),
+      promptIndex: 1,
+      stableFileStem: "workflow-run-123",
+      hooks,
+    });
+    const concurrentRun = prepareUserHookEnvironments({
+      harnessId: HARNESS_IDS.QWEN_CLI,
+      extensionPath,
+      hookTempDirectory: os.tmpdir(),
+      promptIndex: 0,
+      stableFileStem: "workflow-run-456",
+      hooks,
+    });
+
+    assert.strictEqual(first.tempFilePath, nextStep.tempFilePath);
+    assert.notStrictEqual(first.tempFilePath, concurrentRun.tempFilePath);
+    assert.strictEqual(
+      first.hooks?.[0].command,
+      nextStep.hooks?.[0].command
+    );
+  });
+
   test("launcher passes stdin and stdout through and returns the command exit code", async () => {
     const tempDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-hook-launcher-")

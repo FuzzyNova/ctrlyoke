@@ -37,13 +37,17 @@ export function prepareUserHookEnvironments(params: {
   extensionPath: string;
   hookTempDirectory: string;
   promptIndex: number;
+  /** Stable run identity for harnesses that persist hook commands as trust keys. */
+  stableFileStem?: string;
 }): PreparedUserHookEnvironments {
   const { hooks } = params;
   if (!hooks || !hasUserHookEnvironment(hooks)) {
     return { hooks };
   }
 
-  const fileName = `user-hook-env-${params.promptIndex}-${crypto.randomUUID()}.json`;
+  const fileName = params.stableFileStem
+    ? `user-hook-env-${params.stableFileStem}.json`
+    : `user-hook-env-${params.promptIndex}-${crypto.randomUUID()}.json`;
   const tempFilePath = path.join(params.hookTempDirectory, fileName);
   const launcherPath = path.join(
     params.extensionPath,
