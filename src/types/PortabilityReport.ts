@@ -25,6 +25,7 @@ import type {
 import {
   analyzeCompatibility,
   enumerateCompatibilityTargets,
+  getHookPropertyPointer,
   retargetCompatibilityTargets,
   type CompatibilityExecutionTarget,
   type CompatibilityTargetResolver,
@@ -267,14 +268,14 @@ function collectWorkspaceSideEffects(
         if (!HOOK_EVENT_ORDER.includes(event) || !state) {
           continue;
         }
-        const hookSource = target.resolved.sources.hooks;
+        const origin = target.resolved.hookOrigins?.[hookIndex];
         addUsedCapability(
           uses,
           event,
           state,
           target,
-          hookSource,
-          getHookPointer(target, hookSource, hookIndex)
+          origin?.tier ?? target.resolved.sources.hooks,
+          origin ? getHookPropertyPointer(target.consumer, origin) : undefined
         );
       }
     }
@@ -385,22 +386,6 @@ function getPermissionPointer(
   return sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
     ? `${base}/toolPermissions/${key}`
     : `/toolPermissions/${key}`;
-}
-
-function getHookPointer(
-  target: CompatibilityExecutionTarget,
-  sourceTier: CompatibilityDiagnostic["sourceTier"],
-  hookIndex: number
-): string | undefined {
-  const base =
-    target.consumer.kind === FINAL_STEP_PHASES.QUEUE
-      ? `/steps/${target.consumer.stepIndex}`
-      : "/finalStep";
-  return sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
-    ? `${base}/hooks/${hookIndex}/event`
-    : sourceTier === COMPATIBILITY_SOURCE_TIERS.WORKFLOW
-      ? `/hooks/${hookIndex}/event`
-      : undefined;
 }
 
 function getMcpPointer(

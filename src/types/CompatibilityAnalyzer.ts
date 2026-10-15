@@ -18,7 +18,10 @@ import {
 } from "./DashboardConstants";
 import type { PromptFile, PromptStep, WorkflowStep } from "./CtrlYokeTypes";
 import { parseAllFileReferences } from "../utils/FileReferenceParser";
-import type { ResolvedExecutionTarget } from "./ExecutionPropertyResolver";
+import type {
+  HookOrigin,
+  ResolvedExecutionTarget,
+} from "./ExecutionPropertyResolver";
 import type {
   CompatibilityConsumerTarget,
   CompatibilityDiagnostic,
@@ -395,8 +398,9 @@ function analyzeConfiguredHooks(
     return;
   }
 
-  const sourceTier = target.resolved.sources.hooks;
   for (const [hookIndex, hook] of hooks.entries()) {
+    const origin = target.resolved.hookOrigins?.[hookIndex];
+    const sourceTier = origin?.tier ?? target.resolved.sources.hooks;
     const event = hook.event as HookEvent;
     if (!HOOK_EVENT_ORDER.includes(event)) {
       continue;
@@ -418,7 +422,7 @@ function analyzeConfiguredHooks(
         createHookDiagnostic(
           COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED,
           base,
-          hookIndex,
+          origin,
           declarations?.[event]?.caveatCode
         )
       );
@@ -427,7 +431,7 @@ function analyzeConfiguredHooks(
         createHookDiagnostic(
           COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL,
           base,
-          hookIndex,
+          origin,
           declarations?.[event]?.caveatCode
         )
       );
@@ -441,7 +445,7 @@ function analyzeConfiguredHooks(
         createHookDiagnostic(
           COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED,
           base,
-          hookIndex
+          origin
         )
       );
     }
@@ -457,19 +461,12 @@ function createHookDiagnostic(
     sourceTier?: ResolvedExecutionTarget["sources"]["hooks"];
     state: EffectiveCapabilityState;
   },
-  hookIndex: number,
+  origin: HookOrigin | undefined,
   caveatCode?: CompatibilityCaveatCode
 ): CompatibilityDiagnostic {
-  const pointerBase =
-    base.consumer.kind === FINAL_STEP_PHASES.QUEUE
-      ? `/steps/${base.consumer.stepIndex}`
-      : "/finalStep";
-  const propertyPointer =
-    base.sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
-      ? `${pointerBase}/hooks/${hookIndex}/event`
-      : base.sourceTier === COMPATIBILITY_SOURCE_TIERS.WORKFLOW
-        ? `/hooks/${hookIndex}/event`
-        : undefined;
+  const propertyPointer = origin
+    ? getHookPropertyPointer(base.consumer, origin)
+    : undefined;
   return {
     code,
     severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
@@ -585,6 +582,23 @@ function diagnosticsForPermissionField(
   }
 
   return diagnostics;
+}
+
+/** Resolve the JSON pointer for an effective hook's authored event field. */
+export function getHookPropertyPointer(
+  consumer: CompatibilityConsumerTarget,
+  origin: HookOrigin
+): string | undefined {
+  if (origin.tier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS) {
+    return undefined;
+  }
+  const base =
+    consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${consumer.stepIndex}`
+      : "/finalStep";
+  return origin.tier === COMPATIBILITY_SOURCE_TIERS.PROMPT
+    ? `${base}/hooks/${origin.index}/event`
+    : `/hooks/${origin.index}/event`;
 }
 
 function createDiagnostic(

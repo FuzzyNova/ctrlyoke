@@ -70,6 +70,13 @@ export interface ExecutionResolutionContext {
 export interface ResolvedExecutionTarget {
   properties: ResolvedProperties;
   sources: Partial<Record<keyof ResolvedProperties, ResolutionSource>>;
+  /** Origin of each effective hook, in the same order as `properties.hooks`. */
+  hookOrigins?: HookOrigin[];
+}
+
+export interface HookOrigin {
+  tier: ResolutionSource;
+  index: number;
 }
 
 /**
@@ -208,35 +215,62 @@ function resolveHooks(
   prompt: PromptStep,
   workflow: PromptFile,
   defaults: ExecutionPropertyDefaults
-): { value: UserHookConfig[] | null; source: ResolutionSource } {
+): {
+  value: UserHookConfig[] | null;
+  source: ResolutionSource;
+  origins: HookOrigin[];
+} {
   if (prompt.hooks === null) {
-    return { value: null, source: "prompt" };
+    return { value: null, source: "prompt", origins: [] };
   }
   if (prompt.hooks === undefined && workflow.hooks === null) {
-    return { value: null, source: "workflow" };
+    return { value: null, source: "workflow", origins: [] };
   }
 
+  const workflowTier =
+    workflow.hooks !== undefined && workflow.hooks !== null
+      ? RESOLUTION_SOURCES.WORKFLOW
+      : RESOLUTION_SOURCES.DEFAULTS;
   const workflowHooks = workflow.hooks ?? defaults.hooks ?? [];
   if (prompt.hooks === undefined || prompt.hooks.length === 0) {
     return {
       value: workflowHooks,
-      source: workflow.hooks !== undefined ? "workflow" : "defaults",
+      source: workflowTier,
+      origins: workflowHooks.map((_, index) => ({
+        tier: workflowTier,
+        index,
+      })),
     };
   }
 
-  const eventMap = new Map<UserHookConfig["event"], UserHookConfig[]>();
-  for (const hook of workflowHooks) {
+  const eventMap = new Map<
+    UserHookConfig["event"],
+    { hook: UserHookConfig; origin: HookOrigin }[]
+  >();
+  for (const [index, hook] of workflowHooks.entries()) {
     if (!eventMap.has(hook.event)) eventMap.set(hook.event, []);
-    eventMap.get(hook.event)!.push(hook);
+    eventMap.get(hook.event)!.push({
+      hook,
+      origin: { tier: workflowTier, index },
+    });
   }
   const promptEvents = new Set(prompt.hooks.map((hook) => hook.event));
   for (const event of promptEvents) {
     eventMap.set(
       event,
-      prompt.hooks.filter((hook) => hook.event === event)
+      prompt.hooks.flatMap((hook, index) =>
+        hook.event === event
+          ? [{ hook, origin: { tier: RESOLUTION_SOURCES.PROMPT, index } }]
+          : []
+      )
     );
   }
-  return { value: [...eventMap.values()].flat(), source: "prompt" };
+  const entries = [...eventMap.values()].flat();
+  return {
+    value: entries.map(({ hook }) => hook),
+    source: RESOLUTION_SOURCES.PROMPT,
+    origins: entries.map(({ origin }) => origin),
+  };
 }
 
 export function resolveSessionId(
@@ -467,6 +501,7 @@ export function resolveExecutionProperties(
 
   return {
     properties,
+    hookOrigins: hooks.origins,
     sources: {
       harness: harness.source,
       model: model.source,

@@ -178,6 +178,56 @@ function mixedWorkflow(overrides: Partial<PromptFile> = {}): PromptFile {
 }
 
 suite("CompatibilityAnalyzer", () => {
+  test("points merged workflow and step hook diagnostics at their authored fields", () => {
+    const workflow: PromptFile = {
+      hooks: [
+        { event: "error", command: "workflow A" },
+        { event: "sessionStart", command: "workflow B" },
+      ],
+      steps: [
+        {
+          prompt: "Target",
+          hooks: [{ event: "sessionStart", command: "step B prime" }],
+        },
+      ],
+    };
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: installed(
+          HARNESS_IDS.CODEX_CLI,
+          true,
+          "partial",
+          "verified"
+        ),
+      })
+    );
+
+    assert.deepStrictEqual(
+      diagnostics
+        .filter((diagnostic) =>
+          ["error", "sessionStart"].includes(diagnostic.capability)
+        )
+        .map(({ capability, sourceTier, propertyPointer }) => ({
+          capability,
+          sourceTier,
+          propertyPointer,
+        })),
+      [
+        {
+          capability: "error",
+          sourceTier: "workflow",
+          propertyPointer: "/hooks/0/event",
+        },
+        {
+          capability: "sessionStart",
+          sourceTier: "prompt",
+          propertyPointer: "/steps/0/hooks/0/event",
+        },
+      ]
+    );
+  });
+
   test("resolves mixed harness consumers independently", () => {
     const diagnostics = analyze(
       mixedWorkflow(),

@@ -1388,6 +1388,57 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(startHooks[0].command, "node notify.js");
     });
 
+    test("records each merged hook's original tier and index", () => {
+      const context = {
+        defaults: {
+          harness: HARNESS_IDS.COPILOT_CLI,
+          modelsByHarness: {},
+          additionalArgsByHarness: {},
+          executionMode: EXECUTION_MODES.INTERACTIVE,
+          resumeSession: false,
+        },
+        hostCanProvidePty: false,
+      } as const;
+      const resolved = resolveExecutionProperties(
+        {
+          prompt: "test",
+          hooks: [{ event: "sessionStart", command: "step hook" }],
+        },
+        {
+          steps: [],
+          hooks: [
+            { event: "error", command: "workflow A" },
+            { event: "sessionStart", command: "workflow B" },
+          ],
+        },
+        context
+      );
+
+      assert.deepStrictEqual(resolved.properties.hooks, [
+        { event: "error", command: "workflow A" },
+        { event: "sessionStart", command: "step hook" },
+      ]);
+      assert.deepStrictEqual(resolved.hookOrigins, [
+        { tier: "workflow", index: 0 },
+        { tier: "prompt", index: 0 },
+      ]);
+
+      const fromDefaults = resolveExecutionProperties(
+        { prompt: "test" },
+        { steps: [] },
+        {
+          ...context,
+          defaults: {
+            ...context.defaults,
+            hooks: [{ event: "error", command: "default hook" }],
+          },
+        }
+      );
+      assert.deepStrictEqual(fromDefaults.hookOrigins, [
+        { tier: "defaults", index: 0 },
+      ]);
+    });
+
     test("should support multiple hooks on the same event", () => {
       const prompt: PromptStep = {
         prompt: "test",
