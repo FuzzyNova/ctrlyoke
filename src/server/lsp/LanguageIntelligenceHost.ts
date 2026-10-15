@@ -362,7 +362,7 @@ export class LanguageIntelligenceHost {
       await this.closeWarmupDocuments(result.value);
       for (const proxy of [...result.value.proxies]) {
         try {
-          proxy.dispose();
+          proxy.invalidateSession();
         } catch {
           /* one broken client must not prevent invalidating the rest */
         }

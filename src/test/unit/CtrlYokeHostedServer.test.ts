@@ -21,6 +21,7 @@ import {
   HARNESS_VERSION_STATUSES,
   MESSAGE_TYPES,
   BROWSER_NOTIFICATION_MODES,
+  LANGUAGE_SERVER_REQUEST_ORIGINS,
   THEME_KINDS,
   THEME_KIND_CSS_VAR,
   VSCODE_THEME_BODY_CLASSES,
@@ -41,9 +42,13 @@ import {
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 import { NoopFileWatcherFactory } from "../helpers/NoopFileWatcherFactory";
+import { InMemoryLanguageServerBackend } from "../helpers/InMemoryLanguageServerBackend";
+import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
 
-function createHostedServer(options: Partial<HostedServerOptions> = {}) {
-  return new CtrlYokeHostedServer({
+function hostedServerOptions(
+  options: Partial<HostedServerOptions> = {}
+): HostedServerOptions {
+  return {
     hub: new DashboardBroadcastHub(),
     endpoint: {} as never,
     getOrchestrator: (() => ({})) as never,
@@ -65,12 +70,24 @@ function createHostedServer(options: Partial<HostedServerOptions> = {}) {
     },
     fileWatcherFactory: new NoopFileWatcherFactory(),
     ...options,
-  });
+  };
+}
+
+function createHostedServer(options: Partial<HostedServerOptions> = {}) {
+  return new CtrlYokeHostedServer(hostedServerOptions(options));
 }
 
 class TestableHostedServer extends CtrlYokeHostedServer {
   allowClient(remoteAddress: string | undefined): Promise<boolean> {
     return this.isClientAllowed(remoteAddress);
+  }
+}
+
+class RemoteRequestTestHostedServer extends CtrlYokeHostedServer {
+  protected override isClientAllowed(
+    _remoteAddress: string | undefined
+  ): Promise<boolean> {
+    return super.isClientAllowed("192.0.2.1");
   }
 }
 
@@ -164,6 +181,39 @@ suite("CtrlYokeHostedServer remote access trial", () => {
     assert.strictEqual(await server.allowClient("192.0.2.1"), true);
     assert.strictEqual(trialStarted, true);
     assert.strictEqual(beginCalls, 1);
+  });
+
+  test("gates token-authenticated HTTP routes on remote access entitlement", async () => {
+    for (const [allowed, expectedStatus] of [
+      [false, 403],
+      [true, 200],
+    ] as const) {
+      const workspaceRoot = makeTempDir("ctrlyoke-hosted-http-entitlement-");
+      const token = "0123456789abcdef0123456789abcdef";
+      const server = new RemoteRequestTestHostedServer(
+        hostedServerOptions({
+          workspaceRoot,
+          token,
+          remoteAccess: {
+            canUse: async () => true,
+            begin: async () => allowed,
+            onBlocked: () => undefined,
+          },
+        })
+      );
+      try {
+        const serverUrl = await server.listen();
+        if (!serverUrl) throw new Error("Hosted server did not start");
+        const response = await sendGetRequest(
+          Number(new URL(serverUrl).port),
+          `/manifest.webmanifest?token=${token}`
+        );
+        assert.strictEqual(response.statusCode, expectedStatus);
+      } finally {
+        server.dispose();
+        removeTempDir(workspaceRoot);
+      }
+    }
   });
 });
 
@@ -807,6 +857,54 @@ suite("CtrlYokeHostedServer WebSocket security", () => {
       assert.strictEqual(closeCode, 4404);
       assert.strictEqual(wasConnectionObserved(), false);
     });
+  });
+
+  test("closes connected LSP sockets with going-away on server disposal", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-hosted-lsp-dispose-");
+    fs.writeFileSync(
+      path.join(workspaceRoot, "example.ts"),
+      "const value = 1;\n"
+    );
+    const backend = new InMemoryLanguageServerBackend(workspaceRoot);
+    const languageIntelligenceHost = new LanguageIntelligenceHost({
+      backend,
+      workspaceRoot,
+      namedWorkspaceRoots: [],
+      isWorkspaceTrusted: () => true,
+    });
+    const token = "0123456789abcdef0123456789abcdef";
+    const server = createHostedServer({
+      workspaceRoot,
+      token,
+      languageIntelligenceHost,
+    });
+    try {
+      const lookup = await languageIntelligenceHost.lookupSession(
+        "example.ts",
+        LANGUAGE_SERVER_REQUEST_ORIGINS.EDITOR
+      );
+      assert.ok(lookup.session);
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const lspUrl = new URL(serverUrl);
+      lspUrl.protocol = "ws:";
+      lspUrl.pathname = "/ws/lsp";
+      lspUrl.searchParams.set("server", lookup.session.id);
+      lspUrl.searchParams.set("token", token);
+      const ws = new WebSocket(lspUrl);
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", resolve);
+        ws.once("error", reject);
+      });
+      const closed = new Promise<number>((resolve) => {
+        ws.once("close", (code) => resolve(code));
+      });
+      server.dispose();
+      assert.strictEqual(await closed, 1001);
+    } finally {
+      server.dispose();
+      removeTempDir(workspaceRoot);
+    }
   });
 
   test("token-gates language-server session lookup", async () => {

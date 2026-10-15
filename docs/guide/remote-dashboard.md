@@ -20,11 +20,11 @@ view and a remote control. To serve a workspace without VS Code, use
 | Custom app icon colors                                  |      | Pro only     |
 
 Each installation gets a one-time **14-day remote-access trial**. The 14 days
-start the first time a browser or phone on another device connects, not when
-you start the server or switch **Bind address** to all interfaces. When the
-trial ends without a Pro license, the next server start binds to localhost
-only, and the Server tab says so. The localhost dashboard keeps working. See
-[ctrlyoke Pro](/pro/) for licensing.
+start the first time a browser or phone on another device connects, or makes an
+authenticated HTTP request, not when you start the server or switch **Bind
+address** to all interfaces. When the trial ends without a Pro license, the
+next server start binds to localhost only, and the Server tab says so. The
+localhost dashboard keeps working. See [ctrlyoke Pro](/pro/) for licensing.
 
 ## Start the server
 

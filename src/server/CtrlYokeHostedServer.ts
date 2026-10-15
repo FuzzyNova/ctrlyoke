@@ -1253,15 +1253,27 @@ export class CtrlYokeHostedServer
     });
     // Token is required for the HTML entry point and all API routes.
     const requireToken: express.RequestHandler = (req, res, next) => {
-      if (this.requestHasValidToken(req)) return next();
-      res.status(401).send("Unauthorized");
+      if (!this.requestHasValidToken(req)) {
+        res.status(401).send("Unauthorized");
+        return;
+      }
+      void this.isClientAllowed(req.socket.remoteAddress).then((allowed) => {
+        if (allowed) next();
+        else res.status(403).send("Forbidden");
+      });
     };
     // Same check, but for browser-navigated page routes (entry HTML, SPA fallback)
     // rather than JSON API routes — these get the themed landing page instead of a
     // bare "Unauthorized" string, since a human is looking at this in a browser tab.
     const requireTokenForPage: express.RequestHandler = (req, res, next) => {
-      if (this.requestHasValidToken(req)) return next();
-      this.sendUnauthorizedPage(res, this.getThemeOverride(req));
+      if (!this.requestHasValidToken(req)) {
+        this.sendUnauthorizedPage(res, this.getThemeOverride(req));
+        return;
+      }
+      void this.isClientAllowed(req.socket.remoteAddress).then((allowed) => {
+        if (allowed) next();
+        else res.status(403).send("Forbidden");
+      });
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);
@@ -3318,6 +3330,9 @@ export class CtrlYokeHostedServer
     for (const ws of this.connections) ws.close();
     this.connections.clear();
     this.wss.close();
+    for (const ws of this.lspWss.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.close(1001, "going away");
+    }
     this.lspWss.close();
     this.httpServer.close();
   }

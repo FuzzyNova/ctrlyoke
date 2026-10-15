@@ -5,6 +5,7 @@ import { suite, test, setup, teardown } from "mocha";
 import { LanguageIntelligenceHost } from "../../server/lsp/LanguageIntelligenceHost";
 import {
   LANGUAGE_SERVER_REQUEST_ORIGINS,
+  LSP_SESSION_INVALIDATION_CLOSE,
   LSP_SESSION_LOOKUP_REASONS,
 } from "../../types/DashboardConstants";
 import { InMemoryLanguageServerBackend } from "../helpers/InMemoryLanguageServerBackend";
@@ -38,8 +39,8 @@ suite("LanguageIntelligenceHost ctrlyoke-file exclusion", () => {
     });
   });
 
-  teardown(() => {
-    host.dispose();
+  teardown(async () => {
+    await host.dispose();
     removeTempDir(workspaceRoot);
   });
 
@@ -75,5 +76,28 @@ suite("LanguageIntelligenceHost ctrlyoke-file exclusion", () => {
     await host.openWarmupDocument("flow.ctrlyoke.yaml", "yaml", ORIGIN);
     assert.deepStrictEqual(backend.notifications, []);
     assert.deepStrictEqual(backend.requests, []);
+  });
+
+  test("invalidates active proxies when the host is disposed", async () => {
+    const lookup = await host.lookupSession("plain.ts", ORIGIN);
+    assert.ok(lookup.session);
+    let invalidation: { code: number; reason: string } | undefined;
+    const proxy = await host.createProxy(
+      lookup.session.id,
+      () => undefined,
+      async () => true,
+      undefined,
+      (code, reason) => {
+        invalidation = { code, reason };
+      }
+    );
+    assert.ok(proxy);
+
+    await host.dispose();
+
+    assert.deepStrictEqual(invalidation, {
+      code: LSP_SESSION_INVALIDATION_CLOSE.CODE,
+      reason: LSP_SESSION_INVALIDATION_CLOSE.REASON,
+    });
   });
 });
