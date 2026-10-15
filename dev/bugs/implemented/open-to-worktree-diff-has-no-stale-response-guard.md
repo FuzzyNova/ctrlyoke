@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/store/workspaceViewerStore.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -40,3 +40,7 @@ Add two store tests:
 
 - Start two `openToWorktreeDiff` calls with deferred mocks, resolve them out of order, and assert that the later request's label and files win.
 - Call `selectDiff` while an `openToWorktreeDiff` call is pending, and assert that the single-file selection is not overwritten when the pending call resolves.
+
+## Decision
+
+Request sequences invalidate stale diff responses, with selected-path checks as a store-level backstop.

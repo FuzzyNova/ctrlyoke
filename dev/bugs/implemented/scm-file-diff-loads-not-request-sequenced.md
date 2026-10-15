@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/components/workspace-viewer/WorkspaceSourceControlPane.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -32,3 +32,7 @@ Add a request-sequence ref to `selectFileDiff`, following the explorer pane's `f
 Optionally, have `setDiffData` take the path and ignore responses for a path that is no longer selected, as a store-level backstop.
 
 Add a Vitest test that resolves two `workspaceDiff` promises out of order and asserts the store holds the later file's content and that `diffLoading` stays true until the latest request settles.
+
+## Decision
+
+Request sequences invalidate stale diff responses, with selected-path checks as a store-level backstop.

@@ -266,7 +266,7 @@ interface WorkspaceViewerActions {
   setSourceControlLoading(loading: boolean): void;
   selectDiff(path: string | null): void;
   clearDiff(): void;
-  setDiffData(response: WorkspaceScmDiffResponse): void;
+  setDiffData(path: string, response: WorkspaceScmDiffResponse): void;
   setDiffLoading(loading: boolean): void;
   setCommitMessage(msg: string): void;
   setCommitting(v: boolean): void;
@@ -413,6 +413,8 @@ const INITIAL_STATE: WorkspaceViewerState = {
 // ============================================================================
 // Store
 // ============================================================================
+
+let worktreeDiffRequestSeq = 0;
 
 export const useWorkspaceViewerStore = create<
   WorkspaceViewerState & WorkspaceViewerActions
@@ -758,6 +760,7 @@ export const useWorkspaceViewerStore = create<
       },
 
       selectDiff(path) {
+        worktreeDiffRequestSeq += 1;
         set({
           selectedDiffPath: path,
           fileHistoryPath: null,
@@ -766,6 +769,10 @@ export const useWorkspaceViewerStore = create<
           pendingFileHistory: null,
           diffPayloadKind: null,
           diffImage: null,
+          diffOldContent: "",
+          diffNewContent: "",
+          diffLanguage: undefined,
+          diffKind: null,
           diffFiles: null,
           diffNonTextEntries: [],
           diffRefLabel: null,
@@ -776,6 +783,7 @@ export const useWorkspaceViewerStore = create<
       },
 
       clearDiff() {
+        worktreeDiffRequestSeq += 1;
         set({
           selectedDiffPath: null,
           diffOldContent: "",
@@ -799,7 +807,8 @@ export const useWorkspaceViewerStore = create<
         });
       },
 
-      setDiffData(response) {
+      setDiffData(path, response) {
+        if (get().selectedDiffPath !== path) return;
         const isText = response.payloadKind === DIFF_PAYLOAD_KINDS.TEXT;
         set({
           diffOldContent: isText ? response.oldContent : "",
@@ -930,6 +939,7 @@ export const useWorkspaceViewerStore = create<
       // --- Git-ref diff (browser multi-file) ---
 
       openToGitRef(ref) {
+        worktreeDiffRequestSeq += 1;
         set({
           isOpen: true,
           activeTab: "sourceControl",
@@ -945,6 +955,7 @@ export const useWorkspaceViewerStore = create<
       },
 
       async openToWorktreeDiff(sourceCheckoutRoot, baseCommit, branchName) {
+        const requestSeq = ++worktreeDiffRequestSeq;
         set({
           isOpen: true,
           activeTab: "sourceControl",
@@ -967,6 +978,7 @@ export const useWorkspaceViewerStore = create<
             baseCommit,
             branchName
           );
+          if (requestSeq !== worktreeDiffRequestSeq) return;
           set({
             diffFiles: parseUnifiedDiffToFiles(unifiedDiff),
             diffNonTextEntries: nonTextEntries ?? [],
@@ -974,6 +986,7 @@ export const useWorkspaceViewerStore = create<
             diffRefLoading: false,
           });
         } catch {
+          if (requestSeq !== worktreeDiffRequestSeq) return;
           set({ diffRefLoading: false });
         }
       },

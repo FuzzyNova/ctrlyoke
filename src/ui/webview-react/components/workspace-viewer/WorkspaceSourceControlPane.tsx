@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { MESSAGE_TYPES } from "@/types/messages";
 import {
@@ -122,6 +122,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const [pendingDiscard, setPendingDiscard] =
     useState<PendingDiscardAction | null>(null);
   const [dontWarnAgain, setDontWarnAgain] = useState(false);
+  const diffRequestSeqRef = useRef(0);
 
   const loadStatus = useCallback(async (): Promise<SourceControlFile[]> => {
     setSourceControlLoading(true);
@@ -192,16 +193,22 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
   const selectFileDiff = useCallback(
     async (filePath: string) => {
+      const requestSeq = ++diffRequestSeqRef.current;
+      const isCurrentRequest = () =>
+        requestSeq === diffRequestSeqRef.current &&
+        useWorkspaceViewerStore.getState().selectedDiffPath === filePath;
       selectDiff(filePath);
       setDiffLoading(true);
       if (isMobile) setMobileDiffVisible(true);
       try {
         const result = await workspaceDiff(filePath);
-        setDiffData(result);
+        if (!isCurrentRequest()) return;
+        setDiffData(filePath, result);
       } catch (err) {
+        if (!isCurrentRequest()) return;
         setScmError(String(err));
       } finally {
-        setDiffLoading(false);
+        if (isCurrentRequest()) setDiffLoading(false);
       }
     },
     [
