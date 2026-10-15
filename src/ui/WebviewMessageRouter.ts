@@ -2310,8 +2310,8 @@ export class WebviewMessageRouter {
       await reload.call(this.hostDependencies.actions);
     });
 
-    table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message, ctx) => {
-      this.settingsSync.handleUpdateGlobalSetting(
+    table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, async (message, ctx) => {
+      await this.settingsSync.handleUpdateGlobalSetting(
         message.path,
         message.value,
         message.scope,

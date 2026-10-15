@@ -1309,6 +1309,18 @@ export class WebviewSettingsSync {
     Log.error(`[WebviewSettingsSync] ${message}`, detail ?? "");
   }
 
+  private reportGlobalSettingFailure(error: unknown): void {
+    const message = "Could not update the global setting.";
+    const detail = getErrorMessage(error);
+    notifyUserFeedback(
+      this.getOrchestrator()?.getUserFeedbackSink?.(),
+      USER_FEEDBACK_SEVERITY.ERROR,
+      message,
+      detail
+    );
+    Log.error(`[WebviewSettingsSync] ${message}`, detail);
+  }
+
   async handleUpdateGlobalSetting(
     path: string,
     value: unknown,
@@ -1347,41 +1359,67 @@ export class WebviewSettingsSync {
       scope === CONFIG_SCOPE.WORKSPACE
         ? ConfigurationUtils.getTrustedExternalRootsByScope().workspace
         : [];
-    await configService.set(path, value, scope);
-    if (
-      path === CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS &&
-      scope === CONFIG_SCOPE.WORKSPACE &&
-      Array.isArray(value)
-    ) {
-      const currentCanonicalRoots = new Set(
-        currentWorkspaceRoots.map((root) =>
-          ExternalRootsTrustStore.canonicalizeRoot(root)
-        )
-      );
-      const addedRoots = value.filter(
-        (root): root is string =>
-          typeof root === "string" &&
-          root.trim().length > 0 &&
-          !currentCanonicalRoots.has(
+    let writeFailed = false;
+    try {
+      await configService.set(path, value, scope);
+      if (
+        path === CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS &&
+        scope === CONFIG_SCOPE.WORKSPACE &&
+        Array.isArray(value)
+      ) {
+        const currentCanonicalRoots = new Set(
+          currentWorkspaceRoots.map((root) =>
             ExternalRootsTrustStore.canonicalizeRoot(root)
           )
-      );
-      await this.recordInteractiveExternalRootDecision(
-        scope,
-        addedRoots,
-        TRUST_DECISIONS.ALLOW
+        );
+        const addedRoots = value.filter(
+          (root): root is string =>
+            typeof root === "string" &&
+            root.trim().length > 0 &&
+            !currentCanonicalRoots.has(
+              ExternalRootsTrustStore.canonicalizeRoot(root)
+            )
+        );
+        await this.recordInteractiveExternalRootDecision(
+          scope,
+          addedRoots,
+          TRUST_DECISIONS.ALLOW
+        );
+      }
+    } catch (error) {
+      writeFailed = true;
+      this.reportGlobalSettingFailure(error);
+    }
+
+    let reloadFailed = false;
+    try {
+      // A failed write may leave optimistic/local client state behind. Always
+      // reload the persisted settings, including when an external-file watcher
+      // has already requested a refresh; this path does not report a second toast.
+      await this.handleGlobalSettingsLoadRequest(postMessage);
+    } catch (error) {
+      reloadFailed = true;
+      if (!writeFailed) {
+        this.reportGlobalSettingFailure(error);
+      } else {
+        Log.error(
+          "[WebviewSettingsSync] Could not reload global settings after a failed write.",
+          getErrorMessage(error)
+        );
+      }
+    }
+
+    if (!writeFailed && !reloadFailed) {
+      this.emitMessage(
+        {
+          type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
+          path,
+          value,
+          source: scope,
+        },
+        postMessage
       );
     }
-    await this.handleGlobalSettingsLoadRequest(postMessage);
-    this.emitMessage(
-      {
-        type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
-        path,
-        value,
-        source: scope,
-      },
-      postMessage
-    );
   }
 
   async handleUpdateExternalRootDecision(
