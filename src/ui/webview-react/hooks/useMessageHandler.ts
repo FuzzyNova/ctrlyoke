@@ -2155,6 +2155,7 @@ export function createMessageHandlers(
     useMcpManagerStore
       .getState()
       .setRemoteSearchResult(
+        message.requestId,
         message.servers ?? [],
         message.error,
         message.nextCursor

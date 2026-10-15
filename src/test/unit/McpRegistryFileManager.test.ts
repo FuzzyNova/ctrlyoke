@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs/promises";
+import * as fsSync from "fs";
 import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
@@ -107,6 +108,80 @@ suite("McpRegistryFileManager", () => {
         SETTING_SCOPES.WORKSPACE
       ),
       /Invalid MCP server config/
+    );
+  });
+
+  test("rejects rename collisions without changing the registry", async () => {
+    const manager = new McpRegistryFileManager(workspaceRoot);
+    const registryPath = getCtrlYokeWorkspaceMcpRegistryPath(workspaceRoot);
+    const entries = [
+      { id: "first", command: "one" },
+      { id: "taken", command: "two" },
+    ];
+    await fs.mkdir(path.dirname(registryPath), { recursive: true });
+    await fs.writeFile(registryPath, JSON.stringify(entries));
+
+    await assert.rejects(
+      manager.rename(
+        "first",
+        { id: "taken", command: "renamed" },
+        SETTING_SCOPES.WORKSPACE
+      ),
+      /already exists/
+    );
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(registryPath, "utf-8")),
+      entries
+    );
+  });
+
+  test("keeps the original entry when the atomic rename write fails", async () => {
+    const manager = new McpRegistryFileManager(workspaceRoot);
+    const registryPath = getCtrlYokeWorkspaceMcpRegistryPath(workspaceRoot);
+    const entries = [{ id: "before", command: "original" }];
+    await fs.mkdir(path.dirname(registryPath), { recursive: true });
+    await fs.writeFile(registryPath, JSON.stringify(entries));
+    const mutableFs = fsSync.promises as unknown as {
+      rename: typeof fsSync.promises.rename;
+    };
+    const originalRename = mutableFs.rename;
+    mutableFs.rename = async () => {
+      throw new Error("simulated write failure");
+    };
+    try {
+      await assert.rejects(
+        manager.rename(
+          "before",
+          { id: "after", command: "replacement" },
+          SETTING_SCOPES.WORKSPACE
+        ),
+        /simulated write failure/
+      );
+    } finally {
+      mutableFs.rename = originalRename;
+    }
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(registryPath, "utf-8")),
+      entries
+    );
+  });
+
+  test("rejects adding a server whose id is already present", async () => {
+    const manager = new McpRegistryFileManager(workspaceRoot);
+    await manager.add(
+      { id: "taken", command: "original" },
+      SETTING_SCOPES.WORKSPACE
+    );
+    await assert.rejects(
+      manager.add(
+        { id: "taken", command: "replacement" },
+        SETTING_SCOPES.WORKSPACE
+      ),
+      /already exists/
+    );
+    assert.strictEqual(
+      (await manager.readScope(SETTING_SCOPES.WORKSPACE))[0]?.command,
+      "original"
     );
   });
 

@@ -334,6 +334,67 @@ export class McpRegistryFileManager {
     }
   }
 
+  async add(server: McpServerConfig, scope: SettingWriteScope): Promise<void> {
+    if (!isMcpServerConfig(server)) {
+      throw new Error("Invalid MCP server config.");
+    }
+    const filePath = this.getRequiredScopePath(scope);
+    const requestedBefore =
+      scope === SETTING_SCOPES.WORKSPACE
+        ? await this.readWorkspaceTrustRequests()
+        : undefined;
+    await serializeMutation(filePath, async () => {
+      const next = await readRawArrayForMutation(filePath);
+      if (next.some((entry) => hasServerId(entry, server.id))) {
+        throw new Error(
+          `An MCP registry server with id "${server.id}" already exists.`
+        );
+      }
+      next.push(server);
+      await writeJsonFileAtomic(filePath, next);
+    });
+    if (requestedBefore) await this.approveNewWorkspaceServers(requestedBefore);
+  }
+
+  async rename(
+    previousId: string,
+    server: McpServerConfig,
+    scope: SettingWriteScope
+  ): Promise<void> {
+    if (!isMcpServerConfig(server)) {
+      throw new Error("Invalid MCP server config.");
+    }
+    const filePath = this.getRequiredScopePath(scope);
+    const requestedBefore =
+      scope === SETTING_SCOPES.WORKSPACE
+        ? await this.readWorkspaceTrustRequests()
+        : undefined;
+    await serializeMutation(filePath, async () => {
+      const next = await readRawArrayForMutation(filePath);
+      const previousIndex = next.findIndex((entry) =>
+        hasServerId(entry, previousId)
+      );
+      if (previousIndex < 0) {
+        throw new Error(
+          `MCP registry server "${previousId}" no longer exists.`
+        );
+      }
+      if (
+        next.some(
+          (entry, index) =>
+            index !== previousIndex && hasServerId(entry, server.id)
+        )
+      ) {
+        throw new Error(
+          `An MCP registry server with id "${server.id}" already exists.`
+        );
+      }
+      next[previousIndex] = server;
+      await writeJsonFileAtomic(filePath, next);
+    });
+    if (requestedBefore) await this.approveNewWorkspaceServers(requestedBefore);
+  }
+
   async remove(id: string, scope: SettingWriteScope): Promise<void> {
     const filePath = this.getRequiredScopePath(scope);
     await serializeMutation(filePath, async () => {

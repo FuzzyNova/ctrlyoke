@@ -2739,6 +2739,7 @@ export interface RequestMcpLocalScanMessage {
 
 export interface RequestMcpRegistrySearchMessage {
   type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH;
+  requestId: number;
   query: string;
   cursor?: string;
   updatedSince?: string;
@@ -2772,6 +2773,7 @@ export interface McpLocalScanResultMessage {
 
 export interface McpRegistrySearchResultMessage {
   type: typeof MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT;
+  requestId: number;
   servers: RegistryMcpEntry[];
   nextCursor?: string;
   error?: string;
