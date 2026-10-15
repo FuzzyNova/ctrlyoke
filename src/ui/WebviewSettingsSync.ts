@@ -57,6 +57,7 @@ import {
   WorktreeConfig,
 } from "../types/CtrlYokeTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
+import { WorkspaceInitializer } from "../core/orchestration/WorkspaceInitializer";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ServerCertificateService } from "../server/ServerCertificateService";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
@@ -351,9 +352,7 @@ export class WebviewSettingsSync {
       },
       postMessage
     );
-    this.writeCapabilities(modelOptions).catch((err) =>
-      Log.warn("[WebviewSettingsSync] Failed to write capabilities.json:", err)
-    );
+    void this.refreshCapabilitiesFile(modelOptions);
   }
 
   /**
@@ -367,9 +366,32 @@ export class WebviewSettingsSync {
       },
       postMessage
     );
-    this.writeCapabilities(this.buildModelOptions()).catch((err) =>
-      Log.warn("[WebviewSettingsSync] Failed to write capabilities.json:", err)
-    );
+    void this.refreshCapabilitiesFile();
+  }
+
+  /**
+   * Rewrite `.ctrlyoke/capabilities.json` for the external MCP server process.
+   * Never rejects: a failed write is logged, since the file is advisory.
+   *
+   * Skipped until ctrlyoke is initialized in the workspace. Harness detection
+   * and model discovery call this during every startup, including while the
+   * "Initialize ctrlyoke" prompt is still waiting for the user, so writing
+   * unconditionally created `.ctrlyoke/` in folders the user never opted into
+   * (and that folder then reads as initialized on every later activation).
+   * The INITIALIZE_WORKSPACE handler calls this again once the user approves.
+   */
+  async refreshCapabilitiesFile(
+    modelOptions: Record<string, CapabilitiesModel[]> = this.buildModelOptions()
+  ): Promise<void> {
+    const workspaceRoot = this.host.getWorkspaceRoot();
+    if (!workspaceRoot || !WorkspaceInitializer.isInitialized(workspaceRoot)) {
+      return;
+    }
+    try {
+      await this.writeCapabilities(workspaceRoot, modelOptions);
+    } catch (err) {
+      Log.warn("[WebviewSettingsSync] Failed to write capabilities.json:", err);
+    }
   }
 
   /** Publish the shared registry snapshot after a client handshake or status refresh. */
@@ -775,12 +797,12 @@ export class WebviewSettingsSync {
   /**
    * Write capabilities.json to the workspace .ctrlyoke/ directory.
    * Read by the MCP server (separate process) for harness/model validation.
+   * Callers go through {@link refreshCapabilitiesFile}, which owns the gate.
    */
   private async writeCapabilities(
+    workspaceRoot: string,
     modelOptions: Record<string, CapabilitiesModel[]>
   ): Promise<void> {
-    const workspaceRoot = this.host.getWorkspaceRoot();
-    if (!workspaceRoot) return;
     const capabilitiesPath = path.join(
       workspaceRoot,
       PATH_CONSTANTS.CTRLYOKE_DIR,

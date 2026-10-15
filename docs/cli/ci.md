@@ -119,7 +119,7 @@ Antigravity don't enforce allow and deny lists.
 ## Approvals on a fresh runner
 
 Trust decisions (external directory roots, secret grants, workspace settings that run programs) are recorded per machine, so a fresh
-runner has none. `run` exits `2` and names the missing approval. Record approvals in the job
+runner has none. With no terminal to ask in, `run` exits `2` and names the missing approval. Record approvals in the job
 before running, with `--yes`, and only for workflow files your repository controls:
 
 ```bash

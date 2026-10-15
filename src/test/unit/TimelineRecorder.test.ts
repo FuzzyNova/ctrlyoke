@@ -362,6 +362,8 @@ suite("TimelineRecorder", () => {
       ...manifest,
       workflowId: secret,
     }));
+    // The CLI logs to a file only in an initialized workspace.
+    await fs.mkdir(path.join(tempDir, ".ctrlyoke"));
     Log.initializeCli(tempDir, true);
     Log.error(`[TimelineRecorder] session log failure: ${secret}`);
     release();

@@ -204,9 +204,11 @@ suite("CLI dry-run process", () => {
 
     assert.strictEqual(result.code, 2, result.stderr);
     assert.match(result.stderr, new RegExp(grantName));
-    assert.match(
-      result.stderr,
-      /Run `ctrlyoke trust-secret-grants <file>` to review and approve them\./
+    assert.ok(
+      result.stderr.includes(
+        `Run \`ctrlyoke trust-secret-grants ${workflow}\` to review them.`
+      ),
+      result.stderr
     );
   });
 
@@ -238,9 +240,11 @@ suite("CLI dry-run process", () => {
       blocked.stderr,
       new RegExp(externalRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     );
-    assert.match(
-      blocked.stderr,
-      /Run `ctrlyoke trust-workflow-external-roots <file>` to review and approve them\./
+    assert.ok(
+      blocked.stderr.includes(
+        `Run \`ctrlyoke trust-workflow-external-roots ${workflow}\` to review them.`
+      ),
+      blocked.stderr
     );
 
     const trusted = await runCli(

@@ -5,16 +5,9 @@ import {
   workspaceSettingsTrustAccess,
   type WorkspaceSettingsTrustAccess,
 } from "../config/WorkspaceSettingsTrust";
-import { promptYesNo } from "./CliPrompt";
+import { ensureCliTrustDecided, type CliTrustIo } from "./CliTrustGate";
 
 export const TRUST_WORKSPACE_SETTINGS_COMMAND = "trust-workspace-settings";
-
-export interface WorkspaceSettingsTrustIo {
-  writeOut(message: string): void;
-  writeErr(message: string): void;
-  readonly isInteractive: boolean;
-  confirm(question: string): Promise<boolean>;
-}
 
 export interface TrustWorkspaceSettingsOptions {
   cwd?: string;
@@ -22,15 +15,6 @@ export interface TrustWorkspaceSettingsOptions {
   yes?: boolean;
   /** Also list values already allowed or denied, to change a past answer. */
   all?: boolean;
-}
-
-export function createWorkspaceSettingsTrustIo(): WorkspaceSettingsTrustIo {
-  return {
-    writeOut: (message) => process.stdout.write(`${message}\n`),
-    writeErr: (message) => process.stderr.write(`${message}\n`),
-    isInteractive: !!process.stdin.isTTY && !!process.stderr.isTTY,
-    confirm: promptYesNo,
-  };
 }
 
 const TRUST_EXPLANATION =
@@ -50,7 +34,7 @@ function decisionTag(state: WorkspaceSensitiveSettingState): string {
 async function askAndRecord(
   workspaceRoot: string,
   states: readonly WorkspaceSensitiveSettingState[],
-  io: WorkspaceSettingsTrustIo,
+  io: CliTrustIo,
   dependencies: WorkspaceSettingsTrustAccess
 ): Promise<number> {
   const approved: WorkspaceSensitiveSettingRequest[] = [];
@@ -68,37 +52,31 @@ async function askAndRecord(
 /**
  * The `run` family's gate. Workspace values awaiting a decision are already
  * withheld by the settings layer; this makes the user decide before a
- * workflow loads (loading copies settings defaults into the run). In a
- * terminal it asks about each value; otherwise it fails closed with exit
- * code 2 and names the command that reviews them.
+ * workflow loads (loading copies settings defaults into the run). Unlike
+ * the other trust gates it asks about each value separately.
  *
  * Returns `undefined` to proceed, or the exit code to stop with.
  */
 export async function ensureWorkspaceSettingsDecided(
   workspaceRoot: string,
-  io: WorkspaceSettingsTrustIo,
+  io: CliTrustIo,
   dependencies: WorkspaceSettingsTrustAccess = workspaceSettingsTrustAccess
 ): Promise<number | undefined> {
   const pending = (await dependencies.loadStates(workspaceRoot)).filter(
     (state) => state.decision === undefined
   );
-  if (pending.length === 0) {
-    return undefined;
-  }
-
-  io.writeErr("This workspace's settings choose programs for ctrlyoke to run:");
-  pending.forEach((state) => io.writeErr(`  - ${state.request.summary}`));
-
-  if (!io.isInteractive) {
-    io.writeErr(
-      `Error: these have not been approved. Run \`ctrlyoke ${TRUST_WORKSPACE_SETTINGS_COMMAND}\` to review them.`
-    );
-    return 2;
-  }
-
-  io.writeErr(TRUST_EXPLANATION);
-  await askAndRecord(workspaceRoot, pending, io, dependencies);
-  return undefined;
+  return ensureCliTrustDecided(
+    {
+      heading: "This workspace's settings choose programs for ctrlyoke to run:",
+      items: pending.map((state) => state.request.summary),
+      reviewCommand: `ctrlyoke ${TRUST_WORKSPACE_SETTINGS_COMMAND}`,
+      ask: async (askIo) => {
+        askIo.writeErr(TRUST_EXPLANATION);
+        await askAndRecord(workspaceRoot, pending, askIo, dependencies);
+      },
+    },
+    io
+  );
 }
 
 /**
@@ -110,7 +88,7 @@ export async function ensureWorkspaceSettingsDecided(
 export async function trustWorkspaceSettingsCommand(
   workspaceRoot: string,
   options: TrustWorkspaceSettingsOptions,
-  io: WorkspaceSettingsTrustIo,
+  io: CliTrustIo,
   dependencies: WorkspaceSettingsTrustAccess = workspaceSettingsTrustAccess
 ): Promise<number> {
   const states = (await dependencies.loadStates(workspaceRoot)).filter(

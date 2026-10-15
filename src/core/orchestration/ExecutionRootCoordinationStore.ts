@@ -649,19 +649,30 @@ export class ExecutionRootCoordinationStore {
   async read(
     options: CoordinationReadOptions = {}
   ): Promise<CoordinationReadResult> {
+    return this.select(await this.readAll(), options);
+  }
+
+  /**
+   * Load every board entry without creating anything: a board that does not
+   * exist yet reads as empty. Pure readers must use this, never
+   * {@link transaction}, which creates the storage root and its scope record
+   * up front. In a non-Git root that storage is `<root>/.ctrlyoke/`, so merely
+   * displaying the board would create `.ctrlyoke/` in a folder the user never
+   * initialized, and every later activation would then take the folder as
+   * initialized.
+   */
+  async readAll(): Promise<CoordinationEntry[]> {
     const scope = await this.getScopeInfo();
     try {
       await fs.access(scope.boardPath);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return { entries: [] };
-      }
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw error;
     }
 
     return withFileLock(scope.boardPath, async () => {
       await verifyBoardScope(scope);
-      return this.select(await readEntries(scope.boardPath), options);
+      return readEntries(scope.boardPath);
     });
   }
 
