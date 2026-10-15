@@ -262,6 +262,25 @@ describe("outputFind", () => {
       });
     });
 
+    it("searches only the sent text of a prompt sent to a running terminal", () => {
+      const row: OutputRenderRow = {
+        key: "command-1",
+        rowKind: OUTPUT_ROW_KINDS.CLI_COMMAND,
+        target,
+        command: "summarize the running terminal output",
+        wasInjected: true,
+        estimateSize: 24,
+      };
+
+      const matches = findOutputMatches([row], "terminal", false);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        field: "command",
+        start: "summarize the running ".length,
+      });
+    });
+
     it("searches only rendered diff content and maps offsets without prefixes or markers", () => {
       const row = makeStructuredFileEditRow();
       const patch = (row.event.data as FileEditData).structuredPatch;

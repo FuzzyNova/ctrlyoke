@@ -24,7 +24,7 @@ import {
 } from "./diffUtils";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
-import { formatCliCommandDisplay } from "../../../utils/outputCommandDisplay";
+import { getCliCommandDisplayParts } from "../../../utils/outputCommandDisplay";
 import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
 import { getGenericToolCallParamsText } from "./toolCallLayout";
 import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/registry";
@@ -182,11 +182,11 @@ export function getOutputRowSearchSegments(
       return createSegments([
         {
           field: "command",
-          text: formatCliCommandDisplay(
+          text: getCliCommandDisplayParts(
             row.command,
             row.workingDirectory,
             row.wasInjected
-          ),
+          ).body,
         },
       ]);
     case OUTPUT_ROW_KINDS.ERROR:

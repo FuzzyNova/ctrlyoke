@@ -51,7 +51,7 @@ import {
   formatExecutionBadge,
   getFirstWords,
 } from "./outputUtils";
-import { formatCliCommandDisplay } from "../../../utils/outputCommandDisplay";
+import { getCliCommandDisplayParts } from "../../../utils/outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
 import { formatTokenCount } from "@root/utils/TokenFormatting";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
@@ -533,15 +533,14 @@ export function generateMarkdownExport(
       if ((includeCommand || isScriptOutput(output)) && output.cliCommand) {
         if (includeMetadata) lines.push("### CLI Command");
         lines.push("");
+        const { header, body } = getCliCommandDisplayParts(
+          output.cliCommand,
+          output.workingDirectory,
+          output.cliCommandWasInjected
+        );
+        if (header) lines.push(`**${header}**`, "");
         lines.push(
-          fenceLiteral(
-            formatCliCommandDisplay(
-              output.cliCommand,
-              output.workingDirectory,
-              output.cliCommandWasInjected
-            ),
-            output.cliCommandWasInjected ? "" : "bash"
-          )
+          fenceLiteral(body, output.cliCommandWasInjected ? "" : "bash")
         );
         lines.push("");
       }

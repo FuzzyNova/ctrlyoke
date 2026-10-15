@@ -835,11 +835,12 @@ CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName:
 CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true, cliCommand: "npm test", workingDirectory: "scripts" }, { stepIndex: 0, stepName: "script", key: "script-directory" });`);
 
     assert.ok(output.includes("src/worktree> codex exec"));
-    assert.ok(
-      output.includes(
-        "Prompt was injected into running terminal: the injected prompt"
-      )
+    const lines = output.split("\n");
+    const headerIndex = lines.findIndex((line) =>
+      line.includes("Prompt sent to running terminal:")
     );
+    assert.ok(headerIndex >= 0);
+    assert.ok(lines[headerIndex + 1].includes("the injected prompt"));
     assert.ok(output.includes("scripts> npm test"));
   });
 

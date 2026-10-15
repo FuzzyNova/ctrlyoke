@@ -83,7 +83,7 @@ import {
   type ToolTerminalLine,
 } from "../utils/ctrlyokeToolViews/shared";
 import { getFileReadHeaderText } from "../utils/FileReadHeaderText";
-import { formatCliCommandDisplay } from "../utils/outputCommandDisplay";
+import { getCliCommandDisplayParts } from "../utils/outputCommandDisplay";
 import {
   formatWorktreeOutcome,
   WORKTREE_OUTCOME_SEVERITIES,
@@ -866,16 +866,12 @@ export class CliTerminalFormatter {
     if (output.isStreaming) {
       CliTerminalFormatter.flushStreamingBuffer(target);
       if (output.cliCommand !== undefined) {
-        console.log(
-          `${border} ${chalk.dim(
-            formatCliCommandDisplay(
-              output.cliCommand,
-              output.workingDirectory,
-              output.cliCommandWasInjected
-            )
-          )}`
+        CliTerminalFormatter.printCommandLine(
+          border,
+          output.cliCommand,
+          output.workingDirectory,
+          output.cliCommandWasInjected
         );
-        console.log();
       }
       return;
     }
@@ -1720,6 +1716,23 @@ export class CliTerminalFormatter {
     }
   }
 
+  /** Prints a command/sent-prompt block, mirroring the dashboard's command row. */
+  private static printCommandLine(
+    border: string,
+    command: string,
+    workingDirectory: string | undefined,
+    wasInjected: boolean | undefined
+  ): void {
+    const { header, body } = getCliCommandDisplayParts(
+      command,
+      workingDirectory,
+      wasInjected
+    );
+    if (header) console.log(`${border} ${chalk.bold.dim(header)}`);
+    console.log(`${border} ${chalk.dim(body)}`);
+    console.log();
+  }
+
   /**
    * Renders the step header (step N/M, prompt preview) or CLI command line.
    * Called twice per attempt: first without cliCommand (show header + prompt),
@@ -1742,17 +1755,12 @@ export class CliTerminalFormatter {
 
     if (cliCommand !== undefined) {
       // Second fire — print the CLI command with a yellow left border (mirrors border-l-output-command-border)
-      const cmdBorder = chalk.yellow("│");
-      console.log(
-        `${cmdBorder} ${chalk.dim(
-          formatCliCommandDisplay(
-            cliCommand,
-            workingDirectory,
-            cliCommandWasInjected
-          )
-        )}`
+      CliTerminalFormatter.printCommandLine(
+        chalk.yellow("│"),
+        cliCommand,
+        workingDirectory,
+        cliCommandWasInjected
       );
-      console.log();
       return;
     }
 

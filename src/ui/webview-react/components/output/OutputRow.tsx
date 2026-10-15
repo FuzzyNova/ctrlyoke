@@ -110,7 +110,7 @@ import {
 } from "./outputStyles";
 import { ContextReference } from "./ContextReference";
 import { findAtomicReferences } from "@utils/atomicReferences";
-import { formatCliCommandDisplay } from "@root/utils/outputCommandDisplay";
+import { getCliCommandDisplayParts } from "@root/utils/outputCommandDisplay";
 import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -1873,16 +1873,20 @@ function OutputRowComponent({
         row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_COMMAND
           ? "border-l-output-script-border"
           : "border-l-output-command-border";
+      const { header, body } = getCliCommandDisplayParts(
+        row.command,
+        row.workingDirectory,
+        row.wasInjected
+      );
       content = (
         <div
           className={`${OUTPUT_BLOCK_BASE} ${borderClass} text-(--fg-primary) whitespace-pre-wrap wrap-anywhere`}
         >
+          {header && (
+            <div className="font-bold opacity-60 select-none">{header}</div>
+          )}
           {renderCommandTextWithFileLinks(
-            formatCliCommandDisplay(
-              row.command,
-              row.workingDirectory,
-              row.wasInjected
-            ),
+            body,
             getFieldMatches(HISTORY_MATCH_FIELDS.COMMAND),
             row.workingDirectory
           )}

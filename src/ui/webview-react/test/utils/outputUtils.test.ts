@@ -845,8 +845,9 @@ describe("generateMarkdownExport", () => {
     ];
 
     const md = generateMarkdownExport(outputs, metadata);
-    expect(md).toContain("Prompt was injected into running terminal:");
-    expect(md).toContain("Open the referenced file and summarize it.");
+    expect(md).toContain(
+      "**Prompt sent to running terminal:**\n\n```\nOpen the referenced file and summarize it.\n```"
+    );
     expect(md).not.toContain("```bash");
   });
 
