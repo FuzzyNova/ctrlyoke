@@ -39,3 +39,7 @@ Exporting or removing an MCP server for Codex can leave `config.toml` unparseabl
 - Detect headers with a pattern that allows a trailing comment and handles `[[...]]` array tables, e.g. `/^\s*\[\[?([^\]]*)\]\]?\s*(#.*)?$/`.
 - A better option is to round-trip through a real TOML library (e.g. `smol-toml` or `@iarna/toml`), or to remove the server's whole subtree before emitting its keys.
 - Add `HarnessMcpExporter` tests for the subtable layout (export with `env`, and remove) and for a commented header, and assert that the output parses as valid TOML.
+
+## Decision
+
+Settled by Nathan on 2026-10-14. Fix the hand-rolled section-header matching (subtables, `[[array]]` tables, trailing `# comments`) with thorough tests. Do not add a TOML library. Parsing and re-serializing would destroy the user's formatting and comments in `~/.codex/config.toml`.

@@ -508,6 +508,20 @@ Include these in every `append_step` prompt:
 8. **Commit its own work.** Commit to the current branch (do not create a branch) with
    a plain conventional-commit message (`fix(harness): ...`, `fix(webview): ...`) and
    no attribution or trailer lines.
+9. **Never leave a bug open.** If a fix hits a choice the bug doc doesn't settle, decide
+   it yourself:
+   - Fail closed on security.
+   - Prefer the smallest change a user would notice.
+   - Follow existing conventions.
+   - If another plan's file must change, make the edit minimal and name it in the commit
+     message.
+
+   Before moving the doc, record the choice in a short `## Decision` paragraph in it. A
+   bug leaves `dev/bugs/backlog/` only as fixed (`implemented/`) or as not real
+   (`rejected/`). It is never skipped, deferred, or left for Nathan.
+
+Plan 4's Step 4 (commit-message permissions) may make small, additive edits to this
+plan's harness permission mappers. Expect them when merging.
 
 ## Done criteria
 

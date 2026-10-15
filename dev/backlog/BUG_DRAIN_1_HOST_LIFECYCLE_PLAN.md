@@ -488,6 +488,17 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
 8. **Commit.** Commit the step's own work on the current branch with a plain
    conventional-commit message (`fix: ...`), no attribution or trailer lines.
    Do not create branches. Do not stash.
+9. **Never leave a bug open.** If a fix hits a choice the bug doc doesn't
+   settle, decide it yourself:
+   - Fail closed on security.
+   - Prefer the smallest change a user would notice.
+   - Follow existing conventions.
+   - If another plan's file must change, make the edit minimal and name it in
+     the commit message.
+
+   Before moving the doc, record the choice in a short `## Decision` paragraph
+   in it. A bug leaves `dev/bugs/backlog/` only as fixed (`implemented/`) or as
+   not real (`rejected/`). It is never skipped, deferred, or left for Nathan.
 
 ## Done criteria
 

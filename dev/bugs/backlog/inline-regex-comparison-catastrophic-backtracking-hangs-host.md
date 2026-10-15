@@ -35,3 +35,12 @@ Stop choosing the guard by input length. Any one of these works:
 - **Use V8's linear engine.** Start Node with `--enable-experimental-regexp_engine-on-excessive-backtracks`, or compile the pattern with the `l` (linear) flag where it is supported, so V8 falls back to its linear-time engine.
 
 After the fix, update the `ScriptComparison.ts` doc comment. Also add a test that runs `^(a+)+$` against a short (about 40-char) non-matching string and expects the timeout reason.
+
+## Decision
+
+Settled by Nathan on 2026-10-14. These points override any conflicting option above.
+
+- **Always the worker.** Every `matches` comparison runs in the worker, whatever the input length. Reuse one lazily created worker.
+- **A timeout is an error, not a mismatch.** A worker timeout or crash is an internal evaluation error that goes through `errorBehavior` (default `stopWorkflow`). It never triggers `onFail: retry`. The message names the pattern, the input length and the deadline, and says the pattern likely backtracks catastrophically.
+- **Configurable deadline.** The deadline comes from a new `execution.regexTimeoutSec` setting (default 10 s), which replaces the hard-coded 2 s `REGEX_WORKER_TIMEOUT_MS`. Update the workflow schema's `operator` description and regenerate the docs.
+- **No sync exceptions.** Convert any synchronous caller that evaluates a user regex to the async worker path.

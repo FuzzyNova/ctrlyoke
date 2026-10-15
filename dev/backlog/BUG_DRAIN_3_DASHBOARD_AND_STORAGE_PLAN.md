@@ -148,18 +148,45 @@ Every step follows the rules in §5.
 - **Bug:** `dev/bugs/backlog/inline-regex-comparison-catastrophic-backtracking-hangs-host.md`
 - **Files:** `src/utils/ScriptComparisonAsync.ts`, `src/utils/ScriptComparison.ts`,
   `src/utils/ScriptRegexWorker.ts`
-- **Fix:** Stop choosing the guard by input length. Send every `matches` comparison through
-  the deadline-guarded worker (`compareRegexInWorker`), whatever the length. Keep the
-  synchronous `compareScriptOutputInline` for non-regex operators only. Update the doc
-  comment in `ScriptComparison.ts` that claims cost scales with input length. If worker
-  start-up cost is a concern, reuse one lazily created worker rather than adding a `vm`
-  path. Do not add Node flags (that would touch `package.json`/launch scripts).
+- **Decision (Nathan, 2026-10-14):** every regex runs in the worker. A timeout is an
+  evaluation **error**, not a mismatch. The deadline defaults to 10 s and is configurable.
+- **Fix:**
+  - **Always the worker.** Stop choosing the guard by input length. Send every `matches`
+    comparison through the deadline-guarded worker (`compareRegexInWorker`), whatever the
+    length. Keep the synchronous `compareScriptOutputInline` for non-regex operators only.
+    Reuse one lazily created worker to pay the startup cost once. Don't add a `vm` path
+    or Node flags.
+  - **A timeout is an error.** It must no longer return a plain `passed: false`. Surface
+    it as an internal evaluation error that goes through the step's `errorBehavior`
+    (default `stopWorkflow`), the same path a condition script that cannot run takes. It
+    must never trigger `onFail: retry`. The message names the pattern, the input length
+    and the deadline, and says the pattern likely backtracks catastrophically. A worker
+    crash is handled the same way.
+  - **Configurable deadline.** Replace the hard-coded `REGEX_WORKER_TIMEOUT_MS = 2_000`
+    with a new setting, `execution.regexTimeoutSec` (number > 0, default 10). Add it
+    next to `execution.scriptTimeoutSec` in `schemas/settings-schema.json`, and also in
+    `src/types/CtrlYokeSettings.ts` and `src/utils/ConfigurationUtils.ts`. Add it to
+    the settings UI catalog wherever `scriptTimeoutSec` appears. Run
+    `npm run schema:update`.
+  - **Docs.** Update the `operator` description in `schemas/workflow-schema.json`,
+    which currently says "Inputs over 100,000 characters run in a worker with a 2 second
+    timeout; a timeout fails the comparison". The new text: every `matches` runs in a
+    worker bounded by `execution.regexTimeoutSec`, and a timeout is an error handled by
+    `errorBehavior`. Regenerate the docs. Update the doc comment in `ScriptComparison.ts`
+    that claims cost scales with input length.
+- **Files (added):** `schemas/settings-schema.json`, `schemas/workflow-schema.json`,
+  `src/types/CtrlYokeSettings.ts`, `src/utils/ConfigurationUtils.ts`, the settings
+  catalog, `src/core/EndConditionEvaluator.ts` and any pre-condition/script-step
+  evaluator that calls `compareScriptOutputAsync`, plus the generated schema/docs
+  outputs. These are unowned or shared, so keep the edits additive.
 - **Tests:** `src/test/unit/scriptComparison.test.ts`. Replace the test that pins the
-  inline path for short input. Add `^(a+)+$` against a ~40-char non-matching string and
-  expect the timeout reason. Keep the existing long-input timeout test.
-- **Tricky:** `compareScriptOutputInline` may have other synchronous callers (completions,
-  preview). Grep for them; any sync caller that evaluates user regexes on the host thread
-  must not regress. If one exists and cannot go async, leave it and note it in the commit.
+  inline path for short input. Run `^(a+)+$` against a ~40-char non-matching string with
+  a small configured deadline and expect an error result, not a mismatch. Add an
+  evaluator-level test showing that a timeout follows `errorBehavior` and does not use
+  `onFail: retry`. Add a test that the setting changes the deadline.
+- **Sync callers:** grep for other synchronous callers of `compareScriptOutputInline`
+  (completions, preview). Convert any caller that evaluates a user regex to the async
+  worker path. Don't leave it on the host thread as a noted exception.
 
 ### Step 4: Promoted parallel group stays serialized after anchor settles
 
@@ -243,9 +270,12 @@ Every step follows the rules in §5.
   `parseTomlMcpServerKey`) that maps `[mcp_servers.<id>]` and any `[mcp_servers.<id>.*]`
   subtable to `<id>`, and use it in `writeCodexTomlFile` and `removeCodexTomlServers` so
   export and remove drop every block of the target server. Detect headers with a pattern
-  that allows a trailing `# comment` and `[[...]]` array tables. Do **not** add a TOML
-  library: `package.json` belongs to plan 1. If a TOML parser is already a dependency (check
-  `node_modules` and existing imports), tests may use it to assert validity.
+  that allows a trailing `# comment` and `[[...]]` array tables. **Decision (Nathan,
+  2026-10-14): hand-rolled matching is the final fix. Do not add a TOML library.** Parsing
+  and re-serializing would destroy the user's formatting and comments in
+  `~/.codex/config.toml`. Make the matcher robust with thorough tests instead. Don't
+  leave a "follow-up" note. If a TOML parser is already a dependency (check `node_modules`
+  and existing imports), tests may use it to assert that the output is valid TOML.
 - **Tests:** `src/test/unit/HarnessMcpExporter.test.ts`, `src/test/unit/HarnessLspExporter.test.ts`,
   `src/test/unit/McpDiscoveryUtils.test.ts`. Unreadable existing file (simulate EACCES/EISDIR,
   e.g. a directory at the target path): export and remove reject and leave it untouched.
@@ -432,20 +462,16 @@ Every step follows the rules in §5.
 
 ---
 
-## 4. Bugs needing Nathan's decision
+## 4. Decisions
 
-None. Every bug in this plan has a clear fix that stays inside the owned files. Two
-choices were made here rather than escalated:
+Nathan settled every open question on 2026-10-14. No bug in this plan waits on him.
 
-- Step 3 picks "always use the worker" over a `vm` timeout or a V8 flag, because the flag
-  would touch launch config owned by plan 1 and `vm` adds a second evaluation path.
-- Step 8 does not add a TOML library, because `package.json` is owned by plan 1. If the
-  hand-rolled section matching proves too fragile, the step should note that in its
-  commit message as a follow-up for Nathan, not add the dependency.
+- **Step 3:** always use the worker. A timeout is an `errorBehavior` error, and the
+  deadline comes from the new `execution.regexTimeoutSec` setting (default 10 s).
+- **Step 8:** hand-rolled TOML section matching is final. No TOML library.
 
-If a step finds that a fix truly requires a decision (for example a behavior change a user
-would notice that the bug doc does not settle), the orchestrator should skip that step and
-list it in its final summary.
+Any other judgment call a step runs into is settled by the step itself under rule 9.
+The orchestrator must not skip or defer a bug.
 
 ---
 
@@ -467,11 +493,23 @@ list it in its final summary.
    does not reproduce, `git mv` the doc to `dev/bugs/rejected/` with a one-line
    `**Resolution:**` giving the reason, instead of fixing it.
 7. **Docs.** If behavior a user sees or types changes, update the hand-written `docs/`
-   page in the same commit. No step here changes a schema, so generated reference pages
-   should not change.
+   page in the same commit. Step 3 changes the settings and workflow schemas. For it,
+   regenerate the generated pages with `npm run schema:update` and never hand-edit them.
+   Run `npm run check:docs`.
 8. **Commit.** Commit the step's own work on the current branch with a plain
    conventional-commit message (`fix: ...`). No attribution or trailer lines. Do not create
    a branch.
+9. **Never leave a bug open.** If a fix hits a choice the bug doc doesn't settle, decide
+   it yourself:
+   - Fail closed on security.
+   - Prefer the smallest change a user would notice.
+   - Follow existing conventions.
+   - If another plan's file must change, make the edit minimal and name it in the commit
+     message.
+
+   Before moving the doc, record the choice in a short `## Decision` paragraph in it. A
+   bug leaves `dev/bugs/backlog/` only as fixed (`implemented/`) or as not real
+   (`rejected/`). It is never skipped, deferred, or left for Nathan.
 
 ---
 

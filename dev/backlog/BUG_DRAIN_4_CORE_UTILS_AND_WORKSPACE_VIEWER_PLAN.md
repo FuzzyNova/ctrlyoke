@@ -184,23 +184,27 @@ steps; and the three `workspaceViewerStore` bugs in steps 13 and 14.
 
 - **Fixes:** `dev/bugs/backlog/commit-message-generation-runs-with-allow-all-permissions.md`
 - **Files:** `src/git/CommitMessageGenerator.ts`
+- **Decision (Nathan, 2026-10-14):** least privilege on every harness. Edit the
+  mappers where needed. Never fall back to allow-all.
 - **Approach:** in `buildCommitWorkflowOverrides`, replace
-  `PERMISSION_MODES.ALLOW_ALL` with least privilege:
-  - native MCP mode: `PERMISSION_MODES.CUSTOM` with `allowedTools` limited to
-    the `submit_commit_message` MCP tool, and shell/write tools explicitly
-    denied;
-  - skill mode: allow only the ctrlyoke CLI commit-message command pattern.
-  Then read (do not edit) each harness's permission mapper and confirm that the
-  custom mode gives deny-by-default in a headless run. Several mappers belong
-  to plan 2.
+  `PERMISSION_MODES.ALLOW_ALL` with `PERMISSION_MODES.CUSTOM`:
+  - allow read-only tools (read/grep/glob or each harness's equivalent) so the
+    model can read files for context;
+  - native MCP mode: also allow the `submit_commit_message` MCP tool;
+  - skill mode: also allow only the ctrlyoke CLI commit-message command
+    pattern;
+  - shell and write/edit tools are explicitly denied.
+
+  Then check each harness's permission mapper. Confirm that this custom mode
+  gives deny-by-default in a headless run on all six harnesses.
 - **Tests:** `src/test/unit/CommitMessageGenerator.test.ts`. Replace the test
   that pins `ALLOW_ALL` with one that pins the restricted permissions for each
   MCP mode.
-- **Tricky:** if a harness cannot express "only this tool" without a mapper
-  change, do **not** edit the mapper. Give that harness the narrowest mode it
-  supports (read-only or no tools, relying on the existing response-text
-  fallback), and list it in the commit message and in the step's final report.
-  See "Bugs needing Nathan's decision".
+- **Tricky:** if a harness's mapper cannot express that allowlist, extend that
+  mapper minimally so it can. The mappers live under `src/core/harness/<harness>/`
+  and several are owned by plan 2. Add a mapper unit test, and name each
+  cross-plan file in the commit message. Do not settle for a broader mode on
+  any harness.
 
 ### Step 5: Script completion erases `npm run` without a trailing space (S)
 
@@ -413,21 +417,12 @@ steps; and the three `workspaceViewerStore` bugs in steps 13 and 14.
   until the latest settles). Mock `hostedApi`; do not edit it (plan 3).
 - **Tricky:** runs after step 13 because both change `workspaceViewerStore.ts`.
 
-## Bugs needing Nathan's decision
+## Decisions
 
-None of the 19 bugs needs a decision before work starts. There is one
-conditional case:
-
-- **Step 4 (commit-message permissions):** if some harness cannot express
-  "allow only `submit_commit_message`" without editing its permission mapper
-  (owned by plan 2 or unowned), the step uses the narrowest mode that harness
-  supports and does not edit the mapper. The orchestrator should list any such
-  harness in its summary as needing Nathan's decision: accept read-only/no-tool
-  mode there, or schedule a mapper change after the parallel drains merge.
-
-If any step finds that a fix would need a substantial edit to a file another
-plan owns, it should stop short of that edit, commit what it can, leave the bug
-doc in `backlog/`, and the orchestrator should report it in its summary.
+None. Nathan settled the open question on 2026-10-14: Step 4 uses least
+privilege on every harness and edits mappers where needed. Any other judgment
+call is settled by the step itself under rule 8. The orchestrator must not
+skip or defer a bug.
 
 ## Rules every queued step follows
 
@@ -454,9 +449,19 @@ doc in `backlog/`, and the orchestrator should report it in its summary.
 7. **Commit your own work** on the current branch with a plain
    conventional-commit message (`fix: ...`) and no attribution or trailer
    lines. Do not create a branch.
+8. **Never leave a bug open.** If a fix hits a choice the bug doc doesn't
+   settle, decide it yourself:
+   - Fail closed on security.
+   - Prefer the smallest change a user would notice.
+   - Follow existing conventions.
+   - If another plan's file must change, make the edit minimal and name it in
+     the commit message.
+
+   Before moving the doc, record the choice in a short `## Decision` paragraph
+   in it. A bug leaves `dev/bugs/backlog/` only as fixed (`implemented/`) or as
+   not real (`rejected/`). It is never skipped, deferred, or left for Nathan.
 
 ## Done criteria
 
 Every bug doc listed in the steps above is in `dev/bugs/implemented/` or
-`dev/bugs/rejected/`, except any the orchestrator reported as blocked on a
-decision or on another plan's file. `npm test` passes on the final commit.
+`dev/bugs/rejected/`, with no exceptions. `npm test` passes on the final commit.

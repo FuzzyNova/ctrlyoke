@@ -35,3 +35,14 @@ Run commit-message generation with least privilege:
 - **Skill mode:** allow only the specific ctrlyoke CLI commit-message command pattern (for example a scoped `shell(node:...)` entry), not all tools.
 - **Harnesses that cannot express the restriction:** use read-only or no-tool mode and rely on the existing response-text fallback.
 - Update the `CommitMessageGenerator` unit test to pin the restricted permissions instead of `ALLOW_ALL`.
+
+## Decision
+
+Settled by Nathan on 2026-10-14. Use least privilege on every harness, and never fall back to allow-all:
+
+- Use `PERMISSION_MODES.CUSTOM`.
+- Allow read-only tools.
+- Allow `submit_commit_message` in native MCP mode, or only the ctrlyoke CLI commit-message command in skill mode.
+- Explicitly deny shell and write tools.
+
+If a harness's permission mapper can't express that allowlist, extend the mapper minimally and test it, rather than giving that harness a broader mode.
