@@ -1489,105 +1489,114 @@ export class PromptEditorSupportService {
     ctx: WebviewClientContext,
     references: string[]
   ): Promise<void> {
+    const requestedReferences = references ?? [];
     const workspaceRoot = this.getWorkspaceRoot() || undefined;
-    if (!workspaceRoot || !references || references.length === 0) {
+    if (!workspaceRoot || requestedReferences.length === 0) {
       ctx.emit({
         type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
-        counts: {},
+        counts: Object.fromEntries(requestedReferences.map((ref) => [ref, 0])),
       });
       return;
     }
 
-    const counts: Record<string, number> = {};
-
-    const workspaceIdentity =
-      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-    const trustedRoots = [
-      ...this.getTrustedWorkspaceRoots(),
-      ...ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-        workspaceIdentity
-      ),
-    ];
-    const namedRoots = [...this.getNamedRoots()];
-    const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
-      ctx,
-      trustedRoots
+    const counts: Record<string, number> = Object.fromEntries(
+      requestedReferences.map((ref) => [ref, 0])
     );
+    try {
+      const workspaceIdentity =
+        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+      const trustedRoots = [
+        ...this.getTrustedWorkspaceRoots(),
+        ...ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          workspaceIdentity
+        ),
+      ];
+      const namedRoots = [...this.getNamedRoots()];
+      const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
+        ctx,
+        trustedRoots
+      );
 
-    await Promise.all(
-      references.map(async (rawRef) => {
-        try {
-          // Prior-context refs ($previous, $step:N …) expand to the actual
-          // output of earlier steps — count that exact XML. When no run output
-          // exists yet, buildPriorContextContent returns an `<!-- … -->`
-          // placeholder; treat that as zero tokens.
-          const priorRef = decodePriorContextTokenRef(rawRef);
-          if (priorRef) {
-            const content = await this.buildPriorContextContent(
-              ctx,
-              priorRef.body,
-              priorRef.stepCount
+      await Promise.all(
+        requestedReferences.map(async (rawRef) => {
+          try {
+            // Prior-context refs ($previous, $step:N …) expand to the actual
+            // output of earlier steps — count that exact XML. When no run output
+            // exists yet, buildPriorContextContent returns an `<!-- … -->`
+            // placeholder; treat that as zero tokens.
+            const priorRef = decodePriorContextTokenRef(rawRef);
+            if (priorRef) {
+              const content = await this.buildPriorContextContent(
+                ctx,
+                priorRef.body,
+                priorRef.stepCount
+              );
+              counts[rawRef] = content.startsWith("<!--")
+                ? 0
+                : encode(content).length;
+              return;
+            }
+
+            const expander = new ContextExpander({
+              workspaceRoot,
+              additionalTrustedRoots: trustedRoots,
+              namedRoots,
+              effectiveAbsolute: false,
+              sourceDefinitionDir,
+            });
+
+            // Images are billed by pixel area, not raw byte content — estimate
+            // them directly instead of tokenizing the binary file as text.
+            const imageTokens =
+              await expander.estimateImageReferenceTokens(rawRef);
+            if (imageTokens !== null) {
+              counts[rawRef] = imageTokens;
+              return;
+            }
+
+            // Bare full-file @refs are capped the same way the dry-run preview
+            // caps its Tier 1 file references — see estimateFileReferenceTokens.
+            const fileEstimate =
+              await expander.estimateFileReferenceTokens(rawRef);
+            if (fileEstimate !== null) {
+              counts[rawRef] = fileEstimate.tokens;
+              return;
+            }
+
+            const excerptEstimate =
+              await expander.estimateExcerptReferenceTokens(rawRef);
+            if (excerptEstimate !== null) {
+              counts[rawRef] = excerptEstimate.tokens;
+              return;
+            }
+
+            const expanded = await expander.expandContext(rawRef);
+
+            if (expanded === rawRef) {
+              counts[rawRef] = 0;
+              return;
+            }
+
+            const attachmentContent = expanded.slice(
+              0,
+              expanded.lastIndexOf(`\n\n${rawRef}`)
             );
-            counts[rawRef] = content.startsWith("<!--")
-              ? 0
-              : encode(content).length;
-            return;
-          }
-
-          const expander = new ContextExpander({
-            workspaceRoot,
-            additionalTrustedRoots: trustedRoots,
-            namedRoots,
-            effectiveAbsolute: false,
-            sourceDefinitionDir,
-          });
-
-          // Images are billed by pixel area, not raw byte content — estimate
-          // them directly instead of tokenizing the binary file as text.
-          const imageTokens =
-            await expander.estimateImageReferenceTokens(rawRef);
-          if (imageTokens !== null) {
-            counts[rawRef] = imageTokens;
-            return;
-          }
-
-          // Bare full-file @refs are capped the same way the dry-run preview
-          // caps its Tier 1 file references — see estimateFileReferenceTokens.
-          const fileEstimate =
-            await expander.estimateFileReferenceTokens(rawRef);
-          if (fileEstimate !== null) {
-            counts[rawRef] = fileEstimate.tokens;
-            return;
-          }
-
-          const excerptEstimate =
-            await expander.estimateExcerptReferenceTokens(rawRef);
-          if (excerptEstimate !== null) {
-            counts[rawRef] = excerptEstimate.tokens;
-            return;
-          }
-
-          const expanded = await expander.expandContext(rawRef);
-
-          if (expanded === rawRef) {
+            counts[rawRef] = encode(attachmentContent).length;
+          } catch (error) {
+            Log.warn(
+              `[PromptEditorSupportService] Failed to count tokens for reference "${rawRef}":`,
+              error
+            );
             counts[rawRef] = 0;
-            return;
           }
-
-          const attachmentContent = expanded.slice(
-            0,
-            expanded.lastIndexOf(`\n\n${rawRef}`)
-          );
-          counts[rawRef] = encode(attachmentContent).length;
-        } catch (error) {
-          Log.warn(
-            `[PromptEditorSupportService] Failed to count tokens for reference "${rawRef}":`,
-            error
-          );
-          counts[rawRef] = 0;
-        }
-      })
-    );
+        })
+      );
+    } catch (error) {
+      Log.warn(
+        "[PromptEditorSupportService] Failed to prepare attachment token counts:",
+        error
+      );
+    }
 
     ctx.emit({
       type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,

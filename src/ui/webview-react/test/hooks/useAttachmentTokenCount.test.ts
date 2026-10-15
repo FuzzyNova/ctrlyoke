@@ -36,6 +36,37 @@ describe("useAttachmentTokenCount", () => {
     });
   });
 
+  it("reissues lost requests and retires refs after the attempt cap", () => {
+    const { result } = renderHook(() =>
+      useAttachmentTokenCount("@src/extension.ts")
+    );
+    const postMessage = getVsCodeApi().postMessage as ReturnType<typeof vi.fn>;
+
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(postMessage).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(postMessage).toHaveBeenCalledTimes(3);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(result.current).toBeGreaterThan(0);
+    expect(postMessage).toHaveBeenCalledTimes(3);
+    act(() => {
+      vi.advanceTimersByTime(15_000);
+    });
+    expect(postMessage).toHaveBeenCalledTimes(3);
+    act(() => {
+      vi.advanceTimersByTime(15_000);
+    });
+    expect(postMessage).toHaveBeenCalledTimes(3);
+  });
+
   it("requests prior-context counts again when the displayed run changes", () => {
     const address = (runRef: string) => ({
       kind: "run" as const,

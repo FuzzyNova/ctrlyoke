@@ -34,6 +34,53 @@ suite("PromptEditorSupportService", () => {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   });
 
+  test("answers every attachment ref with zero when no workspace is open", async () => {
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => "",
+      () => undefined,
+      () => undefined
+    );
+
+    await service.handleAttachmentTokenCountRequest(
+      createWebviewClientContext("test-client", (message) =>
+        emitted.push(message)
+      ),
+      ["@src/one.ts", "@src/two.ts"]
+    );
+
+    assert.deepStrictEqual(
+      (emitted[0] as { counts: Record<string, number> }).counts,
+      { "@src/one.ts": 0, "@src/two.ts": 0 }
+    );
+  });
+
+  test("answers every attachment ref when setup throws", async () => {
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined,
+      undefined,
+      undefined,
+      () => {
+        throw new Error("setup failed");
+      }
+    );
+
+    await service.handleAttachmentTokenCountRequest(
+      createWebviewClientContext("test-client", (message) =>
+        emitted.push(message)
+      ),
+      ["@src/one.ts", "@src/two.ts"]
+    );
+
+    assert.deepStrictEqual(
+      (emitted[0] as { counts: Record<string, number> }).counts,
+      { "@src/one.ts": 0, "@src/two.ts": 0 }
+    );
+  });
+
   test("estimates oversized excerpt token counts without reading file contents", async () => {
     const filePath = path.join(workspaceRoot, "large.log");
     await fs.writeFile(filePath, "small fixture", "utf8");

@@ -37,7 +37,9 @@ import {
 const attachmentTokenCache = new Map<string, number>();
 
 /** References currently being fetched (avoid duplicate requests) */
-const pendingRequests = new Set<string>();
+const pendingRequests = new Map<string, { sentAt: number; attempts: number }>();
+const retiredRequests = new Set<string>();
+const completedRequests = new Set<string>();
 
 /** Registered callbacks to invoke when new counts arrive */
 const countUpdateCallbacks = new Set<
@@ -50,6 +52,8 @@ const countUpdateCallbacks = new Set<
  * debouncing collapses that burst into a single request once typing settles.
  */
 const REFERENCE_REQUEST_DEBOUNCE_MS = 250;
+const REQUEST_RETRY_INTERVAL_MS = 5_000;
+const MAX_REQUEST_ATTEMPTS = 3;
 
 // ============================================================================
 // Global message listener (set up once)
@@ -72,9 +76,11 @@ function ensureGlobalListener(): void {
     for (const [ref, count] of Object.entries(counts)) {
       // Prior-context counts depend on the displayed run's output. They are
       // delivered to the current hook instances but never persisted globally.
-      if (!decodePriorContextTokenRef(ref))
-        attachmentTokenCache.set(ref, count);
+      const isPriorContext = !!decodePriorContextTokenRef(ref);
+      if (!isPriorContext) attachmentTokenCache.set(ref, count);
       pendingRequests.delete(ref);
+      retiredRequests.delete(ref);
+      if (isPriorContext) completedRequests.add(ref);
       changed = true;
     }
 
@@ -219,24 +225,60 @@ export function useAttachmentTokenCount(
   // requested for the current view because their output changes across runs.
   useEffect(() => {
     if (refs.length === 0) return;
-
-    const timer = setTimeout(() => {
-      const uncached = refs.filter((ref) => {
-        if (decodePriorContextTokenRef(ref)) return true;
-        return !attachmentTokenCache.has(ref) && !pendingRequests.has(ref);
-      });
-      if (uncached.length === 0) return;
-
-      for (const ref of uncached) {
-        if (!decodePriorContextTokenRef(ref)) pendingRequests.add(ref);
+    for (const ref of refs) {
+      if (decodePriorContextTokenRef(ref)) {
+        completedRequests.delete(ref);
+        retiredRequests.delete(ref);
       }
+    }
 
-      sendMessage(MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS, {
-        references: uncached,
-      });
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const timer = setTimeout(() => {
+      const requestEligible = (): void => {
+        const now = Date.now();
+        const requestRefs: string[] = [];
+        let hasActiveRequest = false;
+        for (const ref of refs) {
+          const isPriorContext = !!decodePriorContextTokenRef(ref);
+          if (retiredRequests.has(ref)) continue;
+          if (completedRequests.has(ref)) continue;
+          if (!isPriorContext && attachmentTokenCache.has(ref)) continue;
+          const pending = pendingRequests.get(ref);
+          if (pending && now - pending.sentAt < REQUEST_RETRY_INTERVAL_MS) {
+            hasActiveRequest = true;
+            continue;
+          }
+          if (pending && pending.attempts >= MAX_REQUEST_ATTEMPTS) {
+            if (!isPriorContext) attachmentTokenCache.set(ref, 0);
+            pendingRequests.delete(ref);
+            retiredRequests.add(ref);
+            if (isPriorContext) {
+              countUpdateCallbacks.forEach((cb) => cb({ [ref]: 0 }));
+            }
+            continue;
+          }
+          pendingRequests.set(ref, {
+            sentAt: now,
+            attempts: (pending?.attempts ?? 0) + 1,
+          });
+          requestRefs.push(ref);
+          hasActiveRequest = true;
+        }
+        if (requestRefs.length > 0) {
+          sendMessage(MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS, {
+            references: requestRefs,
+          });
+        }
+        if (hasActiveRequest) {
+          retryTimer = setTimeout(requestEligible, REQUEST_RETRY_INTERVAL_MS);
+        }
+      };
+      requestEligible();
     }, REFERENCE_REQUEST_DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [refs, viewKey]);
 
   // Raw prompt tokens are re-encoded only when the text actually changes, not on
