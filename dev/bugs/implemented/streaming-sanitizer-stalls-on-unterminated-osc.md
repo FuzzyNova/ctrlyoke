@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/utils/TerminalOutputSanitizer.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

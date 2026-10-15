@@ -1,5 +1,6 @@
 const ANSI_ESCAPE_SEQUENCE_PATTERN =
-  /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][\s\S]*?(?:\x07|\x1B\\)|[ -/]*[0-~])/g;
+  /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\n]*?(?:\x07|\x1B\\|\x9C)|[ -/]*[0-~])/g;
+const MAX_PENDING_ESCAPE_LENGTH = 4_096;
 // Single-pass replacement for the three line-ending/control-char cleanup
 // steps that used to be sequential .replace() calls, each of which rescans
 // the whole string. \r\n is listed before the lone \r alternative so the
@@ -109,9 +110,34 @@ export class TerminalOutputSanitizer {
       return "";
     }
 
-    const input = this.pendingEscape + chunk;
+    const pendingEscape = this.pendingEscape;
+    let input = pendingEscape + chunk;
     this.pendingEscape = "";
-    const incompleteStart = findTrailingIncompleteEscape(input);
+    let incompleteStart = findTrailingIncompleteEscape(input);
+    if (
+      incompleteStart >= 0 &&
+      input.startsWith("\x1B]", incompleteStart) &&
+      input.slice(incompleteStart).includes("\n") &&
+      pendingEscape.length > 0 &&
+      chunk.includes("\n")
+    ) {
+      // The OSC began in an earlier chunk. Its buffered control payload is
+      // stale; release the newly arrived line instead of swallowing it.
+      input = input.slice(0, incompleteStart) + chunk;
+      incompleteStart = findTrailingIncompleteEscape(input);
+    }
+    while (
+      incompleteStart >= 0 &&
+      input.startsWith("\x1B]", incompleteStart) &&
+      (input.length - incompleteStart > MAX_PENDING_ESCAPE_LENGTH ||
+        input.slice(incompleteStart).includes("\n"))
+    ) {
+      // A real OSC title or hyperlink fits comfortably under this bound. If
+      // it does not terminate in time, drop its introducer and resume normal
+      // sanitization so one malformed sequence cannot stall the stream.
+      input = input.slice(0, incompleteStart) + input.slice(incompleteStart + 2);
+      incompleteStart = findTrailingIncompleteEscape(input);
+    }
     const completePrefix =
       incompleteStart >= 0 ? input.slice(0, incompleteStart) : input;
     if (incompleteStart >= 0) {
@@ -156,7 +182,7 @@ function isIncompleteEscape(suffix: string): boolean {
   }
 
   if (suffix.startsWith("\x1B]")) {
-    return !/(?:\x07|\x1B\\)/.test(suffix.slice(2));
+    return !/(?:\x07|\x1B\\|\x9C)/.test(suffix.slice(2));
   }
 
   if (/^\x1B[ -\/]+$/.test(suffix)) {

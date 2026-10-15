@@ -134,5 +134,39 @@ suite("TerminalOutputSanitizer", () => {
       assert.strictEqual(sanitizer.push("Bafter"), "after");
       assert.strictEqual(sanitizer.flush(), "");
     });
+
+    test("releases an unterminated OSC payload at a newline", () => {
+      const sanitizer = new TerminalOutputSanitizer();
+      assert.strictEqual(sanitizer.push("a\x1B]0;t"), "a");
+      assert.strictEqual(sanitizer.push("line1\n"), "line1\n");
+    });
+
+    test("recovers from an unterminated OSC spread across many chunks", () => {
+      const sanitizer = new TerminalOutputSanitizer();
+      assert.strictEqual(sanitizer.push("\x1B]0;"), "");
+      let released = "";
+      for (let index = 0; index < 800; index++) {
+        released += sanitizer.push("payload");
+      }
+      assert.strictEqual(released, `0;${"payload".repeat(800)}`);
+      assert.strictEqual(sanitizer.flush(), "");
+    });
+
+    test("recognizes C1 ST as an OSC terminator", () => {
+      const sanitizer = new TerminalOutputSanitizer();
+      assert.strictEqual(sanitizer.push("\x1B]0;title\x9Cafter"), "after");
+    });
+
+    test("strips an OSC 8 hyperlink split across chunks", () => {
+      const sanitizer = new TerminalOutputSanitizer();
+      assert.strictEqual(
+        sanitizer.push("\x1B]8;;https://example.com\x1B"),
+        ""
+      );
+      assert.strictEqual(
+        sanitizer.push("\\linked text\x1B]8;;\x1B\\"),
+        "linked text"
+      );
+    });
   });
 });
