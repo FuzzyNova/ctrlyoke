@@ -55,6 +55,7 @@ import { Log } from "../../../utils/Log";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
+import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
 import { AntigravityNotificationMonitor } from "./AntigravityNotificationMonitor";
 import { AntigravityToolPermissionMapper } from "./AntigravityToolPermissionMapper";
 import { AntigravityLogParser } from "./AntigravityLogParser";
@@ -650,14 +651,20 @@ export class AntigravityCliProvider implements ICliProvider {
     const groupName = this.getHookGroupName(workflowKey);
     const hooksPath = this.getGlobalHooksPath();
 
-    await withFileLock(hooksPath, async () => {
-      const current = await this.readHooksFile();
-      if (!(groupName in current)) {
-        return;
-      }
-      delete current[groupName];
-      await this.writeHooksFile(current);
-    });
+    try {
+      await withFileLock(hooksPath, async () => {
+        const current = await this.readHooksFile();
+        if (!(groupName in current)) {
+          return;
+        }
+        delete current[groupName];
+        await this.writeHooksFile(current);
+      });
+    } catch (error) {
+      Log.warn(
+        `[AntigravityCliProvider] Failed to clean up Antigravity hooks in ${hooksPath}: ${error}`
+      );
+    }
   }
 
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
@@ -953,16 +960,33 @@ export class AntigravityCliProvider implements ICliProvider {
 
   private async readHooksFile(): Promise<Record<string, AntigravityHookGroup>> {
     const hooksPath = this.getGlobalHooksPath();
+    let content: string;
     try {
-      const content = await fs.readFile(hooksPath, "utf8");
-      const parsed = JSON.parse(content);
+      content = await fs.readFile(hooksPath, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return {};
+      }
+      throw new Error(
+        `Cannot safely update ${hooksPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(content);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return parsed as Record<string, AntigravityHookGroup>;
       }
-    } catch {
-      // Ignore missing/invalid files and recreate a minimal object.
+      throw new Error("Expected a JSON object");
+    } catch (error) {
+      throw new Error(
+        `Cannot safely update ${hooksPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
-    return {};
   }
 
   private async writeHooksFile(
@@ -970,6 +994,6 @@ export class AntigravityCliProvider implements ICliProvider {
   ): Promise<void> {
     const hooksPath = this.getGlobalHooksPath();
     await fs.mkdir(path.dirname(hooksPath), { recursive: true });
-    await fs.writeFile(hooksPath, JSON.stringify(hooks, null, 2), "utf8");
+    await writeFileAtomic(hooksPath, JSON.stringify(hooks, null, 2));
   }
 }
