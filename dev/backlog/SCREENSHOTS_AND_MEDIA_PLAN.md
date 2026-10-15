@@ -162,11 +162,22 @@ to whatever they are.
 | H. Raw mobile/PWA screenshot   | #7, #10           | none — natural mobile portrait, crop to content   | 750–860px wide                         | 2x of a real iPhone's ~375–430px CSS width; capture on an actual device, not an emulator, for anything touching the PWA-install/cert flow               |
 | I. Walkthrough step media      | #13               | ~16:10 to 4:3 landscape                           | 1200px wide, stills 2x / GIF near 1x   | fills the right-hand media pane of VS Code's walkthrough page, which scales it to the pane width; ships inside the VSIX, so bytes count double          |
 
-One practical gotcha for A/B/C: on a non-retina Windows display at 100%/125% scaling, an ordinary
-screenshot captures logical pixels 1:1 — soft once placed at native size in a 2x-built container.
-Bump Windows display scaling to 200% temporarily before capturing, or if the capture goes through
-Playwright (per the hosted-dashboard debugging flow), set `deviceScaleFactor: 2` on the browser
-context; then ship the 2x PNG with `width`/`height` HTML attributes set to the 1x display size.
+**Sharpness is pixel density: captured pixels ÷ the CSS pixels the image is shown at.** Windows
+display scaling is just how you raise it for a native app. A capture taken at 150% has 1.5
+physical pixels per UI pixel. A 1x capture is sharp on a 1x screen but soft on any HiDPI screen,
+because the browser has to upscale it. That is why the 2026-10 captures, taken at 100% on a
+2560×1440 monitor, look fine there but soft on a 200% laptop. Targets:
+
+- **New stills: at least 1.5x, ideally 2x.** On the 2560×1440 desktop, use **150% scaling with
+  VS Code at default zoom**. 200% plus zooming VS Code out cancels itself (zoom level −2 at 200%
+  is about 139%), and it leaves only 1280×720 logical px of room. 2x needs a 4K screen at 200%,
+  or Playwright with `deviceScaleFactor: 2` for the hosted dashboard.
+- **Show a dense capture at its logical size,** not its pixel size: `{.panel-shot}` (400 px) for
+  side-panel crops, or the full prose column (~688 px) for anything at least ~1030 px wide.
+- **Existing 1x captures stay.** Replace them gradually, starting with the most-viewed pages.
+  Only README and walkthrough media are frozen per release.
+- **Walkthrough media (category I) at 2400×1500 needs the 4K laptop:** 1500 physical px don't
+  fit on a 1440-tall screen. On the desktop, 2048×1280 (16:10, 150%) is the fallback.
 
 ## Shot checklist
 
