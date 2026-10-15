@@ -31,3 +31,9 @@ Read the roots lazily: call `getVsCodeWorkspaceRoot()` and `getVsCodeNamedWorksp
 Alternatively, subscribe to `vscode.workspace.onDidChangeWorkspaceFolders` in `initializeCompletionHelpers` and reset `completionCore` and `vsCodeSymbolIndex` to `undefined` along with `clearFilesCache()`, so the next call rebuilds the core with the current roots.
 
 Add a test that changes the mocked `workspaceFolders` after the first `getCompletionCore()` call and asserts that a symbol from the new folder resolves.
+
+## Follow-up (review)
+
+The regex symbol cache now includes the viewer path as well as the absolute
+file path, so a workspace folder rename refreshes the displayed folder prefix
+even when the file itself and its modification time stay the same.

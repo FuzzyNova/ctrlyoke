@@ -21,6 +21,7 @@ suite("WorkflowLockManager stale-run recovery", () => {
     );
     const workflowKey = "successor-race" as WorkflowKey;
     const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+    const successorRunRef = "run-2026-01-01T00-00-01-000Z" as RunRef;
     const runFilePath = WorkflowPaths.runFilePath(
       workspaceRoot,
       workflowKey,
@@ -34,6 +35,11 @@ suite("WorkflowLockManager stale-run recovery", () => {
 
     try {
       await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      const successorRunFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        successorRunRef
+      );
       await fs.writeFile(
         runFilePath,
         JSON.stringify({
@@ -68,7 +74,7 @@ suite("WorkflowLockManager stale-run recovery", () => {
               {
                 schemaVersion: 2,
                 workflowKey,
-                runRef,
+                runRef: successorRunRef,
                 runner: RUNNER_IDS.VSCODE,
                 pid: process.pid,
                 ownerToken: "successor-owner",
@@ -78,8 +84,11 @@ suite("WorkflowLockManager stale-run recovery", () => {
                 lastHeartbeat: Date.now(),
               }
             ).then(async () => {
+              await fs.mkdir(path.dirname(successorRunFilePath), {
+                recursive: true,
+              });
               await fs.writeFile(
-                runFilePath,
+                successorRunFilePath,
                 JSON.stringify({
                   steps: [{ prompt: "successor state" }],
                   _runtime: {
@@ -91,7 +100,8 @@ suite("WorkflowLockManager stale-run recovery", () => {
                 "utf8"
               );
             });
-            // Let the successor queue behind normalization's file mutex.
+            // Give the successor time to acquire while stale run recovery is
+            // still writing the old run file.
             await new Promise((resolve) => setTimeout(resolve, 20));
           }
           return originalRename(source, destination);
@@ -107,14 +117,15 @@ suite("WorkflowLockManager stale-run recovery", () => {
         "successor-owner"
       );
       assert.strictEqual(
-        JSON.parse(await fs.readFile(runFilePath, "utf8"))._runtime.successorMarker,
+        JSON.parse(await fs.readFile(successorRunFilePath, "utf8"))._runtime
+          .successorMarker,
         "preserved"
       );
       await assert.rejects(
         WorkflowLockManager.acquireLock(workspaceRoot, workflowKey, {
           schemaVersion: 2,
           workflowKey,
-          runRef,
+          runRef: successorRunRef,
           runner: RUNNER_IDS.VSCODE,
           pid: process.pid,
           ownerToken: "third-owner",
@@ -126,6 +137,115 @@ suite("WorkflowLockManager stale-run recovery", () => {
         /Timed out waiting for runner lock/
       );
     } finally {
+      Object.defineProperty(fsPromises, "rename", {
+        configurable: true,
+        value: originalRename,
+      });
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("a slow run-file write does not hold the runner-lock mutex", async function () {
+    this.timeout(15_000);
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-slow-normalize-")
+    );
+    const workflowKey = "slow-normalize" as WorkflowKey;
+    const staleRunRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+    const successorRunRef = "run-2026-01-01T00-00-01-000Z" as RunRef;
+    const staleRunPath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      staleRunRef
+    );
+    const lockPath = WorkflowLockManager.getLockPath(workspaceRoot, workflowKey);
+    const fsPromises = require("fs/promises") as typeof import("fs/promises");
+    const originalRename = fsPromises.rename;
+    let signalWriteStarted!: () => void;
+    let finishWrite!: () => void;
+    const writeStarted = new Promise<void>((resolve) => {
+      signalWriteStarted = resolve;
+    });
+    const waitForWrite = new Promise<void>((resolve) => {
+      finishWrite = resolve;
+    });
+    let intercepted = false;
+
+    try {
+      await fs.mkdir(path.dirname(staleRunPath), { recursive: true });
+      await fs.writeFile(
+        staleRunPath,
+        JSON.stringify({
+          steps: [{ prompt: "interrupted" }],
+          _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+        }),
+        "utf8"
+      );
+      await fs.writeFile(
+        lockPath,
+        JSON.stringify({
+          schemaVersion: 2,
+          workflowKey,
+          runRef: staleRunRef,
+          runner: RUNNER_IDS.VSCODE,
+          pid: 999_999,
+          ownerToken: "slow-stale-owner",
+          startedAt: 0,
+          lastHeartbeat: 0,
+        }),
+        "utf8"
+      );
+      Object.defineProperty(fsPromises, "rename", {
+        configurable: true,
+        value: async (source: string, destination: string) => {
+          if (destination === staleRunPath && !intercepted) {
+            intercepted = true;
+            signalWriteStarted();
+            await waitForWrite;
+          }
+          return originalRename(source, destination);
+        },
+      });
+
+      const normalization = WorkflowLockManager.normalizeStaleLocks(
+        workspaceRoot,
+        [workflowKey]
+      );
+      await writeStarted;
+      const successorLock = {
+        schemaVersion: 2 as const,
+        workflowKey,
+        runRef: successorRunRef,
+        runner: RUNNER_IDS.VSCODE,
+        pid: process.pid,
+        ownerToken: "slow-write-successor",
+        hostInstanceId: "successor-host",
+        executionInstanceId: "successor-execution",
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      };
+      await Promise.race([
+        WorkflowLockManager.acquireLock(
+          workspaceRoot,
+          workflowKey,
+          successorLock
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("acquire blocked by slow write")),
+            1000
+          )
+        ),
+      ]);
+
+      finishWrite();
+      await normalization;
+      assert.strictEqual(
+        (await readWorkflowLock(workspaceRoot, workflowKey))?.ownerToken,
+        successorLock.ownerToken
+      );
+    } finally {
+      finishWrite?.();
       Object.defineProperty(fsPromises, "rename", {
         configurable: true,
         value: originalRename,

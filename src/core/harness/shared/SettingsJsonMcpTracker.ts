@@ -89,6 +89,7 @@ interface BaselineState {
 }
 
 interface WorkflowServerState {
+  readonly workflowKey: string;
   readonly settingsPath: string;
   readonly serverNames: string[];
 }
@@ -258,7 +259,7 @@ export class SettingsJsonMcpTracker {
   /** Reference counts per resolved config file and managed server name. */
   private refCounts = new Map<string, Map<string, number>>();
 
-  /** Per-workflow tracking, including the config file used at registration. */
+  /** Per workflow/config-path registration, so one workflow can span roots. */
   private workflowServers = new Map<string, WorkflowServerState>();
 
   /** Inserted values keyed by config path, to preserve user edits during cleanup. */
@@ -428,12 +429,14 @@ export class SettingsJsonMcpTracker {
     // once. Without this, a completed multi-step workflow leaves stale MCP
     // entries behind because its ref count is incremented per step but
     // decremented only once during workflow cleanup.
-    const existingState = this.workflowServers.get(workflowKey);
+    const workflowPathKey = JSON.stringify([workflowKey, settingsPath]);
+    const existingState = this.workflowServers.get(workflowPathKey);
     const existing = existingState?.serverNames ?? [];
     const newServerNames = serverNames.filter(
       (name) => !existing.includes(name)
     );
-    this.workflowServers.set(workflowKey, {
+    this.workflowServers.set(workflowPathKey, {
+      workflowKey,
       settingsPath,
       serverNames: [...new Set([...existing, ...serverNames])],
     });
@@ -515,88 +518,86 @@ export class SettingsJsonMcpTracker {
     workflowKey: string,
     _workspaceRoot: string
   ): Promise<void> {
-    const workflowState = this.workflowServers.get(workflowKey);
-    if (!workflowState || workflowState.serverNames.length === 0) {
-      this.workflowServers.delete(workflowKey);
-      return;
-    }
-    const { settingsPath, serverNames } = workflowState;
-    const pathRefCounts = this.refCounts.get(settingsPath);
+    const registrations = [...this.workflowServers.entries()].filter(
+      ([, state]) => state.workflowKey === workflowKey
+    );
+    for (const [workflowPathKey, { settingsPath, serverNames }] of
+      registrations) {
+      this.workflowServers.delete(workflowPathKey);
+      const pathRefCounts = this.refCounts.get(settingsPath);
 
-    // Decrement ref counts and determine which servers to remove
-    const toRemove: string[] = [];
-    for (const name of serverNames) {
-      const count = (pathRefCounts?.get(name) ?? 1) - 1;
-      if (count <= 0) {
-        pathRefCounts?.delete(name);
-        // Only remove from settings if it wasn't a baseline server
-        if (!this.getBaseline(settingsPath).servers.has(name)) {
-          toRemove.push(name);
-        }
-      } else {
-        pathRefCounts?.set(name, count);
-      }
-    }
-    if (pathRefCounts?.size === 0) {
-      this.refCounts.delete(settingsPath);
-    }
-
-    this.workflowServers.delete(workflowKey);
-
-    // Remove zero-ref servers from settings.json (serialized under mutex)
-    if (toRemove.length > 0) {
-      await this.withMutationLock(settingsPath, async () => {
-        try {
-          const settings = JSON.parse(
-            await fs.readFile(settingsPath, "utf-8")
-          ) as Record<string, unknown>;
-          const mcpServers = settings[this.mcpServersProperty] as
-            Record<string, unknown> | undefined;
-          if (mcpServers) {
-            for (const name of toRemove) {
-              const pathManagedValues =
-                this.managedServerValues.get(settingsPath);
-              const managedValue = pathManagedValues?.get(name);
-              if (
-                managedValue !== undefined &&
-                this.jsonEquals(mcpServers[name], managedValue)
-              ) {
-                delete mcpServers[name];
-              } else if (managedValue !== undefined) {
-                Log.warn(
-                  `[SettingsJsonMcpTracker] ${this.toolName} MCP cleanup preserved user-modified server "${name}"`
-                );
-              }
-              pathManagedValues?.delete(name);
-            }
-            if (this.managedServerValues.get(settingsPath)?.size === 0) {
-              this.managedServerValues.delete(settingsPath);
-            }
-            if (
-              Object.keys(mcpServers).length === 0 &&
-              !this.getBaseline(settingsPath).hadMcpServers
-            ) {
-              delete settings[this.mcpServersProperty];
-            } else {
-              settings[this.mcpServersProperty] = mcpServers;
-            }
-
-            await this.writeOrRemoveManagedConfig(settingsPath, settings);
-            Log.debug(
-              `[SettingsJsonMcpTracker] ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
-            );
+      // Decrement ref counts and determine which servers to remove.
+      const toRemove: string[] = [];
+      for (const name of serverNames) {
+        const count = (pathRefCounts?.get(name) ?? 1) - 1;
+        if (count <= 0) {
+          pathRefCounts?.delete(name);
+          if (!this.getBaseline(settingsPath).servers.has(name)) {
+            toRemove.push(name);
           }
-        } catch {
-          // Settings file gone — nothing to clean up
+        } else {
+          pathRefCounts?.set(name, count);
         }
-      });
-    }
+      }
+      if (pathRefCounts?.size === 0) {
+        this.refCounts.delete(settingsPath);
+      }
 
-    if (
-      !this.refCounts.has(settingsPath) &&
-      !this.getBaseline(settingsPath).settingsFileExisted
-    ) {
-      await this.deleteCtrlYokeGitignore(settingsPath);
+      // Remove zero-ref servers from settings.json (serialized under mutex).
+      if (toRemove.length > 0) {
+        await this.withMutationLock(settingsPath, async () => {
+          try {
+            const settings = JSON.parse(
+              await fs.readFile(settingsPath, "utf-8")
+            ) as Record<string, unknown>;
+            const mcpServers = settings[this.mcpServersProperty] as
+              Record<string, unknown> | undefined;
+            if (mcpServers) {
+              for (const name of toRemove) {
+                const pathManagedValues =
+                  this.managedServerValues.get(settingsPath);
+                const managedValue = pathManagedValues?.get(name);
+                if (
+                  managedValue !== undefined &&
+                  this.jsonEquals(mcpServers[name], managedValue)
+                ) {
+                  delete mcpServers[name];
+                } else if (managedValue !== undefined) {
+                  Log.warn(
+                    `[SettingsJsonMcpTracker] ${this.toolName} MCP cleanup preserved user-modified server "${name}"`
+                  );
+                }
+                pathManagedValues?.delete(name);
+              }
+              if (this.managedServerValues.get(settingsPath)?.size === 0) {
+                this.managedServerValues.delete(settingsPath);
+              }
+              if (
+                Object.keys(mcpServers).length === 0 &&
+                !this.getBaseline(settingsPath).hadMcpServers
+              ) {
+                delete settings[this.mcpServersProperty];
+              } else {
+                settings[this.mcpServersProperty] = mcpServers;
+              }
+
+              await this.writeOrRemoveManagedConfig(settingsPath, settings);
+              Log.debug(
+                `[SettingsJsonMcpTracker] ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
+              );
+            }
+          } catch {
+            // Settings file gone — nothing to clean up.
+          }
+        });
+      }
+
+      if (
+        !this.refCounts.has(settingsPath) &&
+        !this.getBaseline(settingsPath).settingsFileExisted
+      ) {
+        await this.deleteCtrlYokeGitignore(settingsPath);
+      }
     }
   }
 

@@ -14,6 +14,7 @@ import {
   clearSlashTokenCompletionCache,
   getCtrlYokeSlashCompletions,
 } from "../../completions/SlashTokenCompletionHelpers";
+import { RegexSymbolIndex } from "../../completions/RegexSymbolIndex";
 import type { PlainCompletionItem } from "../../completions/CompletionCore";
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
@@ -84,6 +85,32 @@ suite("CompletionHelpers workspace roots", () => {
     assert.ok(
       items.some((item) => item.label.includes("NewWorkspaceSymbol")),
       "a symbol in the newly added folder should be offered"
+    );
+  });
+
+  test("refreshes cached symbol paths after a workspace folder rename", async () => {
+    const folderPath = path.join(tempDir, "physical-root");
+    const sourcePath = path.join(folderPath, "src", "RenamedSymbol.ts");
+    fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+    fs.writeFileSync(sourcePath, "export class RenamedSymbol {}\n");
+    let folderName = "root-c";
+    const index = new RegexSymbolIndex(
+      () => folderPath,
+      async () => [`${folderName}/src/RenamedSymbol.ts`],
+      (viewerPath) => ({
+        workspaceRoot: folderPath,
+        absolutePath: path.join(folderPath, ...viewerPath.split("/").slice(1)),
+      })
+    );
+
+    const original = await index.workspaceSymbols("RenamedSymbol", 10);
+    assert.strictEqual(original[0]?.viewerPath, "root-c/src/RenamedSymbol.ts");
+
+    folderName = "renamed-root";
+    const renamed = await index.workspaceSymbols("RenamedSymbol", 10);
+    assert.strictEqual(
+      renamed[0]?.viewerPath,
+      "renamed-root/src/RenamedSymbol.ts"
     );
   });
 });

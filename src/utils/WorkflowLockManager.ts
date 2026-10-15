@@ -44,8 +44,7 @@ function sleep(ms: number): Promise<void> {
 /** Reclaim only the stale owner inspected by the caller, under the lock mutex. */
 async function reclaimIfStale(
   lockPath: string,
-  expectedToken: string | undefined,
-  onReclaim?: () => Promise<void>
+  expectedToken: string | undefined
 ): Promise<boolean> {
   return withFileLock(lockPath, async () => {
     const current = await readWorkflowLockAtPath(lockPath);
@@ -58,7 +57,6 @@ async function reclaimIfStale(
       return false;
     }
 
-    await onReclaim?.();
     await fs.promises.unlink(lockPath).catch((error) => {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     });
@@ -315,38 +313,36 @@ export class WorkflowLockManager {
       try {
         const reclaimed = await reclaimIfStale(
           WorkflowLockManager.getLockPath(workspaceRoot, workflowKey),
-          lock.ownerToken,
-          async () => {
-            let runningFile: WorkingFile;
-            try {
-              runningFile = JSON.parse(
-                await fs.promises.readFile(runFilePath, "utf8")
-              );
-            } catch {
-              return;
-            }
-            const executionState = runningFile._runtime?.executionState;
-            if (
-              isNewerRunFile(runningFile) ||
-              !executionState ||
-              !ACTIVE_EXECUTION_STATES.has(executionState as ExecutionState) ||
-              executionState === EXECUTION_STATES.PAUSED
-            ) return;
-
-            runningFile._runtime!.executionState = EXECUTION_STATES.STOPPED;
-            settleInterruptedRun(runningFile);
-            await writeFileAtomic(
-              runFilePath,
-              JSON.stringify(runningFile, null, 2),
-              runStateWriteOptions(
-                runFilePath,
-                "WorkflowLockManager.normalizeStaleLocks"
-              )
-            );
-            recoveredRunFiles.push(runFilePath);
-          }
+          lock.ownerToken
         );
         if (reclaimed) {
+          let runningFile: WorkingFile;
+          try {
+            runningFile = JSON.parse(
+              await fs.promises.readFile(runFilePath, "utf8")
+            );
+          } catch {
+            continue;
+          }
+          const executionState = runningFile._runtime?.executionState;
+          if (
+            isNewerRunFile(runningFile) ||
+            !executionState ||
+            !ACTIVE_EXECUTION_STATES.has(executionState as ExecutionState) ||
+            executionState === EXECUTION_STATES.PAUSED
+          ) continue;
+
+          runningFile._runtime!.executionState = EXECUTION_STATES.STOPPED;
+          settleInterruptedRun(runningFile);
+          await writeFileAtomic(
+            runFilePath,
+            JSON.stringify(runningFile, null, 2),
+            runStateWriteOptions(
+              runFilePath,
+              "WorkflowLockManager.normalizeStaleLocks"
+            )
+          );
+          recoveredRunFiles.push(runFilePath);
           Log.info(
             `[WorkflowLockManager] normalizeStaleLocks: recovered ${workflowKey} from ${lock.runRef}`
           );

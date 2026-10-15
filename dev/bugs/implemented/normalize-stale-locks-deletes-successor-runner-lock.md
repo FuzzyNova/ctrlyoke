@@ -38,3 +38,10 @@ The run-file overwrite at lines 313-325 is a blind write of a snapshot read at l
 - Write the run file through the shared `RunStateWrites`/atomic-write helper with a unique tmp name, not the hand-rolled `.tmp` plus rename.
 - Consider having `updateHeartbeat` report "lock lost" when the file is missing or its owner token differs, instead of no-oping silently, so a runner whose lock disappeared can stop or re-acquire.
 - Add a test that injects an `acquireLock` between the inspection and the unlink, and asserts that the successor's lock and run state survive.
+
+## Follow-up (review)
+
+Stale-lock ownership is rechecked and the lock is unlinked under the mutex; run
+state normalization now happens after releasing it. Since the successor owns a
+new run, a slow run-file rename cannot block lock acquisition or overwrite that
+successor's state.

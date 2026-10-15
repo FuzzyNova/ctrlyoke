@@ -122,15 +122,18 @@ export class RegexSymbolIndex implements SymbolIndex {
         path.isAbsolute(realRelative)
       )
         return [];
-      const cached = this.fileCache.get(absolutePath);
+      // A file can have a different workspace-prefixed display path after a
+      // folder is renamed, even though its absolute path and mtime are stable.
+      const cacheKey = JSON.stringify([absolutePath, viewerPath]);
+      const cached = this.fileCache.get(cacheKey);
       if (cached?.mtimeMs === stat.mtimeMs) return cached.symbols;
       const source = await fs.readFile(absolutePath, "utf8");
       if (signal?.aborted) return [];
       const symbols = extractDeclarations(source, viewerPath);
-      this.fileCache.set(absolutePath, { mtimeMs: stat.mtimeMs, symbols });
+      this.fileCache.set(cacheKey, { mtimeMs: stat.mtimeMs, symbols });
       return symbols;
     } catch {
-      this.fileCache.delete(absolutePath);
+      this.fileCache.delete(JSON.stringify([absolutePath, viewerPath]));
       return [];
     }
   }
