@@ -168,6 +168,35 @@ suite("ExecutionRootLeaseManager", function () {
     }
   });
 
+  test("removes malformed leases and continues acquisition", async () => {
+    const root = await tempDirectory("malformed");
+    try {
+      const scope = await ExecutionRootLeaseManager.getScopeInfo(root);
+      await fs.mkdir(scope.leasesRoot, { recursive: true });
+      await fs.writeFile(
+        path.join(scope.storageRoot, "scope.json"),
+        JSON.stringify({ scopeIdentity: scope.identity }),
+        "utf8"
+      );
+      const malformedNames = ["empty.json", "truncated.json"];
+      await fs.writeFile(path.join(scope.leasesRoot, malformedNames[0]), "");
+      await fs.writeFile(
+        path.join(scope.leasesRoot, malformedNames[1]),
+        '{"ownerToken":'
+      );
+
+      const lease = await ExecutionRootLeaseManager.acquire(
+        request(root, "exclusive-worktree", "after-malformed")
+      );
+      assert.deepStrictEqual(await fs.readdir(scope.leasesRoot), [
+        `${lease.ownerToken}.json`,
+      ]);
+      await lease.release();
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("owner-token verification protects a successor lease", async () => {
     const root = await tempDirectory("owner-token");
     try {
