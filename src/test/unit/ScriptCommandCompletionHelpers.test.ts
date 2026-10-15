@@ -94,6 +94,7 @@ suite("ScriptCommandCompletionHelpers", () => {
   test("finds the replacement range for every documented segment shape", () => {
     const cases = [
       { text: "npm run te", expected: 8 },
+      { text: "npm run", expected: 0 },
       { text: "npm run ", expected: 8 },
       { text: "pnpm run ", expected: 9 },
       { text: "yarn run ", expected: 9 },
@@ -160,6 +161,34 @@ suite("ScriptCommandCompletionHelpers", () => {
     assert.ok(pnpm.some((item) => item.insertText === "pnpm build"));
     const yarn = await getCompletions(root, "yarn ", 5);
     assert.ok(yarn.some((item) => item.insertText === "yarn test"));
+  });
+
+  test("keeps the package-manager run prefix when run has no trailing space", async () => {
+    const root = await createWorkspace(
+      JSON.stringify({ scripts: { build: "tsc" } })
+    );
+
+    for (const command of ["npm run", "pnpm run", "yarn run"]) {
+      const from = parseScriptCompletionContext(
+        command,
+        command.length
+      ).replacementStart;
+      const suggestions = await getCompletions(root, command, command.length);
+      const build = suggestions.find(
+        (item) => item.insertText === `${command} build`
+      );
+
+      assert.ok(build, `${command} should offer its full build command`);
+      assert.strictEqual(
+        command.slice(0, from) + build.insertText,
+        `${command} build`
+      );
+    }
+
+    assert.strictEqual(
+      parseScriptCompletionContext("npm runx", "npm runx".length).runMatch,
+      undefined
+    );
   });
 
   test("falls back to static commands without a workspace folder", async () => {

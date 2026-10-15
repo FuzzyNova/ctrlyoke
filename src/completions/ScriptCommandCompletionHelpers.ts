@@ -30,6 +30,8 @@ export interface ScriptCompletionContext {
   segment: string;
   /** Segment text from its command start through the cursor. */
   beforeCursor: string;
+  /** Package-manager `run` prefix, when a script name follows its whitespace. */
+  runMatch?: ScriptRunMatch;
 }
 
 const PACKAGE_MANAGERS = {
@@ -47,6 +49,11 @@ const SCRIPT_COMPLETION_MODES = {
   SCRIPT_NAME: "script-name",
 } as const;
 type PackageManager = (typeof PACKAGE_MANAGER_LIST)[number];
+
+interface ScriptRunMatch {
+  manager: PackageManager;
+  scriptPrefix: string;
+}
 
 interface ScriptRecord {
   name: string;
@@ -476,9 +483,15 @@ export function parseScriptCompletionContext(
   const leadingWhitespace =
     text.slice(segmentStart, cursor).match(/^\s*/)?.[0].length ?? 0;
   const commandStart = segmentStart + leadingWhitespace;
-  const runPrefix = /^(?:npm|pnpm|yarn)\s+run\s+/i.exec(beforeCursor);
-  const replacementStart = runPrefix
-    ? commandStart + runPrefix[0].length
+  const runMatchResult = /^(npm|pnpm|yarn)\s+run\b\s+(.*)$/i.exec(beforeCursor);
+  const runMatch = runMatchResult
+    ? {
+        manager: runMatchResult[1].toLowerCase() as PackageManager,
+        scriptPrefix: runMatchResult[2].trim(),
+      }
+    : undefined;
+  const replacementStart = runMatchResult
+    ? commandStart + runMatchResult[0].length - runMatchResult[2].length
     : commandStart;
 
   return {
@@ -488,6 +501,7 @@ export function parseScriptCompletionContext(
     replacementStart,
     segment,
     beforeCursor,
+    runMatch,
   };
 }
 
@@ -610,11 +624,9 @@ export async function getScriptCommandCompletions(
     ...packageCandidates(scripts),
   ]);
   const beforeCursor = context.beforeCursor;
-  const runMatch = /^(npm|pnpm|yarn)\s+run\s*(.*)$/i.exec(beforeCursor);
   let filtered: CompletionCandidate[];
-  if (runMatch) {
-    const manager = runMatch[1].toLowerCase() as PackageManager;
-    const scriptPrefix = runMatch[2].trim();
+  if (context.runMatch) {
+    const { manager, scriptPrefix } = context.runMatch;
     filtered = candidates.filter(
       (candidate) =>
         candidate.mode === SCRIPT_COMPLETION_MODES.SCRIPT_NAME &&
