@@ -2014,6 +2014,7 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_CREATED] = (message) => {
     const uiStore = useUiStore.getState();
+    uiStore.setCreateWorkflowPending(false);
     // Only close the modal on success; errors are shown by the extension via showErrorMessage
     if (!message.error) {
       uiStore.closeNewWorkflowModal();

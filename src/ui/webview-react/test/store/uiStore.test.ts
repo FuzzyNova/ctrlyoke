@@ -83,6 +83,18 @@ describe("revealWorkflowVariable", () => {
   });
 });
 
+describe("template workflow creation", () => {
+  it("tracks pending creation and resets it when the modal opens", () => {
+    store().setCreateWorkflowPending(true);
+    expect(store().createWorkflowPending).toBe(true);
+    store().openNewWorkflowModal({ templates: [] });
+    expect(store().createWorkflowPending).toBe(false);
+    store().setCreateWorkflowPending(true);
+    store().closeNewWorkflowModal();
+    expect(store().createWorkflowPending).toBe(false);
+  });
+});
+
 describe("togglePromptsCollapse", () => {
   it("flips promptsCollapsed", () => {
     expect(store().stepsCollapsed).toBe(false);

@@ -707,6 +707,7 @@ interface UiState {
 
   // New workflow modal state
   newWorkflowModalOpen: boolean;
+  createWorkflowPending: boolean;
   openCreateTemplateForm: boolean;
   templates: TemplateInfo[];
   templateCatalog: TemplateInfo[];
@@ -987,6 +988,7 @@ interface UiActions {
     openCreateTemplateForm?: boolean;
   }) => void;
   closeNewWorkflowModal: () => void;
+  setCreateWorkflowPending: (pending: boolean) => void;
   setCurrentTemplate: (template: TemplateInfo | null) => void;
   setDefaultTemplateId: (id: string) => void;
   setDefaultTemplateConfirmedId: (id: string | null) => void;
@@ -1246,6 +1248,7 @@ const initialState: UiState = {
   historySearchFilters: createDefaultHistorySearchFilters(),
   pendingHistorySearchNavigation: null,
   newWorkflowModalOpen: false,
+  createWorkflowPending: false,
   openCreateTemplateForm: false,
   templates: [],
   templateCatalog: [],
@@ -1775,6 +1778,7 @@ export const useUiStore = create<UiState & UiActions>()(
       }) =>
         set({
           newWorkflowModalOpen: true,
+          createWorkflowPending: false,
           openCreateTemplateForm: openCreateTemplateForm ?? false,
           templates,
           defaultTemplateId: defaultTemplateId ?? "blank",
@@ -1789,9 +1793,13 @@ export const useUiStore = create<UiState & UiActions>()(
       closeNewWorkflowModal: () =>
         set({
           newWorkflowModalOpen: false,
+          createWorkflowPending: false,
           openCreateTemplateForm: false,
           currentTemplate: null,
         }),
+
+      setCreateWorkflowPending: (pending) =>
+        set({ createWorkflowPending: pending }),
 
       setCurrentTemplate: (template) => set({ currentTemplate: template }),
 
@@ -2554,6 +2562,7 @@ export const useUiStore = create<UiState & UiActions>()(
           fileBrowserState: null,
           propertiesDrawerOpen: false,
           newWorkflowModalOpen: false,
+          createWorkflowPending: false,
           openCreateTemplateForm: false,
           viewingDeletedWorkflow: null,
           viewedLineageIsSystemGenerated: false,

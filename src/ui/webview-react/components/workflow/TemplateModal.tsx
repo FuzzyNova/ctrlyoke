@@ -145,6 +145,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [formRef, isNarrow] = useElementNarrow<HTMLFormElement>(
     TEMPLATE_MODAL_NARROW_PX
   );
+  const createWorkflowPending = useUiStore((s) => s.createWorkflowPending);
+  const setCreateWorkflowPending = useUiStore(
+    (s) => s.setCreateWorkflowPending
+  );
+  const createWorkflowPendingRef = useRef(false);
+  useEffect(() => {
+    createWorkflowPendingRef.current = createWorkflowPending;
+  }, [createWorkflowPending]);
 
   // Data from uiStore (populated by useMessageHandler on OPEN_NEW_WORKFLOW_MODAL)
   const templates = useUiStore((s) => s.templates);
@@ -223,6 +231,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const prevIsOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
+      createWorkflowPendingRef.current = false;
+      setCreateWorkflowPending(false);
       const requestedId = defaultTemplateId || TEMPLATE_IDS.BLANK;
       const template =
         templates.find((candidate) => candidate.id === requestedId) ??
@@ -248,7 +258,12 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
     prevIsOpenRef.current = isOpen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, openCreateTemplateForm, lastSavedTemplateScope]);
+  }, [
+    isOpen,
+    openCreateTemplateForm,
+    lastSavedTemplateScope,
+    setCreateWorkflowPending,
+  ]);
 
   useEffect(() => {
     setSelectedScope(lastSavedTemplateScope);
@@ -588,6 +603,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // Submit workflow creation
   const handleSubmit = useCallback(
     (runAfter: boolean) => {
+      if (createWorkflowPendingRef.current) return;
       const filenameIsValid = validateFilename(filename);
       let requiredVariablesAreValid = true;
       for (const variable of requiredVariables) {
@@ -597,6 +613,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       }
       if (!filenameIsValid || !requiredVariablesAreValid) return;
 
+      createWorkflowPendingRef.current = true;
+      setCreateWorkflowPending(true);
       vscode.postMessage({
         type: MESSAGE_TYPES.CREATE_WORKFLOW,
         templateId: selectedTemplateId,
@@ -613,13 +631,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       validateFilename,
       requiredVariables,
       validateRequiredVariable,
+      setCreateWorkflowPending,
     ]
   );
 
   // Keyboard handling
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === KEYBOARD_KEYS.ENTER) {
+      if (!e.repeat && e.key === KEYBOARD_KEYS.ENTER) {
         if (e.ctrlKey) {
           handleSubmit(true); // Create & Run
         } else if (e.target instanceof HTMLInputElement) {
@@ -739,19 +758,25 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               variant="secondary"
               onClick={() => handleSubmit(false)}
               disabled={
-                !filename.trim() || !!filenameError || hasUnsatisfiedRequired
+                createWorkflowPending ||
+                !filename.trim() ||
+                !!filenameError ||
+                hasUnsatisfiedRequired
               }
             >
-              Create
+              {createWorkflowPending ? "Creating…" : "Create"}
             </Button>
             <Button
               variant="primary"
               onClick={() => handleSubmit(true)}
               disabled={
-                !filename.trim() || !!filenameError || hasUnsatisfiedRequired
+                createWorkflowPending ||
+                !filename.trim() ||
+                !!filenameError ||
+                hasUnsatisfiedRequired
               }
             >
-              Create & Run
+              {createWorkflowPending ? "Creating…" : "Create & Run"}
             </Button>
           </div>
         </div>
