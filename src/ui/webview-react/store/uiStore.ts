@@ -839,6 +839,8 @@ interface UiState {
   // NOT persisted: every panel open should show the overlay until startup settles.
   startupReady: boolean;
   devRestarting: boolean;
+  /** True when the host window has no folder open; the overlay offers to open one and startup never completes. */
+  workspaceFolderRequired: boolean;
   /** True when ctrlyoke has not yet been initialized in this workspace and the user must approve before startup proceeds. */
   workspaceInitRequired: boolean;
   /** True after workspace init when the user should choose a panel layout preference (first install only). */
@@ -1186,6 +1188,7 @@ interface UiActions {
   // Startup overlay
   setStartupReady: (ready: boolean) => void;
   setDevRestarting: (restarting: boolean) => void;
+  setWorkspaceFolderRequired: (required: boolean) => void;
   setWorkspaceInitRequired: (required: boolean) => void;
   setShowLayoutPreference: (show: boolean) => void;
 
@@ -1308,6 +1311,7 @@ const initialState: UiState = {
   globalSettingsActiveTab: "general",
   startupReady: false,
   devRestarting: false,
+  workspaceFolderRequired: false,
   workspaceInitRequired: false,
   showLayoutPreference: false,
   myClientId: "",
@@ -2525,6 +2529,7 @@ export const useUiStore = create<UiState & UiActions>()(
           ...(ready
             ? {
                 devRestarting: false,
+                workspaceFolderRequired: false,
                 workspaceInitRequired: false,
                 showLayoutPreference: false,
               }
@@ -2532,6 +2537,9 @@ export const useUiStore = create<UiState & UiActions>()(
         }),
       setDevRestarting: (restarting) =>
         set({ devRestarting: restarting, startupReady: !restarting }),
+
+      setWorkspaceFolderRequired: (required) =>
+        set({ workspaceFolderRequired: required }),
 
       setWorkspaceInitRequired: (required) =>
         set({ workspaceInitRequired: required }),

@@ -35,6 +35,21 @@ import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/
 
 const execAsync = promisify(exec);
 
+/**
+ * Every discovery command runs from the home directory. Inheriting the process
+ * cwd made the result depend on how the host was launched: the VS Code
+ * extension host's cwd is the editor's install directory, never the open
+ * folder, so no workspace ever informed discovery anyway.
+ */
+const DISCOVERY_CWD = os.homedir();
+
+function execDiscoveryCommand(
+  command: string,
+  timeout: number
+): Promise<{ stdout: string; stderr: string }> {
+  return execAsync(command, { timeout, cwd: DISCOVERY_CWD });
+}
+
 // Event emitter for model registry changes
 const modelsLoadedEmitter = new TypedEmitter<void>();
 
@@ -115,7 +130,7 @@ async function queryCopilotCliModels(): Promise<void> {
     const result = await retryWithBackoff(
       async () => {
         try {
-          return await execAsync("copilot help config", { timeout: 5000 });
+          return await execDiscoveryCommand("copilot help config", 5000);
         } catch (error) {
           // On Windows, copilot.ps1 can be temporarily locked by a concurrent process.
           // Retry transient file-lock errors; let other errors fall through.
@@ -179,9 +194,10 @@ async function queryOpenCodeModels(): Promise<void> {
   try {
     // Check availability before querying models to avoid a noisy error when OpenCode is not installed
     try {
-      await execAsync("opencode --version", {
-        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
-      });
+      await execDiscoveryCommand(
+        "opencode --version",
+        CLI_VERSION_CHECK_TIMEOUT_MS
+      );
     } catch {
       Log.debug(
         "[ModelRegistry] OpenCode CLI not available, skipping model query — using fallback list"
@@ -195,9 +211,10 @@ async function queryOpenCodeModels(): Promise<void> {
     );
     let stdout = "";
     try {
-      ({ stdout } = await execAsync("opencode models --verbose", {
-        timeout: 10000,
-      }));
+      ({ stdout } = await execDiscoveryCommand(
+        "opencode models --verbose",
+        10000
+      ));
     } catch (execError) {
       // opencode sometimes exits non-zero (e.g. internal "JSON Parse error") but
       // still writes the full model list to stdout before failing. Recover it.
@@ -344,7 +361,10 @@ function execWithClosedStdin(
   timeoutMs: number
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      cwd: DISCOVERY_CWD,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
 
@@ -399,9 +419,7 @@ async function queryAntigravityModels(): Promise<void> {
   try {
     // Check availability before querying models to avoid a noisy error when Antigravity is not installed
     try {
-      await execAsync("agy --version", {
-        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
-      });
+      await execDiscoveryCommand("agy --version", CLI_VERSION_CHECK_TIMEOUT_MS);
     } catch {
       Log.debug(
         "[ModelRegistry] Antigravity CLI not available, skipping model query — using fallback list"

@@ -25,6 +25,7 @@ import {
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import {
   createNoWorktreeExecutionWorkspace,
+  requireWorkspaceRoot,
   type PlatformAdapter,
 } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
@@ -953,7 +954,7 @@ export class EndConditionEvaluator {
     workingFilePath?: string
   ): Promise<ScriptProcessResult> {
     const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
-      workspaceRoot: this.platform.getWorkspaceRoot(),
+      workspaceRoot: requireWorkspaceRoot(this.platform),
       secretStore: this.platform.getSecretStore?.(),
     });
     const env = {

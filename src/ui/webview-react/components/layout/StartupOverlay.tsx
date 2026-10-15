@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  DASHBOARD_HOST_CAPABILITIES,
+  MESSAGE_TYPES,
+  WORKSPACE_FOLDER_PICKERS,
+  type WorkspaceFolderPicker,
+} from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { Icon } from "../shared/Icon";
 
@@ -29,6 +34,8 @@ const STARTUP_SLOW_HINT_MS = 12000;
  * - Normal startup: shows a spinner until STARTUP_COMPLETE arrives (or the
  *   safety timeout above). A slow-startup hint appears after
  *   STARTUP_SLOW_HINT_MS so a long-but-healthy startup doesn't read as a hang.
+ * - No folder open: shows an "Open a folder" prompt instead of the spinner. Startup
+ *   never completes in this state; opening a folder restarts the extension host.
  * - Uninitialized workspace: shows an "Initialize ctrlyoke" prompt instead of the spinner.
  *   The safety timeout is suppressed so the init button stays visible indefinitely.
  * - First install layout preference: after init, shows a panel placement choice (step 2).
@@ -45,6 +52,7 @@ const STARTUP_SLOW_HINT_MS = 12000;
 export const StartupOverlay: React.FC = () => {
   const startupReady = useUiStore((s) => s.startupReady);
   const devRestarting = useUiStore((s) => s.devRestarting);
+  const workspaceFolderRequired = useUiStore((s) => s.workspaceFolderRequired);
   const workspaceInitRequired = useUiStore((s) => s.workspaceInitRequired);
   const showLayoutPreference = useUiStore((s) => s.showLayoutPreference);
   const setStartupReady = useUiStore((s) => s.setStartupReady);
@@ -52,7 +60,9 @@ export const StartupOverlay: React.FC = () => {
 
   const [slowStartup, setSlowStartup] = useState(false);
 
-  const suppressTimeout = workspaceInitRequired || showLayoutPreference;
+  const promptActive =
+    workspaceFolderRequired || workspaceInitRequired || showLayoutPreference;
+  const suppressTimeout = promptActive;
 
   // A healthy cold start can run well past ten seconds on a large workspace.
   // Say so rather than leaving a bare spinner that looks wedged — the overlay
@@ -67,8 +77,8 @@ export const StartupOverlay: React.FC = () => {
   }, [startupReady, suppressTimeout]);
 
   // Safety timeout: dismiss overlay if STARTUP_COMPLETE never arrives.
-  // Suppressed when workspace initialization or layout preference is pending —
-  // those prompts must stay visible until the user explicitly acts.
+  // Suppressed while a prompt (open a folder, workspace initialization, layout
+  // preference) is pending — those must stay visible until the user acts.
   // devRestarting must NOT bypass this — if the DEV panel triggered a reload
   // but the extension host restart left the webview stuck, the timeout is
   // the only recovery path until RECONNECT arrives and clears devRestarting.
@@ -83,9 +93,8 @@ export const StartupOverlay: React.FC = () => {
     return () => clearTimeout(id);
   }, [startupReady, suppressTimeout, setStartupReady]);
 
-  // Overlay stays visible if startup hasn't finished OR if either prompt is active
-  if (startupReady && !workspaceInitRequired && !showLayoutPreference)
-    return null;
+  // Overlay stays visible if startup hasn't finished OR if a prompt is active
+  if (startupReady && !promptActive) return null;
 
   return (
     <div
@@ -97,14 +106,18 @@ export const StartupOverlay: React.FC = () => {
       }}
       aria-live="polite"
       aria-label={
-        workspaceInitRequired
-          ? "Initialize ctrlyoke in this workspace"
-          : showLayoutPreference
-            ? "Choose where to dock the ctrlyoke panel"
-            : "Loading ctrlyoke…"
+        workspaceFolderRequired
+          ? "Open a folder to use ctrlyoke"
+          : workspaceInitRequired
+            ? "Initialize ctrlyoke in this workspace"
+            : showLayoutPreference
+              ? "Choose where to dock the ctrlyoke panel"
+              : "Loading ctrlyoke…"
       }
     >
-      {workspaceInitRequired ? (
+      {workspaceFolderRequired ? (
+        <OpenFolderStep />
+      ) : workspaceInitRequired ? (
         <div className="flex flex-col items-center gap-4 max-w-xs text-center px-4">
           <Icon
             name="new-folder"
@@ -120,11 +133,7 @@ export const StartupOverlay: React.FC = () => {
             working files.
           </span>
           <button
-            className="mt-1 px-4 py-1.5 text-xs font-medium rounded-sm
-                       bg-btn-bg text-btn-fg border border-btn-border
-                       hover:bg-btn-hover transition-colors
-                       focus:outline-hidden focus:ring-1 focus:ring-focus-border
-                       cursor-pointer select-none"
+            className={`mt-1 ${PRIMARY_BUTTON_CLASS}`}
             onClick={() =>
               getVsCodeApi().postMessage({
                 type: MESSAGE_TYPES.INITIALIZE_WORKSPACE,
@@ -156,6 +165,63 @@ export const StartupOverlay: React.FC = () => {
   );
 };
 
+const BUTTON_BASE_CLASS = `px-4 py-1.5 text-xs font-medium rounded-sm border
+  transition-colors focus:outline-hidden focus:ring-1 focus:ring-focus-border
+  cursor-pointer select-none`;
+const PRIMARY_BUTTON_CLASS = `${BUTTON_BASE_CLASS} bg-btn-bg text-btn-fg
+  border-btn-border hover:bg-btn-hover`;
+const SECONDARY_BUTTON_CLASS = `${BUTTON_BASE_CLASS} bg-btn-secondary-bg
+  text-btn-secondary-fg border-transparent hover:bg-btn-secondary-hover`;
+
+const openWorkspaceFolder = (picker: WorkspaceFolderPicker): void =>
+  getVsCodeApi().postMessage({
+    type: MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER,
+    picker,
+  });
+
+/**
+ * A window with no folder open. ctrlyoke keeps every workflow, run, and setting
+ * in a workspace, so there is nothing to show until one exists. The buttons
+ * need the host's own folder dialog; without it the text alone says what to do.
+ */
+const OpenFolderStep: React.FC = () => {
+  const canPickFolder = useUiStore((s) =>
+    s.hostCapabilities.includes(DASHBOARD_HOST_CAPABILITIES.pickWorkspaceFolder)
+  );
+  return (
+    <div className="flex flex-col items-center gap-4 max-w-xs text-center px-4">
+      <Icon
+        name="folder-opened"
+        className="text-description-fg opacity-80"
+        style={{ fontSize: 32 }}
+      />
+      <span className="text-sm font-medium text-foreground select-none">
+        Open a folder to use ctrlyoke
+      </span>
+      <span className="text-xs text-description-fg select-none leading-relaxed">
+        ctrlyoke runs workflows in a project folder and keeps their history
+        there. This window has no folder open.
+      </span>
+      {canPickFolder && (
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+          <button
+            className={PRIMARY_BUTTON_CLASS}
+            onClick={() => openWorkspaceFolder(WORKSPACE_FOLDER_PICKERS.BROWSE)}
+          >
+            Open Folder…
+          </button>
+          <button
+            className={SECONDARY_BUTTON_CLASS}
+            onClick={() => openWorkspaceFolder(WORKSPACE_FOLDER_PICKERS.RECENT)}
+          >
+            Open Recent…
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
   onChoose,
 }) => {
@@ -179,14 +245,7 @@ const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
         alongside chat. Prefer a wider, horizontal layout instead? Drag the
         ctrlyoke tab down to the bottom panel.
       </span>
-      <button
-        className="mt-1 px-4 py-1.5 text-xs font-medium rounded-sm
-                   bg-btn-bg text-btn-fg border border-btn-border
-                   hover:bg-btn-hover transition-colors
-                   focus:outline-hidden focus:ring-1 focus:ring-focus-border
-                   cursor-pointer select-none"
-        onClick={dismiss}
-      >
+      <button className={`mt-1 ${PRIMARY_BUTTON_CLASS}`} onClick={dismiss}>
         Got it
       </button>
       <span className="text-xs text-description-fg opacity-70 select-none leading-relaxed">

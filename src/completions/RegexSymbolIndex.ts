@@ -42,19 +42,18 @@ interface FileCacheEntry {
 export class RegexSymbolIndex implements SymbolIndex {
   private readonly fileCache = new Map<string, FileCacheEntry>();
   private readonly realWorkspaceRoots = new Map<string, Promise<string>>();
-  private readonly getWorkspaceRoot: () => string;
+  private readonly getWorkspaceRoot: () => string | undefined;
 
   constructor(
-    workspaceRoot: string | (() => string),
+    /** A getter returning `undefined` means no folder is open: no symbols. */
+    workspaceRoot: string | (() => string | undefined),
     private readonly getFiles: () => Promise<string[]>,
     private readonly resolveViewerPath?: (
       viewerPath: string
     ) => { absolutePath: string; workspaceRoot: string } | undefined
   ) {
     this.getWorkspaceRoot =
-      typeof workspaceRoot === "function"
-        ? workspaceRoot
-        : () => workspaceRoot;
+      typeof workspaceRoot === "function" ? workspaceRoot : () => workspaceRoot;
   }
 
   async workspaceSymbols(
@@ -100,6 +99,7 @@ export class RegexSymbolIndex implements SymbolIndex {
     const resolved = this.resolveViewerPath?.(viewerPath);
     if (this.resolveViewerPath && !resolved) return [];
     const workspaceRoot = resolved?.workspaceRoot ?? this.getWorkspaceRoot();
+    if (!workspaceRoot) return [];
     const absolutePath =
       resolved?.absolutePath ?? path.resolve(workspaceRoot, viewerPath);
     const relativeCheck = path.relative(workspaceRoot, absolutePath);

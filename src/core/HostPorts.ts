@@ -4,6 +4,7 @@ import {
   DASHBOARD_ACTION_RESULT_STATUSES,
   PATH_SELECTION_KINDS,
   type HarnessId,
+  type WorkspaceFolderPicker,
 } from "../types/DashboardConstants";
 
 /** Result of asking the host to perform a UI action. */
@@ -73,6 +74,8 @@ export interface DashboardHostActions {
   /** Focus the dashboard when this host provides one. */
   focusDashboard?(): void;
   openFolderWindow?(absolutePath: string): Promise<ActionResult>;
+  /** Let the user open a folder into this window, which has none. */
+  pickWorkspaceFolder?(picker: WorkspaceFolderPicker): Promise<ActionResult>;
   openGitDiff?(request: GitDiffRequest): Promise<ActionResult>;
   revealInOs?(absolutePath: string): Promise<ActionResult>;
   browseMcpGallery?(): Promise<void>;

@@ -6,6 +6,7 @@ import {
   MESSAGE_TYPES,
 } from "../../types/DashboardConstants";
 import type { SecretStore } from "../../platform/SecretStore";
+import { NO_WORKSPACE_FOLDER_MESSAGE } from "../../platform/PlatformAdapter";
 import {
   userSecretKey,
   userSecretMetadataKey,
@@ -158,6 +159,31 @@ suite("SecretRegistryService", () => {
       service.delete("not-valid", SETTING_SCOPES.USER),
       /Invalid secret name/
     );
+  });
+
+  test("with no folder open there are no workspace secrets, only user ones", async () => {
+    const store = new InMemorySecretStore();
+    await store.store(userSecretKey(OPENAI_API_KEY), "user-value");
+    const service = new SecretRegistryService({
+      secretStore: store,
+      getWorkspaceRoot: () => undefined,
+      environment: {},
+      getWorkflowReferences: async () => [],
+      getMcpReferences: async () => [],
+    });
+
+    assert.deepStrictEqual(await service.list(SETTING_SCOPES.WORKSPACE), []);
+    assert.strictEqual(await service.isResolvable(OPENAI_API_KEY), true);
+    assert.deepStrictEqual(
+      (await service.list(SETTING_SCOPES.USER)).map((entry) => entry.name),
+      [OPENAI_API_KEY]
+    );
+    const storeCallsBefore = store.storeCalls;
+    await assert.rejects(
+      service.set(OPENAI_API_KEY, SETTING_SCOPES.WORKSPACE, "secret-value"),
+      (error: Error) => error.message === NO_WORKSPACE_FOLDER_MESSAGE
+    );
+    assert.strictEqual(store.storeCalls, storeCallsBefore);
   });
 
   test("the set response contains no secret value", async () => {

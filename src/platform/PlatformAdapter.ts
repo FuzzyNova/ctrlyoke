@@ -2,6 +2,7 @@ import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import type { SecretStore } from "./SecretStore";
 import type { InteractiveTerminalMode } from "../types/DashboardConstants";
+import { noWorkspacePlaceholderRoot } from "../utils/ProjectStatePaths";
 
 /**
  * Abstraction layer for platform-specific APIs.
@@ -28,11 +29,12 @@ export interface PlatformAdapter {
    * VS Code: resolved by `WorkspaceRootResolver` in this order —
    *   1. the `ctrlyoke.workspaceDirectory` setting, if set;
    *   2. the `.code-workspace` file's directory, when one is open on disk;
-   *   3. the first workspace folder (single-folder case);
-   *   4. `process.cwd()` when no folder is open.
-   * CLI: config.cwd ?? process.cwd()
+   *   3. the first workspace folder (single-folder case).
+   *   `undefined` when the window has no folder open: there is no workspace,
+   *   and nothing may be written on its behalf.
+   * CLI: config.cwd ?? process.cwd() — never `undefined`.
    */
-  getWorkspaceRoot(): string;
+  getWorkspaceRoot(): string | undefined;
 
   /**
    * Get every directory that should be trusted as "inside the workspace" for
@@ -70,18 +72,40 @@ export interface PlatformAdapter {
 }
 
 /**
+ * The platform's workspace root, for code that only runs inside a workflow
+ * run. A run cannot start without a workspace, so reaching this with none is a
+ * bug; it throws rather than letting a caller fall back to the process cwd.
+ */
+export function requireWorkspaceRoot(platform: PlatformAdapter): string {
+  const root = platform.getWorkspaceRoot();
+  if (root === undefined) {
+    throw new Error(NO_WORKSPACE_FOLDER_MESSAGE);
+  }
+  return root;
+}
+
+/** Shown when an action needs a workspace and the window has no folder open. */
+export const NO_WORKSPACE_FOLDER_MESSAGE =
+  "No workspace folder is open. Open a folder to use ctrlyoke.";
+
+/**
  * Construct the execution workspace for ordinary, non-worktree execution.
  *
  * The approved external roots are resolved once using the state root's trust
  * identity and then carried with the execution workspace. Future worktree
  * construction belongs in a separate path; this helper is the sole builder
  * for the no-worktree shape.
+ *
+ * With no workspace (a VS Code window with no folder open) the shape is built
+ * around {@link noWorkspacePlaceholderRoot}. Nothing runs there: run and
+ * working-file paths refuse first when the platform reports no root.
  */
 export function createNoWorktreeExecutionWorkspace(
   platform: PlatformAdapter,
-  stateRoot = platform.getWorkspaceRoot(),
+  requestedStateRoot = platform.getWorkspaceRoot(),
   worktree?: ExecutionWorkspace["worktree"]
 ): ExecutionWorkspace {
+  const stateRoot = requestedStateRoot ?? noWorkspacePlaceholderRoot();
   return {
     stateRoot,
     executionRoot: stateRoot,

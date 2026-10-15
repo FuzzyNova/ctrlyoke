@@ -3,6 +3,7 @@ import * as path from "path";
 import {
   createNoWorktreeExecutionWorkspace,
   PlatformAdapter,
+  requireWorkspaceRoot,
 } from "../../platform/PlatformAdapter";
 import type { DisposableRegistry } from "../HostPorts";
 import {
@@ -970,7 +971,7 @@ export class CliIntegration extends HarnessIntegration {
       isSecretAvailable: async (name) => {
         try {
           await resolveSecretEnvironment([name], {
-            workspaceRoot: this.platform.getWorkspaceRoot(),
+            workspaceRoot: requireWorkspaceRoot(this.platform),
             secretStore: this.platform.getSecretStore?.(),
           });
           return true;
@@ -1009,7 +1010,7 @@ export class CliIntegration extends HarnessIntegration {
       },
       resolveSecretEnvironment: async (names) => {
         const values = await resolveSecretEnvironment(names, {
-          workspaceRoot: this.platform.getWorkspaceRoot(),
+          workspaceRoot: requireWorkspaceRoot(this.platform),
           secretStore: this.platform.getSecretStore?.(),
         });
         this.activeSecretRedactor?.addResolvedValues(values);

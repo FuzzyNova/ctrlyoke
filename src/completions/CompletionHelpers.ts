@@ -65,6 +65,7 @@ export function getCompletionCore(): CompletionCore {
           getCompletionFiles,
           (viewerPath) => {
             const primaryRoot = getVsCodeWorkspaceRoot();
+            if (!primaryRoot) return undefined;
             const namedRoots = getVsCodeNamedWorkspaceRoots();
             const namedRoot = rootForViewerPath(viewerPath, namedRoots);
             const workspaceRoot = namedRoot?.fsPath ?? primaryRoot;

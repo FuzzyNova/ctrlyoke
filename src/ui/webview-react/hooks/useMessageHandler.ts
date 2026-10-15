@@ -2312,6 +2312,14 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
+  // WORKSPACE_FOLDER_REQUIRED - the window has no folder; offer to open one
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKSPACE_FOLDER_REQUIRED] = () => {
+    WebviewLog.info("[startup] WORKSPACE_FOLDER_REQUIRED received");
+    useUiStore.getState().setWorkspaceFolderRequired(true);
+  };
+
+  // --------------------------------------------------------------------------
   // SHOW_LAYOUT_TIP - first-install step 2: panel placement tip
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SHOW_LAYOUT_TIP] = () => {

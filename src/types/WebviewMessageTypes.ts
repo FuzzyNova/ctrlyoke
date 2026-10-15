@@ -60,6 +60,7 @@ import {
   type HarnessStatusString,
   type CtrlYokeFileKind,
   type PriorContextDetail,
+  type WorkspaceFolderPicker,
 } from "./DashboardConstants";
 import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
@@ -3323,6 +3324,11 @@ export type IncomingMessage =
   | OpenHarnessDirResultMessage
   | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE }
   | { type: typeof MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED }
+  | { type: typeof MESSAGE_TYPES.WORKSPACE_FOLDER_REQUIRED }
   | { type: typeof MESSAGE_TYPES.INITIALIZE_WORKSPACE }
+  | {
+      type: typeof MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER;
+      picker: WorkspaceFolderPicker;
+    }
   | { type: typeof MESSAGE_TYPES.SHOW_LAYOUT_TIP }
   | { type: typeof MESSAGE_TYPES.LAYOUT_TIP_DISMISSED };

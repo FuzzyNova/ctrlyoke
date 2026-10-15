@@ -390,8 +390,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
    * Get workspace root folder path
    */
   private getWorkspaceRoot(): string | undefined {
-    const folders = vscode.workspace.workspaceFolders;
-    return folders && folders.length > 0 ? getVsCodeWorkspaceRoot() : undefined;
+    return getVsCodeWorkspaceRoot();
   }
 
   /**

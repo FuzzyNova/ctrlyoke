@@ -603,8 +603,7 @@ export class WorkflowInstance
       id: this.id,
       runnerHostIdentity: resolvedRunnerHostIdentity,
       getQueueState: () => this.promptQueue.getState(),
-      getWorkspaceRoot: () =>
-        this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+      getWorkspaceRoot: () => this.getStateRoot(),
       stop: () => this.stop(),
       getExecutionLease: () => this.executionLease,
     });
@@ -613,15 +612,18 @@ export class WorkflowInstance
         this.promptQueue.updateWorktreeRuntime(patch),
     });
 
-    const resolvedWorkspacePath =
-      workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    // With no workspace this instance can never run (every run and
+    // working-file path checks getStateRoot()); the execution workspace then
+    // carries an inert placeholder root rather than the process cwd.
     const executionWorkspace: ExecutionWorkspace =
-      createNoWorktreeExecutionWorkspace(this.platform, resolvedWorkspacePath);
+      createNoWorktreeExecutionWorkspace(this.platform, this.getStateRoot());
     this.executionWorkspace = executionWorkspace;
     this.defaultExecutionWorkspace = executionWorkspace;
     this.executionWorkspaceIdentity =
       getExecutionWorkspaceIdentity(executionWorkspace);
-    this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
+    this.outputHistoryManager = new OutputHistoryManager(
+      executionWorkspace.stateRoot
+    );
     this.sessionActivityRecorder = new SessionActivityRecorder({
       id: this.id,
       dashboardSink: this.dashboardSink,
@@ -1328,6 +1330,16 @@ export class WorkflowInstance
     };
   }
 
+  /**
+   * The directory that holds this instance's `.ctrlyoke` state, or `undefined`
+   * when the host has no workspace (a VS Code window with no folder open).
+   * Callers that would write must treat `undefined` as "refuse", never fall
+   * back to the process cwd.
+   */
+  private getStateRoot(): string | undefined {
+    return this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+  }
+
   /** Filesystem root whose coordination board belongs to this instance. */
   getExecutionRoot(): string {
     return this.executionWorkspace.executionRoot;
@@ -1543,8 +1555,7 @@ export class WorkflowInstance
       ...workflowOverrides,
     };
 
-    const workspaceFolderPath =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const workspaceFolderPath = this.getStateRoot();
     const workingFilePath = workspaceFolderPath
       ? await this.promptQueue.createWorkingFile(
           nameHint,
@@ -2010,12 +2021,11 @@ export class WorkflowInstance
       getMcpToolSkillContext: () => this.mcpToolSkillContext,
       createPriorContextResolver: (historyFilePath) =>
         createPriorContextResolver({
-          workspaceRoot:
-            this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+          workspaceRoot: this.getStateRoot(),
           projectionOptions: {
             workspaceRoots: this.platform.getWorkspaceRoots(),
             approvedExternalRoots: this.platform.getApprovedExternalFileRoots?.(
-              this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()
+              this.getStateRoot()
             ),
           },
           historyFilePath,
@@ -2076,8 +2086,7 @@ export class WorkflowInstance
         return {
           workflowKey: state.workflowKey,
           runRef: state.runRef,
-          lockWorkspaceRoot:
-            this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+          lockWorkspaceRoot: this.getStateRoot(),
         };
       },
       acquireExecutionLease: async (
@@ -2182,8 +2191,7 @@ export class WorkflowInstance
     expectedDefinitionRevision: number,
     onPrepared?: () => Promise<void>
   ): Promise<void> {
-    const workspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const workspaceRoot = this.getStateRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -2721,8 +2729,7 @@ export class WorkflowInstance
       return;
     }
 
-    const workspaceFolderPath =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const workspaceFolderPath = this.getStateRoot();
     if (!workspaceFolderPath) {
       return;
     }
@@ -3132,8 +3139,7 @@ export class WorkflowInstance
         `Cannot set start position while in state ${executionState}`
       );
     }
-    const workspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const workspaceRoot = this.getStateRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -4355,8 +4361,7 @@ export class WorkflowInstance
     }
 
     const state = this.promptQueue.getState();
-    const sourceCheckoutRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const sourceCheckoutRoot = this.getStateRoot();
     if (!sourceCheckoutRoot || !state.workflowKey || !state.runRef) {
       throw new Error(
         "Named worktree execution requires a promoted workflow run and Git workspace."
@@ -4571,8 +4576,8 @@ export class WorkflowInstance
     const managedTerminalRun =
       terminalWorktreeRun &&
       this.activeWorktree?.mode === WORKTREE_MODES.MANAGED;
-    const workspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    // Only a started run reaches settlement, and a run needs a state root.
+    const workspaceRoot = this.executionWorkspace.stateRoot;
     const integrationCleanup = await this.settleExecutionIntegrations(
       options,
       preserveWorktreeReservation,
@@ -5009,7 +5014,7 @@ export class WorkflowInstance
           changedFilePath,
           undefined,
           false,
-          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()
+          this.getStateRoot()
         );
 
         const workingFile =
@@ -5056,8 +5061,7 @@ export class WorkflowInstance
   ): Promise<string | undefined> {
     const address =
       WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-    const workspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const workspaceRoot = this.getStateRoot();
     if (!address || !workspaceRoot) return undefined;
     return (
       (
@@ -5446,8 +5450,7 @@ export class WorkflowInstance
       }
     }
 
-    const workspaceFolderPath =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const workspaceFolderPath = this.getStateRoot();
     if (!workingFilePath && workspaceFolderPath) {
       try {
         workingFilePath = await this.promptQueue.createWorkingFile(

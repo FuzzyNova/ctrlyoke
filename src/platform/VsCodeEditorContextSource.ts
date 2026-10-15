@@ -17,8 +17,11 @@ function viewerPath(document: vscode.TextDocument): string {
   if (document.uri.scheme === VSCODE_URI_SCHEMES.OUTPUT) {
     return document.uri.path.replace(/^\//, "");
   }
+  const primaryRoot = getVsCodeWorkspaceRoot();
+  // With no folder open there is nothing to be relative to.
+  if (!primaryRoot) return document.uri.fsPath;
   return toViewerPath(document.uri.fsPath, {
-    primaryRoot: getVsCodeWorkspaceRoot(),
+    primaryRoot,
     namedRoots: getVsCodeNamedWorkspaceRoots(),
   });
 }

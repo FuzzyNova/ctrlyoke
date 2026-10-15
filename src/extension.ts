@@ -20,7 +20,6 @@ import { CtrlYokeWebviewProvider } from "./ui/CtrlYokeWebviewProvider";
 import { DashboardApplication } from "./ui/DashboardApplication";
 import {
   getVsCodeWorkspaceRoot,
-  getVsCodeWorkspaceFolder,
   getVsCodeNamedWorkspaceRoots,
   getVsCodeTrustedWorkspaceRoots,
   getVsCodeRequestedExternalWorkspaceRoot,
@@ -28,6 +27,7 @@ import {
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
+import { NO_WORKSPACE_FOLDER_MESSAGE } from "./platform/PlatformAdapter";
 import { VsCodeDashboardHostActions } from "./platform/VsCodeDashboardHostActions";
 import {
   QUIET_SERVER_COMMAND,
@@ -260,18 +260,21 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize config service with file-based backends BEFORE
     // initializeVsCodeLogging() so isDiagnosticLogsEnabled() reads the correct
     // user/workspace value when deciding whether to open the log file.
-    const workspaceFolders = vscode.workspace.workspaceFolders;
+    // Window-stable: the first folder change restarts the extension host.
+    // `undefined` means the window has no folder open, so there is no
+    // workspace and the dashboard shows its "Open a folder" screen.
+    const windowWorkspaceRoot = getVsCodeWorkspaceRoot();
     const userConfigBackend = createUserConfigBackend();
     configService.setUserBackend(userConfigBackend);
-    const workspaceConfigBackend = workspaceFolders?.length
-      ? createWorkspaceConfigBackend(getVsCodeWorkspaceRoot())
+    const workspaceConfigBackend = windowWorkspaceRoot
+      ? createWorkspaceConfigBackend(windowWorkspaceRoot)
       : undefined;
     if (workspaceConfigBackend) {
       configService.setWorkspaceBackend(workspaceConfigBackend);
     }
     const promptPendingExternalRoots = async (): Promise<void> => {
-      if (!vscode.workspace.isTrusted) return;
       const stateRoot = getVsCodeWorkspaceRoot();
+      if (!vscode.workspace.isTrusted || !stateRoot) return;
       const workspaceIdentity =
         ExternalRootsTrustStore.canonicalizeRoot(stateRoot);
       const requestedStateRoot = getVsCodeRequestedExternalWorkspaceRoot();
@@ -300,7 +303,7 @@ export async function activate(context: vscode.ExtensionContext) {
     };
     context.subscriptions.push(
       vscode.workspace.onDidGrantWorkspaceTrust(() => {
-        if (vscode.workspace.workspaceFolders?.length) {
+        if (windowWorkspaceRoot) {
           void webviewProvider
             .awaitPanelReady()
             .then(promptPendingExternalRoots)
@@ -314,10 +317,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Initialize logging system early (creates output channel)
-    initializeVsCodeLogging(
-      context,
-      workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
-    );
+    initializeVsCodeLogging(context, windowWorkspaceRoot);
     // Reclaim groups left by killed Antigravity runs without delaying startup.
     void AntigravityCliProvider.sweepOrphanedGlobalHooks();
     // Samples heap growth into the session log. The one-time heap snapshot is
@@ -393,9 +393,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Freeze storage placement before any history consumer is initialized.
     const runHistoryLocation = configService.get("storage").runHistoryLocation;
     initializeRunHistoryLocation(runHistoryLocation);
-    const resolvedStateRoot = workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const resolvedStateRoot = windowWorkspaceRoot;
     const gitToplevel = resolvedStateRoot
       ? await repoToplevel(resolvedStateRoot)
       : null;
@@ -428,8 +426,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // initialization until the user approves via the "Initialize ctrlyoke"
     // prompt in the dashboard.
     let pendingInitWorkspaceRoot: string | undefined;
-    if (workspaceFolders && workspaceFolders.length > 0) {
-      const workspaceRoot = getVsCodeWorkspaceRoot();
+    if (windowWorkspaceRoot) {
+      const workspaceRoot = windowWorkspaceRoot;
 
       if (WorkspaceInitializer.isInitialized(workspaceRoot)) {
         // Already initialized — idempotently ensure scaffold is up to date
@@ -485,24 +483,21 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     const templateManager = new TemplateManager(
       context.extensionPath,
-      () => getVsCodeWorkspaceFolder()?.uri.fsPath,
+      getVsCodeWorkspaceRoot,
       platform,
       (scope) => configService.getScoped("templates", scope)?.variableDefaults
     );
     const webviewHostDependencies = {
       actions: dashboardHostActions,
       serverControl: new VsCodeHostedServerControl(),
-      getWorkspaceRoot: () =>
-        vscode.workspace.workspaceFolders?.length
-          ? getVsCodeWorkspaceRoot()
-          : undefined,
+      getWorkspaceRoot: getVsCodeWorkspaceRoot,
       getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
       fileWatcherFactory,
       completionCore: getCompletionCore(),
       getNamedRoots: () => {
         const roots = getVsCodeNamedWorkspaceRoots();
-        if (roots.length === 0) return [];
         const workspaceRoot = getVsCodeWorkspaceRoot();
+        if (!workspaceRoot) return [];
         const primary = roots.find((root) => root.fsPath === workspaceRoot);
         return [
           {
@@ -527,7 +522,6 @@ export async function activate(context: vscode.ExtensionContext) {
       keyValueStore: new VsCodeKeyValueStore(context.workspaceState),
       secretStore: platform.getSecretStore(),
       getWorkspaceRoot: webviewHostDependencies.getWorkspaceRoot,
-      getSecretWorkspaceRoot: getVsCodeWorkspaceRoot,
       getNamedRoots: webviewHostDependencies.getNamedRoots,
       getTrustedRoots: getVsCodeTrustedWorkspaceRoots,
       actions: dashboardHostActions,
@@ -568,7 +562,7 @@ export async function activate(context: vscode.ExtensionContext) {
       await webviewProvider.awaitPanelReady();
       return webviewProvider.getUserInteractionPort();
     });
-    if (workspaceFolders && workspaceFolders.length > 0) {
+    if (windowWorkspaceRoot) {
       void webviewProvider
         .awaitPanelReady()
         .then(promptPendingExternalRoots)
@@ -584,10 +578,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Ask once the dashboard can show the prompt, again when VS Code grants
     // workspace trust, and whenever a settings read meets a new value.
     const trustPrompter = new WorkspaceSettingsTrustPrompter(
-      () =>
-        vscode.workspace.workspaceFolders?.length
-          ? getVsCodeWorkspaceRoot()
-          : undefined,
+      getVsCodeWorkspaceRoot,
       async () => {
         await webviewProvider.awaitPanelReady();
         return webviewProvider.getUserInteractionPort();
@@ -642,7 +633,7 @@ export async function activate(context: vscode.ExtensionContext) {
     workflowOrchestrator = new WorkflowOrchestrator({
       platform,
       dashboardHostActions,
-      workspaceFolderPathResolver: () => getVsCodeWorkspaceFolder()?.uri.fsPath,
+      workspaceFolderPathResolver: getVsCodeWorkspaceRoot,
       dashboardProvider: dashboardApplication,
       userFeedbackSink,
       runnerHostIdentity,
@@ -656,10 +647,12 @@ export async function activate(context: vscode.ExtensionContext) {
       userInteractionPort: webviewProvider.getUserInteractionPort(),
     });
 
-    // If ctrlyoke has not yet been initialized in this workspace, gate startup
-    // behind an init prompt. Must be set before initialize() so the check is in
-    // place when READY arrives.
-    if (pendingInitWorkspaceRoot) {
+    // With no folder open, or ctrlyoke not yet initialized in this workspace,
+    // gate startup behind the matching prompt. Must be set before initialize()
+    // so the check is in place when READY arrives.
+    if (!windowWorkspaceRoot) {
+      workflowOrchestrator.setWorkspaceFolderRequired();
+    } else if (pendingInitWorkspaceRoot) {
       workflowOrchestrator.setWorkspaceInitPending(pendingInitWorkspaceRoot);
     }
 
@@ -710,14 +703,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // added/removed) we no-op; when it changed (e.g. the resolver was falling
     // back to folder [0] and [0] was removed) we offer a window reload rather
     // than hot-swapping the singleton stack mid-session.
-    let resolvedWorkspaceRoot = workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    let resolvedWorkspaceRoot = windowWorkspaceRoot;
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        const nextRoot = vscode.workspace.workspaceFolders?.length
-          ? getVsCodeWorkspaceRoot()
-          : undefined;
+        const nextRoot = getVsCodeWorkspaceRoot();
         if (nextRoot === resolvedWorkspaceRoot) {
           return;
         }
@@ -867,8 +856,7 @@ function registerCommands(
       message
     );
   };
-  const getWorkspaceRoot = () =>
-    vscode.workspace.workspaceFolders?.length ? getVsCodeWorkspaceRoot() : "";
+  const getWorkspaceRoot = () => getVsCodeWorkspaceRoot() ?? "";
   const contextMenuReferenceCommands = new ContextMenuReferenceCommands(
     webviewProvider,
     getWorkspaceRoot,
@@ -1169,13 +1157,13 @@ function registerCommands(
   const pickWorkflowFile = async (
     placeHolder: string
   ): Promise<string | undefined> => {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      vscode.window.showErrorMessage("No workspace folder open");
+    const workspaceRoot = getVsCodeWorkspaceRoot();
+    if (!workspaceRoot) {
+      vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
       return undefined;
     }
 
-    const promptFiles = findWorkflowFilesInWorkspace(getVsCodeWorkspaceRoot());
+    const promptFiles = findWorkflowFilesInWorkspace(workspaceRoot);
 
     if (promptFiles.length === 0) {
       vscode.window.showWarningMessage("No prompt files found in workspace");
@@ -1353,13 +1341,9 @@ function registerCommands(
   const openGitChangeCommand = vscode.commands.registerCommand(
     "ctrlyoke.openGitChange",
     async (args: { ref: string; workspaceRoot?: string }) => {
-      const workspaceRoot =
-        args.workspaceRoot ??
-        (vscode.workspace.workspaceFolders?.length
-          ? getVsCodeWorkspaceRoot()
-          : undefined);
+      const workspaceRoot = args.workspaceRoot ?? getVsCodeWorkspaceRoot();
       if (!workspaceRoot) {
-        vscode.window.showErrorMessage("ctrlyoke: No workspace folder open.");
+        vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
         return;
       }
 
@@ -1699,15 +1683,13 @@ function registerCommands(
   const initWorkspaceCommand = vscode.commands.registerCommand(
     "ctrlyoke.initWorkspace",
     async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders || workspaceFolders.length === 0) {
-        vscode.window.showErrorMessage(
-          "ctrlyoke: No workspace folder open. Open a folder first."
-        );
+      const workspaceRoot = getVsCodeWorkspaceRoot();
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
         return;
       }
       try {
-        await WorkspaceInitializer.reinitialize(getVsCodeWorkspaceRoot());
+        await WorkspaceInitializer.reinitialize(workspaceRoot);
         vscode.window.showInformationMessage(
           `ctrlyoke: Workspace initialized — ${PATH_CONSTANTS.CTRLYOKE_DIR}/ and its .gitignore are up to date.`
         );
@@ -1738,8 +1720,13 @@ function registerCommands(
         if (!options?.quiet && runningUrl) confirmServerRunning(runningUrl);
         return;
       }
-      const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const stateRoot = getVsCodeWorkspaceRoot();
+      if (!stateRoot) {
+        // The server's token and file access are both scoped to a workspace.
+        if (!options?.quiet) reportCommandError(NO_WORKSPACE_FOLDER_MESSAGE);
+        return;
+      }
+      const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const workspaceRoot = getVsCodeFileAccessWorkspaceRoot() ?? stateRoot;
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
@@ -1892,10 +1879,12 @@ function registerCommands(
   const regenerateServerTokenCommand = vscode.commands.registerCommand(
     "ctrlyoke.regenerateServerToken",
     async () => {
-      await new ServerTokenStore(
-        machineSecretStore,
-        getVsCodeWorkspaceRoot()
-      ).regenerate();
+      const stateRoot = getVsCodeWorkspaceRoot();
+      if (!stateRoot) {
+        reportCommandError(NO_WORKSPACE_FOLDER_MESSAGE);
+        return;
+      }
+      await new ServerTokenStore(machineSecretStore, stateRoot).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });
