@@ -162,41 +162,61 @@ suite("UserHookEnvironment", () => {
     }
   });
 
-  test("uses a stable run-scoped environment file when requested", () => {
-    const hooks = [
-      { event: "stop" as const, command: "echo hook", env: { TOKEN: "value" } },
-    ];
-    const first = prepareUserHookEnvironments({
-      harnessId: HARNESS_IDS.QWEN_CLI,
-      extensionPath,
-      hookTempDirectory: os.tmpdir(),
-      promptIndex: 0,
-      stableFileStem: "workflow-run-123",
-      hooks,
-    });
-    const nextStep = prepareUserHookEnvironments({
-      harnessId: HARNESS_IDS.QWEN_CLI,
-      extensionPath,
-      hookTempDirectory: os.tmpdir(),
-      promptIndex: 1,
-      stableFileStem: "workflow-run-123",
-      hooks,
-    });
-    const concurrentRun = prepareUserHookEnvironments({
-      harnessId: HARNESS_IDS.QWEN_CLI,
-      extensionPath,
-      hookTempDirectory: os.tmpdir(),
-      promptIndex: 0,
-      stableFileStem: "workflow-run-456",
-      hooks,
-    });
-
-    assert.strictEqual(first.tempFilePath, nextStep.tempFilePath);
-    assert.notStrictEqual(first.tempFilePath, concurrentRun.tempFilePath);
-    assert.strictEqual(
-      first.hooks?.[0].command,
-      nextStep.hooks?.[0].command
+  test("isolates concurrent Qwen step env files and reuses each step path", async () => {
+    const tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-qwen-step-env-")
     );
+    const hooksFor = (token: string) => [
+      { event: "stop" as const, command: "echo hook", env: { TOKEN: token } },
+    ];
+    try {
+      const first = prepareUserHookEnvironments({
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        extensionPath,
+        hookTempDirectory: tempDirectory,
+        promptIndex: 0,
+        stableFileStem: "workflow-run-123-step-0",
+        hooks: hooksFor("first"),
+      });
+      const nextStep = prepareUserHookEnvironments({
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        extensionPath,
+        hookTempDirectory: tempDirectory,
+        promptIndex: 1,
+        stableFileStem: "workflow-run-123-step-1",
+        hooks: hooksFor("second"),
+      });
+      const rerunFirstStep = prepareUserHookEnvironments({
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        extensionPath,
+        hookTempDirectory: tempDirectory,
+        promptIndex: 0,
+        stableFileStem: "workflow-run-123-step-0",
+        hooks: hooksFor("first"),
+      });
+      const concurrentRun = prepareUserHookEnvironments({
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        extensionPath,
+        hookTempDirectory: tempDirectory,
+        promptIndex: 0,
+        stableFileStem: "workflow-run-456-step-0",
+        hooks: hooksFor("other run"),
+      });
+
+      assert.notStrictEqual(first.tempFilePath, nextStep.tempFilePath);
+      assert.strictEqual(first.tempFilePath, rerunFirstStep.tempFilePath);
+      assert.notStrictEqual(first.tempFilePath, concurrentRun.tempFilePath);
+      await first.mutation!.apply();
+      await nextStep.mutation!.apply();
+      await fs.rm(first.tempFilePath!, { force: true });
+      await assert.rejects(fs.access(first.tempFilePath!));
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(nextStep.tempFilePath!, "utf8")),
+        { "hook-0": { env: { TOKEN: "second" } } }
+      );
+    } finally {
+      await fs.rm(tempDirectory, { recursive: true, force: true });
+    }
   });
 
   test("launcher passes stdin and stdout through and returns the command exit code", async () => {

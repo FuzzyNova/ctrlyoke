@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 import { SettingsJsonHooksTracker } from "../../core/harness/shared/SettingsJsonHooksTracker";
+import { isCtrlYokeQwenHookGroup } from "../../core/harness/qwen/QwenNotificationMonitor";
 
 suite("SettingsJsonHooksTracker", () => {
   let tmpDir: string;
@@ -54,6 +55,42 @@ suite("SettingsJsonHooksTracker", () => {
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
     assert.strictEqual(settings.hooks.Stop.length, 2);
     assert.strictEqual(tracker.getActiveWorkflowCount(), 1);
+  });
+
+  test("keeps live Qwen owner groups and discards groups from dead owners", async () => {
+    const qwenGroup = (pid: number) => ({
+      hooks: [
+        {
+          type: "command",
+          command: `node /extension/out/scripts/ctrlyoke-qwen-hook.js /workspace/.ctrlyoke/temp/qwen-notifications "" --ctrlyoke-owner-pid=${pid}`,
+        },
+      ],
+    });
+    const liveGroup = qwenGroup(process.pid);
+    const deadGroup = qwenGroup(2147483647);
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ hooks: { Stop: [liveGroup, deadGroup] } })
+    );
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow(
+      "wf-live-check",
+      tmpDir,
+      { Stop: [{ hooks: [{ type: "command", command: "node current.js" }] }] },
+      {},
+      { discardHookGroup: isCtrlYokeQwenHookGroup }
+    );
+
+    let settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
+    assert.ok(
+      JSON.stringify(settings.hooks).includes(`owner-pid=${process.pid}`)
+    );
+    assert.ok(!JSON.stringify(settings.hooks).includes("owner-pid=2147483647"));
+
+    await tracker.unregisterWorkflow("wf-live-check", tmpDir);
+    settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
+    assert.deepStrictEqual(settings.hooks.Stop, [liveGroup]);
   });
 
   test("should restore baseline on last unregister", async () => {

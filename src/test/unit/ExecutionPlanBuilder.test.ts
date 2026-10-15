@@ -76,6 +76,46 @@ function createBuilder(
 }
 
 suite("ExecutionPlanBuilder", () => {
+  test("uses a stable but step-specific env file for Qwen hooks", async () => {
+    const workspaceRoot = "workspace";
+    const properties: ResolvedProperties = {
+      ...resolvedProperties,
+      harness: HARNESS_IDS.QWEN_CLI,
+      hooks: [
+        {
+          event: "stop",
+          command: "echo hook",
+          env: { TOKEN: "value" },
+        },
+      ],
+    };
+    const builder = createBuilder(new QwenCliProvider(), workspaceRoot);
+    const makeSession = (promptIndex: number) =>
+      new CliExecutionSession({
+        prompt: { prompt: "prompt text" },
+        resolvedProperties: properties,
+        workflowContext: {
+          promptIndex,
+          allPrompts: [],
+          resolvedProperties: properties,
+          workingFilePath: "workflow.yaml",
+        },
+      });
+
+    const stepZero = await builder.plan(makeSession(0));
+    const stepOne = await builder.plan(makeSession(1));
+    const rerunStepZero = await builder.plan(makeSession(0));
+
+    assert.notStrictEqual(
+      stepZero.deferredHookEnvironmentFilePaths[0],
+      stepOne.deferredHookEnvironmentFilePaths[0]
+    );
+    assert.strictEqual(
+      stepZero.deferredHookEnvironmentFilePaths[0],
+      rerunStepZero.deferredHookEnvironmentFilePaths[0]
+    );
+  });
+
   test("passes the resolved execution mode to image argument builders", async () => {
     const provider = new OpenCodeCliProvider();
     const receivedModes: boolean[] = [];

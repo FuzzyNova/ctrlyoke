@@ -81,14 +81,34 @@ suite("QwenTrustedHooksTracker", () => {
     assert.deepStrictEqual(trustFile[otherWorkspace], [":other-hook"]);
   });
 
-  test("reuses the workspace trust entry for env hooks across steps", async () => {
-    const command =
-      ':node "extension/out/scripts/ctrlyoke-hook-run.js" "state/temp/hook-environments/user-hook-env-run-123.json" hook-0 stop YQ==';
+  test("reuses a step trust key across runs while keeping concurrent steps distinct", async () => {
+    const commandForStep = (step: number) =>
+      `:node "extension/out/scripts/ctrlyoke-hook-run.js" "state/temp/hook-environments/user-hook-env-run-123-${step}.json" hook-0 stop YQ==`;
+    const firstStepCommand = commandForStep(0);
 
-    await tracker().registerWorkflow("run-123-step-0", workspaceRoot, [], [command]);
-    await tracker().registerWorkflow("run-123-step-1", workspaceRoot, [], [command]);
+    await tracker().registerWorkflow(
+      "run-a-step-0",
+      workspaceRoot,
+      [],
+      [firstStepCommand]
+    );
+    await tracker().registerWorkflow(
+      "run-b-step-0",
+      workspaceRoot,
+      [],
+      [firstStepCommand]
+    );
+    await tracker().registerWorkflow(
+      "run-a-step-1",
+      workspaceRoot,
+      [],
+      [commandForStep(1)]
+    );
 
-    assert.deepStrictEqual((await readTrustFile())[workspaceRoot], [command]);
+    assert.deepStrictEqual((await readTrustFile())[workspaceRoot], [
+      firstStepCommand,
+      commandForStep(1),
+    ]);
   });
 
   test("reference-counts ctrlyoke keys by workflow key while retaining trust", async () => {

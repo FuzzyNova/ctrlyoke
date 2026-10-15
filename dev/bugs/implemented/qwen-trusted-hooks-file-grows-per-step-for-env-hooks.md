@@ -48,3 +48,11 @@ path. This keeps the command trust key identical across steps while isolating
 concurrent workflow runs. Other harnesses keep their per-step UUID filenames.
 
 **Resolution:** fixed in this commit
+
+## Follow-up (review)
+
+Review found that a run-wide env filename lets concurrent steps overwrite the
+same `hook-<index>` values and lets one step's cleanup unlink another step's
+file. Qwen now includes the prompt index in the stable run stem: each step has
+an isolated env file, and reruns of that step keep the same trusted command.
+Other harnesses continue using their per-invocation UUID filenames.

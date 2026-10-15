@@ -38,3 +38,19 @@ The user's own `qwen` sessions in that workspace keep running the trusted ctrlyo
 - If the policy is still unused after that, remove the optional parameter instead.
 
 **Resolution:** fixed in this commit
+
+## Decision
+
+New Qwen hook commands carry the extension host PID as an ignored trailing
+argument. Baseline cleanup discards a marked group only when that PID returns
+`ESRCH`; a live or permission-protected PID remains part of the baseline. For
+legacy commands without an owner marker, cleanup discards the group only when
+the referenced hook script no longer exists. This uses the command's existing
+notify-directory argument and does not add a separate lock or marker file.
+
+## Follow-up (review)
+
+Review confirmed that active Qwen hook groups survive registrations from other
+ctrlyoke processes, while groups from dead marked owners and legacy commands
+whose installed script is gone can be removed. The temp `.qwen/.gitignore`
+cleanup remains tied to a baseline containing only discarded groups.

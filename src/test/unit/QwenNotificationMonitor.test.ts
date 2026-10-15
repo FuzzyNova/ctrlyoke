@@ -40,6 +40,20 @@ suite("QwenNotificationMonitor", () => {
     );
   });
 
+  test("retains a live owner and discards a dead owner", () => {
+    const groupFor = (pid: number) => ({
+      hooks: [
+        {
+          type: "command",
+          command: `node /extension/out/scripts/ctrlyoke-qwen-hook.js /workspace/.ctrlyoke/temp/qwen-notifications "" --ctrlyoke-owner-pid=${pid}`,
+        },
+      ],
+    });
+
+    assert.strictEqual(isCtrlYokeQwenHookGroup(groupFor(process.pid)), false);
+    assert.strictEqual(isCtrlYokeQwenHookGroup(groupFor(2147483647)), true);
+  });
+
   test("registers Notification for a selected event", () => {
     const config = new QwenNotificationMonitor().buildHookConfig(
       "script.js",
@@ -53,6 +67,8 @@ suite("QwenNotificationMonitor", () => {
 
     assert.ok(hooks.Notification);
     assert.strictEqual(hooks.Notification.length, 1);
-    assert.ok(JSON.stringify(hooks.Notification).includes("script.js"));
+    const command = JSON.stringify(hooks.Notification);
+    assert.ok(command.includes("script.js"));
+    assert.ok(command.includes(`--ctrlyoke-owner-pid=${process.pid}`));
   });
 });

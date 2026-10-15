@@ -185,7 +185,9 @@ export class ExecutionPlanBuilder {
           promptIndex,
           ...(this.deps.provider.config.harnessId === HARNESS_IDS.QWEN_CLI &&
           workingFilePath
-            ? { stableFileStem: runArtifactStem(workingFilePath) }
+            ? {
+                stableFileStem: `${runArtifactStem(workingFilePath)}-${promptIndex}`,
+              }
             : {}),
         });
         userHooks.splice(0, userHooks.length, ...(hookEnvironment.hooks ?? []));

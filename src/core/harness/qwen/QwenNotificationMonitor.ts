@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import {
   HOOK_CONFIG_TYPES,
   INotificationMonitor,
@@ -19,15 +21,16 @@ import {
 
 const CTRLYOKE_QWEN_HOOK_SCRIPT = "ctrlyoke-qwen-hook.js";
 const QWEN_COMMAND_HOOK_TYPE = "command";
+const OWNER_PID_ARGUMENT = "--ctrlyoke-owner-pid=";
 
-/** Identify a leftover ctrlyoke Qwen hook group across extension versions. */
+/** Identify an orphaned ctrlyoke Qwen hook group across extension versions. */
 export function isCtrlYokeQwenHookGroup(group: unknown): boolean {
   if (!group || typeof group !== "object" || Array.isArray(group)) {
     return false;
   }
 
   const hooks = (group as { hooks?: unknown }).hooks;
-  return (
+  const isCtrlYokeGroup = (
     Array.isArray(hooks) &&
     hooks.length > 0 &&
     hooks.every((hook) => {
@@ -46,6 +49,34 @@ export function isCtrlYokeQwenHookGroup(group: unknown): boolean {
       );
     })
   );
+  if (!isCtrlYokeGroup) return false;
+
+  const firstCommand = (hooks as Array<{ command: string }>)[0].command;
+  const ownerPidMatch = firstCommand.match(
+    new RegExp(`${OWNER_PID_ARGUMENT}(\\d+)(?=$|[\\s"'])`, "i")
+  );
+  if (ownerPidMatch) {
+    try {
+      process.kill(Number(ownerPidMatch[1]), 0);
+      return false;
+    } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      return errorCode === "ES" + "RCH";
+    }
+  }
+
+  // Legacy commands have no owner marker. Only discard them when their script
+  // path is gone, which proves the command cannot belong to a live install.
+  const escapedScriptName = CTRLYOKE_QWEN_HOOK_SCRIPT.replace(".", "\\.");
+  const scriptPathMatch = firstCommand.match(
+    new RegExp(
+      `(?:^|\\s|["'])((?:[A-Za-z]:)?[^\\s"']*${escapedScriptName})(?=$|[\\s"'])`,
+      "i"
+    )
+  );
+  return scriptPathMatch
+    ? !fs.existsSync(path.normalize(scriptPathMatch[1]))
+    : false;
 }
 
 /**
@@ -144,12 +175,16 @@ export class QwenNotificationMonitor
     // passes literally to the child process — the quote becomes part of argv[1], making Node.js
     // treat the absolute path as relative. Forward-slash absolute paths work without quotes on
     // Windows as long as they contain no spaces. Paths with spaces are a known limitation.
+    const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      [notifyDir],
+      [
+        notifyDir,
+        encodedDecisionHook ?? "",
+        `${OWNER_PID_ARGUMENT}${process.pid}`,
+      ],
       CliNotificationMonitor.shouldQuoteNodeCommand(HARNESS_IDS.QWEN_CLI)
     );
-    const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
 
     const hooks: Record<string, unknown[]> = {};
     for (const event of ctrlyokeEvents ?? [
@@ -161,10 +196,7 @@ export class QwenNotificationMonitor
       if (!nativeEvent) {
         continue;
       }
-      const eventCommand =
-        event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
-          ? `${command} ${encodedDecisionHook}`
-          : command;
+      const eventCommand = command;
       hooks[nativeEvent] = [
         {
           hooks: [{ type: QWEN_COMMAND_HOOK_TYPE, command: eventCommand }],
