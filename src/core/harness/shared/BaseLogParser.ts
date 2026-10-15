@@ -386,44 +386,7 @@ export abstract class BaseLogParser implements ILogParser {
    */
   async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     try {
-      // Check if file exists
-      if (!fs.existsSync(filePath)) {
-        return [];
-      }
-
-      // Get current file size
-      const stats = fs.statSync(filePath);
-      const currentSize = stats.size;
-
-      // If file was truncated or rotated, reset position
-      if (currentSize < this.lastReadPosition) {
-        this.lastReadPosition = 0;
-        this.resetIncrementalLineState();
-      }
-
-      // If no new content, return empty array
-      if (currentSize === this.lastReadPosition) {
-        return [];
-      }
-
-      // Read only new content (from lastReadPosition to end)
-      const buffer = Buffer.alloc(currentSize - this.lastReadPosition);
-      const fd = fs.openSync(filePath, "r");
-      try {
-        fs.readSync(fd, buffer, 0, buffer.length, this.lastReadPosition);
-      } finally {
-        fs.closeSync(fd);
-      }
-
-      // Update read position
-      this.lastReadPosition = currentSize;
-
-      // Parse JSONL format (one JSON object per line). fs.watch may fire while
-      // the writer is between chunks of the same line; keep an incomplete tail
-      // instead of advancing past it permanently.
-      const content = this.pendingLogText + this.logDecoder.write(buffer);
-      this.pendingLogText = "";
-      const { lines, remainder } = splitCompleteLines(content);
+      const lines = this.readNewCompleteLines(filePath, true);
 
       const entries: BaseCliEvent[] = [];
       for (const line of lines) {
@@ -447,20 +410,55 @@ export abstract class BaseLogParser implements ILogParser {
       // A valid final JSON value does not require a newline (for example a
       // completed static log fixture). Only retain the tail when parsing proves
       // that the writer has not finished it yet.
-      const trailingText = remainder.trim();
-      if (trailingText) {
-        try {
-          entries.push(JSON.parse(trailingText) as BaseCliEvent);
-        } catch {
-          this.pendingLogText = remainder;
-        }
-      }
-
       return entries;
     } catch (error) {
       // File read errors are thrown (caller should handle)
       throw new Error(`Failed to read log file: ${getErrorMessage(error)}`);
     }
+  }
+
+  /** Read appended bytes and return complete lines, preserving decoder and tail state. */
+  protected readNewCompleteLines(
+    filePath: string,
+    acceptValidUnterminatedJson = false
+  ): string[] {
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
+    const currentSize = fs.statSync(filePath).size;
+    if (currentSize < this.lastReadPosition) {
+      this.lastReadPosition = 0;
+      this.resetIncrementalLineState();
+    }
+    if (currentSize === this.lastReadPosition) {
+      return [];
+    }
+    const buffer = Buffer.alloc(currentSize - this.lastReadPosition);
+    const fd = fs.openSync(filePath, "r");
+    try {
+      fs.readSync(fd, buffer, 0, buffer.length, this.lastReadPosition);
+    } finally {
+      fs.closeSync(fd);
+    }
+    this.lastReadPosition = currentSize;
+    const content = this.pendingLogText + this.logDecoder.write(buffer);
+    this.pendingLogText = "";
+    const { lines, remainder } = splitCompleteLines(content);
+    if (remainder) {
+      if (acceptValidUnterminatedJson) {
+        try {
+          JSON.parse(remainder.trim());
+          if (remainder.trim()) {
+            lines.push(remainder);
+            return lines;
+          }
+        } catch {
+          // Keep an incomplete JSON record until its next append.
+        }
+      }
+      this.pendingLogText = remainder;
+    }
+    return lines;
   }
 
   private resetIncrementalLineState(): void {

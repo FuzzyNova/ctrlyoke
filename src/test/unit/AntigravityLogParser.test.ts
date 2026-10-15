@@ -5,6 +5,7 @@ import { suite, test } from "mocha";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { AntigravityTranscriptReader } from "../../core/harness/antigravity/AntigravityTranscriptReader";
+import { AntigravityToolEventBuilder } from "../../core/harness/antigravity/AntigravityToolEventBuilder";
 import { ANTIGRAVITY_TOOL_NAMES } from "../../core/harness/antigravity/AntigravityProtocolConstants";
 import {
   CLI_EVENT_TYPES,
@@ -133,7 +134,7 @@ suite("AntigravityLogParser", () => {
             `Starting conversation update stream for ${sessionId}`,
             "regular log line",
             "clearing ResponsePending",
-          ].join("\n"),
+          ].join("\n") + "\n",
           "utf8"
         );
 
@@ -145,6 +146,50 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(events[2].type, "response.completed");
         assert.strictEqual(parser.extractSessionId(events), sessionId);
         assert.strictEqual(parser.isComplete(events[2]), true);
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+
+    test("buffers split session and completion lines until their newline arrives", async () => {
+      const parser = new AntigravityLogParser();
+      const tempDir = makeTempDir("ctrlyoke-agy-partial-");
+      const logPath = path.join(tempDir, "cli-20261014_120000.log");
+      const sessionId = "11111111-2222-3333-4444-555555555555";
+      try {
+        fs.writeFileSync(logPath, "Starting conversation update stream for 11111111-2222-3333-", "utf8");
+        assert.deepStrictEqual(await parser.readNewLines(logPath), []);
+        fs.appendFileSync(logPath, "4444-555555555555\n", "utf8");
+        const sessionEvents = await parser.readNewLines(logPath);
+        assert.strictEqual(sessionEvents.filter((event) => event.type === "session.created").length, 1);
+        assert.strictEqual(parser.extractSessionId(sessionEvents), sessionId);
+
+        fs.appendFileSync(logPath, "Stream completed, clearing Respon", "utf8");
+        assert.deepStrictEqual(await parser.readNewLines(logPath), []);
+        fs.appendFileSync(logPath, "sePending\n", "utf8");
+        const completionEvents = await parser.readNewLines(logPath);
+        assert.strictEqual(completionEvents.filter((event) => event.type === "response.completed").length, 1);
+        assert.deepStrictEqual(await parser.readNewLines(logPath), []);
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+
+    test("decodes a UTF-8 character split across appends", async () => {
+      const parser = new AntigravityLogParser();
+      const tempDir = makeTempDir("ctrlyoke-agy-utf8-");
+      const logPath = path.join(tempDir, "cli-20261014_120000.log");
+      const character = "€";
+      const bytes = Buffer.from(`value ${character}\n`, "utf8");
+      try {
+        fs.writeFileSync(logPath, bytes.subarray(0, 8));
+        await parser.readNewLines(logPath);
+        fs.appendFileSync(logPath, bytes.subarray(8));
+        const events = await parser.readNewLines(logPath);
+        assert.strictEqual(
+          (events[0] as BaseCliEvent & { line?: string }).line,
+          `value ${character}`
+        );
       } finally {
         removeTempDir(tempDir);
       }
@@ -783,6 +828,40 @@ suite("AntigravityLogParser", () => {
   });
 
   suite("transcript mapping", () => {
+    test("does not infer non-command success from exit-code text in content", () => {
+      const fileRead = AntigravityToolEventBuilder.build({
+        call: { name: "view_file", args: { AbsolutePath: "log.txt" } },
+        result: {
+          source: "MODEL",
+          type: "GENERIC",
+          status: "DONE",
+          content: 'log output: exit code: 1',
+        },
+        timestamp: 1,
+      });
+      assert.strictEqual(fileRead[0].type, CLI_EVENT_TYPES.FILE_READ);
+      assert.strictEqual(
+        (fileRead[0].data as { status: string }).status,
+        OPERATION_STATUS.COMPLETED
+      );
+
+      const command = AntigravityToolEventBuilder.build({
+        call: { name: "run_command", args: { CommandLine: "false" } },
+        result: {
+          source: "MODEL",
+          type: "GENERIC",
+          status: "DONE",
+          content: "Output:\nExit code: 1\n",
+        },
+        timestamp: 2,
+      });
+      assert.strictEqual(command[0].type, CLI_EVENT_TYPES.BASH_COMMAND);
+      assert.strictEqual(
+        (command[0].data as { status: string }).status,
+        OPERATION_STATUS.FAILED
+      );
+    });
+
     test("maps text, thinking, user messages, and checkpoints in arrival order", async () => {
       await withTemporaryHome(async (homeDir) => {
         const parser = new AntigravityLogParser();
