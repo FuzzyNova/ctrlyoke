@@ -627,10 +627,34 @@ export class WorkspaceSnapshotService {
   ): Promise<RawWorkspaceState> {
     const capturedAt = Date.now();
 
-    // Single-root (0/1 named roots): one segment against `executionRoot` with no
-    // prefix/pathspec — byte-identical to the pre-multi-root implementation.
+    // Single-root (0/1 named roots): keep unprefixed viewer paths, while
+    // scoping git commands to the workspace subtree when it is nested in a repo.
     if (!executionNamedRoots || executionNamedRoots.length <= 1) {
-      const seg = await this.captureSegment(executionRoot, strategy, "");
+      let root = executionRoot;
+      let pathspec = "";
+      if (strategy === SNAPSHOT_STRATEGIES.GIT) {
+        const repos = await discoverRepos([
+          { name: path.basename(executionRoot), fsPath: executionRoot },
+        ]);
+        const repo = repos[0];
+        if (repo) {
+          let realExecutionRoot = path.resolve(executionRoot);
+          let realRepoRoot = path.resolve(repo.rootPath);
+          try {
+            realExecutionRoot = fs.realpathSync(executionRoot);
+            realRepoRoot = fs.realpathSync(repo.rootPath);
+          } catch {
+            // Keep resolved paths if either root vanished during discovery.
+          }
+          if (realExecutionRoot !== realRepoRoot) {
+            root = repo.rootPath;
+            pathspec = toPosixPath(
+              path.relative(realRepoRoot, realExecutionRoot)
+            );
+          }
+        }
+      }
+      const seg = await this.captureSegment(root, strategy, pathspec);
       return {
         capturedAt,
         strategy,
@@ -638,8 +662,8 @@ export class WorkspaceSnapshotService {
         segments: [
           {
             prefix: "",
-            root: executionRoot,
-            pathspec: "",
+            root,
+            pathspec,
             strategy,
             git: seg.git,
             files: seg.files,
@@ -1283,6 +1307,21 @@ export class WorkspaceSnapshotService {
     }
 
     const { headCommit } = snapshot.git;
+    const repos = await discoverRepos([
+      { name: path.basename(workspaceFolderPath), fsPath: workspaceFolderPath },
+    ]);
+    const repoRoot = repos[0]?.rootPath ?? workspaceFolderPath;
+    let realRepoRoot = path.resolve(repoRoot);
+    let realWorkspaceRoot = path.resolve(workspaceFolderPath);
+    try {
+      realRepoRoot = fs.realpathSync(repoRoot);
+      realWorkspaceRoot = fs.realpathSync(workspaceFolderPath);
+    } catch {
+      // Fall back to resolved paths if either directory disappeared.
+    }
+    const gitRootRelative = toPosixPath(
+      path.relative(realRepoRoot, realWorkspaceRoot)
+    );
     let anyChanged = false;
 
     const enrichedFiles = await Promise.all(
@@ -1298,8 +1337,11 @@ export class WorkspaceSnapshotService {
         try {
           const { stdout: content } = await execFileAsync(
             "git",
-            ["show", `${headCommit}:${change.path}`],
-            { cwd: workspaceFolderPath }
+            [
+              "show",
+              `${headCommit}:${joinViewerPath(gitRootRelative, change.path)}`,
+            ],
+            { cwd: repoRoot }
           );
           anyChanged = true;
           return { ...change, beforeContent: content };
