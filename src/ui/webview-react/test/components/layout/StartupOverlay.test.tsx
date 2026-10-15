@@ -1,8 +1,13 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StartupOverlay } from "@components/layout/StartupOverlay";
 import { useUiStore } from "@store/uiStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import {
+  DASHBOARD_HOST_CAPABILITIES,
+  MESSAGE_TYPES,
+  WORKSPACE_FOLDER_PICKERS,
+} from "@root/types/DashboardConstants";
 
 const SLOW_HINT = /Still starting up/;
 
@@ -14,9 +19,11 @@ describe("StartupOverlay", () => {
     // a leftover workspaceInitRequired suppresses the spinner in the next test.
     useUiStore.setState({
       startupReady: false,
+      workspaceFolderRequired: false,
       workspaceInitRequired: false,
       showLayoutPreference: false,
       devRestarting: false,
+      hostCapabilities: [],
     });
   });
 
@@ -94,6 +101,59 @@ describe("StartupOverlay", () => {
     ).toBeInTheDocument();
     // The init prompt owns the overlay; the slow-startup hint would contradict it.
     expect(screen.queryByText(SLOW_HINT)).toBeNull();
+  });
+
+  describe("with no folder open", () => {
+    const OPEN_FOLDER_LABEL = "Open a folder to use ctrlyoke";
+
+    it("asks for a folder instead of loading, and never times out", () => {
+      vi.useFakeTimers();
+      act(() => {
+        useUiStore.getState().setWorkspaceFolderRequired(true);
+      });
+      render(<StartupOverlay />);
+
+      act(() => {
+        vi.advanceTimersByTime(120000);
+      });
+
+      expect(useUiStore.getState().startupReady).toBe(false);
+      expect(screen.getByLabelText(OPEN_FOLDER_LABEL)).toBeInTheDocument();
+      expect(screen.queryByText(SLOW_HINT)).toBeNull();
+      expect(screen.queryByText("Initialize ctrlyoke")).toBeNull();
+    });
+
+    it("asks the host to open a folder or a recent one", () => {
+      act(() => {
+        useUiStore.setState({
+          workspaceFolderRequired: true,
+          hostCapabilities: [DASHBOARD_HOST_CAPABILITIES.pickWorkspaceFolder],
+        });
+      });
+      render(<StartupOverlay />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Open Folder…" }));
+      fireEvent.click(screen.getByRole("button", { name: "Open Recent…" }));
+
+      expect(getVsCodeApi().postMessage).toHaveBeenNthCalledWith(1, {
+        type: MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER,
+        picker: WORKSPACE_FOLDER_PICKERS.BROWSE,
+      });
+      expect(getVsCodeApi().postMessage).toHaveBeenNthCalledWith(2, {
+        type: MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER,
+        picker: WORKSPACE_FOLDER_PICKERS.RECENT,
+      });
+    });
+
+    it("offers no buttons when the host cannot show a folder dialog", () => {
+      act(() => {
+        useUiStore.getState().setWorkspaceFolderRequired(true);
+      });
+      render(<StartupOverlay />);
+
+      expect(screen.getByLabelText(OPEN_FOLDER_LABEL)).toBeInTheDocument();
+      expect(screen.queryByRole("button")).toBeNull();
+    });
   });
 
   it("shows the reconnect message instead of the slow-startup hint while restarting", () => {

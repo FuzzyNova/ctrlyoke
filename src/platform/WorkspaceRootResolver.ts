@@ -53,11 +53,6 @@ export interface WorkspaceRootResolverInput {
   workspaceFileDir?: string;
   /** Workspace folders in order (`workspace.workspaceFolders`). */
   workspaceFolders?: readonly ResolverWorkspaceFolder[];
-  /**
-   * Fallback used when no folder is open (CLI / no workspace). Defaults to
-   * `process.cwd()`.
-   */
-  cwd?: string;
 }
 
 /**
@@ -87,22 +82,27 @@ function expandWorkspaceFolderVars(
  * window. The result is window-stable and must be computed in exactly one place
  * (this function) so every consumer agrees on the location.
  *
- * Resolution order:
+ * Returns `undefined` when no folder is open. A window without a folder has no
+ * workspace at all: falling back to the process cwd would put `.ctrlyoke` in
+ * the editor's install directory. The CLI never calls this; its root is its cwd.
+ *
+ * Resolution order, once at least one folder is open:
  *
  * 1. `ctrlyoke.workspaceDirectory` setting, if set — used as-is when
  *    absolute, otherwise resolved against the `.code-workspace` dir (if any),
- *    else the first workspace folder, else `cwd`. Supports `${workspaceFolder}`
- *    and `${workspaceFolder:Name}` expansion.
+ *    else the first workspace folder. Supports `${workspaceFolder}` and
+ *    `${workspaceFolder:Name}` expansion.
  * 2. The `.code-workspace` file's directory, when one is open on disk.
- * 3. The first workspace folder (single-folder case — today's behavior).
- * 4. `cwd` (`process.cwd()` by default) — CLI / no folder open.
+ * 3. The first workspace folder (single-folder case).
  */
 export function resolveWorkspaceRoot(
   input: WorkspaceRootResolverInput
-): string {
-  const cwd = input.cwd ?? process.cwd();
+): string | undefined {
   const folders = input.workspaceFolders ?? [];
   const firstFolder = folders[0]?.fsPath;
+  if (!firstFolder) {
+    return undefined;
+  }
 
   // 1. Explicit native setting (highest precedence).
   const setting = input.setting?.trim();
@@ -112,23 +112,13 @@ export function resolveWorkspaceRoot(
       return path.normalize(expanded);
     }
     // Relative: resolve against the .code-workspace dir if present, else the
-    // first folder, else cwd.
-    const base = input.workspaceFileDir ?? firstFolder ?? cwd;
-    return path.resolve(base, expanded);
+    // first folder.
+    return path.resolve(input.workspaceFileDir ?? firstFolder, expanded);
   }
 
-  // 2. .code-workspace file directory (saved multi-root workspace).
-  if (input.workspaceFileDir) {
-    return input.workspaceFileDir;
-  }
-
-  // 3. First workspace folder (single-folder case).
-  if (firstFolder) {
-    return firstFolder;
-  }
-
-  // 4. CLI / no folder open.
-  return cwd;
+  // 2. .code-workspace file directory (saved multi-root workspace), else
+  // 3. the first workspace folder (single-folder case).
+  return input.workspaceFileDir ?? firstFolder;
 }
 
 /**
@@ -147,8 +137,8 @@ export function resolveTrustedWorkspaceRoots(
   input: WorkspaceRootResolverInput
 ): string[] {
   const { primary, folderPaths, primaryIsExternal } = classifyStateRoot(input);
-  if (folderPaths.length === 0 && !input.workspaceFileDir) {
-    return [primary];
+  if (primary === undefined) {
+    return [];
   }
   return Array.from(
     new Set(primaryIsExternal ? folderPaths : [primary, ...folderPaths])
@@ -169,15 +159,16 @@ export function resolveRequestedExternalWorkspaceRoot(
 
 /**
  * Single source for whether the resolved state root lies outside every open
- * folder and the saved workspace-file directory. With neither present there
- * is nothing to compare against, so the root is never external.
+ * folder and the saved workspace-file directory. With no folder open there is
+ * no state root, so nothing is external.
  */
 function classifyStateRoot(input: WorkspaceRootResolverInput): {
-  primary: string;
+  primary: string | undefined;
   folderPaths: string[];
   primaryIsExternal: boolean;
 } {
-  const primary = path.normalize(resolveWorkspaceRoot(input));
+  const resolved = resolveWorkspaceRoot(input);
+  const primary = resolved === undefined ? undefined : path.normalize(resolved);
   const folderPaths = (input.workspaceFolders ?? []).map((folder) =>
     path.normalize(folder.fsPath)
   );
@@ -186,7 +177,7 @@ function classifyStateRoot(input: WorkspaceRootResolverInput): {
     ...(input.workspaceFileDir ? [path.normalize(input.workspaceFileDir)] : []),
   ];
   const primaryIsExternal =
-    trustedBases.length > 0 &&
+    primary !== undefined &&
     !trustedBases.some((root) => isPathWithinDirectory(primary, root));
   return { primary, folderPaths, primaryIsExternal };
 }

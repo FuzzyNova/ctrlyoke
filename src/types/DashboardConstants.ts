@@ -82,6 +82,7 @@ export const DASHBOARD_HOST_ACTIONS = {
   ACTIVATE_OFFLINE_PRO: "activateOfflinePro",
   RELOAD_WINDOW: "reloadWindow",
   OPEN_WORKTREE_OWNER: "openWorktreeOwner",
+  OPEN_WORKSPACE_FOLDER: "openWorkspaceFolder",
 } as const;
 export type DashboardHostAction =
   (typeof DASHBOARD_HOST_ACTIONS)[keyof typeof DASHBOARD_HOST_ACTIONS];
@@ -102,6 +103,7 @@ export const DASHBOARD_HOST_CAPABILITIES = {
   revealOutput: "revealOutput",
   focusDashboard: "focusDashboard",
   openFolderWindow: "openFolderWindow",
+  pickWorkspaceFolder: "pickWorkspaceFolder",
   openGitDiff: "openGitDiff",
   revealInOs: "revealInOs",
   browseMcpGallery: "browseMcpGallery",
@@ -125,6 +127,7 @@ const HOST_SCREEN_CAPABILITIES: ReadonlySet<DashboardHostCapability> = new Set([
   DASHBOARD_HOST_CAPABILITIES.revealOutput,
   DASHBOARD_HOST_CAPABILITIES.focusDashboard,
   DASHBOARD_HOST_CAPABILITIES.openFolderWindow,
+  DASHBOARD_HOST_CAPABILITIES.pickWorkspaceFolder,
   DASHBOARD_HOST_CAPABILITIES.openGitDiff,
   DASHBOARD_HOST_CAPABILITIES.revealInOs,
   DASHBOARD_HOST_CAPABILITIES.browseMcpGallery,
@@ -147,6 +150,17 @@ export function getDashboardHostCapabilities(
       (sharesHostScreen || !HOST_SCREEN_CAPABILITIES.has(capability))
   );
 }
+
+/** How the dashboard asks the host to open a folder into a window with none. */
+export const WORKSPACE_FOLDER_PICKERS = {
+  /** The host's native folder chooser. */
+  BROWSE: "browse",
+  /** The host's recently opened folders and workspaces. */
+  RECENT: "recent",
+} as const;
+
+export type WorkspaceFolderPicker =
+  (typeof WORKSPACE_FOLDER_PICKERS)[keyof typeof WORKSPACE_FOLDER_PICKERS];
 
 /** Native workspace-path chooser modes used by dashboard host actions. */
 export const PATH_SELECTION_KINDS = {
@@ -867,9 +881,11 @@ export const MESSAGE_TYPES = {
   // Startup lifecycle — Extension → Webview
   STARTUP_COMPLETE: "startupComplete", // Extension → Webview: startup sequence done (with or without auto-load)
   WORKSPACE_INIT_REQUIRED: "workspaceInitRequired", // Extension → Webview: ctrlyoke not yet initialized in this workspace
+  WORKSPACE_FOLDER_REQUIRED: "workspaceFolderRequired", // Extension → Webview: the window has no folder open
 
   // Workspace trust — Webview → Extension
   INITIALIZE_WORKSPACE: "initializeWorkspace", // Webview → Extension: user approved ctrlyoke initialization
+  OPEN_WORKSPACE_FOLDER: "openWorkspaceFolder", // Webview → Extension: { picker: WorkspaceFolderPicker } — open a folder in this window
 
   // First-install layout tip — Extension ↔ Webview
   SHOW_LAYOUT_TIP: "showLayoutTip", // Extension → Webview: show first-install panel placement tip (first install only)

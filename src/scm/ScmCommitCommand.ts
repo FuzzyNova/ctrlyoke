@@ -9,6 +9,7 @@ import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
 import type { RunnerHostIdentity } from "../types/CtrlYokeTypes";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { NO_WORKSPACE_FOLDER_MESSAGE } from "../platform/PlatformAdapter";
 import { pathsEqual } from "../utils/PathCasing";
 
 interface GitRepository {
@@ -65,15 +66,12 @@ export class ScmCommitCommand {
       return;
     }
 
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders?.length) {
-      void vscode.window.showErrorMessage(
-        "ctrlyoke: No workspace folder open."
-      );
+    const stateRoot = getVsCodeWorkspaceRoot();
+    if (!stateRoot) {
+      void vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
       return;
     }
 
-    const stateRoot = getVsCodeWorkspaceRoot();
     const cwd = repositoryRoot ?? stateRoot;
     this.activeAbortController = new AbortController();
     await vscode.commands.executeCommand(

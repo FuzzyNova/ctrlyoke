@@ -254,7 +254,6 @@ export async function createNodeHostedServer(options: {
     keyValueStore: services.workspaceState,
     secretStore: services.secretStore,
     getWorkspaceRoot: () => cwd,
-    getSecretWorkspaceRoot: () => cwd,
     getNamedRoots: () => namedRoots,
     getTrustedRoots: () => [cwd],
     actions,

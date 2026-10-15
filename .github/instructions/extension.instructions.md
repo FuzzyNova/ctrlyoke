@@ -21,7 +21,7 @@ Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and proce
    - uninitialized workspace: capture `pendingInitWorkspaceRoot` only
 4. Create/register `CtrlYokeWebviewProvider` **before** PTY/orchestrator setup.
 5. Initialize `PtyProcessManager` with the panel postMessage first, then create `WorkflowOrchestrator`.
-6. If workspace init is pending, call `workflowOrchestrator.setWorkspaceInitPending(...)` **before** `initialize()`.
+6. With no folder open, call `workflowOrchestrator.setWorkspaceFolderRequired()`; otherwise, if workspace init is pending, `setWorkspaceInitPending(...)`. Either goes **before** `initialize()`.
 7. After both objects exist, wire cross-references:
    - `webviewProvider.setWorkflowOrchestrator(...)`
    - `webviewProvider.setHub(...)`
@@ -30,7 +30,7 @@ Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and proce
 9. Call `workflowOrchestrator.initialize()` fire-and-forget. The webview is allowed to resolve before harness detection finishes.
 10. Only after core wiring: theme listener, completion/link providers, `initializeCompletionHelpers(context)`, then command registration.
 
-Current activation assumes the **first workspace folder** is the workspace root for config backend setup, initialization, workflow discovery, and several commands. If multi-root behavior changes, update those paths together.
+Activation reads the window's root once (`windowWorkspaceRoot`) and uses it for config backend setup, initialization, workflow discovery, and several commands. If multi-root behavior changes, update those paths together.
 </extensionActivation>
 
 <extensionPatterns>

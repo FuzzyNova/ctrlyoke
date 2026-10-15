@@ -2944,6 +2944,19 @@ export class WebviewMessageRouter {
       await orchestrator?.handleInitializeWorkspace();
     });
 
+    table.set(MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER, async (message, ctx) => {
+      const pickFolder = this.hostDependencies.actions.pickWorkspaceFolder;
+      if (!pickFolder) {
+        this.replyHostAction(ctx, DASHBOARD_HOST_ACTIONS.OPEN_WORKSPACE_FOLDER);
+        return;
+      }
+      await this.runHostAction(
+        ctx,
+        DASHBOARD_HOST_ACTIONS.OPEN_WORKSPACE_FOLDER,
+        pickFolder.call(this.hostDependencies.actions, message.picker)
+      );
+    });
+
     table.set(MESSAGE_TYPES.LAYOUT_TIP_DISMISSED, async () => {
       const orchestrator = this.getOrchestrator();
       await orchestrator?.handleLayoutPreference();

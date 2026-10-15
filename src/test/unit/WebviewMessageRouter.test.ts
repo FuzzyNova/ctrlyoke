@@ -27,6 +27,7 @@ import {
   DASHBOARD_ACTION_RESULT_STATUSES,
   PATH_SELECTION_KINDS,
   PATH_SELECTION_TITLES,
+  WORKSPACE_FOLDER_PICKERS,
 } from "../../types/DashboardConstants";
 import type { DashboardHostActions, NamedRoot } from "../../core/HostPorts";
 import { getVsCodeNamedWorkspaceRoots } from "../../platform/VsCodeWorkspaceRoot";
@@ -284,6 +285,10 @@ suite("WebviewMessageRouter — dashboard host actions", () => {
       },
       { type: MESSAGE_TYPES.RELOAD_WINDOW },
       { type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER, stateRoot: "owner" },
+      {
+        type: MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER,
+        picker: WORKSPACE_FOLDER_PICKERS.BROWSE,
+      },
     ];
 
     for (const message of messages) {
@@ -308,6 +313,7 @@ suite("WebviewMessageRouter — dashboard host actions", () => {
         DASHBOARD_HOST_ACTIONS.ACTIVATE_OFFLINE_PRO,
         DASHBOARD_HOST_ACTIONS.RELOAD_WINDOW,
         DASHBOARD_HOST_ACTIONS.OPEN_WORKTREE_OWNER,
+        DASHBOARD_HOST_ACTIONS.OPEN_WORKSPACE_FOLDER,
       ].map((action) => ({
         type: MESSAGE_TYPES.DASHBOARD_HOST_ACTION_RESULT,
         action,
@@ -338,6 +344,10 @@ suite("WebviewMessageRouter — dashboard host actions", () => {
       },
       openFolderWindow: async (path) => {
         calls.push(["openFolderWindow", path]);
+        return { status: "opened" };
+      },
+      pickWorkspaceFolder: async (picker) => {
+        calls.push(["pickWorkspaceFolder", picker]);
         return { status: "opened" };
       },
       openGitDiff: async (request) => {
@@ -388,6 +398,10 @@ suite("WebviewMessageRouter — dashboard host actions", () => {
       type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER,
       stateRoot: "owner",
     });
+    await router.route({
+      type: MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER,
+      picker: WORKSPACE_FOLDER_PICKERS.RECENT,
+    });
 
     assert.deepStrictEqual(calls, [
       [
@@ -433,6 +447,7 @@ suite("WebviewMessageRouter — dashboard host actions", () => {
       ],
       ["reloadHost"],
       ["openFolderWindow", "owner"],
+      ["pickWorkspaceFolder", WORKSPACE_FOLDER_PICKERS.RECENT],
     ]);
   });
 });

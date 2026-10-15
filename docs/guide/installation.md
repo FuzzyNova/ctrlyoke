@@ -96,6 +96,14 @@ Command Palette → ctrlyoke: Initialize Workspace
 
 That creates `.ctrlyoke/` and a self-ignoring `.gitignore` inside it — nothing else, so initializing does not leave your Git worktree dirty. Subdirectories such as `prompts/`, `scripts/`, `templates/`, `agents/`, and `skills/` are created on demand the first time you add something to them.
 
+### A window with no folder open
+
+ctrlyoke needs a folder to work in. In a VS Code window with no folder open, the dashboard shows
+**Open a folder to use ctrlyoke** with **Open Folder…** and **Open Recent…** buttons, and nothing
+runs or is written until you choose one. Once a folder opens, VS Code restarts its extensions, and
+the dashboard continues with the initialize prompt above if that folder has no `.ctrlyoke/` yet.
+The hosted dashboard server needs a folder too, so it does not start in such a window.
+
 ## The command-line tool
 
 The extension includes the `ctrlyoke` command-line tool. In VS Code's integrated terminals it is

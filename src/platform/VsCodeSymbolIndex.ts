@@ -56,8 +56,9 @@ export class VsCodeSymbolIndex implements SymbolIndex {
     query: string,
     _maxResults: number
   ): Promise<IndexedSymbol[]> {
-    await this.warmupLanguageFamilies();
     const root = getVsCodeWorkspaceRoot();
+    if (!root) return [];
+    await this.warmupLanguageFamilies();
     const namedRoots = getVsCodeNamedWorkspaceRoots();
     const symbols = await vscode.commands.executeCommand<
       vscode.SymbolInformation[]
@@ -91,7 +92,8 @@ export class VsCodeSymbolIndex implements SymbolIndex {
           family.languageIds.includes(document.languageId)
         )
     );
-    if (families.length === 0) return;
+    const primaryRoot = getVsCodeWorkspaceRoot();
+    if (families.length === 0 || !primaryRoot) return;
 
     let files: string[];
     try {
@@ -104,7 +106,6 @@ export class VsCodeSymbolIndex implements SymbolIndex {
       return;
     }
     const roots = getVsCodeNamedWorkspaceRoots();
-    const primaryRoot = getVsCodeWorkspaceRoot();
     for (const family of families) {
       const configDirectories = files
         .filter((viewerPath) =>
@@ -154,9 +155,15 @@ export class VsCodeSymbolIndex implements SymbolIndex {
 
   async documentSymbols(viewerPath: string): Promise<IndexedSymbol[]> {
     const root = getVsCodeWorkspaceRoot();
-    const roots = getVsCodeNamedWorkspaceRoots();
+    // An absolute path (an external file) needs no workspace to resolve.
+    if (!root && !path.isAbsolute(viewerPath)) return [];
     const uri = vscode.Uri.file(
-      fromViewerPath(viewerPath, { primaryRoot: root, namedRoots: roots })
+      root
+        ? fromViewerPath(viewerPath, {
+            primaryRoot: root,
+            namedRoots: getVsCodeNamedWorkspaceRoots(),
+          })
+        : viewerPath
     );
     const symbols = await vscode.commands.executeCommand<
       vscode.DocumentSymbol[]

@@ -5,6 +5,7 @@ import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
 
 const CTRLYOKE_DIR = ".ctrlyoke";
 const PROJECTS_DIR = "projects";
+const NO_WORKSPACE_DIR = "no-workspace";
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const HASH_LENGTH = 12;
 const USER_LOCATION: RunHistoryLocation = "user";
@@ -49,6 +50,17 @@ export function projectStateRoot(
   }
 
   throw new Error(`Unsupported run history location: ${String(location)}`);
+}
+
+/**
+ * Inert root for a workflow instance whose host has no workspace (a VS Code
+ * window with no folder open). Such an instance refuses to run or create a
+ * working file, but its in-memory collaborators still need a path. Any write
+ * that slips past those guards lands in the user's state home rather than the
+ * process cwd, which for VS Code is the editor's install directory.
+ */
+export function noWorkspacePlaceholderRoot(): string {
+  return path.join(ctrlyokeStateHome(), NO_WORKSPACE_DIR);
 }
 
 /** Resolve the user-scoped project registry root without consulting frozen policy. */

@@ -138,13 +138,22 @@ suite("WorkspaceRootResolver Tests", () => {
       );
     });
 
-    test("no folder open falls back to the provided cwd", () => {
-      const cwd = path.resolve("/some/cwd");
-      assert.strictEqual(resolveWorkspaceRoot({ cwd }), cwd);
+    test("no folder open has no workspace root, never the process cwd", () => {
+      assert.strictEqual(resolveWorkspaceRoot({}), undefined);
     });
 
-    test("no folder and no cwd falls back to process.cwd()", () => {
-      assert.strictEqual(resolveWorkspaceRoot({}), process.cwd());
+    test("no folder open ignores even an absolute setting", () => {
+      assert.strictEqual(
+        resolveWorkspaceRoot({ setting: path.resolve("/elsewhere") }),
+        undefined
+      );
+    });
+
+    test("a saved workspace file with no folders has no workspace root", () => {
+      assert.strictEqual(
+        resolveWorkspaceRoot({ workspaceFileDir, workspaceFolders: [] }),
+        undefined
+      );
     });
   });
 
@@ -196,8 +205,13 @@ suite("WorkspaceRootResolver Tests", () => {
       const input = { setting: "../..", workspaceFolders: [folder] };
       const resolved = path.resolve(folder.fsPath, "../..");
       assert.strictEqual(resolveWorkspaceRoot(input), resolved);
-      assert.deepStrictEqual(resolveTrustedWorkspaceRoots(input), [folder.fsPath]);
-      assert.strictEqual(resolveRequestedExternalWorkspaceRoot(input), resolved);
+      assert.deepStrictEqual(resolveTrustedWorkspaceRoots(input), [
+        folder.fsPath,
+      ]);
+      assert.strictEqual(
+        resolveRequestedExternalWorkspaceRoot(input),
+        resolved
+      );
     });
 
     test("dedupes when the primary root is also one of the workspace folders", () => {
@@ -209,10 +223,9 @@ suite("WorkspaceRootResolver Tests", () => {
       assert.strictEqual(roots.length, 2);
     });
 
-    test("returns just the cwd fallback when no folders are open", () => {
-      const cwd = path.resolve("/some/cwd");
-      assert.deepStrictEqual(resolveTrustedWorkspaceRoots({ cwd }), [cwd]);
-      assert.strictEqual(resolveRequestedExternalWorkspaceRoot({ cwd }), undefined);
+    test("trusts nothing when no folders are open", () => {
+      assert.deepStrictEqual(resolveTrustedWorkspaceRoots({}), []);
+      assert.strictEqual(resolveRequestedExternalWorkspaceRoot({}), undefined);
     });
   });
 

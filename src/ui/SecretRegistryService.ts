@@ -13,6 +13,7 @@ import type {
   SecretRegistryUsage,
 } from "../types/WebviewMessageTypes";
 import type { SecretStore } from "../platform/SecretStore";
+import { NO_WORKSPACE_FOLDER_MESSAGE } from "../platform/PlatformAdapter";
 import {
   parseSecretMetadata,
   type SecretMetadata,
@@ -46,7 +47,8 @@ export interface SecretRegistryMcpReference {
 
 export interface SecretRegistryServiceOptions {
   secretStore: SecretStore;
-  getWorkspaceRoot: () => string;
+  /** `undefined` when no folder is open: there are no workspace secrets. */
+  getWorkspaceRoot: () => string | undefined;
   environment?: NodeJS.ProcessEnv;
   now?: () => number;
   getWorkflowReferences?: () => Promise<SecretRegistryWorkflowReference[]>;
@@ -260,10 +262,13 @@ export class SecretRegistryService {
     if (!isValidSecretName(name)) return false;
     if (this.hasEnvironmentValue(name)) return true;
 
+    const workspaceRoot = this.options.getWorkspaceRoot();
     const [workspaceValue, userValue] = await Promise.all([
-      this.options.secretStore.get(
-        workspaceSecretKeyForRoot(this.options.getWorkspaceRoot(), name)
-      ),
+      workspaceRoot
+        ? this.options.secretStore.get(
+            workspaceSecretKeyForRoot(workspaceRoot, name)
+          )
+        : undefined,
       this.options.secretStore.get(userSecretKey(name)),
     ]);
     return workspaceValue !== undefined || userValue !== undefined;
@@ -274,6 +279,12 @@ export class SecretRegistryService {
     additionalKnownNames: readonly string[] = []
   ): Promise<SecretRegistryEntry[]> {
     assertWriteScope(scope);
+    if (
+      scope === SETTING_SCOPES.WORKSPACE &&
+      !this.options.getWorkspaceRoot()
+    ) {
+      return [];
+    }
     const [managedNames, workflows, mcpServers] = await Promise.all([
       this.getManagedNames(scope),
       this.getWorkflowReferences(),
@@ -346,16 +357,21 @@ export class SecretRegistryService {
   private secretKey(scope: SettingWriteScope, name: string): string {
     return scope === SETTING_SCOPES.USER
       ? userSecretKey(name)
-      : workspaceSecretKeyForRoot(this.options.getWorkspaceRoot(), name);
+      : workspaceSecretKeyForRoot(this.requireWorkspaceRoot(), name);
   }
 
   private metadataKey(scope: SettingWriteScope, name: string): string {
     return scope === SETTING_SCOPES.USER
       ? userSecretMetadataKey(name)
-      : workspaceSecretMetadataKeyForRoot(
-          this.options.getWorkspaceRoot(),
-          name
-        );
+      : workspaceSecretMetadataKeyForRoot(this.requireWorkspaceRoot(), name);
+  }
+
+  private requireWorkspaceRoot(): string {
+    const root = this.options.getWorkspaceRoot();
+    if (!root) {
+      throw new Error(NO_WORKSPACE_FOLDER_MESSAGE);
+    }
+    return root;
   }
 
   private async getManagedNames(scope: SettingWriteScope): Promise<string[]> {
@@ -398,6 +414,7 @@ export class SecretRegistryService {
       return this.options.getWorkflowReferences();
     }
     const root = this.options.getWorkspaceRoot();
+    if (!root) return [];
     const files = await discoverWorkflowFiles(root);
     const scanned = await Promise.all(
       files.map((filePath) => readWorkflowReference(filePath, root))

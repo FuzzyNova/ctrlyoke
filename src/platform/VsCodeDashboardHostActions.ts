@@ -14,6 +14,8 @@ import {
   PATH_SELECTION_KINDS,
   PATH_SELECTION_TITLES,
   VSCODE_COMMANDS,
+  WORKSPACE_FOLDER_PICKERS,
+  type WorkspaceFolderPicker,
 } from "../types/DashboardConstants";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
 import { getVsCodeWorkspaceRoot } from "./VsCodeWorkspaceRoot";
@@ -55,13 +57,14 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
       request.title === PATH_SELECTION_TITLES.LOAD_WORKFLOW ||
       request.title === PATH_SELECTION_TITLES.APPEND_WORKFLOW
     ) {
-      if (!vscode.workspace.workspaceFolders?.length) {
+      const workspaceRoot = getVsCodeWorkspaceRoot();
+      if (!workspaceRoot) {
         await vscode.commands.executeCommand(
           VSCODE_COMMANDS.SELECT_PROMPT_FILE
         );
         return undefined;
       }
-      const files = findWorkflowFilesInWorkspace(getVsCodeWorkspaceRoot());
+      const files = findWorkflowFilesInWorkspace(workspaceRoot);
       if (files.length === 0) {
         await vscode.commands.executeCommand(
           VSCODE_COMMANDS.SELECT_PROMPT_FILE
@@ -130,6 +133,23 @@ export class VsCodeDashboardHostActions implements DashboardHostActions {
         "vscode.openFolder",
         vscode.Uri.file(absolutePath),
         true
+      );
+      return { status: DASHBOARD_ACTION_RESULT_STATUSES.OPENED };
+    } catch (error) {
+      return this.failed(error);
+    }
+  }
+
+  async pickWorkspaceFolder(
+    picker: WorkspaceFolderPicker
+  ): Promise<ActionResult> {
+    try {
+      // `vscode.openFolder` with no URI shows the native folder dialog and
+      // opens the choice in this window, restarting the extension host.
+      await vscode.commands.executeCommand(
+        picker === WORKSPACE_FOLDER_PICKERS.RECENT
+          ? "workbench.action.openRecent"
+          : "vscode.openFolder"
       );
       return { status: DASHBOARD_ACTION_RESULT_STATUSES.OPENED };
     } catch (error) {

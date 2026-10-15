@@ -624,6 +624,12 @@ export class WorkflowOrchestrator {
   private startupAutoLoadTriggered: boolean = false;
   /** Timestamp (ms) when setDashboardReady was first called — used to compute READY→STARTUP_COMPLETE latency. */
   private dashboardReadyAt: number = 0;
+  /**
+   * Set when the host window has no folder open. Startup never completes: the
+   * dashboard stays on its "Open a folder" screen, because opening the first
+   * folder restarts the extension host rather than resolving in place.
+   */
+  private workspaceFolderRequired: boolean = false;
   /** Set when ctrlyoke has not yet been initialized in this workspace. Blocks startup auto-load until resolved. */
   private workspaceInitPending: boolean = false;
   /** The workspace root path waiting for ctrlyoke initialization. */
@@ -1576,6 +1582,23 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * Mark the host window as having no folder open. Blocks startup auto-load
+   * and broadcasts WORKSPACE_FOLDER_REQUIRED instead of STARTUP_COMPLETE, so
+   * the dashboard offers to open a folder rather than running anywhere.
+   */
+  setWorkspaceFolderRequired(): void {
+    this.workspaceFolderRequired = true;
+    Log.info(
+      "[WorkflowOrchestrator] ctrlyoke: No folder is open; waiting for the user to open one"
+    );
+  }
+
+  /** True when the host window has no folder open; see {@link setWorkspaceFolderRequired}. */
+  isWorkspaceFolderRequired(): boolean {
+    return this.workspaceFolderRequired;
+  }
+
+  /**
    * Mark ctrlyoke as not yet initialized in this workspace. Blocks startup
    * auto-load and broadcasts WORKSPACE_INIT_REQUIRED to the webview instead of
    * STARTUP_COMPLETE until handleInitializeWorkspace() is called.
@@ -1698,6 +1721,13 @@ export class WorkflowOrchestrator {
       !this.dashboardReady ||
       !this.orchestratorInitialized
     ) {
+      return;
+    }
+
+    if (this.workspaceFolderRequired) {
+      this.dashboardBroadcastHub.postMessage({
+        type: MESSAGE_TYPES.WORKSPACE_FOLDER_REQUIRED,
+      });
       return;
     }
 

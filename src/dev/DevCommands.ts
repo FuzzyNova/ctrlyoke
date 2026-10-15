@@ -24,6 +24,7 @@ import { spawn } from "child_process";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { NO_WORKSPACE_FOLDER_MESSAGE } from "../platform/PlatformAdapter";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { attachStreamTextDecoder } from "../utils/StreamTextDecoder";
@@ -370,13 +371,13 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
 
   if (outputFilePath) {
     // Save to file
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      vscode.window.showErrorMessage("No workspace folder open");
+    const workspaceRoot = getVsCodeWorkspaceRoot();
+    if (!workspaceRoot) {
+      vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
       return;
     }
 
-    const fullPath = path.join(getVsCodeWorkspaceRoot(), outputFilePath);
+    const fullPath = path.join(workspaceRoot, outputFilePath);
     const dir = path.dirname(fullPath);
 
     // Ensure directory exists
@@ -422,9 +423,9 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
 async function dumpVsCodeCssVariables(
   context: vscode.ExtensionContext
 ): Promise<void> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) {
-    vscode.window.showErrorMessage("No workspace folder open");
+  const workspaceRoot = getVsCodeWorkspaceRoot();
+  if (!workspaceRoot) {
+    vscode.window.showErrorMessage(NO_WORKSPACE_FOLDER_MESSAGE);
     return;
   }
 
@@ -470,7 +471,7 @@ async function dumpVsCodeCssVariables(
       panel.dispose();
 
       const outputPath = path.join(
-        getVsCodeWorkspaceRoot(),
+        workspaceRoot,
         "dev",
         "reference",
         "vscode-css-vars.json"

@@ -216,9 +216,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     filterText: string,
     escape: InsertTextEscape | undefined
   ): Promise<vscode.CompletionList> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : "";
+    const workspaceRoot = getVsCodeWorkspaceRoot() ?? "";
     const plainItems = await getCompletionCore().getGitChangeCompletions(
       workspaceRoot,
       filterText
@@ -255,9 +253,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     escape: InsertTextEscape | undefined,
     position: vscode.Position
   ): Promise<vscode.CompletionList> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = getVsCodeWorkspaceRoot();
     const plainItems = await getCtrlYokeSlashCompletions(
       workspaceRoot,
       `/${afterSlash}`

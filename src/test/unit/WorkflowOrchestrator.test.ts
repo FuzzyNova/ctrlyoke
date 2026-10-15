@@ -459,6 +459,27 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
     assert.strictEqual(internal.startupAutoLoadTriggered, true);
   });
 
+  test("with no folder open, asks for one on every READY and never auto-loads", async () => {
+    const { orchestrator, internal, getAutoLoadCalls } =
+      createOrchestratorHarness();
+    const posted: string[] = [];
+    internal.dashboardBroadcastHub.postMessage = (message: { type: string }) =>
+      posted.push(message.type);
+    internal.orchestratorInitialized = true;
+    orchestrator.setWorkspaceFolderRequired();
+
+    await orchestrator.setDashboardReady();
+    // A reloaded panel must land on the same prompt, not a blank dashboard.
+    await orchestrator.setDashboardReady();
+
+    assert.strictEqual(orchestrator.isWorkspaceFolderRequired(), true);
+    assert.strictEqual(getAutoLoadCalls(), 0);
+    assert.deepStrictEqual(posted, [
+      MESSAGE_TYPES.WORKSPACE_FOLDER_REQUIRED,
+      MESSAGE_TYPES.WORKSPACE_FOLDER_REQUIRED,
+    ]);
+  });
+
   test("does not rerun startup auto-load when the dashboard reconnects", async () => {
     const { orchestrator, internal, getAutoLoadCalls } =
       createOrchestratorHarness();
@@ -5030,7 +5051,10 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       internal.externalRunWatchCoordinator =
         createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
-        [PANEL_CLIENT_ID, { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
+        [
+          PANEL_CLIENT_ID,
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        ],
       ]);
       internal.viewMessageSinks = new Map();
       internal.lineageRepository = new WorkflowLineageRepository();

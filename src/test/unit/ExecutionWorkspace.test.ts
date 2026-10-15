@@ -5,8 +5,11 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import {
   createNoWorktreeExecutionWorkspace,
+  NO_WORKSPACE_FOLDER_MESSAGE,
+  requireWorkspaceRoot,
   type PlatformAdapter,
 } from "../../platform/PlatformAdapter";
+import { noWorkspacePlaceholderRoot } from "../../utils/ProjectStatePaths";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 
 class RecordingPlatform implements PlatformAdapter {
@@ -14,13 +17,14 @@ class RecordingPlatform implements PlatformAdapter {
   readonly approvedRootArguments: Array<string | undefined> = [];
 
   constructor(
-    private readonly stateRoot: string,
+    /** `undefined` models a VS Code window with no folder open. */
+    private readonly stateRoot: string | undefined,
     private readonly workspaceRoots: string[],
     private readonly namedWorkspaceRoots: ResolverWorkspaceFolder[],
     private readonly approvedExternalRoots: string[]
   ) {}
 
-  getWorkspaceRoot(): string {
+  getWorkspaceRoot(): string | undefined {
     return this.stateRoot;
   }
 
@@ -38,9 +42,27 @@ class RecordingPlatform implements PlatformAdapter {
   }
 
   getExtensionPath(): string {
-    return this.stateRoot;
+    return os.tmpdir();
   }
 }
+
+suite("requireWorkspaceRoot", () => {
+  test("returns the platform's root when a workspace is open", () => {
+    const stateRoot = path.join(os.tmpdir(), "ctrlyoke-open-workspace");
+    const platform = new RecordingPlatform(stateRoot, [stateRoot], [], []);
+
+    assert.strictEqual(requireWorkspaceRoot(platform), stateRoot);
+  });
+
+  test("refuses rather than falling back to the process cwd", () => {
+    const platform = new RecordingPlatform(undefined, [], [], []);
+
+    assert.throws(
+      () => requireWorkspaceRoot(platform),
+      (error: Error) => error.message === NO_WORKSPACE_FOLDER_MESSAGE
+    );
+  });
+});
 
 suite("createNoWorktreeExecutionWorkspace", () => {
   test("preserves the single-root adapter values", () => {
@@ -110,5 +132,16 @@ suite("createNoWorktreeExecutionWorkspace", () => {
     assert.deepStrictEqual(workspace.namedWorkspaceRoots, namedRoots);
     assert.deepStrictEqual(workspace.approvedExternalRoots, []);
     assert.deepStrictEqual(platform.approvedRootArguments, [stateRoot]);
+  });
+
+  test("roots a window with no folder in the inert placeholder, never the cwd", () => {
+    const platform = new RecordingPlatform(undefined, [], [], []);
+
+    const workspace = createNoWorktreeExecutionWorkspace(platform);
+
+    assert.strictEqual(workspace.stateRoot, noWorkspacePlaceholderRoot());
+    assert.strictEqual(workspace.executionRoot, noWorkspacePlaceholderRoot());
+    assert.notStrictEqual(workspace.stateRoot, process.cwd());
+    assert.deepStrictEqual(workspace.workspaceRoots, []);
   });
 });

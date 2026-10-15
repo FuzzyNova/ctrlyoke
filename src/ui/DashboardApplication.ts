@@ -61,7 +61,6 @@ export interface DashboardApplicationOptions {
   keyValueStore: KeyValueStore;
   secretStore: SecretStore;
   getWorkspaceRoot(): string | undefined;
-  getSecretWorkspaceRoot(): string;
   getNamedRoots(): NamedRoot[];
   getTrustedRoots(): string[];
   actions: DashboardHostActions;
@@ -115,7 +114,7 @@ export class DashboardApplication
     const getOrchestrator = () => this.workflowOrchestrator;
     this.secretRegistry = new SecretRegistryService({
       secretStore: options.secretStore,
-      getWorkspaceRoot: options.getSecretWorkspaceRoot,
+      getWorkspaceRoot: options.getWorkspaceRoot,
     });
     this.interactionPort = new WebviewUserInteractionPort(
       options.interactionPostMessage ?? postMessage,

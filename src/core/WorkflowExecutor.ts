@@ -1,5 +1,8 @@
 import * as path from "path";
-import { PlatformAdapter } from "../platform/PlatformAdapter";
+import {
+  PlatformAdapter,
+  requireWorkspaceRoot,
+} from "../platform/PlatformAdapter";
 import type { DashboardHostActions } from "./HostPorts";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
@@ -3473,7 +3476,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext
   ): Promise<Record<string, string> | undefined> {
     const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
-      workspaceRoot: this.platform.getWorkspaceRoot(),
+      workspaceRoot: requireWorkspaceRoot(this.platform),
       secretStore: this.platform.getSecretStore?.(),
     });
     context.secretRedactor?.addResolvedValues(resolvedSecrets);
@@ -3538,7 +3541,7 @@ export class WorkflowExecutor {
     if (names.length === 0) {
       return { values: {}, resolvedNames: [] };
     }
-    const workspaceRoot = this.platform.getWorkspaceRoot();
+    const workspaceRoot = requireWorkspaceRoot(this.platform);
     const resolutionContext = {
       workspaceRoot,
       secretStore: this.platform.getSecretStore?.(),

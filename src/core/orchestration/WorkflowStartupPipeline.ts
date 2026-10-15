@@ -44,7 +44,10 @@ import { RecordedTargetFailureError } from "../RecordedTargetFailureError";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { buildUsageSelectionWarning } from "../harness/shared/usage/UsageSelectionAssist";
 import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
-import type { PlatformAdapter } from "../../platform/PlatformAdapter";
+import {
+  requireWorkspaceRoot,
+  type PlatformAdapter,
+} from "../../platform/PlatformAdapter";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { McpToolSkillRunContext } from "../../types/WorkflowContextTypes";
 import type { WorkflowAttemptTarget } from "../../types/CtrlYokeTypes";
@@ -324,6 +327,9 @@ export class WorkflowStartupPipeline {
         `[executeLoadedPromptFile] ctrlyoke: Executing loaded prompt file: ${filePath}`
       );
 
+      // A window with no folder open has nowhere to keep run state; refuse
+      // before anything is written.
+      requireWorkspaceRoot(this.port.platform);
       await this.preflightSecrets();
       await this.resolveWorktree();
       if (!(await this.preflightCompatibility())) {
@@ -573,7 +579,7 @@ export class WorkflowStartupPipeline {
 
   async preflightSecrets(): Promise<void> {
     const workflow = this.port.queue.getWorkflowFile();
-    const workspaceRoot = this.port.platform.getWorkspaceRoot();
+    const workspaceRoot = requireWorkspaceRoot(this.port.platform);
     await this.port.approveSecretGrants?.(workflow, workspaceRoot);
     this.missingSecretNames = await preflightWorkflowSecrets(
       workflow,
@@ -1137,9 +1143,7 @@ export class WorkflowStartupPipeline {
     workingFilePath: string
   ): Promise<string> {
     const runWorkspaceRoot =
-      this.port.workspaceFolderPath ??
-      this.port.platform.getWorkspaceRoot() ??
-      "";
+      this.port.workspaceFolderPath ?? requireWorkspaceRoot(this.port.platform);
     const startedAt = Date.now();
     const promoted = await this.port.queue.promoteToNewRun(
       runWorkspaceRoot,

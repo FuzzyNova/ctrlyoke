@@ -31,7 +31,7 @@ export class VsCodeAdapter implements PlatformAdapter {
     return this.secretStore;
   }
 
-  getWorkspaceRoot(): string {
+  getWorkspaceRoot(): string | undefined {
     return getVsCodeWorkspaceRoot();
   }
 
@@ -40,11 +40,12 @@ export class VsCodeAdapter implements PlatformAdapter {
   }
 
   getApprovedExternalFileRoots(stateRoot?: string): string[] {
-    return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-      ExternalRootsTrustStore.canonicalizeRoot(
-        stateRoot ?? this.getWorkspaceRoot()
-      )
-    );
+    const root = stateRoot ?? this.getWorkspaceRoot();
+    return root === undefined
+      ? []
+      : ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          ExternalRootsTrustStore.canonicalizeRoot(root)
+        );
   }
 
   getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {

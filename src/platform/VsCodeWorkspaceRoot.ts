@@ -1,6 +1,5 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { pathsEqual } from "../utils/PathCasing";
 import { URI_SCHEMES } from "../types/DashboardConstants";
 import {
   resolveWorkspaceRoot,
@@ -51,8 +50,9 @@ function gatherResolverInput(): WorkspaceRootResolverInput {
  * `vscode.workspace.workspaceFolders?.[0]?.uri.fsPath` must call this instead,
  * so the `.ctrlyoke` location is computed in exactly one place and honors the
  * `.code-workspace` directory plus the `ctrlyoke.workspaceDirectory` setting.
+ * `undefined` means the window has no folder open, so there is no workspace.
  */
-export function getVsCodeWorkspaceRoot(): string {
+export function getVsCodeWorkspaceRoot(): string | undefined {
   return resolveWorkspaceRoot(gatherResolverInput());
 }
 
@@ -97,33 +97,4 @@ export function getVsCodeNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
     name: folder.name,
     fsPath: folder.uri.fsPath,
   }));
-}
-
-/**
- * Return a `vscode.WorkspaceFolder` whose `uri.fsPath` is the resolved
- * workspace root, or `undefined` when no folder is open.
- *
- * When the resolved root matches a real workspace folder, that folder is
- * returned as-is. Otherwise (the root is a `.code-workspace` directory or an
- * explicit `ctrlyoke.workspaceDirectory` override that is not itself one of
- * the folders) a synthetic folder pointing at the resolved root is returned, so
- * every consumer that derives paths from `.uri.fsPath` stays in agreement with
- * {@link getVsCodeWorkspaceRoot}. Use this only where a `WorkspaceFolder`
- * object is genuinely required; otherwise prefer {@link getVsCodeWorkspaceRoot}.
- */
-export function getVsCodeWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders || folders.length === 0) {
-    return undefined;
-  }
-  const root = getVsCodeWorkspaceRoot();
-  const match = folders.find((folder) => pathsEqual(folder.uri.fsPath, root));
-  if (match) {
-    return match;
-  }
-  return {
-    uri: vscode.Uri.file(root),
-    name: path.basename(root),
-    index: 0,
-  };
 }

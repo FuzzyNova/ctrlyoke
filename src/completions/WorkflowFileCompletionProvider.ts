@@ -148,9 +148,7 @@ export class WorkflowFileCompletionProvider
     path: readonly (string | number)[]
   ): Promise<WorkflowValueLists> {
     const field = [...path].reverse().find((part) => typeof part === "string");
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
-      ? getVsCodeWorkspaceRoot()
-      : undefined;
+    const workspaceRoot = getVsCodeWorkspaceRoot();
     switch (field) {
       case PROMPT_PROPERTIES.AGENT:
         return {
