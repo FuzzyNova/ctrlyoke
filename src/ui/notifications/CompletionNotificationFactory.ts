@@ -90,10 +90,14 @@ interface PromptNotificationInput {
 }
 
 /** Uses durable storage identity whenever an execution has been promoted to a run. */
-function notificationIdentity(summary: WorkflowSummary): string {
+export function notificationIdentityPrefix(summary: WorkflowSummary): string {
   return summary.workflowKey && summary.runRef
-    ? `${summary.workflowKey}:${summary.runRef}`
-    : summary.id;
+    ? `${summary.workflowKey}:${summary.runRef}:`
+    : `${summary.id}:`;
+}
+
+function notificationIdentity(summary: WorkflowSummary): string {
+  return notificationIdentityPrefix(summary).slice(0, -1);
 }
 
 export function buildTestNotificationEvent(

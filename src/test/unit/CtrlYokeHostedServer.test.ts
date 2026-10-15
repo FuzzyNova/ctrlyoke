@@ -25,7 +25,9 @@ import {
   THEME_KINDS,
   THEME_KIND_CSS_VAR,
   VSCODE_THEME_BODY_CLASSES,
+  EXECUTION_STATES,
 } from "../../types/DashboardConstants";
+import type { WorkflowSummary } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
 import {
   buildHookNotificationEvent,
@@ -1315,6 +1317,7 @@ interface HostedServerHeartbeatInternals {
 interface HostedServerFeedbackInternals {
   connections: Set<FakeHostedSocket>;
   notifiedEventIds: Set<string>;
+  workflowSummaries: Map<string, WorkflowSummary>;
   publicUrl?: string;
   webPushService: {
     sendNotification(event: unknown): Promise<{
@@ -1325,6 +1328,7 @@ interface HostedServerFeedbackInternals {
   };
   broadcast(message: unknown): void;
   broadcastUserFeedback(message: unknown): void;
+  notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void;
   dispatchCompletionNotification(
     event: CtrlYokeNotificationEvent | undefined
   ): Promise<void>;
@@ -1412,6 +1416,61 @@ suite("CtrlYokeHostedServer connection heartbeat", () => {
 });
 
 suite("CtrlYokeHostedServer feedback transport", () => {
+  test("repeats completion notifications after a run resumes", () => {
+    const notifications: unknown[] = [];
+    const server = Object.create(
+      CtrlYokeHostedServer.prototype
+    ) as HostedServerFeedbackInternals;
+    server.connections = new Set();
+    server.notifiedEventIds = new Set();
+    server.workflowSummaries = new Map();
+    server.broadcast = (message) => {
+      if (
+        (message as { type?: string }).type === MESSAGE_TYPES.NOTIFICATION_EVENT
+      ) {
+        notifications.push(message);
+      }
+    };
+
+    const summary = (
+      id: string,
+      executionState: WorkflowSummary["executionState"]
+    ): WorkflowSummary => ({
+      id,
+      workflowKey: "lineage-1" as WorkflowSummary["workflowKey"],
+      runRef: "run-1" as WorkflowSummary["runRef"],
+      workflowName: "workflow",
+      filePath: "workflow.ctrlyoke.yaml",
+      executionState,
+      currentStep: 0,
+      totalSteps: 1,
+    });
+
+    try {
+      configService.setCliOverlay({
+        notifications: {
+          browser: { mode: BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY },
+        },
+      });
+      server.notifyWorkflowSummaryUpdated(
+        summary("instance-1", EXECUTION_STATES.RUNNING)
+      );
+      server.notifyWorkflowSummaryUpdated(
+        summary("instance-1", EXECUTION_STATES.COMPLETED)
+      );
+      server.notifyWorkflowSummaryUpdated(
+        summary("instance-1", EXECUTION_STATES.RUNNING)
+      );
+      server.notifyWorkflowSummaryUpdated(
+        summary("instance-1", EXECUTION_STATES.COMPLETED)
+      );
+
+      assert.strictEqual(notifications.length, 2);
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
   test("delivers USER_FEEDBACK even when browser notifications are never", () => {
     try {
       configService.setCliOverlay({

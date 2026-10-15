@@ -9,6 +9,8 @@ import type {
 import type { DashboardClient } from "./DashboardBroadcastHub";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
+  EXECUTION_STATES,
+  STEP_STATUS,
   type StepStatus,
 } from "../types/DashboardConstants";
 import {
@@ -16,6 +18,7 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
+  notificationIdentityPrefix,
   type CtrlYokeNotificationEvent,
 } from "./notifications/CompletionNotificationFactory";
 import { Log } from "../utils/Log";
@@ -38,17 +41,24 @@ export class NotificationManager implements DashboardClient {
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
-    this.workflowSummaries.delete(workflowId);
-    for (const key of [...this.notifiedKeys]) {
-      if (key.startsWith(`${workflowId}:`)) {
-        this.notifiedKeys.delete(key);
-      }
+    const summary = this.workflowSummaries.get(workflowId);
+    if (summary) {
+      this.clearNotificationKeys(summary);
     }
+    this.workflowSummaries.delete(workflowId);
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
     const previousSummary = this.workflowSummaries.get(summary.id);
     this.workflowSummaries.set(summary.id, { ...summary });
+
+    if (
+      summary.executionState === EXECUTION_STATES.RUNNING &&
+      (previousSummary?.executionState === EXECUTION_STATES.COMPLETED ||
+        previousSummary?.executionState === EXECUTION_STATES.ERROR)
+    ) {
+      this.clearNotificationKeys(summary);
+    }
 
     if (!isWorkflowCompletionTransition(previousSummary, summary)) {
       return;
@@ -94,6 +104,10 @@ export class NotificationManager implements DashboardClient {
       return;
     }
 
+    if (status.state === STEP_STATUS.RUNNING) {
+      this.clearNotificationKeys(summary);
+    }
+
     const steps = this.getWorkflowSteps(workflowId);
     const event = buildPromptCompletionNotification({
       summary,
@@ -112,6 +126,15 @@ export class NotificationManager implements DashboardClient {
   private getWorkflowSteps(workflowId: string): WorkflowStep[] | undefined {
     const workflow = this.getOrchestrator().getWorkflow(workflowId);
     return workflow?.getQueueState().steps;
+  }
+
+  private clearNotificationKeys(summary: WorkflowSummary): void {
+    const prefix = notificationIdentityPrefix(summary);
+    for (const key of this.notifiedKeys) {
+      if (key.startsWith(prefix)) {
+        this.notifiedKeys.delete(key);
+      }
+    }
   }
 
   notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {

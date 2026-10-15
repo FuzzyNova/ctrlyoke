@@ -44,6 +44,8 @@ import {
   HOSTED_CERT_DOWNLOAD,
   HOSTED_CONNECTION_LIVENESS,
   MESSAGE_TYPES,
+  EXECUTION_STATES,
+  STEP_STATUS,
   BROWSER_CLIENT_PREFIX,
   LANGUAGE_SERVER_REQUEST_ORIGINS,
   type FinalStepPhase,
@@ -76,6 +78,7 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
+  notificationIdentityPrefix,
   type CtrlYokeNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
@@ -655,12 +658,11 @@ export class CtrlYokeHostedServer
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
-    this.workflowSummaries.delete(workflowId);
-    for (const key of [...this.notifiedEventIds]) {
-      if (key.startsWith(`${workflowId}:`)) {
-        this.notifiedEventIds.delete(key);
-      }
+    const summary = this.workflowSummaries.get(workflowId);
+    if (summary) {
+      this.clearNotificationEventIds(summary);
     }
+    this.workflowSummaries.delete(workflowId);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
   }
 
@@ -668,6 +670,14 @@ export class CtrlYokeHostedServer
     const previousSummary = this.workflowSummaries.get(summary.id);
     this.workflowSummaries.set(summary.id, summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+
+    if (
+      summary.executionState === EXECUTION_STATES.RUNNING &&
+      (previousSummary?.executionState === EXECUTION_STATES.COMPLETED ||
+        previousSummary?.executionState === EXECUTION_STATES.ERROR)
+    ) {
+      this.clearNotificationEventIds(summary);
+    }
 
     if (!isWorkflowCompletionTransition(previousSummary, summary)) {
       return;
@@ -885,6 +895,10 @@ export class CtrlYokeHostedServer
     const summary = this.workflowSummaries.get(workflowId);
     if (!summary) {
       return;
+    }
+
+    if (status.state === STEP_STATUS.RUNNING) {
+      this.clearNotificationEventIds(summary);
     }
 
     const steps = this.getOrchestrator()
@@ -2580,6 +2594,15 @@ export class CtrlYokeHostedServer
         Log.warn(
           `[hosted-server] push notification dispatch failed for ${event.id}: ${error}`
         );
+      }
+    }
+  }
+
+  private clearNotificationEventIds(summary: WorkflowSummary): void {
+    const prefix = notificationIdentityPrefix(summary);
+    for (const eventId of this.notifiedEventIds) {
+      if (eventId.startsWith(prefix)) {
+        this.notifiedEventIds.delete(eventId);
       }
     }
   }

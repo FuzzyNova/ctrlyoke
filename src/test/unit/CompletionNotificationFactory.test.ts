@@ -11,6 +11,7 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
+  notificationIdentityPrefix,
   type HookArtifact,
 } from "../../ui/notifications/CompletionNotificationFactory";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
@@ -148,6 +149,33 @@ suite("CompletionNotificationFactory", () => {
     assert.strictEqual(event.body, "Developer test notification");
     assert.strictEqual(event.workflowId, "test");
     assert.strictEqual(event.url, "http://localhost:4747/?token=test");
+  });
+
+  test("uses durable run identity for notification cleanup prefixes", () => {
+    assert.strictEqual(
+      notificationIdentityPrefix({
+        id: "instance-1",
+        workflowKey: "lineage-1" as never,
+        runRef: "run-1" as never,
+        workflowName: "workflow",
+        filePath: "workflow.ctrlyoke.yaml",
+        executionState: EXECUTION_STATES.RUNNING,
+        currentStep: 0,
+        totalSteps: 1,
+      }),
+      "lineage-1:run-1:"
+    );
+    assert.strictEqual(
+      notificationIdentityPrefix({
+        id: "instance-1",
+        workflowName: "workflow",
+        filePath: "workflow.ctrlyoke.yaml",
+        executionState: EXECUTION_STATES.RUNNING,
+        currentStep: 0,
+        totalSteps: 1,
+      }),
+      "instance-1:"
+    );
   });
 
   test("suppresses workflow success notifications in failures-only mode", () => {
