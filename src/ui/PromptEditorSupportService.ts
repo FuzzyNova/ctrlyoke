@@ -1560,6 +1560,13 @@ export class PromptEditorSupportService {
             return;
           }
 
+          const excerptEstimate =
+            await expander.estimateExcerptReferenceTokens(rawRef);
+          if (excerptEstimate !== null) {
+            counts[rawRef] = excerptEstimate.tokens;
+            return;
+          }
+
           const expanded = await expander.expandContext(rawRef);
 
           if (expanded === rawRef) {

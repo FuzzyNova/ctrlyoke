@@ -71,6 +71,38 @@ suite("ContextExpander.expandContextSplit", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  test("caps oversized selection and symbol excerpts before reading content", async () => {
+    const root = freshWorkspace();
+    const filePath = path.join(root, "large.ts");
+    fs.writeFileSync(filePath, "small fixture\n");
+    const originalStat = fs.promises.stat;
+    fs.promises.stat = (async (target: fs.PathLike, ...args: unknown[]) => {
+      if (path.resolve(String(target)) === filePath) {
+        return { size: MAX_CONTENT_SIZE + 1, mtimeMs: 0 } as fs.Stats;
+      }
+      return (originalStat as (...values: unknown[]) => Promise<fs.Stats>)(
+        target,
+        ...args
+      );
+    }) as typeof fs.promises.stat;
+    try {
+      const expander = new ContextExpander({ workspaceRoot: root });
+      for (const reference of [
+        "#selection:large.ts:1-1",
+        "#sym:large.ts:Thing:1-1",
+      ]) {
+        const result = await expander.expandContextSplit(reference);
+        assert.strictEqual(result.excerptBlocks, "");
+        assert.ok(
+          result.skippedReferences[0].reason.includes("excerpt size limit")
+        );
+      }
+    } finally {
+      fs.promises.stat = originalStat;
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   suite("no references", () => {
     test("returns empty result for prompt with no @-references", async () => {
       const root = freshWorkspace();

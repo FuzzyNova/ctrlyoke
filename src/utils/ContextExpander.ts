@@ -1,15 +1,19 @@
 import * as path from "path";
-import * as fs from "fs/promises";
+import * as fs from "fs";
+import * as readline from "readline";
 import {
   FileReference,
   parseAllFileReferences,
   parseAtReferences,
   parseGitChangeReferences,
+  parseSelectionReferences,
+  parseSymbolReferences,
 } from "./FileReferenceParser";
 import { buildDirectoryAttachmentXml } from "./AttachmentBuilders";
 import { estimateImageTokens } from "./ImageTokenEstimator";
 import {
   estimateFileTokens,
+  estimateFileTokensFromSize,
   type FileTokenEstimate,
 } from "./FileTokenEstimator";
 import {
@@ -36,6 +40,7 @@ import {
   GIT_CHANGE_KINDS,
   isImageRefPath,
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
+  MAX_CONTENT_SIZE,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
@@ -273,7 +278,7 @@ export class ContextExpander {
     try {
       await this.prepareSourceRuntimeResolutions([ref]);
       const absolutePath = this.resolveWorkspacePath(ref.path);
-      await fs.access(absolutePath);
+      await fs.promises.access(absolutePath);
       return estimateImageTokens(absolutePath);
     } catch {
       // Unreadable / out-of-workspace — let the normal path handle (and log) it.
@@ -305,6 +310,26 @@ export class ContextExpander {
       return await estimateFileTokens(absolutePath);
     } catch {
       // Unreadable / out-of-workspace — let the normal path handle (and log) it.
+      return null;
+    }
+  }
+
+  /** Estimate oversized selection/symbol refs without loading their contents. */
+  async estimateExcerptReferenceTokens(
+    rawRef: string
+  ): Promise<FileTokenEstimate | null> {
+    const ref = [
+      ...parseSelectionReferences(rawRef),
+      ...parseSymbolReferences(rawRef),
+    ][0];
+    if (!ref) return null;
+    try {
+      await this.prepareSourceRuntimeResolutions([ref]);
+      const stat = await fs.promises.stat(this.resolveWorkspacePath(ref.path));
+      return stat.size > MAX_CONTENT_SIZE
+        ? estimateFileTokensFromSize(stat.size, stat.mtimeMs)
+        : null;
+    } catch {
       return null;
     }
   }
@@ -444,7 +469,7 @@ export class ContextExpander {
               ref.path
             )?.absolutePath;
             if (sourceRuntimePath) {
-              const sourceStat = await fs.stat(sourceRuntimePath);
+              const sourceStat = await fs.promises.stat(sourceRuntimePath);
               if (!sourceStat.isFile()) {
                 throw new Error(
                   `Reference "${ref.path}" is not a regular file`
@@ -470,7 +495,7 @@ export class ContextExpander {
               });
             } else {
               const absolutePath = this.resolveWorkspacePath(ref.path);
-              await fs.access(absolutePath);
+              await fs.promises.access(absolutePath);
               directFileRefs.push(absolutePath);
               if (isImageRefPath(ref.path)) {
                 imageFileRefs.push(absolutePath);
@@ -609,7 +634,7 @@ export class ContextExpander {
     try {
       resolution = this.resolveReference(ref.path);
       absolutePath = resolution.absolutePath;
-      await fs.access(absolutePath);
+      await fs.promises.access(absolutePath);
     } catch (err) {
       Log.trace(
         `[ContextExpander] Skipping unresolvable reference: ${ref.path}.`,
@@ -965,12 +990,22 @@ export class ContextExpander {
     const language =
       path.extname(filePath).toLowerCase().slice(1) || "plaintext";
 
+    const stat = await fs.promises.stat(absolutePath);
+    const lineRange = { startLine, endLine };
+    const hasExcerpt = hasLineRange(lineRange);
+    const limitReason = `Excerpt skipped: file exceeds the ${Math.round(MAX_CONTENT_SIZE / 1024)} KB excerpt size limit`;
+    if (hasExcerpt && stat.size > MAX_CONTENT_SIZE)
+      throw new Error(limitReason);
     const t0 = Date.now();
-    const rawContent = await fs.readFile(absolutePath, "utf8");
-    const elapsed = Date.now() - t0;
-    const sizeKb = (Buffer.byteLength(rawContent, "utf8") / 1024).toFixed(1);
+    const streamedLines =
+      hasExcerpt && !symbolName
+        ? await this.readLineRange(absolutePath, startLine!, endLine!)
+        : undefined;
+    const rawContent = streamedLines
+      ? undefined
+      : await fs.promises.readFile(absolutePath, "utf8");
     Log.trace(
-      `[ContextExpander] Read ${filePath} (${sizeKb} KB) in ${elapsed}ms`
+      `[ContextExpander] Read ${filePath} (${stat.size} bytes) in ${Date.now() - t0}ms`
     );
 
     // A read-in-place source artifact has no worktree path to name, so its
@@ -982,7 +1017,6 @@ export class ContextExpander {
         : filePath;
 
     // If no line range, attach entire file
-    const lineRange = { startLine, endLine };
     if (!hasLineRange(lineRange)) {
       const attachmentId = `file:${filePath}`;
       const description = symbolName
@@ -1000,13 +1034,14 @@ ${rawContent}
     const rangeEndLine = lineRange.endLine;
 
     // Extract line range (0-indexed slice)
-    const lines = splitLines(rawContent);
+    const lines = streamedLines ?? splitLines(rawContent!);
     if (!isValidLineRange(rangeStartLine, rangeEndLine, lines.length)) {
       throw new Error(
         `Invalid line range ${rangeStartLine}-${rangeEndLine} for file with ${lines.length} lines`
       );
     }
-    const slicedLines = lines.slice(rangeStartLine - 1, rangeEndLine);
+    const slicedLines =
+      streamedLines ?? lines.slice(rangeStartLine - 1, rangeEndLine);
 
     Log.trace(
       `[ContextExpander] Sliced ${filePath} lines ${rangeStartLine}-${rangeEndLine} (${slicedLines.length} lines of ${lines.length})`
@@ -1040,6 +1075,41 @@ ${content}
    * Resolve relative path to absolute workspace path
    * Uses Node.js path.resolve for cross-platform compatibility
    */
+  private async readLineRange(
+    absolutePath: string,
+    startLine: number,
+    endLine: number
+  ): Promise<string[]> {
+    const input = fs.createReadStream(absolutePath, { encoding: "utf8" });
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
+    const result: string[] = [];
+    let lineNumber = 0;
+    let byteCount = 0;
+    const limitError = new Error(
+      `Excerpt skipped: file exceeds the ${Math.round(MAX_CONTENT_SIZE / 1024)} KB excerpt size limit`
+    );
+    input.on("data", (chunk: string | Buffer) => {
+      byteCount += Buffer.byteLength(chunk);
+      if (byteCount > MAX_CONTENT_SIZE) input.destroy(limitError);
+    });
+    try {
+      for await (const line of lines) {
+        lineNumber++;
+        if (lineNumber >= startLine) result.push(line);
+        if (lineNumber >= endLine) break;
+      }
+      if (!isValidLineRange(startLine, endLine, lineNumber)) {
+        throw new Error(
+          `Invalid line range ${startLine}-${endLine} for file with ${lineNumber} lines`
+        );
+      }
+      return result;
+    } finally {
+      lines.close();
+      input.destroy();
+    }
+  }
+
   private resolveWorkspacePath(relativePath: string): string {
     return this.resolveReference(relativePath).absolutePath;
   }

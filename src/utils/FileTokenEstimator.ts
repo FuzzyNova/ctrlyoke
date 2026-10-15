@@ -14,6 +14,18 @@ export interface FileTokenEstimate {
   estimated: boolean;
 }
 
+export function estimateFileTokensFromSize(
+  byteCount: number,
+  mtimeMs = 0
+): FileTokenEstimate {
+  return {
+    tokens: Math.ceil(byteCount / ESTIMATED_CHARS_PER_TOKEN),
+    byteCount,
+    mtimeMs,
+    estimated: true,
+  };
+}
+
 /**
  * Single-sourced token estimate for a file's content, shared between the live
  * editor attachment counter (`PromptEditorSupportService`/`ContextExpander`)
@@ -42,10 +54,5 @@ export async function estimateFileTokens(
       estimated: false,
     };
   }
-  return {
-    tokens: Math.ceil(stat.size / ESTIMATED_CHARS_PER_TOKEN),
-    byteCount: stat.size,
-    mtimeMs: stat.mtimeMs,
-    estimated: true,
-  };
+  return estimateFileTokensFromSize(stat.size, stat.mtimeMs);
 }

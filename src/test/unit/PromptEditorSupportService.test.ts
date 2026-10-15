@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs/promises";
+import * as nodeFs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { PromptEditorSupportService } from "../../ui/PromptEditorSupportService";
@@ -11,6 +12,7 @@ import {
   HARNESS_IDS,
   MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  MAX_CONTENT_SIZE,
 } from "../../types/DashboardConstants";
 import { pathsEqual } from "../../utils/PathCasing";
 import { CompletionCore } from "../../completions/CompletionCore";
@@ -30,6 +32,52 @@ suite("PromptEditorSupportService", () => {
 
   teardown(async () => {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
+  });
+
+  test("estimates oversized excerpt token counts without reading file contents", async () => {
+    const filePath = path.join(workspaceRoot, "large.log");
+    await fs.writeFile(filePath, "small fixture", "utf8");
+    const mutableFs = nodeFs.promises as unknown as {
+      stat: typeof nodeFs.promises.stat;
+      readFile: typeof nodeFs.promises.readFile;
+    };
+    const originalStat = mutableFs.stat;
+    const originalReadFile = mutableFs.readFile;
+    mutableFs.stat = (async (target: string, ...args: unknown[]) => {
+      if (path.resolve(String(target)) === filePath) {
+        return { size: MAX_CONTENT_SIZE + 1, mtimeMs: 0 } as import("fs").Stats;
+      }
+      return (
+        originalStat as (...values: unknown[]) => Promise<import("fs").Stats>
+      )(target, ...args);
+    }) as typeof fs.stat;
+    mutableFs.readFile = (async (target: string, ...args: unknown[]) => {
+      if (path.resolve(String(target)) === filePath)
+        throw new Error("unexpected readFile");
+      return (originalReadFile as (...values: unknown[]) => Promise<Buffer>)(
+        target,
+        ...args
+      );
+    }) as typeof fs.readFile;
+    try {
+      const emitted: unknown[] = [];
+      const service = new PromptEditorSupportService(
+        () => workspaceRoot,
+        () => undefined,
+        () => undefined
+      );
+      await service.handleAttachmentTokenCountRequest(
+        createWebviewClientContext("test-client", (message) =>
+          emitted.push(message)
+        ),
+        ["#selection:large.log:1-1"]
+      );
+      const response = emitted[0] as { counts: Record<string, number> };
+      assert.ok(response.counts["#selection:large.log:1-1"] > 0);
+    } finally {
+      mutableFs.stat = originalStat;
+      mutableFs.readFile = originalReadFile;
+    }
   });
 
   test("reports empty prompt files with the request sequence and resolved path", async () => {
