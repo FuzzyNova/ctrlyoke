@@ -74,11 +74,19 @@ export function splitCompleteLines(content: string): {
  * Streams a file line by line without materializing it. A final line with no
  * trailing break is yielded as-is, so callers keep the option of tolerating a
  * partially written last record.
+ *
+ * `maxBytes` stops reading after that many bytes. The last line yielded may
+ * then be cut short (possibly mid-character), so a caller that sets it must
+ * only trust lines followed by another yielded line.
  */
 export async function* streamFileLines(
-  filePath: string
+  filePath: string,
+  options?: { maxBytes?: number }
 ): AsyncGenerator<string, void, undefined> {
-  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  const stream = fs.createReadStream(filePath, {
+    encoding: "utf8",
+    ...(options?.maxBytes !== undefined && { end: options.maxBytes - 1 }),
+  });
   let buffered = "";
 
   try {

@@ -754,7 +754,7 @@ suite("ExecutionRootCoordinationStore", function () {
     }
   });
 
-  test("moves a board with a corrupt middle line aside and starts fresh", async () => {
+  test("salvages a board with a corrupt middle line and keeps sequences rising", async () => {
     const root = await tempDirectory("corrupt-middle");
     try {
       const store = new ExecutionRootCoordinationStore(root);
@@ -763,17 +763,22 @@ suite("ExecutionRootCoordinationStore", function () {
       const valid = await fs.readFile(boardPath, "utf8");
       await fs.writeFile(boardPath, `${valid}not-json\n${valid}`, "utf8");
 
-      assert.deepStrictEqual((await store.read()).entries, []);
+      const salvaged = (await store.read()).entries;
+      assert.deepStrictEqual(
+        salvaged.map((entry) => entry.text),
+        ["before"]
+      );
       assert.strictEqual(
         (await fs.readdir(path.dirname(boardPath))).filter((name) =>
           name.startsWith("board.jsonl.corrupt-")
         ).length,
         1
       );
-      await store.append(note("writer", "fresh"));
+      await store.append(note("writer", "after"));
+      const after = (await store.read({ since: salvaged[0].seq })).entries;
       assert.deepStrictEqual(
-        (await store.read()).entries.map((entry) => entry.text),
-        ["fresh"]
+        after.map((entry) => entry.text),
+        ["after"]
       );
     } finally {
       await removeDirectory(root);

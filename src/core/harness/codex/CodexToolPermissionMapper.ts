@@ -44,6 +44,25 @@ export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
 };
 
 /**
+ * Bare tool names whose denial Codex can only express as a read-only sandbox.
+ * A scoped pattern such as `shell(rm:*)` does not count: Codex cannot narrow
+ * a sandbox to one command, and clamping the whole run for it would be broader
+ * than the user asked for.
+ */
+const CODEX_WRITE_CAPABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "write",
+  "edit",
+  "multiedit",
+  "shell",
+]);
+
+function deniesWriteCapableTool(config: ToolPermissionConfig): boolean {
+  return config.deniedTools.some((tool) =>
+    CODEX_WRITE_CAPABLE_TOOL_NAMES.has(tool.trim().toLowerCase())
+  );
+}
+
+/**
  * Codex CLI Tool Permission Mapper
  *
  * Converts ctrlyoke's unified permission configuration into Codex CLI arguments.
@@ -128,8 +147,8 @@ export class CodexToolPermissionMapper
    */
   buildCodexSpecificArgs(
     config: ToolPermissionConfig,
-    _sandboxMode?: string,
-    _approvalPolicy?: string,
+    sandboxMode?: string,
+    approvalPolicy?: string,
     isInteractive?: boolean
   ): string[] {
     // Warn if tool patterns are configured (unsupported by Codex)
@@ -158,10 +177,28 @@ export class CodexToolPermissionMapper
         return ["--sandbox", "workspace-write"];
 
       case PERMISSION_MODES.CUSTOM:
-        // Codex cannot enforce ctrlyoke's per-tool allow/deny patterns. Custom
-        // must therefore fail closed to its read-only sandbox instead of
-        // inheriting workspace-write from the user's broader Codex settings.
-        return ["--sandbox", "read-only"];
+        // Codex cannot enforce ctrlyoke's per-tool patterns. A config that
+        // denies a whole write-capable tool can only be honoured by the
+        // read-only sandbox, so fail closed instead of inheriting the user's
+        // broader Codex sandbox setting.
+        if (deniesWriteCapableTool(config)) {
+          return ["--sandbox", "read-only"];
+        }
+        // Otherwise use Codex-specific sandbox and approval settings.
+        // -a / --ask-for-approval is interactive-only; omit for headless exec.
+        if (sandboxMode && approvalPolicy) {
+          if (includeApprovalFlag) {
+            return ["-s", sandboxMode, "-a", approvalPolicy];
+          }
+          return ["-s", sandboxMode];
+        }
+        Log.warn(
+          "[CodexToolPermissionMapper] Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to the Auto preset."
+        );
+        if (includeApprovalFlag) {
+          return [...this.AUTO_PRESET_ARGS];
+        }
+        return ["--sandbox", "workspace-write"];
 
       case PERMISSION_MODES.NONE:
         return [];

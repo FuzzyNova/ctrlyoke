@@ -159,14 +159,20 @@ suite("TerminalOutputSanitizer", () => {
 
     test("strips an OSC 8 hyperlink split across chunks", () => {
       const sanitizer = new TerminalOutputSanitizer();
-      assert.strictEqual(
-        sanitizer.push("\x1B]8;;https://example.com\x1B"),
-        ""
-      );
+      assert.strictEqual(sanitizer.push("\x1B]8;;https://example.com\x1B"), "");
       assert.strictEqual(
         sanitizer.push("\\linked text\x1B]8;;\x1B\\"),
         "linked text"
       );
+    });
+
+    test("does not duplicate text when a buffered OSC ends before a new unterminated one", () => {
+      const sanitizer = new TerminalOutputSanitizer();
+      assert.strictEqual(sanitizer.push("\x1B]8;;http"), "");
+      const output = sanitizer.push("x\x07 text \x1B]0;title\nnext");
+      assert.strictEqual(output.split("text").length - 1, 1, output);
+      assert.ok(output.includes("next"), output);
+      assert.ok(!output.includes("http"), output);
     });
   });
 });

@@ -1,6 +1,5 @@
 import * as path from "path";
 import * as fs from "fs";
-import * as readline from "readline";
 import {
   FileReference,
   parseAllFileReferences,
@@ -44,8 +43,10 @@ import {
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
-import { splitLines } from "./TextLines";
+import { splitLines, streamFileLines } from "./TextLines";
 import { hasLineRange, isValidLineRange } from "./LineRangeUtils";
+
+const EXCERPT_SIZE_LIMIT_REASON = `Excerpt skipped: file exceeds the ${Math.round(MAX_CONTENT_SIZE / 1024)} KB excerpt size limit`;
 
 const CONTEXT_REFERENCE_BASES = {
   WORKFLOW: "workflow",
@@ -992,15 +993,18 @@ export class ContextExpander {
 
     const stat = await fs.promises.stat(absolutePath);
     const lineRange = { startLine, endLine };
-    const hasExcerpt = hasLineRange(lineRange);
-    const limitReason = `Excerpt skipped: file exceeds the ${Math.round(MAX_CONTENT_SIZE / 1024)} KB excerpt size limit`;
-    if (hasExcerpt && stat.size > MAX_CONTENT_SIZE)
-      throw new Error(limitReason);
+    const overExcerptCap =
+      hasLineRange(lineRange) && stat.size > MAX_CONTENT_SIZE;
+    // A symbol excerpt needs the whole file to locate the symbol, so an
+    // over-cap one is refused outright; an over-cap line range is streamed
+    // and refused only if the range lies past the cap.
+    if (overExcerptCap && symbolName) {
+      throw new Error(EXCERPT_SIZE_LIMIT_REASON);
+    }
     const t0 = Date.now();
-    const streamedLines =
-      hasExcerpt && !symbolName
-        ? await this.readLineRange(absolutePath, startLine!, endLine!)
-        : undefined;
+    const streamedLines = overExcerptCap
+      ? await this.readCappedLineRange(absolutePath, startLine!, endLine!)
+      : undefined;
     const rawContent = streamedLines
       ? undefined
       : await fs.promises.readFile(absolutePath, "utf8");
@@ -1033,18 +1037,23 @@ ${rawContent}
     const rangeStartLine = lineRange.startLine;
     const rangeEndLine = lineRange.endLine;
 
-    // Extract line range (0-indexed slice)
-    const lines = streamedLines ?? splitLines(rawContent!);
-    if (!isValidLineRange(rangeStartLine, rangeEndLine, lines.length)) {
-      throw new Error(
-        `Invalid line range ${rangeStartLine}-${rangeEndLine} for file with ${lines.length} lines`
-      );
+    // Extract line range (0-indexed slice). A streamed read has already
+    // validated the range and holds only the requested lines.
+    let slicedLines: string[];
+    if (streamedLines) {
+      slicedLines = streamedLines;
+    } else {
+      const lines = splitLines(rawContent!);
+      if (!isValidLineRange(rangeStartLine, rangeEndLine, lines.length)) {
+        throw new Error(
+          `Invalid line range ${rangeStartLine}-${rangeEndLine} for file with ${lines.length} lines`
+        );
+      }
+      slicedLines = lines.slice(rangeStartLine - 1, rangeEndLine);
     }
-    const slicedLines =
-      streamedLines ?? lines.slice(rangeStartLine - 1, rangeEndLine);
 
     Log.trace(
-      `[ContextExpander] Sliced ${filePath} lines ${rangeStartLine}-${rangeEndLine} (${slicedLines.length} lines of ${lines.length})`
+      `[ContextExpander] Sliced ${filePath} lines ${rangeStartLine}-${rangeEndLine} (${slicedLines.length} lines)`
     );
 
     // Prefix each line with its 1-based source line number: "    N→content"
@@ -1072,43 +1081,32 @@ ${content}
   }
 
   /**
-   * Resolve relative path to absolute workspace path
-   * Uses Node.js path.resolve for cross-platform compatibility
+   * Read lines `startLine..endLine` of a file larger than the excerpt cap,
+   * reading at most `MAX_CONTENT_SIZE` bytes. The read is cut at the cap, so
+   * the last line it yields may be partial; the range is only trusted once a
+   * line *after* `endLine` has been seen, which proves `endLine` is complete.
    */
-  private async readLineRange(
+  private async readCappedLineRange(
     absolutePath: string,
     startLine: number,
     endLine: number
   ): Promise<string[]> {
-    const input = fs.createReadStream(absolutePath, { encoding: "utf8" });
-    const lines = readline.createInterface({ input, crlfDelay: Infinity });
     const result: string[] = [];
     let lineNumber = 0;
-    let byteCount = 0;
-    const limitError = new Error(
-      `Excerpt skipped: file exceeds the ${Math.round(MAX_CONTENT_SIZE / 1024)} KB excerpt size limit`
-    );
-    input.on("data", (chunk: string | Buffer) => {
-      byteCount += Buffer.byteLength(chunk);
-      if (byteCount > MAX_CONTENT_SIZE) input.destroy(limitError);
-    });
-    try {
-      for await (const line of lines) {
-        lineNumber++;
-        if (lineNumber >= startLine) result.push(line);
-        if (lineNumber >= endLine) break;
-      }
-      if (!isValidLineRange(startLine, endLine, lineNumber)) {
-        throw new Error(
-          `Invalid line range ${startLine}-${endLine} for file with ${lineNumber} lines`
-        );
-      }
-      return result;
-    } finally {
-      lines.close();
-      input.destroy();
+    for await (const line of streamFileLines(absolutePath, {
+      maxBytes: MAX_CONTENT_SIZE,
+    })) {
+      lineNumber++;
+      if (lineNumber > endLine) return result;
+      if (lineNumber >= startLine) result.push(line);
     }
+    throw new Error(EXCERPT_SIZE_LIMIT_REASON);
   }
+
+  /**
+   * Resolve relative path to absolute workspace path
+   * Uses Node.js path.resolve for cross-platform compatibility
+   */
 
   private resolveWorkspacePath(relativePath: string): string {
     return this.resolveReference(relativePath).absolutePath;

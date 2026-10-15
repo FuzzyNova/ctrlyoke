@@ -115,7 +115,9 @@ async function acquireLock(
       try {
         const stats = await ops.stat(lockPath);
         if (Date.now() - stats.mtimeMs > staleMs) {
-          const judgedPayload = await ops.readFile(lockPath, "utf8").catch(() => "");
+          const judgedPayload = await ops
+            .readFile(lockPath, "utf8")
+            .catch(() => "");
           const tombstone = `${lockPath}.${crypto.randomUUID()}${RELEASED_LOCK_SUFFIX}`;
           try {
             await ops.rename(lockPath, tombstone);
@@ -127,8 +129,11 @@ async function acquireLock(
             ops.stat(tombstone),
             ops.readFile(tombstone, "utf8"),
           ]).catch(() => [undefined, ""] as const);
-          const sameFile = !!renamedStats && renamedStats.ino === stats.ino &&
-            renamedStats.dev === stats.dev && renamedStats.mtimeMs === stats.mtimeMs &&
+          const sameFile =
+            !!renamedStats &&
+            renamedStats.ino === stats.ino &&
+            renamedStats.dev === stats.dev &&
+            renamedStats.mtimeMs === stats.mtimeMs &&
             renamedPayload === judgedPayload;
           if (sameFile) {
             await ops.unlink(tombstone).catch(() => undefined);
@@ -138,7 +143,11 @@ async function acquireLock(
           // replacing a new owner, then keep polling as though it were held.
           try {
             const restore = await ops.open(lockPath, "wx");
-            try { await restore.writeFile(renamedPayload, "utf8"); } finally { await restore.close(); }
+            try {
+              await restore.writeFile(renamedPayload, "utf8");
+            } finally {
+              await restore.close();
+            }
             await ops.unlink(tombstone).catch(() => undefined);
           } catch {
             // A competing owner already restored/acquired the lock.
@@ -176,7 +185,9 @@ async function releaseLock(
     });
     if (currentToken === undefined) return;
     if (currentToken !== ownerToken) {
-      Log.warn(`[FileLockUtils] Lock ownership changed before release: ${lockPath}`);
+      Log.warn(
+        `[FileLockUtils] Lock ownership changed before release: ${lockPath}`
+      );
       return;
     }
     const tombstone = `${lockPath}.${crypto.randomUUID()}${RELEASED_LOCK_SUFFIX}`;
@@ -186,14 +197,22 @@ async function releaseLock(
       if (!isMissing(error)) throw error;
       return;
     }
-    const renamedToken = await ops.readFile(tombstone, "utf8").catch(() => undefined);
+    const renamedToken = await ops
+      .readFile(tombstone, "utf8")
+      .catch(() => undefined);
     if (renamedToken === ownerToken) {
       await ops.unlink(tombstone).catch(() => undefined);
     } else if (renamedToken !== undefined) {
-      Log.warn(`[FileLockUtils] Lock ownership changed during release: ${lockPath}`);
+      Log.warn(
+        `[FileLockUtils] Lock ownership changed during release: ${lockPath}`
+      );
       try {
         const restore = await ops.open(lockPath, "wx");
-        try { await restore.writeFile(renamedToken, "utf8"); } finally { await restore.close(); }
+        try {
+          await restore.writeFile(renamedToken, "utf8");
+        } finally {
+          await restore.close();
+        }
         await ops.unlink(tombstone).catch(() => undefined);
       } catch {
         // Another owner already holds the lock name.
@@ -223,13 +242,21 @@ export async function withFileLock<T>(
     utimes: options?.utimes ?? fs.utimes,
   };
   const staleMs = options?.staleMs ?? LOCK_STALE_MS;
-  const ownerToken = await acquireLock(lockPath, options?.timeoutMs ?? LOCK_TIMEOUT_MS, ops, staleMs);
+  const ownerToken = await acquireLock(
+    lockPath,
+    options?.timeoutMs ?? LOCK_TIMEOUT_MS,
+    ops,
+    staleMs
+  );
   const heartbeat = setInterval(() => {
-    void ops.readFile(lockPath, "utf8").then((currentToken) => {
-      if (currentToken !== ownerToken) return;
-      const now = new Date();
-      return ops.utimes(lockPath, now, now);
-    }).catch(() => undefined);
+    void ops
+      .readFile(lockPath, "utf8")
+      .then((currentToken) => {
+        if (currentToken !== ownerToken) return;
+        const now = new Date();
+        return ops.utimes(lockPath, now, now);
+      })
+      .catch(() => undefined);
   }, staleMs / 3);
   heartbeat.unref();
 

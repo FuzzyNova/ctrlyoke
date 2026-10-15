@@ -6,7 +6,7 @@
 
 ## Decision
 
-A malformed final JSONL record is treated as an interrupted append and skipped. A malformed record before the tail makes sequence continuity untrustworthy, so the whole board is moved aside and rebuilt from fresh writes.
+A malformed final JSONL record is treated as an interrupted append and skipped. A malformed record before the tail is dropped, along with any duplicate sequence numbers. The original board is copied to `board.jsonl.corrupt-<ts>`, and the board is rewritten atomically with every entry that parsed. Resetting the board instead would release live claims and restart sequence numbers at 1, so a reader polling with `since: N` would silently miss new notes. (Changed during the drain's review pass.)
 
 ## Symptom
 

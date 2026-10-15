@@ -438,15 +438,33 @@ suite("ToolPermissionMappers", () => {
         ]);
       });
 
-      test("custom without sandbox/approval config → read-only sandbox", async () => {
+      test("custom without sandbox/approval config → fallback to explicit Auto preset flags", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, [], [])
         );
-        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
       });
 
-      test("custom mode with allowed/denied patterns → read-only sandbox (Codex doesn't support granular patterns)", async () => {
+      test("custom mode with only allowed patterns → still Auto preset flags (Codex doesn't support granular patterns)", async () => {
+        const args = await mapperArgs(
+          mapper,
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
+        );
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
+      });
+
+      test("custom mode denying shell → read-only sandbox (the only way Codex can enforce it)", async () => {
         const args = await mapperArgs(
           mapper,
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
@@ -481,20 +499,30 @@ suite("ToolPermissionMappers", () => {
         ]);
       });
 
-      test("custom ignores broader sandbox and approval settings", async () => {
+      test("custom with sandboxMode and approvalPolicy → -s <mode> -a <policy>", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
           "workspace-write",
           "on-request"
         );
-        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
+        assert.deepStrictEqual(args, [
+          "-s",
+          "workspace-write",
+          "-a",
+          "on-request",
+        ]);
       });
 
-      test("custom without sandboxMode/approvalPolicy → read-only sandbox", async () => {
+      test("custom without sandboxMode/approvalPolicy → fallback to explicit Auto preset flags", async () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM)
         );
-        assert.deepStrictEqual(args, ["--sandbox", "read-only"]);
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
       });
     });
 

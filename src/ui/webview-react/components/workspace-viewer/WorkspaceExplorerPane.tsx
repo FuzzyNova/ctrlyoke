@@ -325,9 +325,15 @@ export const WorkspaceExplorerPane: React.FC = () => {
         const canonicalPath = result.path.replace(/\\/g, "/");
         if (!isCurrentRequest()) return;
         selectedPath = canonicalPath;
+        // A save that finished while another file was open recorded its mtime
+        // here. Prefer the newer of that and the fresh load, so a later
+        // external change is not hidden behind the saved value (a false 409).
+        const savedModifiedAt =
+          savedModifiedAtByPathRef.current.get(canonicalPath);
         modifiedAtRef.current =
-          savedModifiedAtByPathRef.current.get(canonicalPath) ??
-          result.modifiedAt;
+          savedModifiedAt !== undefined && result.modifiedAt !== undefined
+            ? Math.max(savedModifiedAt, result.modifiedAt)
+            : (savedModifiedAt ?? result.modifiedAt);
         savedModifiedAtByPathRef.current.delete(canonicalPath);
         setExternalChange(undefined);
         if (result.imageDataUri) {
@@ -565,7 +571,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
   }, [setMobileEditorVisible]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedFilePath || useWorkspaceViewerStore.getState().fileSaving) return;
+    if (!selectedFilePath || useWorkspaceViewerStore.getState().fileSaving)
+      return;
     const savedPath = selectedFilePath;
     const savedContent = fileContent;
     setFileSaving(true);

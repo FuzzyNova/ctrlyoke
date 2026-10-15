@@ -40,3 +40,12 @@ The `FileTokenEstimator.ts` header comment already documents a single huge `read
 - For a full-file inline read, refuse or truncate above a single-sourced cap. That can be `MAX_CONTENT_SIZE` or a dedicated excerpt cap in `DashboardConstants.ts`.
 - In the live token counter, add an estimate path for excerpt refs that never loads the whole file. Either tokenize the streamed slice, or fall back to a size-based approximation when the file is over the cap.
 - Add tests that pin the cap for `#selection` and `#sym` refs in both `expandContextSplit` and the `PromptEditorSupportService` counter.
+
+## Decision
+
+Files at or under `MAX_CONTENT_SIZE` keep the original read-and-slice path, so
+normal excerpts are byte-for-byte unchanged. Over the cap, a `#sym` excerpt is
+refused outright (locating the symbol needs the whole file), while a
+`#selection` line range is streamed through `streamFileLines` with a
+`maxBytes` read limit and attaches if the range ends before the cap; a range
+past the cap is skipped with the excerpt-size-limit reason.

@@ -123,12 +123,17 @@ async function readEntries(boardPath: string): Promise<CoordinationEntry[]> {
 
   const lines = splitLines(contents).filter((line) => line.trim().length > 0);
   const entries: CoordinationEntry[] = [];
+  const seenSequences = new Set<number>();
+  let corruptMiddleLine: unknown;
   for (const [index, line] of lines.entries()) {
     try {
-      entries.push(
-        migrateToCurrent(PERSISTED_STORES.COORDINATION_BOARD, JSON.parse(line))
-          .doc as CoordinationEntry
-      );
+      const entry = migrateToCurrent(
+        PERSISTED_STORES.COORDINATION_BOARD,
+        JSON.parse(line)
+      ).doc as CoordinationEntry;
+      if (seenSequences.has(entry.seq)) continue;
+      seenSequences.add(entry.seq);
+      entries.push(entry);
     } catch (error) {
       if (index === lines.length - 1) {
         Log.warn(
@@ -137,14 +142,23 @@ async function readEntries(boardPath: string): Promise<CoordinationEntry[]> {
         );
         continue;
       }
-      const corruptPath = `${boardPath}.corrupt-${Date.now()}`;
-      await fs.rename(boardPath, corruptPath);
-      Log.warn(
-        `[CoordinationStore] moved corrupt board "${boardPath}" to "${corruptPath}"; starting fresh:`,
-        error
-      );
-      return [];
+      corruptMiddleLine ??= error;
     }
+  }
+  if (corruptMiddleLine !== undefined) {
+    // Salvage rather than reset: every parseable entry survives, so live
+    // claims stay held and sequence numbers keep rising for `since` readers.
+    // Callers hold the board lock, so the rewrite cannot race an append.
+    const corruptPath = `${boardPath}.corrupt-${Date.now()}`;
+    await fs.copyFile(boardPath, corruptPath);
+    await writeFileAtomic(
+      boardPath,
+      entries.map((entry) => `${JSON.stringify(entry)}\n`).join("")
+    );
+    Log.warn(
+      `[CoordinationStore] dropped corrupt board lines from "${boardPath}"; original kept at "${corruptPath}":`,
+      corruptMiddleLine
+    );
   }
   return entries;
 }

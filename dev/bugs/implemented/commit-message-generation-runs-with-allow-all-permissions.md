@@ -51,9 +51,12 @@ Claude maps the pattern list to its headless `dontAsk` allowlist. OpenCode
 emits an `ask` catch-all, then read-only tools and the selected capture pattern,
 with denials last. Qwen uses default approval with explicit allow and exclude
 lists. Copilot already maps custom allow/deny patterns; its mapper is owned by
-plan 2 and was not changed here. Codex cannot translate tool patterns, so its
-custom mode now forces a read-only sandbox regardless of broader workspace
-settings; native MCP access remains restricted by the commit server's
+plan 2 and was not changed here. Codex cannot translate tool patterns, so a
+custom config that denies a whole write-capable tool (`write`, `edit`,
+`multiedit` or `shell`) now forces the read-only sandbox regardless of the
+user's `permissions.codexSandboxMode`. Every other custom config keeps the
+configured sandbox and approval settings, so that setting still works for
+ordinary workflows. Native MCP access remains restricted by the commit server's
 exhaustive denied-tool list, and skill mode can fall back to response text if
 the scoped shell command is unavailable. Antigravity has no granular flags;
 its custom mode enables the CLI sandbox and never uses a permission bypass, so

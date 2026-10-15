@@ -922,7 +922,11 @@ suite("ExternalRunWatchCoordinator ownership", () => {
     const clearedIntervals = new Set<ReturnType<typeof setInterval>>();
     const originalSetInterval = global.setInterval;
     const originalClearInterval = global.clearInterval;
-    global.setInterval = ((handler: (...args: unknown[]) => void, timeout?: number, ...args: unknown[]) => {
+    global.setInterval = ((
+      handler: (...args: unknown[]) => void,
+      timeout?: number,
+      ...args: unknown[]
+    ) => {
       const handle = originalSetInterval(handler, timeout, ...args);
       intervalHandles.push(handle);
       return handle;
@@ -947,8 +951,12 @@ suite("ExternalRunWatchCoordinator ownership", () => {
       assert.strictEqual(host.fileWatcherFactory.watchers.length, 3);
       assert.strictEqual(intervalHandles.length, 1);
       coordinator.dispose();
-      assert.ok(host.fileWatcherFactory.watchers.every((watcher) => watcher.disposed));
-      assert.ok(intervalHandles.every((handle) => clearedIntervals.has(handle)));
+      assert.ok(
+        host.fileWatcherFactory.watchers.every((watcher) => watcher.disposed)
+      );
+      assert.ok(
+        intervalHandles.every((handle) => clearedIntervals.has(handle))
+      );
     } finally {
       global.setInterval = originalSetInterval;
       global.clearInterval = originalClearInterval;

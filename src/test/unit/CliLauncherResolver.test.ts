@@ -62,7 +62,10 @@ suite("CliLauncherResolver", () => {
   });
 
   test("retries a failed Windows lookup and caches a resolved launcher", async () => {
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    const originalPlatform = Object.getOwnPropertyDescriptor(
+      process,
+      "platform"
+    );
     Object.defineProperty(process, "platform", { value: "win32" });
     let probeCount = 0;
     const restoreResolver = setWindowsCommandMetadataResolverForTests(

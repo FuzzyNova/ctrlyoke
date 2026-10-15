@@ -116,6 +116,10 @@ export class TerminalOutputSanitizer {
     let incompleteStart = findTrailingIncompleteEscape(input);
     if (
       incompleteStart >= 0 &&
+      // Only an OSC that began in the buffered text is stale; one that starts
+      // inside this chunk is handled by the loop below, and slicing here would
+      // emit part of the chunk twice.
+      incompleteStart < pendingEscape.length &&
       input.startsWith("\x1B]", incompleteStart) &&
       input.slice(incompleteStart).includes("\n") &&
       pendingEscape.length > 0 &&
@@ -135,7 +139,8 @@ export class TerminalOutputSanitizer {
       // A real OSC title or hyperlink fits comfortably under this bound. If
       // it does not terminate in time, drop its introducer and resume normal
       // sanitization so one malformed sequence cannot stall the stream.
-      input = input.slice(0, incompleteStart) + input.slice(incompleteStart + 2);
+      input =
+        input.slice(0, incompleteStart) + input.slice(incompleteStart + 2);
       incompleteStart = findTrailingIncompleteEscape(input);
     }
     const completePrefix =

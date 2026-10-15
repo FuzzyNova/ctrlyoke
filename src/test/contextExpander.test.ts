@@ -102,6 +102,30 @@ suite("ContextExpander.expandContextSplit", () => {
     }
   });
 
+  test("streams a line range near the top of an over-cap file and refuses one past the cap", async () => {
+    const root = freshWorkspace();
+    const filePath = path.join(root, "huge.log");
+    const line = "x".repeat(1023);
+    const lineCount = Math.ceil((MAX_CONTENT_SIZE + 64 * 1024) / 1024);
+    fs.writeFileSync(
+      filePath,
+      Array.from({ length: lineCount }, (_, i) =>
+        i === 1 ? "second line" : line
+      ).join("\n")
+    );
+    const expander = new ContextExpander({ workspaceRoot: root });
+
+    const near = await expander.expandContextSplit("#selection:huge.log:2-2");
+    assert.deepStrictEqual(near.skippedReferences, []);
+    assert.ok(near.excerptBlocks.includes("    2→second line"));
+
+    const far = await expander.expandContextSplit(
+      `#selection:huge.log:${lineCount}-${lineCount}`
+    );
+    assert.strictEqual(far.excerptBlocks, "");
+    assert.ok(far.skippedReferences[0].reason.includes("excerpt size limit"));
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   suite("no references", () => {
     test("returns empty result for prompt with no @-references", async () => {
