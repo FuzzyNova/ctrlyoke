@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { withFileLock } from "../utils/FileLockUtils";
 import { SecretStoreUnavailableError, type SecretStore } from "./SecretStore";
 
 export { SecretStoreUnavailableError } from "./SecretStore";
@@ -179,6 +183,19 @@ export interface OsCredentialStoreOptions {
   readonly runCommand?: CommandRunner;
   /** Waits between retries of a torn key-index read; tests shorten them. */
   readonly indexReadRetryDelaysMs?: readonly number[];
+  /** Path guarded by the cross-process index lock; tests use a temp dir. */
+  readonly indexLockTarget?: string;
+}
+
+/**
+ * Every process on this machine (each VS Code window, the CLI, `ctrlyoke
+ * server`) rewrites the same key index read-modify-write, so mutations take
+ * a file lock beside it. The credential store is per OS user, not per
+ * `CTRLYOKE_HOME`, so the lock deliberately ignores that override: an
+ * isolated dev host still shares the real index and must share its lock.
+ */
+function defaultIndexLockTarget(): string {
+  return path.join(os.homedir(), ".ctrlyoke", "secret-index");
 }
 
 /**
@@ -204,6 +221,7 @@ export class OsCredentialStore implements SecretStore {
   private readonly runCommand: CommandRunner;
   private readonly backend: CredentialBackend;
   private readonly indexReadRetryDelaysMs: readonly number[];
+  private readonly indexLockTarget: string;
   private indexOperationChain: Promise<void> = Promise.resolve();
 
   constructor(options: OsCredentialStoreOptions = {}) {
@@ -211,6 +229,7 @@ export class OsCredentialStore implements SecretStore {
     this.runCommand = options.runCommand ?? runCommand;
     this.indexReadRetryDelaysMs =
       options.indexReadRetryDelaysMs ?? INDEX_READ_RETRY_DELAYS_MS;
+    this.indexLockTarget = options.indexLockTarget ?? defaultIndexLockTarget();
     this.backend = this.createBackend();
   }
 
@@ -221,14 +240,14 @@ export class OsCredentialStore implements SecretStore {
   async store(key: string, value: string): Promise<void> {
     await this.withAvailability(async () => {
       await this.backend.store(key, value);
-      await this.enqueueIndexOperation(() => this.addKeyToIndex(key));
+      await this.enqueueIndexMutation(() => this.addKeyToIndex(key));
     });
   }
 
   async delete(key: string): Promise<void> {
     await this.withAvailability(async () => {
       await this.backend.delete(key);
-      await this.enqueueIndexOperation(() => this.removeKeyFromIndex(key));
+      await this.enqueueIndexMutation(() => this.removeKeyFromIndex(key));
     });
   }
 
@@ -319,6 +338,18 @@ export class OsCredentialStore implements SecretStore {
       CREDENTIAL_INDEX_KEY,
       JSON.stringify([...keys].sort())
     );
+  }
+
+  /**
+   * Serializes an index rewrite in this process and, through the file lock,
+   * against every other process. Reads skip the file lock: a torn read from
+   * another process's rewrite is retried in `readIndexValue` instead.
+   */
+  private enqueueIndexMutation(mutation: () => Promise<void>): Promise<void> {
+    return this.enqueueIndexOperation(async () => {
+      await fs.mkdir(path.dirname(this.indexLockTarget), { recursive: true });
+      await withFileLock(this.indexLockTarget, mutation);
+    });
   }
 
   private enqueueIndexOperation<T>(operation: () => Promise<T>): Promise<T> {

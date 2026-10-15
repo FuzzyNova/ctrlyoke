@@ -1,5 +1,9 @@
 import * as assert from "assert";
-import { suite, test } from "mocha";
+import * as crypto from "crypto";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
+import { suite, suiteTeardown, test } from "mocha";
 import {
   OsCredentialStore,
   SecretStoreUnavailableError,
@@ -118,17 +122,38 @@ function result(
   return Promise.resolve({ exitCode, stdout, stderr });
 }
 
+const lockDirectories: string[] = [];
+
+/** A fresh index-lock target, so suites never touch the real home dir. */
+function tempIndexLockTarget(): string {
+  const directory = path.join(
+    os.tmpdir(),
+    `ctrlyoke-credential-lock-${crypto.randomUUID()}`
+  );
+  lockDirectories.push(directory);
+  return path.join(directory, "secret-index");
+}
+
+/** A store as another process on the same machine would construct it. */
+function createWindowsStoreFor(
+  vault: FakeWindowsCredentialVault,
+  indexLockTarget: string
+): OsCredentialStore {
+  return new OsCredentialStore({
+    platform: "win32",
+    runCommand: vault.run,
+    indexReadRetryDelaysMs: [1, 1, 1],
+    indexLockTarget,
+  });
+}
+
 function createWindowsStore(): {
   store: OsCredentialStore;
   vault: FakeWindowsCredentialVault;
 } {
   const vault = new FakeWindowsCredentialVault();
   return {
-    store: new OsCredentialStore({
-      platform: "win32",
-      runCommand: vault.run,
-      indexReadRetryDelaysMs: [1, 1, 1],
-    }),
+    store: createWindowsStoreFor(vault, tempIndexLockTarget()),
     vault,
   };
 }
@@ -161,6 +186,14 @@ function textOfLength(length: number): string {
 }
 
 suite("OsCredentialStore", () => {
+  suiteTeardown(async () => {
+    await Promise.all(
+      lockDirectories.map((directory) =>
+        fs.rm(directory, { recursive: true, force: true })
+      )
+    );
+  });
+
   test("round-trips a value that fits in a single credential blob", async () => {
     const { store, vault } = createWindowsStore();
     const value = textOfLength(WINDOWS_CHUNK_LENGTH);
@@ -410,6 +443,26 @@ suite("OsCredentialStore", () => {
     for (const keys of await Promise.all(reads)) {
       assert.ok(existingKeys.every((key) => keys.includes(key)));
     }
+  });
+
+  test("keeps both keys when two processes add to the index at once", async () => {
+    const vault = new FakeWindowsCredentialVault();
+    const lockTarget = tempIndexLockTarget();
+    // Separate instances have separate in-process queues, exactly as two
+    // VS Code windows do; only the file lock can serialize them.
+    const windowA = createWindowsStoreFor(vault, lockTarget);
+    const windowB = createWindowsStoreFor(vault, lockTarget);
+    vault.yieldPerCommand = true;
+
+    await Promise.all([
+      windowA.store("ctrlyoke.server.token.workspace-a", "token"),
+      windowB.store("ctrlyoke.server.token.workspace-b", "token"),
+    ]);
+
+    assert.deepStrictEqual(await windowA.keys(), [
+      "ctrlyoke.server.token.workspace-a",
+      "ctrlyoke.server.token.workspace-b",
+    ]);
   });
 
   test("retries an index read torn by another process's rewrite", async () => {

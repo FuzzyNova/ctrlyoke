@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { OsCredentialStore } from "../../platform/OsCredentialStore";
 import {
@@ -14,8 +17,23 @@ import {
 suite("SecretStore", () => {
   test("serializes concurrent OS credential index updates", async () => {
     const credentials = new Map<string, string>();
+    const lockDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-store-")
+    );
+    try {
+      await assertConcurrentIndexUpdates(credentials, lockDirectory);
+    } finally {
+      await fs.rm(lockDirectory, { recursive: true, force: true });
+    }
+  });
+
+  async function assertConcurrentIndexUpdates(
+    credentials: Map<string, string>,
+    lockDirectory: string
+  ): Promise<void> {
     const store = new OsCredentialStore({
       platform: "linux",
+      indexLockTarget: path.join(lockDirectory, "secret-index"),
       runCommand: async (_command, args, input) => {
         const operation = args[0];
         const key = args[args.length - 1];
@@ -51,7 +69,7 @@ suite("SecretStore", () => {
       "ctrlyoke.secret.user.SECOND",
       "ctrlyoke.secret.user.THIRD",
     ]);
-  });
+  }
 
   test("builds distinct user and workspace-scoped keys", () => {
     assert.strictEqual(
