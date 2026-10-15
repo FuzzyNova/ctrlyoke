@@ -88,6 +88,11 @@ interface BaselineState {
   servers: Set<string>;
 }
 
+interface WorkflowServerState {
+  readonly settingsPath: string;
+  readonly serverNames: string[];
+}
+
 interface PathValue {
   readonly value: unknown;
   readonly hadKey: boolean;
@@ -247,17 +252,17 @@ export class SettingsJsonMcpTracker {
   /** Baseline snapshots keyed by the resolved config file path. */
   private readonly baselines = new Map<string, BaselineState>();
 
-  /** Path to the temporary .gitignore written for a newly-created config file. */
-  private gitignorePath: string | undefined;
+  /** Temporary .gitignore paths keyed by the config file they protect. */
+  private gitignorePaths = new Map<string, string>();
 
-  /** Reference count per ctrlyoke-managed server name. */
-  private refCounts = new Map<string, number>();
+  /** Reference counts per resolved config file and managed server name. */
+  private refCounts = new Map<string, Map<string, number>>();
 
-  /** Per-workflow tracking: which server names each workflow registered. */
-  private workflowServers = new Map<string, string[]>();
+  /** Per-workflow tracking, including the config file used at registration. */
+  private workflowServers = new Map<string, WorkflowServerState>();
 
-  /** Values ctrlyoke inserted, used to avoid deleting user edits during cleanup. */
-  private managedServerValues = new Map<string, unknown>();
+  /** Inserted values keyed by config path, to preserve user edits during cleanup. */
+  private managedServerValues = new Map<string, Map<string, unknown>>();
 
   private constructor(
     private readonly toolName: string,
@@ -411,6 +416,7 @@ export class SettingsJsonMcpTracker {
   ): Promise<string[]> {
     await this.captureBaseline(workspaceRoot);
 
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
     const serverNames = Object.keys(servers);
     if (serverNames.length === 0) {
       return [];
@@ -422,20 +428,26 @@ export class SettingsJsonMcpTracker {
     // once. Without this, a completed multi-step workflow leaves stale MCP
     // entries behind because its ref count is incremented per step but
     // decremented only once during workflow cleanup.
-    const existing = this.workflowServers.get(workflowKey) ?? [];
+    const existingState = this.workflowServers.get(workflowKey);
+    const existing = existingState?.serverNames ?? [];
     const newServerNames = serverNames.filter(
       (name) => !existing.includes(name)
     );
-    this.workflowServers.set(workflowKey, [
-      ...new Set([...existing, ...serverNames]),
-    ]);
+    this.workflowServers.set(workflowKey, {
+      settingsPath,
+      serverNames: [...new Set([...existing, ...serverNames])],
+    });
 
     // Increment ref counts only for newly associated workflow/server pairs.
+    let pathRefCounts = this.refCounts.get(settingsPath);
+    if (!pathRefCounts) {
+      pathRefCounts = new Map();
+      this.refCounts.set(settingsPath, pathRefCounts);
+    }
     for (const name of newServerNames) {
-      this.refCounts.set(name, (this.refCounts.get(name) ?? 0) + 1);
+      pathRefCounts.set(name, (pathRefCounts.get(name) ?? 0) + 1);
     }
 
-    const settingsPath = this.getProjectConfigPath(workspaceRoot);
     // Serialize the complete read-modify-write across processes as well as
     // within this process.
     await this.withMutationLock(settingsPath, async () => {
@@ -449,7 +461,12 @@ export class SettingsJsonMcpTracker {
       for (const [name, config] of Object.entries(servers)) {
         if (!(name in existingMcp)) {
           existingMcp[name] = config;
-          this.managedServerValues.set(name, this.cloneJson(config));
+          let pathManagedValues = this.managedServerValues.get(settingsPath);
+          if (!pathManagedValues) {
+            pathManagedValues = new Map();
+            this.managedServerValues.set(settingsPath, pathManagedValues);
+          }
+          pathManagedValues.set(name, this.cloneJson(config));
           changed = true;
         }
       }
@@ -496,38 +513,38 @@ export class SettingsJsonMcpTracker {
    */
   async unregisterWorkflow(
     workflowKey: string,
-    workspaceRoot: string
+    _workspaceRoot: string
   ): Promise<void> {
-    const serverNames = this.workflowServers.get(workflowKey);
-    if (!serverNames || serverNames.length === 0) {
+    const workflowState = this.workflowServers.get(workflowKey);
+    if (!workflowState || workflowState.serverNames.length === 0) {
       this.workflowServers.delete(workflowKey);
       return;
     }
+    const { settingsPath, serverNames } = workflowState;
+    const pathRefCounts = this.refCounts.get(settingsPath);
 
     // Decrement ref counts and determine which servers to remove
     const toRemove: string[] = [];
     for (const name of serverNames) {
-      const count = (this.refCounts.get(name) ?? 1) - 1;
+      const count = (pathRefCounts?.get(name) ?? 1) - 1;
       if (count <= 0) {
-        this.refCounts.delete(name);
+        pathRefCounts?.delete(name);
         // Only remove from settings if it wasn't a baseline server
-        if (
-          !this.getBaseline(
-            this.getProjectConfigPath(workspaceRoot)
-          ).servers.has(name)
-        ) {
+        if (!this.getBaseline(settingsPath).servers.has(name)) {
           toRemove.push(name);
         }
       } else {
-        this.refCounts.set(name, count);
+        pathRefCounts?.set(name, count);
       }
+    }
+    if (pathRefCounts?.size === 0) {
+      this.refCounts.delete(settingsPath);
     }
 
     this.workflowServers.delete(workflowKey);
 
     // Remove zero-ref servers from settings.json (serialized under mutex)
     if (toRemove.length > 0) {
-      const settingsPath = this.getProjectConfigPath(workspaceRoot);
       await this.withMutationLock(settingsPath, async () => {
         try {
           const settings = JSON.parse(
@@ -537,7 +554,9 @@ export class SettingsJsonMcpTracker {
             Record<string, unknown> | undefined;
           if (mcpServers) {
             for (const name of toRemove) {
-              const managedValue = this.managedServerValues.get(name);
+              const pathManagedValues =
+                this.managedServerValues.get(settingsPath);
+              const managedValue = pathManagedValues?.get(name);
               if (
                 managedValue !== undefined &&
                 this.jsonEquals(mcpServers[name], managedValue)
@@ -548,7 +567,10 @@ export class SettingsJsonMcpTracker {
                   `[SettingsJsonMcpTracker] ${this.toolName} MCP cleanup preserved user-modified server "${name}"`
                 );
               }
-              this.managedServerValues.delete(name);
+              pathManagedValues?.delete(name);
+            }
+            if (this.managedServerValues.get(settingsPath)?.size === 0) {
+              this.managedServerValues.delete(settingsPath);
             }
             if (
               Object.keys(mcpServers).length === 0 &&
@@ -571,11 +593,10 @@ export class SettingsJsonMcpTracker {
     }
 
     if (
-      this.refCounts.size === 0 &&
-      !this.getBaseline(this.getProjectConfigPath(workspaceRoot))
-        .settingsFileExisted
+      !this.refCounts.has(settingsPath) &&
+      !this.getBaseline(settingsPath).settingsFileExisted
     ) {
-      await this.deleteCtrlYokeGitignore();
+      await this.deleteCtrlYokeGitignore(settingsPath);
     }
   }
 
@@ -714,7 +735,7 @@ export class SettingsJsonMcpTracker {
     settingsPath: string,
     settings: Record<string, unknown>
   ): Promise<void> {
-    const hasManagedState = this.refCounts.size > 0;
+    const hasManagedState = (this.refCounts.get(settingsPath)?.size ?? 0) > 0;
     if (
       !hasManagedState &&
       this.schemaUrl &&
@@ -750,7 +771,7 @@ export class SettingsJsonMcpTracker {
    * .gitignore files are never modified.
    */
   private async writeGitignore(settingsPath: string): Promise<void> {
-    if (this.gitignorePath) {
+    if (this.gitignorePaths.has(settingsPath)) {
       return;
     }
 
@@ -769,13 +790,13 @@ export class SettingsJsonMcpTracker {
       "",
     ].join("\n");
     await fs.writeFile(gitignorePath, content, "utf-8").catch(() => {});
-    this.gitignorePath = gitignorePath;
+    this.gitignorePaths.set(settingsPath, gitignorePath);
   }
 
   /** Delete the temporary .gitignore only when it still has ctrlyoke's marker. */
-  private async deleteCtrlYokeGitignore(): Promise<void> {
-    const gitignorePath = this.gitignorePath;
-    this.gitignorePath = undefined;
+  private async deleteCtrlYokeGitignore(settingsPath: string): Promise<void> {
+    const gitignorePath = this.gitignorePaths.get(settingsPath);
+    this.gitignorePaths.delete(settingsPath);
     if (!gitignorePath) {
       return;
     }
