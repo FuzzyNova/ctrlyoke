@@ -1,10 +1,8 @@
 # Unreadable or invalid global ~/.gemini/config/hooks.json is silently replaced, deleting every other hook group
 
-**Resolution:** fixed in this commit
-
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/harness/antigravity/AntigravityCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

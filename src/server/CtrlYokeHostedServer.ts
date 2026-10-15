@@ -1265,16 +1265,25 @@ export class CtrlYokeHostedServer
       const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
       void this.serveColorizedPng(svgPath, "large", res);
     });
+    // Remote-access entitlement gate shared by every token-checked route (the
+    // WebSocket upgrade path applies the same isClientAllowed check).
+    const continueIfClientAllowed = (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ): void => {
+      void this.isClientAllowed(req.socket.remoteAddress).then((allowed) => {
+        if (allowed) next();
+        else res.status(403).send("Forbidden");
+      });
+    };
     // Token is required for the HTML entry point and all API routes.
     const requireToken: express.RequestHandler = (req, res, next) => {
       if (!this.requestHasValidToken(req)) {
         res.status(401).send("Unauthorized");
         return;
       }
-      void this.isClientAllowed(req.socket.remoteAddress).then((allowed) => {
-        if (allowed) next();
-        else res.status(403).send("Forbidden");
-      });
+      continueIfClientAllowed(req, res, next);
     };
     // Same check, but for browser-navigated page routes (entry HTML, SPA fallback)
     // rather than JSON API routes — these get the themed landing page instead of a
@@ -1284,10 +1293,7 @@ export class CtrlYokeHostedServer
         this.sendUnauthorizedPage(res, this.getThemeOverride(req));
         return;
       }
-      void this.isClientAllowed(req.socket.remoteAddress).then((allowed) => {
-        if (allowed) next();
-        else res.status(403).send("Forbidden");
-      });
+      continueIfClientAllowed(req, res, next);
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);

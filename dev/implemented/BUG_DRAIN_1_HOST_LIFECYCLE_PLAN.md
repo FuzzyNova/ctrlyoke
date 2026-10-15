@@ -1,6 +1,7 @@
 # Bug Drain 1: Host Lifecycle, Settings & Dashboard Interaction Plan
 
-**Status:** All steps have run
+**Status:** Implemented (2026-10-15). All 24 bug docs are in
+`dev/bugs/implemented/`; steps 1-4 and 6-18 landed in `e5c52eb5f`..`56adc6659`.
 **Priority:** P1
 **Runs as:** plan 1 of 4 in a parallel bug drain. Each plan runs through
 `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git worktree.
@@ -217,7 +218,7 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
   `cleanupWorkspaceArtifacts`).
 - **Approach:** `readHooksFile` returns `{}` only on `ENOENT`; any other read
   error, parse error or non-object value throws `Cannot safely update
-  ${hooksPath}: ...` (same wording as `SettingsJsonMcpTracker.readProjectConfig`).
+${hooksPath}: ...` (same wording as `SettingsJsonMcpTracker.readProjectConfig`).
   The cleanup path catches and logs so teardown is never blocked. Write via
   temp file and rename; use the existing atomic write helper from
   `src/utils/AtomicFileUtils.ts` by import only.
@@ -301,7 +302,7 @@ earlier steps' commits. The order keeps every shared file's edits sequential:
 - **Files:** `src/ui/webview-react/utils/promptUndo.ts`,
   `src/ui/webview-react/hooks/useOutputUndoActions.ts`.
 - **Approach:** add one `excludeUndoneCandidates(candidates, redoInstructions,
-  workspaceRoot)` helper in `promptUndo.ts` that normalizes both sides to
+workspaceRoot)` helper in `promptUndo.ts` that normalizes both sides to
   workspace-relative keys (prefer `candidate.instruction?.path` when present),
   and use it at all three call sites (`buildUndoDialogInputForPrompt`,
   `computePromptChangeSummary`, workflow change data in the hook).

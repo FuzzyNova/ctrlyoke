@@ -146,23 +146,13 @@ export function resolveWorkspaceRoot(
 export function resolveTrustedWorkspaceRoots(
   input: WorkspaceRootResolverInput
 ): string[] {
-  const primary = path.normalize(resolveWorkspaceRoot(input));
-  const folderPaths = (input.workspaceFolders ?? []).map((folder) =>
-    path.normalize(folder.fsPath)
-  );
-  const trustedBases = [
-    ...folderPaths,
-    ...(input.workspaceFileDir ? [path.normalize(input.workspaceFileDir)] : []),
-  ];
-  if (trustedBases.length === 0) {
+  const { primary, folderPaths, primaryIsExternal } = classifyStateRoot(input);
+  if (folderPaths.length === 0 && !input.workspaceFileDir) {
     return [primary];
   }
-  const roots = trustedBases.some((root) =>
-    isPathWithinDirectory(primary, root)
-  )
-    ? [primary, ...folderPaths]
-    : folderPaths;
-  return Array.from(new Set(roots));
+  return Array.from(
+    new Set(primaryIsExternal ? folderPaths : [primary, ...folderPaths])
+  );
 }
 
 /**
@@ -173,19 +163,32 @@ export function resolveTrustedWorkspaceRoots(
 export function resolveRequestedExternalWorkspaceRoot(
   input: WorkspaceRootResolverInput
 ): string | undefined {
+  const { primary, primaryIsExternal } = classifyStateRoot(input);
+  return primaryIsExternal ? primary : undefined;
+}
+
+/**
+ * Single source for whether the resolved state root lies outside every open
+ * folder and the saved workspace-file directory. With neither present there
+ * is nothing to compare against, so the root is never external.
+ */
+function classifyStateRoot(input: WorkspaceRootResolverInput): {
+  primary: string;
+  folderPaths: string[];
+  primaryIsExternal: boolean;
+} {
   const primary = path.normalize(resolveWorkspaceRoot(input));
+  const folderPaths = (input.workspaceFolders ?? []).map((folder) =>
+    path.normalize(folder.fsPath)
+  );
   const trustedBases = [
-    ...(input.workspaceFolders ?? []).map((folder) =>
-      path.normalize(folder.fsPath)
-    ),
+    ...folderPaths,
     ...(input.workspaceFileDir ? [path.normalize(input.workspaceFileDir)] : []),
   ];
-  if (trustedBases.length === 0) {
-    return undefined;
-  }
-  return trustedBases.some((root) => isPathWithinDirectory(primary, root))
-    ? undefined
-    : primary;
+  const primaryIsExternal =
+    trustedBases.length > 0 &&
+    !trustedBases.some((root) => isPathWithinDirectory(primary, root));
+  return { primary, folderPaths, primaryIsExternal };
 }
 
 export type ReferencePathBase =
