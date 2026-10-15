@@ -62,7 +62,11 @@ import {
   installTwoStageShutdown,
 } from "./cli/SignalShutdown";
 import { inheritedTerminalOwnership } from "./utils/InheritedTerminalOwnership";
-import { DOCS_URLS, PROCESS_SIGNALS } from "./types/DashboardConstants";
+import {
+  DOCS_URLS,
+  PROCESS_SIGNALS,
+  TRUST_DECISIONS,
+} from "./types/DashboardConstants";
 import { CliAttemptTally } from "./cli/CliAttemptTally";
 import {
   CliTerminalFormatter,
@@ -111,6 +115,7 @@ import {
 } from "./core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
+import { WorkspaceInitializer } from "./core/orchestration/WorkspaceInitializer";
 import { createPriorContextResolver } from "./core/orchestration/AddressedPriorContextResolver";
 import {
   getAuthoredSourcePath,
@@ -193,8 +198,13 @@ import {
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 import { promptYesNo } from "./cli/CliPrompt";
 import {
+  askOnceForAll,
+  createCliTrustIo,
+  ensureCliTrustDecided,
+  type CliTrustRequest,
+} from "./cli/CliTrustGate";
+import {
   TRUST_WORKSPACE_SETTINGS_COMMAND,
-  createWorkspaceSettingsTrustIo,
   ensureWorkspaceSettingsDecided,
   trustWorkspaceSettingsCommand,
   type TrustWorkspaceSettingsOptions,
@@ -535,7 +545,7 @@ program
       await trustWorkspaceSettingsCommand(
         workingDir,
         options,
-        createWorkspaceSettingsTrustIo()
+        createCliTrustIo()
       )
     );
   });
@@ -817,10 +827,12 @@ async function runCommand(
   const resolvedFile = file ? resolveCliFileArgument(file) : undefined;
   const workingDir = options.cwd ?? process.cwd();
 
-  // Redirect all Log.* output to .ctrlyoke/logs/ctrlyoke-<timestamp>.log.
-  // Must be called before any component code that calls Log.debug/info/etc.,
-  // so that diagnostic messages never pollute the terminal output.
-  Log.initializeCli(workingDir, options.verbose);
+  // Running a workflow is an explicit choice to use ctrlyoke here, so it
+  // initializes without the VS Code dashboard's "Initialize ctrlyoke here?"
+  // prompt. This also redirects all Log.* output to
+  // .ctrlyoke/logs/ctrlyoke-cli-<timestamp>.log, so it must come before any
+  // component code that logs, or diagnostics pollute the terminal output.
+  await WorkspaceInitializer.initializeForCli(workingDir, !!options.verbose);
 
   // Host capability is physical (TTYs); execution-mode flags are workflow overrides.
   const {
@@ -883,38 +895,19 @@ async function runCommand(
     gitToplevel ?? undefined
   );
 
-  // Fail closed when this workspace requests external file roots
-  // (permissions.trustedExternalRoots at workspace scope) that have not
-  // been reviewed yet — see dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
-  // User-scope roots need no such gate (the user already approved them by
-  // editing their own settings).
-  const workspaceIdentity =
-    ExternalRootsTrustStore.canonicalizeRoot(workingDir);
-  const pendingExternalRoots =
-    ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
-  if (pendingExternalRoots.length > 0) {
-    console.error(
-      chalk.red(
-        "Error: This workspace requests external file roots that have not been approved yet:"
-      )
-    );
-    pendingExternalRoots.forEach((root) =>
-      console.error(chalk.red(`  - ${root}`))
-    );
-    console.error(
-      chalk.yellow(
-        "Run `ctrlyoke trust-external-roots` to review and approve them."
-      )
-    );
-    process.exit(2);
-  }
+  // Workspace-scope external file roots (permissions.trustedExternalRoots)
+  // need a decision before anything runs — see
+  // dev/implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md. User-scope roots
+  // need no such gate (the user already approved them by editing their own
+  // settings).
+  await exitUnlessTrustDecided(workspaceExternalRootsTrustRequest(workingDir));
 
   // Workspace settings that choose a program to run (shell, hooks, MCP
   // servers, harness flags, default scripts) need a decision before the
   // workflow loads, because loading copies settings defaults into the run.
   const workspaceSettingsExitCode = await ensureWorkspaceSettingsDecided(
     workingDir,
-    createWorkspaceSettingsTrustIo()
+    createCliTrustIo()
   );
   if (workspaceSettingsExitCode !== undefined) {
     process.exit(workspaceSettingsExitCode);
@@ -1337,10 +1330,12 @@ async function runCommand(
         if (!loaded) {
           throw new Error(`Failed to load workflow file: ${resolvedFile}`);
         }
-        assertWorkflowExternalRootsApproved(
-          instance.promptQueue.getWorkflowFile(),
-          workingDir,
-          getAuthoredSourcePath(resolvedFile!)
+        await exitUnlessTrustDecided(
+          workflowExternalRootsTrustRequest(
+            instance.promptQueue.getWorkflowFile(),
+            workingDir,
+            resolvedFile!
+          )
         );
       }
 
@@ -1374,9 +1369,12 @@ async function runCommand(
         await instance.promptQueue.updateWorkingFile(true);
       }
 
-      assertSecretGrantsApproved(
-        instance.promptQueue.getWorkflowFile(),
-        workingDir
+      await exitUnlessTrustDecided(
+        secretGrantsTrustRequest(
+          instance.promptQueue.getWorkflowFile(),
+          workingDir,
+          resolvedFile
+        )
       );
 
       await instance.executeLoadedPromptFile();
@@ -1579,73 +1577,118 @@ function mergeCliVarsIntoWorkflow(
   workflow.vars = mergedVars;
 }
 
-function assertSecretGrantsApproved(
-  workflow: PromptFile,
+/**
+ * Run one of the `run` family's trust gates: ask in a terminal, or exit 2
+ * when there is none (see {@link ensureCliTrustDecided}).
+ */
+async function exitUnlessTrustDecided(request: CliTrustRequest): Promise<void> {
+  const exitCode = await ensureCliTrustDecided(request, createCliTrustIo());
+  if (exitCode !== undefined) {
+    process.exit(exitCode);
+  }
+}
+
+/** Shown in a review command when the run has no workflow file to name. */
+const CLI_FILE_PLACEHOLDER = "<file>";
+
+/** A file path as it would be typed in a review command. */
+function reviewCommandFileArg(file: string | undefined): string {
+  if (file === undefined) return CLI_FILE_PLACEHOLDER;
+  return /\s/u.test(file) ? `"${file}"` : file;
+}
+
+/** One yes/no for every listed root, recorded against `scopeIdentity`. */
+function askAboutExternalRoots(
+  scopeIdentity: string,
+  pendingRoots: readonly string[]
+): CliTrustRequest["ask"] {
+  return askOnceForAll(
+    `Trust all ${pendingRoots.length} listed folder(s)?`,
+    (allow) =>
+      externalRootsTrustStore.setDecisions(
+        scopeIdentity,
+        pendingRoots,
+        allow ? TRUST_DECISIONS.ALLOW : TRUST_DECISIONS.DENY
+      )
+  );
+}
+
+/** This workspace's undecided workspace-scope `trustedExternalRoots`. */
+function workspaceExternalRootsTrustRequest(
   workingDir: string
-): void {
+): CliTrustRequest {
   const workspaceIdentity =
     ExternalRootsTrustStore.canonicalizeRoot(workingDir);
-  const pendingGrants = secretGrantsTrustStore.getPendingGrants(
+  const pendingRoots =
+    ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
+  return {
+    heading:
+      "This workspace requests external file roots that have not been approved yet:",
+    items: pendingRoots,
+    reviewCommand: "ctrlyoke trust-external-roots",
+    ask: askAboutExternalRoots(workspaceIdentity, pendingRoots),
+  };
+}
+
+/** The workflow's undecided `trustedExternalRoots`. */
+function workflowExternalRootsTrustRequest(
+  workflow: PromptFile,
+  workingDir: string,
+  workflowFile: string
+): CliTrustRequest {
+  const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+    workingDir,
+    getAuthoredSourcePath(workflowFile)
+  );
+  const pendingRoots =
+    workflow.trustedExternalRoots === undefined ||
+    workflow.trustedExternalRoots === null
+      ? []
+      : ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+          ExternalRootsTrustStore.canonicalizeRoot(workingDir),
+          workflowIdentity,
+          workflow.trustedExternalRoots
+        );
+  return {
+    heading:
+      "This workflow requests external file roots that have not been approved yet:",
+    items: pendingRoots,
+    reviewCommand: `ctrlyoke trust-workflow-external-roots ${reviewCommandFileArg(workflowFile)}`,
+    ask: askAboutExternalRoots(workflowIdentity, pendingRoots),
+  };
+}
+
+/**
+ * The workflow's secret grants that are not allowed. Denied grants are
+ * asked about again, as in the dashboard: unlike a denied root or setting,
+ * a denied grant stops the run, so an earlier "no" has to be revisitable.
+ */
+function secretGrantsTrustRequest(
+  workflow: PromptFile,
+  workingDir: string,
+  workflowFile: string | undefined
+): CliTrustRequest {
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workingDir);
+  const unallowedGrants = secretGrantsTrustStore.getUnallowedGrants(
     workspaceIdentity,
     getWorkflowSecretGrants(workflow)
   );
-  if (pendingGrants.length === 0) {
-    return;
-  }
-
-  console.error(
-    chalk.red(
-      "Error: This workflow requests secret grants that have not been approved yet:"
-    )
-  );
-  pendingGrants.forEach((name) => console.error(chalk.red(`  - ${name}`)));
-  console.error(
-    chalk.yellow(
-      "Run `ctrlyoke trust-secret-grants <file>` to review and approve them."
-    )
-  );
-  process.exit(2);
-}
-
-function assertWorkflowExternalRootsApproved(
-  workflow: PromptFile,
-  workingDir: string,
-  authoredSourcePath: string
-): void {
-  if (
-    workflow.trustedExternalRoots === undefined ||
-    workflow.trustedExternalRoots === null
-  ) {
-    return;
-  }
-
-  const workspaceIdentity =
-    ExternalRootsTrustStore.canonicalizeRoot(workingDir);
-  const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
-    workingDir,
-    authoredSourcePath
-  );
-  const pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
-    workspaceIdentity,
-    workflowIdentity,
-    workflow.trustedExternalRoots
-  );
-  if (pendingRoots.length === 0) {
-    return;
-  }
-
-  console.error(
-    chalk.red(
-      "Error: This workflow requests external file roots that have not been approved yet:"
-    )
-  );
-  pendingRoots.forEach((root) => console.error(chalk.red(`  - ${root}`)));
-  console.error(
-    chalk.yellow(
-      "Run `ctrlyoke trust-workflow-external-roots <file>` to review and approve them."
-    )
-  );
-  process.exit(2);
+  return {
+    heading:
+      "This workflow requests secret grants that have not been approved yet:",
+    items: unallowedGrants,
+    reviewCommand: `ctrlyoke trust-secret-grants ${reviewCommandFileArg(workflowFile)}`,
+    ask: askOnceForAll(
+      `Trust all ${unallowedGrants.length} listed secret grant(s)?`,
+      (allow) =>
+        secretGrantsTrustStore.setDecisions(
+          workspaceIdentity,
+          unallowedGrants,
+          allow ? TRUST_DECISIONS.ALLOW : TRUST_DECISIONS.DENY
+        )
+    ),
+  };
 }
 
 async function dryRunCommand(
@@ -1680,15 +1723,15 @@ async function dryRunCommand(
     }
 
     if (resolvedFile) {
-      assertWorkflowExternalRootsApproved(
-        workflow,
-        workingDir,
-        getAuthoredSourcePath(resolvedFile)
+      await exitUnlessTrustDecided(
+        workflowExternalRootsTrustRequest(workflow, workingDir, resolvedFile)
       );
     }
 
     mergeCliVarsIntoWorkflow(workflow, config.vars);
-    assertSecretGrantsApproved(workflow, workingDir);
+    await exitUnlessTrustDecided(
+      secretGrantsTrustRequest(workflow, workingDir, resolvedFile)
+    );
 
     const previewWorkflow = workflow;
     collectWorkflowHarnesses(previewWorkflow, harness);

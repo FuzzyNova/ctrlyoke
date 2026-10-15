@@ -152,6 +152,26 @@ suite("ExecutionRootCoordination", function () {
     assert.deepStrictEqual(folded.claims, []);
   });
 
+  test("reading a board that was never written creates nothing", async () => {
+    // A non-Git root keeps its board under `<root>/.ctrlyoke/`, and the
+    // dashboard reads it on every startup — before the user has agreed to
+    // initialize ctrlyoke in the folder.
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root);
+      const folded = await registry.fold();
+      assert.deepStrictEqual(folded.participants, []);
+      assert.deepStrictEqual(folded.claims, []);
+      assert.deepStrictEqual(
+        (await registry.readEntries({ limit: 10 })).entries,
+        []
+      );
+      assert.deepStrictEqual(await fs.readdir(root), []);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("detects path and glob intersections conservatively", () => {
     const overlappingPairs: Array<[string, string]> = [
       ["a*/file.txt", "*b/file.txt"],

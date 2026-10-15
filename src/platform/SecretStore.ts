@@ -12,6 +12,26 @@ export interface SecretStore {
   keys(): PromiseLike<string[]>;
 }
 
+/**
+ * Process-lifetime secret storage, for a host whose OS credential store is
+ * unavailable (the Node server's fallback) and for composing hosts in tests.
+ */
+export class MemorySecretStore implements SecretStore {
+  private readonly values = new Map<string, string>();
+  async get(key: string): Promise<string | undefined> {
+    return this.values.get(key);
+  }
+  async store(key: string, value: string): Promise<void> {
+    this.values.set(key, value);
+  }
+  async delete(key: string): Promise<void> {
+    this.values.delete(key);
+  }
+  async keys(): Promise<string[]> {
+    return [...this.values.keys()];
+  }
+}
+
 /** Raised when the host has no usable encrypted credential-store backend. */
 export class SecretStoreUnavailableError extends Error {
   constructor(platform: NodeJS.Platform, cause?: unknown) {

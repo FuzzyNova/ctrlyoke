@@ -129,6 +129,13 @@ export class Log {
    * Redirects all log output to `.ctrlyoke/logs/ctrlyoke-cli-<timestamp>.log`
    * and suppresses console output so the terminal stays clean for prompt output.
    *
+   * Like {@link openLogFile}, it never creates `.ctrlyoke/` itself: in a
+   * folder that has not been initialized it logs nowhere. Commands that act
+   * on the workspace (`run`, `serve`) call
+   * `WorkspaceInitializer.initializeIfNeeded` first, so the directory gets its
+   * `.gitignore`; read-only commands (`validate`, `status`, the `trust-*`
+   * reviews) leave an uninitialized folder untouched.
+   *
    * @param workspaceDir - Working directory (parent of .ctrlyoke/).
    * @param verbose      - When true, enables DEBUG level; otherwise INFO.
    * @param existingLogFilePath - Reuse an already-open workspace log file when
@@ -147,11 +154,12 @@ export class Log {
       return;
     }
 
-    const logDir = path.join(
-      workspaceDir,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.LOGS_DIR
-    );
+    const ctrlyokeDir = path.join(workspaceDir, PATH_CONSTANTS.CTRLYOKE_DIR);
+    if (!fs.existsSync(ctrlyokeDir)) {
+      this.cliLogFilePath = undefined;
+      return;
+    }
+    const logDir = path.join(ctrlyokeDir, PATH_CONSTANTS.LOGS_DIR);
     try {
       fs.mkdirSync(logDir, { recursive: true });
       this.cliLogFilePath = path.join(logDir, `ctrlyoke-cli-${Date.now()}.log`);

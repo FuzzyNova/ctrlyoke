@@ -2942,6 +2942,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.INITIALIZE_WORKSPACE, async () => {
       const orchestrator = this.getOrchestrator();
       await orchestrator?.handleInitializeWorkspace();
+      // Startup's harness detection skipped this while the workspace was
+      // uninitialized, so the MCP server would otherwise have no file at all.
+      await this.settingsSync.refreshCapabilitiesFile();
     });
 
     table.set(MESSAGE_TYPES.OPEN_WORKSPACE_FOLDER, async (message, ctx) => {

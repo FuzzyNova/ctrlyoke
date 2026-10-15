@@ -694,9 +694,11 @@ export class CoordinationParticipantRegistry {
     });
   }
 
+  /** A read: it never creates the board, so the dashboard can call it anywhere. */
   async fold(): Promise<CoordinationParticipantFold> {
-    return this.store.transaction(async (transaction) =>
-      foldCoordinationEntries(transaction.entries, this.foldOptions())
+    return foldCoordinationEntries(
+      await this.store.readAll(),
+      this.foldOptions()
     );
   }
 

@@ -12,7 +12,7 @@ import { FileKeyValueStore } from "./FileKeyValueStore";
 import { NodeDashboardHostActions } from "./NodeDashboardHostActions";
 import { OsCredentialStore } from "./OsCredentialStore";
 import { FallbackSecretStore } from "./FallbackSecretStore";
-import type { SecretStore } from "./SecretStore";
+import { MemorySecretStore, type SecretStore } from "./SecretStore";
 import { ConsoleUserFeedbackSink } from "./ConsoleUserFeedbackSink";
 import { CompositeUserFeedbackSink } from "../core/CompositeUserFeedbackSink";
 import { HostedWebSocketUserFeedbackSink } from "../server/HostedWebSocketUserFeedbackSink";
@@ -36,6 +36,7 @@ import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import { DashboardApplication } from "../ui/DashboardApplication";
 import { TemplateManager } from "../core/TemplateManager";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import { WorkspaceInitializer } from "../core/orchestration/WorkspaceInitializer";
 import {
   createPtyDimensionsPersistence,
   initPtyProcessManager,
@@ -49,22 +50,6 @@ import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { LANGUAGE_SERVER_CATALOG } from "../server/lsp/LanguageServerCatalog";
 import { setRuntimeMode } from "../utils/RuntimeMode";
 import { initializeModelRegistry } from "../utils/ModelRegistry";
-
-class MemorySecretStore implements SecretStore {
-  private readonly values = new Map<string, string>();
-  async get(key: string): Promise<string | undefined> {
-    return this.values.get(key);
-  }
-  async store(key: string, value: string): Promise<void> {
-    this.values.set(key, value);
-  }
-  async delete(key: string): Promise<void> {
-    this.values.delete(key);
-  }
-  async keys(): Promise<string[]> {
-    return [...this.values.keys()];
-  }
-}
 
 export interface NodeHostServices {
   cwd: string;
@@ -128,7 +113,9 @@ export async function createNodeHostServices(options: {
   const licenseService = new LicenseService(secretStore);
   disposables.push(licenseService);
   void licenseService.refresh();
-  Log.initializeCli(cwd, config.verbose);
+  // Starting the server is an explicit choice to use ctrlyoke here, so it
+  // initializes without the dashboard's "Initialize ctrlyoke here?" prompt.
+  await WorkspaceInitializer.initializeForCli(cwd, config.verbose);
 
   let hub = new DashboardBroadcastHub();
   const userFeedbackSink = new CompositeUserFeedbackSink([

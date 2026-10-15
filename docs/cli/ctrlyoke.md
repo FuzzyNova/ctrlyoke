@@ -217,20 +217,31 @@ ctrlyoke run build.ctrlyoke.json --json --quiet
 ctrlyoke run review.ctrlyoke.yaml --dry-run
 ```
 
+### First run in a folder
+
+Running a workflow is how you opt a folder in, so `run` creates `.ctrlyoke/`
+and its `.gitignore` without asking, as `ctrlyoke serve` does. Commands that
+only read or review (`validate`, `status`, `history`, the `trust-*` commands)
+never create it.
+
 ### Pre-run approvals
 
-`run` refuses to start (exit code `2`) and names the command to run when:
+Before a workflow starts, `run` needs a decision on anything that has not been
+reviewed:
 
-- the workspace requests `permissions.trustedExternalRoots` that have not
-  been reviewed: run `ctrlyoke trust-external-roots`
-- the workflow's `trustedExternalRoots` include roots that have not been
-  reviewed: run `ctrlyoke trust-workflow-external-roots <file>`
-- the workflow declares secret grants that have not been approved: run
-  `ctrlyoke trust-secret-grants <file>`
-- the workspace settings choose a program to run (a shell, hook, MCP server,
-  harness flag, or default script) that has not been reviewed, and there is no
-  terminal to ask in: run `ctrlyoke trust-workspace-settings`. In a terminal,
-  `run` asks about each value instead and then continues.
+- `permissions.trustedExternalRoots` requested by the workspace
+  (`ctrlyoke trust-external-roots`)
+- `trustedExternalRoots` requested by the workflow
+  (`ctrlyoke trust-workflow-external-roots <file>`)
+- secret grants the workflow declares that are not approved
+  (`ctrlyoke trust-secret-grants <file>`)
+- workspace settings that choose a program to run: a shell, hook, MCP server,
+  harness flag, or default script (`ctrlyoke trust-workspace-settings`)
+
+In a terminal, `run` lists them, asks, and continues. A declined root or
+setting stays blocked and the run goes on without it; a declined secret grant
+stops the run. With no terminal to ask in, such as in CI, `run` exits with code
+`2` and prints the command that records the decision.
 
 ## `ctrlyoke rerun`
 
@@ -393,9 +404,9 @@ ctrlyoke trust-workflow-external-roots my-workflow.ctrlyoke.yaml
 
 The command lists pending roots and asks for confirmation before recording an
 allow or deny decision for that workflow on the local machine. Use
-`--yes` to approve all pending roots in automation. A workflow with pending
-roots cannot run; `ctrlyoke run` exits with code `2` and prints this command as
-the remediation.
+`--yes` to approve all pending roots in automation. `ctrlyoke run` asks the
+same question itself in a terminal; without one it exits with code `2` and
+prints this command as the remediation.
 
 ## `ctrlyoke trust-external-roots`
 
@@ -409,8 +420,9 @@ ctrlyoke trust-external-roots --yes
 
 This is the workspace-scope counterpart of `trust-workflow-external-roots`.
 User-scope roots are trusted immediately when added to the user's settings.
-While a workspace root is pending, every `ctrlyoke run` in that workspace exits
-with code `2`. `--yes` approves all pending roots without prompting.
+While a workspace root is pending, `ctrlyoke run` asks about it in a terminal
+and exits with code `2` without one. `--yes` approves all pending roots without
+prompting.
 
 ## `ctrlyoke trust-secret-grants`
 
