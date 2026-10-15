@@ -51,7 +51,7 @@ export class AntigravityToolEventBuilder {
     const toolName = call?.name ?? this.toolNameFromResult(result);
     const args = call?.args ?? {};
     const normalizedName = toolName.toLowerCase();
-    const success = this.resultSucceeded(result);
+    const success = this.resultSucceeded(toolName, result);
     const error = success ? undefined : this.resultError(result);
     const resultText = error || this.stringContent(result);
     const id = taskId ?? eventId;
@@ -89,7 +89,7 @@ export class AntigravityToolEventBuilder {
       result.type === ANTIGRAVITY_ENTRY_TYPES.RUN_COMMAND ||
       normalizedName === ANTIGRAVITY_TOOL_NAMES.RUN_COMMAND
     ) {
-      const exitCode = this.exitCode(result);
+      const exitCode = this.exitCode(toolName, result);
       const command = this.stringArg(args, ["CommandLine", "command", "cmd"]);
       const workingDir = this.stringArg(args, ["Cwd", "cwd", "workingDir"]);
       const { output, stderr } = this.parseCommandOutput(resultText);
@@ -491,7 +491,10 @@ export class AntigravityToolEventBuilder {
     ];
   }
 
-  private static resultSucceeded(entry: AntigravityTranscriptEntry): boolean {
+  private static resultSucceeded(
+    toolName: string,
+    entry: AntigravityTranscriptEntry
+  ): boolean {
     if (
       entry.status === ANTIGRAVITY_WIRE_VALUES.ERROR ||
       (typeof entry.error === "string" && entry.error.trim())
@@ -502,7 +505,7 @@ export class AntigravityToolEventBuilder {
     if (typeof explicit === "boolean") {
       return explicit;
     }
-    const exitCode = this.exitCode(entry);
+    const exitCode = this.exitCode(toolName, entry);
     if (exitCode !== undefined) {
       return exitCode === 0;
     }
@@ -542,6 +545,7 @@ export class AntigravityToolEventBuilder {
   }
 
   private static exitCode(
+    toolName: string,
     entry: AntigravityTranscriptEntry
   ): number | undefined {
     const value = entry.exit_code ?? entry.exitCode;
@@ -552,16 +556,25 @@ export class AntigravityToolEventBuilder {
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : undefined;
     }
+    const isRunCommand =
+      toolName.toLowerCase() === ANTIGRAVITY_TOOL_NAMES.RUN_COMMAND ||
+      entry.type === ANTIGRAVITY_ENTRY_TYPES.RUN_COMMAND;
+    const isBackgroundCompletion =
+      entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+      entry.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE;
+    if (!isRunCommand && !isBackgroundCompletion) {
+      return undefined;
+    }
     const content = this.stringContent(entry);
-    // "exit code: N" / "exit_code=N" and agy's own "exited with code N"
-    // phrasing (confirmed in real background-task completion messages).
-    const match = content.match(
-      /(?:exit\s*code|exit_code)\s*[:=]\s*(-?\d+)|exited with code\s+(-?\d+)/i
-    );
+    // agy puts "Exit code: N" on the first line of a run_command result; a
+    // later line is command output and may say anything.
+    const match = isRunCommand
+      ? content.split(/\r?\n/, 1)[0]!.match(/^Exit code:\s*(-?\d+)\s*$/i)
+      : content.match(/\bexited with code\s+(-?\d+)\b/i);
     if (!match) {
       return undefined;
     }
-    const raw = match[1] ?? match[2];
+    const raw = match[1];
     return raw !== undefined ? Number(raw) : undefined;
   }
 

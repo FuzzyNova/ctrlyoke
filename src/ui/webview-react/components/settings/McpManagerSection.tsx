@@ -765,8 +765,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
   const handleSaveAll = (id: AnyTargetId, scope: SettingWriteScope) => {
     if (id === SPECIAL_TARGET_IDS.CTRLYOKE) {
+      // Save all overwrites a copy already in that scope, so each server names
+      // itself as the entry it replaces; a plain add would reject the id.
       for (const server of selectedServers) {
-        addOrUpdateServer(server.config, scope);
+        addOrUpdateServer(server.config, scope, server.config.id);
       }
       return;
     }

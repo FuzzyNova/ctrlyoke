@@ -1,13 +1,19 @@
 # Bug Drain 3: Dashboard State and Local Storage I/O
 
-> **Status:** Proposed. Written 2026-10-14 against current `main`.
+> **Status:** Implemented 2026-10-14 (`946577ef6`..`feaa2df10`). Written 2026-10-14 against current `main`.
+> Reviewed 2026-10-15; the review's fixes landed in one follow-up commit. Three
+> follow-up bugs are filed in `dev/bugs/backlog/`:
+> `lifetime-usage-lineage-rescan-holds-store-lock.md`,
+> `lifetime-usage-skips-unfinished-runs-inside-counted-interval.md` and
+> `codex-toml-export-duplicates-inline-mcp-servers-entry.md`.
 >
 > **Plan 3 of 4.** The four bug-drain plans run **in parallel**, each through
 > `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml` in its own git worktree. The
 > orchestrator reads this plan, queues one `append_step` per step in §3 (in order), then
 > reviews the result.
 >
-> **Size:** 22 bug docs, 26 effort points, 18 steps.
+> **Size:** 22 bug docs, 26 effort points, 18 steps. Step 18 already landed in
+> `9a344c52c` (bug doc in `dev/bugs/implemented/`), so 17 steps are queued.
 
 ---
 
@@ -22,7 +28,8 @@ lifetime usage store, the workspace git snapshot, the execution-root lease file,
 Windows credential store, the MCP/LSP config exporters and the MCP registry, the
 end-condition regex guard, `ParallelGroupRun` worker dispatch, OpenCode permission
 collision discovery, and the Antigravity log/tool parsers. Every fix is local to the files
-listed in §2. None of them changes the workflow schema or the settings schema.
+listed in §2, except step 3, which adds the `execution.regexTimeoutSec` setting and
+rewrites the workflow schema's `operator` description.
 
 ---
 
@@ -446,6 +453,8 @@ Every step follows the rules in §5.
 
 ### Step 18: Steps panel "Copy full output" omits the prompt
 
+> **Done** in `9a344c52c` before this drain was staged; not queued.
+
 - **Bug:** `dev/bugs/backlog/steps-panel-copy-full-output-omits-prompt.md`
 - **Files:** `src/ui/webview-react/hooks/useLatestStepOutput.ts`,
   `src/ui/webview-react/utils/stepContextMenuItems.ts`,
@@ -485,7 +494,7 @@ The orchestrator must not skip or defer a bug.
    file owned by plan 1, 2 or 4, keep that edit minimal and name it in the commit message.
 3. **Fix and test.** Fix the bug and add or update tests that fail without the fix.
 4. **`npm test` passes.** Run it once and read the `TEST SUMMARY:` block
-   (`npm test 2>&1 | Select-Object -Last 40`). Never run `npm run test:harness`. Also run
+   (`npm test 2>&1 | tail -40` on macOS/Linux; PowerShell: `npm test 2>&1 | Select-Object -Last 40`). Never run `npm run test:harness`. Also run
    `npm run lint` and `npm run typecheck` if the summary does not already cover them.
 5. **Move the bug doc.** `git mv` each fixed bug doc to `dev/bugs/implemented/`, replacing
    its `**Severity:**` line with `**Resolution:** fixed in this commit`.

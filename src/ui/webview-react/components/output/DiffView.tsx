@@ -421,8 +421,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
       mode: (typeof DIFF_EXPANSION_MODES)[keyof typeof DIFF_EXPANSION_MODES]
     ) => {
       if (oldContent === undefined) return;
-      const gapStart =
-        prevHunk !== null ? prevHunk.oldStart + prevHunk.oldLines : 1;
+      const basePrevHunk = gapIndex > 0 ? baseHunks[gapIndex - 1] : null;
+      const gapStart = basePrevHunk
+        ? basePrevHunk.oldStart + basePrevHunk.oldLines
+        : prevHunk !== null
+          ? prevHunk.oldStart + prevHunk.oldLines
+          : 1;
       const gapEnd = nextHunk.oldStart;
       const currentExpandedToLine =
         activeExpandedGaps.get(gapIndex) ?? gapStart;
@@ -450,7 +454,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       }
       onExpandGap?.(gapIndex, nextExpandedToLine);
     },
-    [activeExpandedGaps, expandedGaps, oldContent, onExpandGap]
+    [activeExpandedGaps, baseHunks, expandedGaps, oldContent, onExpandGap]
   );
 
   const shouldDeferTokenization =
@@ -740,6 +744,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
             {(hunks) =>
               hunks.reduce<React.ReactElement[]>((nodes, hunk, i) => {
                 const prevHunk = i > 0 ? hunks[i - 1] : null;
+                const baseGapIndex = baseHunks.findIndex(
+                  (baseHunk, baseIndex) =>
+                    baseIndex > 0 && baseHunk.oldStart >= hunk.oldStart
+                );
                 const collapsed =
                   prevHunk !== null
                     ? getCollapsedLinesCountBetween(prevHunk, hunk)
@@ -761,7 +769,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                           <button
                             type="button"
                             onClick={() =>
-                              handleExpand(i, prevHunk, hunk, "chunk")
+                              handleExpand(baseGapIndex, prevHunk, hunk, "chunk")
                             }
                             className="cursor-pointer border-none bg-transparent p-0 font-mono text-link-fg hover:text-link-active-fg"
                             title={
@@ -779,7 +787,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                               type="button"
                               onClick={() =>
                                 handleExpand(
-                                  i,
+                                  baseGapIndex,
                                   prevHunk,
                                   hunk,
                                   DIFF_EXPANSION_MODES.ALL

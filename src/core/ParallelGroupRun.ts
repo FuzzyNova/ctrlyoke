@@ -208,6 +208,8 @@ export class ParallelGroupRun<TContext extends object> {
       this.failFastTriggered = true;
       await this.closeAdmission();
       await this.cancelRunning();
+    } else if (this.runStarted) {
+      this.startAvailableWorkers();
     }
     return true;
   }

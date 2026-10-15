@@ -1,5 +1,21 @@
 import * as fs from "fs/promises";
+import * as path from "node:path";
 import { randomBytes } from "crypto";
+
+/** Read an editable file, treating only a missing file as an empty document. */
+export async function readFileForEdit(
+  filePath: string,
+  missingContents: string
+): Promise<string> {
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return missingContents;
+    }
+    throw error;
+  }
+}
 
 /**
  * Atomic file replacement, hardened against the transient sharing failures
@@ -72,6 +88,8 @@ export interface RenameRetryOptions {
    * would leave the window.
    */
   budgetMs?: number;
+  /** Permission bits for the replacement file; the umask default otherwise. */
+  mode?: number;
   /** Called before each backoff wait, for logging a write that is taking a while. */
   onTransientRetry?: (retry: TransientRenameRetry) => void;
   /**
@@ -168,6 +186,7 @@ export async function writeFileAtomic(
   try {
     tempFile = await fs.open(tempPath, "wx");
     tempCreated = true;
+    if (options.mode !== undefined) await tempFile.chmod(options.mode);
     await tempFile.writeFile(contents);
     await tempFile.close();
     tempFile = undefined;
@@ -179,4 +198,26 @@ export async function writeFileAtomic(
     }
     throw error;
   }
+}
+
+/**
+ * Atomically replace a text file while preserving a symlink at its path and
+ * the existing file's permissions. A user config such as `~/.codex/config.toml`
+ * is often 0600 because it holds tokens; the replacement must not widen it.
+ */
+export async function writeTextFileAtomic(
+  filePath: string,
+  contents: string
+): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  let targetPath = filePath;
+  let mode: number | undefined;
+  try {
+    targetPath = await fs.realpath(filePath);
+    mode = (await fs.stat(targetPath)).mode & 0o7777;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  await writeFileAtomic(targetPath, contents, { mode });
 }

@@ -126,9 +126,12 @@ export class McpManagerService {
     try {
       const manager = this.getRegistryFileManager();
       if (message.previousId && message.previousId !== message.server.id) {
-        await manager.remove(message.previousId, message.scope);
+        await manager.rename(message.previousId, message.server, message.scope);
+      } else if (!message.previousId) {
+        await manager.add(message.server, message.scope);
+      } else {
+        await manager.addOrUpdate(message.server, message.scope);
       }
-      await manager.addOrUpdate(message.server, message.scope);
       await this.emitManagedRegistryServers(ctx);
     } catch (error) {
       const errorMessage = `Failed to save MCP registry server: ${getErrorMessage(error)}`;
@@ -166,6 +169,7 @@ export class McpManagerService {
     });
     ctx.emit({
       type: MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT,
+      requestId: message.requestId,
       servers: result.servers,
       nextCursor: result.nextCursor,
       ...(result.error ? { error: result.error } : {}),

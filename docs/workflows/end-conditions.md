@@ -86,6 +86,11 @@ recipe: keep working while the condition passes, and advance once it fails.
 | `onPass`               | `continue` (default), `retry`, or `stopWorkflow`                                                                                                                                                                                                                         |
 | `onFail`               | `continue`, `retry`, or `stopWorkflow` (default)                                                                                                                                                                                                                         |
 
+Every `matches` comparison runs in an isolated worker. Its deadline is set by
+`execution.regexTimeoutSec` (default 10 seconds). A timeout or worker failure is
+an evaluation error routed through the step's `errorBehavior`; it does not count
+as a failed comparison and does not trigger `onFail: retry`.
+
 `endCondition` and `preCondition` can also be set once at the workflow level (or
 in the `defaults` settings) and are inherited by every prompt step. Set either to
 `null` on a step to switch an inherited condition off.

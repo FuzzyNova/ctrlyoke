@@ -122,6 +122,24 @@ async function readJson<T>(filePath: string): Promise<T | null> {
   }
 }
 
+/** A missing or malformed lease cannot establish a live owner. */
+async function readLeaseTolerantly(
+  leasePath: string,
+  removeMalformed = false
+): Promise<ExecutionLease | null> {
+  try {
+    return await readJson<ExecutionLease>(leasePath);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    if (removeMalformed) {
+      await fs.unlink(leasePath).catch((unlinkError: unknown) => {
+        if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") throw unlinkError;
+      });
+    }
+    return null;
+  }
+}
+
 async function resolveLeaseScope(
   executionRoot: string,
   git?: GitLocationLookup
@@ -157,7 +175,7 @@ async function readLiveLeases(scope: LeaseScope): Promise<ExecutionLease[]> {
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
     const leasePath = path.join(scope.leasesRoot, entry.name);
-    const lease = await readJson<ExecutionLease>(leasePath);
+    const lease = await readLeaseTolerantly(leasePath, true);
     if (!lease) continue;
     if (isOwnerStale(lease.pid, lease.lastHeartbeat)) {
       await fs.unlink(leasePath).catch((error: unknown) => {
@@ -261,12 +279,10 @@ export class ExecutionRootLeaseManager {
       }
 
       const leasePath = path.join(scope.leasesRoot, `${ownerToken}.json`);
-      const handle = await fs.open(leasePath, "wx");
-      try {
-        await handle.writeFile(JSON.stringify(lease, null, 2), "utf8");
-      } finally {
-        await handle.close();
-      }
+      // The arbitration lock serializes creation and the random owner token
+      // gives this lease its own path; atomic replacement therefore cannot
+      // overwrite another owner's lease.
+      await writeFileAtomic(leasePath, JSON.stringify(lease, null, 2));
     });
 
     return createHandle(lease, scope);
@@ -324,11 +340,11 @@ export class ExecutionRootLeaseManager {
       if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
       let lease: ExecutionLease | null;
       try {
-        lease = await readJson<ExecutionLease>(
+        lease = await readLeaseTolerantly(
           path.join(scope.leasesRoot, entry.name)
         );
       } catch {
-        // A malformed or disappearing lease cannot prove a live owner.
+        // Inspection is best-effort; unreadable files cannot be inspected.
         continue;
       }
       if (!lease) continue;

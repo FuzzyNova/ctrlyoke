@@ -6,6 +6,7 @@ import {
 import type { ExecutionPreviewResultMessage } from "@root/types/WebviewMessageTypes";
 import type { WorkflowKey } from "@root/types/CtrlYokeTypes";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 
 const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
@@ -105,5 +106,37 @@ describe("executionPreviewStore", () => {
     useExecutionPreviewStore.getState().observeDefinitionRevision(address, 2);
 
     expect(useExecutionPreviewStore.getState().isStale).toBe(true);
+  });
+
+  it("accepts an authoritative rollback before resolving the preview", () => {
+    const store = useExecutionPreviewStore.getState();
+    store.observeDefinitionRevision(address, 3);
+    const token = store.open({ kind: "workflow" });
+    useExecutionPreviewStore
+      .getState()
+      .observeDefinitionRevision(address, 2, true);
+
+    useExecutionPreviewStore.getState().resolve(result(token, 2));
+
+    expect(useExecutionPreviewStore.getState()).toMatchObject({
+      displayedDefinitionRevision: 2,
+      definitionRevisionHeads: { [workflowViewAddressKey(address)]: 2 },
+      isStale: false,
+    });
+  });
+
+  it("marks a response stale when a newer push overtook it", () => {
+    const token = useExecutionPreviewStore
+      .getState()
+      .open({ kind: "workflow" });
+    useExecutionPreviewStore.getState().observeDefinitionRevision(address, 3);
+
+    useExecutionPreviewStore.getState().resolve(result(token, 2));
+
+    expect(useExecutionPreviewStore.getState()).toMatchObject({
+      displayedDefinitionRevision: 2,
+      definitionRevisionHeads: { [workflowViewAddressKey(address)]: 3 },
+      isStale: true,
+    });
   });
 });

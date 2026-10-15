@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   HostedHttpError,
+  hostedErrorMessage,
   workspaceGitRefDiffPage,
   workspaceTree,
 } from "@utils/hostedApi";
@@ -11,6 +12,22 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("hostedErrorMessage", () => {
+  it("extracts an error string from a HostedHttpError JSON body", () => {
+    expect(
+      hostedErrorMessage(
+        new HostedHttpError(500, 'HTTP 500: {"error":"checkout refused"}')
+      )
+    ).toBe("checkout refused");
+  });
+
+  it("falls back to the original message when the body has no error field", () => {
+    expect(
+      hostedErrorMessage(new HostedHttpError(500, "HTTP 500: failed"))
+    ).toBe("HTTP 500: failed");
+  });
 });
 
 describe("hostedApi workspaceTree", () => {

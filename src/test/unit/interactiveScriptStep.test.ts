@@ -9,12 +9,16 @@ import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
 import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import {
+  COMPARE_SOURCES,
+  CONDITION_ACTIONS,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
+  SCRIPT_OPERATORS,
   STEP_STATUS,
   STEP_TYPES,
 } from "../../types/DashboardConstants";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 
 type ComparisonCase = {
@@ -329,5 +333,59 @@ suite("interactive script steps", () => {
       ),
       statusMessages.join("\n")
     );
+  });
+
+  test("a regex timeout in an interactive step follows errorBehavior, not onFail", async () => {
+    const originalTimeout = ConfigurationUtils.getRegexTimeoutSeconds;
+    ConfigurationUtils.getRegexTimeoutSeconds = () => 0.01;
+    try {
+      const queue = new PromptQueue();
+      const executor = makeExecutor(queue);
+      let ptyCalls = 0;
+      const statusMessages: string[] = [];
+      const context = makeContext(undefined, async (options) => {
+        ptyCalls++;
+        options.onOutput(`${"a".repeat(40)}!`);
+        return 0;
+      });
+      context.onStatusMessage = (_stepIndex, message) => {
+        statusMessages.push(message);
+      };
+
+      queue.loadPrompts({
+        steps: [
+          {
+            type: STEP_TYPES.SCRIPT,
+            script: "echo aaaa",
+            executionMode: EXECUTION_MODES.INTERACTIVE,
+            compareSource: COMPARE_SOURCES.STDOUT,
+            operator: SCRIPT_OPERATORS.MATCHES,
+            expected: "^(a+)+$",
+            onFail: CONDITION_ACTIONS.CONTINUE,
+          },
+        ],
+      });
+
+      await executor.execute(
+        new MockHarnessIntegration(undefined, false),
+        context
+      );
+
+      assert.strictEqual(ptyCalls, 1);
+      assert.notStrictEqual(
+        queue.getState().results[0]?.status,
+        STEP_STATUS.COMPLETED
+      );
+      assert.ok(
+        statusMessages.some(
+          (message) =>
+            message.includes("Script step could not run") &&
+            message.includes("timed out after")
+        ),
+        statusMessages.join("\n")
+      );
+    } finally {
+      ConfigurationUtils.getRegexTimeoutSeconds = originalTimeout;
+    }
   });
 });

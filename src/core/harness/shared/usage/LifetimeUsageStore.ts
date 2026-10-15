@@ -66,6 +66,7 @@ export interface LifetimeUsageStoreData {
       subtotal: LifetimeHarnessContribution;
       byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>>;
       runCount: number;
+      skippedRunCount: number;
       outcomes: Record<RunOutcomeBucket, number>;
       activeExecutionMs: number;
       wallClockDurationRunCount: number;
@@ -348,8 +349,10 @@ function recomputeGrandTotals(data: LifetimeUsageStoreData): void {
   data.runCount = 0;
   data.totalActiveExecutionMs = 0;
   data.wallClockDurationRunCount = 0;
+  data.skippedRunCount = 0;
   for (const lineage of Object.values(data.lineages)) {
     addLineageToStore(data, lineage, 1);
+    data.skippedRunCount += numeric(lineage.skippedRunCount);
   }
 }
 
@@ -479,6 +482,21 @@ function validateContributionTotals(value: unknown): boolean {
   return true;
 }
 
+/**
+ * A document written before lineages carried their own `skippedRunCount`.
+ * Its totals are not wrong data, just an older shape, so it is rebuilt from
+ * the run history quietly instead of being quarantined as corrupt.
+ */
+function predatesLineageSkippedRunCounts(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isRecord(value.lineages) &&
+    Object.values(value.lineages).some(
+      (lineage) => isRecord(lineage) && !("skippedRunCount" in lineage)
+    )
+  );
+}
+
 function validateStore(value: unknown): LifetimeUsageStoreData {
   if (
     !isRecord(value) ||
@@ -520,6 +538,7 @@ function validateStore(value: unknown): LifetimeUsageStoreData {
       !validateContributionTotals(lineage.subtotal) ||
       !isRecord(lineage.byHarness) ||
       !requiredNumeric(lineage.runCount) ||
+      !requiredNumeric(lineage.skippedRunCount) ||
       !isRecord(lineage.outcomes) ||
       !requiredNumeric(lineage.activeExecutionMs) ||
       !requiredNumeric(lineage.wallClockDurationRunCount) ||
@@ -568,6 +587,7 @@ function createLineage(
     subtotal: aggregateByHarness(byHarness),
     byHarness,
     runCount: 1,
+    skippedRunCount: 0,
     outcomes,
     activeExecutionMs: numeric(contribution.activeExecutionMs),
     wallClockDurationRunCount: contribution.durationIsWallClock ? 1 : 0,
@@ -587,6 +607,7 @@ function createEmptyLineage(
     subtotal: emptyContribution(),
     byHarness: {},
     runCount: 0,
+    skippedRunCount: 0,
     outcomes: emptyOutcomes(),
     activeExecutionMs: 0,
     wallClockDurationRunCount: 0,
@@ -625,7 +646,6 @@ export class LifetimeUsageStore {
     string,
     LifetimeRunContribution
   >();
-  private readonly lineageSkippedRunCounts = new Map<WorkflowKey, number>();
   private lastErrorCode: string | undefined;
 
   constructor(private readonly workspaceRoot: string) {
@@ -669,7 +689,6 @@ export class LifetimeUsageStore {
         if (!existingLineage) {
           const lineage = createLineage(normalized);
           data.lineages[normalized.workflowKey] = lineage;
-          this.lineageSkippedRunCounts.set(normalized.workflowKey, 0);
           addRunToStore(data, normalized, 1);
           this.remember(cacheKey, normalized);
         } else if (
@@ -679,6 +698,14 @@ export class LifetimeUsageStore {
           if (normalized.runRef < existingLineage.countedFrom) {
             const rescanned = await this.scanLineage(normalized.workflowKey);
             this.replaceLineage(data, normalized.workflowKey, rescanned);
+          } else if (existingLineage.backfillComplete === false) {
+            const rescanned = await this.scanLineage(normalized.workflowKey);
+            this.replaceLineage(data, normalized.workflowKey, rescanned);
+            const rebuilt = data.lineages[normalized.workflowKey];
+            if (rebuilt) {
+              rebuilt.backfillComplete = false;
+              delete rebuilt.dirMtimeMs;
+            }
           } else {
             applyRunToLineage(existingLineage, normalized, 1);
             existingLineage.countedThrough = normalized.runRef;
@@ -764,6 +791,22 @@ export class LifetimeUsageStore {
       await withFileLock(this.filePath, async () => {
         const data = await this.readOrReset(now);
         let lineage = data.lineages[batch.workflowKey];
+        if (
+          lineage &&
+          batch.runRefs.some((runRef) => runRef < lineage!.countedFrom)
+        ) {
+          const rescanned = await this.scanLineage(batch.workflowKey);
+          this.replaceLineage(data, batch.workflowKey, rescanned);
+          lineage = data.lineages[batch.workflowKey];
+          if (lineage) {
+            lineage.backfillComplete = false;
+            if (batch.dirMtimeMs === undefined) delete lineage.dirMtimeMs;
+            else lineage.dirMtimeMs = batch.dirMtimeMs;
+          }
+          data.updatedAt = now;
+          await this.writeAtomic(data);
+          return;
+        }
         for (const runRef of batch.runRefs) {
           if (
             lineage &&
@@ -772,7 +815,6 @@ export class LifetimeUsageStore {
           ) {
             continue;
           }
-
           const contribution = contributions.get(runRef);
           if (!lineage) {
             lineage = contribution
@@ -780,7 +822,10 @@ export class LifetimeUsageStore {
               : createEmptyLineage(runRef, runRef, batch.dirMtimeMs);
             data.lineages[batch.workflowKey] = lineage;
             if (contribution) addRunToStore(data, contribution, 1);
-            else data.skippedRunCount++;
+            else {
+              lineage.skippedRunCount++;
+              data.skippedRunCount++;
+            }
             continue;
           }
 
@@ -788,6 +833,7 @@ export class LifetimeUsageStore {
             applyRunToLineage(lineage, contribution, 1);
             addRunToStore(data, contribution, 1);
           } else {
+            lineage.skippedRunCount++;
             data.skippedRunCount++;
           }
           lineage.countedFrom =
@@ -802,6 +848,27 @@ export class LifetimeUsageStore {
           if (batch.dirMtimeMs === undefined) delete lineage.dirMtimeMs;
           else lineage.dirMtimeMs = batch.dirMtimeMs;
         }
+        data.updatedAt = now;
+        await this.writeAtomic(data);
+      });
+    } catch (error) {
+      const wrapped = new Error(LIFETIME_USAGE_ERROR_CODES.WRITE_FAILED);
+      wrapped.cause = error;
+      throw wrapped;
+    }
+  }
+
+  /** Rebuild a lineage from its manifests when the persisted interval has gaps. */
+  async rebuildLineage(
+    workflowKey: WorkflowKey,
+    now: number = Date.now()
+  ): Promise<void> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    try {
+      await withFileLock(this.filePath, async () => {
+        const data = await this.readOrReset(now);
+        const rescanned = await this.scanLineage(workflowKey);
+        this.replaceLineage(data, workflowKey, rescanned);
         data.updatedAt = now;
         await this.writeAtomic(data);
       });
@@ -856,24 +923,13 @@ export class LifetimeUsageStore {
     scanned: ScannedLineage
   ): void {
     const previous = data.lineages[workflowKey];
-    const previousSkippedRunCount =
-      this.lineageSkippedRunCounts.get(workflowKey) ?? 0;
-    const nextSkippedRunCount = scanned.lineage ? scanned.skippedRunCount : 0;
     if (previous) addLineageToStore(data, previous, -1);
     if (scanned.lineage) {
+      scanned.lineage.skippedRunCount = scanned.skippedRunCount;
       data.lineages[workflowKey] = scanned.lineage;
       addLineageToStore(data, scanned.lineage, 1);
     } else {
       delete data.lineages[workflowKey];
-    }
-    data.skippedRunCount = Math.max(
-      0,
-      data.skippedRunCount - previousSkippedRunCount + nextSkippedRunCount
-    );
-    if (scanned.lineage) {
-      this.lineageSkippedRunCounts.set(workflowKey, nextSkippedRunCount);
-    } else {
-      this.lineageSkippedRunCounts.delete(workflowKey);
     }
     // Aggregate flags and cost provenance cannot be subtracted exactly from
     // the lineage-shaped document, so rebuild those derived fields after a
@@ -934,6 +990,7 @@ export class LifetimeUsageStore {
         subtotal: aggregateByHarness(byHarness),
         byHarness,
         runCount: contributions.length,
+        skippedRunCount,
         outcomes,
         activeExecutionMs,
         wallClockDurationRunCount,
@@ -972,7 +1029,9 @@ export class LifetimeUsageStore {
   private async readOrReset(now: number): Promise<LifetimeUsageStoreData> {
     try {
       const parsed = await this.readExisting();
-      return parsed === undefined ? emptyStore(now) : validateStore(parsed);
+      return parsed === undefined || predatesLineageSkippedRunCounts(parsed)
+        ? emptyStore(now)
+        : validateStore(parsed);
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
       this.lastErrorCode = LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA;

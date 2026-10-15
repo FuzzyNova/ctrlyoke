@@ -22,6 +22,7 @@ import {
   LIFETIME_USAGE_ERROR_CODES,
 } from "../../core/harness/shared/usage/LifetimeUsageStore";
 import { formatRunRef, manifestPath, runDir } from "../../utils/WorkflowPaths";
+import { WorkspaceStatsService } from "../../core/harness/shared/usage/WorkspaceStatsService";
 
 suite("LifetimeUsageStore", () => {
   suiteSetup(function () {
@@ -130,6 +131,31 @@ suite("LifetimeUsageStore", () => {
     assert.strictEqual(data.totals.attemptCount, 1);
   });
 
+  test("rebuilds a live-upsert lineage when a backfill batch has older refs", async () => {
+    const olderRefs = [0, 1, 2].map((index) =>
+      formatRunRef(baseTime + index * 1000)
+    );
+    for (const [index, runRef] of olderRefs.entries()) {
+      await writeManifest(runRef, index + 1);
+    }
+    const newestRunRef = formatRunRef(baseTime + 3000);
+    await writeManifest(newestRunRef, 4);
+    await store.upsertRunContribution(contribution(newestRunRef, 4));
+
+    await store.applyBackfillBatch({
+      workflowKey,
+      runRefs: olderRefs,
+      contributions: olderRefs.map((runRef, index) =>
+        contribution(runRef, index + 1)
+      ),
+      skippedRunCount: 0,
+    });
+
+    const data = await store.read(baseTime + 1);
+    assert.strictEqual(data.runCount, 4);
+    assert.strictEqual(data.totals.total, 10);
+  });
+
   test("revises an old run after its recent cache entry is evicted", async () => {
     const oldRunRef = formatRunRef(baseTime);
     await writeManifest(oldRunRef, 10);
@@ -171,6 +197,53 @@ suite("LifetimeUsageStore", () => {
     const files = await fs.readdir(path.dirname(store.getPath()));
     assert.ok(
       files.some((file) => file.startsWith("lifetime-stats.json.corrupt-"))
+    );
+  });
+
+  test("keeps skipped run counts stable when a fresh store rescans a lineage", async () => {
+    const readableRunRef = formatRunRef(baseTime);
+    await writeManifest(readableRunRef, 10);
+    const unreadableRunRef = formatRunRef(baseTime + 1000);
+    await fs.mkdir(runDir(workspaceRoot, workflowKey, unreadableRunRef), {
+      recursive: true,
+    });
+    const initial = await new WorkspaceStatsService(workspaceRoot).refresh();
+    assert.strictEqual(initial.skippedRunCount, 1);
+
+    const freshStore = new LifetimeUsageStore(workspaceRoot);
+    const revised = contribution(readableRunRef, 15);
+    revised.byHarness[HARNESS_IDS.CLAUDE_CLI]!.costSources = [
+      "harness-reported",
+    ];
+    await freshStore.upsertRunContribution(revised, baseTime + 2000);
+
+    const afterRescan = await freshStore.read(baseTime + 2000);
+    assert.strictEqual(afterRescan.skippedRunCount, 1);
+    assert.strictEqual(afterRescan.lineages[workflowKey].skippedRunCount, 1);
+  });
+
+  test("rebuilds persisted data when a lineage has no skipped run count", async () => {
+    await writeManifest(formatRunRef(baseTime), 10);
+    await store.upsertRunContribution(contribution(formatRunRef(baseTime), 10));
+    const stored = await store.read(baseTime);
+    const legacy = JSON.parse(JSON.stringify(stored)) as typeof stored;
+    delete (
+      legacy.lineages[workflowKey] as Partial<
+        (typeof legacy.lineages)[typeof workflowKey]
+      >
+    ).skippedRunCount;
+    await fs.writeFile(store.getPath(), JSON.stringify(legacy), "utf8");
+
+    const reader = new LifetimeUsageStore(workspaceRoot);
+    const rebuilt = await reader.read(baseTime + 1);
+    assert.strictEqual(rebuilt.runCount, 0);
+    assert.strictEqual(rebuilt.skippedRunCount, 0);
+    // An older shape is not corruption: no error, nothing quarantined.
+    assert.strictEqual(reader.getLastErrorCode(), undefined);
+    const siblings = await fs.readdir(path.dirname(store.getPath()));
+    assert.ok(
+      !siblings.some((name) => name.includes(".corrupt-")),
+      siblings.join(", ")
     );
   });
 });

@@ -46,6 +46,7 @@ export interface McpManagerState {
   remoteNextCursor: string | undefined;
   remotePageCursors: (string | undefined)[];
   remoteQuery: string;
+  latestRemoteRequestId: number;
   remoteSort: McpManagerRemoteSort;
 
   discoveryTab: McpManagerDiscoveryTab;
@@ -53,6 +54,7 @@ export interface McpManagerState {
   setManagedServers: (servers: ManagedMcpServer[]) => void;
   setLocalScanResult: (servers: LocalMcpServerEntry[], error?: string) => void;
   setRemoteSearchResult: (
+    requestId: number,
     servers: RegistryMcpEntry[],
     error?: string,
     nextCursor?: string
@@ -122,6 +124,7 @@ export const useMcpManagerStore = create<McpManagerState>((set, get) => ({
   remoteNextCursor: undefined,
   remotePageCursors: [undefined],
   remoteQuery: "",
+  latestRemoteRequestId: 0,
   remoteSort: MCP_MANAGER_REMOTE_SORTS.A_TO_Z,
 
   discoveryTab: MCP_MANAGER_DISCOVERY_TABS.LOCAL,
@@ -139,13 +142,17 @@ export const useMcpManagerStore = create<McpManagerState>((set, get) => ({
       isLoadingLocal: false,
     }),
 
-  setRemoteSearchResult: (servers, error, nextCursor) =>
-    set({
-      remoteServers: servers,
-      remoteError: error,
-      remoteNextCursor: nextCursor,
-      isLoadingRemote: false,
-    }),
+  setRemoteSearchResult: (requestId, servers, error, nextCursor) =>
+    set((state) =>
+      requestId !== state.latestRemoteRequestId
+        ? state
+        : {
+            remoteServers: servers,
+            remoteError: error,
+            remoteNextCursor: nextCursor,
+            isLoadingRemote: false,
+          }
+    ),
 
   requestServers: () => {
     set({ isLoadingRegistry: true });
@@ -184,12 +191,14 @@ export const useMcpManagerStore = create<McpManagerState>((set, get) => ({
   },
 
   searchRemoteRegistry: (query, cursor, updatedSince, sortOverride) => {
+    const requestId = get().latestRemoteRequestId + 1;
     const resolvedSort = sortOverride ?? get().remoteSort;
     const resolvedUpdatedSince =
       updatedSince ?? getUpdatedSinceForSort(resolvedSort);
 
     set((state) => ({
       remoteQuery: query,
+      latestRemoteRequestId: requestId,
       isLoadingRemote: true,
       remoteError: undefined,
       ...(cursor === undefined
@@ -206,6 +215,7 @@ export const useMcpManagerStore = create<McpManagerState>((set, get) => ({
 
     sendMessage(MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH, {
       query,
+      requestId,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(resolvedUpdatedSince ? { updatedSince: resolvedUpdatedSince } : {}),
     });

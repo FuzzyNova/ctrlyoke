@@ -140,6 +140,7 @@ import type {
 import type {
   HistoryClearPreview,
   HistoryTrashEntrySummary,
+  HistoryTrashItem,
   HistoryTrashOutcome,
 } from "./HistoryTrashTypes";
 export type {
@@ -2206,6 +2207,11 @@ export interface HistoryTrashedMessage {
   kind: HistoryTrashEntryKind;
   message: string;
   skippedLive: WorkflowKey[];
+  /**
+   * Lineages this entry removed entirely. A run-only delete leaves its lineage
+   * in place, so it is not listed here and never locks the view.
+   */
+  trashedLineages: Pick<HistoryTrashItem, "workflowKey" | "workflowName">[];
 }
 
 /** Webview → Extension: list Recently deleted. */
@@ -2241,6 +2247,8 @@ export interface HistoryTrashEmptyMessage {
 /** Extension → Webview: outcome of a restore/purge/empty action. */
 export interface HistoryTrashResultMessage extends HistoryTrashOutcome {
   type: typeof MESSAGE_TYPES.HISTORY_TRASH_RESULT;
+  /** Lineages restored by a successful restore action. */
+  workflowKeys?: WorkflowKey[];
 }
 
 /** Start the currently viewed draft through its explicit address. */
@@ -2739,6 +2747,7 @@ export interface RequestMcpLocalScanMessage {
 
 export interface RequestMcpRegistrySearchMessage {
   type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH;
+  requestId: number;
   query: string;
   cursor?: string;
   updatedSince?: string;
@@ -2772,6 +2781,7 @@ export interface McpLocalScanResultMessage {
 
 export interface McpRegistrySearchResultMessage {
   type: typeof MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT;
+  requestId: number;
   servers: RegistryMcpEntry[];
   nextCursor?: string;
   error?: string;

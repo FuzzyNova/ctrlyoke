@@ -78,7 +78,7 @@ describe("useLocalInput", () => {
     expect(input).toHaveValue(2);
     fireEvent.blur(input);
 
-    expect(onCommit.mock.calls).toEqual([[2], [2]]);
+    expect(onCommit.mock.calls).toEqual([[2]]);
     expect(input).toHaveValue(2);
   });
 
@@ -105,5 +105,27 @@ describe("useLocalInput", () => {
 
     fireEvent.blur(input);
     expect(onCommit).toHaveBeenCalledWith(2);
+  });
+
+  it("resyncs external changes after focus-only interaction without committing", () => {
+    const onCommit = vi.fn<(value: number | undefined) => void>();
+    const view = renderInput(1, onCommit);
+    const input = screen.getByRole("spinbutton", {
+      name: "Maximum parallel steps",
+    });
+
+    fireEvent.focus(input);
+    view.rerender(
+      <LocalNumberInput
+        aria-label="Maximum parallel steps"
+        value={3}
+        onCommit={onCommit}
+        parse={(raw) => parseInt(raw, 10) || 1}
+      />
+    );
+    fireEvent.blur(input);
+
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(input).toHaveValue(3);
   });
 });

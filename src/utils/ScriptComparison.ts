@@ -14,12 +14,6 @@ import {
   SCRIPT_OPERATOR_OPTIONS_META,
 } from "../types/SchemaUiMetadata";
 
-/**
- * Maximum text length evaluated inline. Longer inputs use an isolated worker
- * with a deadline so regex backtracking cannot hang the host.
- */
-export const MAX_REGEX_INPUT_LENGTH = 100_000;
-
 /** The comparison an author configured, before defaults are applied. */
 export interface ScriptComparisonConfig {
   compareSource?: CompareSource;
@@ -51,8 +45,11 @@ export interface ScriptComparisonResult {
   passed: boolean;
   /** The trimmed value taken from `compareSource` and compared. */
   actual: string;
-  /** Present when a guarded comparison could not finish. */
-  reason?: string;
+  /**
+   * Present when the comparison could not finish (a regex timeout or worker
+   * failure). Callers treat it as an evaluation error, never a mismatch.
+   */
+  error?: string;
 }
 
 /** Fill in the defaults so every consumer reads the same resolved triple. */
@@ -165,17 +162,6 @@ function compareNumeric(
   }
 }
 
-function compareRegex(actual: string, pattern: string): boolean {
-  try {
-    // Unanchored on purpose — documented, and `^`/`$` are the author's to add.
-    return new RegExp(pattern).test(actual.slice(0, MAX_REGEX_INPUT_LENGTH));
-  } catch {
-    // An invalid pattern cannot match anything; the schema does not validate
-    // regex syntax, so this is a real reachable state rather than a guard.
-    return false;
-  }
-}
-
 /**
  * Evaluate a script condition. The operator always comes from the author's
  * configuration — nothing here inspects the values to pick a comparison, which
@@ -214,7 +200,11 @@ export function compareScriptOutputInline(
   }
 
   if (operator === SCRIPT_OPERATORS.MATCHES) {
-    return { passed: compareRegex(actual, expected), actual };
+    return {
+      passed: false,
+      actual,
+      error: "Regex comparisons must use compareScriptOutputAsync.",
+    };
   }
 
   const trimmedExpected = expected.trim();

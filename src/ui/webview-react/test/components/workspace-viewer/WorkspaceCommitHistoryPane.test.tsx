@@ -17,7 +17,8 @@ import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerT
 import type { PagedCommitHistoryController } from "@hooks/usePagedCommitHistory";
 import { GIT_REF_LABEL_TYPES } from "@root/types/DashboardConstants";
 
-vi.mock("@utils/hostedApi", () => ({
+vi.mock("@utils/hostedApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@utils/hostedApi")>()),
   workspaceCheckoutBranch: vi.fn(),
   workspaceCheckoutCommit: vi.fn(),
   workspaceGitRefDiff: vi.fn(),
@@ -224,6 +225,37 @@ describe("WorkspaceCommitHistoryPane", () => {
       })
     );
     expect(useWorkspaceViewerStore.getState().previousBranch).toBeNull();
+    expect(controllerRefresh).toHaveBeenCalledOnce();
+    expect(paneRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("shows branch checkout errors and refreshes after a rejection", async () => {
+    vi.mocked(workspaceCheckoutBranch).mockRejectedValue(
+      new Error("Your local changes would be overwritten")
+    );
+    const controllerRefresh = vi.fn();
+    const paneRefresh = vi.fn();
+    useWorkspaceViewerStore.setState({
+      currentBranch: null,
+      detached: true,
+      previousBranch: "main",
+    });
+    render(
+      <WorkspaceCommitHistoryPane
+        onRefresh={paneRefresh}
+        controller={testController([commit], {
+          currentBranch: null,
+          detached: true,
+          refresh: controllerRefresh,
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to main" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your local changes would be overwritten"
+    );
     expect(controllerRefresh).toHaveBeenCalledOnce();
     expect(paneRefresh).toHaveBeenCalledOnce();
   });
@@ -514,6 +546,45 @@ describe("WorkspaceCommitHistoryPane", () => {
     expect(useWorkspaceViewerStore.getState().detached).toBe(true);
     expect(controllerRefresh).toHaveBeenCalledOnce();
     expect(paneRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("shows a commit checkout failure in the same banner, replacing an older error", async () => {
+    vi.mocked(workspaceCheckoutBranch).mockRejectedValue(
+      new Error("branch failed")
+    );
+    vi.mocked(workspaceCheckoutCommit).mockRejectedValue(
+      new Error("commit failed")
+    );
+    useWorkspaceViewerStore.setState({
+      currentBranch: null,
+      detached: true,
+      previousBranch: "main",
+    });
+    render(
+      <WorkspaceCommitHistoryPane
+        onRefresh={vi.fn()}
+        controller={testController([{ ...commit, isHead: false }], {
+          currentBranch: null,
+          detached: true,
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to main" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("branch failed");
+
+    fireEvent.contextMenu(commitRow());
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Checkout Commit (Detach HEAD)",
+      })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Checkout" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("commit failed")
+    );
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 
   it("keeps sparse placeholder rows indexed in the full virtual sequence", () => {

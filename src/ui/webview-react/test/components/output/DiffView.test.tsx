@@ -61,8 +61,15 @@ const {
       diffType: string;
     }
   >(() => ({ hunks: [], diffType: "modify" })),
-  mockGetCollapsedLinesCountBetween: vi.fn(() => 0),
-  mockExpandFromRawCode: vi.fn((hunks: unknown[]) => hunks),
+  mockGetCollapsedLinesCountBetween: vi.fn(
+    (
+      _left: { oldStart: number; oldLines: number },
+      _right: { oldStart: number }
+    ) => 0
+  ),
+  mockExpandFromRawCode: vi.fn(
+    (hunks: unknown[], _source?: string, _start?: number, _end?: number) => hunks
+  ),
   mockRefractorRegistered: vi.fn(() => false),
   mockTokenize: vi.fn(() => null),
 }));
@@ -646,6 +653,99 @@ describe("DiffView", () => {
     fireEvent.click(getByRole("button", { name: /show 4 hidden lines/i }));
 
     expect(onExpandGap).toHaveBeenCalledWith(1, 6);
+  });
+
+  it("expands a later base gap after a fully expanded gap merges rendered hunks", () => {
+    const hunks = [1, 6, 42].map((oldStart) => ({
+      content: `@@ -${oldStart},1 +${oldStart},1 @@`,
+      oldStart,
+      oldLines: 1,
+      newStart: oldStart,
+      newLines: 1,
+      changes: [],
+    }));
+    mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
+    mockGetCollapsedLinesCountBetween.mockImplementation((left, right) =>
+      right.oldStart - (left.oldStart + left.oldLines)
+    );
+    mockExpandFromRawCode.mockImplementation((current, _source, start, end) => {
+      if (start === 2 && end === 6) {
+        return [{ ...hunks[0], oldLines: 5 }, hunks[2]];
+      }
+      return current;
+    });
+    const oldContent = Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join("\n");
+    const { getByRole } = render(
+      <DiffView oldContent={oldContent} newContent={oldContent} globallyCollapsed={false} />
+    );
+
+    fireEvent.click(getByRole("button", { name: /show 4 hidden lines/i }));
+    fireEvent.click(getByRole("button", { name: /show 25 of 36 hidden lines/i }));
+
+    expect(mockExpandFromRawCode).toHaveBeenLastCalledWith(
+      expect.any(Array), oldContent, 7, 32
+    );
+  });
+
+  it("reports the base index for a rendered gap in controlled mode", () => {
+    const hunks = [1, 6, 42].map((oldStart) => ({
+      content: `@@ -${oldStart},1 +${oldStart},1 @@`,
+      oldStart,
+      oldLines: 1,
+      newStart: oldStart,
+      newLines: 1,
+      changes: [],
+    }));
+    mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
+    mockGetCollapsedLinesCountBetween.mockImplementation((left, right) =>
+      right.oldStart - (left.oldStart + left.oldLines)
+    );
+    mockExpandFromRawCode.mockImplementation((current) => [
+      { ...hunks[0], oldLines: 5 },
+      current[2],
+    ]);
+    const onExpandGap = vi.fn();
+    const { getByRole } = render(
+      <DiffView
+        oldContent={Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join("\n")}
+        newContent=""
+        globallyCollapsed={false}
+        expandedGaps={new Map([[1, 6]])}
+        onExpandGap={onExpandGap}
+      />
+    );
+
+    fireEvent.click(getByRole("button", { name: /show 25 of 36 hidden lines/i }));
+
+    expect(onExpandGap).toHaveBeenCalledWith(2, 32);
+  });
+
+  it("maps later gaps after a one-line gap auto-expands", () => {
+    const hunks = [1, 3, 42].map((oldStart) => ({
+      content: `@@ -${oldStart},1 +${oldStart},1 @@`,
+      oldStart,
+      oldLines: 1,
+      newStart: oldStart,
+      newLines: 1,
+      changes: [],
+    }));
+    mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
+    mockGetCollapsedLinesCountBetween.mockImplementation((left, right) =>
+      right.oldStart - (left.oldStart + left.oldLines)
+    );
+    mockExpandFromRawCode.mockImplementation((current, _source, start, end) =>
+      start === 2 && end === 3 ? [{ ...hunks[0], oldLines: 2 }, current[2]] : current
+    );
+    const oldContent = Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join("\n");
+    const { getByRole } = render(
+      <DiffView oldContent={oldContent} newContent={oldContent} globallyCollapsed={false} />
+    );
+
+    fireEvent.click(getByRole("button", { name: /show 25 of 39 hidden lines/i }));
+
+    expect(mockExpandFromRawCode).toHaveBeenLastCalledWith(
+      expect.any(Array), oldContent, 4, 29
+    );
   });
 
   it("shows hidden-line summaries as non-expandable when original file content is unavailable", () => {

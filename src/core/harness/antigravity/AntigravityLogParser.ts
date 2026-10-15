@@ -188,30 +188,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     // read can seed the authoritative transcript path; early-return and catch
     // paths below still poll it when the Go log has nothing new to report.
     try {
-      if (!fs.existsSync(filePath)) {
-        return await this.readNewTranscriptEvents();
-      }
-
-      const stats = fs.statSync(filePath);
-      const currentSize = stats.size;
-      if (currentSize < this.lastReadPosition) {
-        this.lastReadPosition = 0;
-      }
-      if (currentSize === this.lastReadPosition) {
-        return await this.readNewTranscriptEvents();
-      }
-
-      const buffer = Buffer.alloc(currentSize - this.lastReadPosition);
-      const fd = fs.openSync(filePath, "r");
-      try {
-        fs.readSync(fd, buffer, 0, buffer.length, this.lastReadPosition);
-      } finally {
-        fs.closeSync(fd);
-      }
-      this.lastReadPosition = currentSize;
-
+      const lines = this.readNewCompleteLines(filePath);
       const events: AntigravityLogEvent[] = [];
-      for (const rawLine of buffer.toString("utf8").split(/\r?\n/)) {
+      for (const rawLine of lines) {
         const line = rawLine.trim();
         if (!line) {
           continue;

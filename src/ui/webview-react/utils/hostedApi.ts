@@ -30,6 +30,7 @@ import type {
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
 import type { LanguageIntelligenceSessionLookupResponse } from "@root/types/HostedWorkspaceViewerTypes";
+import { WebviewLog } from "@utils/logger";
 
 export class HostedHttpError extends Error {
   constructor(
@@ -38,6 +39,49 @@ export class HostedHttpError extends Error {
   ) {
     super(message);
     this.name = "HostedHttpError";
+  }
+}
+
+/** Return a useful server error message when the response body is JSON. */
+export function hostedErrorMessage(error: unknown): string {
+  if (!(error instanceof HostedHttpError)) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  const body = error.message.replace(/^HTTP \d+:\s*/, "");
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "error" in parsed &&
+      typeof parsed.error === "string" &&
+      parsed.error.trim()
+    ) {
+      return parsed.error;
+    }
+  } catch {
+    // A non-JSON response is already represented by the raw error message.
+  }
+  return error.message;
+}
+
+/** Run a workspace-viewer git mutation with consistent error and refresh handling. */
+export async function runWorkspaceGitMutation<T>(options: {
+  action: string;
+  mutate: () => Promise<T>;
+  onSuccess?: (result: T) => void;
+  onError: (message: string) => void;
+  onRefresh: () => void;
+}): Promise<void> {
+  try {
+    const result = await options.mutate();
+    options.onSuccess?.(result);
+  } catch (error) {
+    const message = hostedErrorMessage(error);
+    WebviewLog.error(`Workspace viewer ${options.action} failed`, error);
+    options.onError(message);
+  } finally {
+    options.onRefresh();
   }
 }
 

@@ -306,10 +306,70 @@ export class McpRegistryFileManager {
     server: McpServerConfig,
     scope: SettingWriteScope
   ): Promise<void> {
+    await this.writeServer(server, scope, (next) => {
+      const existingIndex = next.findIndex((entry) =>
+        hasServerId(entry, server.id)
+      );
+      if (existingIndex >= 0) {
+        next[existingIndex] = server;
+      } else {
+        next.push(server);
+      }
+    });
+  }
+
+  async add(server: McpServerConfig, scope: SettingWriteScope): Promise<void> {
+    await this.writeServer(server, scope, (next) => {
+      if (next.some((entry) => hasServerId(entry, server.id))) {
+        throw new Error(
+          `An MCP registry server with id "${server.id}" already exists.`
+        );
+      }
+      next.push(server);
+    });
+  }
+
+  async rename(
+    previousId: string,
+    server: McpServerConfig,
+    scope: SettingWriteScope
+  ): Promise<void> {
+    await this.writeServer(server, scope, (next) => {
+      const previousIndex = next.findIndex((entry) =>
+        hasServerId(entry, previousId)
+      );
+      if (previousIndex < 0) {
+        throw new Error(
+          `MCP registry server "${previousId}" no longer exists.`
+        );
+      }
+      if (
+        next.some(
+          (entry, index) =>
+            index !== previousIndex && hasServerId(entry, server.id)
+        )
+      ) {
+        throw new Error(
+          `An MCP registry server with id "${server.id}" already exists.`
+        );
+      }
+      next[previousIndex] = server;
+    });
+  }
+
+  /**
+   * Validate `server`, apply `mutate` to the scope's entries under the file's
+   * mutation lock and write once, then approve any workspace server it adds.
+   * A throw from `mutate` leaves the registry unwritten.
+   */
+  private async writeServer(
+    server: McpServerConfig,
+    scope: SettingWriteScope,
+    mutate: (entries: unknown[]) => void
+  ): Promise<void> {
     if (!isMcpServerConfig(server)) {
       throw new Error("Invalid MCP server config.");
     }
-
     const filePath = this.getRequiredScopePath(scope);
     const requestedBefore =
       scope === SETTING_SCOPES.WORKSPACE
@@ -317,21 +377,10 @@ export class McpRegistryFileManager {
         : undefined;
     await serializeMutation(filePath, async () => {
       const next = await readRawArrayForMutation(filePath);
-      const existingIndex = next.findIndex((entry) =>
-        hasServerId(entry, server.id)
-      );
-
-      if (existingIndex >= 0) {
-        next[existingIndex] = server;
-      } else {
-        next.push(server);
-      }
-
+      mutate(next);
       await writeJsonFileAtomic(filePath, next);
     });
-    if (requestedBefore) {
-      await this.approveNewWorkspaceServers(requestedBefore);
-    }
+    if (requestedBefore) await this.approveNewWorkspaceServers(requestedBefore);
   }
 
   async remove(id: string, scope: SettingWriteScope): Promise<void> {

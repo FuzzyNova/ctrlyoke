@@ -949,6 +949,9 @@ export function toHistoryTrashedMessage(
     kind: entry.kind,
     message: `Moved ${describeTrashEntry(entry)} to Recently deleted`,
     skippedLive: entry.skippedLive,
+    trashedLineages: entry.items
+      .filter((item) => item.wholeLineage)
+      .map(({ workflowKey, workflowName }) => ({ workflowKey, workflowName })),
   };
 }
 

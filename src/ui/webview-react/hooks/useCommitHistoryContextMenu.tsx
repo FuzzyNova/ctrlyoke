@@ -5,7 +5,10 @@ import {
 } from "@components/shared/StepContextMenu";
 import { useEditorStore } from "@store/editorStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceCheckoutCommit } from "@utils/hostedApi";
+import {
+  runWorkspaceGitMutation,
+  workspaceCheckoutCommit,
+} from "@utils/hostedApi";
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { buildGitReference } from "@root/completions/ContextReferenceBuilder";
 import { PROMPT_EDITOR_INSERT_MODES, MESSAGE_TYPES } from "@/types/messages";
@@ -16,10 +19,13 @@ import { sendMessage } from "@hooks/useMessageHandler";
 
 interface UseCommitHistoryContextMenuOptions {
   onRefresh: () => void;
+  /** Reports a failed checkout's message, or `null` when a new one starts. */
+  onCheckoutError: (message: string | null) => void;
 }
 
 export function useCommitHistoryContextMenu({
   onRefresh,
+  onCheckoutError,
 }: UseCommitHistoryContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
@@ -53,27 +59,27 @@ export function useCommitHistoryContextMenu({
     async (commit: WorkspaceCommitLogEntry) => {
       const store = useWorkspaceViewerStore.getState();
       const branchBeforeCheckout = store.currentBranch;
-      try {
-        await workspaceCheckoutCommit({
-          hash: commit.hash,
-          repo: store.selectedRepoId ?? undefined,
-        });
-        if (branchBeforeCheckout) {
-          store.setPreviousBranch(branchBeforeCheckout);
-        }
-        // Optimistically mark detached so the immediate refresh below passes the
-        // branch hint (detachedBranchHint requires `detached` to be true). The
-        // store's `detached` flag otherwise only flips once the refreshed
-        // response lands, which would be too late for this first request and
-        // would hide the commits ahead of the checked-out point until a manual
-        // refresh.
-        store.setDetached(true);
-        onRefresh();
-      } catch {
-        // errors surfaced via refresh
-      }
+      onCheckoutError(null);
+      await runWorkspaceGitMutation({
+        action: "commit checkout",
+        mutate: () =>
+          workspaceCheckoutCommit({
+            hash: commit.hash,
+            repo: store.selectedRepoId ?? undefined,
+          }),
+        onSuccess: () => {
+          if (branchBeforeCheckout) {
+            store.setPreviousBranch(branchBeforeCheckout);
+          }
+          // The refresh query needs detached state to include commits ahead of
+          // the checked-out point.
+          store.setDetached(true);
+        },
+        onError: onCheckoutError,
+        onRefresh,
+      });
     },
-    [onRefresh]
+    [onCheckoutError, onRefresh]
   );
 
   const openContextMenu = useCallback(

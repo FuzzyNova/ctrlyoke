@@ -2,7 +2,11 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/orchestration/ExecutionRootLeaseManager.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
+
+## Decision
+
+Atomic replacement is safe because lease acquisition holds the per-execution-root arbitration lock, and each lease uses a generated owner token for its filename. This retains serialized conflict checks without exposing a partially written file.
 
 ## Symptom
 

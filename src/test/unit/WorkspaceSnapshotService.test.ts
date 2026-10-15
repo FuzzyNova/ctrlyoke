@@ -107,6 +107,63 @@ suite("WorkspaceSnapshotService", function () {
     assert.strictEqual(changes[0]?.contentToRestore, "base\n");
   });
 
+  test("scopes a single-root git snapshot to a workspace below the repo root", async () => {
+    const packageRoot = path.join(workspaceRoot, "packages", "foo");
+    await fs.mkdir(packageRoot, { recursive: true });
+    await fs.writeFile(path.join(packageRoot, "modified.txt"), "base\n");
+    await fs.writeFile(path.join(packageRoot, "deleted.txt"), "restore me\n");
+    await fs.writeFile(path.join(workspaceRoot, "outside.txt"), "outside base\n");
+    runGit(["add", "packages/foo/modified.txt", "packages/foo/deleted.txt", "outside.txt"]);
+    runGit(["commit", "-m", "Add package files"]);
+
+    const before = await snapshotService.captureWorkspaceState(
+      packageRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    await fs.writeFile(path.join(packageRoot, "modified.txt"), "changed\n");
+    await fs.rm(path.join(packageRoot, "deleted.txt"));
+    await fs.writeFile(path.join(workspaceRoot, "outside.txt"), "outside changed\n");
+
+    const after = await snapshotService.captureWorkspaceState(
+      packageRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      packageRoot
+    );
+    assert.deepStrictEqual(
+      changes.map(({ path: filePath, changeType }) => ({ filePath, changeType }))
+        .sort((a, b) => a.filePath.localeCompare(b.filePath)),
+      [
+        { filePath: "deleted.txt", changeType: "deleted" },
+        { filePath: "modified.txt", changeType: "modified" },
+      ]
+    );
+    const deleted = changes.find((change) => change.path === "deleted.txt");
+    assert.strictEqual(deleted?.contentToRestore, "restore me\n");
+
+    const undo = await snapshotService.undoFiles(
+      [
+        {
+          path: "deleted.txt",
+          action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+          contentToRestore: deleted?.contentToRestore,
+        },
+      ],
+      packageRoot
+    );
+    assert.deepStrictEqual(undo.restoredFiles, ["deleted.txt"]);
+    assert.strictEqual(
+      await fs.readFile(path.join(packageRoot, "deleted.txt"), "utf8"),
+      "restore me\n"
+    );
+    await assert.rejects(() =>
+      fs.access(path.join(packageRoot, "packages", "foo", "deleted.txt"))
+    );
+  });
+
   test("captures files inside a newly created untracked directory", async () => {
     const before = await snapshotService.captureWorkspaceState(
       workspaceRoot,

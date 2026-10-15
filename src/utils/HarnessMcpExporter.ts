@@ -1,5 +1,3 @@
-import * as fs from "fs";
-import * as path from "path";
 import { modify, applyEdits, parse } from "jsonc-parser";
 import type {
   AnyTargetId,
@@ -30,6 +28,12 @@ import {
   getVscodeWorkspaceMcpConfigPath,
 } from "./McpConfigPaths";
 import { detectFormattingOptions } from "./WorkflowSourceEditor";
+import { readFileForEdit, writeTextFileAtomic } from "./AtomicFileUtils";
+import {
+  findTomlTableHeaderLines,
+  getTomlMcpServerSectionId,
+  parseTomlTableHeader,
+} from "./McpDiscoveryUtils";
 
 type JsonObject = Record<string, unknown>;
 
@@ -46,37 +50,6 @@ export interface HarnessMcpDeleteResult {
 
 function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-async function readTextForEdit(filePath: string): Promise<string> {
-  try {
-    return await fs.promises.readFile(filePath, "utf-8");
-  } catch {
-    return "{}";
-  }
-}
-
-async function readTextFile(filePath: string): Promise<string> {
-  try {
-    return await fs.promises.readFile(filePath, "utf-8");
-  } catch {
-    return "";
-  }
-}
-
-async function writeTextFileAtomic(
-  filePath: string,
-  text: string
-): Promise<void> {
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.${process.pid}.tmp`;
-  try {
-    await fs.promises.writeFile(tempPath, text, "utf-8");
-    await fs.promises.rename(tempPath, filePath);
-  } catch (error) {
-    await fs.promises.unlink(tempPath).catch(() => undefined);
-    throw error;
-  }
 }
 
 function toVsCodeEntry(server: McpServerConfig): JsonObject | null {
@@ -298,30 +271,9 @@ function toCodexBlock(server: McpServerConfig): string | null {
   return lines.join("\n");
 }
 
-function parseTomlTargetSectionId(headerLine: string): string | null {
-  const trimmed = headerLine.trim();
-  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
-    return null;
-  }
-
-  const sectionName = trimmed.slice(1, -1).trim();
-  if (!sectionName.startsWith("mcp_servers.")) {
-    return null;
-  }
-
-  const remainder = sectionName.slice("mcp_servers.".length).trim();
-  if (!remainder) {
-    return null;
-  }
-
-  if (
-    (remainder.startsWith(`"`) && remainder.endsWith(`"`)) ||
-    (remainder.startsWith(`'`) && remainder.endsWith(`'`))
-  ) {
-    return remainder.slice(1, -1).replace(/\\"/g, `"`).replace(/\\\\/g, "\\");
-  }
-
-  return remainder;
+function tomlServerIdAtLine(line: string): string | null {
+  const sectionName = parseTomlTableHeader(line);
+  return sectionName ? getTomlMcpServerSectionId(sectionName) : null;
 }
 
 async function writeJsonServerMap(
@@ -330,7 +282,7 @@ async function writeJsonServerMap(
   servers: McpServerConfig[],
   mapper: (server: McpServerConfig) => JsonObject | null
 ): Promise<HarnessMcpExportResult> {
-  let text = await readTextForEdit(filePath);
+  let text = await readFileForEdit(filePath, "{}");
   const formattingOptions = detectFormattingOptions(text);
   const skippedIds: string[] = [];
   let exportedCount = 0;
@@ -355,7 +307,7 @@ async function removeJsonServerMapEntries(
   key: string,
   ids: string[]
 ): Promise<HarnessMcpDeleteResult> {
-  let text = await readTextForEdit(filePath);
+  let text = await readFileForEdit(filePath, "{}");
   const formattingOptions = detectFormattingOptions(text);
   const parsed = parse(text) as Record<string, unknown>;
   const existingSection = isPlainObject(parsed[key])
@@ -380,7 +332,7 @@ async function writeCodexTomlFile(
   filePath: string,
   servers: McpServerConfig[]
 ): Promise<HarnessMcpExportResult> {
-  const existingText = await readTextFile(filePath);
+  const existingText = await readFileForEdit(filePath, "");
   const blocks = new Map<string, string>();
   const skippedIds: string[] = [];
 
@@ -395,13 +347,7 @@ async function writeCodexTomlFile(
 
   const targetIds = new Set(blocks.keys());
   const lines = existingText.split(/\r?\n/);
-  const sectionStartIndices: number[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index]!.trim();
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      sectionStartIndices.push(index);
-    }
-  }
+  const sectionStartIndices = findTomlTableHeaderLines(lines);
 
   const keptSegments: string[] = [];
   let cursor = 0;
@@ -418,7 +364,7 @@ async function writeCodexTomlFile(
     }
 
     const blockLines = lines.slice(start, end);
-    const blockId = parseTomlTargetSectionId(blockLines[0] ?? "");
+    const blockId = tomlServerIdAtLine(blockLines[0] ?? "");
     if (!(blockId && targetIds.has(blockId))) {
       keptSegments.push(blockLines.join("\n"));
     }
@@ -438,8 +384,7 @@ async function writeCodexTomlFile(
     nextText += "\n";
   }
 
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(filePath, nextText, "utf-8");
+  await writeTextFileAtomic(filePath, nextText);
 
   return {
     filePath,
@@ -452,16 +397,10 @@ async function removeCodexTomlServers(
   filePath: string,
   ids: string[]
 ): Promise<HarnessMcpDeleteResult> {
-  const existingText = await readTextFile(filePath);
+  const existingText = await readFileForEdit(filePath, "");
   const targetIds = new Set(ids);
   const lines = existingText.split(/\r?\n/);
-  const sectionStartIndices: number[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index]!.trim();
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      sectionStartIndices.push(index);
-    }
-  }
+  const sectionStartIndices = findTomlTableHeaderLines(lines);
 
   const keptSegments: string[] = [];
   let cursor = 0;
@@ -479,7 +418,7 @@ async function removeCodexTomlServers(
     }
 
     const blockLines = lines.slice(start, end);
-    const blockId = parseTomlTargetSectionId(blockLines[0] ?? "");
+    const blockId = tomlServerIdAtLine(blockLines[0] ?? "");
     if (blockId && targetIds.has(blockId)) {
       removedCount += 1;
     } else {
@@ -494,11 +433,9 @@ async function removeCodexTomlServers(
   }
 
   const nextText = keptSegments.join("\n").trimEnd();
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(
+  await writeTextFileAtomic(
     filePath,
-    nextText.length > 0 ? `${nextText}\n` : "",
-    "utf-8"
+    nextText.length > 0 ? `${nextText}\n` : ""
   );
 
   return { filePath, removedCount };

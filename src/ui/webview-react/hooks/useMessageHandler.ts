@@ -43,6 +43,7 @@ import {
   type UndoRecordUpdatedMessage,
   type HistorySearchResult,
 } from "../types/messages";
+import { HISTORY_TRASH_ACTIONS } from "@root/types/DashboardConstants";
 import type {
   OrderedCliHistoryEntry,
   OrderedStatusHistoryEntry,
@@ -767,6 +768,24 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.HISTORY_TRASHED] = (message) => {
     if (typeof message.entryId !== "string") return;
+    const uiState = useUiStore.getState();
+    const displayedWorkflowKey = uiState.displayedViewAddress?.workflowKey;
+    const trashedDisplayed = Array.isArray(message.trashedLineages)
+      ? message.trashedLineages.find(
+          (lineage: { workflowKey?: unknown }) =>
+            lineage.workflowKey === displayedWorkflowKey
+        )
+      : undefined;
+    if (displayedWorkflowKey && trashedDisplayed) {
+      uiState.setViewingDeletedWorkflow({
+        workflowKey: displayedWorkflowKey,
+        workflowName:
+          typeof trashedDisplayed.workflowName === "string" &&
+          trashedDisplayed.workflowName
+            ? trashedDisplayed.workflowName
+            : displayedWorkflowKey,
+      });
+    }
     const entryId = message.entryId;
     // Keep an on-screen Recently deleted summary current.
     if (useHistoryTrashStore.getState().listing) {
@@ -804,6 +823,17 @@ export function createMessageHandlers(
   };
 
   handlers[MESSAGE_TYPES.HISTORY_TRASH_RESULT] = (message) => {
+    const displayedWorkflowKey =
+      useUiStore.getState().displayedViewAddress?.workflowKey;
+    if (
+      message.action === HISTORY_TRASH_ACTIONS.RESTORE &&
+      message.ok === true &&
+      displayedWorkflowKey &&
+      Array.isArray(message.workflowKeys) &&
+      message.workflowKeys.includes(displayedWorkflowKey)
+    ) {
+      useUiStore.getState().setViewingDeletedWorkflow(null);
+    }
     if (typeof message.entryId === "string") {
       useHistoryTrashStore.getState().clearEntryPending(message.entryId);
     }
@@ -1987,6 +2017,7 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_CREATED] = (message) => {
     const uiStore = useUiStore.getState();
+    uiStore.setCreateWorkflowPending(false);
     // Only close the modal on success; errors are shown by the extension via showErrorMessage
     if (!message.error) {
       uiStore.closeNewWorkflowModal();
@@ -2155,6 +2186,7 @@ export function createMessageHandlers(
     useMcpManagerStore
       .getState()
       .setRemoteSearchResult(
+        message.requestId,
         message.servers ?? [],
         message.error,
         message.nextCursor
@@ -2462,11 +2494,6 @@ export function createMessageHandlers(
       isSystemGenerated,
     } = message;
     if (!address) return;
-    if (typeof definitionRevision === "number") {
-      useExecutionPreviewStore
-        .getState()
-        .observeDefinitionRevision(address, definitionRevision);
-    }
     const ui = useUiStore.getState();
     // A run view switch that is still in flight owns the address, so identity
     // for a *different* address would re-point the client at the run it is
@@ -2480,6 +2507,11 @@ export function createMessageHandlers(
       !areWorkflowAddressesEqual(address, ui.displayedViewAddress)
     ) {
       return;
+    }
+    if (typeof definitionRevision === "number") {
+      useExecutionPreviewStore
+        .getState()
+        .observeDefinitionRevision(address, definitionRevision, true);
     }
     ui.setDisplayedViewIdentity(
       address,
@@ -2596,9 +2628,6 @@ export function createMessageHandlers(
     } = message;
     if (!address || !workingFile) return;
     const incomingDefinitionRevision = workingFile.definitionRevision ?? 1;
-    useExecutionPreviewStore
-      .getState()
-      .observeDefinitionRevision(address, incomingDefinitionRevision);
     // A late response from a previous selector click must not overwrite the
     // most recently requested address.
     const uiStore = useUiStore.getState();
@@ -2674,6 +2703,9 @@ export function createMessageHandlers(
       }
       return;
     }
+    useExecutionPreviewStore
+      .getState()
+      .observeDefinitionRevision(address, incomingDefinitionRevision, true);
     const openSaveDialog = useUiStore.getState().saveWorkflowDialogData;
     if (
       openSaveDialog &&

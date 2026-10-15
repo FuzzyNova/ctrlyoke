@@ -25,6 +25,7 @@ class FakeWindowsCredentialVault {
   readonly credentials = new Map<string, string>();
   commandCount = 0;
   failWriteFor: string | undefined;
+  failReadFor: { target: string; exitCode: number } | undefined;
 
   run = (
     command: string,
@@ -45,6 +46,13 @@ class FakeWindowsCredentialVault {
     );
 
     if (operation === "get") {
+      if (target === this.failReadFor?.target) {
+        return result(
+          this.failReadFor.exitCode,
+          "",
+          "CredRead failed with Win32 error 5."
+        );
+      }
       const value = this.credentials.get(target);
       return value === undefined
         ? result(44)
@@ -346,6 +354,57 @@ suite("OsCredentialStore", () => {
       "ctrlyoke.pro.license-file",
       "ctrlyoke.pro.license-key",
     ]);
+  });
+
+  for (const exitCode of [45, 1]) {
+    test(`rejects a chunk-count read failure with exit ${exitCode}`, async () => {
+      const { store, vault } = createWindowsStore();
+      const key = "ctrlyoke.pro.license-file";
+      vault.credentials.set(
+        `ctrlyoke.${key}`,
+        "x".repeat(WINDOWS_CHUNK_LENGTH)
+      );
+      vault.failReadFor = { target: `ctrlyoke.${key}#count`, exitCode };
+
+      await assert.rejects(
+        store.get(key),
+        /CredMan credential-store command failed/
+      );
+    });
+
+    test(`rejects an index read failure with exit ${exitCode} without changing the index`, async () => {
+      const { store, vault } = createWindowsStore();
+      const indexTarget = "ctrlyoke.ctrlyoke.secret.index";
+      vault.credentials.set(indexTarget, '["existing"]');
+      vault.failReadFor = { target: indexTarget, exitCode };
+      const originalIndex = vault.credentials.get(indexTarget);
+
+      await assert.rejects(
+        store.keys(),
+        /CredMan credential-store command failed/
+      );
+      await assert.rejects(
+        store.store("other", "y"),
+        /CredMan credential-store command failed/
+      );
+      assert.strictEqual(vault.credentials.get(indexTarget), originalIndex);
+    });
+  }
+
+  test("rejects a corrupt index instead of replacing it during store", async () => {
+    const { store, vault } = createWindowsStore();
+    const indexTarget = "ctrlyoke.ctrlyoke.secret.index";
+    vault.credentials.set(indexTarget, "not-json");
+
+    await assert.rejects(
+      store.keys(),
+      /Could not read credential-store key index/
+    );
+    await assert.rejects(
+      store.store("other", "y"),
+      /Could not read credential-store key index/
+    );
+    assert.strictEqual(vault.credentials.get(indexTarget), "not-json");
   });
 
   test("fails with env-passthrough guidance when no OS backend exists", async () => {

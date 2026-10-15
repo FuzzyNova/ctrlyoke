@@ -448,6 +448,14 @@ export const ConfigurationUtils = {
       : CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeoutSec;
   },
 
+  /** Get the finite regex evaluation deadline in seconds. */
+  getRegexTimeoutSeconds(): number {
+    const timeoutSec = configService.get(CONFIG_KEYS.EXECUTION).regexTimeoutSec;
+    return Number.isFinite(timeoutSec) && timeoutSec > 0
+      ? timeoutSec
+      : CTRLYOKE_SETTINGS_DEFAULTS.execution.regexTimeoutSec;
+  },
+
   /**
    * Get the default end condition for new workflows (null/undefined = disabled)
    */

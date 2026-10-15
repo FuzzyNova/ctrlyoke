@@ -38,7 +38,8 @@ interface ExecutionPreviewActions {
   resolve: (message: ExecutionPreviewResultMessage) => void;
   observeDefinitionRevision: (
     address: WorkflowViewAddress,
-    definitionRevision: number
+    definitionRevision: number,
+    authoritative?: boolean
   ) => void;
   close: () => void;
   reset: () => void;
@@ -105,6 +106,9 @@ export const useExecutionPreviewStore = create<
       return;
     }
     const key = workflowViewAddressKey(message.address);
+    // A push that overtook this response may already have moved the head
+    // past the previewed revision. Only authoritative view pushes lower it
+    // (a discarded continuation restores an older revision).
     const currentHead = Math.max(
       state.definitionRevisionHeads[key] ?? message.displayedDefinitionRevision,
       message.displayedDefinitionRevision
@@ -122,13 +126,19 @@ export const useExecutionPreviewStore = create<
     });
   },
 
-  observeDefinitionRevision: (address, definitionRevision) =>
+  observeDefinitionRevision: (
+    address,
+    definitionRevision,
+    authoritative = false
+  ) =>
     set((state) => {
       const key = workflowViewAddressKey(address);
-      const head = Math.max(
-        state.definitionRevisionHeads[key] ?? definitionRevision,
-        definitionRevision
-      );
+      const head = authoritative
+        ? definitionRevision
+        : Math.max(
+            state.definitionRevisionHeads[key] ?? definitionRevision,
+            definitionRevision
+          );
       const isPlanAddress =
         state.displayedAddress !== null &&
         workflowViewAddressKey(state.displayedAddress) === key;

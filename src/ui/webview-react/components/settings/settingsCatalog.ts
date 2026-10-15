@@ -346,6 +346,12 @@ const STATIC_SETTINGS_CATALOG = {
     tab: GLOBAL_SETTINGS_TABS.EXECUTION,
     label: "Script timeout (seconds)",
   },
+  "execution.regexTimeoutSec": {
+    id: "execution.regexTimeoutSec",
+    path: "execution.regexTimeoutSec",
+    tab: GLOBAL_SETTINGS_TABS.EXECUTION,
+    label: "Regex timeout (seconds)",
+  },
   "execution.closeTerminalOnComplete": {
     id: "execution.closeTerminalOnComplete",
     path: "execution.closeTerminalOnComplete",

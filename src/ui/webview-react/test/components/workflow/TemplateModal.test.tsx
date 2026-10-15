@@ -16,6 +16,7 @@ import {
   TEMPLATE_VARIABLE_DEFAULT_SOURCES,
 } from "@root/types/DashboardConstants";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { createMessageHandlers } from "@hooks/useMessageHandler";
 
 const postMessage = vi.fn();
 
@@ -402,6 +403,50 @@ describe("TemplateModal variable defaults", () => {
     });
     expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Create & Run" })).toBeEnabled();
+  });
+
+  it("posts only one create request when Create & Run is double-clicked", () => {
+    openModal(template([]));
+    fireEvent.change(screen.getByRole("textbox", { name: "Workflow Name" }), {
+      target: { value: "new-workflow" },
+    });
+    const button = screen.getByRole("button", { name: "Create & Run" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(
+      postMessage.mock.calls.filter(
+        ([message]) => message.type === MESSAGE_TYPES.CREATE_WORKFLOW
+      )
+    ).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Creating…" })).toHaveLength(
+      2
+    );
+  });
+
+  it("ignores repeated Ctrl+Enter and allows retry after an error reply", () => {
+    openModal(template([]));
+    const name = screen.getByRole("textbox", { name: "Workflow Name" });
+    fireEvent.change(name, { target: { value: "new-workflow" } });
+    fireEvent.keyDown(name, { key: "Enter", ctrlKey: true, repeat: false });
+    fireEvent.keyDown(name, { key: "Enter", ctrlKey: true, repeat: true });
+    expect(
+      postMessage.mock.calls.filter(
+        ([message]) => message.type === MESSAGE_TYPES.CREATE_WORKFLOW
+      )
+    ).toHaveLength(1);
+
+    act(() => {
+      createMessageHandlers()[MESSAGE_TYPES.WORKFLOW_CREATED]({
+        error: "failed",
+      });
+    });
+    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(
+      postMessage.mock.calls.filter(
+        ([message]) => message.type === MESSAGE_TYPES.CREATE_WORKFLOW
+      )
+    ).toHaveLength(2);
   });
 
   it("marks required fields and satisfies a required default immediately", () => {

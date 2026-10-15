@@ -2738,7 +2738,7 @@ export class WorkflowExecutor {
         );
         return {
           ...comparison,
-          errored: ptyTimedOut,
+          errored: ptyTimedOut || comparison.errored === true,
           stdout: comparison.stdout,
           stderr: comparison.stderr,
           result: comparison.result,

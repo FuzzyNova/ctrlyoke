@@ -5718,6 +5718,9 @@ describe("Recently deleted messages", () => {
         kind: HISTORY_TRASH_ENTRY_KINDS.ALL,
         message: "Moved 3 workflows (5 runs) to Recently deleted",
         skippedLive: ["live-key"],
+        trashedLineages: [
+          { workflowKey: "wf-trashed", workflowName: "Trashed" },
+        ],
       });
     });
 
@@ -5732,6 +5735,98 @@ describe("Recently deleted messages", () => {
       entryId: "entry-1",
     });
     postMessage.mockRestore();
+  });
+
+  it("locks only the displayed lineage after it is confirmed trashed", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-viewed" as never,
+        kind: "draft",
+      },
+      recentWorkflows: [],
+    });
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.HISTORY_TRASHED]({
+        type: MESSAGE_TYPES.HISTORY_TRASHED,
+        entryId: "entry-1",
+        kind: HISTORY_TRASH_ENTRY_KINDS.LINEAGE,
+        message: "Moved workflow to Recently deleted",
+        skippedLive: [],
+        trashedLineages: [
+          { workflowKey: "wf-viewed", workflowName: "Viewed workflow" },
+        ],
+      });
+    });
+    expect(useUiStore.getState().viewingDeletedWorkflow).toEqual({
+      workflowKey: "wf-viewed",
+      workflowName: "Viewed workflow",
+    });
+  });
+
+  it("does not lock the displayed lineage when only some of its runs were trashed", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-viewed" as never,
+        kind: "draft",
+      },
+      viewingDeletedWorkflow: null,
+    });
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.HISTORY_TRASHED]({
+        type: MESSAGE_TYPES.HISTORY_TRASHED,
+        entryId: "entry-1",
+        kind: HISTORY_TRASH_ENTRY_KINDS.RUN,
+        message: "Moved run #3 to Recently deleted",
+        skippedLive: [],
+        trashedLineages: [],
+      });
+    });
+    expect(useUiStore.getState().viewingDeletedWorkflow).toBeNull();
+  });
+
+  it("unlocks the displayed lineage after a successful restore", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-viewed" as never,
+        kind: "draft",
+      },
+      viewingDeletedWorkflow: {
+        workflowKey: "wf-viewed" as never,
+        workflowName: "Viewed workflow",
+      },
+    });
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.HISTORY_TRASH_RESULT]({
+        type: MESSAGE_TYPES.HISTORY_TRASH_RESULT,
+        action: "restore",
+        entryId: "entry-1",
+        ok: true,
+        message: "Restored workflow",
+        workflowKeys: ["wf-viewed"],
+      });
+    });
+    expect(useUiStore.getState().viewingDeletedWorkflow).toBeNull();
+  });
+
+  it("does not lock the displayed lineage when trash confirmation omits its key", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-viewed" as never,
+        kind: "draft",
+      },
+      viewingDeletedWorkflow: null,
+    });
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.HISTORY_TRASHED]({
+        type: MESSAGE_TYPES.HISTORY_TRASHED,
+        entryId: "entry-1",
+        kind: HISTORY_TRASH_ENTRY_KINDS.ALL,
+        message: "Other workflows moved to Recently deleted",
+        skippedLive: ["wf-viewed"],
+        trashedLineages: [{ workflowKey: "wf-other", workflowName: "Other" }],
+      });
+    });
+    expect(useUiStore.getState().viewingDeletedWorkflow).toBeNull();
   });
 
   it("HISTORY_TRASH_RESULT clears the entry's pending state and reports the outcome", () => {

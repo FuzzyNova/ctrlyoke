@@ -13,6 +13,7 @@ export function useLocalValue<T>(
 ) {
   const [value, setValue] = useState(externalValue);
   const editing = useRef(false);
+  const dirty = useRef(false);
   const externalValueRef = useRef(externalValue);
 
   useEffect(() => {
@@ -26,21 +27,23 @@ export function useLocalValue<T>(
     value,
     onChange: (next: T) => {
       editing.current = true;
+      dirty.current = true;
       setValue(next);
     },
-    onFocus: () => {
-      editing.current = true;
-    },
+    onFocus: () => undefined,
     onBlur: () => {
       editing.current = false;
-      onCommit(value);
-      const normalizedValue = getNormalizedValue?.(value);
-      setValue(
-        normalizedValue !== undefined &&
-          Object.is(normalizedValue, externalValueRef.current)
-          ? externalValueRef.current
-          : value
-      );
+      if (dirty.current) {
+        onCommit(value);
+        const normalizedValue = getNormalizedValue?.(value);
+        setValue(
+          normalizedValue !== undefined &&
+            Object.is(normalizedValue, externalValueRef.current)
+            ? externalValueRef.current
+            : value
+        );
+      }
+      dirty.current = false;
     },
   };
 }

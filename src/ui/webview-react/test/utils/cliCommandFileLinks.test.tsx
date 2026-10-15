@@ -56,9 +56,44 @@ describe("findCliFileReferenceRanges", () => {
       "C:\\Users\\natha\\AppData\\Roaming\\npm\\node_modules\\codex\\bin\\codex.js"
     );
   });
+
+  it("matches POSIX absolute paths without treating URL paths as files", () => {
+    const text =
+      "@/Users/me/repo/src/foo.ts /home/u/repo/.ctrlyoke/temp/x.md https://x/y.md";
+    const ranges = findCliFileReferenceRanges(text);
+
+    expect(ranges.map((range) => text.slice(range.start, range.end))).toEqual([
+      "@/Users/me/repo/src/foo.ts",
+      "/home/u/repo/.ctrlyoke/temp/x.md",
+    ]);
+    expect(ranges.map((range) => range.openPath)).toEqual([
+      "/Users/me/repo/src/foo.ts",
+      "/home/u/repo/.ctrlyoke/temp/x.md",
+    ]);
+  });
+
+  it("does not link a home-relative path as a root-absolute one", () => {
+    expect(findCliFileReferenceRanges("cat ~/notes/plan.md")).toEqual([]);
+  });
 });
 
 describe("renderCommandTextWithFileLinks", () => {
+  it("opens POSIX absolute references unchanged when a working directory is present", () => {
+    const text = "@/Users/me/repo/src/foo.ts /home/u/repo/.ctrlyoke/temp/x.md";
+    render(
+      <div>
+        {renderCommandTextWithFileLinks(text, [], "/workspace/project")}
+      </div>
+    );
+
+    const links = screen.getAllByRole("button");
+    links[0].click();
+    links[1].click();
+
+    expect(openFile).toHaveBeenCalledWith("/Users/me/repo/src/foo.ts");
+    expect(openFile).toHaveBeenCalledWith("/home/u/repo/.ctrlyoke/temp/x.md");
+  });
+
   it("renders a relative reference as a link resolved against the working directory, preserving raw text", () => {
     const text =
       "using these attachment excerpts .ctrlyoke\\\\temp\\\\1786938810-plan-4.excerpts.md, follow";

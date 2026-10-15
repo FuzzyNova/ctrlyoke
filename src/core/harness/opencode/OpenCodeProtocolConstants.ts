@@ -51,6 +51,19 @@ export const OPENCODE_CLI_FLAGS = {
   PROMPT: "--prompt",
 } as const;
 
+/** OpenCode config filenames, in the load order used for each config directory. */
+export const OPENCODE_CONFIG_FILENAMES = [
+  "config.json",
+  "opencode.json",
+  "opencode.jsonc",
+] as const;
+
+/** Config filenames OpenCode loads from project and custom config directories. */
+export const OPENCODE_PROJECT_CONFIG_FILENAMES = [
+  "opencode.json",
+  "opencode.jsonc",
+] as const;
+
 /**
  * How a resumed interactive launch (`--session`) hands its prompt to OpenCode.
  *

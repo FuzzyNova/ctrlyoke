@@ -9,7 +9,11 @@ import {
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
 } from "../../types/DashboardConstants";
-import { safeDiscoverLocalMcpServers } from "../../utils/McpDiscoveryUtils";
+import {
+  findTomlTableHeaderLines,
+  getTomlMcpServerSectionId,
+  safeDiscoverLocalMcpServers,
+} from "../../utils/McpDiscoveryUtils";
 
 const REMOTE_SERVER_ID = "remote";
 
@@ -340,5 +344,65 @@ args = ["C:\\new\\server.js"]
 
     assert.strictEqual(entry?.command, "npx");
     assert.deepStrictEqual(entry?.args, ["-y", "server-github"]);
+  });
+
+  test("maps every Codex server header shape to its owning server id", () => {
+    const cases: Array<[string, string | null]> = [
+      ["mcp_servers.foo", "foo"],
+      ["mcp_servers.foo.env", "foo"],
+      ["mcp_servers.foo.http_headers", "foo"],
+      ["mcp_servers.foo.tools.search", "foo"],
+      ['mcp_servers."foo.bar".env', "foo.bar"],
+      ["mcp_servers.'lit'.tools", "lit"],
+      ["mcp_servers . foo . env", "foo"],
+      ['"mcp_servers".foo', "foo"],
+      ["mcp_servers", null],
+      ["profiles.foo", null],
+      ['mcp_servers."unterminated', null],
+    ];
+    for (const [header, expected] of cases) {
+      assert.strictEqual(getTomlMcpServerSectionId(header), expected, header);
+    }
+  });
+
+  test("finds only real TOML headers, not lookalikes inside strings or arrays", () => {
+    const lines = [
+      "[a] # comment",
+      "x = [",
+      '  ["not-a-header"],',
+      "]",
+      "[[b]]",
+      'y = """',
+      "[not.a.header]",
+      '"""',
+      "[c]",
+    ];
+    assert.deepStrictEqual(findTomlTableHeaderLines(lines), [0, 4, 8]);
+  });
+
+  test("discovers a Codex server whose tools subtable follows its env table", async () => {
+    const configPath = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.writeFile(
+      configPath,
+      [
+        "[mcp_servers.foo] # local",
+        'command = "node"',
+        "[mcp_servers.foo.env]",
+        'TOKEN = "t"',
+        "[mcp_servers.foo.tools.search]",
+        'command = "ignored"',
+      ].join("\n"),
+      "utf8"
+    );
+    const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+    const foo = result.servers.find(
+      (server) =>
+        server.id === "foo" &&
+        server.source ===
+          getMcpLocalSource(HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.WORKSPACE)
+    );
+    assert.ok(foo, JSON.stringify(result.servers));
+    assert.strictEqual(foo.command, "node");
+    assert.deepStrictEqual(foo.env, { TOKEN: "t" });
   });
 });
