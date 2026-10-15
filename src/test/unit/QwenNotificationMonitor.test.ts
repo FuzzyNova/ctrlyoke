@@ -4,6 +4,7 @@ import {
   isCtrlYokeQwenHookGroup,
   QwenNotificationMonitor,
 } from "../../core/harness/qwen/QwenNotificationMonitor";
+import type { UserHookConfig } from "../../types/CtrlYokeTypes";
 
 suite("QwenNotificationMonitor", () => {
   test("identifies only command groups running the Qwen hook script basename", () => {
@@ -70,5 +71,46 @@ suite("QwenNotificationMonitor", () => {
     const command = JSON.stringify(hooks.Notification);
     assert.ok(command.includes("script.js"));
     assert.ok(command.includes(`--ctrlyoke-owner-pid=${process.pid}`));
+  });
+
+  test("passes the decision hook only to PermissionRequest and never an empty argument", () => {
+    const commandFor = (
+      hooks: Record<string, unknown[]>,
+      event: string
+    ): string =>
+      (hooks[event][0] as { hooks: Array<{ command: string }> }).hooks[0]
+        .command;
+    const buildHooks = (userHooks: UserHookConfig[]) =>
+      (
+        new QwenNotificationMonitor().buildHookConfig(
+          "script.js",
+          "notify-dir",
+          "workspace",
+          userHooks,
+          ["stop", "permissionRequest"]
+        ) as { config: { hooks: Record<string, unknown[]> } }
+      ).config.hooks;
+
+    const withoutDecision = buildHooks([]);
+    for (const event of ["Stop", "PermissionRequest"]) {
+      const command = commandFor(withoutDecision, event);
+      assert.strictEqual(
+        command,
+        `node script.js notify-dir --ctrlyoke-owner-pid=${process.pid}`
+      );
+    }
+
+    const withDecision = buildHooks([
+      { event: "permissionRequest", command: "node decide.js" },
+    ]);
+    assert.strictEqual(
+      commandFor(withDecision, "Stop"),
+      `node script.js notify-dir --ctrlyoke-owner-pid=${process.pid}`
+    );
+    const permissionCommand = commandFor(withDecision, "PermissionRequest");
+    assert.match(
+      permissionCommand,
+      new RegExp(`--ctrlyoke-owner-pid=${process.pid} \\S+$`)
+    );
   });
 });

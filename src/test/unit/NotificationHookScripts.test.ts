@@ -362,7 +362,8 @@ suite("notification hook scripts", () => {
       },
       {
         harness: "qwen" as const,
-        hookArgs: [encodedDecisionHook],
+        // Production order: the owner marker precedes the decision hook.
+        hookArgs: ["--ctrlyoke-owner-pid=1", encodedDecisionHook],
         payload: {
           hook_event_name: "PermissionRequest",
           session_id: "qwen-permission",

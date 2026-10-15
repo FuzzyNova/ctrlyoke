@@ -54,3 +54,13 @@ Review confirmed that active Qwen hook groups survive registrations from other
 ctrlyoke processes, while groups from dead marked owners and legacy commands
 whose installed script is gone can be removed. The temp `.qwen/.gitignore`
 cleanup remains tied to a baseline containing only discarded groups.
+
+## Follow-up (final review)
+
+The owner-marker change briefly put the decision hook in a fixed argv slot with
+an empty-string placeholder. Qwen hook commands are unquoted, so the empty
+argument vanished and the hook script read `--ctrlyoke-owner-pid=N` as the
+base64 decision hook on every PermissionRequest without a user hook. The script
+now strips the owner marker before reading positional args, the decision hook is
+again appended only to the PermissionRequest command, and liveness uses the
+shared `isProcessAlive` from `LockSafetyPrimitives`.

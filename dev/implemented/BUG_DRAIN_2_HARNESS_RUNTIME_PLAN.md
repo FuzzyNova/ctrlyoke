@@ -1,7 +1,7 @@
 # Bug Drain 2: Harness Runtime
 
 **Created:** October 14, 2026
-**Status:** Proposed. Plan 2 of 4 in the parallel bug drain.
+**Status:** Implemented (2026-10-15). Plan 2 of 4 in the parallel bug drain.
 **Runs via:** `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml`, in its own git worktree.
 
 > **For the orchestrator:** queue one `append_step` per step in

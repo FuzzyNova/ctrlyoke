@@ -18,6 +18,7 @@ import {
   HOOK_EVENT_NAMES,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
+import { isProcessAlive } from "../../../utils/LockSafetyPrimitives";
 
 const CTRLYOKE_QWEN_HOOK_SCRIPT = "ctrlyoke-qwen-hook.js";
 const QWEN_COMMAND_HOOK_TYPE = "command";
@@ -30,7 +31,7 @@ export function isCtrlYokeQwenHookGroup(group: unknown): boolean {
   }
 
   const hooks = (group as { hooks?: unknown }).hooks;
-  const isCtrlYokeGroup = (
+  const isCtrlYokeGroup =
     Array.isArray(hooks) &&
     hooks.length > 0 &&
     hooks.every((hook) => {
@@ -42,13 +43,11 @@ export function isCtrlYokeQwenHookGroup(group: unknown): boolean {
       return (
         candidate.type === QWEN_COMMAND_HOOK_TYPE &&
         typeof candidate.command === "string" &&
-        new RegExp(
-          `(?:^|[\\\\/])${escapedScriptName}(?=$|[\\s\"'])`,
-          "i"
-        ).test(candidate.command)
+        new RegExp(`(?:^|[\\\\/])${escapedScriptName}(?=$|[\\s\"'])`, "i").test(
+          candidate.command
+        )
       );
-    })
-  );
+    });
   if (!isCtrlYokeGroup) return false;
 
   const firstCommand = (hooks as Array<{ command: string }>)[0].command;
@@ -56,13 +55,7 @@ export function isCtrlYokeQwenHookGroup(group: unknown): boolean {
     new RegExp(`${OWNER_PID_ARGUMENT}(\\d+)(?=$|[\\s"'])`, "i")
   );
   if (ownerPidMatch) {
-    try {
-      process.kill(Number(ownerPidMatch[1]), 0);
-      return false;
-    } catch (error) {
-      const errorCode = (error as NodeJS.ErrnoException).code;
-      return errorCode === "ES" + "RCH";
-    }
+    return !isProcessAlive(Number(ownerPidMatch[1]));
   }
 
   // Legacy commands have no owner marker. Only discard them when their script
@@ -176,13 +169,11 @@ export class QwenNotificationMonitor
     // treat the absolute path as relative. Forward-slash absolute paths work without quotes on
     // Windows as long as they contain no spaces. Paths with spaces are a known limitation.
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
+    // The owner marker is never positional: the hook script strips it before
+    // reading argv, so an unquoted command never shifts the decision hook slot.
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      [
-        notifyDir,
-        encodedDecisionHook ?? "",
-        `${OWNER_PID_ARGUMENT}${process.pid}`,
-      ],
+      [notifyDir, `${OWNER_PID_ARGUMENT}${process.pid}`],
       CliNotificationMonitor.shouldQuoteNodeCommand(HARNESS_IDS.QWEN_CLI)
     );
 
@@ -196,7 +187,10 @@ export class QwenNotificationMonitor
       if (!nativeEvent) {
         continue;
       }
-      const eventCommand = command;
+      const eventCommand =
+        event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
+          ? `${command} ${encodedDecisionHook}`
+          : command;
       hooks[nativeEvent] = [
         {
           hooks: [{ type: QWEN_COMMAND_HOOK_TYPE, command: eventCommand }],

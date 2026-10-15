@@ -27,9 +27,9 @@ export class CliExecutionSession {
   readonly prompt: PromptStep;
   readonly workflowContext?: WorkflowContext;
   readonly resolvedProperties?: ResolvedProperties;
-  readonly resolvedSessionId?: string;
   readonly executionStartTime: Date;
 
+  private resolvedSessionIdValue?: string;
   private promptText: string;
   private tempFiles: string[] = [];
   private deferredHookEnvironmentFiles: string[] = [];
@@ -49,9 +49,18 @@ export class CliExecutionSession {
     this.prompt = params.prompt;
     this.workflowContext = params.workflowContext;
     this.resolvedProperties = params.resolvedProperties;
-    this.resolvedSessionId = params.resolvedSessionId;
+    this.resolvedSessionIdValue = params.resolvedSessionId;
     this.executionStartTime = params.executionStartTime ?? new Date();
     this.promptText = params.prompt.prompt;
+  }
+
+  get resolvedSessionId(): string | undefined {
+    return this.resolvedSessionIdValue;
+  }
+
+  /** Drops a session ID the harness rejected so nothing resumes it again. */
+  clearResolvedSessionId(): void {
+    this.resolvedSessionIdValue = undefined;
   }
 
   preparePrompt(

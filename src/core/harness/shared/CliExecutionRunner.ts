@@ -422,7 +422,7 @@ export class CliExecutionRunner {
 
           // The rejected ID must not be reused by later steps, even if retry
           // planning or the fresh launch fails before discovering a new ID.
-          Reflect.set(session, "resolvedSessionId", undefined);
+          session.clearResolvedSessionId();
           await this.clearPersistedSessionId(session);
 
           const retrySession = new CliExecutionSession({
@@ -438,9 +438,8 @@ export class CliExecutionRunner {
             session.imageFileRefs,
             session.attachedSkills
           );
-          const retryPlan = await this.deps.executionPlanBuilder.plan(
-            retrySession
-          );
+          const retryPlan =
+            await this.deps.executionPlanBuilder.plan(retrySession);
           await this.deps.executionPlanBuilder.apply(retryPlan);
           for (const tempFilePath of retryPlan.tempFilePaths) {
             session.addTempFilePath(tempFilePath);

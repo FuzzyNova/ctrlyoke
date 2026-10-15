@@ -50,6 +50,7 @@ const COPILOT_BUILT_IN_PERMISSION_KINDS = new Set([
 const COPILOT_READ_ONLY_TOOLS: readonly string[] = [
   "grep",
   "list_files",
+  "read",
   "read_file",
   "search_files",
 ] as const;
