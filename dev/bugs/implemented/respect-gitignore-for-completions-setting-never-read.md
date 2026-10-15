@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/completions/CompletionHelpers.ts`, `src/platform/NodeHostServices.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

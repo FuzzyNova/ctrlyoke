@@ -308,6 +308,13 @@ export class CopilotLogParser extends BaseLogParser {
     if (currentSize < this.otelReadPosition) {
       this.otelReadPosition = 0; // file truncated/rotated
       this.resetOtelIncrementalLineState();
+      this.otelCumulativeInputTokens = 0;
+      this.otelCumulativeOutputTokens = 0;
+      this.otelCumulativeCacheReadTokens = 0;
+      this.otelCumulativeCacheWriteTokens = 0;
+      this.otelChatSpanSeen = false;
+      this.otelContextWindowUsedTokens = undefined;
+      this.otelContextWindowSize = undefined;
     }
     if (currentSize === this.otelReadPosition) {
       return [];

@@ -22,7 +22,10 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
-import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
+import {
+  PROMPT_INPUT_CAVEAT_CODES,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
@@ -99,6 +102,13 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
     reference: "https://dev.opencode.ai/docs/cli/",
     basis: "cli-version",
     verifiedVersions: [">=1.18.10"],
+  },
+  modeOverrides: {
+    interactive: {
+      fidelity: "partial",
+      mechanism: "native",
+      caveatCode: PROMPT_INPUT_CAVEAT_CODES.OPENCODE_INTERACTIVE_PATH_ONLY,
+    },
   },
 } as const;
 
@@ -515,8 +525,13 @@ export class OpenCodeCliProvider implements ICliProvider {
     return relativeFilePath;
   }
 
-  buildImageAttachmentArgs(imageFilePaths: readonly string[]): string[] {
-    return imageFilePaths.flatMap((filePath) => ["--file", filePath]);
+  buildImageAttachmentArgs(
+    imageFilePaths: readonly string[],
+    isInteractive: boolean
+  ): string[] {
+    return isInteractive
+      ? []
+      : imageFilePaths.flatMap((filePath) => ["--file", filePath]);
   }
 
   /**

@@ -203,6 +203,11 @@ interface PendingPlaceholder {
   timeoutId: ReturnType<typeof setTimeout>;
 }
 
+const MOUSE_SELECTION_TEARDOWN_EVENTS = {
+  keydown: "keydown",
+  blur: "blur",
+} as const;
+
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
 
@@ -551,7 +556,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // never fires for exactly the navigation keys a stuck user presses. A
   // capture-phase window listener runs before CodeMirror sees the key at all, so
   // destroying the orphan here means the subsequent cursor-move transaction no
-  // longer re-arms the snap. `blur-sm` covers focus leaving the panel. Both are
+  // longer re-arms the snap. `blur` covers focus leaving the panel. Both are
   // no-ops during normal use (no MouseSelection is active outside a live drag).
   useEffect(() => {
     const teardown = () => {
@@ -559,11 +564,22 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         destroyOrphanedMouseSelection(viewRef.current);
       }
     };
-    window.addEventListener("keydown", teardown, true);
-    window.addEventListener("blur", teardown);
+    window.addEventListener(
+      MOUSE_SELECTION_TEARDOWN_EVENTS.keydown,
+      teardown,
+      true
+    );
+    window.addEventListener(MOUSE_SELECTION_TEARDOWN_EVENTS.blur, teardown);
     return () => {
-      window.removeEventListener("keydown", teardown, true);
-      window.removeEventListener("blur-sm", teardown);
+      window.removeEventListener(
+        MOUSE_SELECTION_TEARDOWN_EVENTS.keydown,
+        teardown,
+        true
+      );
+      window.removeEventListener(
+        MOUSE_SELECTION_TEARDOWN_EVENTS.blur,
+        teardown
+      );
     };
   }, []);
 
@@ -1191,7 +1207,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 // and nulls `inputState.mouseSelection` so the per-transaction re-select stops
 // firing. By the time any key is pressed the mouse button is necessarily up, so a
 // stale MouseSelection is always an orphan — see the window-level capture-phase
-// `keydown`/`blur-sm` teardown in the component (NOT EditorView.domEventHandlers,
+// `keydown`/`blur` teardown in the component (NOT EditorView.domEventHandlers,
 // whose keydown handler is pre-empted by the keymap for bound keys like arrows).
 // `inputState.mouseSelection` is not in CodeMirror's public typings; access it
 // defensively so a future internal change degrades to a no-op instead of throwing.

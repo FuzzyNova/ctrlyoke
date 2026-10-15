@@ -151,6 +151,65 @@ function buildReport(
 }
 
 suite("PortabilityReport", () => {
+  test("points merged hook diagnostics and side effects at authored hook fields", () => {
+    const workflow: PromptFile = {
+      hooks: [
+        { event: "error", command: "workflow A" },
+        { event: "sessionStart", command: "workflow B" },
+      ],
+      steps: [
+        {
+          prompt: "Target",
+          hooks: [{ event: "sessionStart", command: "step B prime" }],
+        },
+      ],
+    };
+    const report = buildReport(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CLAUDE_CLI]: installed(HARNESS_IDS.CLAUDE_CLI, {
+          hooks: createState(
+            CAPABILITY_FIDELITIES.PARTIAL,
+            CAPABILITY_MECHANISMS.MIXED
+          ),
+        }),
+      })
+    );
+    const row = report.rows.find(
+      (candidate) => candidate.harnessId === HARNESS_IDS.CLAUDE_CLI
+    );
+    assert.ok(row);
+    const expected = [
+      {
+        capability: "error",
+        sourceTier: "workflow",
+        propertyPointer: "/hooks/0/event",
+      },
+      {
+        capability: "sessionStart",
+        sourceTier: "prompt",
+        propertyPointer: "/steps/0/hooks/0/event",
+      },
+    ];
+    const fields = (
+      items: readonly {
+        capability: string;
+        sourceTier?: string;
+        propertyPointer?: string;
+      }[]
+    ) =>
+      items
+        .filter((item) => ["error", "sessionStart"].includes(item.capability))
+        .map(({ capability, sourceTier, propertyPointer }) => ({
+          capability,
+          sourceTier,
+          propertyPointer,
+        }));
+
+    assert.deepStrictEqual(fields(row.diagnostics), expected);
+    assert.deepStrictEqual(fields(row.workspaceSideEffects), expected);
+  });
+
   test("retargets mixed consumers while preserving provenance, exclusions, nulls, and authored immutability", () => {
     const workflow: PromptFile = {
       harness: HARNESS_IDS.CLAUDE_CLI,

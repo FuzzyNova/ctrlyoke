@@ -22,7 +22,6 @@ import type {
   UserSteerData,
   CliOutput as CliOutputType,
 } from "../types/cliEvents";
-import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import {
   HARNESS_INFO,
@@ -37,10 +36,7 @@ import {
   formatThinkingLabel,
   isRenderableThinkingBlock,
 } from "@root/utils/ThinkingBlockFormat";
-import {
-  getTargetKey,
-  mapOrderedHistoryEntriesToMessages,
-} from "./outputProjection";
+import { getTargetKey } from "./outputProjection";
 import { truncate } from "./string";
 import {
   generateDiffLines,
@@ -397,6 +393,17 @@ export interface ExportOptions {
   stepRange?: number[];
 }
 
+/** Order live output messages by timestamp, then by sequence. */
+export function sortByOutputOrder<
+  T extends { timestamp: number; sequence?: number },
+>(items: ReadonlyArray<T>): T[] {
+  return [...items].sort(
+    (left, right) =>
+      left.timestamp - right.timestamp ||
+      (left.sequence ?? 0) - (right.sequence ?? 0)
+  );
+}
+
 /**
  * Generate markdown export content from CLI outputs.
  */
@@ -409,7 +416,8 @@ export function generateMarkdownExport(
     totalSteps: number;
   },
   options?: {
-    orderedEntries?: ReadonlyArray<OrderedHistoryEntry>;
+    /** `outputs` are already in display order; skip the timestamp sort. */
+    preordered?: boolean;
     exportOptions?: ExportOptions;
   }
 ): string {
@@ -435,16 +443,9 @@ export function generateMarkdownExport(
     lines.push("");
   }
 
-  const sortedOutputs: MarkdownExportItem[] =
-    options?.orderedEntries && options.orderedEntries.length > 0
-      ? (mapOrderedHistoryEntriesToMessages(
-          options.orderedEntries
-        ) as unknown as MarkdownExportItem[])
-      : [...outputs].sort(
-          (left, right) =>
-            left.timestamp - right.timestamp ||
-            (left.sequence ?? 0) - (right.sequence ?? 0)
-        );
+  const sortedOutputs: readonly MarkdownExportItem[] = options?.preordered
+    ? outputs
+    : sortByOutputOrder(outputs);
 
   // Assign sequential 1-based step numbers to unique CLI steps in appearance order.
   const stepSequence = new Map<string, number>();

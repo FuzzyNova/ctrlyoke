@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/harness/shared/SettingsJsonMcpTracker.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -41,3 +41,9 @@ Key all lifecycle state by the resolved config path, as `baselines` already is:
 In `unregisterWorkflow`, decrement, remove and check emptiness against that path's map only. Base `writeOrRemoveManagedConfig`'s `hasManagedState` on that path's map, and call `deleteCtrlYokeGitignore` for that path only once its count map is empty.
 
 Add a unit test in which two workflows in two roots register and unregister in interleaved order. Once both have finished, it should assert that both config files and both temporary `.gitignore` files are gone.
+
+## Follow-up (review)
+
+Workflow registrations are now keyed by workflow and resolved config path. A
+single workflow cleanup releases every path it registered, preventing a later
+worktree step from leaving an earlier root's config or temporary `.gitignore`.

@@ -12,6 +12,7 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   EXECUTION_MODES,
+  HARNESS_IDS,
   type ExecutionMode,
 } from "../../../types/DashboardConstants";
 import {
@@ -34,6 +35,7 @@ import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 import { CliProviderUtils } from "./CliProviderUtils";
 import { projectStateRoot } from "../../../utils/ProjectStatePaths";
+import { runArtifactStem } from "../../../utils/WorkflowPaths";
 import {
   hasUserHookEnvironment,
   prepareUserHookEnvironments,
@@ -145,7 +147,10 @@ export class ExecutionPlanBuilder {
       this.deps.provider.buildImageAttachmentArgs
     ) {
       baseArgs.push(
-        ...this.deps.provider.buildImageAttachmentArgs(session.imageFileRefs)
+        ...this.deps.provider.buildImageAttachmentArgs(
+          session.imageFileRefs,
+          isInteractive
+        )
       );
     }
     const mutations = [...providerPreparation.mutations];
@@ -178,6 +183,12 @@ export class ExecutionPlanBuilder {
           extensionPath,
           hookTempDirectory,
           promptIndex,
+          ...(this.deps.provider.config.harnessId === HARNESS_IDS.QWEN_CLI &&
+          workingFilePath
+            ? {
+                stableFileStem: `${runArtifactStem(workingFilePath)}-${promptIndex}`,
+              }
+            : {}),
         });
         userHooks.splice(0, userHooks.length, ...(hookEnvironment.hooks ?? []));
         if (hookEnvironment.tempFilePath) {

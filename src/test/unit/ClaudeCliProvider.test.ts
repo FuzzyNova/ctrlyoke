@@ -124,7 +124,7 @@ suite("ClaudeCliProvider", () => {
     }
   });
 
-  test("keeps invalid-session spawn errors recoverable", () => {
+  test("matches recoverable session errors from stderr text or a process result", () => {
     const provider = new ClaudeCliProvider();
 
     for (const message of [
@@ -134,6 +134,18 @@ suite("ClaudeCliProvider", () => {
     ]) {
       assert.strictEqual(provider.isRecoverableSessionError(message), true);
     }
+    assert.strictEqual(
+      provider.isRecoverableSessionError({
+        stderr: "No conversation found with session ID abc",
+      }),
+      true
+    );
+    assert.strictEqual(
+      provider.isRecoverableSessionError(
+        new Error("No conversation found with session ID abc")
+      ),
+      true
+    );
 
     assert.strictEqual(
       provider.isRecoverableSessionError("Claude authentication failed"),

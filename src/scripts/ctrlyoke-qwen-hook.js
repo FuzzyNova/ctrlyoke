@@ -52,10 +52,15 @@ const {
 
 const SCRIPT_NAME = "ctrlyoke-qwen-hook";
 const SCRIPT_PREFIX = "ctrlyoke Qwen Hook";
+// Ownership marker QwenNotificationMonitor adds so stale groups can be detected.
+const OWNER_PID_ARGUMENT_PREFIX = "--ctrlyoke-owner-pid=";
 
 function main() {
-  const notifyDir = process.argv[2];
-  const encodedDecisionHook = process.argv[3];
+  const positionalArgs = process.argv
+    .slice(2)
+    .filter((arg) => !arg.startsWith(OWNER_PID_ARGUMENT_PREFIX));
+  const notifyDir = positionalArgs[0];
+  const encodedDecisionHook = positionalArgs[1];
 
   // Unconditional invocation log — written before any flag checks so we can confirm
   // the hook script is being called at all, regardless of diagnostic settings.

@@ -40,3 +40,19 @@ Make the trust key for env-wrapped hooks the same on every step.
 If the path has to stay per-step, the tracker should own the user-hook keys that contain a `user-hook-env-` launcher path and remove them in `unregisterWorkflow`. Another option is to prune keys whose env file no longer exists.
 
 Add a unit test that registers two steps with an env-bearing hook and checks that the workspace entry does not grow.
+
+## Decision
+
+Qwen env-hook launchers use the stable run artifact stem in their environment-file
+path. This keeps the command trust key identical across steps while isolating
+concurrent workflow runs. Other harnesses keep their per-step UUID filenames.
+
+**Resolution:** fixed in this commit
+
+## Follow-up (review)
+
+Review found that a run-wide env filename lets concurrent steps overwrite the
+same `hook-<index>` values and lets one step's cleanup unlink another step's
+file. Qwen now includes the prompt index in the stable run stem: each step has
+an isolated env file, and reruns of that step keep the same trusted command.
+Other harnesses continue using their per-invocation UUID filenames.

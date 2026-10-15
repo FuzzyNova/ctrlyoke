@@ -248,6 +248,10 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
     return () => window.clearTimeout(focusTimer);
   }, [activeScope, dialog]);
 
+  useEffect(() => {
+    if (multiline) valueInputRef.current?.focus();
+  }, [multiline]);
+
   if (!dialog) return null;
 
   const isReplace = dialog.mode === "replace";
@@ -363,9 +367,15 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
               id="secret-value"
               type="password"
               value={value}
+              onPaste={(event) => {
+                const pastedValue = event.clipboardData.getData("text");
+                if (!/[\r\n]/.test(pastedValue)) return;
+                event.preventDefault();
+                setValue(pastedValue);
+                setMultiline(true);
+              }}
               onChange={(event) => {
                 setValue(event.target.value);
-                if (event.target.value.includes("\n")) setMultiline(true);
               }}
               autoComplete="new-password"
               className="w-full rounded-sm border border-input-border bg-input-bg px-2 py-1.5 font-mono text-sm text-input-fg focus:border-focus-border focus:outline-hidden"

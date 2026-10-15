@@ -347,4 +347,108 @@ suite("SettingsJsonMcpTracker", () => {
       { mcpServers: { shared: { command: "user" } } }
     );
   });
+
+  test("cleans up MCP state independently for workflows in different roots", async () => {
+    const firstWorkspace = path.join(tmpDir, "first");
+    const secondWorkspace = path.join(tmpDir, "second");
+    const firstSettingsPath = path.join(
+      firstWorkspace,
+      ".multi-root",
+      "settings.json"
+    );
+    const secondSettingsPath = path.join(
+      secondWorkspace,
+      ".multi-root",
+      "settings.json"
+    );
+    const firstGitignorePath = path.join(
+      path.dirname(firstSettingsPath),
+      ".gitignore"
+    );
+    const secondGitignorePath = path.join(
+      path.dirname(secondSettingsPath),
+      ".gitignore"
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("multi-root", {
+      userConfigPath: () => path.join(tmpDir, "missing-user-settings.json"),
+    });
+
+    await tracker.registerServers("wf-first", firstWorkspace, {
+      shared: { command: "first-server", env: { API_KEY: "first-secret" } },
+    });
+    await tracker.registerServers("wf-second", secondWorkspace, {
+      shared: { command: "second-server", env: { API_KEY: "second-secret" } },
+    });
+
+    // Cleanup follows the config path captured at registration, even if the
+    // caller's current root differs.
+    await tracker.unregisterWorkflow("wf-first", secondWorkspace);
+
+    await assert.rejects(fs.access(firstSettingsPath), /ENOENT/);
+    await assert.rejects(fs.access(firstGitignorePath), /ENOENT/);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(secondSettingsPath, "utf-8")),
+      {
+        mcpServers: {
+          shared: {
+            command: "second-server",
+            env: { API_KEY: "second-secret" },
+          },
+        },
+      }
+    );
+    assert.strictEqual(
+      (await fs.readFile(secondGitignorePath, "utf-8")).startsWith(
+        "# ctrlyoke temp files"
+      ),
+      true
+    );
+
+    await tracker.unregisterWorkflow("wf-second", firstWorkspace);
+
+    await assert.rejects(fs.access(firstSettingsPath), /ENOENT/);
+    await assert.rejects(fs.access(firstGitignorePath), /ENOENT/);
+    await assert.rejects(fs.access(secondSettingsPath), /ENOENT/);
+    await assert.rejects(fs.access(secondGitignorePath), /ENOENT/);
+  });
+
+  test("cleans up every config path registered by one workflow", async () => {
+    const firstWorkspace = path.join(tmpDir, "workflow-root-a");
+    const secondWorkspace = path.join(tmpDir, "workflow-root-b");
+    const firstSettingsPath = path.join(
+      firstWorkspace,
+      ".multi-root",
+      "settings.json"
+    );
+    const secondSettingsPath = path.join(
+      secondWorkspace,
+      ".multi-root",
+      "settings.json"
+    );
+    const firstGitignorePath = path.join(
+      path.dirname(firstSettingsPath),
+      ".gitignore"
+    );
+    const secondGitignorePath = path.join(
+      path.dirname(secondSettingsPath),
+      ".gitignore"
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("multi-root", {
+      userConfigPath: () => path.join(tmpDir, "missing-user-settings.json"),
+    });
+
+    await tracker.registerServers("same-workflow", firstWorkspace, {
+      server: { command: "first", env: { API_KEY: "first-secret" } },
+    });
+    await tracker.registerServers("same-workflow", secondWorkspace, {
+      server: { command: "second", env: { API_KEY: "second-secret" } },
+    });
+
+    await tracker.unregisterWorkflow("same-workflow", secondWorkspace);
+
+    await assert.rejects(fs.access(firstSettingsPath), /ENOENT/);
+    await assert.rejects(fs.access(firstGitignorePath), /ENOENT/);
+    await assert.rejects(fs.access(secondSettingsPath), /ENOENT/);
+    await assert.rejects(fs.access(secondGitignorePath), /ENOENT/);
+  });
 });

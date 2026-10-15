@@ -53,6 +53,46 @@ suite("CodexCliProvider", () => {
     assert.deepStrictEqual({ ...parsed.mcp_servers["user-server"].env }, env);
   });
 
+  test("skips an unrepresentable MCP server and keeps ctrlyoke and valid servers", async () => {
+    const preparation = await new CodexCliProvider().planMcpConfigArgs(
+      ".ctrlyoke-mcp-server",
+      "/workspace",
+      undefined,
+      undefined,
+      [
+        {
+          id: "invalid-server",
+          command: "node",
+          env: { TOKEN: "prefix-${secret:API_KEY}" },
+        },
+        { id: "valid-server", command: "node", args: ["server.js"] },
+      ]
+    );
+
+    assert.ok(
+      preparation.cliArgs.some((arg) =>
+        arg.includes("mcp_servers.ctrlyoke")
+      )
+    );
+    assert.ok(
+      preparation.cliArgs.some((arg) =>
+        arg.includes("mcp_servers.valid-server")
+      )
+    );
+    assert.ok(
+      !preparation.cliArgs.some((arg) =>
+        arg.includes("mcp_servers.invalid-server")
+      )
+    );
+    assert.strictEqual(preparation.diagnostics.length, 1);
+    assert.match(preparation.diagnostics[0].message, /invalid-server/);
+    assert.strictEqual(preparation.diagnostics[0].state.fidelity, "partial");
+    assert.match(
+      preparation.diagnostics[0].message,
+      /composite secret interpolation/
+    );
+  });
+
   test("sanitizes MCP server IDs consistently in config and approval overrides", async () => {
     const preparation = await new CodexCliProvider().planMcpConfigArgs(
       undefined,
@@ -306,7 +346,10 @@ suite("CodexCliProvider", () => {
 
     test("builds native image arguments for resolved attachments", () => {
       assert.deepStrictEqual(
-        provider.buildImageAttachmentArgs(["shots/one.png", "shots/two.jpg"]),
+        provider.buildImageAttachmentArgs(
+          ["shots/one.png", "shots/two.jpg"],
+          true
+        ),
         ["--image", "shots/one.png", "--image", "shots/two.jpg"]
       );
     });

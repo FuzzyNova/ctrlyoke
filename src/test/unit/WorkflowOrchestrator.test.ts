@@ -21,6 +21,7 @@ import type { QueueState } from "../../types/CtrlYokeTypes";
 import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { RunDidNotPrepareError } from "../../core/orchestration/RunLifecycleService";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { HistoryTrashRepository } from "../../core/orchestration/HistoryTrashRepository";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -4987,6 +4988,71 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       );
 
       releaseExecution();
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not record successful revisions when a draft never prepares", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-unprepared-revisions-")
+    );
+    try {
+      const manager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "step one" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Draft run",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await manager.createWorkingFile(
+        "draft-run",
+        [{ prompt: "step one" }],
+        workspace,
+        "Draft run"
+      );
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        workflowKey
+      );
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
+      ]);
+      internal.viewMessageSinks = new Map();
+      internal.lineageRepository = new WorkflowLineageRepository();
+      internal.assertNoPendingWorkflowExternalRoots = async () => undefined;
+      let revisionRecords = 0;
+      internal.recordSuccessfulRevisions = async () => {
+        revisionRecords += 1;
+      };
+      internal.getInstanceForClient = () => ({
+        executeLoadedPromptFile: async () => undefined,
+      });
+
+      await assert.rejects(
+        orchestrator.executeDraftAtAddress(
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+          1,
+          descriptor.revision,
+          PANEL_CLIENT_ID
+        ),
+        RunDidNotPrepareError
+      );
+      assert.strictEqual(revisionRecords, 0);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

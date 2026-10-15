@@ -4,6 +4,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
+import { RunDidNotPrepareError } from "../core/orchestration/RunLifecycleService";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkflowDefinitionMutation } from "../types/WebviewMessageTypes";
 import type { WebviewClientContext } from "./WebviewClientContext";
@@ -190,6 +191,8 @@ export class WorkflowMutationCoordinator {
     action: string,
     error: unknown
   ): void {
+    // The startup pipeline already reported this failure to the user.
+    if (error instanceof RunDidNotPrepareError) return;
     Log.error(`[WorkflowMutationCoordinator] Failed to ${action}:`, error);
     // A hosted browser client never sees the VS Code notification, so without
     // this the rejected run action is indistinguishable from a dead button.

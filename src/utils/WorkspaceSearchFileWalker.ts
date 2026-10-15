@@ -12,15 +12,23 @@ export const DEFAULT_SKIP_DIRECTORIES = new Set([
 ]);
 
 /** Shared completion-search exclusion used by both the walker and file watcher. */
-export function isSearchPathIgnored(relativePath: string): boolean {
+export function isSearchPathIgnored(
+  relativePath: string,
+  skipDirectories: ReadonlySet<string> = DEFAULT_SKIP_DIRECTORIES,
+  excludeCtrlYokeLogs = true
+): boolean {
   const segments = relativePath.split(/[\\/]+/).filter(Boolean);
   return (
-    segments.some((segment) => DEFAULT_SKIP_DIRECTORIES.has(segment)) ||
-    (segments.length >= 2 &&
+    segments.some((segment) => skipDirectories.has(segment)) ||
+    (excludeCtrlYokeLogs &&
+      segments.length >= 2 &&
       segments[0] === ".ctrlyoke" &&
       segments[1] === "logs")
   );
 }
+
+/** Paths intentionally exposed when completion search includes gitignored files. */
+export const COMPLETION_ALL_FILES_SKIP_DIRECTORIES = new Set([".git"]);
 
 export interface SearchWalkResult {
   files: string[];
@@ -33,7 +41,8 @@ export async function walkSearchFiles(
   startedAt: number,
   maxFiles: number,
   maxDurationMs: number,
-  skipDirectories: ReadonlySet<string> = DEFAULT_SKIP_DIRECTORIES
+  skipDirectories: ReadonlySet<string> = DEFAULT_SKIP_DIRECTORIES,
+  excludeCtrlYokeLogs = true
 ): Promise<SearchWalkResult> {
   const root = path.resolve(rootPath);
   const pending = [root];
@@ -67,7 +76,9 @@ export async function walkSearchFiles(
         entry.isDirectory() &&
         !skipDirectories.has(entry.name) &&
         !isSearchPathIgnored(
-          path.relative(root, path.join(directory, entry.name))
+          path.relative(root, path.join(directory, entry.name)),
+          skipDirectories,
+          excludeCtrlYokeLogs
         )
       ) {
         pending.push(path.join(directory, entry.name));

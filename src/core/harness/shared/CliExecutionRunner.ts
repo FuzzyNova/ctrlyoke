@@ -5,7 +5,6 @@ import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
   FAILURE_KINDS,
   CTRLYOKE_ENV_VARS,
-  HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   INTERACTIVE_TERMINAL_MODES,
   type InteractiveTerminalMode,
@@ -15,7 +14,7 @@ import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { CliLogMonitor } from "../CliLogMonitor";
-import type { CliExecutionSession } from "./CliExecutionSession";
+import { CliExecutionSession } from "./CliExecutionSession";
 import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import {
@@ -37,6 +36,7 @@ import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
 import { CliTransportError } from "./CliTransportError";
+import type { ExecutionPlanBuilder } from "./ExecutionPlanBuilder";
 
 interface CliInteractiveStartupCoordinatorLike {
   resolveSession(params: {
@@ -62,6 +62,7 @@ interface CliResponseCollectorLike {
 
 export interface CliExecutionRunnerDeps {
   provider: ICliProvider;
+  executionPlanBuilder: Pick<ExecutionPlanBuilder, "plan" | "apply">;
   transportCoordinator: CliExecutionTransportCoordinator;
   failureTracker: CliFailureTracker;
   factories: {
@@ -383,6 +384,8 @@ export class CliExecutionRunner {
         : null;
     hookMonitor?.start();
 
+    const deferTempFileCleanup =
+      this.deps.provider.isRecoverableSessionError !== undefined;
     const executeWithRecovery = async (
       args: string[],
       activeSource: HeadlessStreamingSource | undefined,
@@ -403,50 +406,66 @@ export class CliExecutionRunner {
           headlessEnv,
           activeSource,
           command,
-          session.resolvedProperties?.secrets
+          session.resolvedProperties?.secrets,
+          deferTempFileCleanup
         );
       } catch (error) {
-        if (this.deps.provider.isRecoverableSessionError?.(error) ?? false) {
-          const currentHarness =
-            session.resolvedProperties?.harness ??
-            this.deps.provider.config.harnessId;
+        if (
+          error instanceof CliTransportError &&
+          error.failureKind === FAILURE_KINDS.SESSION_REJECTED &&
+          deferTempFileCleanup
+        ) {
+          const rejectedSessionId = session.resolvedSessionId;
+          Log.warn(
+            `[CliExecutionRunner] ${this.deps.provider.config.displayName} rejected session ID "${rejectedSessionId}". Retrying without resume flag.`
+          );
 
-          if (currentHarness === HARNESS_IDS.CLAUDE_CLI) {
-            Log.warn(
-              `[CliExecutionRunner] Claude CLI rejected session ID "${session.resolvedSessionId}". ` +
-                `Retrying without resume flag.`
-            );
+          // The rejected ID must not be reused by later steps, even if retry
+          // planning or the fresh launch fails before discovering a new ID.
+          session.clearResolvedSessionId();
+          await this.clearPersistedSessionId(session);
 
-            const argsWithoutResume = await this.deps.provider.buildCliArgs(
-              session.prompt,
-              false,
-              this.deps.runtimeState.getExtensionPath(),
-              this.deps.runtimeState.getWorkspaceRoot() || "",
-              undefined,
-              session.workflowContext,
-              this.deps.runtimeState.getWorkspaceRoots?.(),
-              this.deps.runtimeState.getApprovedExternalRoots?.()
-            );
-
-            const retryCallback = this.buildHeadlessResponseCallback(
-              session,
-              " (retry)",
-              undefined
-            );
-
-            const retrySource = this.createHeadlessStreamingSource(session);
-
-            return await this.deps.transportCoordinator.executeHeadless(
-              argsWithoutResume,
-              session.promptArgument,
-              session.tempFilePaths,
-              retryCallback,
-              headlessEnv,
-              retrySource,
-              undefined,
-              session.resolvedProperties?.secrets
-            );
+          const retrySession = new CliExecutionSession({
+            prompt: session.prompt,
+            workflowContext: session.workflowContext,
+            resolvedProperties: session.resolvedProperties,
+            resolvedSessionId: undefined,
+            executionStartTime: session.executionStartTime,
+          });
+          retrySession.preparePrompt(
+            session.promptArgument,
+            session.tempFilePaths,
+            session.imageFileRefs,
+            session.attachedSkills
+          );
+          const retryPlan =
+            await this.deps.executionPlanBuilder.plan(retrySession);
+          await this.deps.executionPlanBuilder.apply(retryPlan);
+          for (const tempFilePath of retryPlan.tempFilePaths) {
+            session.addTempFilePath(tempFilePath);
           }
+          for (const tempFilePath of retryPlan.deferredHookEnvironmentFilePaths) {
+            session.addDeferredHookEnvironmentFilePath(tempFilePath);
+          }
+
+          const retryCallback = this.buildHeadlessResponseCallback(
+            session,
+            " (retry)",
+            undefined
+          );
+
+          // The old session's log is not a source for the fresh session.
+          return await this.deps.transportCoordinator.executeHeadless(
+            retryPlan.cliArgs,
+            session.promptArgument,
+            session.tempFilePaths,
+            retryCallback,
+            headlessEnv,
+            undefined,
+            retryPlan.resolvedCommand,
+            session.resolvedProperties?.secrets,
+            true
+          );
         }
 
         throw error;
@@ -490,6 +509,10 @@ export class CliExecutionRunner {
       Log.error("[CliExecutionRunner] Headless execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return false;
+    } finally {
+      if (deferTempFileCleanup) {
+        await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
+      }
     }
   }
 
@@ -854,6 +877,18 @@ export class CliExecutionRunner {
     const responseCollector = this.deps.factories.createResponseCollector();
 
     return async (result) => {
+      if (
+        result.exitCode !== 0 &&
+        !result.terminationSignal &&
+        session.resolvedSessionId !== undefined &&
+        this.deps.provider.isRecoverableSessionError?.(result)
+      ) {
+        throw new CliTransportError(
+          result.stderr,
+          FAILURE_KINDS.SESSION_REJECTED
+        );
+      }
+
       if (ConfigurationUtils.shouldLogRawCliOutput()) {
         Log.trace(
           `[${this.deps.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
@@ -1055,5 +1090,22 @@ export class CliExecutionRunner {
       }
     }
     this.persistedSessionIds.set(session, sessionId);
+  }
+
+  private async clearPersistedSessionId(
+    session: CliExecutionSession
+  ): Promise<void> {
+    const context = session.workflowContext;
+    const persistence = context?.workingFilePersistence;
+    if (context && persistence?.persistSessionId) {
+      try {
+        await persistence.persistSessionId(context.promptIndex, "");
+      } catch (error) {
+        Log.warn(
+          "[CliExecutionRunner] Failed to clear rejected live session ID:",
+          error
+        );
+      }
+    }
   }
 }

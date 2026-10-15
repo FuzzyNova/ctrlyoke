@@ -1,7 +1,12 @@
 import * as assert from "assert";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import * as vscode from "vscode";
 import { suite, test, setup, teardown } from "mocha";
 import {
+  clearFilesCache,
+  getCompletionCore,
   getOutputChannelSlug,
   toVSCodeCompletionItem,
 } from "../../completions/CompletionHelpers";
@@ -9,6 +14,7 @@ import {
   clearSlashTokenCompletionCache,
   getCtrlYokeSlashCompletions,
 } from "../../completions/SlashTokenCompletionHelpers";
+import { RegexSymbolIndex } from "../../completions/RegexSymbolIndex";
 import type { PlainCompletionItem } from "../../completions/CompletionCore";
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
@@ -18,6 +24,149 @@ import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { snapshotProperty } from "../helpers/propertySnapshot";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+
+suite("CompletionHelpers workspace roots", () => {
+  let workspaceFolders: vscode.WorkspaceFolder[];
+  let restoreWorkspaceFolders: (() => void) | undefined;
+  let tempDir: string;
+
+  setup(() => {
+    tempDir = makeTempDir("ctrlyoke-completion-roots-");
+    const folders = ["root-a", "root-b", "root-c"].map((name, index) => {
+      const fsPath = path.join(tempDir, name);
+      fs.mkdirSync(fsPath, { recursive: true });
+      return {
+        name,
+        uri: vscode.Uri.file(fsPath),
+        index,
+      } as vscode.WorkspaceFolder;
+    });
+    workspaceFolders = folders.slice(0, 2);
+    restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      get: () => workspaceFolders,
+    });
+  });
+
+  teardown(() => {
+    restoreWorkspaceFolders?.();
+    restoreWorkspaceFolders = undefined;
+    clearFilesCache();
+    removeTempDir(tempDir);
+  });
+
+  test("resolves symbols from a workspace folder added after first use", async () => {
+    const core = getCompletionCore();
+    await core.getHashCompletions("ExistingSymbol");
+
+    workspaceFolders = [
+      ...workspaceFolders,
+      {
+        name: "root-c",
+        uri: vscode.Uri.file(path.join(tempDir, "root-c")),
+        index: 2,
+      } as vscode.WorkspaceFolder,
+    ];
+    fs.mkdirSync(path.join(tempDir, "root-c", "src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempDir, "root-c", "src", "NewWorkspaceSymbol.js"),
+      "export class NewWorkspaceSymbol {}\n"
+    );
+    clearFilesCache();
+
+    const items = await core.getHashCompletions("NewWorkspaceSymbol");
+    assert.ok(
+      items.some((item) => item.label.includes("NewWorkspaceSymbol")),
+      "a symbol in the newly added folder should be offered"
+    );
+  });
+
+  test("refreshes cached symbol paths after a workspace folder rename", async () => {
+    const folderPath = path.join(tempDir, "physical-root");
+    const sourcePath = path.join(folderPath, "src", "RenamedSymbol.ts");
+    fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+    fs.writeFileSync(sourcePath, "export class RenamedSymbol {}\n");
+    let folderName = "root-c";
+    const index = new RegexSymbolIndex(
+      () => folderPath,
+      async () => [`${folderName}/src/RenamedSymbol.ts`],
+      (viewerPath) => ({
+        workspaceRoot: folderPath,
+        absolutePath: path.join(folderPath, ...viewerPath.split("/").slice(1)),
+      })
+    );
+
+    const original = await index.workspaceSymbols("RenamedSymbol", 10);
+    assert.strictEqual(original[0]?.viewerPath, "root-c/src/RenamedSymbol.ts");
+
+    folderName = "renamed-root";
+    const renamed = await index.workspaceSymbols("RenamedSymbol", 10);
+    assert.strictEqual(
+      renamed[0]?.viewerPath,
+      "renamed-root/src/RenamedSymbol.ts"
+    );
+  });
+});
+
+suite("CompletionHelpers gitignore setting", () => {
+  const originalShouldRespectGitignore =
+    ConfigurationUtils.shouldRespectGitignoreForCompletions;
+  let restoreWorkspaceFolders: (() => void) | undefined;
+  let tempDir: string;
+
+  setup(async () => {
+    tempDir = makeTempDir("ctrlyoke-completion-gitignore-");
+    execFileSync("git", ["init"], { cwd: tempDir, stdio: "pipe" });
+    fs.writeFileSync(path.join(tempDir, ".gitignore"), "ignored.txt\n");
+    fs.writeFileSync(path.join(tempDir, "ignored.txt"), "ignored");
+    restoreWorkspaceFolders = snapshotProperty(
+      vscode.workspace,
+      "workspaceFolders"
+    );
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      value: [
+        {
+          name: "workspace",
+          uri: vscode.Uri.file(tempDir),
+          index: 0,
+        } as vscode.WorkspaceFolder,
+      ],
+    });
+    clearFilesCache();
+  });
+
+  teardown(() => {
+    ConfigurationUtils.shouldRespectGitignoreForCompletions =
+      originalShouldRespectGitignore;
+    restoreWorkspaceFolders?.();
+    restoreWorkspaceFolders = undefined;
+    clearFilesCache();
+    removeTempDir(tempDir);
+  });
+
+  test("refreshes @ file completions when the setting changes", async () => {
+    ConfigurationUtils.shouldRespectGitignoreForCompletions = () => true;
+    const respecting = await getCompletionCore().getFileCompletions(
+      "ignored.txt"
+    );
+    assert.ok(!respecting.some((item) => item.label.includes("ignored.txt")));
+
+    ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
+    clearFilesCache();
+    const including = await getCompletionCore().getFileCompletions(
+      "ignored.txt"
+    );
+    assert.ok(including.some((item) => item.label.includes("ignored.txt")));
+  });
+});
 
 suite("CompletionHelpers VS Code adapters", () => {
   test("converts an ordinary item without attaching a capture command", () => {

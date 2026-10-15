@@ -3,9 +3,14 @@ import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import {
   generateMarkdownExport,
+  sortByOutputOrder,
   type ExportOptions,
 } from "@utils/markdownExport";
-import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
+import {
+  getTargetKey,
+  mapOrderedHistoryEntriesToMessages,
+  type OutputMessage,
+} from "@utils/outputProjection";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
@@ -19,6 +24,7 @@ interface UseOutputExportInput {
   fileName: string | null;
   finalStep: WorkflowStep | null;
   historyOrderedEntries?: OrderedHistoryEntry[];
+  liveOrderedEntries?: OrderedHistoryEntry[];
   isViewingHistory: boolean;
   hiddenTargetKeys: readonly string[];
   steps: WorkflowStep[];
@@ -26,7 +32,7 @@ interface UseOutputExportInput {
 }
 
 function getVisibleStepRange(
-  allMessages: readonly OutputMessage[],
+  orderedMessages: readonly OutputMessage[],
   hiddenTargetKeys: readonly string[]
 ): string {
   if (hiddenTargetKeys.length === 0) return "";
@@ -34,13 +40,7 @@ function getVisibleStepRange(
   const hiddenKeys = new Set(hiddenTargetKeys);
   const seenKeys = new Set<string>();
   const visibleStepNumbers: number[] = [];
-  const sortedMessages = [...allMessages].sort(
-    (left, right) =>
-      left.timestamp - right.timestamp ||
-      (left.sequence ?? 0) - (right.sequence ?? 0)
-  );
-
-  for (const message of sortedMessages) {
+  for (const message of orderedMessages) {
     if (message.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
 
     const key = getTargetKey(message.target);
@@ -62,6 +62,7 @@ export function useOutputExport({
   fileName,
   finalStep,
   historyOrderedEntries,
+  liveOrderedEntries,
   isViewingHistory,
   hiddenTargetKeys,
   steps,
@@ -73,9 +74,23 @@ export function useOutputExport({
   const [stepRange, setStepRange] = useState("");
   const [stepRangeError, setStepRangeError] = useState(false);
 
+  const exportOrderedEntries = isViewingHistory
+    ? historyOrderedEntries
+    : liveOrderedEntries;
+  // Export order is fixed here once, so the step numbers in the range
+  // prompt, the step count and the generated markdown always agree.
+  const exportMessages = useMemo(() => {
+    if (exportOrderedEntries?.length) {
+      return mapOrderedHistoryEntriesToMessages(exportOrderedEntries);
+    }
+    return sortByOutputOrder(
+      allMessages.filter((message) => !message.isActivity)
+    );
+  }, [allMessages, exportOrderedEntries]);
+
   const visibleStepRange = useMemo(
-    () => getVisibleStepRange(allMessages, hiddenTargetKeys),
-    [allMessages, hiddenTargetKeys]
+    () => getVisibleStepRange(exportMessages, hiddenTargetKeys),
+    [exportMessages, hiddenTargetKeys]
   );
 
   const openModal = useCallback(() => {
@@ -97,17 +112,17 @@ export function useOutputExport({
 
   const totalCliSteps = useMemo(() => {
     const seen = new Set<string>();
-    for (const msg of allMessages) {
+    for (const msg of exportMessages) {
       if (msg.type === OUTPUT_MESSAGE_TYPES.CLI) {
         seen.add(getTargetKey(msg.target));
       }
     }
     return seen.size;
-  }, [allMessages]);
+  }, [exportMessages]);
 
   const buildExportMessages = useCallback(
     () =>
-      allMessages.map((msg) => ({
+      exportMessages.map((msg) => ({
         type: msg.type,
         target: msg.target,
         timestamp: msg.timestamp,
@@ -123,7 +138,7 @@ export function useOutputExport({
               : steps[msg.target.index]?.name?.trim() || undefined
             : undefined,
       })),
-    [allMessages, finalStep?.name, steps]
+    [exportMessages, finalStep?.name, steps]
   );
 
   const confirmExport = useCallback(() => {
@@ -153,13 +168,7 @@ export function useOutputExport({
           currentStep,
           totalSteps,
         },
-        {
-          orderedEntries:
-            isViewingHistory && historyOrderedEntries?.length
-              ? historyOrderedEntries
-              : undefined,
-          exportOptions,
-        }
+        { preordered: true, exportOptions }
       );
     } catch (error) {
       WebviewLog.error(
@@ -191,11 +200,10 @@ export function useOutputExport({
     buildExportMessages,
     currentStep,
     executionState,
+    exportOrderedEntries,
     fileName,
-    historyOrderedEntries,
     includeCommand,
     includeMetadata,
-    isViewingHistory,
     stepRange,
     totalSteps,
   ]);

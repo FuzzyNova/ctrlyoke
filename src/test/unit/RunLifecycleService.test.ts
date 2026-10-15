@@ -1,5 +1,8 @@
 import { suite, test } from "mocha";
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import type {
   QueueState,
   RunRef,
@@ -14,12 +17,15 @@ import {
 } from "../../types/DashboardConstants";
 import {
   RunLifecycleService,
+  RunDidNotPrepareError,
   type RunLifecycleInstancePort,
   type RunLifecycleRegistryPort,
   type RunLifecycleServiceHost,
   type RunLifecycleViewPort,
 } from "../../core/orchestration/RunLifecycleService";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   UserFeedback,
   UserFeedbackSink,
@@ -231,6 +237,63 @@ function createHost(
 }
 
 suite("RunLifecycleService continuation validation", () => {
+  test("settles a draft start when execution finishes without preparation", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-draft-no-prepare-")
+    );
+    try {
+      const manager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "draft step" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Lifecycle test",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const created = await manager.createWorkingFile(
+        "lifecycle-test",
+        [{ prompt: "draft step" }],
+        workspace,
+        "Lifecycle test"
+      );
+      const registry = new FakeRegistry();
+      const views = new FakeViews();
+      views.address = { workflowKey: created.workflowKey, kind: "draft" };
+      const instance = new FakeInstance(queueState(EXECUTION_STATES.IDLE));
+      instance.executeLoadedPromptFile = async () => undefined;
+      registry.viewedInstance = instance;
+      const baseHost = createHost(
+        registry,
+        views,
+        new WorkflowLineageRepository()
+      );
+      const host: RunLifecycleServiceHost = {
+        ...baseHost,
+        getWorkspaceRoot: () => workspace,
+        getInstanceForClient: () => instance,
+      };
+      const service = new RunLifecycleService(host);
+
+      await assert.rejects(
+        service.executeDraftAtAddress(
+          { workflowKey: created.workflowKey, kind: "draft" },
+          1,
+          1,
+          "panel"
+        ),
+        RunDidNotPrepareError
+      );
+      await fs.stat(WorkflowPaths.draftFilePath(workspace, created.workflowKey));
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("switching to a missing run keeps the current client view address", async () => {
     const registry = new FakeRegistry();
     const currentAddress: WorkflowViewAddress = {

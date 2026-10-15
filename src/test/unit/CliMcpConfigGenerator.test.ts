@@ -5,7 +5,9 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { parse } from "smol-toml";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
+import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 
 suite("CliMcpConfigGenerator", () => {
   // ──────────────────────────────────────────────────────────────────────────
@@ -237,7 +239,7 @@ suite("CliMcpConfigGenerator", () => {
           executionRoot,
           ".ctrlyoke",
           "temp",
-          "mcp-config-workflow.json"
+          `mcp-config-${WorkflowPaths.runArtifactStem(workingFile)}.json`
         )
       );
       assert.strictEqual(
@@ -248,6 +250,36 @@ suite("CliMcpConfigGenerator", () => {
         config.mcpServers.ctrlyoke.env.CTRLYOKE_WORKING_FILE,
         workingFile.replace(/\\/g, "/")
       );
+    });
+
+    test("uses distinct config paths for different runs and a draft", () => {
+      const workspaceRoot = path.join(os.tmpdir(), "mcp-config-run-scope");
+      const workflowKey = "workflow-2026-10-14T12-00-00" as WorkflowKey;
+      const workingFiles = [
+        path.join(
+          workspaceRoot,
+          workflowKey,
+          "run-2026-10-14T12-00-00-000Z",
+          "workflow.ctrlyoke.json"
+        ),
+        path.join(
+          workspaceRoot,
+          workflowKey,
+          "run-2026-10-14T12-01-00-000Z",
+          "workflow.ctrlyoke.json"
+        ),
+        path.join(workspaceRoot, workflowKey, "draft", "workflow.ctrlyoke.json"),
+      ];
+
+      const configPaths = workingFiles.map((workingFile) =>
+        CliMcpConfigGenerator.getConfigFilePath(
+          workingFile,
+          workspaceRoot,
+          "mcp-config"
+        )
+      );
+
+      assert.strictEqual(new Set(configPaths).size, workingFiles.length);
     });
 
     test("restrictive MCP artifacts are deleted by their cleanup mutation", async () => {

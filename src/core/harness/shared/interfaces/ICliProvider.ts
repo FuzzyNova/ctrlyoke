@@ -192,13 +192,10 @@ export interface ICliProvider {
    */
   finishHeadlessStdout?(): void;
 
-  /**
-   * Classify a process-spawn error that should trigger a retry without the
-   * resume flag. Providers that do not implement this method default to
-   * false; this belongs on the provider because it classifies transport
-   * errors, not CLI output.
-   */
-  isRecoverableSessionError?(error: unknown): boolean;
+  /** Input accepted by provider-specific invalid-session classifiers. */
+  isRecoverableSessionError?(
+    input: string | Error | { stderr?: string }
+  ): boolean;
 
   /**
    * Build complete CLI arguments array for execution
@@ -307,7 +304,10 @@ export interface ICliProvider {
    * Build native CLI arguments for resolved image attachments. Providers that
    * do not expose a verified native image-input mechanism leave this unset.
    */
-  buildImageAttachmentArgs?(imageFilePaths: readonly string[]): string[];
+  buildImageAttachmentArgs?(
+    imageFilePaths: readonly string[],
+    isInteractive: boolean
+  ): string[];
 
   /**
    * Generate MCP server configuration arguments (optional)

@@ -3,7 +3,6 @@ import { REDACTION_MARKER } from "@root/types/PreviewRedactor";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { useSettingsStore } from "@store/settingsStore";
-import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   buildDiffAnchorPrefix,
   formatAttemptLabel,
@@ -24,11 +23,7 @@ import {
   generateSingleStepMarkdownExport,
 } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
-import {
-  FINAL_STEP_PHASES,
-  OUTPUT_HISTORY_KINDS,
-  SCRIPT_OUTPUT_SOURCES,
-} from "@/types/messages";
+import { FINAL_STEP_PHASES, SCRIPT_OUTPUT_SOURCES } from "@/types/messages";
 import { hasRenderableDiff } from "@utils/diffUtils";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -962,7 +957,7 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("## Final Step Pass 1 — Initial Attempt");
   });
 
-  it("prefers canonical ordered entries when provided for export", () => {
+  it("keeps the caller's order only when outputs are preordered", () => {
     const outputs = [
       {
         type: "cli" as const,
@@ -999,41 +994,18 @@ describe("generateMarkdownExport", () => {
         },
       },
     ];
-    const orderedEntries: OrderedHistoryEntry[] = [
-      {
-        kind: OUTPUT_HISTORY_KINDS.STATUS,
-        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-        statusMessage: {
-          message: "canonical status",
-          severity: "info",
-          timestamp: 1000,
-        },
-        timestampMs: 1000,
-        sequence: 1,
-      },
-      {
-        kind: OUTPUT_HISTORY_KINDS.CLI,
-        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
-        attemptIndex: 0,
-        cliOutput: {
-          structured: {
-            events: [{ type: "text", data: { text: "canonical final" } }],
-            metadata: {},
-          },
-          elapsed: 0,
-          isStreaming: false,
-          timestampMs: 1000,
-        },
-        timestampMs: 1000,
-        sequence: 2,
-      },
-    ];
 
-    const md = generateMarkdownExport(outputs, metadata, { orderedEntries });
-    expect(md.indexOf("canonical status")).toBeLessThan(
-      md.indexOf("## Final Step Pass 1 — Initial Attempt")
+    const sorted = generateMarkdownExport(outputs, metadata);
+    expect(sorted.indexOf("legacy queue first")).toBeLessThan(
+      sorted.indexOf("legacy queue second")
     );
-    expect(md).toContain("canonical final");
+
+    const preordered = generateMarkdownExport(outputs, metadata, {
+      preordered: true,
+    });
+    expect(preordered.indexOf("legacy queue second")).toBeLessThan(
+      preordered.indexOf("legacy queue first")
+    );
   });
 });
 

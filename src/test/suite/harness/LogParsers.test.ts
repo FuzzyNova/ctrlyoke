@@ -3332,6 +3332,85 @@ suite("CopilotLogParser", () => {
       }
     });
 
+    test("should exclude the previous invocation's spans after switching OTel files", async () => {
+      const firstPath = createTempJsonlFile([
+        {
+          type: "span",
+          name: "chat gpt-5.4",
+          attributes: {
+            "gen_ai.usage.input_tokens": 1000,
+            "gen_ai.usage.output_tokens": 10,
+          },
+        },
+      ]);
+      const secondPath = createTempJsonlFile([
+        {
+          type: "span",
+          name: "chat gpt-5.4",
+          attributes: {
+            "gen_ai.usage.input_tokens": 2000,
+            "gen_ai.usage.output_tokens": 20,
+          },
+        },
+      ]);
+
+      try {
+        parser.setOtelFilePath(firstPath);
+        await parser.pollOtelContextWindow();
+        assert.strictEqual(parser.getFinalOtelUsage()?.inputTokens, 1000);
+
+        // A fresh invocation has a fresh exporter file, even at the same step index.
+        parser.setOtelFilePath(secondPath);
+        await parser.pollOtelContextWindow();
+        assert.strictEqual(parser.getFinalOtelUsage()?.inputTokens, 2000);
+        assert.strictEqual(parser.getFinalOtelUsage()?.outputTokens, 20);
+      } finally {
+        cleanupTempFile(firstPath);
+        cleanupTempFile(secondPath);
+      }
+    });
+
+    test("should reset cumulative usage when the OTel file is truncated", async () => {
+      const firstSpan = {
+        type: "span",
+        name: "chat gpt-5.4",
+        attributes: {
+          "gen_ai.usage.input_tokens": 5000,
+          "gen_ai.usage.output_tokens": 50,
+          description: "x".repeat(300),
+        },
+        events: [usageInfoEvent(5500, 128000)],
+      };
+      const secondSpan = {
+        type: "span",
+        name: "chat gpt-5.4",
+        attributes: {
+          "gen_ai.usage.input_tokens": 2000,
+          "gen_ai.usage.output_tokens": 20,
+        },
+        events: [usageInfoEvent(2200, 128000)],
+      };
+      const filePath = createTempJsonlFile([firstSpan]);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        await parser.pollOtelContextWindow();
+        assert.strictEqual(parser.getFinalOtelUsage()?.inputTokens, 5000);
+
+        fs.writeFileSync(filePath, JSON.stringify(secondSpan), "utf8");
+        assert.deepStrictEqual(await parser.pollOtelContextWindow(), {
+          used: 2200,
+          size: 128000,
+        });
+        const usage = parser.getFinalOtelUsage();
+        assert.strictEqual(usage?.inputTokens, 2000);
+        assert.strictEqual(usage?.outputTokens, 20);
+        assert.strictEqual(usage?.contextWindowUsedTokens, 2200);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
     test("should read usage_info events attached to the invoke_agent span (Copilot 1.0.92+)", async () => {
       const otelLines = [
         {

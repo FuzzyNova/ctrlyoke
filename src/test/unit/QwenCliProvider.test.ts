@@ -40,6 +40,124 @@ suite("QwenCliProvider", () => {
   });
 
   suite("hook registration", () => {
+    test("discards stale ctrlyoke groups while preserving user hook groups", async () => {
+      const workspaceRoot = await createTempWorkspace();
+      const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      const userGroup = {
+        hooks: [{ type: "command", command: "node user-hook.js" }],
+      };
+      await fs.writeFile(
+        settingsPath,
+        JSON.stringify({
+          hooks: {
+            SessionStart: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command:
+                      "node /old/extension/out/scripts/ctrlyoke-qwen-hook.js old-notifications",
+                  },
+                ],
+              },
+              userGroup,
+            ],
+          },
+        })
+      );
+      SettingsJsonHooksTracker.resetAll();
+      QwenTrustedHooksTracker.resetAll();
+      const provider = new QwenCliProvider(
+        SettingsJsonHooksTracker.getInstance("qwen"),
+        QwenTrustedHooksTracker.getInstance({
+          trustedHooksPath: path.join(workspaceRoot, "global", "trusted.json"),
+        })
+      );
+      const workflowPath = path.join(workspaceRoot, "workflow.yaml");
+
+      try {
+        await provider.buildNotificationHookArgs(
+          "extension",
+          workspaceRoot,
+          0,
+          workflowPath,
+          undefined,
+          []
+        );
+        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
+
+        const settings = JSON.parse(
+          await fs.readFile(settingsPath, "utf-8")
+        ) as { hooks: { SessionStart: unknown[] } };
+        assert.deepStrictEqual(settings.hooks.SessionStart, [userGroup]);
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
+        SettingsJsonHooksTracker.resetAll();
+        QwenTrustedHooksTracker.resetAll();
+        await removeTempWorkspace(workspaceRoot);
+      }
+    });
+
+    test("deletes stale-only settings and ctrlyoke gitignore", async () => {
+      const workspaceRoot = await createTempWorkspace();
+      const settingsDir = path.join(workspaceRoot, ".qwen");
+      const settingsPath = path.join(settingsDir, "settings.json");
+      const gitignorePath = path.join(settingsDir, ".gitignore");
+      await fs.mkdir(settingsDir, { recursive: true });
+      await fs.writeFile(
+        settingsPath,
+        JSON.stringify({
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command:
+                      "node /old/extension/ctrlyoke-qwen-hook.js old-notifications",
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      );
+      await fs.writeFile(
+        gitignorePath,
+        "# ctrlyoke temp files (auto-managed, do not commit)\nsettings.json\n.gitignore\n"
+      );
+      SettingsJsonHooksTracker.resetAll();
+      QwenTrustedHooksTracker.resetAll();
+      const provider = new QwenCliProvider(
+        SettingsJsonHooksTracker.getInstance("qwen"),
+        QwenTrustedHooksTracker.getInstance({
+          trustedHooksPath: path.join(workspaceRoot, "global", "trusted.json"),
+        })
+      );
+      const workflowPath = path.join(workspaceRoot, "workflow.yaml");
+
+      try {
+        await provider.buildNotificationHookArgs(
+          "extension",
+          workspaceRoot,
+          0,
+          workflowPath,
+          undefined,
+          []
+        );
+        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
+
+        await assert.rejects(fs.access(settingsPath), /ENOENT/);
+        await assert.rejects(fs.access(gitignorePath), /ENOENT/);
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workflowPath);
+        SettingsJsonHooksTracker.resetAll();
+        QwenTrustedHooksTracker.resetAll();
+        await removeTempWorkspace(workspaceRoot);
+      }
+    });
+
     test("registers workspace hooks with the hooks tracker lock owner", async () => {
       const workspaceRoot = await createTempWorkspace();
       const trustedHooksPath = path.join(

@@ -1,7 +1,7 @@
 # Bug Drain 2: Harness Runtime
 
 **Created:** October 14, 2026
-**Status:** Proposed. Plan 2 of 4 in the parallel bug drain.
+**Status:** Implemented (2026-10-15). Plan 2 of 4 in the parallel bug drain.
 **Runs via:** `out/templates/workflows/spec-driven-loop.ctrlyoke.yaml`, in its own git worktree.
 
 > **For the orchestrator:** queue one `append_step` per step in
@@ -214,8 +214,8 @@ each other.
   `No conversation found with session ID x`. Assert that a second `executeHeadless` call
   runs without `-r`, that its prompt files still exist, and that the temp files are
   cleaned up after the retry. `ClaudeCliProvider.test.ts`: the widened matcher.
-- **Tricky:** `FAILURE_KINDS` is probably in `src/types/` (check that no other plan
-  owns the file). The `finally` cleanup in `CliTransportCoordinator.executeHeadless`
+- **Tricky:** `FAILURE_KINDS` is in `src/types/DashboardConstants.ts`, which no plan
+  owns but several may touch; keep any addition there small and additive. The `finally` cleanup in `CliTransportCoordinator.executeHeadless`
   runs for every harness, so make sure the non-retry path still deletes temp files
   exactly once.
 
@@ -330,7 +330,11 @@ each other.
 
 ### Step 12: Permissions tab says Claude ignores Allowed Tools
 
-- **Fixes:** `dev/bugs/backlog/claude-allowed-tools-warning-says-ignored.md`
+> **Status (2026-10-15):** the code fix already landed in `6e9880e9a` before this drain
+> started, and the doc is in `dev/bugs/implemented/`. The fix survived Steps 4 and 11.
+> The screenshot still needs retaking because Playwright MCP was not attached.
+
+- **Fixes:** `dev/bugs/implemented/claude-allowed-tools-warning-says-ignored.md`
 - **Files:** `src/ui/webview-react/utils/compatibilityDiagnostics.ts`,
   `src/types/CompatibilityTypes.ts`, `images/screenshots/permissions-tab-800x1600.png`
 - **Approach:** split `isLossy` into "not enforced" (unsupported or no mechanism) and
@@ -415,10 +419,12 @@ each other.
   `src/ui/webview-react/utils/logger.ts`, `src/ui/webview-react/components/settings/SecretsSection.tsx`
 - **Approach:**
   - CodeMirror: change `"blur-sm"` back to `"blur"` in the `removeEventListener` call
-    and in the two comments. Keep the add/remove event names in one place so they
+    and in the two comments (around lines 554 and 1194). Keep the add/remove event names in one place so they
     cannot drift apart. Grep `src/ui/webview-react` for other event-name strings with a
     Tailwind `-sm`/`-xs` suffix, and fix any found in files this plan owns. List any in
-    other plans' files in the summary instead.
+    other plans' files in the summary instead. Real Tailwind classes such as
+    `backdrop-blur-sm` in a `className` are correct and must not be changed; only
+    DOM event names and comments about them count.
   - Logger: add a safe per-argument formatter (`Error` → name, message and stack;
     strings unchanged; anything else through `JSON.stringify` with a cycle-safe
     `WeakSet` replacer that also stringifies `BigInt`, falling back to `String(arg)`),

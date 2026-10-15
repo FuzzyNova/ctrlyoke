@@ -48,6 +48,14 @@ import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import { isExecutionOwnerState } from "./WorkflowInstanceRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
+/** Execution already reported its startup failure, so callers should not toast it again. */
+export class RunDidNotPrepareError extends Error {
+  constructor() {
+    super("Run did not start; see the workflow status for details");
+    this.name = "RunDidNotPrepareError";
+  }
+}
+
 export interface RunLifecycleRegistryPort {
   getInstances(): Map<string, RunLifecycleInstancePort>;
   getRetiredInstances(): Map<string, RunLifecycleInstancePort>;
@@ -538,6 +546,9 @@ export class RunLifecycleService {
         prepared = true;
         resolvePrepared();
       })
+      .then(() => {
+        if (!prepared) rejectPrepared(new RunDidNotPrepareError());
+      })
       .catch((error) => {
         if (!prepared) rejectPrepared(error);
         Log.error(
@@ -676,6 +687,9 @@ export class RunLifecycleService {
         }
         prepared = true;
         resolvePrepared();
+      })
+      .then(() => {
+        if (!prepared) rejectPrepared(new RunDidNotPrepareError());
       })
       .catch((error) => {
         if (!prepared) rejectPrepared(error);

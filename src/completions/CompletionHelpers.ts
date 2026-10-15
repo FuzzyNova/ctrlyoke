@@ -2,11 +2,9 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
 import { Log } from "../utils/Log";
-import { getGitTrackedFiles } from "../utils/GitUtils";
-import {
-  isSearchPathIgnored,
-  walkSearchFiles,
-} from "../utils/WorkspaceSearchFileWalker";
+import { listCompletionFiles } from "../utils/CompletionFileDiscovery";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { isSearchPathIgnored } from "../utils/WorkspaceSearchFileWalker";
 import {
   getVsCodeNamedWorkspaceRoots,
   getVsCodeWorkspaceRoot,
@@ -40,18 +38,10 @@ async function getCompletionFiles(): Promise<string[]> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   const results: string[] = [];
   for (const folder of folders) {
-    let paths: string[];
-    try {
-      paths = await getGitTrackedFiles(folder.uri.fsPath);
-    } catch (error) {
-      Log.warn(
-        `[Completions] git ls-files failed for ${folder.name}, falling back to workspace walk:`,
-        error
-      );
-      paths = (
-        await walkSearchFiles(folder.uri.fsPath, Date.now(), 100_000, 10_000)
-      ).files;
-    }
+    const paths = await listCompletionFiles(folder.uri.fsPath, {
+      respectGitignore:
+        ConfigurationUtils.shouldRespectGitignoreForCompletions(),
+    });
     for (const file of paths) {
       results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
     }
@@ -64,26 +54,30 @@ async function getCompletionFiles(): Promise<string[]> {
 /** VS Code composition root for the host-neutral completion engine. */
 export function getCompletionCore(): CompletionCore {
   if (!completionCore) {
-    const root = getVsCodeWorkspaceRoot();
-    const roots = getVsCodeNamedWorkspaceRoots();
     vsCodeSymbolIndex = new VsCodeSymbolIndex(getCompletionFiles);
     completionCore = new CompletionCore({
       isMultiRoot: isMultiRootWorkspace,
       getFiles: getCompletionFiles,
       symbols: new FallbackSymbolIndex(
         vsCodeSymbolIndex,
-        new RegexSymbolIndex(root, getCompletionFiles, (viewerPath) => {
-          const namedRoot = rootForViewerPath(viewerPath, roots);
-          const workspaceRoot = namedRoot?.fsPath ?? root;
-          const absolutePath = fromViewerPath(viewerPath, {
-            primaryRoot: root,
-            namedRoots: roots,
-          });
-          const relative = path.relative(workspaceRoot, absolutePath);
-          return relative === ".." || relative.startsWith(`..${path.sep}`)
-            ? undefined
-            : { absolutePath, workspaceRoot };
-        })
+        new RegexSymbolIndex(
+          getVsCodeWorkspaceRoot,
+          getCompletionFiles,
+          (viewerPath) => {
+            const primaryRoot = getVsCodeWorkspaceRoot();
+            const namedRoots = getVsCodeNamedWorkspaceRoots();
+            const namedRoot = rootForViewerPath(viewerPath, namedRoots);
+            const workspaceRoot = namedRoot?.fsPath ?? primaryRoot;
+            const absolutePath = fromViewerPath(viewerPath, {
+              primaryRoot,
+              namedRoots,
+            });
+            const relative = path.relative(workspaceRoot, absolutePath);
+            return relative === ".." || relative.startsWith(`..${path.sep}`)
+              ? undefined
+              : { absolutePath, workspaceRoot };
+          }
+        )
       ),
       editorContext: new VsCodeEditorContextSource(),
     });

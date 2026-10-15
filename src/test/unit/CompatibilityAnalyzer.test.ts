@@ -20,6 +20,7 @@ import {
 } from "../../types/DashboardConstants";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
+  PROMPT_INPUT_CAVEAT_CODES,
   getCompatibilityCaveatMessage,
   type HarnessCapabilityRegistrySnapshot,
   type InstalledHarnessCapabilities,
@@ -177,6 +178,56 @@ function mixedWorkflow(overrides: Partial<PromptFile> = {}): PromptFile {
 }
 
 suite("CompatibilityAnalyzer", () => {
+  test("points merged workflow and step hook diagnostics at their authored fields", () => {
+    const workflow: PromptFile = {
+      hooks: [
+        { event: "error", command: "workflow A" },
+        { event: "sessionStart", command: "workflow B" },
+      ],
+      steps: [
+        {
+          prompt: "Target",
+          hooks: [{ event: "sessionStart", command: "step B prime" }],
+        },
+      ],
+    };
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.CODEX_CLI]: installed(
+          HARNESS_IDS.CODEX_CLI,
+          true,
+          "partial",
+          "verified"
+        ),
+      })
+    );
+
+    assert.deepStrictEqual(
+      diagnostics
+        .filter((diagnostic) =>
+          ["error", "sessionStart"].includes(diagnostic.capability)
+        )
+        .map(({ capability, sourceTier, propertyPointer }) => ({
+          capability,
+          sourceTier,
+          propertyPointer,
+        })),
+      [
+        {
+          capability: "error",
+          sourceTier: "workflow",
+          propertyPointer: "/hooks/0/event",
+        },
+        {
+          capability: "sessionStart",
+          sourceTier: "prompt",
+          propertyPointer: "/steps/0/hooks/0/event",
+        },
+      ]
+    );
+  });
+
   test("resolves mixed harness consumers independently", () => {
     const diagnostics = analyze(
       mixedWorkflow(),
@@ -355,6 +406,59 @@ suite("CompatibilityAnalyzer", () => {
         },
       ]
     );
+  });
+
+  test("applies image capability fidelity overrides for the resolved execution mode", () => {
+    const opencode = installed(
+      HARNESS_IDS.OPENCODE_CLI,
+      true,
+      "exact",
+      "verified"
+    );
+    opencode.descriptor.promptInputs!.images.modeOverrides = {
+      interactive: {
+        fidelity: "partial",
+        mechanism: "native",
+        caveatCode: PROMPT_INPUT_CAVEAT_CODES.OPENCODE_INTERACTIVE_PATH_ONLY,
+      },
+    };
+    const workflow: PromptFile = {
+      steps: [
+        {
+          prompt: "Describe @interactive.png",
+          harness: HARNESS_IDS.OPENCODE_CLI,
+          executionMode: "interactive",
+        },
+        {
+          prompt: "Describe @headless.png",
+          harness: HARNESS_IDS.OPENCODE_CLI,
+          executionMode: "headless",
+        },
+      ],
+    };
+    const executionTargets = enumerateCompatibilityTargets(
+      workflow,
+      (prompt, file) =>
+        resolveExecutionProperties(prompt, file, {
+          defaults,
+          hostCanProvidePty: true,
+        })
+    );
+    const diagnostics = analyzeCompatibility({
+      workflow,
+      executionTargets,
+      capabilities: snapshot({ [HARNESS_IDS.OPENCODE_CLI]: opencode }),
+    });
+
+    assert.strictEqual(diagnostics.length, 1);
+    assert.strictEqual(
+      diagnostics[0].code,
+      COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL
+    );
+    assert.strictEqual(diagnostics[0].consumer?.kind, FINAL_STEP_PHASES.QUEUE);
+    assert.strictEqual(diagnostics[0].consumer?.stepIndex, 0);
+    assert.strictEqual(diagnostics[0].state.fidelity, "partial");
+    assert.match(diagnostics[0].message, /interactive mode/);
   });
 
   test("emits a blocking unavailable error only for an actual consumer", () => {

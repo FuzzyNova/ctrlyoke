@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/harness/copilot/CopilotCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -32,3 +32,11 @@ Stale `ctrlyoke-otel-workflow-p<N>.jsonl` files also pile up in `.ctrlyoke/temp/
 - Track every OTel path created during the workflow in a list, the same way `hookFilePaths` is tracked, and return all of them from `getAdditionalCleanupFilePaths`. Ideally delete each one as soon as its invocation's usage has been read.
 - In `readNewOtelLines`, reset the cumulative counters too when truncation is detected, or treat truncation as a fresh file.
 - Add a unit test that sets the same path twice on a file that already holds spans and asserts the second invocation's usage excludes the earlier spans.
+
+## Decision
+
+Each OTel export filename adds the invocation UUID already created by planCliArgs to the Step 1 run-specific stem. This keeps concurrent invocations isolated while preserving the workflow/run identity in temp filenames.
+
+## Follow-up (review)
+
+The provider clears its tracked OTel paths after workflow artifact cleanup, preventing the list from growing when the provider is reused across workflows.

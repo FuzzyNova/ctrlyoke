@@ -1,10 +1,13 @@
 import * as path from "path";
+import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { installHintFor } from "../shared/HarnessInstallHint";
 import {
   HARNESS_IDS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HEADLESS_SOURCE_MODES,
   PERSISTENT_VALUE_INSTALL_RESULT_KINDS,
   STATUS_LINE_HARNESS_IDS,
@@ -43,7 +46,10 @@ import {
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
-import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
+import {
+  type CompatibilityDiagnostic,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -182,6 +188,8 @@ export class CopilotCliProvider implements ICliProvider {
    * OTel section) since Copilot CLI 1.0.x removed every other per-turn context signal.
    */
   private otelFilePath: string | undefined;
+  /** Every invocation's OTel export file, retained for end-of-workflow cleanup. */
+  private readonly otelFilePaths: string[] = [];
   private statusLineToken: string | undefined;
   private readonly statusLineSnapshotPaths = new Set<string>();
   private statusLineDirectory: string | undefined;
@@ -285,6 +293,7 @@ export class CopilotCliProvider implements ICliProvider {
           PATH_CONSTANTS.TEMP_DIR,
           CopilotCliProvider.buildOtelFileName(
             workflowContext?.promptIndex ?? 0,
+            statusLineToken,
             workflowContext?.workingFilePath
           )
         )
@@ -313,6 +322,24 @@ export class CopilotCliProvider implements ICliProvider {
           workflowContext?.secretEnvironment
         )
     );
+    const diagnostics: CompatibilityDiagnostic[] = [
+      ...mcpPreparation.diagnostics,
+    ];
+    const warnSkippedAutoApproval = (message: string): void => {
+      Log.warn(`[CopilotCliProvider] ${message}`);
+      diagnostics.push({
+        code: "mcp.autoApprove.skipped",
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId: HARNESS_IDS.COPILOT_CLI,
+        capability: "mcp.server",
+        state: {
+          fidelity: "partial",
+          mechanism: "translated-cli",
+          verification: CAPABILITY_VERIFICATION_STATUSES.UNKNOWN,
+        },
+        message,
+      });
+    };
     if (
       mcpPreparation.cliArgs.length > 0 ||
       mcpPreparation.mutations.length > 0
@@ -331,6 +358,14 @@ export class CopilotCliProvider implements ICliProvider {
       const mcpServers = workflowContext?.resolvedProperties?.mcpServers ?? [];
       for (const server of mcpServers) {
         if (typeof server === "object" && server.autoApprove) {
+          const permissionServerPattern =
+            CopilotToolPermissionMapper.isSafeMcpServerId(server.id);
+          if (!permissionServerPattern) {
+            warnSkippedAutoApproval(
+              `Copilot CLI skipped auto-approval for MCP server "${server.id}": its ID conflicts with a built-in permission or contains unsupported characters.`
+            );
+            continue;
+          }
           if (server.autoApprove === true) {
             // Approve all tools from this server
             args.push("--allow-tool", server.id);
@@ -340,7 +375,21 @@ export class CopilotCliProvider implements ICliProvider {
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
             for (const pattern of server.autoApprove) {
-              args.push("--allow-tool", pattern);
+              const copilotPattern =
+                CopilotToolPermissionMapper.toCopilotMcpToolPattern(
+                  server.id,
+                  pattern
+                );
+              if (!copilotPattern) {
+                warnSkippedAutoApproval(
+                  `Copilot CLI skipped auto-approval for tool "${pattern}" from MCP server "${server.id}": tool names cannot contain parentheses or commas.`
+                );
+                continue;
+              }
+              args.push(
+                "--allow-tool",
+                copilotPattern
+              );
             }
             Log.debug(
               `[CopilotCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
@@ -436,12 +485,15 @@ export class CopilotCliProvider implements ICliProvider {
           apply: async () => {
             this.enablePromptModeRepoHooksForHeadlessRun = false;
             this.otelFilePath = otelFilePath;
+            if (otelFilePath) {
+              this.otelFilePaths.push(otelFilePath);
+            }
             this.logParser.setOtelFilePath(otelFilePath);
           },
         },
         ...mcpPreparation.mutations,
       ],
-      diagnostics: mcpPreparation.diagnostics,
+      diagnostics,
     };
   }
 
@@ -821,7 +873,7 @@ export class CopilotCliProvider implements ICliProvider {
    * Return additional file paths to delete after workflow cleanup.
    *
    * Includes all per-prompt hook files created during this workflow's
-   * interactive and headless sessions, plus this invocation's Copilot OTel
+   * interactive and headless sessions, plus every invocation's Copilot OTel
    * telemetry file (see buildOtelSpawnEnv()).
    *
    * Note: the .gitignore is NOT deleted here. Deletion is deferred to
@@ -832,7 +884,7 @@ export class CopilotCliProvider implements ICliProvider {
     return [
       ...this.hookFilePaths,
       ...this.statusLineSnapshotPaths,
-      ...(this.otelFilePath ? [this.otelFilePath] : []),
+      ...this.otelFilePaths,
       // Defensive: some environments have COPILOT_OTEL_FILE_EXPORTER_PATH set globally
       // to the relative path "NUL" (observed pointed at the Windows null device via
       // \\.\nul). buildOtelSpawnEnv() always overrides this for our own spawns, but
@@ -852,8 +904,8 @@ export class CopilotCliProvider implements ICliProvider {
    * we still clean it up if it's ours and the directory is now empty.
    */
   async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
-    const hookDir = path.join(workspaceRoot, ".github", "hooks");
     try {
+      const hookDir = path.join(workspaceRoot, ".github", "hooks");
       const files = await fs.readdir(hookDir);
       const hasOtherHookFiles = files.some(
         (f) => f.startsWith("ctrlyoke-") && f.endsWith(".json")
@@ -871,6 +923,9 @@ export class CopilotCliProvider implements ICliProvider {
     } catch {
       // Directory doesn't exist — nothing to clean up
       this.hooksDirGitignorePath = undefined;
+    } finally {
+      // getAdditionalCleanupFilePaths() has already handed these paths to cleanup.
+      this.otelFilePaths.length = 0;
     }
   }
 
@@ -957,13 +1012,10 @@ export class CopilotCliProvider implements ICliProvider {
    * Build a unique hook filename for a prompt.
    *
    * Format: `ctrlyoke-<stem>-p<promptIndex>.json`
-   * where stem is derived from the working file basename (already contains a
-   * timestamp and workflow name), or falls back to a timestamp.
+   * where stem identifies the working file's workflow lineage and run.
    *
    * Examples:
-   * - `ctrlyoke-1774891046-my-workflow-p0.json`
-   * - `ctrlyoke-1774891046-my-workflow-p1.json`
-   * - `ctrlyoke-1774891200-p0.json` (fallback when no workingFilePath)
+   * - `ctrlyoke-my-workflow-run-2026-07-20T10-30-00-000Z-p0.json`
    */
   private static buildHookFileName(
     promptIndex: number,
@@ -971,9 +1023,7 @@ export class CopilotCliProvider implements ICliProvider {
   ): string {
     let stem: string;
     if (workingFilePath) {
-      // Working file is like "1774891046-my-workflow.ctrlyoke.json"
-      // Strip extensions to get "1774891046-my-workflow"
-      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
+      stem = WorkflowPaths.runArtifactStem(workingFilePath);
     } else {
       stem = String(Date.now());
     }
@@ -984,22 +1034,23 @@ export class CopilotCliProvider implements ICliProvider {
 
   /**
    * Build a unique OTel export filename for a prompt, mirroring buildHookFileName()'s
-   * naming convention (same collision profile — accepted there already).
+   * run-specific naming convention.
    *
-   * Format: `ctrlyoke-otel-<stem>-p<promptIndex>.jsonl`
+   * Format: `ctrlyoke-otel-<stem>-p<promptIndex>-<invocationId>.jsonl`
    */
   private static buildOtelFileName(
     promptIndex: number,
+    invocationId: string,
     workingFilePath?: string
   ): string {
     let stem: string;
     if (workingFilePath) {
-      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
+      stem = WorkflowPaths.runArtifactStem(workingFilePath);
     } else {
       stem = String(Date.now());
     }
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
-    return `ctrlyoke-otel-${safeStem}-p${promptIndex}.jsonl`;
+    return `ctrlyoke-otel-${safeStem}-p${promptIndex}-${invocationId}.jsonl`;
   }
 
   /**

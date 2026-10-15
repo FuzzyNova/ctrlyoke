@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/utils/HarnessFileManager.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -40,3 +40,10 @@ Make discovery and deletion use the same path.
 - Smaller fix: try every accepted filename (`name.agent.md` and `name.md`) in every dir returned for the target and scope, not only `dirs[0]`.
 - Drop `force: true`, or check that at least one file was removed, so a delete that removes nothing reports an error instead of success.
 - Add a test that discovers a plain `.md` agent in `.agents/agents` and a `.agent.md` agent in `.claude/agents`, deletes each one, and asserts the file is gone.
+
+## Decision
+
+In this checkout, `getAgentsWorkspaceAgentDir` resolves to `.agents` directly,
+and discovery scans that directory without descending into an `agents` child.
+This fix preserves the existing discovery scope and deletes the paths discovery
+returns; the regression test uses `.agents/reviewer.md`.

@@ -1,12 +1,25 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { PROMPT_PROPERTIES } from "../../../types/DashboardConstants";
+import { withFileLock } from "../../../utils/FileLockUtils";
 import { Log } from "../../../utils/Log";
 import { AsyncMutex } from "./AsyncMutex";
 
 type WorkflowHookLayers = {
   ctrlyoke: Record<string, unknown[]>;
   userHooks: Record<string, unknown[]>;
+};
+
+type WorkflowHooks = {
+  settingsPath: string;
+  layers: WorkflowHookLayers;
+};
+
+type HooksBaseline = {
+  hooks: Record<string, unknown> | null;
+  fileExisted: boolean;
+  dirExisted: boolean;
+  gitignorePath: string | undefined;
 };
 
 export type HookBaselinePolicy = {
@@ -17,36 +30,18 @@ export type HookBaselinePolicy = {
 /**
  * Manages ctrlyoke hook injection into settings.json / hooks.json.
  *
- * Parallel safety: hooks injected by workflow A are preserved until A unregisters,
- * regardless of other workflows. Original hooks restored only on last unregister.
- *
- * Owns the in-process mutex for hook mutations. Callers must wrap
- * registerWorkflow/unregisterWorkflow inside withLock() so hook reads and
- * writes cannot interleave with another workflow's mutation.
+ * Hook state is isolated by resolved settings path. The in-process mutex
+ * serializes callers in this host, and a file lock protects baseline capture
+ * and writes from other ctrlyoke processes using the same settings file.
  */
 export class SettingsJsonHooksTracker {
   private static instances = new Map<string, SettingsJsonHooksTracker>();
 
-  /** Original hooks section before any ctrlyoke workflow touched it. */
-  private baselineHooksSection: Record<string, unknown> | null | undefined =
-    undefined;
+  /** Per-workflow ctrlyoke and user hooks, keyed by workflowKey. */
+  private workflowHooks = new Map<string, WorkflowHooks>();
 
-  /** Whether the target settings/hooks file existed before ctrlyoke touched it. */
-  private baselineFileExisted: boolean | undefined = undefined;
-
-  /**
-   * Whether the settings directory (e.g. `.qwen/`) existed before ctrlyoke
-   * touched it. Writing the file creates the directory, and deleting the file
-   * on restore does not remove it again, so without this every hook
-   * registration in a fresh workspace left an empty `.qwen/` behind.
-   */
-  private baselineDirExisted: boolean | undefined = undefined;
-
-  /** Path to a temporary .gitignore we wrote to hide newly-created settings files from git. */
-  private gitignorePath: string | undefined;
-
-  /** Per-workflow ctrlyoke hooks + user hooks, keyed by workflowKey. */
-  private workflowHooks = new Map<string, WorkflowHookLayers>();
+  /** Original state captured before the first workflow touched each path. */
+  private baselines = new Map<string, HooksBaseline>();
 
   /** Serializes hook settings read-modify-write operations in this host. */
   private readonly mutex = new AsyncMutex();
@@ -87,10 +82,7 @@ export class SettingsJsonHooksTracker {
     }
   }
 
-  /**
-   * Register a workflow's hook injection.
-   * Must be called under withLock().
-   */
+  /** Register a workflow's hook injection. Must be called under withLock(). */
   async registerWorkflow(
     workflowKey: string,
     workspaceRoot: string,
@@ -103,62 +95,75 @@ export class SettingsJsonHooksTracker {
       this.settingsDir,
       this.settingsFile
     );
+    const resolvedSettingsPath = path.resolve(settingsPath);
+    const dirExisted = await fs
+      .access(path.dirname(settingsPath))
+      .then(() => true)
+      .catch(() => false);
+    // The lock file lives beside settings.json, so ensure its parent exists.
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
 
-    // First registration captures the baseline and records the original-case path
-    if (this.workflowHooks.size === 0) {
-      const baseline = await this.readBaseline(settingsPath, baselinePolicy);
-      this.baselineHooksSection = baseline.hooks;
-      this.baselineFileExisted = baseline.fileExisted;
-      this.baselineDirExisted = await fs
-        .access(path.dirname(settingsPath))
-        .then(() => true)
-        .catch(() => false);
-    }
+    await withFileLock(settingsPath, async () => {
+      let baseline = this.baselines.get(resolvedSettingsPath);
+      if (!baseline) {
+        const snapshot = await this.readBaseline(settingsPath, baselinePolicy);
+        baseline = {
+          hooks: snapshot.hooks,
+          fileExisted: snapshot.fileExisted,
+          dirExisted,
+          gitignorePath: snapshot.gitignorePath,
+        };
+        this.baselines.set(resolvedSettingsPath, baseline);
+      }
 
-    // Track this workflow's hooks
-    this.workflowHooks.set(workflowKey, {
-      ctrlyoke: ctrlyokeHooks,
-      userHooks: workflowUserHooks,
+      this.workflowHooks.set(workflowKey, {
+        settingsPath,
+        layers: {
+          ctrlyoke: ctrlyokeHooks,
+          userHooks: workflowUserHooks,
+        },
+      });
+
+      await this.rebuildAndWriteSettings(settingsPath, resolvedSettingsPath);
+
+      if (!baseline.fileExisted && !baseline.gitignorePath) {
+        baseline.gitignorePath = await this.writeGitignore(workspaceRoot);
+      }
     });
-
-    // Rebuild and write merged settings
-    await this.rebuildAndWriteSettings(settingsPath, workspaceRoot);
-
-    // On first registration: if we just created the settings file fresh, hide it from git.
-    if (this.workflowHooks.size === 1 && this.baselineFileExisted === false) {
-      await this.writeGitignore(workspaceRoot);
-    }
   }
 
-  /**
-   * Unregister a workflow. Restores baseline when last workflow unregisters.
-   * Must be called under withLock().
-   */
+  /** Unregisters using the settings path captured at registration time. */
   async unregisterWorkflow(
     workflowKey: string,
-    workspaceRoot: string
+    _workspaceRoot: string
   ): Promise<void> {
-    if (!this.workflowHooks.has(workflowKey)) {
-      return;
-    }
+    const workflow = this.workflowHooks.get(workflowKey);
+    if (!workflow) return;
 
-    this.workflowHooks.delete(workflowKey);
+    const resolvedSettingsPath = path.resolve(workflow.settingsPath);
+    let removeSettingsDir = false;
+    await withFileLock(workflow.settingsPath, async () => {
+      this.workflowHooks.delete(workflowKey);
 
-    const settingsPath = path.join(
-      workspaceRoot,
-      this.settingsDir,
-      this.settingsFile
-    );
+      if (this.hasWorkflowsForPath(resolvedSettingsPath)) {
+        await this.rebuildAndWriteSettings(
+          workflow.settingsPath,
+          resolvedSettingsPath
+        );
+        return;
+      }
 
-    if (this.workflowHooks.size === 0) {
-      // Last workflow — restore baseline
-      await this.restoreBaseline(settingsPath);
-      this.baselineHooksSection = undefined;
-      this.baselineFileExisted = undefined;
-      this.baselineDirExisted = undefined;
-    } else {
-      // Other workflows still active — rebuild without this one
-      await this.rebuildAndWriteSettings(settingsPath, workspaceRoot);
+      const baseline = this.baselines.get(resolvedSettingsPath);
+      if (baseline) {
+        await this.restoreBaseline(workflow.settingsPath, baseline);
+        removeSettingsDir = !baseline.dirExisted && !baseline.fileExisted;
+        this.baselines.delete(resolvedSettingsPath);
+      }
+    });
+    // The file lock itself lives in this directory, so remove the directory
+    // only after withFileLock has released and deleted its lock file.
+    if (removeSettingsDir) {
+      await fs.rmdir(path.dirname(workflow.settingsPath)).catch(() => {});
     }
   }
 
@@ -166,12 +171,19 @@ export class SettingsJsonHooksTracker {
     return this.workflowHooks.size;
   }
 
+  private hasWorkflowsForPath(resolvedSettingsPath: string): boolean {
+    return [...this.workflowHooks.values()].some(
+      (workflow) => path.resolve(workflow.settingsPath) === resolvedSettingsPath
+    );
+  }
+
   /**
    * Write a temporary .gitignore to hide newly-created settings files from git.
-   * The .gitignore also hides itself, so neither file appears as untracked.
-   * No-op if a .gitignore already exists in the settings directory (user-owned file).
+   * Return its path only when this tracker created it.
    */
-  private async writeGitignore(workspaceRoot: string): Promise<void> {
+  private async writeGitignore(
+    workspaceRoot: string
+  ): Promise<string | undefined> {
     const gitignorePath = path.join(
       workspaceRoot,
       this.settingsDir,
@@ -179,9 +191,9 @@ export class SettingsJsonHooksTracker {
     );
     try {
       await fs.access(gitignorePath);
-      return; // Existing .gitignore — leave it alone
+      return undefined;
     } catch {
-      // File doesn't exist — write it
+      // File doesn't exist — write it.
     }
     const content = [
       "# ctrlyoke temp files (auto-managed, do not commit)",
@@ -189,8 +201,12 @@ export class SettingsJsonHooksTracker {
       ".gitignore",
       "",
     ].join("\n");
-    await fs.writeFile(gitignorePath, content, "utf-8").catch(() => {});
-    this.gitignorePath = gitignorePath;
+    try {
+      await fs.writeFile(gitignorePath, content, "utf-8");
+      return gitignorePath;
+    } catch {
+      return undefined;
+    }
   }
 
   private async readBaseline(
@@ -199,6 +215,7 @@ export class SettingsJsonHooksTracker {
   ): Promise<{
     fileExisted: boolean;
     hooks: Record<string, unknown> | null;
+    gitignorePath?: string;
   }> {
     let content: string;
     try {
@@ -212,22 +229,15 @@ export class SettingsJsonHooksTracker {
       const hooks = this.asRecord(settings.hooks);
       const discardHookGroup = policy?.discardHookGroup;
       if (!hooks || !discardHookGroup) {
-        return {
-          fileExisted: true,
-          hooks,
-        };
+        return { fileExisted: true, hooks };
       }
 
       let discardedGroup = false;
       const sanitizedHooks = Object.fromEntries(
         Object.entries(hooks).map(([event, value]) => {
-          if (!Array.isArray(value)) {
-            return [event, value];
-          }
+          if (!Array.isArray(value)) return [event, value];
           const retainedGroups = value.filter((group) => {
-            if (!discardHookGroup(group)) {
-              return true;
-            }
+            if (!discardHookGroup(group)) return true;
             discardedGroup = true;
             return false;
           });
@@ -246,117 +256,98 @@ export class SettingsJsonHooksTracker {
       );
       const containedOnlyDiscardedGroups =
         discardedGroup && !hasRetainedHookData && !hasOtherSettings;
+      const gitignorePath = containedOnlyDiscardedGroups
+        ? await this.findCtrlYokeGitignore(settingsPath)
+        : undefined;
 
       return {
-        // Treat an otherwise-empty provider-owned file like one ctrlyoke
-        // originally created so last-unregister removes it instead of restoring
-        // stale generated hooks as the baseline.
         fileExisted: !containedOnlyDiscardedGroups,
         hooks: containedOnlyDiscardedGroups ? null : sanitizedHooks,
+        gitignorePath,
       };
     } catch {
       return { fileExisted: true, hooks: null };
     }
   }
 
+  private async findCtrlYokeGitignore(
+    settingsPath: string
+  ): Promise<string | undefined> {
+    const gitignorePath = path.join(path.dirname(settingsPath), ".gitignore");
+    try {
+      const content = await fs.readFile(gitignorePath, "utf-8");
+      return content.startsWith("# ctrlyoke temp files")
+        ? gitignorePath
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async rebuildAndWriteSettings(
     settingsPath: string,
-    workspaceRoot: string
+    resolvedSettingsPath: string
   ): Promise<void> {
-    // Read current settings (preserving non-hooks keys like mcpServers)
     let settings: Record<string, unknown> = {};
     try {
-      const content = await fs.readFile(settingsPath, "utf-8");
-      settings = JSON.parse(content);
+      settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
     } catch {
-      // File doesn't exist — start fresh
+      // File doesn't exist — start fresh.
     }
 
-    const { events: baseHooks } = this.getBaselineHooksData();
-
-    // Collect all event names
-    const allEvents = new Set<string>();
-    for (const key of Object.keys(baseHooks)) {
-      allEvents.add(key);
-    }
-    for (const wfHooks of this.workflowHooks.values()) {
-      for (const key of Object.keys(wfHooks.ctrlyoke)) {
-        allEvents.add(key);
-      }
-      for (const key of Object.keys(wfHooks.userHooks)) {
-        allEvents.add(key);
-      }
+    const baseline = this.baselines.get(resolvedSettingsPath);
+    const baseHooks = this.getBaselineHooksData(baseline?.hooks);
+    const pathWorkflows = [...this.workflowHooks.values()].filter(
+      (workflow) => path.resolve(workflow.settingsPath) === resolvedSettingsPath
+    );
+    const allEvents = new Set<string>(Object.keys(baseHooks));
+    for (const workflow of pathWorkflows) {
+      for (const key of Object.keys(workflow.layers.ctrlyoke)) allEvents.add(key);
+      for (const key of Object.keys(workflow.layers.userHooks)) allEvents.add(key);
     }
 
-    // Merge: ctrlyoke first, workflow user hooks middle, baseline last
     const mergedHooks: Record<string, unknown[]> = {};
     for (const event of allEvents) {
       const eventGroups: unknown[] = [];
-      for (const wfHooks of this.workflowHooks.values()) {
-        for (const group of wfHooks.ctrlyoke[event] ?? []) {
-          eventGroups.push(group);
-        }
-
-        for (const group of wfHooks.userHooks[event] ?? []) {
-          eventGroups.push(group);
-        }
+      for (const workflow of pathWorkflows) {
+        eventGroups.push(...(workflow.layers.ctrlyoke[event] ?? []));
+        eventGroups.push(...(workflow.layers.userHooks[event] ?? []));
       }
-
-      const baselineHandlers = baseHooks[event] ?? [];
-      baselineHandlers.forEach((group) => {
-        eventGroups.push(group);
-      });
-
+      eventGroups.push(...(baseHooks[event] ?? []));
       mergedHooks[event] = eventGroups;
     }
 
     settings.hooks = mergedHooks;
-
-    await fs.mkdir(path.join(workspaceRoot, this.settingsDir), {
-      recursive: true,
-    });
-    await fs.writeFile(
-      settingsPath,
-      JSON.stringify(settings, null, 2),
-      "utf-8"
-    );
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
   }
 
-  private async restoreBaseline(settingsPath: string): Promise<void> {
+  private async restoreBaseline(
+    settingsPath: string,
+    baseline: HooksBaseline
+  ): Promise<void> {
     try {
-      if (this.baselineFileExisted === false) {
+      if (!baseline.fileExisted) {
         await fs.unlink(settingsPath).catch(() => {});
-        if (this.gitignorePath) {
-          await fs.unlink(this.gitignorePath).catch(() => {});
-          this.gitignorePath = undefined;
-        }
-        if (this.baselineDirExisted === false) {
-          // Non-recursive on purpose: anything else in the directory (another
-          // tracker's file, something the user added) keeps it in place.
-          await fs.rmdir(path.dirname(settingsPath)).catch(() => {});
+        if (baseline.gitignorePath) {
+          await fs.unlink(baseline.gitignorePath).catch(() => {});
         }
         return;
       }
 
       let settings: Record<string, unknown> = {};
       try {
-        const content = await fs.readFile(settingsPath, "utf-8");
-        settings = JSON.parse(content);
+        settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
       } catch {
         return;
       }
 
-      if (this.baselineHooksSection === null) {
+      if (baseline.hooks === null) {
         delete settings.hooks;
       } else {
-        settings.hooks = this.baselineHooksSection;
+        settings.hooks = baseline.hooks;
       }
-
-      await fs.writeFile(
-        settingsPath,
-        JSON.stringify(settings, null, 2),
-        "utf-8"
-      );
+      await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
     } catch (error) {
       Log.warn(
         `[SettingsJsonHooksTracker] Failed to restore hooks baseline for ${this.toolName}: ${error}`
@@ -364,22 +355,15 @@ export class SettingsJsonHooksTracker {
     }
   }
 
-  private getBaselineHooksData(): {
-    events: Record<string, unknown[]>;
-  } {
+  private getBaselineHooksData(
+    hooksSection: Record<string, unknown> | null | undefined
+  ): Record<string, unknown[]> {
     const events: Record<string, unknown[]> = {};
-    const hooksSection = this.baselineHooksSection;
-    if (!hooksSection) {
-      return { events };
-    }
-
+    if (!hooksSection) return events;
     for (const [key, value] of Object.entries(hooksSection)) {
-      if (Array.isArray(value)) {
-        events[key] = [...value];
-      }
+      if (Array.isArray(value)) events[key] = [...value];
     }
-
-    return { events };
+    return events;
   }
 
   private asRecord(value: unknown): Record<string, unknown> | null {

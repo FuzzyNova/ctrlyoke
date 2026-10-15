@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/harness/shared/CliExecutionRunner.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -38,3 +38,15 @@ Detect the rejection from the process result rather than from an exception:
 - Keep the prompt files alive for the retry. The coordinator's `finally` deletes them, so either defer `cleanupTempFiles` until any retry has finished (make the runner own cleanup, or add a `keepTempFiles` option for the first attempt), or rebuild the prompt files for the retry.
 - Clear `session.resolvedSessionId`, or persist the new ID, so later steps stop resuming the dead session.
 - Add a `CliExecutionRunner` unit test in which a fake transport returns `exitCode: 1` with `No conversation found with session ID x` on stderr. Assert that a second `executeHeadless` call is made without `-r` and that its prompt files still exist.
+
+## Decision
+
+Any provider implementing `isRecoverableSessionError` uses this recovery path, including Qwen. The runner owns temp-file cleanup across both attempts; the retry starts without the rejected session log source, and a newly extracted session ID is persisted for later steps.
+
+## Follow-up (review)
+
+The retry now rebuilds the launch through `ExecutionPlanBuilder`, preserving
+permission flags, headless hook arguments and suffix arguments while omitting
+the rejected resume ID. Session rejection is recognized only for resumed
+steps. The rejected ID is cleared before retry planning and response
+collection, including when the retry cannot produce a replacement ID.

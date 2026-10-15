@@ -38,6 +38,23 @@ const COPILOT_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   },
 };
 
+/** Copilot's built-in permission kinds cannot be used as MCP server IDs. */
+const COPILOT_BUILT_IN_PERMISSION_KINDS = new Set([
+  "memory",
+  "read",
+  "shell",
+  "url",
+  "write",
+]);
+
+const COPILOT_READ_ONLY_TOOLS: readonly string[] = [
+  "grep",
+  "list_files",
+  "read",
+  "read_file",
+  "search_files",
+] as const;
+
 /**
  * Copilot CLI Tool Permission Mapper
  *
@@ -67,17 +84,28 @@ export class CopilotToolPermissionMapper
 {
   readonly capabilities = COPILOT_PERMISSION_CAPABILITIES;
 
+  static isSafeMcpServerId(serverId: string): boolean {
+    return (
+      !COPILOT_BUILT_IN_PERMISSION_KINDS.has(serverId.toLowerCase()) &&
+      !/[(),\s]/.test(serverId)
+    );
+  }
+
+  static toCopilotMcpToolPattern(
+    serverId: string,
+    tool: string
+  ): string | null {
+    if (!this.isSafeMcpServerId(serverId) || /[(),]/.test(tool)) {
+      return null;
+    }
+    return `${serverId}(${tool})`;
+  }
+
   /**
    * Read-only tools that don't require explicit permission
    * (Copilot CLI auto-grants these)
    */
-  private readonly READ_ONLY_TOOLS = [
-    "grep",
-    "list_files",
-    "read",
-    "read_file",
-    "search_files",
-  ];
+  private readonly READ_ONLY_TOOLS = COPILOT_READ_ONLY_TOOLS;
 
   /**
    * Build Copilot CLI permission arguments
@@ -194,6 +222,9 @@ export class CopilotToolPermissionMapper
     const serverId = rest.slice(0, sepIdx);
     const toolName = rest.slice(sepIdx + 2);
     if (!serverId || !toolName) return null;
-    return `${serverId}(${toolName})`;
+    return CopilotToolPermissionMapper.toCopilotMcpToolPattern(
+      serverId,
+      toolName
+    );
   }
 }
