@@ -44,6 +44,19 @@ export interface CliResolvedCommand {
 
 const launcherCache = new Map<string, Promise<CliLauncher>>();
 const MAX_BATCH_PROXY_BYTES = 16 * 1024;
+let windowsCommandMetadataResolver = getWindowsCommandMetadata;
+
+export function setWindowsCommandMetadataResolverForTests(
+  resolver: typeof getWindowsCommandMetadata
+): () => void {
+  const previous = windowsCommandMetadataResolver;
+  windowsCommandMetadataResolver = resolver;
+  launcherCache.clear();
+  return () => {
+    windowsCommandMetadataResolver = previous;
+    launcherCache.clear();
+  };
+}
 
 export async function resolveCliCommand(
   commandName: string,
@@ -95,24 +108,39 @@ async function getCliLauncher(commandName: string): Promise<CliLauncher> {
     return cached;
   }
 
-  const resolutionPromise =
+  const resolutionPromise: Promise<CliLauncher> =
     process.platform === "win32"
       ? resolveWindowsLauncher(commandName)
-      : Promise.resolve({
-          kind: "direct" as const,
+      : Promise.resolve<CliLauncher>({
+          kind: "direct",
           command: commandName,
           prefixArgs: [],
         });
 
   launcherCache.set(cacheKey, resolutionPromise);
-  return resolutionPromise;
+  try {
+    const launcher = await resolutionPromise;
+    if (
+      launcher.kind === "direct" &&
+      !launcher.resolvedPath &&
+      launcherCache.get(cacheKey) === resolutionPromise
+    ) {
+      launcherCache.delete(cacheKey);
+    }
+    return launcher;
+  } catch (error) {
+    if (launcherCache.get(cacheKey) === resolutionPromise) {
+      launcherCache.delete(cacheKey);
+    }
+    throw error;
+  }
 }
 
 async function resolveWindowsLauncher(
   commandName: string
 ): Promise<CliLauncher> {
   const shell = resolveWindowsShell();
-  const metadata = await getWindowsCommandMetadata(commandName, shell);
+  const metadata = await windowsCommandMetadataResolver(commandName, shell);
 
   if (!metadata) {
     Log.warn(
@@ -351,7 +379,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 async function resolveBareNodeExecutable(
   shell: string
 ): Promise<string | undefined> {
-  const metadata = await getWindowsCommandMetadata("node", shell);
+  const metadata = await windowsCommandMetadataResolver("node", shell);
   return metadata ? getWindowsCommandPath(metadata) : undefined;
 }
 

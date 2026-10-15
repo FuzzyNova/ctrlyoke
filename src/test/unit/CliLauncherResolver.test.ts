@@ -1,6 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { parsePowerShellBatchProxyTarget } from "../../core/harness/shared/CliLauncherResolver";
+import {
+  parsePowerShellBatchProxyTarget,
+  resolveCliCommand,
+  setWindowsCommandMetadataResolverForTests,
+} from "../../core/harness/shared/CliLauncherResolver";
 
 suite("CliLauncherResolver", () => {
   test("recognizes a pure PowerShell batch proxy", () => {
@@ -55,5 +59,35 @@ suite("CliLauncherResolver", () => {
       ),
       undefined
     );
+  });
+
+  test("retries a failed Windows lookup and caches a resolved launcher", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32" });
+    let probeCount = 0;
+    const restoreResolver = setWindowsCommandMetadataResolverForTests(
+      async () => {
+        probeCount += 1;
+        return probeCount === 1 ? undefined : { Path: "C:\\Tools\\codex.exe" };
+      }
+    );
+
+    try {
+      const fallback = await resolveCliCommand("codex", ["--version"]);
+      assert.strictEqual(fallback.launcherKind, "direct");
+      assert.strictEqual(fallback.resolvedPath, undefined);
+
+      const resolved = await resolveCliCommand("codex", ["--version"]);
+      assert.strictEqual(resolved.resolvedPath, "C:\\Tools\\codex.exe");
+      assert.strictEqual(resolved.command, "C:\\Tools\\codex.exe");
+
+      await resolveCliCommand("codex", ["--help"]);
+      assert.strictEqual(probeCount, 2, "successful launcher should be cached");
+    } finally {
+      restoreResolver();
+      if (originalPlatform) {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    }
   });
 });
