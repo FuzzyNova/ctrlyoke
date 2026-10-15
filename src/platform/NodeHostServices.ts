@@ -26,6 +26,7 @@ import type { EditorContextSource } from "../completions/EditorContextSource";
 import { listCompletionFiles } from "../utils/CompletionFileDiscovery";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { Log } from "../utils/Log";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { configService } from "../config/CtrlYokeConfigService";
 import { initializeRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
@@ -136,7 +137,8 @@ export async function createNodeHostServices(options: {
   ]);
   const getCompletionFiles = async (): Promise<string[]> => {
     return listCompletionFiles(cwd, {
-      respectGitignore: configService.get("ui").respectGitignoreForCompletions,
+      respectGitignore:
+        ConfigurationUtils.shouldRespectGitignoreForCompletions(),
     });
   };
   const editorContext: EditorContextSource = {

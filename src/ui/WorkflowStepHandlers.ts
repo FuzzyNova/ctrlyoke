@@ -1,5 +1,4 @@
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
-import { RunDidNotPrepareError } from "../core/orchestration/RunLifecycleService";
 import {
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
@@ -555,7 +554,6 @@ export class WorkflowStepHandlers {
         ctx.clientId
       );
     } catch (error) {
-      if (error instanceof RunDidNotPrepareError) return;
       this.mutationCoordinator.showRunActionFailure(ctx, "run draft", error);
     }
   }
@@ -575,7 +573,6 @@ export class WorkflowStepHandlers {
         ctx.clientId
       );
     } catch (error) {
-      if (error instanceof RunDidNotPrepareError) return;
       this.mutationCoordinator.showRunActionFailure(ctx, "re-run", error);
     }
   }

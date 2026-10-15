@@ -61,10 +61,12 @@ function renderExportHook({
   isViewingHistory = false,
   historyOrderedEntries,
   liveEntries = liveOrderedEntries,
+  steps = [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
 }: {
   isViewingHistory?: boolean;
   historyOrderedEntries?: OrderedHistoryEntry[];
   liveEntries?: OrderedHistoryEntry[];
+  steps?: Array<{ prompt: string; name?: string }>;
 } = {}) {
   return renderHook(() =>
     useOutputExport({
@@ -77,7 +79,7 @@ function renderExportHook({
       liveOrderedEntries: isViewingHistory ? undefined : liveEntries,
       hiddenTargetKeys: ["queue:1"],
       isViewingHistory,
-      steps: [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
+      steps,
       totalSteps: 3,
     })
   );
@@ -125,6 +127,28 @@ describe("useOutputExport", () => {
     expect(message.content).not.toContain("activity slice");
     expect(result.current.totalCliSteps).toBe(1);
   });
+
+  it.each([false, true])(
+    "labels exported steps with their configured names (history: %s)",
+    (isViewingHistory) => {
+      const { result } = renderExportHook({
+        isViewingHistory,
+        historyOrderedEntries: isViewingHistory
+          ? liveOrderedEntries
+          : undefined,
+        steps: [
+          { prompt: "one", name: "Refactor parser" },
+          { prompt: "two" },
+          { prompt: "three" },
+        ],
+      });
+
+      act(() => result.current.confirmExport());
+
+      const message = postMessage.mock.calls[0][0] as { content: string };
+      expect(message.content).toMatch(/^## Step 1: Refactor parser — /m);
+    }
+  );
 
   it("keeps history export on the aggregate ordered entries", () => {
     const { result } = renderExportHook({

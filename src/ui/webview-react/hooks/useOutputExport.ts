@@ -3,6 +3,7 @@ import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import {
   generateMarkdownExport,
+  sortByOutputOrder,
   type ExportOptions,
 } from "@utils/markdownExport";
 import {
@@ -31,7 +32,7 @@ interface UseOutputExportInput {
 }
 
 function getVisibleStepRange(
-  allMessages: readonly OutputMessage[],
+  orderedMessages: readonly OutputMessage[],
   hiddenTargetKeys: readonly string[]
 ): string {
   if (hiddenTargetKeys.length === 0) return "";
@@ -39,13 +40,7 @@ function getVisibleStepRange(
   const hiddenKeys = new Set(hiddenTargetKeys);
   const seenKeys = new Set<string>();
   const visibleStepNumbers: number[] = [];
-  const sortedMessages = [...allMessages].sort(
-    (left, right) =>
-      left.timestamp - right.timestamp ||
-      (left.sequence ?? 0) - (right.sequence ?? 0)
-  );
-
-  for (const message of sortedMessages) {
+  for (const message of orderedMessages) {
     if (message.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
 
     const key = getTargetKey(message.target);
@@ -82,11 +77,15 @@ export function useOutputExport({
   const exportOrderedEntries = isViewingHistory
     ? historyOrderedEntries
     : liveOrderedEntries;
+  // Export order is fixed here once, so the step numbers in the range
+  // prompt, the step count and the generated markdown always agree.
   const exportMessages = useMemo(() => {
     if (exportOrderedEntries?.length) {
       return mapOrderedHistoryEntriesToMessages(exportOrderedEntries);
     }
-    return allMessages.filter((message) => !message.isActivity);
+    return sortByOutputOrder(
+      allMessages.filter((message) => !message.isActivity)
+    );
   }, [allMessages, exportOrderedEntries]);
 
   const visibleStepRange = useMemo(
@@ -169,12 +168,7 @@ export function useOutputExport({
           currentStep,
           totalSteps,
         },
-        {
-          orderedEntries: exportOrderedEntries?.length
-            ? exportOrderedEntries
-            : undefined,
-          exportOptions,
-        }
+        { preordered: true, exportOptions }
       );
     } catch (error) {
       WebviewLog.error(
