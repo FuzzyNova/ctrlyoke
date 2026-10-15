@@ -1039,14 +1039,21 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Check if error is a Claude CLI invalid session error.
+   * Check whether stderr or an error describes a rejected Claude session.
    *
-   * This classifies a process-spawn error so the runner can retry without
+   * This classifies a process result so the runner can retry without
    * the resume flag; it is intentionally a provider concern, not output
    * parsing.
    */
-  isRecoverableSessionError(error: unknown): boolean {
-    const message = getErrorMessage(error);
+  isRecoverableSessionError(
+    input: string | Error | { stderr?: string }
+  ): boolean {
+    const message =
+      typeof input === "string"
+        ? input
+        : input instanceof Error
+          ? getErrorMessage(input)
+          : (input.stderr ?? "");
     return (
       message.includes("--resume requires a valid session ID") ||
       message.includes("Session IDs must be in UUID format") ||

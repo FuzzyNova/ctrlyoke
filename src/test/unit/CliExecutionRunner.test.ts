@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, teardown, test } from "mocha";
 import {
   CTRLYOKE_ENV_VARS,
@@ -25,6 +28,7 @@ function createProvider(options?: {
     onCancel?: () => boolean
   ) => Promise<{ completed: boolean; error?: string; data?: unknown }>;
   discoverSessionLog?: () => Promise<string | null>;
+  recoverableSessionError?: boolean;
 }): ICliProvider {
   return {
     config: {
@@ -77,6 +81,21 @@ function createProvider(options?: {
       getFinalEventsOnCompletion: async () => [],
     },
     buildCliArgs: async () => [],
+    ...(options?.recoverableSessionError
+      ? {
+          isRecoverableSessionError: (
+            input: string | Error | { stderr?: string }
+          ) => {
+            const message =
+              typeof input === "string"
+                ? input
+                : input instanceof Error
+                  ? input.message
+                  : (input.stderr ?? "");
+            return message.includes("No conversation found with session ID");
+          },
+        }
+      : {}),
     buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
       ...baseArgs,
       prompt,
@@ -107,6 +126,13 @@ function createRunner(options?: {
   };
   headlessError?: Error;
   cleanupTempFiles?: (paths: string[]) => Promise<void>;
+  recoverableSessionError?: boolean;
+  headlessResponses?: Array<{
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+  }>;
+  onHeadlessAttempt?: (args: string[], keepTempFiles: boolean) => Promise<void>;
 }) {
   const failureTracker = new CliFailureTracker();
   let failureReason: string | undefined;
@@ -115,6 +141,7 @@ function createRunner(options?: {
   let standaloneTerminations = 0;
   let embeddedPtyStarts = 0;
   let inheritedStdioStarts = 0;
+  let headlessAttempt = 0;
   const provider = createProvider(options);
 
   const runner = new CliExecutionRunner({
@@ -145,20 +172,36 @@ function createRunner(options?: {
         embeddedPtyStarts++;
         failureTracker.capturePtyExit(0, []);
       },
-      executeHeadless: async (_args, _prompt, tempFiles, callback, env) => {
+      executeHeadless: async (
+        args,
+        _prompt,
+        tempFiles,
+        callback,
+        env,
+        _source,
+        _resolvedCommand,
+        _secretNames,
+        keepTempFiles
+      ) => {
         observedHeadlessEnv = env;
+        const attempt = headlessAttempt++;
         try {
+          await options?.onHeadlessAttempt?.(args, keepTempFiles ?? false);
           if (options?.headlessError) {
             throw options.headlessError;
           }
-          return await callback({
-            stdout: "",
-            stderr: options?.collectedHeadlessResponse?.error ?? "",
-            exitCode:
-              options?.collectedHeadlessResponse?.success === false ? 1 : 0,
-          });
+          return await callback(
+            options?.headlessResponses?.[attempt] ?? {
+              stdout: "",
+              stderr: options?.collectedHeadlessResponse?.error ?? "",
+              exitCode:
+                options?.collectedHeadlessResponse?.success === false ? 1 : 0,
+            }
+          );
         } finally {
-          await options?.cleanupTempFiles?.(tempFiles);
+          if (!keepTempFiles) {
+            await options?.cleanupTempFiles?.(tempFiles);
+          }
         }
       },
       writeToCurrentPtySession:
@@ -243,6 +286,94 @@ suite("CliExecutionRunner", () => {
     await counters.runner.executeHeadless(session, []);
     await fs.access(tempPath);
     await fs.rm(tempPath, { force: true });
+  });
+
+  test("retries a rejected session without resume and cleans prompt files afterward", async () => {
+    const tempPath = path.join(
+      os.tmpdir(),
+      `ctrlyoke-session-retry-${Date.now()}.txt`
+    );
+    await fs.writeFile(tempPath, "prompt attachment");
+    let cleanupCalls = 0;
+    let attempt = 0;
+    const counters = createRunner({
+      recoverableSessionError: true,
+      headlessResponses: [
+        {
+          stdout: "",
+          stderr: "No conversation found with session ID x",
+          exitCode: 1,
+        },
+        { stdout: "retry succeeded", stderr: "", exitCode: 0 },
+      ],
+      collectedHeadlessResponse: { success: true, sessionId: "fresh-session" },
+      onHeadlessAttempt: async (args, keepTempFiles) => {
+        attempt++;
+        assert.strictEqual(keepTempFiles, true);
+        if (attempt === 2) {
+          assert.strictEqual(args.includes("-r"), false);
+          await fs.access(tempPath);
+        }
+      },
+      cleanupTempFiles: async (paths) => {
+        cleanupCalls++;
+        await Promise.all(
+          paths.map((filePath) => fs.rm(filePath, { force: true }))
+        );
+      },
+    });
+    const session = new CliExecutionSession({
+      prompt: { prompt: "retry this" },
+      resolvedSessionId: "x",
+    });
+    session.preparePrompt("@prompt.txt", [tempPath]);
+
+    try {
+      assert.strictEqual(
+        await counters.runner.executeHeadless(session, ["-r", "x"]),
+        true
+      );
+      assert.strictEqual(attempt, 2);
+      assert.strictEqual(session.effectiveSessionId, "fresh-session");
+      assert.strictEqual(cleanupCalls, 1);
+      await assert.rejects(fs.access(tempPath));
+    } finally {
+      await fs.rm(tempPath, { force: true });
+    }
+  });
+
+  test("cleans prompt files once when a recoverable-session provider does not retry", async () => {
+    const tempPath = path.join(
+      os.tmpdir(),
+      `ctrlyoke-session-no-retry-${Date.now()}.txt`
+    );
+    await fs.writeFile(tempPath, "prompt attachment");
+    let cleanupCalls = 0;
+    const counters = createRunner({
+      recoverableSessionError: true,
+      onHeadlessAttempt: async (_args, keepTempFiles) => {
+        assert.strictEqual(keepTempFiles, true);
+      },
+      cleanupTempFiles: async (paths) => {
+        cleanupCalls++;
+        await Promise.all(
+          paths.map((filePath) => fs.rm(filePath, { force: true }))
+        );
+      },
+    });
+    const session = new CliExecutionSession({ prompt: { prompt: "no retry" } });
+    session.preparePrompt("@prompt.txt", [tempPath]);
+
+    try {
+      assert.strictEqual(
+        await counters.runner.executeHeadless(session, []),
+        true
+      );
+      assert.strictEqual(cleanupCalls, 1);
+      await assert.rejects(fs.access(tempPath));
+    } finally {
+      await fs.rm(tempPath, { force: true });
+    }
   });
 
   test("keeps hook env files until the user Stop hook can run", async () => {

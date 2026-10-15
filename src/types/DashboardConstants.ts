@@ -2995,6 +2995,7 @@ export const FAILURE_KINDS = {
   PROCESS_EXIT: "processExit",
   HARNESS_ERROR: "harnessError",
   HARNESS_NOT_INSTALLED: "harnessNotInstalled",
+  SESSION_REJECTED: "sessionRejected",
   TIMEOUT: "timeout",
   UNKNOWN: "unknown",
 } as const;

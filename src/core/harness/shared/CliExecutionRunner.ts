@@ -5,7 +5,6 @@ import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
   FAILURE_KINDS,
   CTRLYOKE_ENV_VARS,
-  HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   INTERACTIVE_TERMINAL_MODES,
   type InteractiveTerminalMode,
@@ -383,6 +382,8 @@ export class CliExecutionRunner {
         : null;
     hookMonitor?.start();
 
+    const deferTempFileCleanup =
+      this.deps.provider.isRecoverableSessionError !== undefined;
     const executeWithRecovery = async (
       args: string[],
       activeSource: HeadlessStreamingSource | undefined,
@@ -403,50 +404,48 @@ export class CliExecutionRunner {
           headlessEnv,
           activeSource,
           command,
-          session.resolvedProperties?.secrets
+          session.resolvedProperties?.secrets,
+          deferTempFileCleanup
         );
       } catch (error) {
-        if (this.deps.provider.isRecoverableSessionError?.(error) ?? false) {
-          const currentHarness =
-            session.resolvedProperties?.harness ??
-            this.deps.provider.config.harnessId;
+        if (
+          error instanceof CliTransportError &&
+          error.failureKind === FAILURE_KINDS.SESSION_REJECTED &&
+          deferTempFileCleanup
+        ) {
+          Log.warn(
+            `[CliExecutionRunner] ${this.deps.provider.config.displayName} rejected session ID "${session.resolvedSessionId}". Retrying without resume flag.`
+          );
 
-          if (currentHarness === HARNESS_IDS.CLAUDE_CLI) {
-            Log.warn(
-              `[CliExecutionRunner] Claude CLI rejected session ID "${session.resolvedSessionId}". ` +
-                `Retrying without resume flag.`
-            );
+          const argsWithoutResume = await this.deps.provider.buildCliArgs(
+            session.prompt,
+            false,
+            this.deps.runtimeState.getExtensionPath(),
+            this.deps.runtimeState.getWorkspaceRoot() || "",
+            undefined,
+            session.workflowContext,
+            this.deps.runtimeState.getWorkspaceRoots?.(),
+            this.deps.runtimeState.getApprovedExternalRoots?.()
+          );
 
-            const argsWithoutResume = await this.deps.provider.buildCliArgs(
-              session.prompt,
-              false,
-              this.deps.runtimeState.getExtensionPath(),
-              this.deps.runtimeState.getWorkspaceRoot() || "",
-              undefined,
-              session.workflowContext,
-              this.deps.runtimeState.getWorkspaceRoots?.(),
-              this.deps.runtimeState.getApprovedExternalRoots?.()
-            );
+          const retryCallback = this.buildHeadlessResponseCallback(
+            session,
+            " (retry)",
+            undefined
+          );
 
-            const retryCallback = this.buildHeadlessResponseCallback(
-              session,
-              " (retry)",
-              undefined
-            );
-
-            const retrySource = this.createHeadlessStreamingSource(session);
-
-            return await this.deps.transportCoordinator.executeHeadless(
-              argsWithoutResume,
-              session.promptArgument,
-              session.tempFilePaths,
-              retryCallback,
-              headlessEnv,
-              retrySource,
-              undefined,
-              session.resolvedProperties?.secrets
-            );
-          }
+          // The old session's log is not a source for the fresh session.
+          return await this.deps.transportCoordinator.executeHeadless(
+            argsWithoutResume,
+            session.promptArgument,
+            session.tempFilePaths,
+            retryCallback,
+            headlessEnv,
+            undefined,
+            undefined,
+            session.resolvedProperties?.secrets,
+            true
+          );
         }
 
         throw error;
@@ -490,6 +489,10 @@ export class CliExecutionRunner {
       Log.error("[CliExecutionRunner] Headless execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return false;
+    } finally {
+      if (deferTempFileCleanup) {
+        await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
+      }
     }
   }
 
@@ -854,6 +857,17 @@ export class CliExecutionRunner {
     const responseCollector = this.deps.factories.createResponseCollector();
 
     return async (result) => {
+      if (
+        result.exitCode !== 0 &&
+        !result.terminationSignal &&
+        this.deps.provider.isRecoverableSessionError?.(result)
+      ) {
+        throw new CliTransportError(
+          result.stderr,
+          FAILURE_KINDS.SESSION_REJECTED
+        );
+      }
+
       if (ConfigurationUtils.shouldLogRawCliOutput()) {
         Log.trace(
           `[${this.deps.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`

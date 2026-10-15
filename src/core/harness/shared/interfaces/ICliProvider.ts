@@ -192,13 +192,10 @@ export interface ICliProvider {
    */
   finishHeadlessStdout?(): void;
 
-  /**
-   * Classify a process-spawn error that should trigger a retry without the
-   * resume flag. Providers that do not implement this method default to
-   * false; this belongs on the provider because it classifies transport
-   * errors, not CLI output.
-   */
-  isRecoverableSessionError?(error: unknown): boolean;
+  /** Input accepted by provider-specific invalid-session classifiers. */
+  isRecoverableSessionError?(
+    input: string | Error | { stderr?: string }
+  ): boolean;
 
   /**
    * Build complete CLI arguments array for execution

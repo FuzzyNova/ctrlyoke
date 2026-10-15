@@ -117,7 +117,8 @@ export interface CliExecutionTransportCoordinator {
     env?: Record<string, string>,
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
-    secretNames?: readonly string[]
+    secretNames?: readonly string[],
+    keepTempFiles?: boolean
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -387,7 +388,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     env?: Record<string, string>,
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
-    secretNames?: readonly string[]
+    secretNames?: readonly string[],
+    keepTempFiles = false
   ): Promise<boolean> {
     this.activeHeadlessLogTail = source?.logTail;
     try {
@@ -568,7 +570,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       return false;
     } finally {
       this.activeHeadlessLogTail = undefined;
-      await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
+      if (!keepTempFiles) {
+        await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
+      }
     }
   }
 
