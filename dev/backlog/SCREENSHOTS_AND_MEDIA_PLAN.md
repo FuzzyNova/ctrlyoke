@@ -16,8 +16,9 @@ dummy managed value again) and `template-modal-full-feature-840x1119` (default
 `planDocument`, a changed `testCommand` showing **Save as default**), both with updated alt
 text.
 
-**README media done 2026-10-12:** `readme-demo-720x480.gif` (the first 10 s of the hero
-video, 6 fps, 64 colors, 1.9 MB) plus `output-pane-find-diff-1600x1000.png` and
+**README media done 2026-10-12:** `readme-demo-900x600.gif` (the first 10 s of the hero
+video, 6 fps, 1.7 MB; re-encoded 2026-10-15 from a 720×480, 64-colour cut that looked washed out
+because the small palette greyed every accent colour) plus `output-pane-find-diff-1600x1000.png` and
 `workspace-viewer-source-control-1600x1000.png`, linked from `README.md` as absolute
 `https://ctrlyoke.dev/docs/screenshots/` URLs. `scripts/sync-docs-screenshots.mjs` now scans
 `README.md`, so those files publish with the docs site. The full 23 s hero came out at 4–5 MB
@@ -480,25 +481,34 @@ command link, with the large right-hand media pane mostly empty. The goal is one
 
 #### Decisions
 
-- **Image media, two themes.** Each step switches to `image` media with `dark` and `light`
-  variants plus `altText`. VS Code picks the variant from the active theme (`hc`/`hcLight` fall back
-  if omitted). Markdown media can embed an image but has no per-theme variant, so it's out.
+- **Image media, four themes.** Each step switches to `image` media with its own `dark`, `light`,
+  `hc` and `hcLight` file plus `altText`. VS Code picks the variant from the active theme, so a
+  high-contrast user sees a high-contrast screenshot; the dashboard's high-contrast support is
+  deliberate work worth showing. **An object-form `image` must list all four keys anyway:** omit
+  `hc` and VS Code throws `Cannot read properties of undefined (reading 'startsWith')` while
+  registering the walkthrough and silently drops the whole walkthrough (seen 2026-10-15).
+  Markdown media can embed an image but has no per-theme variant, so it's out.
 - **The step text moves into `description`.** With image media the description is the only text
   VS Code shows, beside the step title. A link alone on its own line renders as a button. The
   final text is in "Step descriptions" below. Step 1 no longer describes where things sit ("steps on
   the left…"): the side bar layout is narrow and the docs explain both layouts
   (`docs/guide/dashboard.md#layout`).
-- **Themes:** `Dark 2026` and `Light 2026` (VS Code's defaults). Same window, same state, two
-  captures. The GIF (13d) ships dark-only.
+- **Themes: all four, for every still.** `Dark 2026`, `Light 2026`, `Dark High Contrast` and
+  `Light High Contrast` (all built into VS Code). Same window, same state, four captures: set up a
+  shot once, then switch the theme and recapture without touching anything else. The GIF (13d)
+  ships dark-only, with all four keys pointing at it.
 - **Size: 2400×1500 (16:10) at 200% scaling on the 4K laptop**, i.e. 1200×750 of VS Code UI. The
   2560×1440 desktop can't do it: 1500 physical px don't fit on a 1440-tall screen. The GIF is the
   exception, at ~1x (see 13d).
 - **Compression: pngquant** (a lossy palette quantizer, CLI). UI screenshots usually lose 60–70% with
   no visible change. It runs on the dev machine after capture, not on the laptop (see "Wiring").
 - **Budget:** the walkthrough downloads with every install. Keep all walkthrough media together
-  under ~3 MB after pngquant. If it's over, drop the light variants of the busiest stills first.
-- **Naming:** `walkthrough-<step>-<theme>-<w>x<h>.<ext>` in `images/screenshots/`, e.g.
-  `walkthrough-open-panel-dark-2400x1500.png`.
+  (20 stills plus the GIF) under ~3 MB after pngquant. High-contrast captures are mostly flat
+  colour and compress far better than the others. If the total is over, first lower pngquant's
+  quality floor, then scale every still to 1.5x (1800×1125, from the 2x captures). Don't drop a
+  theme without asking Nathan.
+- **Naming:** `walkthrough-<step>-<theme>-<w>x<h>.<ext>` in `images/screenshots/`, with `<theme>`
+  one of `dark`, `light`, `hc`, `hclight`, e.g. `walkthrough-open-panel-hc-2400x1500.png`.
 
 **Where the logo shows.** The walkthrough `icon` (`images/ctrlyoke-icon-color.png`) only renders on
 the Welcome page's walkthrough list card. The walkthrough detail page has no icon slot (VS Code
@@ -520,7 +530,10 @@ include the ctrlyoke activity-bar icon in the frame.
    - `npm run dev:host:start:no-harnesses`: the same, with every harness CLI hidden from `PATH`.
      Only for 13b's left half.
    - `npm run dev:host:stop` between modes.
-6. In the dev host, set the theme with Ctrl+K Ctrl+T. Clear the frame of anything that isn't the
+6. In the dev host, set the theme with Ctrl+K Ctrl+T: `Dark 2026`, `Light 2026`,
+   `Dark High Contrast`, `Light High Contrast`. Capture all four themes for a shot before moving to
+   the next shot, so the state is identical across them. Keep the mouse out of the frame: in the
+   high-contrast themes a hover draws a dashed outline. Clear the frame of anything that isn't the
    point of the shot: close other editor tabs, notifications and unrelated side bars.
 
 #### Capture order
@@ -531,14 +544,14 @@ it. 13b and `installCli` are independent.
 
 #### Shots
 
-| Step (`id`)          | File(s)                                                                            | In the frame                                                                                                                                                                                                                                                                                                 | How                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 13c `createWorkflow` | `walkthrough-create-workflow-{dark,light}-2400x1500.png`                           | The New Workflow from Template dialog over the dashboard with a template selected and its variables filled in with realistic values. One frame; no inset.                                                                                                                                                    | Onboarding host, initialize the workspace, run **New Workflow from Template**. Pick a short built-in template so 13d's run is quick. Fill the variables, capture, then create it.                                                                                                                                                                                                                                                             |
-| 13d `runWorkflow`    | `walkthrough-run-workflow-dark-1200x750.gif` (dark only)                           | A loop of at most ~8 s: Run clicked → output streams → the step completes, its end condition passes, and the next step starts.                                                                                                                                                                               | Record the same 2400×1500 region as an MP4 with ShareX (Screen recording), with a fast model. Trim and convert on the dev machine: `ffmpeg -ss <start> -t 8 -i in.mp4 -vf "fps=10,scale=1200:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer" out.gif`, then `gifsicle -O3 --lossy=40`. Target under 1 MB; lower `fps` or `max_colors` if not. Hand over the MP4; the agent can do the conversion. |
-| 13a `openPanel`      | `walkthrough-open-panel-{dark,light}-2400x1500.png`                                | The dashboard in the **wide** layout (drag the ctrlyoke tab to the bottom panel, or the secondary side bar made wide) with the 13c workflow loaded after 13d: step list, real output, prompt editor. Include the ctrlyoke icon in the activity bar at the frame's left edge so the logo appears on the page. | Straight after 13d, with output on screen.                                                                                                                                                                                                                                                                                                                                                                                                    |
-| 13e `getHelp`        | `walkthrough-get-help-{dark,light}-2400x1500.png`                                  | The Agent picker open with `ctrlyoke-tech-support` highlighted, and the first few lines of its answer to a real question (e.g. "why did my end condition fail?") in the output.                                                                                                                              | Ask the question once so the answer is real, then reopen the picker over the answer and capture.                                                                                                                                                                                                                                                                                                                                              |
-| 13b `verifyHarness`  | `walkthrough-verify-harness-{dark,light}-2400x1500.png`, from two 1200×1500 halves | Left half: the **No AI harness CLI is available** panel listing all six install commands with their copy buttons. Right half: the footer harness picker (or the Harness tab's dropdown) open, with detected harnesses marked available.                                                                      | Left: `npm run dev:host:start:no-harnesses`, initialize, capture the side panel at the 1200×1500 fixed region. Right: `npm run dev:host:start:onboarding`, initialize, open the picker, capture at 1200×1500. Same theme for both halves. Combine with ShareX → Tools → Image combiner (horizontal), or leave both halves for the agent (`magick left.png right.png +append out.png`).                                                        |
-| `installCli`         | `walkthrough-install-cli-{dark,light}-2400x1500.png`                               | VS Code's integrated terminal running `ctrlyoke --version` and `ctrlyoke --help`, showing the CLI works there with no setup.                                                                                                                                                                                 | Any dev host. Make the terminal panel tall enough that the frame is mostly terminal.                                                                                                                                                                                                                                                                                                                                                          |
+| Step (`id`)          | File(s)                                                                                       | In the frame                                                                                                                                                                                                                                                                                                 | How                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 13c `createWorkflow` | `walkthrough-create-workflow-{dark,light,hc,hclight}-2400x1500.png`                           | The New Workflow from Template dialog over the dashboard with a template selected and its variables filled in with realistic values. One frame; no inset.                                                                                                                                                    | Onboarding host, initialize the workspace, run **New Workflow from Template**. Pick a short built-in template so 13d's run is quick. Fill the variables, capture, then create it.                                                                                                                                                                                                                                                             |
+| 13d `runWorkflow`    | `walkthrough-run-workflow-dark-1200x750.gif` (dark only)                                      | A loop of at most ~8 s: Run clicked → output streams → the step completes, its end condition passes, and the next step starts.                                                                                                                                                                               | Record the same 2400×1500 region as an MP4 with ShareX (Screen recording), with a fast model. Trim and convert on the dev machine: use the GIF recipe under "GIF encoding" below with `-ss <start> -t 8` and `scale=1200:-1`. Target under 1 MB; scale down before cutting colours. Hand over the MP4; the agent can do the conversion.                                                                                                       |
+| 13a `openPanel`      | `walkthrough-open-panel-{dark,light,hc,hclight}-2400x1500.png`                                | The dashboard in the **wide** layout (drag the ctrlyoke tab to the bottom panel, or the secondary side bar made wide) with the 13c workflow loaded after 13d: step list, real output, prompt editor. Include the ctrlyoke icon in the activity bar at the frame's left edge so the logo appears on the page. | Straight after 13d, with output on screen.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 13e `getHelp`        | `walkthrough-get-help-{dark,light,hc,hclight}-2400x1500.png`                                  | The Agent picker open with `ctrlyoke-tech-support` highlighted, and the first few lines of its answer to a real question (e.g. "why did my end condition fail?") in the output.                                                                                                                              | Ask the question once so the answer is real, then reopen the picker over the answer and capture.                                                                                                                                                                                                                                                                                                                                              |
+| 13b `verifyHarness`  | `walkthrough-verify-harness-{dark,light,hc,hclight}-2400x1500.png`, from two 1200×1500 halves | Left half: the **No AI harness CLI is available** panel listing all six install commands with their copy buttons. Right half: the footer harness picker (or the Harness tab's dropdown) open, with detected harnesses marked available.                                                                      | Left: `npm run dev:host:start:no-harnesses`, initialize, capture the side panel at the 1200×1500 fixed region. Right: `npm run dev:host:start:onboarding`, initialize, open the picker, capture at 1200×1500. Do both halves in each of the four themes; each theme gets its own combined image. Combine with ShareX → Tools → Image combiner (horizontal), or leave both halves for the agent (`magick left.png right.png +append out.png`). |
+| `installCli`         | `walkthrough-install-cli-{dark,light,hc,hclight}-2400x1500.png`                               | VS Code's integrated terminal running `ctrlyoke --version` and `ctrlyoke --help`, showing the CLI works there with no setup.                                                                                                                                                                                 | Any dev host. Make the terminal panel tall enough that the frame is mostly terminal.                                                                                                                                                                                                                                                                                                                                                          |
 
 Before capturing, check each frame for anything personal: usernames in paths (use the onboarding
 workspace, whose path is inside the repo), account names in status-bar items, and notifications.
@@ -547,6 +560,24 @@ workspace, whose path is inside the repo), account names in status-bar items, an
 can go anywhere outside the repo; mention its path), commit and push from the laptop, or copy them
 across. Don't compress them on the laptop.
 
+#### GIF encoding
+
+The recipe behind `readme-demo-900x600.gif` (2026-10-15), for any UI GIF made from a screen
+recording:
+
+```sh
+ffmpeg -t 10 -i in.mp4 -vf "fps=6,scale=900:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" raw.gif
+npx -y gifsicle@7.0.1 -O3 --lossy=20 -o out.gif raw.gif
+```
+
+- **128 colours, not 64.** At 64 the palette has no room for accent colours (code highlights,
+  harness icons, status badges) and they all go grey, which reads as "washed out".
+- **No dithering** for flat UI: dithering adds noise to text and costs bytes.
+- **gifsicle `--lossy=20` roughly halves the file** with no visible change; it is what makes 128
+  colours affordable. Frame rate barely affects size, because only changed regions are stored.
+- **Scale down as little as the budget allows.** Shrinking thin light text blurs it into a dark
+  background and makes it look grey.
+
 #### Wiring (dev machine, after capture)
 
 1. **Compress** every walkthrough PNG with pngquant (install it with `scoop install pngquant`,
@@ -554,8 +585,10 @@ across. Don't compress them on the laptop.
    `pngquant --quality=65-90 --speed 1 --strip --skip-if-larger --force --ext .png images/screenshots/walkthrough-*.png`.
    Look at each result at 100% for banding in gradients or dithering in text before keeping it,
    and report the total size.
-2. **Manifest:** in `package.json`, give each step `image` media (`dark`, `light`, `altText`) and
-   the description below. For 13d, point both `dark` and `light` at the dark GIF.
+2. **Manifest:** in `package.json`, give each step `image` media (`dark`, `light`, `hc` = the `-hc-`
+   file, `hcLight` = the `-hclight-` file, plus `altText`) and the description below. For 13d,
+   point all four at the dark GIF. VS Code's own `package.json` schema flags a missing variant, so check the
+   Problems panel for the file is clean before launching.
 3. **`.vscodeignore`:** add `!images/screenshots/walkthrough-*`. It is an allowlist, so without
    this the dev host works but the published VSIX shows broken images. Remove
    `!walkthroughs/**` once the markdown files are gone.

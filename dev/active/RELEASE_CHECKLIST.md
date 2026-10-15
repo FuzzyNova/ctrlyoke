@@ -600,7 +600,7 @@ Confirm:
 
 **Also still open from the original plan, unrelated to licensing:**
 
-- [x] **Screenshots + demo GIF** for README/Marketplace — promoted to a release blocker (Nathan, July 4, 2026). Done 2026-10-12: `README.md` has `readme-demo-720x480.gif` (10 s cut from the hero video) and two stills, linked as absolute `https://ctrlyoke.dev/docs/screenshots/` URLs that `scripts/sync-docs-screenshots.mjs` publishes with the docs site. Confirm they render on the deployed site and in the Marketplace listing during Phase 9's post-publish check. The rest of `SCREENSHOTS_AND_MEDIA_PLAN.md` (walkthrough media, landing feature cards, #14) is not release-blocking.
+- [x] **Screenshots + demo GIF** for README/Marketplace — promoted to a release blocker (Nathan, July 4, 2026). Done 2026-10-12: `README.md` has `readme-demo-900x600.gif` (10 s cut from the hero video) and two stills, linked as absolute `https://ctrlyoke.dev/docs/screenshots/` URLs that `scripts/sync-docs-screenshots.mjs` publishes with the docs site. Confirm they render on the deployed site and in the Marketplace listing during Phase 9's post-publish check. The rest of `SCREENSHOTS_AND_MEDIA_PLAN.md` (walkthrough media, landing feature cards, #14) is not release-blocking.
 - [x] Confirm dev-only command `ctrlyoke: Developer Tools` stays hidden unless `ctrlyoke.devMode` is set. Verified 2026-10-10: the `ctrlyoke.devMenu` command-palette entry in `package.json` has `"when": "ctrlyoke.devMode"`.
 
 ---
