@@ -22,6 +22,7 @@ import {
   LIFETIME_USAGE_ERROR_CODES,
 } from "../../core/harness/shared/usage/LifetimeUsageStore";
 import { formatRunRef, manifestPath, runDir } from "../../utils/WorkflowPaths";
+import { WorkspaceStatsService } from "../../core/harness/shared/usage/WorkspaceStatsService";
 
 suite("LifetimeUsageStore", () => {
   suiteSetup(function () {
@@ -172,5 +173,38 @@ suite("LifetimeUsageStore", () => {
     assert.ok(
       files.some((file) => file.startsWith("lifetime-stats.json.corrupt-"))
     );
+  });
+
+  test("keeps skipped run counts stable when a fresh store rescans a lineage", async () => {
+    const readableRunRef = formatRunRef(baseTime);
+    await writeManifest(readableRunRef, 10);
+    const unreadableRunRef = formatRunRef(baseTime + 1000);
+    await fs.mkdir(runDir(workspaceRoot, workflowKey, unreadableRunRef), {
+      recursive: true,
+    });
+    const initial = await new WorkspaceStatsService(workspaceRoot).refresh();
+    assert.strictEqual(initial.skippedRunCount, 1);
+
+    const freshStore = new LifetimeUsageStore(workspaceRoot);
+    const revised = contribution(readableRunRef, 15);
+    revised.byHarness[HARNESS_IDS.CLAUDE_CLI]!.costSources = ["harness-reported"];
+    await freshStore.upsertRunContribution(revised, baseTime + 2000);
+
+    const afterRescan = await freshStore.read(baseTime + 2000);
+    assert.strictEqual(afterRescan.skippedRunCount, 1);
+    assert.strictEqual(afterRescan.lineages[workflowKey].skippedRunCount, 1);
+  });
+
+  test("rebuilds persisted data when a lineage has no skipped run count", async () => {
+    await writeManifest(formatRunRef(baseTime), 10);
+    await store.upsertRunContribution(contribution(formatRunRef(baseTime), 10));
+    const stored = await store.read(baseTime);
+    const legacy = JSON.parse(JSON.stringify(stored)) as typeof stored;
+    delete (legacy.lineages[workflowKey] as Partial<typeof legacy.lineages[typeof workflowKey]>).skippedRunCount;
+    await fs.writeFile(store.getPath(), JSON.stringify(legacy), "utf8");
+
+    const rebuilt = await new LifetimeUsageStore(workspaceRoot).read(baseTime + 1);
+    assert.strictEqual(rebuilt.runCount, 0);
+    assert.strictEqual(rebuilt.skippedRunCount, 0);
   });
 });

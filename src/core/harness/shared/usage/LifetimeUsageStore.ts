@@ -66,6 +66,7 @@ export interface LifetimeUsageStoreData {
       subtotal: LifetimeHarnessContribution;
       byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>>;
       runCount: number;
+      skippedRunCount: number;
       outcomes: Record<RunOutcomeBucket, number>;
       activeExecutionMs: number;
       wallClockDurationRunCount: number;
@@ -348,8 +349,10 @@ function recomputeGrandTotals(data: LifetimeUsageStoreData): void {
   data.runCount = 0;
   data.totalActiveExecutionMs = 0;
   data.wallClockDurationRunCount = 0;
+  data.skippedRunCount = 0;
   for (const lineage of Object.values(data.lineages)) {
     addLineageToStore(data, lineage, 1);
+    data.skippedRunCount += numeric(lineage.skippedRunCount);
   }
 }
 
@@ -520,6 +523,7 @@ function validateStore(value: unknown): LifetimeUsageStoreData {
       !validateContributionTotals(lineage.subtotal) ||
       !isRecord(lineage.byHarness) ||
       !requiredNumeric(lineage.runCount) ||
+      !requiredNumeric(lineage.skippedRunCount) ||
       !isRecord(lineage.outcomes) ||
       !requiredNumeric(lineage.activeExecutionMs) ||
       !requiredNumeric(lineage.wallClockDurationRunCount) ||
@@ -568,6 +572,7 @@ function createLineage(
     subtotal: aggregateByHarness(byHarness),
     byHarness,
     runCount: 1,
+    skippedRunCount: 0,
     outcomes,
     activeExecutionMs: numeric(contribution.activeExecutionMs),
     wallClockDurationRunCount: contribution.durationIsWallClock ? 1 : 0,
@@ -587,6 +592,7 @@ function createEmptyLineage(
     subtotal: emptyContribution(),
     byHarness: {},
     runCount: 0,
+    skippedRunCount: 0,
     outcomes: emptyOutcomes(),
     activeExecutionMs: 0,
     wallClockDurationRunCount: 0,
@@ -625,7 +631,6 @@ export class LifetimeUsageStore {
     string,
     LifetimeRunContribution
   >();
-  private readonly lineageSkippedRunCounts = new Map<WorkflowKey, number>();
   private lastErrorCode: string | undefined;
 
   constructor(private readonly workspaceRoot: string) {
@@ -669,7 +674,6 @@ export class LifetimeUsageStore {
         if (!existingLineage) {
           const lineage = createLineage(normalized);
           data.lineages[normalized.workflowKey] = lineage;
-          this.lineageSkippedRunCounts.set(normalized.workflowKey, 0);
           addRunToStore(data, normalized, 1);
           this.remember(cacheKey, normalized);
         } else if (
@@ -780,7 +784,10 @@ export class LifetimeUsageStore {
               : createEmptyLineage(runRef, runRef, batch.dirMtimeMs);
             data.lineages[batch.workflowKey] = lineage;
             if (contribution) addRunToStore(data, contribution, 1);
-            else data.skippedRunCount++;
+            else {
+              lineage.skippedRunCount++;
+              data.skippedRunCount++;
+            }
             continue;
           }
 
@@ -788,6 +795,7 @@ export class LifetimeUsageStore {
             applyRunToLineage(lineage, contribution, 1);
             addRunToStore(data, contribution, 1);
           } else {
+            lineage.skippedRunCount++;
             data.skippedRunCount++;
           }
           lineage.countedFrom =
@@ -856,24 +864,13 @@ export class LifetimeUsageStore {
     scanned: ScannedLineage
   ): void {
     const previous = data.lineages[workflowKey];
-    const previousSkippedRunCount =
-      this.lineageSkippedRunCounts.get(workflowKey) ?? 0;
-    const nextSkippedRunCount = scanned.lineage ? scanned.skippedRunCount : 0;
     if (previous) addLineageToStore(data, previous, -1);
     if (scanned.lineage) {
+      scanned.lineage.skippedRunCount = scanned.skippedRunCount;
       data.lineages[workflowKey] = scanned.lineage;
       addLineageToStore(data, scanned.lineage, 1);
     } else {
       delete data.lineages[workflowKey];
-    }
-    data.skippedRunCount = Math.max(
-      0,
-      data.skippedRunCount - previousSkippedRunCount + nextSkippedRunCount
-    );
-    if (scanned.lineage) {
-      this.lineageSkippedRunCounts.set(workflowKey, nextSkippedRunCount);
-    } else {
-      this.lineageSkippedRunCounts.delete(workflowKey);
     }
     // Aggregate flags and cost provenance cannot be subtracted exactly from
     // the lineage-shaped document, so rebuild those derived fields after a
@@ -934,6 +931,7 @@ export class LifetimeUsageStore {
         subtotal: aggregateByHarness(byHarness),
         byHarness,
         runCount: contributions.length,
+        skippedRunCount,
         outcomes,
         activeExecutionMs,
         wallClockDurationRunCount,
