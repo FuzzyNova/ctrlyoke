@@ -307,7 +307,10 @@ export interface ICliProvider {
    * Build native CLI arguments for resolved image attachments. Providers that
    * do not expose a verified native image-input mechanism leave this unset.
    */
-  buildImageAttachmentArgs?(imageFilePaths: readonly string[]): string[];
+  buildImageAttachmentArgs?(
+    imageFilePaths: readonly string[],
+    isInteractive: boolean
+  ): string[];
 
   /**
    * Generate MCP server configuration arguments (optional)

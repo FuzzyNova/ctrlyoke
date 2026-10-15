@@ -237,42 +237,51 @@ function buildNotes(facts, compatibilityTypes, presentation) {
   const notes = [];
   const noteByCell = new Map();
   forEachCell(facts, ({ harness, domain, capability, declaration }) => {
-    if (declaration.fidelity === compatibilityTypes.fidelities.EXACT) {
-      return;
-    }
-    const caveat = compatibilityTypes.getCompatibilityCaveatMessage(
-      declaration.caveatCode
-    );
-    const remediation =
-      compatibilityTypes.getCompatibilityDeclarationRemediation(
-        domain,
-        capability,
-        declaration
+    const declarations = [
+      ...(declaration.fidelity === compatibilityTypes.fidelities.EXACT
+        ? []
+        : [{ declaration }]),
+      ...Object.entries(declaration.modeOverrides ?? {})
+        .filter(
+          ([, override]) =>
+            override.fidelity !== compatibilityTypes.fidelities.EXACT
+        )
+        .map(([mode, override]) => ({ declaration: override, mode })),
+    ];
+    for (const { declaration: limited, mode } of declarations) {
+      const caveat = compatibilityTypes.getCompatibilityCaveatMessage(
+        limited.caveatCode
       );
-    const { status } = presentFidelity(presentation, declaration.fidelity);
-    // Advisory caveats add a note to enforced support; reason caveats explain
-    // why the capability is limited.
-    const explanation = caveat
-      ? `${status}${compatibilityTypes.isAdvisoryCaveat(declaration.caveatCode) ? `: ${caveat}` : ` ${caveat}`}.`
-      : `${status}.`;
-    const key = `${explanation}\n${remediation ?? ""}`;
-    let note = notes.find((candidate) => candidate.key === key);
-    if (!note) {
-      note = {
-        key,
-        number: notes.length + 1,
-        explanation,
-        remediation,
-        appliesTo: new Map(),
-      };
-      notes.push(note);
+      const remediation =
+        compatibilityTypes.getCompatibilityDeclarationRemediation(
+          domain,
+          capability,
+          limited
+        );
+      const { status } = presentFidelity(presentation, limited.fidelity);
+      const explanation = caveat
+        ? `${status}${compatibilityTypes.isAdvisoryCaveat(limited.caveatCode) ? `: ${caveat}` : ` ${caveat}`}.`
+        : `${mode ? `In ${mode} mode, ` : ""}${status}.`;
+      const key = `${explanation}\n${remediation ?? ""}`;
+      let note = notes.find((candidate) => candidate.key === key);
+      if (!note) {
+        note = {
+          key,
+          number: notes.length + 1,
+          explanation,
+          remediation,
+          appliesTo: new Map(),
+        };
+        notes.push(note);
+      }
+      const harnessName = shortHarnessName(harness.displayName);
+      note.appliesTo.set(harnessName, [
+        ...(note.appliesTo.get(harnessName) ?? []),
+        `${formatLabel(capability)}${mode ? ` (${mode})` : ""}`,
+      ]);
+      const keyForCell = cellKey(harness, domain, capability);
+      noteByCell.set(keyForCell, [...(noteByCell.get(keyForCell) ?? []), note]);
     }
-    const harnessName = shortHarnessName(harness.displayName);
-    note.appliesTo.set(harnessName, [
-      ...(note.appliesTo.get(harnessName) ?? []),
-      formatLabel(capability),
-    ]);
-    noteByCell.set(cellKey(harness, domain, capability), note);
   });
   return { notes, noteByCell };
 }
@@ -318,10 +327,13 @@ function buildMatrix(facts, presentation, noteByCell) {
         presentation,
         declaration.fidelity
       );
-      const note = noteByCell.get(cellKey(harness, domain, capability));
-      const marker = note
-        ? `<sup><a href="#${noteAnchor(note)}">${note.number}</a></sup>`
-        : "";
+      const notes = noteByCell.get(cellKey(harness, domain, capability)) ?? [];
+      const marker = notes
+        .map(
+          (note) =>
+            `<sup><a href="#${noteAnchor(note)}">${note.number}</a></sup>`
+        )
+        .join("");
       return `<span title="${status}">${symbol}</span>${marker}`;
     }
   );

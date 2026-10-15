@@ -345,7 +345,10 @@ suite("CodexCliProvider", () => {
 
     test("builds native image arguments for resolved attachments", () => {
       assert.deepStrictEqual(
-        provider.buildImageAttachmentArgs(["shots/one.png", "shots/two.jpg"]),
+        provider.buildImageAttachmentArgs(
+          ["shots/one.png", "shots/two.jpg"],
+          true
+        ),
         ["--image", "shots/one.png", "--image", "shots/two.jpg"]
       );
     });

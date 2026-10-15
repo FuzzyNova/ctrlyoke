@@ -145,7 +145,10 @@ export class ExecutionPlanBuilder {
       this.deps.provider.buildImageAttachmentArgs
     ) {
       baseArgs.push(
-        ...this.deps.provider.buildImageAttachmentArgs(session.imageFileRefs)
+        ...this.deps.provider.buildImageAttachmentArgs(
+          session.imageFileRefs,
+          isInteractive
+        )
       );
     }
     const mutations = [...providerPreparation.mutations];

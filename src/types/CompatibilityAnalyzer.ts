@@ -263,11 +263,21 @@ function analyzeConfiguredImageInputs(
     return;
   }
 
-  const state = installed.effective?.promptInputs?.images;
+  const baseState = installed.effective?.promptInputs?.images;
   const declaration = installed.descriptor.promptInputs?.images;
-  if (!state || !declaration) {
+  if (!baseState || !declaration) {
     return;
   }
+
+  const modeOverride =
+    declaration.modeOverrides?.[target.resolved.properties.executionMode];
+  const state = modeOverride
+    ? {
+        ...baseState,
+        fidelity: modeOverride.fidelity,
+        mechanism: modeOverride.mechanism,
+      }
+    : baseState;
 
   const code =
     state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
@@ -298,7 +308,7 @@ function analyzeConfiguredImageInputs(
     message: getCompatibilityDiagnosticMessage(code, {
       harnessId,
       capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
-      caveatCode: declaration.caveatCode,
+      caveatCode: modeOverride?.caveatCode ?? declaration.caveatCode,
     }),
     ...(getCompatibilityDiagnosticRemediation(code)
       ? { remediation: getCompatibilityDiagnosticRemediation(code) }

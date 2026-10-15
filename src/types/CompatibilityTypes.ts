@@ -14,6 +14,7 @@ import {
   PROMPT_INPUT_CAPABILITY_KEYS,
   type HarnessId,
   type HookEvent,
+  type ExecutionMode,
 } from "./DashboardConstants";
 import { HOOK_EVENT_OPTIONS_META } from "./SchemaUiMetadata";
 
@@ -81,6 +82,14 @@ export interface CapabilityDeclaration {
   };
   caveatCode?: CompatibilityCaveatCode;
   remediationCode?: string;
+  /** Capability refinements for harness execution modes. */
+  modeOverrides?: Partial<Record<ExecutionMode, CapabilityModeOverride>>;
+}
+
+export interface CapabilityModeOverride {
+  fidelity: CapabilityFidelity;
+  mechanism: CapabilityMechanism;
+  caveatCode?: CompatibilityCaveatCode;
 }
 
 export interface EffectiveCapabilityState {
@@ -201,6 +210,7 @@ export const MCP_CAVEAT_CODES = {
 
 export const PROMPT_INPUT_CAVEAT_CODES = {
   NO_NATIVE_IMAGE_ATTACHMENT: "promptInputs.noNativeImageAttachment",
+  OPENCODE_INTERACTIVE_PATH_ONLY: "promptInputs.opencodeInteractivePathOnly",
 } as const;
 
 export const HOOK_CAVEAT_CODES = {
@@ -262,6 +272,8 @@ export function getCompatibilityCaveatMessage(
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT:
       return "because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter";
+    case PROMPT_INPUT_CAVEAT_CODES.OPENCODE_INTERACTIVE_PATH_ONLY:
+      return "because interactive mode keeps the image path in the prompt without attaching it as vision input";
     case HOOK_CAVEAT_CODES.NO_NATIVE_EVENT:
       return "because this harness exposes no native event ctrlyoke can map it to";
     case HOOK_CAVEAT_CODES.MAIN_SESSION_START_UNRELIABLE:

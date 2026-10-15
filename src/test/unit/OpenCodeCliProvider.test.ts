@@ -982,11 +982,18 @@ suite("OpenCodeCliProvider", () => {
     );
   });
 
-  test("builds native file arguments for resolved image attachments", () => {
+  test("builds native file arguments only for headless image attachments", () => {
     const provider = new OpenCodeCliProvider();
     assert.deepStrictEqual(
-      provider.buildImageAttachmentArgs(["shots/one.png", "shots/two.jpg"]),
+      provider.buildImageAttachmentArgs(
+        ["shots/one.png", "shots/two.jpg"],
+        false
+      ),
       ["--file", "shots/one.png", "--file", "shots/two.jpg"]
+    );
+    assert.deepStrictEqual(
+      provider.buildImageAttachmentArgs(["shots/one.png"], true),
+      []
     );
   });
 });

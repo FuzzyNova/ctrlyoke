@@ -762,7 +762,10 @@ export class CodexCliProvider implements ICliProvider {
     return relativeFilePath;
   }
 
-  buildImageAttachmentArgs(imageFilePaths: readonly string[]): string[] {
+  buildImageAttachmentArgs(
+    imageFilePaths: readonly string[],
+    _isInteractive: boolean
+  ): string[] {
     return imageFilePaths.flatMap((filePath) => ["--image", filePath]);
   }
 
