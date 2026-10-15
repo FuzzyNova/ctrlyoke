@@ -221,12 +221,17 @@ export class OsCredentialStore implements SecretStore {
       }
       try {
         const parsed: unknown = JSON.parse(index);
-        return Array.isArray(parsed) &&
-          parsed.every((key) => typeof key === "string")
-          ? parsed
-          : [];
-      } catch {
-        return [];
+        if (
+          !Array.isArray(parsed) ||
+          !parsed.every((key) => typeof key === "string")
+        ) {
+          throw new Error("Credential-store key index is invalid.");
+        }
+        return parsed;
+      } catch (error) {
+        throw new Error("Could not read credential-store key index.", {
+          cause: error,
+        });
       }
     });
   }
@@ -537,9 +542,13 @@ class WindowsCredentialBackend implements CredentialBackend {
   private async readCredential(key: string): Promise<string | undefined> {
     const result = await this.execute("get", key);
     throwIfBackendUnavailable("win32", result);
-    return result.exitCode === 0
-      ? Buffer.from(result.stdout, "base64").toString("utf8")
-      : undefined;
+    if (result.exitCode === 0) {
+      return Buffer.from(result.stdout, "base64").toString("utf8");
+    }
+    if (result.exitCode === 44) {
+      return undefined;
+    }
+    return throwCommandFailure("CredMan", result);
   }
 
   private async writeCredential(key: string, value: string): Promise<void> {
