@@ -8,11 +8,13 @@ suite("SettingsJsonHooksTracker", () => {
   let tmpDir: string;
   let settingsDir: string;
   let settingsPath: string;
+  let additionalTmpDirs: string[];
 
   setup(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "hooks-tracker-test-"));
     settingsDir = path.join(tmpDir, ".qwen");
     settingsPath = path.join(settingsDir, "settings.json");
+    additionalTmpDirs = [];
     await fs.mkdir(settingsDir, { recursive: true });
     SettingsJsonHooksTracker.resetAll();
   });
@@ -20,6 +22,11 @@ suite("SettingsJsonHooksTracker", () => {
   teardown(async () => {
     SettingsJsonHooksTracker.resetAll();
     await fs.rm(tmpDir, { recursive: true, force: true });
+    await Promise.all(
+      additionalTmpDirs.map((directory) =>
+        fs.rm(directory, { recursive: true, force: true })
+      )
+    );
   });
 
   test("should capture baseline on first registration", async () => {
@@ -138,6 +145,135 @@ suite("SettingsJsonHooksTracker", () => {
 
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
     assert.strictEqual(settings.hooks.Stop.length, 2);
+  });
+
+  test("keeps concurrent workflows isolated by settings path in either unregister order", async () => {
+    for (const unregisterOrder of [
+      ["wf-a", "wf-b"],
+      ["wf-b", "wf-a"],
+    ]) {
+      const rootA = await fs.mkdtemp(path.join(os.tmpdir(), "hooks-root-a-"));
+      const rootB = await fs.mkdtemp(path.join(os.tmpdir(), "hooks-root-b-"));
+      additionalTmpDirs.push(rootA, rootB);
+      const rootASettings = path.join(rootA, ".qwen", "settings.json");
+      const rootBSettings = path.join(rootB, ".qwen", "settings.json");
+      await fs.mkdir(path.dirname(rootASettings), { recursive: true });
+      await fs.mkdir(path.dirname(rootBSettings), { recursive: true });
+      const baselineA = {
+        Stop: [{ hooks: [{ type: "command", command: "echo baseline-a" }] }],
+      };
+      const baselineB = {
+        Stop: [{ hooks: [{ type: "command", command: "echo baseline-b" }] }],
+      };
+      await fs.writeFile(rootASettings, JSON.stringify({ hooks: baselineA }));
+      await fs.writeFile(rootBSettings, JSON.stringify({ hooks: baselineB }));
+
+      const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+      await Promise.all([
+        tracker.registerWorkflow(
+          "wf-a",
+          rootA,
+          { Stop: [{ hooks: [{ type: "command", command: "node a.js" }] }] },
+          { Stop: [{ hooks: [{ type: "command", command: "echo user-a" }] }] }
+        ),
+        tracker.registerWorkflow(
+          "wf-b",
+          rootB,
+          { Stop: [{ hooks: [{ type: "command", command: "node b.js" }] }] },
+          { Stop: [{ hooks: [{ type: "command", command: "echo user-b" }] }] }
+        ),
+      ]);
+
+      for (const [settingsFile, ownCommands, otherCommands] of [
+        [
+          rootASettings,
+          ["node a.js", "echo user-a", "echo baseline-a"],
+          ["node b.js", "echo user-b", "echo baseline-b"],
+        ],
+        [
+          rootBSettings,
+          ["node b.js", "echo user-b", "echo baseline-b"],
+          ["node a.js", "echo user-a", "echo baseline-a"],
+        ],
+      ] as const) {
+        const commands = JSON.stringify(
+          JSON.parse(await fs.readFile(settingsFile, "utf-8")).hooks
+        );
+        for (const command of ownCommands) {
+          assert.ok(commands.includes(command));
+        }
+        for (const command of otherCommands) {
+          assert.ok(!commands.includes(command));
+        }
+      }
+
+      for (const workflowKey of unregisterOrder) {
+        const root = workflowKey === "wf-a" ? rootA : rootB;
+        const ownSettings =
+          workflowKey === "wf-a" ? rootASettings : rootBSettings;
+        const otherSettings =
+          workflowKey === "wf-a" ? rootBSettings : rootASettings;
+        await tracker.unregisterWorkflow(workflowKey, root);
+        const ownHooks = JSON.stringify(
+          JSON.parse(await fs.readFile(ownSettings, "utf-8")).hooks
+        );
+        assert.ok(!ownHooks.includes("node "));
+        assert.ok(!ownHooks.includes("echo user-"));
+        const remainingHooks = JSON.stringify(
+          JSON.parse(await fs.readFile(otherSettings, "utf-8")).hooks
+        );
+        if (tracker.getActiveWorkflowCount() > 0) {
+          assert.ok(
+            remainingHooks.includes(
+              workflowKey === "wf-a" ? "node b.js" : "node a.js"
+            )
+          );
+        }
+      }
+
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(rootASettings, "utf-8")).hooks,
+        baselineA
+      );
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(rootBSettings, "utf-8")).hooks,
+        baselineB
+      );
+      SettingsJsonHooksTracker.resetAll();
+      await fs.rm(rootA, { recursive: true, force: true });
+      await fs.rm(rootB, { recursive: true, force: true });
+    }
+  });
+
+  test("deletes settings and temporary gitignore independently for fresh roots", async () => {
+    const freshRoot = await fs.mkdtemp(path.join(os.tmpdir(), "hooks-fresh-root-"));
+    additionalTmpDirs.push(freshRoot);
+    await fs.rm(settingsDir, { recursive: true, force: true });
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+
+    await Promise.all([
+      tracker.registerWorkflow("fresh-a", tmpDir, {}, {}),
+      tracker.registerWorkflow("fresh-b", freshRoot, {}, {}),
+    ]);
+    await Promise.all([
+      tracker.unregisterWorkflow("fresh-a", freshRoot),
+      tracker.unregisterWorkflow("fresh-b", tmpDir),
+    ]);
+
+    for (const root of [tmpDir, freshRoot]) {
+      const rootSettingsDir = path.join(root, ".qwen");
+      await assert.rejects(
+        fs.access(path.join(rootSettingsDir, "settings.json")),
+        /ENOENT/
+      );
+      await assert.rejects(
+        fs.access(path.join(rootSettingsDir, ".gitignore")),
+        /ENOENT/
+      );
+      await assert.rejects(fs.access(rootSettingsDir), /ENOENT/);
+    }
+
+    await fs.rm(freshRoot, { recursive: true, force: true });
   });
 
   test("should handle no existing settings file", async () => {
