@@ -2,7 +2,11 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/orchestration/ExternalRunWatchCoordinator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
+
+## Decision
+
+Session starts are serialized by workflow ID; the first active session remains authoritative, and a losing session is disposed immediately if a defensive race check detects it.
 
 ## Symptom
 

@@ -8,6 +8,8 @@ import {
 import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
 import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { writeFileAtomic } from "../../utils/AtomicFileUtils";
+import { Log } from "../../utils/Log";
 import { splitLines } from "../../utils/TextLines";
 import { claimPathForCompare } from "../../utils/CoordinationClaimPath";
 import {
@@ -119,13 +121,32 @@ async function readEntries(boardPath: string): Promise<CoordinationEntry[]> {
     throw error;
   }
 
-  return splitLines(contents)
-    .filter((line) => line.trim().length > 0)
-    .map(
-      (line) =>
+  const lines = splitLines(contents).filter((line) => line.trim().length > 0);
+  const entries: CoordinationEntry[] = [];
+  for (const [index, line] of lines.entries()) {
+    try {
+      entries.push(
         migrateToCurrent(PERSISTED_STORES.COORDINATION_BOARD, JSON.parse(line))
           .doc as CoordinationEntry
-    );
+      );
+    } catch (error) {
+      if (index === lines.length - 1) {
+        Log.warn(
+          `[CoordinationStore] ignoring unparseable trailing board line in "${boardPath}":`,
+          error
+        );
+        continue;
+      }
+      const corruptPath = `${boardPath}.corrupt-${Date.now()}`;
+      await fs.rename(boardPath, corruptPath);
+      Log.warn(
+        `[CoordinationStore] moved corrupt board "${boardPath}" to "${corruptPath}"; starting fresh:`,
+        error
+      );
+      return [];
+    }
+  }
+  return entries;
 }
 
 async function verifyBoardScope(scope: CoordinationBoardScope): Promise<void> {
@@ -597,11 +618,10 @@ export class ExecutionRootCoordinationStore {
               : undefined
           );
           if (!sameEntries(entries, fitted)) {
-            await fs.writeFile(
+            await writeFileAtomic(
               scope.boardPath,
               fitted.map((candidate) => JSON.stringify(candidate)).join("\n") +
-                (fitted.length > 0 ? "\n" : ""),
-              "utf8"
+                (fitted.length > 0 ? "\n" : "")
             );
           }
           entries.splice(0, entries.length, ...fitted);

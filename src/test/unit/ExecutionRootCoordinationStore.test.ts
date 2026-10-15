@@ -731,4 +731,52 @@ suite("ExecutionRootCoordinationStore", function () {
       await removeDirectory(root);
     }
   });
+
+  test("recovers from a truncated final line on read and append", async () => {
+    const root = await tempDirectory("truncated-tail");
+    try {
+      const store = new ExecutionRootCoordinationStore(root);
+      await store.append(note("writer", "kept"));
+      const { boardPath } = await store.getScopeInfo();
+      await fs.appendFile(boardPath, '{"seq":2,"kind":"note"');
+
+      assert.deepStrictEqual(
+        (await store.read()).entries.map((entry) => entry.text),
+        ["kept"]
+      );
+      await store.append(note("writer", "recovered"));
+      assert.deepStrictEqual(
+        (await store.read()).entries.map((entry) => entry.text),
+        ["kept", "recovered"]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("moves a board with a corrupt middle line aside and starts fresh", async () => {
+    const root = await tempDirectory("corrupt-middle");
+    try {
+      const store = new ExecutionRootCoordinationStore(root);
+      await store.append(note("writer", "before"));
+      const { boardPath } = await store.getScopeInfo();
+      const valid = await fs.readFile(boardPath, "utf8");
+      await fs.writeFile(boardPath, `${valid}not-json\n${valid}`, "utf8");
+
+      assert.deepStrictEqual((await store.read()).entries, []);
+      assert.strictEqual(
+        (await fs.readdir(path.dirname(boardPath))).filter((name) =>
+          name.startsWith("board.jsonl.corrupt-")
+        ).length,
+        1
+      );
+      await store.append(note("writer", "fresh"));
+      assert.deepStrictEqual(
+        (await store.read()).entries.map((entry) => entry.text),
+        ["fresh"]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
 });

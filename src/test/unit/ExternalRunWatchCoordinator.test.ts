@@ -51,6 +51,7 @@ class TestLineageRepository implements ExternalRunWatchLineageRepository {
 }
 
 class TestFileWatcher implements FileWatcher {
+  disposed = false;
   onDidCreate(): { dispose(): void } {
     return { dispose: () => undefined };
   }
@@ -63,12 +64,18 @@ class TestFileWatcher implements FileWatcher {
     return { dispose: () => undefined };
   }
 
-  dispose(): void {}
+  dispose(): void {
+    this.disposed = true;
+  }
 }
 
 class TestFileWatcherFactory implements FileWatcherFactory {
+  readonly watchers: TestFileWatcher[] = [];
+
   create(): FileWatcher {
-    return new TestFileWatcher();
+    const watcher = new TestFileWatcher();
+    this.watchers.push(watcher);
+    return watcher;
   }
 }
 
@@ -907,6 +914,48 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
 });
 
 suite("ExternalRunWatchCoordinator ownership", () => {
+  test("serializes concurrent runner events and disposes the single session", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-concurrent-start-")
+    );
+    const intervalHandles: Array<ReturnType<typeof setInterval>> = [];
+    const clearedIntervals = new Set<ReturnType<typeof setInterval>>();
+    const originalSetInterval = global.setInterval;
+    const originalClearInterval = global.clearInterval;
+    global.setInterval = ((handler: (...args: unknown[]) => void, timeout?: number, ...args: unknown[]) => {
+      const handle = originalSetInterval(handler, timeout, ...args);
+      intervalHandles.push(handle);
+      return handle;
+    }) as typeof setInterval;
+    global.clearInterval = ((handle?: ReturnType<typeof setInterval>) => {
+      if (handle !== undefined) clearedIntervals.add(handle);
+      originalClearInterval(handle);
+    }) as typeof clearInterval;
+    try {
+      const run = await createLiveRun(workspace, RUNNER_IDS.CLI, "concurrent");
+      const { coordinator, host } = createCoordinator(workspace);
+      const lockPath = WorkflowLockManager.getLockPath(
+        workspace,
+        run.workflowKey
+      );
+      await Promise.all([
+        coordinator.handleRunnerJsonEvent(lockPath, workspace),
+        coordinator.handleRunnerJsonEvent(lockPath, workspace),
+      ]);
+
+      assert.ok(coordinator.hasSession(run.workflowKey));
+      assert.strictEqual(host.fileWatcherFactory.watchers.length, 3);
+      assert.strictEqual(intervalHandles.length, 1);
+      coordinator.dispose();
+      assert.ok(host.fileWatcherFactory.watchers.every((watcher) => watcher.disposed));
+      assert.ok(intervalHandles.every((handle) => clearedIntervals.has(handle)));
+    } finally {
+      global.setInterval = originalSetInterval;
+      global.clearInterval = originalClearInterval;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("watches a live sibling lock and does not watch a self-owned lock", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-coordinator-ownership-")

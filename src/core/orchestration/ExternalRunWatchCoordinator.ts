@@ -133,6 +133,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     string,
     ExternalRunWatchEntry
   >();
+  private readonly pendingStarts = new Map<string, Promise<boolean>>();
   private runnerJsonCreateWatcher?: import("../HostPorts").FileWatcher;
   private runnerJsonDiscoveryPollInterval?: ReturnType<typeof setInterval>;
   private readonly polledRunnerJsonMtimes = new Map<string, number>();
@@ -440,6 +441,29 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     workspaceFolderPath: string,
     inspection: ActiveExternalLockInspection
   ): Promise<boolean> {
+    const workflowId = inspection.lock.workflowKey;
+    if (this.externalRunSessions.has(workflowId)) return true;
+    const pending = this.pendingStarts.get(workflowId);
+    if (pending) return pending;
+
+    const start = this.createExternalRunWatchSession(
+      workingFilePath,
+      workspaceFolderPath,
+      inspection
+    ).finally(() => {
+      if (this.pendingStarts.get(workflowId) === start) {
+        this.pendingStarts.delete(workflowId);
+      }
+    });
+    this.pendingStarts.set(workflowId, start);
+    return start;
+  }
+
+  private async createExternalRunWatchSession(
+    workingFilePath: string,
+    workspaceFolderPath: string,
+    inspection: ActiveExternalLockInspection
+  ): Promise<boolean> {
     const address =
       WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
     if (!address?.runRef) {
@@ -612,6 +636,10 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       this.host.fileWatcherFactory
     );
 
+    if (this.externalRunSessions.has(workflowId)) {
+      session.dispose();
+      return true;
+    }
     this.externalRunSessions.set(workflowId, {
       session,
       summary,
@@ -627,6 +655,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
     await session.start();
     const activeEntry = this.externalRunSessions.get(workflowId);
     if (activeEntry?.session !== session) {
+      session.dispose();
       return false;
     }
     this.host.broadcast.notifyWorkflowAdded(activeEntry.summary);
@@ -1131,6 +1160,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
       entry.session.dispose();
     }
     this.externalRunSessions.clear();
+    this.pendingStarts.clear();
     this.runnerJsonCreateWatcher?.dispose();
     this.runnerJsonCreateWatcher = undefined;
     if (this.runnerJsonDiscoveryPollInterval !== undefined) {

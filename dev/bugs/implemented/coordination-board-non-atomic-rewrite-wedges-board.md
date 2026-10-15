@@ -2,7 +2,11 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/core/orchestration/ExecutionRootCoordinationStore.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
+
+## Decision
+
+A malformed final JSONL record is treated as an interrupted append and skipped. A malformed record before the tail makes sequence continuity untrustworthy, so the whole board is moved aside and rebuilt from fresh writes.
 
 ## Symptom
 
