@@ -1107,7 +1107,6 @@ ${content}
    * Resolve relative path to absolute workspace path
    * Uses Node.js path.resolve for cross-platform compatibility
    */
-
   private resolveWorkspacePath(relativePath: string): string {
     return this.resolveReference(relativePath).absolutePath;
   }

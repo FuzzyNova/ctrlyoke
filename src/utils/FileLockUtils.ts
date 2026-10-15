@@ -150,7 +150,9 @@ async function acquireLock(
             }
             await ops.unlink(tombstone).catch(() => undefined);
           } catch {
-            // A competing owner already restored/acquired the lock.
+            // A competing owner already restored/acquired the lock; the
+            // tombstone holds a superseded payload, so don't leave it behind.
+            await ops.unlink(tombstone).catch(() => undefined);
           }
         }
       } catch (statError) {
@@ -216,6 +218,7 @@ async function releaseLock(
         await ops.unlink(tombstone).catch(() => undefined);
       } catch {
         // Another owner already holds the lock name.
+        await ops.unlink(tombstone).catch(() => undefined);
       }
     }
   } catch (error) {
