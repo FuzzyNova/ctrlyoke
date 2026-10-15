@@ -309,12 +309,13 @@ describe("workspaceViewerStore — file read-only state", () => {
 describe("workspaceViewerStore — save state", () => {
   it("markFileSaved clears dirty state after a successful save", () => {
     useWorkspaceViewerStore.setState({
+      selectedFilePath: "src/index.ts",
       fileContent: "updated",
       originalFileContent: "original",
       fileDirty: true,
     });
 
-    useWorkspaceViewerStore.getState().markFileSaved();
+    useWorkspaceViewerStore.getState().markFileSaved("src/index.ts", "updated");
 
     const state = useWorkspaceViewerStore.getState();
     expect(state.fileContent).toBe("updated");
@@ -362,7 +363,7 @@ describe("workspaceViewerStore — cached file drafts", () => {
       fileDrafts: { "src/index.ts": { content: "changed" } },
     });
 
-    useWorkspaceViewerStore.getState().markFileSaved("changed");
+    useWorkspaceViewerStore.getState().markFileSaved("src/index.ts", "changed");
 
     expect(useWorkspaceViewerStore.getState().fileDirty).toBe(false);
     expect(

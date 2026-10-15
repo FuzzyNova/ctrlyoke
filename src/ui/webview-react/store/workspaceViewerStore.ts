@@ -240,7 +240,7 @@ interface WorkspaceViewerActions {
   /** Load a known image file for inline <img> preview (read-only, no text content). */
   setLoadedImage(path: string, imageDataUri: string): void;
   discardFileDraft(path: string, diskContent: string): void;
-  markFileSaved(content?: string): void;
+  markFileSaved(path: string, savedContent: string): void;
   setFileLoading(loading: boolean): void;
   setFileSaving(saving: boolean): void;
   setFileReadOnly(readOnly: boolean, reason?: string): void;
@@ -652,22 +652,16 @@ export const useWorkspaceViewerStore = create<
         });
       },
 
-      markFileSaved(content) {
-        const { selectedFilePath, fileDrafts } = get();
-        const savedContent = content ?? get().fileContent;
-        const nextDrafts =
-          selectedFilePath === null
-            ? fileDrafts
-            : Object.fromEntries(
-                Object.entries(fileDrafts).filter(
-                  ([path]) => path !== selectedFilePath
-                )
-              );
+      markFileSaved(path, savedContent) {
+        const { selectedFilePath, fileContent, fileDrafts } = get();
+        if (selectedFilePath !== path) return;
+
+        const nextDrafts = { ...fileDrafts };
+        if (nextDrafts[path]?.content === savedContent) delete nextDrafts[path];
 
         set({
-          fileContent: savedContent,
           originalFileContent: savedContent,
-          fileDirty: false,
+          fileDirty: fileContent !== savedContent,
           fileDrafts: nextDrafts,
         });
       },

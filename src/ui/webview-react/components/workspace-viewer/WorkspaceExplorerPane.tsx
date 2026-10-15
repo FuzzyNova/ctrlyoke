@@ -192,6 +192,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const editorRef = useRef<WorkspaceFileEditorHandle>(null);
   const fileWatchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const modifiedAtRef = useRef<number | undefined>(undefined);
+  const savedModifiedAtByPathRef = useRef(new Map<string, number>());
   const [externalChange, setExternalChange] = useState<number | undefined>();
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -324,7 +325,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
         const canonicalPath = result.path.replace(/\\/g, "/");
         if (!isCurrentRequest()) return;
         selectedPath = canonicalPath;
-        modifiedAtRef.current = result.modifiedAt;
+        modifiedAtRef.current =
+          savedModifiedAtByPathRef.current.get(canonicalPath) ??
+          result.modifiedAt;
+        savedModifiedAtByPathRef.current.delete(canonicalPath);
         setExternalChange(undefined);
         if (result.imageDataUri) {
           setLoadedImage(canonicalPath, result.imageDataUri);
@@ -561,18 +565,24 @@ export const WorkspaceExplorerPane: React.FC = () => {
   }, [setMobileEditorVisible]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedFilePath) return;
+    if (!selectedFilePath || useWorkspaceViewerStore.getState().fileSaving) return;
+    const savedPath = selectedFilePath;
+    const savedContent = fileContent;
     setFileSaving(true);
     try {
       const result = await workspaceSaveFile({
-        path: selectedFilePath,
-        content: fileContent,
+        path: savedPath,
+        content: savedContent,
         baseModifiedAt: modifiedAtRef.current ?? null,
       });
-      modifiedAtRef.current = result.modifiedAt;
-      setExternalChange(undefined);
-      markFileSaved(fileContent);
-      refreshDirectory(selectedFilePath);
+      if (useWorkspaceViewerStore.getState().selectedFilePath === savedPath) {
+        modifiedAtRef.current = result.modifiedAt;
+        setExternalChange(undefined);
+      } else {
+        savedModifiedAtByPathRef.current.set(savedPath, result.modifiedAt);
+      }
+      markFileSaved(savedPath, savedContent);
+      refreshDirectory(savedPath);
     } catch (err) {
       if (err instanceof HostedHttpError && err.status === 409) {
         setExternalChange(Date.now());

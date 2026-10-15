@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -31,3 +31,7 @@ If the user switches to another file before the save returns, that file's editor
 - In `handleSave`, capture `const savedPath = selectedFilePath; const savedContent = fileContent;`. After the await, update `modifiedAtRef.current` only if the store's `selectedFilePath` still equals `savedPath`. If the user has switched away, keep the returned mtime in a per-path map instead of the single ref.
 - Ignore Ctrl+S while a save is already in flight (check `fileSaving` in `handleSave`).
 - Add Vitest coverage for both cases: typing during an in-flight save, and switching files during an in-flight save.
+
+## Decision
+
+A save completion updates the selected editor only when its path still matches the saved path; otherwise its returned modification time is retained by path and consumed when that file is opened again.

@@ -92,6 +92,42 @@ describe("search state", () => {
   });
 });
 
+describe("markFileSaved", () => {
+  it("keeps newer edits and their draft after saving an earlier snapshot", () => {
+    useWorkspaceViewerStore.setState({
+      selectedFilePath: "src/file.ts",
+      fileContent: "newer edit",
+      originalFileContent: "original",
+      fileDirty: true,
+      fileDrafts: { "src/file.ts": { content: "newer edit" } },
+    });
+
+    store().markFileSaved("src/file.ts", "saved snapshot");
+
+    expect(store().fileContent).toBe("newer edit");
+    expect(store().originalFileContent).toBe("saved snapshot");
+    expect(store().fileDirty).toBe(true);
+    expect(store().fileDrafts["src/file.ts"]?.content).toBe("newer edit");
+  });
+
+  it("does not apply a save to a different selected file", () => {
+    useWorkspaceViewerStore.setState({
+      selectedFilePath: "src/other.ts",
+      fileContent: "other content",
+      originalFileContent: "other original",
+      fileDirty: true,
+      fileDrafts: { "src/other.ts": { content: "other content" } },
+    });
+
+    store().markFileSaved("src/file.ts", "saved snapshot");
+
+    expect(store().fileContent).toBe("other content");
+    expect(store().originalFileContent).toBe("other original");
+    expect(store().fileDirty).toBe(true);
+    expect(store().fileDrafts["src/other.ts"]?.content).toBe("other content");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // openToFile
 // ---------------------------------------------------------------------------
