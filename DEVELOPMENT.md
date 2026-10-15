@@ -50,6 +50,24 @@ npm run compile    # Ensure TypeScript compiles
 npm test           # Run tests
 ```
 
+### Git Hooks
+
+The repo ships a `pre-push` hook in `.githooks/` that runs `npm run check:fast` (typecheck, lint, compile-tests, `test:ui`, `test:packaging`) before a push reaches the remote. Git ignores it until `core.hooksPath` points at that directory, and that setting is stored in each clone's local `.git/config`.
+
+`npm ci` / `npm install` sets it up automatically through the `prepare` script in `package.json` (`git config core.hooksPath .githooks`). The script is idempotent, so re-running `npm ci` on new branches or worktrees is harmless; it just rewrites the same value. If you ever skip `npm ci` (or install with `--ignore-scripts`), set it by hand:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Notes:
+
+- The setting lives in the shared `.git/config`, so it applies to every worktree of the clone. Each worktree still needs its own `npm ci` before the hook can run there.
+- The hook is skipped when a push only changes `dev/**`, `docs/**`, or `*.md` files.
+- It never runs `test:harness` (that spends real money).
+- Verify with `git config --get core.hooksPath` (should print `.githooks`).
+- Bypass in a genuine emergency with `git push --no-verify`, not routinely.
+
 ### Prettier Settings
 
 - **Semi-colons**: Required (`;`)

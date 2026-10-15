@@ -667,6 +667,7 @@
     ]
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "generate-schema": "node scripts/generate-yaml-schema.mjs",
     "schema:update": "npm run generate-schema && npm run generate-schema-ui-descriptions && npm run generate-workflow-schema-outline && npm run generate-schema-docs",
     "schema:bump": "node scripts/schema-bump.mjs",
