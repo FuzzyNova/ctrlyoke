@@ -37,6 +37,7 @@ import {
 const CLI_FILE_PATH_SOURCE =
   "@?" +
   "(?:" +
+  "(?<![\\w.+-])" +
   "[A-Za-z]:" +
   SEP + // 1. Windows absolute  C:\  or  C:/  or  C:\\
   "|" +
@@ -46,9 +47,12 @@ const CLI_FILE_PATH_SOURCE =
   "/" +
   "[A-Za-z]:/" + // 3. Slash-prefixed Windows absolute /c:/
   "|" +
+  "(?<![\\w./:-])/(?!/)" + // 4. POSIX absolute, not a URL path
+  "|" +
   "\\.{1,2}" +
   SEP + // 4. Relative prefix   ./   or  ../
   "|" +
+  "(?<![\\w./:-])" + // Bare-relative references also need a path boundary
   "\\.?[a-zA-Z][\\w-]*" +
   SEP + // 5. Bare relative, optional single leading dot segment (.ctrlyoke\, src\, …)
   ")" +
@@ -60,7 +64,7 @@ const CLI_FILE_PATH_SOURCE =
   FILE_EXTENSIONS +
   ")\\b"; // Extension (required)
 
-const ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
+const ABSOLUTE_PATH_PATTERN = /^(?:[A-Za-z]:[\\/]|\/)/;
 
 export interface CliFileReferenceRange {
   start: number;
