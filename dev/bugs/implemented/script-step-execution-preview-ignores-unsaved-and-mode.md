@@ -42,3 +42,5 @@ At minimum:
 - Handle `color` and `secrets` the way the save path does.
 
 Add a Vitest case under `src/ui/webview-react/test/` that loads a saved script step with `executionMode`, `shell` and a non-default `onPass`, edits them back to the defaults, and checks the snapshot.
+
+**Resolution:** fixed in this commit
