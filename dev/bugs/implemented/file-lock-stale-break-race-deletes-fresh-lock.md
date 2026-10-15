@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/utils/FileLockUtils.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -29,3 +29,7 @@ Make breaking a stale lock verify ownership. First rename the stale lock to a un
 Better still, write a unique token (pid plus `randomUUID`) into each lock instead of the current `pid timestamp` payload (line 122). Release would then remove the lock only when its payload still matches the holder's token. Stale-breaking would compare the token read at judgement time with the token in the renamed tombstone. Consider also refreshing the lock's mtime while a long action runs.
 
 Add a unit test that uses the injectable `open`/`rename` ops to pause waiter B between stat and rename, and asserts that two waiters on one stale lock never run their actions at the same time.
+
+## Decision
+
+The stale-break path validates both the lock token and file identity after rename; if the path changed, it restores the renamed payload only with exclusive creation and keeps waiting. Rebuild cleanup uses a five-minute age threshold to protect recently active directories.

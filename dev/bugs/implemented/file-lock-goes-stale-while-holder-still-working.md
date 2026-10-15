@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-14 by Claude Code repo-wide review workflow
 - **Area:** `src/utils/FileLockUtils.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -37,3 +37,7 @@ Make lock liveness explicit and ownership-checked in `FileLockUtils`:
 4. Add a unit test where the holder's action runs longer than `LOCK_STALE_MS` (with a reduced stale window or fake timers), and assert that a concurrent waiter with a longer timeout does not enter the critical section until the holder releases.
 
 Defense in depth in `historySearchRebuildWorker`: make `cleanupRebuildDirs` skip `rebuild-*` directories younger than some threshold, so it never deletes a sibling's in-progress directory.
+
+## Decision
+
+The stale-break path validates both the lock token and file identity after rename; if the path changed, it restores the renamed payload only with exclusive creation and keeps waiting. Rebuild cleanup uses a five-minute age threshold to protect recently active directories.

@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import { isTransientSharingError } from "./AtomicFileUtils";
+import { Log } from "./Log";
 
 const LOCK_FILE_EXTENSION = ".lock";
 const RELEASED_LOCK_SUFFIX = ".released";
@@ -52,12 +53,20 @@ export interface FileLockOptions {
   open?: (lockPath: string, flags: "wx") => Promise<fs.FileHandle>;
   rename?: (source: string, destination: string) => Promise<void>;
   unlink?: (filePath: string) => Promise<void>;
+  stat?: (filePath: string) => Promise<import("fs").Stats>;
+  readFile?: (filePath: string, encoding: BufferEncoding) => Promise<string>;
+  utimes?: (filePath: string, atime: Date, mtime: Date) => Promise<void>;
+  /** Injectable stale window for deterministic liveness tests. */
+  staleMs?: number;
 }
 
 interface LockFileOperations {
   open: NonNullable<FileLockOptions["open"]>;
   rename: NonNullable<FileLockOptions["rename"]>;
   unlink: NonNullable<FileLockOptions["unlink"]>;
+  stat: NonNullable<FileLockOptions["stat"]>;
+  readFile: NonNullable<FileLockOptions["readFile"]>;
+  utimes: NonNullable<FileLockOptions["utimes"]>;
 }
 
 /** The lock file {@link withFileLock} uses for `targetPath`. */
@@ -69,48 +78,12 @@ function isMissing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
-/**
- * Remove a lock file so its *name* is free the moment this returns.
- *
- * A plain `unlink` does not guarantee that on Windows: if any other process
- * has the file open (with delete sharing — antivirus, indexers, backup and
- * sync filters all do this), the file only becomes delete-pending, and until
- * that handle closes every create or open of the name fails with `EPERM`. One
- * such handle that never closed wedged an execution lease until reboot.
- * Renaming succeeds under exactly the same sharing conditions, so the lock is
- * first moved to a unique tombstone name and only the tombstone is unlinked;
- * if the tombstone goes delete-pending it is removed by Windows once the
- * holder closes, and it never blocks the lock name. No sweep is needed.
- *
- * Resolves without error when the lock is already gone.
- */
-async function removeLockFile(
-  lockPath: string,
-  ops: LockFileOperations
-): Promise<void> {
-  const tombstone = `${lockPath}.${crypto.randomUUID()}${RELEASED_LOCK_SUFFIX}`;
-  try {
-    await ops.rename(lockPath, tombstone);
-  } catch (renameError) {
-    if (isMissing(renameError)) return;
-    // Rename refused (a handle without delete sharing); unlink would be
-    // refused for the same reason, but try it so the real error surfaces.
-    try {
-      await ops.unlink(lockPath);
-    } catch (unlinkError) {
-      if (!isMissing(unlinkError)) throw unlinkError;
-    }
-    return;
-  }
-  // The lock name is already free; a tombstone that survives is harmless.
-  await ops.unlink(tombstone).catch(() => undefined);
-}
-
 async function acquireLock(
   lockPath: string,
   timeoutMs: number,
-  ops: LockFileOperations
-): Promise<void> {
+  ops: LockFileOperations,
+  staleMs: number
+): Promise<string> {
   const startTime = Date.now();
   let lastSharingError: unknown;
   let sawHeldLock = false;
@@ -118,13 +91,13 @@ async function acquireLock(
   while (Date.now() - startTime < timeoutMs) {
     try {
       const handle = await ops.open(lockPath, "wx");
+      const ownerToken = `${process.pid} ${crypto.randomUUID()}`;
       try {
-        const payload = `${process.pid} ${new Date().toISOString()}`;
-        await handle.writeFile(payload, "utf8");
+        await handle.writeFile(ownerToken, "utf8");
       } finally {
         await handle.close();
       }
-      return;
+      return ownerToken;
     } catch (error) {
       // On Windows, creating a lock file the previous holder just unlinked
       // fails with EPERM/EACCES while the old file is still delete-pending.
@@ -140,11 +113,36 @@ async function acquireLock(
       sawHeldLock = true;
 
       try {
-        const stats = await fs.stat(lockPath);
-        if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) {
-          // Another process beating us to the stale lock is fine.
-          await removeLockFile(lockPath, ops);
-          continue;
+        const stats = await ops.stat(lockPath);
+        if (Date.now() - stats.mtimeMs > staleMs) {
+          const judgedPayload = await ops.readFile(lockPath, "utf8").catch(() => "");
+          const tombstone = `${lockPath}.${crypto.randomUUID()}${RELEASED_LOCK_SUFFIX}`;
+          try {
+            await ops.rename(lockPath, tombstone);
+          } catch (renameError) {
+            if (!isMissing(renameError)) throw renameError;
+            continue;
+          }
+          const [renamedStats, renamedPayload] = await Promise.all([
+            ops.stat(tombstone),
+            ops.readFile(tombstone, "utf8"),
+          ]).catch(() => [undefined, ""] as const);
+          const sameFile = !!renamedStats && renamedStats.ino === stats.ino &&
+            renamedStats.dev === stats.dev && renamedStats.mtimeMs === stats.mtimeMs &&
+            renamedPayload === judgedPayload;
+          if (sameFile) {
+            await ops.unlink(tombstone).catch(() => undefined);
+            continue;
+          }
+          // The pathname changed after our stale check. Restore without
+          // replacing a new owner, then keep polling as though it were held.
+          try {
+            const restore = await ops.open(lockPath, "wx");
+            try { await restore.writeFile(renamedPayload, "utf8"); } finally { await restore.close(); }
+            await ops.unlink(tombstone).catch(() => undefined);
+          } catch {
+            // A competing owner already restored/acquired the lock.
+          }
         }
       } catch (statError) {
         // Lock might have been deleted between EEXIST and stat - retry
@@ -168,10 +166,39 @@ async function acquireLock(
 
 async function releaseLock(
   lockPath: string,
+  ownerToken: string,
   ops: LockFileOperations
 ): Promise<void> {
   try {
-    await removeLockFile(lockPath, ops);
+    const currentToken = await ops.readFile(lockPath, "utf8").catch((error) => {
+      if (isMissing(error)) return undefined;
+      throw error;
+    });
+    if (currentToken === undefined) return;
+    if (currentToken !== ownerToken) {
+      Log.warn(`[FileLockUtils] Lock ownership changed before release: ${lockPath}`);
+      return;
+    }
+    const tombstone = `${lockPath}.${crypto.randomUUID()}${RELEASED_LOCK_SUFFIX}`;
+    try {
+      await ops.rename(lockPath, tombstone);
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      return;
+    }
+    const renamedToken = await ops.readFile(tombstone, "utf8").catch(() => undefined);
+    if (renamedToken === ownerToken) {
+      await ops.unlink(tombstone).catch(() => undefined);
+    } else if (renamedToken !== undefined) {
+      Log.warn(`[FileLockUtils] Lock ownership changed during release: ${lockPath}`);
+      try {
+        const restore = await ops.open(lockPath, "wx");
+        try { await restore.writeFile(renamedToken, "utf8"); } finally { await restore.close(); }
+        await ops.unlink(tombstone).catch(() => undefined);
+      } catch {
+        // Another owner already holds the lock name.
+      }
+    }
   } catch (error) {
     // always use console.warn here instead of importing Log since file lock utils is used by mcp server
     // which doesn't have access to the vscode logging infrastructure
@@ -191,12 +218,25 @@ export async function withFileLock<T>(
     open: options?.open ?? fs.open,
     rename: options?.rename ?? fs.rename,
     unlink: options?.unlink ?? fs.unlink,
+    stat: options?.stat ?? fs.stat,
+    readFile: options?.readFile ?? fs.readFile,
+    utimes: options?.utimes ?? fs.utimes,
   };
-  await acquireLock(lockPath, options?.timeoutMs ?? LOCK_TIMEOUT_MS, ops);
+  const staleMs = options?.staleMs ?? LOCK_STALE_MS;
+  const ownerToken = await acquireLock(lockPath, options?.timeoutMs ?? LOCK_TIMEOUT_MS, ops, staleMs);
+  const heartbeat = setInterval(() => {
+    void ops.readFile(lockPath, "utf8").then((currentToken) => {
+      if (currentToken !== ownerToken) return;
+      const now = new Date();
+      return ops.utimes(lockPath, now, now);
+    }).catch(() => undefined);
+  }, staleMs / 3);
+  heartbeat.unref();
 
   try {
     return await action();
   } finally {
-    await releaseLock(lockPath, ops);
+    clearInterval(heartbeat);
+    await releaseLock(lockPath, ownerToken, ops);
   }
 }

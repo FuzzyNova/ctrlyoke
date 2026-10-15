@@ -52,6 +52,7 @@ export const MAX_INDEXED_TEXT_LENGTH = 2000;
  */
 export const REBUILD_WORKER_MAX_OLD_GENERATION_MB = 2048;
 const REBUILD_LOCK_TIMEOUT_MS = 60_000;
+const REBUILD_DIR_MIN_AGE_MS = 5 * 60_000;
 const PROGRESS_LOG_INTERVAL = 200;
 const PROGRESS_EMIT_INTERVAL_MS = 150;
 const FRESHNESS_CHECK_CONCURRENCY = 16;
@@ -975,12 +976,16 @@ async function cleanupRebuildDirs(
             entry.name.startsWith("rebuild-") &&
             path.join(indexDir, entry.name) !== activeRebuildDir
         )
-        .map((entry) =>
-          fs.promises.rm(path.join(indexDir, entry.name), {
-            recursive: true,
-            force: true,
-          })
-        )
+        .map(async (entry) => {
+          const rebuildPath = path.join(indexDir, entry.name);
+          try {
+            const stats = await fs.promises.stat(rebuildPath);
+            if (Date.now() - stats.mtimeMs < REBUILD_DIR_MIN_AGE_MS) return;
+            await fs.promises.rm(rebuildPath, { recursive: true, force: true });
+          } catch {
+            // Opportunistic cleanup only.
+          }
+        })
     );
     await fs.promises.rm(activeRebuildDir, { recursive: true, force: true });
   } catch {

@@ -113,6 +113,28 @@ suite("FileLockUtils", () => {
       );
     });
 
+    test("heartbeat keeps a long-running holder exclusive", async () => {
+      const target = tempTarget();
+      const order: string[] = [];
+      let releaseHolder!: () => void;
+      const holderGate = new Promise<void>((resolve) => { releaseHolder = resolve; });
+      const holder = withFileLock(target, async () => {
+        order.push("holder-start");
+        await holderGate;
+        order.push("holder-end");
+      }, { staleMs: 120 });
+      while (!order.includes("holder-start")) await new Promise((resolve) => setTimeout(resolve, 1));
+      const waiter = withFileLock(target, async () => { order.push("waiter"); }, {
+        staleMs: 120,
+        timeoutMs: 2_000,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.deepStrictEqual(order, ["holder-start"]);
+      releaseHolder();
+      await Promise.all([holder, waiter]);
+      assert.deepStrictEqual(order, ["holder-start", "holder-end", "waiter"]);
+    });
+
     test("withFileLock returns the action's resolved value for async actions", async () => {
       const target = tempTarget();
       const value = await withFileLock(target, async () => {
@@ -214,6 +236,61 @@ suite("FileLockUtils", () => {
       } finally {
         await fs.rm(directory, { recursive: true, force: true });
       }
+    });
+
+    test("release preserves a replacement lock owned by another holder", async () => {
+      const target = tempTarget();
+      const lockPath = `${target}.lock`;
+      await withFileLock(target, async () => {
+        await fs.rename(lockPath, `${lockPath}.old`);
+        await fs.writeFile(lockPath, "other-owner replacement", "utf8");
+      });
+      assert.strictEqual(await fs.readFile(lockPath, "utf8"), "other-owner replacement");
+    });
+
+    test("a stale-break waiter does not overlap the holder that won the rename race", async () => {
+      const target = tempTarget();
+      const lockPath = `${target}.lock`;
+      await fs.writeFile(lockPath, "99999 old-format-lock", "utf8");
+      const past = new Date(Date.now() - 60_000);
+      await fs.utimes(lockPath, past, past);
+
+      let statObserved!: () => void;
+      const observed = new Promise<void>((resolve) => { statObserved = resolve; });
+      let resumeWaiter!: () => void;
+      const resume = new Promise<void>((resolve) => { resumeWaiter = resolve; });
+      let insideFirst = false;
+      let secondEntered = false;
+      let releaseFirst!: () => void;
+      const firstMayFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+      const waiterB = withFileLock(target, async () => {
+        secondEntered = true;
+        assert.strictEqual(insideFirst, false, "actions must never overlap");
+      }, {
+        stat: async (filePath) => {
+          const stats = await fs.stat(filePath);
+          if (filePath === lockPath) {
+            statObserved();
+            await resume;
+          }
+          return stats;
+        },
+      });
+
+      await observed;
+      const holderA = withFileLock(target, async () => {
+        insideFirst = true;
+        await firstMayFinish;
+        insideFirst = false;
+      });
+      // Wait until A has replaced the stale lock and entered its action.
+      while (!insideFirst) await new Promise((resolve) => setTimeout(resolve, 1));
+      resumeWaiter();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.strictEqual(secondEntered, false);
+      releaseFirst();
+      await Promise.all([holderA, waiterB]);
+      assert.strictEqual(secondEntered, true);
     });
 
     test("still times out as held when a sharing error follows a held lock", async () => {
