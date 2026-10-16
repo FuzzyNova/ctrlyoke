@@ -1,8 +1,6 @@
 # Workspace File Index Plan
 
-**Status:** Phases 1–4a done. Phases 4b and 5 remain. Every decision below is
-settled; each phase leaves the build and `npm test` green and commits its own
-work.
+**Status:** Implemented.
 **Priority:** P1
 **Bug:** `dev/bugs/backlog/at-completion-misses-files-past-walk-cap.md`
 
