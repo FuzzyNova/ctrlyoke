@@ -208,7 +208,7 @@ export function toVSCodeCompletionItem(
 ): vscode.CompletionItem {
   const insertText = item.captureId
     ? CAPTURING_OUTPUT_PLACEHOLDER
-    : item.insertText;
+    : item.insertText ?? item.label;
   const vscodeItem = toVSCodeWorkflowCompletionItem(
     {
       ...item,

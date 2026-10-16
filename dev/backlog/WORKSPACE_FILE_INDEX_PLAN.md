@@ -224,7 +224,7 @@ repeated `@` partials or status rows yet.
   final both update the open dropdown; a stale `seq` is ignored; the status
   row is non-insertable.
 
-### Phase 4b — Host streaming
+### Phase 4b — Host streaming (done)
 
 - `CompletionCore.getFileCompletions(query, options?)` gains
   `{ budgetMs?, onPartial?, signal? }`. Partial results are converted to

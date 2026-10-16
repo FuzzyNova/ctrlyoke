@@ -3,6 +3,7 @@ import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
 import { toVSCodeCompletionItem } from "./CompletionHelpers";
 import { getCompletionCore } from "./CompletionHelpers";
+import type { PlainCompletionItem } from "./CompletionCore";
 import type { SecretRegistryService } from "../ui/SecretRegistryService";
 import {
   PROMPT_FILE_LANGUAGE_IDS,
@@ -54,7 +55,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   async provideCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
-    _token: vscode.CancellationToken,
+    token: vscode.CancellationToken,
     _context: vscode.CompletionContext
   ): Promise<vscode.CompletionList | undefined> {
     // Determine which trigger character is active
@@ -141,7 +142,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
-      return this.getAtCompletions(afterTrigger, escape);
+      return this.getAtCompletions(afterTrigger, escape, token);
     } else if (triggerChar === "#") {
       return this.getHashCompletions(afterTrigger, escape);
     } else if (triggerChar === "~") {
@@ -161,10 +162,21 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    */
   private async getAtCompletions(
     filterText: string,
-    escape: InsertTextEscape | undefined
+    escape: InsertTextEscape | undefined,
+    token: vscode.CancellationToken
   ): Promise<vscode.CompletionList> {
     // Use shared helper to get plain completions
-    const plainItems = await getCompletionCore().getFileCompletions(filterText);
+    const controller = new AbortController();
+    const cancellation = token.onCancellationRequested(() => controller.abort());
+    let plainItems: PlainCompletionItem[];
+    try {
+      plainItems = await getCompletionCore().getFileCompletions(filterText, {
+        budgetMs: 150,
+        signal: controller.signal,
+      });
+    } finally {
+      cancellation.dispose();
+    }
 
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("@");

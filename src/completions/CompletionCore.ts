@@ -30,7 +30,10 @@ import type {
   EditorContextSource,
   EditorSelection,
 } from "./EditorContextSource";
-import type { WorkspaceFileQueries } from "./WorkspaceFileIndex";
+import type {
+  WorkspaceFileIndexStatus,
+  WorkspaceFileQueries,
+} from "./WorkspaceFileIndex";
 import type { WorkspacePathResult } from "./WorkspacePathQuery";
 import {
   getCommitByHash,
@@ -44,7 +47,7 @@ import {
 export interface PlainCompletionItem {
   label: string;
   kind: number;
-  insertText: string;
+  insertText?: string;
   /**
    * Set only on output-capture completion items; the picker resolves it via
    * the output snapshot save command.
@@ -69,6 +72,14 @@ export interface PlainCompletionItem {
    * adapter uses `kind` instead.
    */
   icon?: string;
+  /** Non-insertable informational row in dashboard completion lists. */
+  status?: boolean;
+}
+
+export interface FileCompletionOptions {
+  budgetMs?: number;
+  onPartial?: (items: PlainCompletionItem[]) => void;
+  signal?: AbortSignal;
 }
 
 export interface CompletionWorkspace {
@@ -164,11 +175,18 @@ export class CompletionCore {
 
   constructor(private readonly workspace: CompletionWorkspace) {}
 
+  getFileIndexStatus(): WorkspaceFileIndexStatus {
+    return this.workspace.files.getStatus();
+  }
+
   setSymbolIndex(symbols: SymbolIndex): void {
     this.workspace.symbols = symbols;
   }
 
-  async getFileCompletions(query: string): Promise<PlainCompletionItem[]> {
+  async getFileCompletions(
+    query: string,
+    options: FileCompletionOptions = {}
+  ): Promise<PlainCompletionItem[]> {
     const filter = normalizeReferencePath(query)
       .replace(/^"/, "")
       .toLowerCase();
@@ -179,11 +197,58 @@ export class CompletionCore {
     const outputItems = this.outputCompletions(filter);
     const limit = Math.max(0, FILE_COMPLETION_LIMIT - outputItems.length);
     const queryForRank = hasPath ? childPrefix : filter;
-    const ranked = await this.workspace.files.queryFiles(filter, { limit });
-    const toItem = (
+    const toItems = (ranked: readonly WorkspacePathResult[]) => {
+      const mapped = ranked.map(toItem);
+      if (queryForRank) {
+        return [...outputItems, ...mapped].map((item, rank) =>
+          item.rank === undefined
+            ? item
+            : { ...item, rank: rank - outputItems.length }
+        );
+      }
+      const directories = ranked
+        .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY)
+        .map((entry, rank) => toItem(entry, rank));
+      const files = [
+        ...outputItems,
+        ...ranked
+          .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE)
+          .map((entry, rank) => toItem(entry, rank)),
+      ];
+      return [...directories, ...files].slice(0, FILE_COMPLETION_LIMIT);
+    };
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    options.signal?.addEventListener("abort", abort, { once: true });
+    if (options.signal?.aborted) controller.abort();
+    let latest = outputItems;
+    const queryPromise = this.workspace.files
+      .queryFiles(filter, {
+        limit,
+        signal: controller.signal,
+        onProgress: (progress) => {
+          latest = toItems(progress.results);
+          options.onPartial?.(latest);
+        },
+      })
+      .then(toItems);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let finishInterrupted: (() => void) | undefined;
+    const interrupted = new Promise<PlainCompletionItem[]>((resolve) => {
+      finishInterrupted = () => resolve(latest);
+      options.signal?.addEventListener("abort", finishInterrupted, { once: true });
+      if (options.signal?.aborted) finishInterrupted();
+      if (options.budgetMs !== undefined) {
+        timer = setTimeout(() => {
+          controller.abort();
+          finishInterrupted?.();
+        }, Math.max(0, options.budgetMs));
+      }
+    });
+    function toItem(
       entry: WorkspacePathResult,
       rank: number
-    ): PlainCompletionItem => {
+    ): PlainCompletionItem {
       const directory = entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY;
       const depth = entry.relativePath.split("/").length;
       return {
@@ -207,24 +272,18 @@ export class CompletionCore {
         filterText: `${path.posix.basename(entry.relativePath)} ${entry.relativePath}`,
         ...(queryForRank ? { rank } : {}),
       };
-    };
-    if (queryForRank) {
-      return [...outputItems, ...ranked.map(toItem)].map((item, rank) =>
-        item.rank === undefined
-          ? item
-          : { ...item, rank: rank - outputItems.length }
-      );
     }
-    const directories = ranked
-      .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY)
-      .map((entry, rank) => toItem(entry, rank));
-    const files = [
-      ...outputItems,
-      ...ranked
-        .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE)
-        .map((entry, rank) => toItem(entry, rank)),
-    ];
-    return [...directories, ...files].slice(0, FILE_COMPLETION_LIMIT);
+    try {
+      return options.budgetMs === undefined && !options.signal
+        ? await queryPromise
+        : await Promise.race([queryPromise, interrupted]);
+    } finally {
+      if (timer) clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abort);
+      if (finishInterrupted) {
+        options.signal?.removeEventListener("abort", finishInterrupted);
+      }
+    }
   }
 
   async getPromptFileCompletions(
