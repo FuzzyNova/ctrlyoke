@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; reproduced with the compiled `out/cli.js`)
 - **Area:** `src/cli.ts` (`trustExternalRootsCommand`, `trustWorkflowExternalRootsCommand`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

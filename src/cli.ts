@@ -198,6 +198,10 @@ import {
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 import { promptYesNo } from "./cli/CliPrompt";
 import {
+  trustExternalRootsCommand as reviewExternalRootsCommand,
+  type TrustExternalRootsOptions,
+} from "./cli/ExternalRootsTrustCommands";
+import {
   askOnceForAll,
   createCliTrustIo,
   ensureCliTrustDecided,
@@ -608,9 +612,27 @@ function getCliReportingWorkflow(
   workflow: PromptFile | undefined,
   operation: CliRunOperation,
   options: RunCommandOptions | RerunOptions | AppendOptions | ContinueOptions
-): PromptFile | undefined {
-  if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN || !workflow) {
-    return workflow;
+): Pick<PromptFile, "harness" | "model"> | undefined {
+  if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN) {
+    if (!workflow) {
+      return options.harness || options.model
+        ? {
+            ...(options.harness
+              ? { harness: options.harness as HarnessId }
+              : {}),
+            ...(options.model ? { model: options.model } : {}),
+          }
+        : undefined;
+    }
+    return {
+      ...workflow,
+      ...(options.harness ? { harness: options.harness as HarnessId } : {}),
+      ...(options.model ? { model: options.model } : {}),
+    };
+  }
+
+  if (!workflow) {
+    return undefined;
   }
 
   // Rerun's harness/model flags are workflow-scoped. Append's harness flag
@@ -2582,12 +2604,6 @@ function formatCompatibilityConsumer(
   return step?.name?.trim() || `step ${diagnostic.consumer.stepIndex + 1}`;
 }
 
-/** Ask a y/N question on stderr (keeps stdout pipe-friendly). */
-interface TrustExternalRootsOptions {
-  cwd?: string;
-  yes?: boolean;
-}
-
 interface TrustWorkflowExternalRootsOptions {
   cwd?: string;
   yes?: boolean;
@@ -2615,54 +2631,16 @@ async function trustExternalRootsCommand(
   const pendingRoots =
     ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
 
-  if (pendingRoots.length === 0) {
-    console.log(
-      chalk.green(
-        "No pending external file roots to approve for this workspace."
-      )
-    );
-    process.exit(0);
-  }
-
-  console.log(
-    chalk.bold(
-      `This workspace requests ${pendingRoots.length} external file root(s):`
-    )
-  );
-  pendingRoots.forEach((root) => console.log(`  - ${root}`));
-  console.log();
-
-  const approved =
-    options.yes ||
-    (await promptYesNo(
-      `Trust all ${pendingRoots.length} listed folder(s)? [y/N] `
-    ));
-
-  if (!approved) {
-    await externalRootsTrustStore.setDecisions(
-      workspaceIdentity,
-      pendingRoots,
-      "deny"
-    );
-    console.log(
-      chalk.yellow(
-        "No roots were approved. They remain blocked — change this in Settings if needed."
-      )
-    );
-    process.exit(0);
-  }
-
-  await externalRootsTrustStore.setDecisions(
+  const exitCode = await reviewExternalRootsCommand(
     workspaceIdentity,
     pendingRoots,
-    "allow"
+    `This workspace requests ${pendingRoots.length} external file root(s):`,
+    "No pending external file roots to approve for this workspace.",
+    options,
+    createCliTrustIo(),
+    externalRootsTrustStore
   );
-  console.log(
-    chalk.green(
-      `✓ Approved ${pendingRoots.length} external file root(s) for this workspace.`
-    )
-  );
-  process.exit(0);
+  process.exit(exitCode);
 }
 
 /**
@@ -2694,18 +2672,6 @@ async function trustWorkflowExternalRootsCommand(
     process.exit(2);
   }
 
-  if (
-    workflow.trustedExternalRoots === undefined ||
-    workflow.trustedExternalRoots === null
-  ) {
-    console.log(
-      chalk.green(
-        "No pending workflow external file roots to approve for this workflow."
-      )
-    );
-    process.exit(0);
-  }
-
   const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
     workingDir,
     getAuthoredSourcePath(resolvedFile)
@@ -2713,53 +2679,18 @@ async function trustWorkflowExternalRootsCommand(
   const pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
     ExternalRootsTrustStore.canonicalizeRoot(workingDir),
     workflowIdentity,
-    workflow.trustedExternalRoots
+    workflow.trustedExternalRoots ?? []
   );
-
-  if (pendingRoots.length === 0) {
-    console.log(
-      chalk.green(
-        "No pending workflow external file roots to approve for this workflow."
-      )
-    );
-    process.exit(0);
-  }
-
-  console.log(
-    chalk.bold(
-      `This workflow requests ${pendingRoots.length} external file root(s):`
-    )
-  );
-  pendingRoots.forEach((root) => console.log(`  - ${root}`));
-  console.log();
-
-  const approved =
-    options.yes ||
-    (await promptYesNo(
-      `Trust all ${pendingRoots.length} listed folder(s)? [y/N] `
-    ));
-  const decision = approved ? "allow" : "deny";
-  await externalRootsTrustStore.setDecisions(
+  const exitCode = await reviewExternalRootsCommand(
     workflowIdentity,
     pendingRoots,
-    decision
+    `This workflow requests ${pendingRoots.length} external file root(s):`,
+    "No pending workflow external file roots to approve for this workflow.",
+    options,
+    createCliTrustIo(),
+    externalRootsTrustStore
   );
-
-  if (!approved) {
-    console.log(
-      chalk.yellow(
-        "No roots were approved. They remain blocked — change this in Settings if needed."
-      )
-    );
-    process.exit(0);
-  }
-
-  console.log(
-    chalk.green(
-      `✓ Approved ${pendingRoots.length} external file root(s) for this workflow.`
-    )
-  );
-  process.exit(0);
+  process.exit(exitCode);
 }
 
 interface CommitCommandOptions {

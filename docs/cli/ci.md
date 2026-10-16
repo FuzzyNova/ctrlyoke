@@ -122,6 +122,9 @@ Trust decisions (external directory roots, secret grants, workspace settings tha
 runner has none. With no terminal to ask in, `run` exits `2` and names the missing approval. Record approvals in the job
 before running, with `--yes`, and only for workflow files your repository controls:
 
+The root trust commands require a terminal unless `--yes` is supplied; without
+one they list pending roots on stderr and exit `2` without recording a decision.
+
 ```bash
 ctrlyoke trust-external-roots --yes
 ctrlyoke trust-workflow-external-roots workflows/release.ctrlyoke.yaml --yes

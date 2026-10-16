@@ -404,9 +404,10 @@ ctrlyoke trust-workflow-external-roots my-workflow.ctrlyoke.yaml
 
 The command lists pending roots and asks for confirmation before recording an
 allow or deny decision for that workflow on the local machine. Use
-`--yes` to approve all pending roots in automation. `ctrlyoke run` asks the
-same question itself in a terminal; without one it exits with code `2` and
-prints this command as the remediation.
+`--yes` to approve all pending roots in automation. Without a terminal, the
+command lists the roots on stderr and exits with code `2` unless `--yes` is
+passed. `ctrlyoke run` asks the same question itself in a terminal; without
+one it exits with code `2` and prints this command as the remediation.
 
 ## `ctrlyoke trust-external-roots`
 
@@ -421,8 +422,9 @@ ctrlyoke trust-external-roots --yes
 This is the workspace-scope counterpart of `trust-workflow-external-roots`.
 User-scope roots are trusted immediately when added to the user's settings.
 While a workspace root is pending, `ctrlyoke run` asks about it in a terminal
-and exits with code `2` without one. `--yes` approves all pending roots without
-prompting.
+and exits with code `2` without one. This review command also lists pending
+roots on stderr and exits with code `2` without a terminal unless `--yes` is
+passed. `--yes` approves all pending roots without prompting.
 
 ## `ctrlyoke trust-secret-grants`
 
