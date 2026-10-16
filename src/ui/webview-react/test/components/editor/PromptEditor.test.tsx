@@ -254,6 +254,29 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
 });
 
 describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
+  it("inserts Run Next before the pending step when paused", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({
+      steps: [
+        { prompt: "completed", status: STEP_STATUS.COMPLETED },
+        { prompt: "completed", status: STEP_STATUS.COMPLETED },
+        { prompt: "next pending", status: STEP_STATUS.PENDING },
+        { prompt: "later", status: STEP_STATUS.PENDING },
+      ],
+      currentStep: 2,
+      executionState: EXECUTION_STATES.PAUSED,
+    });
+    useEditorStore.getState().setPromptText("insert before pending");
+
+    render(<PromptEditor />);
+    await user.click(screen.getByRole("button", { name: "Run" }));
+
+    expect(findExecutePromptMessage()).toMatchObject({
+      text: "insert before pending",
+      action: ACTION_TYPES.RUN_BEFORE_CURRENT,
+    });
+  });
+
   it("clears an empty prompt-mode final-step name in the update message", async () => {
     const user = userEvent.setup();
     useEditorStore.getState().selectFinalStep({

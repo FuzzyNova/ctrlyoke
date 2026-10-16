@@ -1430,7 +1430,7 @@ export class WorkflowSerializer {
     try {
       const workspaceRoot = this.workspaceRoot;
       if (!workspaceRoot) return;
-      await this.lineageRepository.updateDescriptor(
+      await this.lineageRepository.updateDescriptorMetadata(
         workspaceRoot,
         address.workflowKey,
         (descriptor) => ({ ...descriptor, isFavorite: !descriptor.isFavorite })

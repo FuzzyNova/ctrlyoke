@@ -30,6 +30,11 @@ import type {
   EditorContextSource,
   EditorSelection,
 } from "./EditorContextSource";
+import type {
+  WorkspaceFileIndexStatus,
+  WorkspaceFileQueries,
+} from "./WorkspaceFileIndex";
+import type { WorkspacePathResult } from "./WorkspacePathQuery";
 import {
   getCommitByHash,
   getRecentCommits,
@@ -42,7 +47,7 @@ import {
 export interface PlainCompletionItem {
   label: string;
   kind: number;
-  insertText: string;
+  insertText?: string;
   /**
    * Set only on output-capture completion items; the picker resolves it via
    * the output snapshot save command.
@@ -67,18 +72,25 @@ export interface PlainCompletionItem {
    * adapter uses `kind` instead.
    */
   icon?: string;
+  /** Non-insertable informational row in dashboard completion lists. */
+  status?: boolean;
+}
+
+export interface FileCompletionOptions {
+  budgetMs?: number;
+  onPartial?: (items: PlainCompletionItem[]) => void;
+  signal?: AbortSignal;
 }
 
 export interface CompletionWorkspace {
-  /** Git-aware tracked and non-ignored untracked paths, normalized per root. */
-  getFiles(): Promise<string[]>;
+  files: WorkspaceFileQueries;
   isMultiRoot(): boolean;
   symbols?: SymbolIndex;
   editorContext?: EditorContextSource;
 }
 
 const SYMBOL_PREFIX_LENGTH = 3;
-const PROMPT_EXTENSIONS = [".prompt.md", ".md", ".txt"];
+const FILE_COMPLETION_LIMIT = 500;
 const GIT_CACHE_DURATION_MS = 10_000;
 interface GitCache {
   workspaceRoot: string;
@@ -158,202 +170,159 @@ export function mapSymbolKindToReferenceKind(
 }
 
 export class CompletionCore {
-  private files: string[] = [];
-  private filesAt = 0;
-  private paths: Array<{
-    kind: string;
-    relativePath: string;
-    name: string;
-    parent: string;
-  }> = [];
-  private pathsFor?: string[];
   private gitCache: GitCache | null = null;
   private gitSearchCache: GitSearchCache | null = null;
 
   constructor(private readonly workspace: CompletionWorkspace) {}
 
+  getFileIndexStatus(): WorkspaceFileIndexStatus {
+    return this.workspace.files.getStatus();
+  }
+
   setSymbolIndex(symbols: SymbolIndex): void {
     this.workspace.symbols = symbols;
   }
 
-  clearCache(): void {
-    this.files = [];
-    this.filesAt = 0;
-    this.pathsFor = undefined;
-  }
-
-  private async pathEntries(): Promise<typeof this.paths> {
-    const now = Date.now();
-    if (this.files.length && now - this.filesAt < 5000) return this.paths;
-    const files = await this.workspace.getFiles();
-    if (this.pathsFor === files) return this.paths;
-    const dirs = new Set<string>();
-    const entries: typeof this.paths = [];
-    for (const raw of files) {
-      const relativePath = normalizeReferencePath(raw);
-      if (!relativePath || relativePath.startsWith("../")) continue;
-      let parent = path.posix.dirname(relativePath);
-      while (parent !== "." && parent !== "") {
-        dirs.add(parent);
-        parent = path.posix.dirname(parent);
-      }
-      entries.push({
-        kind: WORKSPACE_ENTRY_KINDS.FILE,
-        relativePath,
-        name: path.posix.basename(relativePath),
-        parent: path.posix.dirname(relativePath),
-      });
-    }
-    for (const relativePath of dirs)
-      entries.push({
-        kind: WORKSPACE_ENTRY_KINDS.DIRECTORY,
-        relativePath,
-        name: path.posix.basename(relativePath),
-        parent: path.posix.dirname(relativePath),
-      });
-    this.files = files;
-    this.filesAt = now;
-    this.pathsFor = files;
-    this.paths = entries;
-    return entries;
-  }
-
-  async getFileCompletions(query: string): Promise<PlainCompletionItem[]> {
-    const entries = await this.pathEntries();
+  async getFileCompletions(
+    query: string,
+    options: FileCompletionOptions = {}
+  ): Promise<PlainCompletionItem[]> {
     const filter = normalizeReferencePath(query)
       .replace(/^"/, "")
       .toLowerCase();
     const hasPath = filter.includes("/");
     const endsInSlash = filter.endsWith("/");
-    const parentPath = hasPath
-      ? (endsInSlash
-          ? filter.slice(0, -1)
-          : filter.slice(0, filter.lastIndexOf("/"))
-        ).replace(/\/+$/, "")
-      : "";
     const childPrefix =
       hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
-    const candidates = entries.filter((entry) => {
-      if (!filter) return true;
-      if (!hasPath)
-        return fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter);
-      return (
-        entry.parent.toLowerCase() === parentPath &&
-        (!childPrefix || fuzzyMatches(entry.name, childPrefix))
-      );
-    });
-    const queryForRank = hasPath ? childPrefix : filter;
-    const ranked = queryForRank
-      ? rankByFuzzyQuery(queryForRank, candidates, [
-          (entry) => entry.name,
-          (entry) => entry.relativePath,
-        ])
-      : candidates;
     const outputItems = this.outputCompletions(filter);
-    const toItem = (
-      entry: (typeof entries)[number],
+    const limit = Math.max(0, FILE_COMPLETION_LIMIT - outputItems.length);
+    const queryForRank = hasPath ? childPrefix : filter;
+    const toItems = (ranked: readonly WorkspacePathResult[]) => {
+      const mapped = ranked.map(toItem);
+      if (queryForRank) {
+        return [...outputItems, ...mapped].map((item, rank) =>
+          item.rank === undefined
+            ? item
+            : { ...item, rank: rank - outputItems.length }
+        );
+      }
+      const directories = ranked
+        .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY)
+        .map((entry, rank) => toItem(entry, rank));
+      const files = [
+        ...outputItems,
+        ...ranked
+          .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE)
+          .map((entry, rank) => toItem(entry, rank)),
+      ];
+      return [...directories, ...files].slice(0, FILE_COMPLETION_LIMIT);
+    };
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    options.signal?.addEventListener("abort", abort, { once: true });
+    if (options.signal?.aborted) controller.abort();
+    let latest = outputItems;
+    const queryPromise = this.workspace.files
+      .queryFiles(filter, {
+        limit,
+        signal: controller.signal,
+        onProgress: (progress) => {
+          latest = toItems(progress.results);
+          options.onPartial?.(latest);
+        },
+      })
+      .then(toItems);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let finishInterrupted: (() => void) | undefined;
+    const interrupted = new Promise<PlainCompletionItem[]>((resolve) => {
+      finishInterrupted = () => resolve(latest);
+      options.signal?.addEventListener("abort", finishInterrupted, {
+        once: true,
+      });
+      if (options.signal?.aborted) finishInterrupted();
+      if (options.budgetMs !== undefined) {
+        timer = setTimeout(
+          () => {
+            controller.abort();
+            finishInterrupted?.();
+          },
+          Math.max(0, options.budgetMs)
+        );
+      }
+    });
+    function toItem(
+      entry: WorkspacePathResult,
       rank: number
-    ): PlainCompletionItem => {
+    ): PlainCompletionItem {
       const directory = entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY;
       const depth = entry.relativePath.split("/").length;
       return {
-        label: entry.name + (directory ? "/" : ""),
+        label: path.posix.basename(entry.relativePath) + (directory ? "/" : ""),
         kind: directory
           ? COMPLETION_ITEM_KINDS.FOLDER
           : COMPLETION_ITEM_KINDS.FILE,
         insertText: directory
           ? buildDirectoryReferenceValue(entry.relativePath)
           : buildFileReferenceValue(entry.relativePath),
-        detail: entry.parent === "." ? "Root directory" : entry.parent,
+        detail:
+          path.posix.dirname(entry.relativePath) === "."
+            ? "Root directory"
+            : path.posix.dirname(entry.relativePath),
         documentation: directory
           ? `**Directory structure attachment**\n\nInsert: \`${buildDirectoryReference(entry.relativePath)}\`\n\nctrlyoke will attach a file tree of this directory.\n\n_No file contents, just structure._`
           : `**Full file attachment** (CLI-native)\n\nInsert: \`${buildFileReference(entry.relativePath)}\`\n\nThe CLI will automatically attach this file's content.\n\n_For line ranges, use \`${buildSelectionReference(entry.relativePath, 10, 20)}\`_`,
         sortText: queryForRank
           ? `0_${String(rank).padStart(6, "0")}`
           : `0_${depth}_${entry.relativePath}`,
-        filterText: `${entry.name} ${entry.relativePath}`,
+        filterText: `${path.posix.basename(entry.relativePath)} ${entry.relativePath}`,
         ...(queryForRank ? { rank } : {}),
       };
-    };
-    if (queryForRank) {
-      return [
-        ...outputItems,
-        ...ranked.slice(0, Math.max(0, 500 - outputItems.length)).map(toItem),
-      ].map((item, rank) =>
-        item.rank === undefined
-          ? item
-          : { ...item, rank: rank - outputItems.length }
-      );
     }
-    const directories = ranked
-      .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY)
-      .map((entry, rank) => toItem(entry, rank));
-    const files = [
-      ...outputItems,
-      ...ranked
-        .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE)
-        .map((entry, rank) => toItem(entry, rank)),
-    ];
-    return [...directories, ...files].slice(0, 500);
+    try {
+      return options.budgetMs === undefined && !options.signal
+        ? await queryPromise
+        : await Promise.race([queryPromise, interrupted]);
+    } finally {
+      if (timer) clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abort);
+      if (finishInterrupted) {
+        options.signal?.removeEventListener("abort", finishInterrupted);
+      }
+    }
   }
 
   async getPromptFileCompletions(
     query: string
   ): Promise<PlainCompletionItem[]> {
-    const entries = await this.pathEntries();
-    const filter = normalizeReferencePath(query)
+    const normalized = normalizeReferencePath(query)
       .replace(/^\.\.?\//, "")
-      .replace(/^\//, "")
-      .toLowerCase();
-    const hasPath = filter.includes("/");
-    const endsInSlash = filter.endsWith("/");
-    const parent = hasPath
-      ? (endsInSlash
-          ? filter.slice(0, -1)
-          : filter.slice(0, filter.lastIndexOf("/"))
-        ).replace(/\/+$/, "")
-      : "";
+      .replace(/^\//, "");
+    const hasPath = normalized.includes("/");
+    const endsInSlash = normalized.endsWith("/");
     const child =
-      hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
-    const selected = entries.filter(
-      (entry) =>
-        entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
-        PROMPT_EXTENSIONS.some((ext) =>
-          entry.relativePath.toLowerCase().endsWith(ext)
-        ) &&
-        (!filter ||
-          (hasPath
-            ? entry.parent.toLowerCase() === parent &&
-              (!child || fuzzyMatches(entry.name, child))
-            : fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter)))
-    );
-    const shouldRank = Boolean(child || (filter && !hasPath));
-    const ranked = child
-      ? rankByFuzzyQuery(child, selected, [(e) => e.name])
-      : filter && !hasPath
-        ? rankByFuzzyQuery(filter, selected, [
-            (e) => e.name,
-            (e) => e.relativePath,
-          ])
-        : [...selected].sort((a, b) =>
-            `${a.relativePath.split("/").length}_${a.relativePath}`.localeCompare(
-              `${b.relativePath.split("/").length}_${b.relativePath}`
-            )
-          );
+      hasPath && !endsInSlash
+        ? normalized.slice(normalized.lastIndexOf("/") + 1)
+        : "";
+    const shouldRank = Boolean(child || (normalized && !hasPath));
+    const ranked = await this.workspace.files.queryPromptFiles(query, {
+      limit: 200,
+    });
     return ranked.slice(0, 200).map((entry, rank) => {
+      const name = path.posix.basename(entry.relativePath);
+      const parent = path.posix.dirname(entry.relativePath);
       const insertPath = this.workspace.isMultiRoot()
         ? entry.relativePath
         : `./${entry.relativePath}`;
       return {
-        label: entry.name,
+        label: name,
         kind: COMPLETION_ITEM_KINDS.FILE,
         insertText: insertPath,
-        detail: entry.parent === "." ? "Root" : entry.parent,
+        detail: parent === "." ? "Root" : parent,
         documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
         sortText: shouldRank
           ? String(rank).padStart(6, "0")
           : `${entry.relativePath.split("/").length}_${entry.relativePath}`,
-        filterText: `${entry.name} ${entry.relativePath}`,
+        filterText: `${name} ${entry.relativePath}`,
         ...(shouldRank ? { rank } : {}),
       };
     });
@@ -547,52 +516,13 @@ export class CompletionCore {
     kind: WorkspaceFileTreeEntryKind,
     maxResults = 3
   ): Promise<string[]> {
-    const normalized = normalizeReferencePath(typedPath)
-      .replace(/^\.\.?\//, "")
-      .replace(/\/+$/, "");
-    const base = path.posix.basename(normalized).toLowerCase();
-    if (!base) return [];
-    const parent = path.posix.dirname(normalized);
-    const directory = kind === WORKSPACE_ENTRY_KINDS.DIRECTORY;
-    const entries = (await this.pathEntries()).filter(
-      (entry) =>
-        entry.kind ===
-        (directory
-          ? WORKSPACE_ENTRY_KINDS.DIRECTORY
-          : WORKSPACE_ENTRY_KINDS.FILE)
+    return (
+      await this.workspace.files.suggestPaths(typedPath, kind, maxResults)
+    ).map((entry) =>
+      kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+        ? buildDirectoryReference(entry.relativePath)
+        : buildFileReference(entry.relativePath)
     );
-    const ranked = entries
-      .flatMap((entry) => {
-        const candidate = entry.name.toLowerCase();
-        const sameDir = entry.parent === parent;
-        const prefix = base.startsWith(candidate) || candidate.startsWith(base);
-        const tier =
-          sameDir && prefix
-            ? 0
-            : sameDir && fuzzyMatches(candidate, base)
-              ? 1
-              : candidate === base
-                ? 2
-                : prefix
-                  ? 3
-                  : -1;
-        return tier < 0 || entry.relativePath === normalized
-          ? []
-          : [{ entry, tier, delta: Math.abs(candidate.length - base.length) }];
-      })
-      .sort(
-        (a, b) =>
-          a.tier - b.tier ||
-          a.delta - b.delta ||
-          a.entry.relativePath.localeCompare(b.entry.relativePath)
-      );
-    return ranked
-      .slice(0, maxResults)
-      .map(({ entry }) =>
-        directory
-          ? buildDirectoryReference(entry.relativePath)
-          : buildFileReference(entry.relativePath)
-      );
   }
 
   private outputCompletions(query: string): PlainCompletionItem[] {

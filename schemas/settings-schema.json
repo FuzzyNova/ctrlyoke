@@ -444,7 +444,7 @@
     },
     "modelPricing": {
       "type": "object",
-      "description": "Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.",
+      "description": "Optional per-harness/per-model USD pricing overrides. User and workspace scopes merge per model, with workspace rates taking precedence for the same model. Rates are USD per one million tokens.",
       "propertyNames": {
         "$ref": "workflow.json#/$defs/harnessId"
       },
@@ -503,7 +503,7 @@
           "type": "string",
           "enum": ["warn", "fail"],
           "default": "warn",
-          "description": "How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
+          "description": "How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/@dir/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
         },
         "maxPromptTimeoutSec": {
           "oneOf": [

@@ -2499,6 +2499,26 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("reorderPendingPrompts", () => {
+    test("warns when reordering shifts a final-step positional reference", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "A" },
+          { prompt: "B" },
+          { prompt: "C" },
+        ])
+      );
+      (queue as any).workflowFile.finalStep = {
+        prompt: "Summarize $step:2",
+      };
+
+      const warning = await queue.reorderPendingPrompts([0, 2, 1]);
+
+      assert.strictEqual(
+        warning,
+        "Reordered steps. Step references in Final step now point at a different or missing step; check them."
+      );
+    });
+
     test("rejects dragging a sibling reference into a parallel group", async () => {
       for (const reference of [
         { resumeSession: true, sessionId: 2 },

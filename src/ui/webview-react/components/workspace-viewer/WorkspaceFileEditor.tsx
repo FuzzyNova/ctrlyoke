@@ -69,6 +69,7 @@ import {
 import { createStoreWorkflowValueDataSource } from "@utils/workflowFileSupport/workflowValueDataSource";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
+import { getInclusiveEndLine } from "@root/utils/InclusiveLineRange";
 import {
   createAtomicReferenceExtension,
   createReferenceLinkHandlerExtension,
@@ -349,7 +350,12 @@ export const WorkspaceFileEditor = forwardRef<
           if (from === to) return null;
           const doc = view.state.doc;
           const startLine = doc.lineAt(from).number;
-          const endLine = doc.lineAt(to).number;
+          const end = doc.lineAt(to);
+          const endLine = getInclusiveEndLine(
+            doc.lineAt(from).number - 1,
+            end.number - 1,
+            to - end.from
+          );
           return { startLine, endLine };
         },
         getLanguageCapabilities: () =>

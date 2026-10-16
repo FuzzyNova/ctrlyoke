@@ -3084,6 +3084,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         nextTopology.steps,
         {
           workflowDefaults: this.workflowFile,
+          finalStep: this.workflowFile?.finalStep,
         }
       );
       warning = describeShiftedStepReferences(

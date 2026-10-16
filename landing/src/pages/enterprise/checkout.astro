@@ -1,0 +1,210 @@
+---
+// Enterprise terms-acceptance step in front of the Lemon Squeezy checkout.
+// ENTERPRISE_TERMS.md §2 requires an affirmative acceptance with conspicuous
+// links to the Enterprise Terms, EULA, Privacy Policy, and DPA, by someone
+// authorized to bind a named legal entity. Lemon Squeezy's hosted checkout
+// can't collect that, so this page does, then forwards everything as checkout
+// custom data; the Lemon Squeezy order is the acceptance record (PRIVACY.md §3.3).
+import Layout from "../../layouts/Layout.astro";
+import {
+  ENTERPRISE_CHECKOUT_ENABLED,
+  ENTERPRISE_LS_CHECKOUT_URL,
+} from "../../config";
+import {
+  ENTERPRISE_ACCEPTANCE_METHOD,
+  ENTERPRISE_CHECKOUT_FIELD,
+  readLegalDocumentVersion,
+} from "../../../../src/license/LemonSqueezyConstants";
+import enterpriseTerms from "../../../../ENTERPRISE_TERMS.md?raw";
+import eula from "../../../../LICENSE.md?raw";
+import privacyPolicy from "../../../../PRIVACY.md?raw";
+import dpa from "../../../../DPA.md?raw";
+
+// Recorded with the order, so it must name the exact versions this build serves.
+const acceptedVersions = [
+  `enterprise-terms@${readLegalDocumentVersion(enterpriseTerms, "ENTERPRISE_TERMS.md")}`,
+  `eula@${readLegalDocumentVersion(eula, "LICENSE.md")}`,
+  `privacy@${readLegalDocumentVersion(privacyPolicy, "PRIVACY.md")}`,
+  `dpa@${readLegalDocumentVersion(dpa, "DPA.md")}`,
+].join("; ");
+
+const inputClass =
+  "w-full rounded-lg border border-white/10 bg-brand-950/70 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 disabled:opacity-50";
+const labelClass = "mb-2 block text-sm font-medium text-slate-200";
+const linkClass = "text-sky-400 underline hover:text-sky-300";
+---
+
+<Layout
+  title="Buy Enterprise — ctrlyoke"
+  description="Buy a ctrlyoke Enterprise site license: $4,499 per year for unlimited Authorized Users within one legal entity."
+>
+  <section class="border-b border-white/5 px-6 py-20 text-center">
+    <div class="mx-auto max-w-3xl">
+      <p class="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-sky-400">ctrlyoke Enterprise</p>
+      <h1 class="mb-5 text-4xl font-bold text-white md:text-5xl">Buy an Enterprise site license</h1>
+      <p class="mx-auto max-w-2xl text-lg leading-relaxed text-slate-400">
+        $4,499 per year, plus any applicable tax. Covers unlimited Authorized Users within one legal
+        entity, with no per-seat fee. Tell us which organization is buying, accept the terms, then
+        pay through our merchant of record, Lemon Squeezy.
+      </p>
+    </div>
+  </section>
+
+  <section class="px-6 py-16">
+    <div class="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)]">
+      <div class="rounded-2xl border border-sky-400/25 bg-gradient-to-br from-brand-800 to-brand-900 p-6 shadow-2xl shadow-brand-950/30 md:p-8">
+        <form data-enterprise-form novalidate>
+          <fieldset class="flex flex-col gap-5" disabled={!ENTERPRISE_CHECKOUT_ENABLED}>
+            <legend class="mb-5 text-2xl font-bold text-white">Your organization</legend>
+
+            <div>
+              <label for="legal-name" class={labelClass}>Legal entity name</label>
+              <input id="legal-name" name="legal-name" type="text" required autocomplete="organization"
+                placeholder="Example Corp, Inc." class={inputClass} aria-describedby="legal-name-help" />
+              <p id="legal-name-help" class="mt-2 text-xs text-slate-500">
+                The company that will hold the license, exactly as registered. One legal entity per subscription.
+              </p>
+            </div>
+
+            <div>
+              <label for="address-line1" class={labelClass}>Business address</label>
+              <input id="address-line1" name="address-line1" type="text" required autocomplete="address-line1"
+                placeholder="Street address" aria-label="Street address" class={inputClass} />
+              <input id="address-line2" name="address-line2" type="text" autocomplete="address-line2"
+                placeholder="Suite, floor (optional)" aria-label="Suite or floor" class={`${inputClass} mt-3`} />
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <input id="address-city" name="address-city" type="text" required autocomplete="address-level2"
+                  placeholder="City" aria-label="City" class={inputClass} />
+                <input id="address-region" name="address-region" type="text" autocomplete="address-level1"
+                  placeholder="State / region" aria-label="State or region" class={inputClass} />
+                <input id="address-postal" name="address-postal" type="text" autocomplete="postal-code"
+                  placeholder="Postal code" aria-label="Postal code" class={inputClass} />
+                <input id="address-country" name="address-country" type="text" required autocomplete="country-name"
+                  placeholder="Country" aria-label="Country" class={inputClass} />
+              </div>
+            </div>
+
+            <div>
+              <label for="registration-number" class={labelClass}>Company registration number <span class="font-normal text-slate-500">(optional)</span></label>
+              <input id="registration-number" name="registration-number" type="text" autocomplete="off"
+                class={inputClass} aria-describedby="registration-number-help" />
+              <p id="registration-number-help" class="mt-2 text-xs text-slate-500">
+                Needed only if you want the DPA's EU or UK transfer clauses to name it.
+              </p>
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label for="signer-name" class={labelClass}>Your name</label>
+                <input id="signer-name" name="signer-name" type="text" required autocomplete="name" class={inputClass} />
+              </div>
+              <div>
+                <label for="signer-email" class={labelClass}>Your work email</label>
+                <input id="signer-email" name="signer-email" type="email" required autocomplete="email" class={inputClass} />
+              </div>
+            </div>
+            <p class="-mt-2 text-xs text-slate-500">
+              The license key, receipts, and renewal reminders go to the email you pay with at checkout.
+            </p>
+
+            <label class="flex items-start gap-3 rounded-xl border border-white/10 bg-brand-950/40 p-4 text-sm leading-relaxed text-slate-300">
+              <input id="accept-terms" name="accept-terms" type="checkbox" required
+                class="mt-1 h-4 w-4 shrink-0 accent-sky-400" />
+              <span>
+                I am authorized to bind the organization named above, and on its behalf I accept the{" "}
+                <a href="/enterprise-terms/" target="_blank" rel="noopener" class={linkClass}>Enterprise Terms</a>,
+                the <a href="/terms/" target="_blank" rel="noopener" class={linkClass}>ctrlyoke Commercial License (EULA)</a>,
+                and the <a href="/dpa/" target="_blank" rel="noopener" class={linkClass}>Data Processing Agreement</a>,
+                and acknowledge the <a href="/privacy/" target="_blank" rel="noopener" class={linkClass}>Privacy Policy</a>.
+                This purchase is for business use. The subscription renews every year until cancelled.
+              </span>
+            </label>
+
+            <button type="submit"
+              class="w-full rounded-lg bg-sky-400 px-5 py-3 font-semibold text-brand-950 transition-colors hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-50">
+              {ENTERPRISE_CHECKOUT_ENABLED ? "Continue to secure checkout" : "Available at launch"}
+            </button>
+          </fieldset>
+        </form>
+        <p class="mt-5 min-h-6 text-sm text-rose-300" role="alert" data-status></p>
+      </div>
+
+      <aside class="flex flex-col gap-6">
+        <div class="rounded-2xl border border-white/8 bg-brand-900/40 p-6 md:p-8">
+          <h2 class="mb-4 text-xl font-bold text-white">What happens next</h2>
+          <ol class="flex list-decimal flex-col gap-3 pl-5 text-sm leading-relaxed text-slate-400 marker:text-sky-400">
+            <li>You pay on Lemon Squeezy's secure checkout. They are the merchant of record and add any sales tax or VAT.</li>
+            <li>The license key arrives by email within a few minutes. Every Authorized User activates it with <strong class="font-medium text-slate-200">ctrlyoke: Activate Pro License</strong>.</li>
+            <li>We email a reminder 30 days before each annual renewal. Cancel any time before then in the customer portal.</li>
+          </ol>
+        </div>
+
+        <div class="rounded-2xl border border-white/8 bg-brand-900/40 p-6 md:p-8">
+          <h2 class="mb-4 text-xl font-bold text-white">Need a PO or invoice?</h2>
+          <p class="text-sm leading-relaxed text-slate-400">
+            Email <a href="mailto:sales@ctrlyoke.dev" class={linkClass}>sales@ctrlyoke.dev</a> and we'll
+            set up the order by purchase order and invoice instead. Your security and legal team can review the{" "}
+            <a href="/trust/" class={linkClass}>Trust &amp; Security</a> page first.
+          </p>
+        </div>
+      </aside>
+    </div>
+  </section>
+</Layout>
+
+<script
+  define:vars={{
+    checkoutUrl: ENTERPRISE_LS_CHECKOUT_URL,
+    field: ENTERPRISE_CHECKOUT_FIELD,
+    acceptedVersions,
+    acceptanceMethod: ENTERPRISE_ACCEPTANCE_METHOD,
+  }}
+>
+  const form = document.querySelector("[data-enterprise-form]");
+  const status = document.querySelector("[data-status]");
+  const value = (id) => document.getElementById(id).value.trim();
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    status.textContent = "";
+    const firstInvalid = [...form.elements].find(
+      (el) => typeof el.checkValidity === "function" && !el.checkValidity()
+    );
+    if (firstInvalid) {
+      status.textContent =
+        firstInvalid.type === "checkbox"
+          ? "Please accept the terms to continue."
+          : "Please fill in every required field.";
+      firstInvalid.focus();
+      return;
+    }
+
+    const address = [
+      value("address-line1"),
+      value("address-line2"),
+      value("address-city"),
+      [value("address-region"), value("address-postal")].filter(Boolean).join(" "),
+      value("address-country"),
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    const url = new URL(checkoutUrl);
+    url.searchParams.set("checkout[name]", value("signer-name"));
+    url.searchParams.set("checkout[email]", value("signer-email"));
+    const custom = {
+      [field.LEGAL_NAME]: value("legal-name"),
+      [field.BUSINESS_ADDRESS]: address,
+      [field.REGISTRATION_NUMBER]: value("registration-number"),
+      [field.SIGNER_NAME]: value("signer-name"),
+      [field.SIGNER_EMAIL]: value("signer-email"),
+      [field.ACCEPTED_AT]: new Date().toISOString(),
+      [field.ACCEPTED_VERSIONS]: acceptedVersions,
+      [field.ACCEPTANCE_METHOD]: acceptanceMethod,
+    };
+    for (const [key, val] of Object.entries(custom)) {
+      if (val) url.searchParams.set(`checkout[custom][${key}]`, val);
+    }
+    window.location.assign(url.toString());
+  });
+</script>

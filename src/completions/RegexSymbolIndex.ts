@@ -47,7 +47,7 @@ export class RegexSymbolIndex implements SymbolIndex {
   constructor(
     /** A getter returning `undefined` means no folder is open: no symbols. */
     workspaceRoot: string | (() => string | undefined),
-    private readonly getFiles: () => Promise<string[]>,
+    private readonly sourceFiles: () => Promise<string[]>,
     private readonly resolveViewerPath?: (
       viewerPath: string
     ) => { absolutePath: string; workspaceRoot: string } | undefined
@@ -56,12 +56,16 @@ export class RegexSymbolIndex implements SymbolIndex {
       typeof workspaceRoot === "function" ? workspaceRoot : () => workspaceRoot;
   }
 
+  getSourceFiles(): Promise<string[]> {
+    return this.sourceFiles();
+  }
+
   async workspaceSymbols(
     query: string,
     maxResults: number,
     signal?: AbortSignal
   ): Promise<IndexedSymbol[]> {
-    const files = await this.getFiles();
+    const files = await this.getSourceFiles();
     const symbols: IndexedSymbol[] = [];
     for (const relativePath of files) {
       if (signal?.aborted) break;

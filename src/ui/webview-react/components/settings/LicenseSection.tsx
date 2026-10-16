@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LICENSE_ACTIONS,
   LICENSE_UI,
@@ -7,10 +7,17 @@ import {
   VSCODE_COMMANDS,
 } from "@root/types/DashboardConstants";
 import { LICENSE_SOURCES } from "../../../../license/LicenseService";
-import type { LicenseMachineSummary } from "@root/types/WebviewMessageTypes";
+import type {
+  LicenseMachineSummary,
+  LicenseSeatUsage,
+} from "@root/types/WebviewMessageTypes";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
-import { ActionButton, type ActionFeedback } from "../shared/ActionButton";
+import {
+  ActionButton,
+  actionFeedbackDurationMs,
+  type ActionFeedback,
+} from "../shared/ActionButton";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { Button } from "../shared/Button";
 import { Modal } from "../shared/Modal";
@@ -42,10 +49,43 @@ function machineLabel(machine: LicenseMachineSummary): string {
   );
 }
 
+/** Feedback key for an error on one machine row. */
+function machineFeedbackKey(machineId: string): string {
+  return `${MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE}:${machineId}`;
+}
+
+function SeatUsageMeter({ usage }: { usage: LicenseSeatUsage }) {
+  const used = usage.used.toLocaleString();
+  if (usage.max === null) {
+    return <p className="text-xs text-foreground">{used} seats in use</p>;
+  }
+  const remaining = Math.max(0, usage.max - usage.used);
+  const percent = Math.min(100, (usage.used / Math.max(1, usage.max)) * 100);
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-foreground">
+        {used} of {usage.max.toLocaleString()} seats in use ·{" "}
+        {remaining.toLocaleString()} remaining
+      </p>
+      <div
+        role="meter"
+        aria-label="Seats in use"
+        aria-valuemin={0}
+        aria-valuemax={usage.max}
+        aria-valuenow={usage.used}
+        className="h-1.5 overflow-hidden rounded-sm bg-panel-border"
+      >
+        <div className="h-full bg-pro-brand" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function LicenseSection() {
   const vscode = useVsCodeApi();
   const licenseAccess = useSettingsStore((state) => state.licenseAccess);
   const machines = useSettingsStore((state) => state.licenseMachines);
+  const seatUsage = useSettingsStore((state) => state.licenseSeatUsage);
   const actionResult = useSettingsStore((state) => state.licenseActionResult);
   const clearActionResult = useSettingsStore(
     (state) => state.clearLicenseActionResult
@@ -54,10 +94,16 @@ export function LicenseSection() {
   const [licenseBlob, setLicenseBlob] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [pendingMachineId, setPendingMachineId] = useState<string | null>(null);
+  const [pendingMachine, setPendingMachine] =
+    useState<LicenseMachineSummary | null>(null);
   const [feedback, setFeedback] = useState<Record<string, ActionFeedback>>({});
+  const feedbackTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
   const [machineError, setMachineError] = useState<string | undefined>();
   const [machineListPending, setMachineListPending] = useState(false);
+  const [seatUsagePending, setSeatUsagePending] = useState(false);
+  const [seatUsageError, setSeatUsageError] = useState<string | undefined>();
   const [activationLimit, setActivationLimit] = useState(false);
   const [confirmingDeactivation, setConfirmingDeactivation] = useState(false);
 
@@ -66,17 +112,50 @@ export function LicenseSection() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(
+    () => () => {
+      for (const timer of Object.values(feedbackTimersRef.current))
+        clearTimeout(timer);
+    },
+    []
+  );
+
+  const clearFeedback = useCallback((key: string) => {
+    clearTimeout(feedbackTimersRef.current[key]);
+    delete feedbackTimersRef.current[key];
+    setFeedback((current) => {
+      if (!(key in current)) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const showFeedback = useCallback(
+    (key: string, result: ActionFeedback) => {
+      clearTimeout(feedbackTimersRef.current[key]);
+      setFeedback((current) => ({ ...current, [key]: result }));
+      feedbackTimersRef.current[key] = setTimeout(
+        () => clearFeedback(key),
+        actionFeedbackDurationMs(result)
+      );
+    },
+    [clearFeedback]
+  );
+
   const isEnterprise = licenseAccess.isEnterprise === true;
   const tierLabel = isEnterprise
     ? "Enterprise"
     : licenseAccess.isPro
       ? "Pro"
       : "Free";
-  const showMachines =
-    !isEnterprise &&
-    (activationLimit ||
-      (licenseAccess.isPro &&
-        licenseAccess.source !== LICENSE_SOURCES.OFFLINE_FILE));
+  const isOnlineLicense =
+    licenseAccess.isPro &&
+    licenseAccess.source !== LICENSE_SOURCES.OFFLINE_FILE;
+  const showMachines = !isEnterprise && (activationLimit || isOnlineLicense);
+  // Enterprise keys are shared company-wide, so employees see the seat count
+  // but never the machine list (anyone could otherwise deactivate everyone).
+  const showSeatUsage = isEnterprise && isOnlineLicense;
 
   const requestMachines = useCallback(() => {
     setMachineListPending(true);
@@ -84,9 +163,19 @@ export function LicenseSection() {
     vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_LICENSE_MACHINES });
   }, [vscode]);
 
+  const requestSeatUsage = useCallback(() => {
+    setSeatUsagePending(true);
+    setSeatUsageError(undefined);
+    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE });
+  }, [vscode]);
+
   useEffect(() => {
     if (showMachines) requestMachines();
   }, [requestMachines, showMachines]);
+
+  useEffect(() => {
+    if (showSeatUsage) requestSeatUsage();
+  }, [requestSeatUsage, showSeatUsage]);
 
   useEffect(() => {
     if (!actionResult) return;
@@ -95,6 +184,14 @@ export function LicenseSection() {
       setMachineListPending(false);
       if (actionResult.status === USER_FEEDBACK_SEVERITY.ERROR)
         setMachineError(actionResult.message);
+      clearActionResult();
+      return;
+    }
+
+    if (actionResult.action === MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE) {
+      setSeatUsagePending(false);
+      if (actionResult.status === USER_FEEDBACK_SEVERITY.ERROR)
+        setSeatUsageError(actionResult.message);
       clearActionResult();
       return;
     }
@@ -108,27 +205,32 @@ export function LicenseSection() {
 
     if (actionResult.action === MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE) {
       setPendingAction(null);
-      setPendingMachineId(null);
-      setFeedback((current) => ({
-        ...current,
-        [MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE]: {
+      setPendingMachine(null);
+      // A deactivated machine drops out of the refreshed list, so success is
+      // reported once for the section; an error stays on the row it concerns.
+      if (actionResult.status === USER_FEEDBACK_SEVERITY.SUCCESS) {
+        showFeedback(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, {
+          status: actionResult.status,
+          message: pendingMachine
+            ? `Deactivated ${machineLabel(pendingMachine)}.`
+            : actionResult.message,
+        });
+      } else if (pendingMachine) {
+        showFeedback(machineFeedbackKey(pendingMachine.id), {
           status: actionResult.status,
           message: actionResult.message,
-        },
-      }));
+        });
+      }
       clearActionResult();
       return;
     }
 
     if (pendingAction !== actionResult.action) return;
     setPendingAction(null);
-    setFeedback((current) => ({
-      ...current,
-      [actionResult.action]: {
-        status: actionResult.status,
-        message: actionResult.message,
-      },
-    }));
+    showFeedback(actionResult.action, {
+      status: actionResult.status,
+      message: actionResult.message,
+    });
     if (
       actionResult.action === MESSAGE_TYPES.ACTIVATE_LICENSE_KEY &&
       actionResult.status === USER_FEEDBACK_SEVERITY.SUCCESS
@@ -143,20 +245,32 @@ export function LicenseSection() {
       setLicenseBlob("");
     }
     clearActionResult();
-  }, [actionResult, clearActionResult, pendingAction]);
+  }, [
+    actionResult,
+    clearActionResult,
+    pendingAction,
+    pendingMachine,
+    showFeedback,
+  ]);
 
   const postAction = useCallback(
     (action: string, payload: Record<string, unknown> = {}) => {
-      setFeedback((current) => {
-        if (!(action in current)) return current;
-        const next = { ...current };
-        delete next[action];
-        return next;
-      });
+      clearFeedback(action);
       setPendingAction(action);
       vscode.postMessage({ type: action, ...payload });
     },
-    [vscode]
+    [clearFeedback, vscode]
+  );
+
+  const deactivateMachine = useCallback(
+    (machine: LicenseMachineSummary) => {
+      clearFeedback(machineFeedbackKey(machine.id));
+      setPendingMachine(machine);
+      postAction(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, {
+        machineId: machine.id,
+      });
+    },
+    [clearFeedback, postAction]
   );
 
   const trialLeft = trialDaysLeft(licenseAccess.trialEndsAt, now);
@@ -398,6 +512,11 @@ export function LicenseSection() {
               {machineError}
             </p>
           )}
+          {machineFeedback && (
+            <p className="text-xs text-indicator-success" role="status">
+              {machineFeedback.message}
+            </p>
+          )}
           {machineListPending ? (
             <p className="text-xs text-description-fg">Loading machines…</p>
           ) : machines.length === 0 ? (
@@ -436,18 +555,12 @@ export function LicenseSection() {
                           label="Deactivate"
                           pendingLabel="Deactivating…"
                           icon="close"
-                          disabled={machine.isThisMachine}
-                          pending={pendingMachineId === machine.id}
-                          feedback={machineFeedback}
-                          onClick={() => {
-                            setPendingMachineId(machine.id);
-                            postAction(
-                              MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
-                              {
-                                machineId: machine.id,
-                              }
-                            );
-                          }}
+                          disabled={
+                            machine.isThisMachine || pendingMachine !== null
+                          }
+                          pending={pendingMachine?.id === machine.id}
+                          feedback={feedback[machineFeedbackKey(machine.id)]}
+                          onClick={() => deactivateMachine(machine)}
                         />
                       </td>
                     </tr>
@@ -461,17 +574,38 @@ export function LicenseSection() {
 
       {licenseAccess.isPro && isEnterprise && (
         <section
-          className="rounded-sm border border-panel-border bg-input-bg p-3"
-          aria-label="Enterprise machine management"
+          className="space-y-2 rounded-sm border border-panel-border bg-input-bg p-3"
+          aria-label="Enterprise seats"
         >
-          <h4 className="text-sm font-semibold text-foreground">
-            Activated machines
-          </h4>
-          <p className="mt-1 text-xs text-description-fg">
-            Enterprise licenses are shared across your company, so machine
-            activations aren't self-service here — any employee with the key
-            would otherwise be able to see and deactivate every other machine.
-            To free up a slot or increase your seat limit, email{" "}
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-foreground">Seats</h4>
+            {showSeatUsage && (
+              <button
+                type="button"
+                className="cy-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
+                onClick={requestSeatUsage}
+                disabled={seatUsagePending}
+              >
+                <Icon name="refresh" className="text-xxs" />
+                Refresh
+              </button>
+            )}
+          </div>
+          {seatUsageError && (
+            <p className="text-xs text-error-fg" role="alert">
+              {seatUsageError}
+            </p>
+          )}
+          {showSeatUsage &&
+            (seatUsagePending ? (
+              <p className="text-xs text-description-fg">Loading seats…</p>
+            ) : (
+              seatUsage && <SeatUsageMeter usage={seatUsage} />
+            ))}
+          <p className="text-xs text-description-fg">
+            Each machine that activates your company's key uses a seat until
+            it's deactivated. To free seats held by machines you no longer use,
+            or to raise your limit, email{" "}
             <a
               href={`mailto:${LICENSE_UI.SUPPORT_EMAIL}`}
               className="text-link-fg hover:underline"

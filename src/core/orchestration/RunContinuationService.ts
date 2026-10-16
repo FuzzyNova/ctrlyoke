@@ -377,6 +377,7 @@ export class RunContinuationService {
     if (incomingTopology.steps.length === 0) {
       throw new Error("Append continuation requires at least one tail step");
     }
+    assertIncomingStepsHaveRequiredContent(incomingTopology.steps);
     const runFilePath = WorkflowPaths.runFilePath(
       workspaceRoot,
       workflowKey,
@@ -444,12 +445,19 @@ export class RunContinuationService {
           steps: identifiedTail.map(stripViewOnlyWorkflowStepFields),
           parallelGroups: incomingTopology.parallelGroups,
         };
+        // A paused run's currentIndex already names the next pending step (pause
+        // lands on a step boundary), so `next` means "before current" there.
+        const effectivePosition =
+          position === QUEUE_POSITION.NEXT &&
+          sourceState === EXECUTION_STATES.PAUSED
+            ? QUEUE_POSITION.BEFORE_CURRENT
+            : position;
         const requestedIndex =
-          typeof position === "number"
-            ? position
+          typeof effectivePosition === "number"
+            ? effectivePosition
             : Math.max(
                 resolveQueueInsertIndex(
-                  position,
+                  effectivePosition,
                   source._runtime?.currentIndex ?? sourceTopology.steps.length,
                   sourceTopology.steps.length,
                   sourceTopology.parallelGroups
@@ -565,6 +573,7 @@ export class RunContinuationService {
     if (steps.length === 0) {
       throw new Error("Parallel-group join requires at least one flat step");
     }
+    assertIncomingStepsHaveRequiredContent(steps);
 
     const runFilePath = WorkflowPaths.runFilePath(
       workspaceRoot,
@@ -1372,6 +1381,14 @@ function assertStepHasRequiredContent(step: WorkflowStep): void {
   }
   if (typeof step.prompt !== "string" || step.prompt.trim().length === 0) {
     throw new Error("A prompt step must keep a non-empty prompt");
+  }
+}
+
+function assertIncomingStepsHaveRequiredContent(
+  steps: readonly WorkflowStep[]
+): void {
+  for (const step of steps) {
+    assertStepHasRequiredContent(step);
   }
 }
 

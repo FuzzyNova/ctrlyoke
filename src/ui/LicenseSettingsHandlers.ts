@@ -3,6 +3,7 @@ import {
   LicenseActivationLimitError,
   type Entitlement,
   type LicenseMachineSummary,
+  type LicenseSeatUsage,
 } from "../license/LicenseService";
 import type {
   ActivateLicenseKeyMessage,
@@ -10,6 +11,7 @@ import type {
   ImportLicenseFileMessage,
   LicenseActionResultMessage,
   LicenseMachinesUpdatedMessage,
+  LicenseSeatUsageUpdatedMessage,
 } from "../types/WebviewMessageTypes";
 import { getErrorChainMessage, getErrorMessage } from "../utils/ErrorUtils";
 import { Log } from "../utils/Log";
@@ -22,6 +24,7 @@ export interface LicenseActionService {
   importLicenseFile(blob: string): Promise<Entitlement>;
   deactivate(): Promise<void>;
   listMachines(key: string): Promise<LicenseMachineSummary[]>;
+  getSeatUsage(key: string): Promise<LicenseSeatUsage>;
   deactivateMachine(key: string, machineId: string): Promise<void>;
 }
 
@@ -68,6 +71,26 @@ export class LicenseSettingsHandlers {
       const machines = await this.listStoredLicenseMachines();
       this.sendMachines(ctx, machines);
       this.sendSuccess(ctx, action, "License machines loaded.");
+    } catch (error) {
+      this.sendError(ctx, action, error);
+    }
+  }
+
+  async handleRequestLicenseSeatUsage(
+    ctx: WebviewClientContext
+  ): Promise<void> {
+    const action = MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE;
+    try {
+      const service = this.requireService();
+      const usage = await service.getSeatUsage(
+        await this.requireStoredLicenseKey()
+      );
+      const message: LicenseSeatUsageUpdatedMessage = {
+        type: MESSAGE_TYPES.LICENSE_SEAT_USAGE_UPDATED,
+        usage,
+      };
+      ctx.postMessage(message);
+      this.sendSuccess(ctx, action, "License seat usage loaded.");
     } catch (error) {
       this.sendError(ctx, action, error);
     }

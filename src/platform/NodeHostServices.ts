@@ -5,6 +5,7 @@ import {
   HOST_KINDS,
   INTERACTIVE_TERMINAL_MODES,
   RUNNER_IDS,
+  WORKSPACE_FILE_CHANGE_KINDS,
 } from "../types/DashboardConstants";
 import { CliAdapter, type ResolvedCliConfig } from "./CliAdapter";
 import { NodeFileWatcherFactory } from "./NodeFileWatcher";
@@ -19,14 +20,20 @@ import { HostedWebSocketUserFeedbackSink } from "../server/HostedWebSocketUserFe
 import { resolveServerToken, ServerTokenStore } from "./ServerTokenStore";
 import { LicenseService } from "../license/LicenseService";
 import { CompletionCore } from "../completions/CompletionCore";
+import {
+  WorkspaceFileIndex,
+  type WorkspaceFileChange,
+} from "../completions/WorkspaceFileIndex";
 import { RegexSymbolIndex } from "../completions/RegexSymbolIndex";
 import { LspSymbolIndex } from "../completions/LspSymbolIndex";
 import { FallbackSymbolIndex } from "../completions/FallbackSymbolIndex";
 import type { EditorContextSource } from "../completions/EditorContextSource";
-import { listCompletionFiles } from "../utils/CompletionFileDiscovery";
+import {
+  cacheSourceFiles,
+  getSourceFiles,
+} from "../utils/CompletionFileDiscovery";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { Log } from "../utils/Log";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { configService } from "../config/CtrlYokeConfigService";
 import { initializeRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
@@ -65,7 +72,8 @@ export interface NodeHostServices {
   licenseService: LicenseService;
   completionCore: CompletionCore;
   regexSymbolIndex: RegexSymbolIndex;
-  getCompletionFiles(): Promise<string[]>;
+  getSourceFiles(): Promise<string[]>;
+  startCompletionIndexBuild(): void;
   disposableRegistry: {
     add(disposable: { dispose(): void }): void;
     dispose(): void;
@@ -122,25 +130,63 @@ export async function createNodeHostServices(options: {
     new ConsoleUserFeedbackSink(),
     new HostedWebSocketUserFeedbackSink((message) => hub.postMessage(message)),
   ]);
-  const getCompletionFiles = async (): Promise<string[]> => {
-    return listCompletionFiles(cwd, {
-      respectGitignore:
-        ConfigurationUtils.shouldRespectGitignoreForCompletions(),
-    });
-  };
+  const respectGitignore =
+    configService.get("ui").respectGitignoreForCompletions;
+  const workspaceFileIndex = new WorkspaceFileIndex(
+    [{ path: cwd, name: path.basename(cwd) }],
+    respectGitignore,
+    undefined,
+    { userFeedbackSink }
+  );
+  disposableRegistry.add(workspaceFileIndex);
+  const fileWatcherFactory = new NodeFileWatcherFactory();
+  const completionWatcher = fileWatcherFactory.create(cwd, "**/*");
+  disposableRegistry.add(completionWatcher);
+  const addCompletionChange =
+    (kind: WorkspaceFileChange["kind"]) =>
+    (filePath: string): void => {
+      const relative = path.relative(cwd, filePath).split(path.sep).join("/");
+      if (!relative || relative === "." || relative.startsWith("../")) return;
+      void workspaceFileIndex.applyChanges([
+        { root: cwd, path: relative, kind },
+      ]);
+    };
+  disposableRegistry.add(
+    completionWatcher.onDidCreate(
+      addCompletionChange(WORKSPACE_FILE_CHANGE_KINDS.CREATE)
+    )
+  );
+  disposableRegistry.add(
+    completionWatcher.onDidChange(
+      addCompletionChange(WORKSPACE_FILE_CHANGE_KINDS.CHANGE)
+    )
+  );
+  disposableRegistry.add(
+    completionWatcher.onDidDelete(
+      addCompletionChange(WORKSPACE_FILE_CHANGE_KINDS.DELETE)
+    )
+  );
+  const getSourceFilesForSymbols = cacheSourceFiles(() => getSourceFiles(cwd));
   const editorContext: EditorContextSource = {
     getSelections: () => [],
     getVisibleOutputChannels: () => [],
   };
-  const regexSymbolIndex = new RegexSymbolIndex(cwd, getCompletionFiles);
+  const regexSymbolIndex = new RegexSymbolIndex(cwd, getSourceFilesForSymbols);
   const completionCore = new CompletionCore({
     isMultiRoot: () => false,
-    getFiles: getCompletionFiles,
+    files: workspaceFileIndex,
     symbols: regexSymbolIndex,
     editorContext,
   });
+  let previousRespectGitignore = respectGitignore;
   disposables.push({
-    dispose: configService.subscribe(() => completionCore.clearCache()),
+    dispose: configService.subscribe(() => {
+      const nextRespectGitignore =
+        configService.get("ui").respectGitignoreForCompletions;
+      if (nextRespectGitignore === previousRespectGitignore) return;
+      previousRespectGitignore = nextRespectGitignore;
+      void workspaceFileIndex.build({ respectGitignore: nextRespectGitignore });
+    }),
   });
 
   return {
@@ -150,7 +196,7 @@ export async function createNodeHostServices(options: {
       hub = nextHub;
     },
     platform,
-    fileWatcherFactory: new NodeFileWatcherFactory(),
+    fileWatcherFactory,
     workspaceState: new FileKeyValueStore(cwd),
     userFeedbackSink,
     dashboardHostActions: new NodeDashboardHostActions(),
@@ -159,7 +205,10 @@ export async function createNodeHostServices(options: {
     licenseService,
     completionCore,
     regexSymbolIndex,
-    getCompletionFiles,
+    getSourceFiles: getSourceFilesForSymbols,
+    startCompletionIndexBuild: () => {
+      void workspaceFileIndex.build();
+    },
     disposableRegistry,
     dispose: () => disposableRegistry.dispose(),
   };
@@ -333,7 +382,7 @@ export async function createNodeHostedServer(options: {
   });
   const lspSymbolIndex = new LspSymbolIndex(
     cwd,
-    services.getCompletionFiles,
+    services.getSourceFiles,
     languageIntelligenceHost
   );
   services.completionCore.setSymbolIndex(
@@ -366,6 +415,13 @@ export async function createNodeHostedServer(options: {
     logStartupPhase("listen", phaseStartedAt);
     if (!url) throw new Error("The hosted server did not start.");
     runningUrl = url;
+    const completionBuildTimer = setTimeout(
+      () => services.startCompletionIndexBuild(),
+      2000
+    );
+    services.disposableRegistry.add({
+      dispose: () => clearTimeout(completionBuildTimer),
+    });
     if (configService.get("languageServers").startOnLaunch) {
       const files = await getGitTrackedFiles(cwd).catch(() => []);
       const extensions = new Set(

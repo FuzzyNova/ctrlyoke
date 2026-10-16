@@ -152,9 +152,43 @@ suite("ExecutionPlanBuilder", () => {
     }
 
     assert.ok(!plans[0].cliArgs.includes("--file"));
-    assert.deepStrictEqual(plans[1].cliArgs.slice(-3, -1), [
+    const promptIndex = plans[1].cliArgs.indexOf("Describe shots/diagram.png");
+    const imageFlagIndex = plans[1].cliArgs.indexOf("--file");
+    assert.ok(promptIndex >= 0 && promptIndex < imageFlagIndex);
+    assert.deepStrictEqual(plans[1].cliArgs.slice(imageFlagIndex), [
       "--file",
       "shots/diagram.png",
+    ]);
+  });
+
+  test("places Codex image flags after the headless prompt", async () => {
+    const session = createSession("headless");
+    session.preparePrompt("Describe shots/diagram.png", [], ["shots/diagram.png"]);
+    const plan = await createBuilder(new CodexCliProvider()).plan(session);
+    const promptIndex = plan.cliArgs.indexOf("Describe shots/diagram.png");
+    const imageFlagIndex = plan.cliArgs.indexOf("--image");
+
+    assert.ok(promptIndex >= 0 && promptIndex < imageFlagIndex);
+    assert.deepStrictEqual(plan.cliArgs.slice(imageFlagIndex), [
+      "--image",
+      "shots/diagram.png",
+    ]);
+  });
+
+  test("normalizes MCP deny rules only for Claude", async () => {
+    const properties: ResolvedProperties = {
+      ...resolvedProperties,
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      mcpServers: [
+        { id: "io.github.upstash/context7", deniedTools: ["resolve-library-id"] },
+      ],
+      toolPermissions: { mode: "custom", allowedTools: [], deniedTools: [] },
+    };
+    const session = createSession("headless", properties);
+    const plan = await createBuilder(new ClaudeCliProvider()).plan(session);
+
+    assert.deepStrictEqual(plan.effectiveToolPermissions?.deniedTools, [
+      "mcp__io_github_upstash_context7__resolve-library-id",
     ]);
   });
 

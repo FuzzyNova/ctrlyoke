@@ -174,6 +174,40 @@ suite("CLI dry-run process", () => {
     );
   });
 
+  test("reports explicit harness and model when a JSON run fails before loading", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-early-error-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "invalid.ctrlyoke.yaml");
+    await fs.writeFile(workflow, "steps: [invalid", "utf8");
+
+    const result = await runCli(
+      [
+        "run",
+        workflow,
+        "--harness",
+        "claude-cli",
+        "--model",
+        "sonnet",
+        "--headless",
+        "--json",
+        "--cwd",
+        root,
+      ],
+      root
+    );
+
+    assert.strictEqual(result.code, 2, result.stderr);
+    const report = JSON.parse(result.stdout) as {
+      harness: string;
+      model?: string;
+      status: string;
+    };
+    assert.strictEqual(report.harness, "claude-cli");
+    assert.strictEqual(report.model, "sonnet");
+    assert.strictEqual(report.status, "error");
+  });
+
   test("fails closed with exit code 2 when workflow secret grants are pending", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-dry-run-"));

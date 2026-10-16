@@ -28,6 +28,7 @@ import { WorkspaceSnapshotService } from "../../utils/WorkspaceSnapshotService";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  IN_FLIGHT_EXECUTION_STATES,
   EXECUTION_STATES,
   HARNESS_IDS,
   HISTORY_TRASH_ENTRY_KINDS,
@@ -1082,21 +1083,18 @@ export class OutputHistoryManager {
     this.refreshSearchIndex();
   }
 
-  /** Finalize the newest still-running run after startup detects a dead owner. */
+  /** Finalize the exact interrupted run after startup detects a dead owner. */
   async recoverInterruptedRun(
     workflowKey: WorkflowKey,
+    runRef: RunRef,
     stepCount: number
   ): Promise<void> {
-    const [latestRun] = await this.getRunsForWorkflow(workflowKey);
-    if (!latestRun) {
-      return;
-    }
-    const historyFilePath = this.getHistoryFilePath(workflowKey, latestRun);
+    const historyFilePath = this.getHistoryFilePath(workflowKey, runRef);
     try {
       const manifest =
         await this.timelineRecorder.readManifest(historyFilePath);
       const totals = await this.hydrateTokenTotals(historyFilePath);
-      if (manifest.executionState === EXECUTION_STATES.RUNNING) {
+      if (IN_FLIGHT_EXECUTION_STATES.has(manifest.executionState)) {
         await this.finalizeRun(
           historyFilePath,
           EXECUTION_STATES.STOPPED,
@@ -1108,7 +1106,7 @@ export class OutputHistoryManager {
       if (recoveredTotals) {
         await this.repairWorkingFileTokenTotals(
           workflowKey,
-          latestRun,
+          runRef,
           recoveredTotals
         );
       }

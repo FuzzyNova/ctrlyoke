@@ -10,6 +10,8 @@ import { act } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import { EditorView } from "codemirror";
+import { EditorSelection } from "@codemirror/state";
 
 describe("WorkspaceFileEditor link navigation", () => {
   beforeAll(() => {
@@ -249,5 +251,35 @@ describe("WorkspaceFileEditor link navigation", () => {
       });
     });
     expect(onPendingSelectionApplied).toHaveBeenCalledWith(7);
+  });
+
+  it("uses an inclusive end line for a whole-line CodeMirror selection", () => {
+    const editorRef = createRef<WorkspaceFileEditorHandle>();
+    const { container } = render(
+      <WorkspaceFileEditor
+        ref={editorRef}
+        filePath="src/app.ts"
+        content={["line 1", "line 2", "line 3"].join("\n")}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    const editor = container.querySelector(".cm-content");
+    expect(editor).not.toBeNull();
+    const view = EditorView.findFromDOM(editor as HTMLElement);
+    expect(view).not.toBeNull();
+    const doc = view!.state.doc;
+    act(() => {
+      view!.dispatch({
+        selection: EditorSelection.range(doc.line(2).from, doc.line(3).from),
+      });
+    });
+
+    expect(editorRef.current?.getSelectionRange()).toEqual({
+      startLine: 2,
+      endLine: 2,
+    });
+    expect(editorRef.current?.getSelectionText()).toBe("line 2\n");
   });
 });

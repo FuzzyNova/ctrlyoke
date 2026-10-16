@@ -5,6 +5,7 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import type { IEvent, IPty } from "node-pty";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
+import { PromptFileResolver } from "../../core/PromptFileResolver";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
   HarnessIntegration,
@@ -41,6 +42,7 @@ import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { parseAtReferences } from "../../utils/FileReferenceParser";
 import type { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { ExecutionLeaseConflictError } from "../../core/orchestration/ExecutionRootLeaseManager";
@@ -2024,6 +2026,122 @@ suite("WorkflowInstance append-and-continue", () => {
       assert.deepStrictEqual(persistedAppendedStep, appendedStep);
     } finally {
       await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("appendFromFile rebases prompt and inline references from a subfolder", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-append-relative-paths-")
+    );
+
+    try {
+      const platform = new MockPlatform();
+      platform.getWorkspaceRoot = () => workspaceRoot;
+      platform.getWorkspaceRoots = () => [workspaceRoot];
+      platform.getNamedWorkspaceRoots = () => [
+        { name: path.basename(workspaceRoot), fsPath: workspaceRoot },
+      ];
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        workspaceRoot
+      );
+
+      const destinationPath = path.join(workspaceRoot, "main.ctrlyoke.yaml");
+      await fs.writeFile(destinationPath, "steps:\n  - prompt: main\n");
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "main.ctrlyoke.yaml",
+        [{ prompt: "main" }],
+        workspaceRoot,
+        destinationPath
+      );
+      const workingFile =
+        await instance.promptQueue.readWorkingFile(workingFilePath);
+      instance.promptQueue.loadPrompts(workingFile, workingFilePath);
+      await loadPromptFileForTest(instance, destinationPath, {
+        steps: [{ prompt: "main" }],
+      });
+
+      const sourceDirectory = path.join(workspaceRoot, "sub");
+      await fs.mkdir(sourceDirectory);
+      await fs.writeFile(
+        path.join(sourceDirectory, "task.prompt.md"),
+        "subfolder prompt"
+      );
+      await fs.writeFile(
+        path.join(workspaceRoot, "task.prompt.md"),
+        "wrong prompt"
+      );
+      await fs.writeFile(path.join(sourceDirectory, "asset.md"), "sub asset");
+      await fs.writeFile(
+        path.join(sourceDirectory, "retry.prompt.md"),
+        "subfolder retry"
+      );
+      await fs.writeFile(
+        path.join(sourceDirectory, "extra.ctrlyoke.yaml"),
+        [
+          "steps:",
+          "  - prompt: ./task.prompt.md",
+          '  - prompt: "Read @./asset.md"',
+          "    endCondition:",
+          "      script: echo done",
+          "      retryPrompt: ./retry.prompt.md",
+          "",
+        ].join("\n")
+      );
+
+      await instance.appendFromFile(
+        path.join(sourceDirectory, "extra.ctrlyoke.yaml")
+      );
+
+      const appendedSteps = instance.promptQueue
+        .getState()
+        .steps.slice(1) as PromptStep[];
+      const promptFileStep = appendedSteps.find((step) =>
+        step.prompt.includes("task.prompt.md")
+      );
+      const inlineReferenceStep = appendedSteps.find((step) =>
+        step.prompt.includes("Read @")
+      );
+      assert.ok(promptFileStep);
+      assert.ok(inlineReferenceStep);
+      assert.strictEqual(promptFileStep.prompt, "./sub/task.prompt.md");
+      assert.strictEqual(inlineReferenceStep.prompt, "Read @sub/asset.md");
+      assert.strictEqual(
+        inlineReferenceStep.endCondition?.retryPrompt,
+        "./sub/retry.prompt.md"
+      );
+
+      const promptResolver = new PromptFileResolver({ workspaceRoot });
+      assert.strictEqual(
+        await promptResolver.resolvePromptValue(
+          promptFileStep.prompt,
+          destinationPath
+        ),
+        "subfolder prompt"
+      );
+      assert.strictEqual(
+        await promptResolver.resolvePromptValue(
+          inlineReferenceStep.endCondition!.retryPrompt!,
+          destinationPath
+        ),
+        "subfolder retry"
+      );
+      const [inlineReference] = parseAtReferences(inlineReferenceStep.prompt);
+      assert.strictEqual(inlineReference.path, "sub/asset.md");
+      assert.strictEqual(
+        await fs.readFile(
+          path.join(workspaceRoot, inlineReference.path),
+          "utf8"
+        ),
+        "sub asset"
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 

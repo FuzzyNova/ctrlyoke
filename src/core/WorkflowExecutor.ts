@@ -2089,6 +2089,10 @@ export class WorkflowExecutor {
           actionForErrored: this.getErrorConditionAction(preErrorBehavior),
         });
         const preResult = preReport.evaluationResult;
+        if (preResult.cancelled) {
+          await this.cancelConditionAttempt(context, target, attemptIndex);
+          return false;
+        }
         this.recordPreConditionSummary(
           target,
           createConditionEvaluationSummary(
@@ -2450,6 +2454,13 @@ export class WorkflowExecutor {
         }
 
         if (endDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
+          if (
+            target.kind === FINAL_STEP_PHASES.QUEUE &&
+            this.promptQueue.getState().results[target.stepIndex]?.status ===
+              STEP_STATUS.CANCELLED
+          ) {
+            return false;
+          }
           Log.info(
             "[WorkflowExecutor] Workflow stopped due to end condition failure"
           );
@@ -3007,6 +3018,23 @@ export class WorkflowExecutor {
       reason,
       harnessId
     );
+  }
+
+  private async cancelConditionAttempt(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    attemptIndex: number
+  ): Promise<void> {
+    this.getRuntime().cancelAttempt(target, attemptIndex);
+    await this.recordAttemptTerminal(
+      context,
+      target,
+      attemptIndex,
+      TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED
+    );
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      await this.promptQueue.cancelStep(target.stepIndex);
+    }
   }
 
   /**
@@ -3703,12 +3731,7 @@ export class WorkflowExecutor {
         TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
         reason
       );
-      runtime.scheduleRetry(
-        target,
-        nextAttemptIndex,
-        errorRetryCount + 1,
-        maxRetries
-      );
+      runtime.scheduleErrorRetry(target, nextAttemptIndex);
       const retryDelayMs = ConfigurationUtils.secondsToMs(policy.retryDelaySec);
       if ((retryDelayMs ?? 0) > 0) {
         await this.delay(retryDelayMs!);
@@ -4017,6 +4040,11 @@ export class WorkflowExecutor {
       emitStatus: false,
     });
     const evaluationResult = endReport.evaluationResult;
+
+    if (evaluationResult.cancelled) {
+      await this.cancelConditionAttempt(context, target, attemptIndex);
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
+    }
 
     if (evaluationResult.errored) {
       this.recordEndConditionSummary(
@@ -5369,7 +5397,7 @@ export class WorkflowExecutor {
       const retryLimit = isUnlimited(maxRetries) ? "unlimited" : maxRetries;
 
       runtime.failAttempt(target, attemptIndex, failureReason);
-      runtime.scheduleRetry(target, nextAttemptIndex, retryCount, maxRetries);
+      runtime.scheduleErrorRetry(target, nextAttemptIndex);
 
       await this.trackStatusMessage(
         context,

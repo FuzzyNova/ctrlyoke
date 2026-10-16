@@ -8,7 +8,10 @@ export function quoteReferencePath(pathValue: string): string {
   const unquotedPathPattern = new RegExp(`^(?:${UNQUOTED_AT_REFERENCE_PATH})$`);
   // Keep drive-letter paths quoted even though the parser understands their
   // colon prefix. This is the established insertion format for absolute paths.
-  return !/[\s:]/.test(pathValue) && unquotedPathPattern.test(pathValue)
+  const hasPathMarker = /[/.\\]/.test(pathValue);
+  return hasPathMarker &&
+    !/[\s:]/.test(pathValue) &&
+    unquotedPathPattern.test(pathValue)
     ? pathValue
     : `"${pathValue}"`;
 }

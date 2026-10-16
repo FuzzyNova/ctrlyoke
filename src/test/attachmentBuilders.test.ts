@@ -31,17 +31,17 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
     fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
     const traversal = path.relative(workspaceRoot, outsideDir);
 
-    const xml = await buildDirectoryAttachmentXml(
-      `${traversal}/`,
-      workspaceRoot,
-      [],
-      [],
-      false,
-      workspaceRoot
+    await assert.rejects(
+      buildDirectoryAttachmentXml(
+        `${traversal}/`,
+        workspaceRoot,
+        [],
+        [],
+        false,
+        workspaceRoot
+      ),
+      /outside the workspace and was blocked/u
     );
-
-    assert.ok(xml.includes("blocked"));
-    assert.ok(!xml.includes("secret.txt"));
   });
 
   test("blocks an absolute directory path outside the workspace", async () => {
@@ -49,13 +49,19 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
     outsideDir = makeTempDir("cy-attach-outside-");
     fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
 
-    const xml = await buildDirectoryAttachmentXml(
-      `${outsideDir}/`,
-      workspaceRoot
+    await assert.rejects(
+      buildDirectoryAttachmentXml(`${outsideDir}/`, workspaceRoot),
+      /outside the workspace and was blocked/u
     );
+  });
 
-    assert.ok(xml.includes("blocked"));
-    assert.ok(!xml.includes("secret.txt"));
+  test("rejects a missing directory reference", async () => {
+    workspaceRoot = makeTempDir("cy-attach-");
+
+    await assert.rejects(
+      buildDirectoryAttachmentXml("nope/", workspaceRoot),
+      /Directory not found: nope/u
+    );
   });
 
   test("allows a directory reference into a second trusted root (multi-root workspace)", async () => {
@@ -69,15 +75,17 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
     );
 
     // Without the second root trusted, the same reference is blocked.
-    const untrusted = await buildDirectoryAttachmentXml(
-      `${relativeDir}/`,
-      workspaceRoot,
-      [],
-      [],
-      false,
-      workspaceRoot
+    await assert.rejects(
+      buildDirectoryAttachmentXml(
+        `${relativeDir}/`,
+        workspaceRoot,
+        [],
+        [],
+        false,
+        workspaceRoot
+      ),
+      /outside the workspace and was blocked/u
     );
-    assert.ok(untrusted.includes("blocked"));
 
     const trusted = await buildDirectoryAttachmentXml(
       `${relativeDir}/`,

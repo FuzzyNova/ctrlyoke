@@ -2276,6 +2276,84 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
   });
 
+  test("validates model-only steps against workflow harness and rejects unavailable harnesses", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "inherited-capability",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.harness = "claude-cli";
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    const capabilitiesDirectory = path.join(workspaceRoot, ".ctrlyoke");
+    await fs.mkdir(capabilitiesDirectory, { recursive: true });
+    await fs.writeFile(
+      path.join(capabilitiesDirectory, "capabilities.json"),
+      JSON.stringify({
+        generatedAt: 1,
+        harnesses: [
+          {
+            id: "claude-cli",
+            displayName: "Claude CLI",
+            available: true,
+            models: [{ value: "valid-model", label: "Valid" }],
+          },
+          {
+            id: "codex-cli",
+            displayName: "Codex CLI",
+            available: false,
+            models: [],
+          },
+        ],
+      }),
+      "utf8"
+    );
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "inherit workflow harness", model: "bad-model" }],
+      }),
+      /Invalid model 'bad-model' for harness 'claude-cli'/
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "unavailable", harness: "codex-cli" }],
+      }),
+      /Invalid harness 'codex-cli'.*Available harnesses: claude-cli/
+    );
+  });
+
+  test("reports malformed capabilities separately from a missing file", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "malformed-capabilities",
+      "2026-01-01T00-00-00-000Z"
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const capabilitiesPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "capabilities.json"
+    );
+    await fs.mkdir(path.dirname(capabilitiesPath), { recursive: true });
+    await fs.writeFile(capabilitiesPath, "{", "utf8");
+    await assert.rejects(
+      server.invokeTool("list_harnesses", {}),
+      /capabilities.json is invalid JSON/
+    );
+    await fs.rm(capabilitiesPath);
+    await assert.rejects(
+      server.invokeTool("list_harnesses", {}),
+      /capabilities.json not found/
+    );
+  });
+
   test("reports flattened mixed topology and relocation in the append response", async () => {
     const server = await setup();
     const run = await createRun("mixed-append", "2026-01-01T00-00-00-000Z", {

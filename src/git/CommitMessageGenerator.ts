@@ -205,16 +205,6 @@ export function buildCommitMessagePrompt(
   return `${commitPrompt}\n\n${fencedDiff}${instructionsSection}${mcpInstruction}`;
 }
 
-function isNotGitRepositoryError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "stderr" in error &&
-    typeof error.stderr === "string" &&
-    /fatal: not a git repository/i.test(error.stderr)
-  );
-}
-
 export interface CommitResult {
   message: string;
   staged: boolean;
@@ -289,30 +279,31 @@ export class CommitMessageGenerator {
     cwd: string,
     options: { includeUnstaged?: boolean } = {}
   ): Promise<DiffResult | null> {
+    const repositoryRoot = await repoToplevel(cwd);
+    if (!repositoryRoot) {
+      throw new Error(`Not a git repository: ${cwd}`);
+    }
+
     // Primary: staged changes
     const stagedCommand = gitDiffCommand("--cached");
-    let stagedDiff = "";
-    try {
-      const result = await execFileAsync("git", gitDiffArgs("--cached"), {
+    const { stdout: stagedDiff } = await execFileAsync(
+      "git",
+      gitDiffArgs("--cached"),
+      {
         cwd,
         encoding: "utf8",
         maxBuffer: GIT_DIFF_MAX_BUFFER,
-      });
-      stagedDiff = result.stdout;
-      if (stagedDiff.trim() && !options.includeUnstaged) {
-        const diff = truncateUtf8(stagedDiff, MAX_DIFF_BYTES);
-        return {
-          diff,
-          staged: true,
-          truncated: Buffer.byteLength(stagedDiff, "utf8") > MAX_DIFF_BYTES,
-          commands: [stagedCommand],
-          includesUntrackedFiles: false,
-        };
       }
-    } catch (error) {
-      if (!isNotGitRepositoryError(error)) {
-        throw error;
-      }
+    );
+    if (stagedDiff.trim() && !options.includeUnstaged) {
+      const diff = truncateUtf8(stagedDiff, MAX_DIFF_BYTES);
+      return {
+        diff,
+        staged: true,
+        truncated: Buffer.byteLength(stagedDiff, "utf8") > MAX_DIFF_BYTES,
+        commands: [stagedCommand],
+        includesUntrackedFiles: false,
+      };
     }
 
     // Fallback: unstaged tracked + untracked files
@@ -340,51 +331,33 @@ export class CommitMessageGenerator {
     ];
     let includesUntrackedFiles = false;
     let hasStagedChanges = false;
-    const repositoryRoot = (await repoToplevel(cwd)) ?? cwd;
-    try {
-      if (stagedDiff.trim()) {
-        hasStagedChanges = true;
-      }
-      if (options.includeUnstaged) {
-        try {
-          const { stdout: headDiff } = await execFileAsync(
-            "git",
-            gitDiffArgs("HEAD"),
-            { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
-          );
-          if (headDiff.trim()) {
-            append(headDiff);
-          }
-        } catch (error) {
-          const stderr =
-            typeof error === "object" && error !== null && "stderr" in error
-              ? String(error.stderr)
-              : "";
-          if (
-            !/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)
-          ) {
-            throw error;
-          }
-          commands.push(gitDiffCommand());
-          // An unborn repository has no HEAD comparison; combine its staged
-          // additions with the regular unstaged diff instead.
-          if (stagedDiff.trim()) {
-            append(stagedDiff);
-          }
-          const { stdout: trackedDiff } = await execFileAsync(
-            "git",
-            gitDiffArgs(),
-            {
-              cwd,
-              encoding: "utf8",
-              maxBuffer: GIT_DIFF_MAX_BUFFER,
-            }
-          );
-          if (trackedDiff.trim()) {
-            append(trackedDiff);
-          }
+    if (stagedDiff.trim()) {
+      hasStagedChanges = true;
+    }
+    if (options.includeUnstaged) {
+      try {
+        const { stdout: headDiff } = await execFileAsync(
+          "git",
+          gitDiffArgs("HEAD"),
+          { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
+        );
+        if (headDiff.trim()) {
+          append(headDiff);
         }
-      } else {
+      } catch (error) {
+        const stderr =
+          typeof error === "object" && error !== null && "stderr" in error
+            ? String(error.stderr)
+            : "";
+        if (!/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)) {
+          throw error;
+        }
+        commands.push(gitDiffCommand());
+        // An unborn repository has no HEAD comparison; combine its staged
+        // additions with the regular unstaged diff instead.
+        if (stagedDiff.trim()) {
+          append(stagedDiff);
+        }
         const { stdout: trackedDiff } = await execFileAsync(
           "git",
           gitDiffArgs(),
@@ -398,84 +371,87 @@ export class CommitMessageGenerator {
           append(trackedDiff);
         }
       }
-    } catch (error) {
-      if (!isNotGitRepositoryError(error)) {
-        throw error;
-      }
-    }
-
-    try {
-      commands.push("git ls-files --others --exclude-standard -z");
-      const { stdout: untrackedOut } = await execFileAsync(
+    } else {
+      const { stdout: trackedDiff } = await execFileAsync(
         "git",
-        ["ls-files", "--others", "--exclude-standard", "-z"],
+        gitDiffArgs(),
         {
-          cwd: repositoryRoot,
+          cwd,
           encoding: "utf8",
           maxBuffer: GIT_DIFF_MAX_BUFFER,
         }
       );
-      const untrackedFiles = parseGitNulSeparatedPaths(untrackedOut);
-      includesUntrackedFiles = untrackedFiles.length > 0;
-      for (const filePath of untrackedFiles) {
-        const remaining = MAX_DIFF_BYTES - usedBytes;
-        if (remaining <= 0) {
+      if (trackedDiff.trim()) {
+        append(trackedDiff);
+      }
+    }
+
+    commands.push("git ls-files --others --exclude-standard -z");
+    const { stdout: untrackedOut } = await execFileAsync(
+      "git",
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+      {
+        cwd: repositoryRoot,
+        encoding: "utf8",
+        maxBuffer: GIT_DIFF_MAX_BUFFER,
+      }
+    );
+    const untrackedFiles = parseGitNulSeparatedPaths(untrackedOut);
+    includesUntrackedFiles = untrackedFiles.length > 0;
+    for (const filePath of untrackedFiles) {
+      const remaining = MAX_DIFF_BYTES - usedBytes;
+      if (remaining <= 0) {
+        truncated = true;
+        break;
+      }
+      try {
+        const absolutePath = path.join(repositoryRoot, filePath);
+        const stat = await fs.lstat(absolutePath);
+        if (!stat.isFile()) {
+          continue;
+        }
+
+        const header = `diff --git a/${filePath} b/${filePath}\n`;
+        const binaryHeader = `${header}new file mode 100644\nBinary file b/${filePath} added\n`;
+        const sample = await readFilePrefix(
+          absolutePath,
+          Math.min(BINARY_DETECTION_BYTES, remaining)
+        );
+        if (sample.includes(0)) {
+          append(binaryHeader);
+          continue;
+        }
+
+        const fileBudget = Math.max(
+          0,
+          remaining - Buffer.byteLength(header, "utf8")
+        );
+        if (fileBudget === 0) {
+          append(header);
           truncated = true;
           break;
         }
-        try {
-          const absolutePath = path.join(repositoryRoot, filePath);
-          const stat = await fs.lstat(absolutePath);
-          if (!stat.isFile()) {
-            continue;
-          }
-
-          const header = `diff --git a/${filePath} b/${filePath}\n`;
-          const binaryHeader = `${header}new file mode 100644\nBinary file b/${filePath} added\n`;
-          const sample = await readFilePrefix(
-            absolutePath,
-            Math.min(BINARY_DETECTION_BYTES, remaining)
-          );
-          if (sample.includes(0)) {
-            append(binaryHeader);
-            continue;
-          }
-
-          const fileBudget = Math.max(
-            0,
-            remaining - Buffer.byteLength(header, "utf8")
-          );
-          if (fileBudget === 0) {
-            append(header);
-            truncated = true;
-            break;
-          }
-          const restBuffer = await readFilePrefix(
-            absolutePath,
-            Math.max(0, fileBudget - sample.length),
-            sample.length
-          );
-          const contentBuffer = Buffer.concat([sample, restBuffer]);
-          const content = contentBuffer.toString("utf8");
-          const lines = content.split("\n");
-          const prefix =
-            `${header}new file mode 100644\n` +
-            `--- /dev/null\n` +
-            `+++ b/${filePath}\n` +
-            `@@ -0,0 +1,${lines.length} @@\n`;
-          append(prefix);
-          append(lines.map((line) => `+${line}`).join("\n"));
-          if (contentBuffer.length < stat.size || usedBytes >= MAX_DIFF_BYTES) {
-            truncated = true;
-            break;
-          }
-        } catch {
-          // skip unreadable files
+        const restBuffer = await readFilePrefix(
+          absolutePath,
+          Math.max(0, fileBudget - sample.length),
+          sample.length
+        );
+        const contentBuffer = Buffer.concat([sample, restBuffer]);
+        const content = contentBuffer.toString("utf8");
+        const lines = content.split("\n");
+        const prefix =
+          `${header}new file mode 100644\n` +
+          `--- /dev/null\n` +
+          `+++ b/${filePath}\n` +
+          `@@ -0,0 +1,${lines.length} @@\n`;
+        append(prefix);
+        append(lines.map((line) => `+${line}`).join("\n"));
+        if (contentBuffer.length < stat.size || usedBytes >= MAX_DIFF_BYTES) {
+          truncated = true;
+          break;
         }
-      }
-    } catch (error) {
-      if (!isNotGitRepositoryError(error)) {
-        throw error;
+      } catch {
+        // skip unreadable files
       }
     }
 
@@ -504,6 +480,10 @@ export class CommitMessageGenerator {
     workflowKey?: string;
     runRef?: string;
   }> {
+    if (token?.aborted) {
+      throw new Error("Commit message generation cancelled");
+    }
+
     const rawHarness =
       ConfigurationUtils.getCommitHarness() ||
       ConfigurationUtils.getIntegrationMode();
@@ -697,6 +677,13 @@ export class CommitMessageGenerator {
           void instance.stop();
         };
         token.addEventListener("abort", abortListener);
+        if (token.aborted) {
+          abortListener();
+        }
+      }
+
+      if (token?.aborted) {
+        throw new Error("Commit message generation cancelled");
       }
 
       await instance.executeLoadedPromptFile(harness);

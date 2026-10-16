@@ -63,7 +63,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
-import { isWorkflowRunning } from "../../utils/status";
+import { isExecutionBusy, isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import { getPriorContextStepCount } from "@utils/parallelGroups";
 import { notifyUser, showWebviewToast } from "@utils/notifyUser";
@@ -880,17 +880,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const resolveFinalAction = useCallback(
     (action: string): string => {
       if (action === ACTION_TYPES.RUN && hasPendingPrompts()) {
-        const isIdle = executionState === EXECUTION_STATES.IDLE;
-        const isStopped = executionState === EXECUTION_STATES.STOPPED;
-        const isPaused = executionState === EXECUTION_STATES.PAUSED;
-        if (isStopped) return ACTION_TYPES.RUN_BEFORE_CURRENT;
-        if (isIdle && currentStep === 0) return ACTION_TYPES.RUN_BEFORE_CURRENT;
-        if (isPaused || isRunning) return ACTION_TYPES.RUN_NEXT;
-        return ACTION_TYPES.RUN_NEXT;
+        return isExecutionBusy(executionState)
+          ? ACTION_TYPES.RUN_NEXT
+          : ACTION_TYPES.RUN_BEFORE_CURRENT;
       }
       return action;
     },
-    [hasPendingPrompts, executionState, currentStep, isRunning]
+    [hasPendingPrompts, executionState]
   );
 
   // Execute prompt (Run/Queue)

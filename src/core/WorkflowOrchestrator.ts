@@ -144,6 +144,7 @@ import {
   type WorktreeSyncResult,
 } from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
+import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
@@ -2000,9 +2001,25 @@ export class WorkflowOrchestrator {
     if (!parsed?.steps?.length) {
       throw new Error("No steps found in file");
     }
+    const workspaceRoot = this.currentWorkspaceFolderPath;
+    const destinationDefinitionPath = workspaceRoot
+      ? (
+          await this.lineageRepository.readDescriptor(
+            workspaceRoot,
+            mutation.address.workflowKey
+          )
+        ).originalFile
+      : undefined;
+    const steps = workspaceRoot
+      ? await rebaseWorkflowStepPaths(parsed.steps, filePath, workspaceRoot, {
+          namedRoots: this.platform.getNamedWorkspaceRoots(),
+          trustedRoots: this.platform.getWorkspaceRoots(),
+          destinationDefinitionPath,
+        })
+      : parsed.steps;
     await this.appendAndContinueAtRun(
       mutation.address,
-      parsed.steps,
+      steps,
       mutation.expectedDefinitionRevision,
       mutation.expectedDescriptorRevision,
       clientId

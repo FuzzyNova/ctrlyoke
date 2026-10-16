@@ -114,15 +114,15 @@ Use `--run` with `--workflow` to inspect a specific run.
 
 ## Exit codes
 
-| Code | Meaning                                                                                                                      |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Success                                                                                                                      |
-| `1`  | The workflow failed (a step or end condition failed), or a validation check failed                                           |
-| `2`  | Usage, parse, or unexpected error; also unapproved external roots or secret grants, or run state written by a newer ctrlyoke |
-| `3`  | A harness failed because its CLI could not be found (not installed, not on `PATH`)                                           |
-| `4`  | A step failed with a timeout that is not a configured execution guardrail                                                    |
-| `5`  | Interrupted with Ctrl+C or `SIGTERM`; the run is stopped and its runner lock released                                        |
-| `6`  | The run stopped after reaching a configured execution guardrail                                                              |
+| Code | Meaning                                                                                                                                                                                         |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success                                                                                                                                                                                         |
+| `1`  | The workflow failed (a step or end condition failed), or a validation check failed                                                                                                              |
+| `2`  | Usage, parse, or unexpected error; also, with no terminal to ask in, unapproved external roots, secret grants or workspace settings that run programs, or run state written by a newer ctrlyoke |
+| `3`  | A harness failed because its CLI could not be found (not installed, not on `PATH`)                                                                                                              |
+| `4`  | A step failed with a timeout that is not a configured execution guardrail                                                                                                                       |
+| `5`  | Interrupted with Ctrl+C or `SIGTERM`; the run is stopped and its runner lock released                                                                                                           |
+| `6`  | The run stopped after reaching a configured execution guardrail                                                                                                                                 |
 
 ## `ctrlyoke run`
 
@@ -220,7 +220,7 @@ ctrlyoke run review.ctrlyoke.yaml --dry-run
 ### First run in a folder
 
 Running a workflow is how you opt a folder in, so `run` creates `.ctrlyoke/`
-and its `.gitignore` without asking, as `ctrlyoke serve` does. Commands that
+and its `.gitignore` without asking, as `ctrlyoke server` does. Commands that
 only read or review (`validate`, `status`, `history`, the `trust-*` commands)
 never create it.
 
@@ -404,9 +404,10 @@ ctrlyoke trust-workflow-external-roots my-workflow.ctrlyoke.yaml
 
 The command lists pending roots and asks for confirmation before recording an
 allow or deny decision for that workflow on the local machine. Use
-`--yes` to approve all pending roots in automation. `ctrlyoke run` asks the
-same question itself in a terminal; without one it exits with code `2` and
-prints this command as the remediation.
+`--yes` to approve all pending roots in automation. Without a terminal, the
+command lists the roots on stderr and exits with code `2` unless `--yes` is
+passed. `ctrlyoke run` asks the same question itself in a terminal; without
+one it exits with code `2` and prints this command as the remediation.
 
 ## `ctrlyoke trust-external-roots`
 
@@ -421,8 +422,9 @@ ctrlyoke trust-external-roots --yes
 This is the workspace-scope counterpart of `trust-workflow-external-roots`.
 User-scope roots are trusted immediately when added to the user's settings.
 While a workspace root is pending, `ctrlyoke run` asks about it in a terminal
-and exits with code `2` without one. `--yes` approves all pending roots without
-prompting.
+and exits with code `2` without one. This review command also lists pending
+roots on stderr and exits with code `2` without a terminal unless `--yes` is
+passed. `--yes` approves all pending roots without prompting.
 
 ## `ctrlyoke trust-secret-grants`
 

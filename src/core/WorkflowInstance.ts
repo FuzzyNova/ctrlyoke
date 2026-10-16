@@ -1,5 +1,6 @@
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
+import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
 import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
 import { WorkingFileManager } from "./WorkingFileManager";
@@ -2591,9 +2592,21 @@ export class WorkflowInstance
       }
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
+      const rebasedSteps = await rebaseWorkflowStepPaths(
+        parsed.steps,
+        filePath,
+        this.getStateRoot() ??
+          this.platform.getWorkspaceRoot() ??
+          path.dirname(filePath),
+        {
+          namedRoots: this.platform.getNamedWorkspaceRoots(),
+          trustedRoots: this.platform.getWorkspaceRoots(),
+          destinationDefinitionPath: this.sourceDefinitionPath,
+        }
+      );
       this.reopenRuntimeForContinuationIfNeeded(false);
       const shiftWarning = await this.promptQueue.appendSteps(
-        parsed.steps,
+        rebasedSteps,
         source,
         position,
         parsed.parallelGroups

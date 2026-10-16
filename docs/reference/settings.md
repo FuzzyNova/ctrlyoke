@@ -727,7 +727,7 @@ Automatically delete categorized prompt temp files after execution. Set to false
 - **Type:** `"warn" | "fail"`
 - **Default:** `"warn"`
 
-How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~&lt;hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference.
+How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/@dir/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~&lt;hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference.
 
 ### `execution.maxPromptTimeoutSec` {#execution-maxprompttimeoutsec}
 
@@ -1703,7 +1703,7 @@ Settings format version. Absent means format 1. ctrlyoke stamps this field when 
 - **Type:** map of map of `{ inputPerMTok, outputPerMTok, cachedInputPerMTok?, … }`
 - **Default:** `{}`
 
-Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.
+Optional per-harness/per-model USD pricing overrides. User and workspace scopes merge per model, with workspace rates taking precedence for the same model. Rates are USD per one million tokens.
 
 Fields:
 

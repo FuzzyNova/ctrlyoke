@@ -22,7 +22,11 @@ import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
-import { ActionButton, type ActionFeedback } from "../shared/ActionButton";
+import {
+  ActionButton,
+  actionFeedbackDurationMs,
+  type ActionFeedback,
+} from "../shared/ActionButton";
 
 const CONFIRMATION_VARIANTS = {
   DELETE: "delete",
@@ -98,15 +102,13 @@ function useWorktreeActionFeedback() {
                 .map((result) => result.message)
                 .join(" ")}`;
 
-      setFeedback((prev) => ({
-        ...prev,
-        [key]: {
-          status: success
-            ? USER_FEEDBACK_SEVERITY.SUCCESS
-            : USER_FEEDBACK_SEVERITY.ERROR,
-          message,
-        },
-      }));
+      const result: ActionFeedback = {
+        status: success
+          ? USER_FEEDBACK_SEVERITY.SUCCESS
+          : USER_FEEDBACK_SEVERITY.ERROR,
+        message,
+      };
+      setFeedback((prev) => ({ ...prev, [key]: result }));
       setPending((prev) => {
         const next = { ...prev };
         delete next[key];
@@ -122,7 +124,7 @@ function useWorktreeActionFeedback() {
             delete next[key];
             return next;
           }),
-        success ? 4000 : 8000
+        actionFeedbackDurationMs(result)
       );
     }
   }, [results, pending, clearResult]);
@@ -399,15 +401,16 @@ export function WorktreesSection({
         : success
           ? `Synced ${succeeded} of ${attempted} branch${attempted === 1 ? "" : "es"}.`
           : `Synced ${succeeded} of ${attempted} — ${failures.join(" ")}`;
-    setSyncAllFeedback({
+    const syncAllResult: ActionFeedback = {
       status: success
         ? USER_FEEDBACK_SEVERITY.SUCCESS
         : USER_FEEDBACK_SEVERITY.ERROR,
       message,
-    });
+    };
+    setSyncAllFeedback(syncAllResult);
     syncAllTimerRef.current = setTimeout(
       () => setSyncAllFeedback(undefined),
-      success ? 4000 : 8000
+      actionFeedbackDurationMs(syncAllResult)
     );
   };
 

@@ -7,6 +7,7 @@ import type {
 import type { Extension } from "@codemirror/state";
 import { tooltips } from "@codemirror/view";
 import { fuzzyMatchRanges } from "@root/completions/FuzzyRanking";
+import type { PlainCompletionItem } from "@root/completions/CompletionCore";
 import {
   WORKFLOW_LOCATION_ROLES,
   WORKFLOW_OBJECT_KINDS,
@@ -60,22 +61,13 @@ function locate(
   return { support, location };
 }
 
-function toCompletion(
-  item: {
-    label: string;
-    kind: number;
-    insertText: string;
-    detail?: string;
-    documentation?: string;
-  },
-  index: number
-): Completion {
+function toCompletion(item: PlainCompletionItem, index: number): Completion {
   return {
     label: item.label,
     detail: item.detail,
     info: item.documentation,
     type: COMPLETION_KIND_ICONS[item.kind] || DEFAULT_COMPLETION_ICON,
-    apply: item.insertText,
+    apply: item.insertText ?? item.label,
     boost: -index,
   };
 }

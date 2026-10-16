@@ -218,6 +218,19 @@ suite("ReferencePatterns", () => {
         "my repo/dir/",
       ]);
     });
+
+    test("decorates quoted root extensionless files that runtime can parse", () => {
+      const { fullFileQuoted } = createReferencePatterns();
+      assert.deepStrictEqual(paths(fullFileQuoted, 'Read @"Makefile" now'), [
+        "Makefile",
+      ]);
+      assert.deepStrictEqual(
+        findContextReferenceMatches('Read @"Makefile" now').map(
+          ({ type, path }) => ({ type, path })
+        ),
+        [{ type: "file", path: "Makefile" }]
+      );
+    });
   });
 
   suite("lineRange", () => {

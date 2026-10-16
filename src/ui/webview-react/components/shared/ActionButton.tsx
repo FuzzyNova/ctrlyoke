@@ -7,6 +7,11 @@ export interface ActionFeedback {
   message: string;
 }
 
+/** How long a caller keeps a `feedback` line up before clearing it. */
+export function actionFeedbackDurationMs(feedback: ActionFeedback): number {
+  return feedback.status === USER_FEEDBACK_SEVERITY.SUCCESS ? 4000 : 8000;
+}
+
 interface ActionButtonProps {
   label: string;
   pendingLabel?: string;

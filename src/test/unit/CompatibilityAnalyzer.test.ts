@@ -841,6 +841,40 @@ suite("CompatibilityAnalyzer", () => {
     );
   });
 
+  test("ignores a leftover allow list in allowAll mode, which never applies it", () => {
+    const claude = installed(
+      HARNESS_IDS.CLAUDE_CLI,
+      true,
+      "partial",
+      "verified"
+    );
+    claude.descriptor.permissions!.allowedTools = {
+      ...claude.descriptor.permissions!.allowedTools,
+      caveatCode: "permissions.claudePreapprovedSettings",
+    };
+    const diagnostics = analyze(
+      mixedWorkflow({
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        toolPermissions: {
+          mode: "allowAll",
+          allowedTools: ["shell(git:*)"],
+          deniedTools: ["shell(rm:*)"],
+        },
+        steps: [{ prompt: "Claude target" }],
+      }),
+      snapshot({ [HARNESS_IDS.CLAUDE_CLI]: claude })
+    );
+
+    assert.ok(
+      !diagnostics.some(
+        (diagnostic) => diagnostic.capability === "allowedTools"
+      )
+    );
+    assert.ok(
+      diagnostics.some((diagnostic) => diagnostic.capability === "deniedTools")
+    );
+  });
+
   test("suppresses every diagnostic when mode is dangerouslyAllowAll, even with stale leftover lists", () => {
     const workflow = mixedWorkflow({
       toolPermissions: {

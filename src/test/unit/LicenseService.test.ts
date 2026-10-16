@@ -575,6 +575,38 @@ suite("LicenseService", () => {
     assert.strictEqual(calls.length, 1);
   });
 
+  test("reads seat usage from the validated license without listing machines", async () => {
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: true, code: "VALID" },
+          data: {
+            id: "license-123",
+            attributes: { maxMachines: 3000 },
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: KEYGEN_ENTERPRISE_POLICY_ID } },
+              machines: { meta: { count: 1234 } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+    });
+
+    const usage = await createService(new InMemorySecretStore(), {
+      fetch,
+    }).getSeatUsage("  live-key  ");
+
+    assert.deepStrictEqual(usage, { used: 1234, max: 3000 });
+    assert.deepStrictEqual(
+      calls.map((call) => `${call.method} ${call.url}`),
+      [`POST ${KEYGEN_API_PATH}/licenses/actions/validate-key`]
+    );
+    assert.strictEqual(JSON.parse(calls[0].body ?? "{}").meta.key, "live-key");
+  });
+
   test("lists machines and flags the locally activated machine", async () => {
     const secrets = new InMemorySecretStore();
     await secrets.store(LICENSE_MACHINE_ID_SECRET_KEY, "machine-2");

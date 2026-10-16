@@ -248,6 +248,7 @@ export {
   type LicenseAccessState,
   type LicenseActionResultMessage,
   type LicenseMachineSummary,
+  type LicenseSeatUsage,
 } from "@root/types/WebviewMessageTypes";
 
 // Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from CtrlYokeTypes

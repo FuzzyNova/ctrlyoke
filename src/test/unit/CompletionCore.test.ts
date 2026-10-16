@@ -10,6 +10,7 @@ import {
   mapSymbolKindToReferenceKind,
 } from "../../completions/CompletionCore";
 import type { CompletionWorkspace } from "../../completions/CompletionCore";
+import { InMemoryWorkspaceFileQueries } from "../helpers/InMemoryWorkspaceFileQueries";
 import type { EditorContextSource } from "../../completions/EditorContextSource";
 import type { IndexedSymbol, SymbolIndex } from "../../completions/SymbolIndex";
 import { LspSymbolKind } from "../../completions/SymbolIndex";
@@ -50,7 +51,7 @@ function createCore(
   } = {}
 ): CompletionCore {
   const workspace: CompletionWorkspace = {
-    getFiles: async () => options.files ?? [],
+    files: new InMemoryWorkspaceFileQueries(options.files ?? []),
     isMultiRoot: () => options.multiRoot ?? false,
     symbols: options.symbols,
     editorContext: options.editorContext,
@@ -80,6 +81,33 @@ async function waitForCondition(
 }
 
 suite("CompletionCore", () => {
+  test("returns and cancels the latest file snapshot when its budget expires", async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const files = {
+      queryFiles: async (_query: string, options?: { signal?: AbortSignal; onProgress?: (progress: any) => void }) => {
+        receivedSignal = options?.signal;
+        options?.onProgress?.({
+          results: [{ kind: WORKSPACE_ENTRY_KINDS.FILE, relativePath: "src/Widget.ts", rank: 0 }],
+        });
+        return new Promise<any[]>((resolve) =>
+          setTimeout(() => resolve([]), 100)
+        );
+      },
+      queryPromptFiles: async () => [],
+      suggestPaths: async () => [],
+      getStatus: () => ({ state: "building", indexed: 1 }),
+    };
+    const core = new CompletionCore({ files: files as any, isMultiRoot: () => false });
+    const partials: string[][] = [];
+    const result = await core.getFileCompletions("Wid", {
+      budgetMs: 5,
+      onPartial: (items) => partials.push(items.map((item) => item.label)),
+    });
+    assert.deepStrictEqual(partials, [["Widget.ts"]]);
+    assert.deepStrictEqual(result.map((item) => item.label), ["Widget.ts"]);
+    assert.strictEqual(receivedSignal?.aborted, true);
+  });
+
   test("keeps the #sym insertion and dashboard icon kind stable", async () => {
     const core = createCore({
       symbols: {
@@ -177,6 +205,14 @@ suite("CompletionCore", () => {
     assert.ok(!labels.includes("Picker.tsx"));
   });
 
+  test("quotes root-level extensionless file completion insertions", async () => {
+    const items = await createCore({ files: ["Makefile"] }).getFileCompletions(
+      "Makef"
+    );
+    assert.strictEqual(items[0]?.label, "Makefile");
+    assert.strictEqual(items[0]?.insertText, '"Makefile"');
+  });
+
   test("lists directories before files for an unfiltered @ completion", async () => {
     const items = await createCore({
       files: ["src/z.ts", "README.md"],
@@ -227,6 +263,20 @@ suite("CompletionCore", () => {
     }).getFileCompletions("codemirroreditor");
     assert.strictEqual(items[0]?.label, "CodeMirrorEditor.tsx");
     assert.ok(items.length <= 500);
+  });
+
+  test("breaks @ ranking ties by workspace file order", async () => {
+    const items = await createCore({
+      files: [
+        "zzz/visible/SKILL.md",
+        "aaa/ignored/one/SKILL.md",
+        "aaa/ignored/two/SKILL.md",
+      ],
+    }).getFileCompletions("SKILL.md");
+    assert.deepStrictEqual(
+      items.map((item) => item.detail),
+      ["zzz/visible", "aaa/ignored/one", "aaa/ignored/two"]
+    );
   });
 
   test("ranks matching children within the typed directory", async () => {

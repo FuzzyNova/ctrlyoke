@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
   MESSAGE_TYPES,
   HARNESS_IDS,
@@ -145,6 +146,7 @@ const REMOTE_TLS_SETTING_KEYS = [
  * - Config get/set handlers with security allowlist
  */
 export class WebviewSettingsSync {
+  private capabilitiesWriteQueue: Promise<void> = Promise.resolve();
   // Discovered agents
   private availableAgents: AgentInfo[] = [];
 
@@ -388,7 +390,11 @@ export class WebviewSettingsSync {
       return;
     }
     try {
-      await this.writeCapabilities(workspaceRoot, modelOptions);
+      const write = this.capabilitiesWriteQueue.then(() =>
+        this.writeCapabilities(workspaceRoot, modelOptions)
+      );
+      this.capabilitiesWriteQueue = write.catch(() => {});
+      await write;
     } catch (err) {
       Log.warn("[WebviewSettingsSync] Failed to write capabilities.json:", err);
     }
@@ -830,10 +836,9 @@ export class WebviewSettingsSync {
       harnesses: harnessEntries,
     };
 
-    await fs.writeFile(
+    await writeFileAtomic(
       capabilitiesPath,
-      JSON.stringify(capabilities, null, 2),
-      "utf8"
+      JSON.stringify(capabilities, null, 2)
     );
   }
 
@@ -1084,6 +1089,11 @@ export class WebviewSettingsSync {
         settings: {
           settings: allSettings,
           sources,
+          modelPricingByScope: {
+            user: configService.getScoped("modelPricing", "user") ?? {},
+            workspace:
+              configService.getScoped("modelPricing", "workspace") ?? {},
+          },
           templateVariableDefaultsByScope: {
             user:
               configService.getScoped("templates", "user")?.variableDefaults ??

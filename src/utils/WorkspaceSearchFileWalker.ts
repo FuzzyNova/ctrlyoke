@@ -35,27 +35,34 @@ export interface SearchWalkResult {
   truncated: boolean;
 }
 
-/** Bounded non-git fallback walk. Symlinks are not followed. */
+/**
+ * Bounded non-git fallback walk. Symlinks are not followed. Breadth-first, so
+ * a walk cut short by either bound loses the deepest paths rather than whole
+ * top-level directories (a depth-first walk exhausted the cap inside one huge
+ * tree such as `.vscode-test/` and never reached `.github/`).
+ */
 export async function walkSearchFiles(
   rootPath: string,
   startedAt: number,
   maxFiles: number,
   maxDurationMs: number,
   skipDirectories: ReadonlySet<string> = DEFAULT_SKIP_DIRECTORIES,
-  excludeCtrlYokeLogs = true
+  excludeCtrlYokeLogs = true,
+  /** Receives each directory's files as they are found, before the walk ends. */
+  onFiles?: (files: readonly string[]) => void
 ): Promise<SearchWalkResult> {
   const root = path.resolve(rootPath);
   const pending = [root];
+  let next = 0;
   const files: string[] = [];
   let truncated = false;
 
-  while (pending.length > 0 && files.length < maxFiles) {
+  while (next < pending.length && files.length < maxFiles) {
     if (Date.now() - startedAt >= maxDurationMs) {
       truncated = true;
       break;
     }
-    const directory = pending.pop();
-    if (!directory) break;
+    const directory = pending[next++];
     let entries: Dirent[];
     try {
       entries = await fs.readdir(directory, { withFileTypes: true });
@@ -63,6 +70,7 @@ export async function walkSearchFiles(
       continue;
     }
 
+    const firstNewFile = files.length;
     for (const entry of entries) {
       if (Date.now() - startedAt >= maxDurationMs) {
         truncated = true;
@@ -86,8 +94,11 @@ export async function walkSearchFiles(
         files.push(path.relative(root, path.join(directory, entry.name)));
       }
     }
+    if (onFiles && files.length > firstNewFile) {
+      onFiles(files.slice(firstNewFile));
+    }
   }
-  if (files.length >= maxFiles && pending.length > 0) {
+  if (files.length >= maxFiles && next < pending.length) {
     truncated = true;
   }
   return { files, truncated };

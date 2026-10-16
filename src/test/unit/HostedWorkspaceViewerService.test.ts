@@ -28,6 +28,8 @@ import {
   WORKSPACE_ENTRY_KINDS,
 } from "../../types/DashboardConstants";
 import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
+import { configService } from "../../config/CtrlYokeConfigService";
+import { USER_SETTINGS_VIEWER_SENTINEL_PATH } from "../../types/DashboardConstants";
 
 /**
  * Small enough that "budget exceeded" is a handful of files rather than the
@@ -135,6 +137,53 @@ suite("HostedWorkspaceViewerService", function () {
     for (const workspaceRoot of tempRoots.splice(0)) {
       removeTempDir(workspaceRoot);
     }
+  });
+
+  suite("user settings file access", () => {
+    test("keeps the settings editor working while blocking destructive operations", async () => {
+      const root = createWorkspace();
+      const userSettingsPath = path.join(createWorkspace(), "settings.json");
+      fs.writeFileSync(userSettingsPath, '{"theme":"dark"}');
+      const originalGetUserFilePath = configService.getUserFilePath;
+      configService.getUserFilePath = () => userSettingsPath;
+      const svc = new HostedWorkspaceViewerService(root);
+
+      try {
+        const opened = await svc.readFile(USER_SETTINGS_VIEWER_SENTINEL_PATH);
+        assert.strictEqual(opened.readOnly, undefined);
+        assert.strictEqual(opened.content, '{"theme":"dark"}');
+
+        await svc.saveFile({
+          path: opened.path,
+          content: '{"theme":"light"}',
+          baseModifiedAt: opened.modifiedAt ?? 0,
+        });
+        assert.strictEqual(
+          fs.readFileSync(userSettingsPath, "utf8"),
+          '{"theme":"light"}'
+        );
+
+        await assert.rejects(
+          () => svc.deleteEntry(userSettingsPath),
+          /Path not allowed/
+        );
+        await assert.rejects(
+          () => svc.moveEntry({ sourcePath: userSettingsPath, destDir: "" }),
+          /Path not allowed/
+        );
+        await assert.rejects(
+          () => svc.copyEntry({ sourcePath: userSettingsPath, destDir: "" }),
+          /Path not allowed/
+        );
+        assert.strictEqual(
+          fs.readFileSync(userSettingsPath, "utf8"),
+          '{"theme":"light"}'
+        );
+        assert.strictEqual(fs.existsSync(path.join(root, "settings.json")), false);
+      } finally {
+        configService.getUserFilePath = originalGetUserFilePath;
+      }
+    });
   });
 
   // ── listDirectory ──────────────────────────────────────────────────────────
@@ -1418,6 +1467,40 @@ suite("HostedWorkspaceViewerService", function () {
       const result = await svc.generateCommitMessage();
 
       assert.deepStrictEqual(result, expected);
+    });
+
+    test("uses the workspace root as state root when the repository is its parent", async () => {
+      const repoRoot = createWorkspace();
+      const workspaceRoot = path.join(repoRoot, "packages", "foo");
+      fs.mkdirSync(workspaceRoot, { recursive: true });
+      runGit(repoRoot, "init");
+      let generationRoots: { cwd: string; stateRoot?: string } | undefined;
+
+      CommitMessageGenerator.prototype.getDiff = async () => ({
+        diff: "diff --git a/a b/a",
+        staged: true,
+        truncated: false,
+        commands: ["git diff --cached"],
+        includesUntrackedFiles: false,
+      });
+      CommitMessageGenerator.prototype.generateMessage = async (
+        _diff,
+        cwd,
+        _token,
+        _instructions,
+        stateRoot
+      ) => {
+        generationRoots = { cwd, stateRoot };
+        return { message: "feat: add thing", prompt: "" };
+      };
+
+      const svc = new HostedWorkspaceViewerService(workspaceRoot);
+      await svc.generateCommitMessage();
+
+      assert.deepStrictEqual(generationRoots, {
+        cwd: repoRoot,
+        stateRoot: workspaceRoot,
+      });
     });
 
     test("returns truncated=true when diff was truncated", async () => {

@@ -293,6 +293,19 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("parses quoted root extensionless files but leaves plain words alone", () => {
+      assert.deepStrictEqual(
+        parseAtReferences('Use @workspace or @"Makefile" here').map(
+          ({ path, isDirectory }) => ({ path, isDirectory })
+        ),
+        [{ path: "Makefile", isDirectory: false }]
+      );
+      assert.deepStrictEqual(
+        parseAllFileReferences('Use @"Makefile" here').map(({ path }) => path),
+        ["Makefile"]
+      );
+    });
+
     test("returns empty array for prompt with no references", () => {
       const refs = parseAtReferences("just some text without references");
       assert.deepStrictEqual(refs, []);
@@ -310,6 +323,19 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "src/utils/helper.ts");
       assert.strictEqual(refs[0].isDirectory, false);
+    });
+
+    test("ends @ references before Markdown link destinations", () => {
+      assert.deepStrictEqual(
+        parseAtReferences("[@src/a.ts](src/a.ts)").map((ref) => ref.path),
+        ["src/a.ts"]
+      );
+      assert.deepStrictEqual(
+        parseAtReferences("[x @src/b.ts](https://example.com)").map(
+          (ref) => ref.path
+        ),
+        ["src/b.ts"]
+      );
     });
 
     test("parses an at-reference path containing a hash", () => {

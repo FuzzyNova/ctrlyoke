@@ -732,10 +732,12 @@ export const MESSAGE_TYPES = {
   IMPORT_LICENSE_FILE: "importLicenseFile",
   DEACTIVATE_LICENSE: "deactivateLicense",
   REQUEST_LICENSE_MACHINES: "requestLicenseMachines",
+  REQUEST_LICENSE_SEAT_USAGE: "requestLicenseSeatUsage",
   DEACTIVATE_LICENSE_MACHINE: "deactivateLicenseMachine",
 
   // Pro license management — Extension → Webview
   LICENSE_MACHINES_UPDATED: "licenseMachinesUpdated",
+  LICENSE_SEAT_USAGE_UPDATED: "licenseSeatUsageUpdated",
   LICENSE_ACTION_RESULT: "licenseActionResult",
 
   // VS Code-hosted server — Extension → Webview
@@ -2149,6 +2151,7 @@ export const SETTING_PATHS = {
   DIAGNOSTICS_LOG_RAW_CLI_OUTPUT: "diagnostics.logRawCliOutput",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
   USAGE_TRACKING_PERCENT_DIRECTION: "usageTracking.percentDirection",
+  MODEL_PRICING: "modelPricing",
   TERMINAL_SHELL_EXECUTABLE: "terminal.shellExecutable",
   DEFAULTS_ADDITIONAL_ARGS: "defaults.additionalArgs",
   DEFAULTS_HOOKS: "defaults.hooks",
@@ -4266,6 +4269,23 @@ export function isPermissionMode(value: unknown): value is PermissionMode {
   return Object.values(PERMISSION_MODES).includes(value as PermissionMode);
 }
 
+/**
+ * Whether a permission mode passes the given tool list to the harness.
+ * `allowAll` already grants every tool, so only `custom` applies the allow
+ * list; the deny list applies in both `allowAll` and `custom`. Diagnostics
+ * about a list the mode ignores would describe a rule that never runs.
+ */
+export function permissionModeAppliesToolList(
+  mode: PermissionMode,
+  list:
+    | typeof PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+    | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+): boolean {
+  return list === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+    ? mode === PERMISSION_MODES.CUSTOM
+    : mode === PERMISSION_MODES.ALLOW_ALL || mode === PERMISSION_MODES.CUSTOM;
+}
+
 // ============================================================================
 // TOOL PERMISSION CATEGORIES - Shared tool categories used by permission rules
 // ============================================================================
@@ -4634,6 +4654,26 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   WorkspaceEntryKind,
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
+
+/** Lifecycle states exposed by the workspace file completion index. */
+export const WORKSPACE_FILE_INDEX_STATES = {
+  BUILDING: "building",
+  READY: "ready",
+  DEGRADED: "degraded",
+} as const;
+
+export type WorkspaceFileIndexState =
+  (typeof WORKSPACE_FILE_INDEX_STATES)[keyof typeof WORKSPACE_FILE_INDEX_STATES];
+
+/** Watcher events consumed by the workspace file completion index. */
+export const WORKSPACE_FILE_CHANGE_KINDS = {
+  CREATE: "create",
+  CHANGE: "change",
+  DELETE: "delete",
+} as const;
+
+export type WorkspaceFileChangeKind =
+  (typeof WORKSPACE_FILE_CHANGE_KINDS)[keyof typeof WORKSPACE_FILE_CHANGE_KINDS];
 
 /** Git ref labels rendered by the workspace commit graph. */
 export const GIT_REF_LABEL_TYPES = {

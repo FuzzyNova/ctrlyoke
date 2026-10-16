@@ -32,6 +32,7 @@ import * as fs from "fs/promises";
 import * as fsSync from "fs";
 import * as path from "path";
 import type {
+  PromptStep,
   WorkflowStep,
   WorkingFile,
   CoordinationParticipant,
@@ -40,6 +41,7 @@ import { isScriptStep } from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "./types/CtrlYokeSettings";
 import { configService } from "./config/CtrlYokeConfigService";
+import { PropertyResolver } from "./utils/PropertyResolver";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
@@ -1243,9 +1245,14 @@ export class CtrlYokeMCPServer {
       );
     }
     const flattened = flattenParallelItems(resolvedItems);
+    const attachedRun = await this.readAttachedRun(
+      MCP_APPEND_STEP_TOOL_NAME,
+      selected.filePath
+    );
 
     await this.validateStepHarnessAndModelCapabilities(
-      flattened.topology.steps
+      flattened.topology.steps,
+      attachedRun.harness
     );
 
     let response: McpAppendStepResult | null = null;
@@ -1392,7 +1399,10 @@ export class CtrlYokeMCPServer {
         toWorkflowStepUpdates(updates),
         clearProperties
       );
-      await this.validateStepHarnessAndModelCapabilities([effectiveStep]);
+      await this.validateStepHarnessAndModelCapabilities(
+        [effectiveStep],
+        workingFile.harness
+      );
     }
     const edited = await RunContinuationService.editStepAtRun(
       this.workspaceRoot,
@@ -1546,7 +1556,9 @@ export class CtrlYokeMCPServer {
 
   /**
    * Read and parse .ctrlyoke/capabilities.json.
-   * Returns null if the file does not exist or cannot be parsed.
+   * Returns null when the file does not exist. A present but invalid file is
+   * reported separately so callers never mistake corrupted capabilities for
+   * an uninitialized workspace.
    */
   private async readCapabilities(): Promise<CapabilitiesFile | null> {
     const capabilitiesPath = path.join(
@@ -1554,44 +1566,58 @@ export class CtrlYokeMCPServer {
       CTRLYOKE_DIR,
       CAPABILITIES_FILE
     );
+    let content: string;
     try {
-      const content = await fs.readFile(capabilitiesPath, "utf8");
+      content = await fs.readFile(capabilitiesPath, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+    try {
       return JSON.parse(content) as CapabilitiesFile;
-    } catch {
-      return null;
+    } catch (error) {
+      throw new Error(
+        `capabilities.json is invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
   /** Validate prompt-step harness/model values against detected capabilities. */
   private async validateStepHarnessAndModelCapabilities(
-    steps: readonly WorkflowStep[]
+    steps: readonly WorkflowStep[],
+    workflowHarness?: PromptStep["harness"]
   ): Promise<void> {
     const capabilities = await this.readCapabilities();
     if (!capabilities) return;
 
     for (const step of steps) {
-      if (isScriptStep(step) || !step.harness) continue;
+      if (isScriptStep(step)) continue;
+      const promptStep = step as PromptStep;
+      const effectiveHarness = PropertyResolver.resolveHarnessValue(
+        promptStep.harness,
+        workflowHarness
+      );
 
       const harnessEntry = capabilities.harnesses.find(
-        (harness) => harness.id === step.harness
+        (harness) => harness.id === effectiveHarness
       );
-      if (!harnessEntry) {
+      if (!harnessEntry || !harnessEntry.available) {
         const available = capabilities.harnesses
           .filter((harness) => harness.available)
           .map((harness) => harness.id)
           .join(", ");
         throw new Error(
-          `Invalid harness '${step.harness}'. Available harnesses: ${available || "(none)"}`
+          `Invalid harness '${effectiveHarness}'. Available harnesses: ${available || "(none)"}`
         );
       }
       if (
-        step.model &&
+        promptStep.model &&
         harnessEntry.models.length > 0 &&
-        !harnessEntry.models.some((model) => model.value === step.model)
+        !harnessEntry.models.some((model) => model.value === promptStep.model)
       ) {
         const modelValues = harnessEntry.models.map((model) => model.value);
         throw new Error(
-          `Invalid model '${step.model}' for harness '${step.harness}'. Valid models: ${modelValues.join(", ")}`
+          `Invalid model '${promptStep.model}' for harness '${effectiveHarness}'. Valid models: ${modelValues.join(", ")}`
         );
       }
     }

@@ -1,6 +1,7 @@
 import { createHash, randomUUID, webcrypto } from "node:crypto";
 import {
   CHECKOUT_ELIGIBLE_VALIDATION_CODES,
+  KEYGEN_ACCOUNT_PUBLIC_KEY_HEX,
   KEYGEN_API_BASE_URL,
   KEYGEN_ENTERPRISE_POLICY_ID,
   KEYGEN_PRODUCT_ID,
@@ -17,6 +18,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 export {
   CHECKOUT_ELIGIBLE_VALIDATION_CODES,
   KEYGEN_ACCOUNT_ID,
+  KEYGEN_ACCOUNT_PUBLIC_KEY_HEX,
   KEYGEN_API_BASE_URL,
   KEYGEN_ENTERPRISE_POLICY_ID,
   KEYGEN_PRODUCT_ID,
@@ -45,10 +47,6 @@ export const LICENSE_ID_SECRET_KEY = "ctrlyoke.pro.license-id";
 export const LICENSE_MACHINE_ID_SECRET_KEY = "ctrlyoke.pro.machine-id";
 export const LICENSE_MACHINE_FINGERPRINT_SECRET_KEY =
   "ctrlyoke.pro.machine-fingerprint";
-
-/** The Keygen account verification key. This is public and safe to ship. */
-export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
-  "4cf46fe061bf97080094f14430fa2a1563f1b245cd600ccb99039bfff43836fa";
 
 export const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 export const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
@@ -102,6 +100,13 @@ export interface LicenseMachineSummary {
   isThisMachine: boolean;
 }
 
+/** A license's activated machines against its machine cap. */
+export interface LicenseSeatUsage {
+  used: number;
+  /** null when the license has no machine cap. */
+  max: number | null;
+}
+
 export interface LicenseService {
   /** Verify the cached signed license file offline. Never throws; failures return free. */
   getEntitlement(): Promise<Entitlement>;
@@ -117,6 +122,8 @@ export interface LicenseService {
   getStoredLicenseKey(): Promise<string | undefined>;
 
   listMachines(key: string): Promise<LicenseMachineSummary[]>;
+  /** How many machines the license has activated, without listing them. */
+  getSeatUsage(key: string): Promise<LicenseSeatUsage>;
   deactivateMachine(key: string, machineId: string): Promise<void>;
 
   /** Activate this machine online and cache a signed license file. */
@@ -396,6 +403,20 @@ export class LicenseService implements LicenseService {
         },
       ];
     });
+  }
+
+  async getSeatUsage(key: string): Promise<LicenseSeatUsage> {
+    const { resource } = await this.validateKey(key.trim());
+    const maxMachines = asRecord(resource.attributes)?.maxMachines;
+    const machines = asRecord(asRecord(resource.relationships)?.machines);
+    const used = asRecord(machines?.meta)?.count;
+    if (typeof used !== "number") {
+      throw new Error("Keygen returned no machine count for the license");
+    }
+    return {
+      used,
+      max: typeof maxMachines === "number" ? maxMachines : null,
+    };
   }
 
   async deactivateMachine(key: string, machineId: string): Promise<void> {
@@ -737,6 +758,7 @@ export class LicenseService implements LicenseService {
   private async validateKey(key: string): Promise<{
     readonly id: string;
     readonly validationCode: string | undefined;
+    readonly resource: JsonRecord;
   }> {
     const body = await this.keygenJson("/licenses/actions/validate-key", {
       method: "POST",
@@ -763,7 +785,7 @@ export class LicenseService implements LicenseService {
     }
     assertExpectedRelationship(data, "product", [KEYGEN_PRODUCT_ID]);
     assertExpectedRelationship(data, "policy", KEYGEN_VALID_POLICY_IDS);
-    return { id, validationCode };
+    return { id, validationCode, resource: data };
   }
 
   private async activateMachine(

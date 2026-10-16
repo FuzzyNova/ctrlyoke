@@ -187,6 +187,37 @@ suite("ClaudeCliProvider", () => {
     });
   }
 
+  test("normalizes MCP server IDs in auto-approved tool rules", async () => {
+    const provider = new ClaudeCliProvider();
+    const preparation = await provider.planCliArgs(
+      { prompt: "use context7" } as PromptStep,
+      false,
+      process.cwd(),
+      process.cwd(),
+      undefined,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: createProperties([
+          {
+            id: "io.github.upstash/context7",
+            command: "node",
+            autoApprove: ["resolve-library-id"],
+          },
+        ]),
+      }
+    );
+
+    assert.ok(
+      preparation.cliArgs.some(
+        (arg, index) =>
+          arg === "--allowed-tools" &&
+          preparation.cliArgs[index + 1] ===
+            "mcp__io_github_upstash_context7__resolve-library-id"
+      )
+    );
+  });
+
   test("uses Claude statusline tracking independently of usageTracking", async () => {
     const userSettings = makeBackend({
       usageTracking: { enabled: false },

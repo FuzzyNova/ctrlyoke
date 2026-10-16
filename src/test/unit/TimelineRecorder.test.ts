@@ -109,6 +109,90 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.lastUpdatedAt, 131);
   });
 
+  test("truncates a torn final line before appending events", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    await fs.appendFile(eventsPath, '{"eventType":"partial');
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(120, "after recovery"),
+    ]);
+
+    const events = await recorder.readEvents(manifestPath);
+    const streamed = [];
+    for await (const event of recorder.streamEvents(manifestPath)) {
+      streamed.push(event);
+    }
+    const manifest = await recorder.readManifest(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+    assert.deepStrictEqual(streamed, events);
+    assert.strictEqual(manifest.eventCount, 2);
+    assert.strictEqual(manifest.nextSequence, 3);
+  });
+
+  test("truncates a torn final line longer than one tail-scan chunk", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    await fs.appendFile(
+      eventsPath,
+      `{"eventType":"partial","text":"${"x".repeat(200 * 1024)}`
+    );
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(120, "after recovery"),
+    ]);
+
+    const events = await recorder.readEvents(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+  });
+
+  test("truncates a torn final line before committing a definition revision", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    await fs.appendFile(eventsPath, '{"eventType":"partial');
+
+    const definition = buildDefinitionSnapshot("revision two", [
+      { prompt: "step" },
+    ]);
+    const result = await recorder.commitDefinitionRevisionIfNewer(
+      manifestPath,
+      2,
+      definition,
+      120
+    );
+
+    assert.strictEqual(result.committed, true);
+    const events = await recorder.readEvents(manifestPath);
+    const streamed = [];
+    for await (const event of recorder.streamEvents(manifestPath)) {
+      streamed.push(event);
+    }
+    const manifest = await recorder.readManifest(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
+    assert.deepStrictEqual(streamed, events);
+    assert.strictEqual(
+      events[1]?.eventType,
+      TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+    );
+    assert.strictEqual(manifest.eventCount, 2);
+    assert.strictEqual(manifest.nextSequence, 3);
+  });
+
   test("reads legacy string versions and stamps the integer baseline on write", async () => {
     const manifest = JSON.parse(
       await fs.readFile(manifestPath, "utf8")

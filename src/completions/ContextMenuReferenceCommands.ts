@@ -24,6 +24,7 @@ import { getVsCodeTrustedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot"
 import { VsCodeSymbolIndex } from "../platform/VsCodeSymbolIndex";
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { getInclusiveEndLine } from "../utils/InclusiveLineRange";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 
 interface TimelineItemLike {
@@ -106,7 +107,13 @@ export class ContextMenuReferenceCommands {
     const startLine =
       editor && !editor.selection.isEmpty ? editor.selection.start.line + 1 : 1;
     const endLine =
-      editor && !editor.selection.isEmpty ? editor.selection.end.line + 1 : 1;
+      editor && !editor.selection.isEmpty
+        ? getInclusiveEndLine(
+            editor.selection.start.line,
+            editor.selection.end.line,
+            editor.selection.end.character
+          )
+        : 1;
 
     await this.insertReferences([
       buildSelectionReference(referencePath, startLine, endLine),
@@ -210,7 +217,11 @@ export class ContextMenuReferenceCommands {
       editor.document.getText(editor.selection),
       {
         startLine: editor.selection.start.line + 1,
-        endLine: editor.selection.end.line + 1,
+        endLine: getInclusiveEndLine(
+          editor.selection.start.line,
+          editor.selection.end.line,
+          editor.selection.end.character
+        ),
       }
     );
   }

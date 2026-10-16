@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
-import { Log } from "../utils/Log";
-import { listCompletionFiles } from "../utils/CompletionFileDiscovery";
+import {
+  cacheSourceFiles,
+  getSourceFiles,
+} from "../utils/CompletionFileDiscovery";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { isSearchPathIgnored } from "../utils/WorkspaceSearchFileWalker";
 import {
   getVsCodeNamedWorkspaceRoots,
   getVsCodeWorkspaceRoot,
@@ -12,6 +13,10 @@ import {
 } from "../platform/VsCodeWorkspaceRoot";
 import { VsCodeSymbolIndex } from "../platform/VsCodeSymbolIndex";
 import { RegexSymbolIndex } from "./RegexSymbolIndex";
+import {
+  WorkspaceFileIndex,
+  type WorkspaceFileChange,
+} from "./WorkspaceFileIndex";
 import { FallbackSymbolIndex } from "./FallbackSymbolIndex";
 import { VsCodeEditorContextSource } from "../platform/VsCodeEditorContextSource";
 import {
@@ -24,45 +29,64 @@ import { CompletionCore, type PlainCompletionItem } from "./CompletionCore";
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
   COMPLETION_ITEM_KINDS,
+  WORKSPACE_FILE_CHANGE_KINDS,
   VSCODE_COMMANDS,
 } from "../types/DashboardConstants";
+import type { UserFeedbackSink } from "../core/UserFeedbackSink";
+import { VsCodeUserFeedbackSink } from "../platform/VsCodeUserFeedbackSink";
 
 let completionCore: CompletionCore | undefined;
 let vsCodeSymbolIndex: VsCodeSymbolIndex | undefined;
-let cachedCompletionFiles: string[] | undefined;
-let completionFilesAt = 0;
+let workspaceFileIndex: WorkspaceFileIndex | undefined;
+const feedbackSink: UserFeedbackSink = new VsCodeUserFeedbackSink();
+let buildTimer: ReturnType<typeof setTimeout> | undefined;
 
-async function getCompletionFiles(): Promise<string[]> {
-  if (cachedCompletionFiles && Date.now() - completionFilesAt < 5000)
-    return cachedCompletionFiles;
-  const folders = vscode.workspace.workspaceFolders ?? [];
-  const results: string[] = [];
-  for (const folder of folders) {
-    const paths = await listCompletionFiles(folder.uri.fsPath, {
-      respectGitignore:
-        ConfigurationUtils.shouldRespectGitignoreForCompletions(),
-    });
-    for (const file of paths) {
-      results.push(folders.length > 1 ? `${folder.name}/${file}` : file);
-    }
-  }
-  cachedCompletionFiles = results;
-  completionFilesAt = Date.now();
-  return results;
+function roots(): Array<{ path: string; name: string }> {
+  return (vscode.workspace.workspaceFolders ?? []).map((folder) => ({
+    path: folder.uri.fsPath,
+    name: folder.name,
+  }));
 }
+
+function getWorkspaceFileIndex(): WorkspaceFileIndex {
+  if (!workspaceFileIndex) {
+    workspaceFileIndex = new WorkspaceFileIndex(
+      roots(),
+      ConfigurationUtils.shouldRespectGitignoreForCompletions(),
+      undefined,
+      { userFeedbackSink: feedbackSink }
+    );
+  }
+  return workspaceFileIndex;
+}
+
+/** Git-visible files of every folder, for the symbol indexes (D16). */
+const sourceFiles = cacheSourceFiles(async (): Promise<string[]> => {
+  const results: string[] = [];
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  for (const folder of folders) {
+    const files = await getSourceFiles(folder.uri.fsPath);
+    results.push(
+      ...files.map((file) =>
+        folders.length > 1 ? `${folder.name}/${file}` : file
+      )
+    );
+  }
+  return results;
+});
 
 /** VS Code composition root for the host-neutral completion engine. */
 export function getCompletionCore(): CompletionCore {
   if (!completionCore) {
-    vsCodeSymbolIndex = new VsCodeSymbolIndex(getCompletionFiles);
+    vsCodeSymbolIndex = new VsCodeSymbolIndex(sourceFiles);
     completionCore = new CompletionCore({
       isMultiRoot: isMultiRootWorkspace,
-      getFiles: getCompletionFiles,
+      files: getWorkspaceFileIndex(),
       symbols: new FallbackSymbolIndex(
         vsCodeSymbolIndex,
         new RegexSymbolIndex(
           getVsCodeWorkspaceRoot,
-          getCompletionFiles,
+          sourceFiles,
           (viewerPath) => {
             const primaryRoot = getVsCodeWorkspaceRoot();
             if (!primaryRoot) return undefined;
@@ -86,11 +110,13 @@ export function getCompletionCore(): CompletionCore {
   return completionCore;
 }
 
-/** Clear the shared completion engine's workspace-file cache. */
+/** Rebuild the shared workspace file index for the current roots and setting. */
 export function clearFilesCache(): void {
-  cachedCompletionFiles = undefined;
-  completionFilesAt = 0;
-  completionCore?.clearCache();
+  void workspaceFileIndex?.build({
+    roots: roots(),
+    respectGitignore: ConfigurationUtils.shouldRespectGitignoreForCompletions(),
+  });
+  sourceFiles.invalidate();
   vsCodeSymbolIndex?.invalidateWarmupCache();
 }
 
@@ -98,31 +124,67 @@ export function clearFilesCache(): void {
 export function initializeCompletionHelpers(
   context: vscode.ExtensionContext
 ): void {
+  const currentRespectGitignore = (): boolean =>
+    ConfigurationUtils.shouldRespectGitignoreForCompletions();
+  let respectGitignore = currentRespectGitignore();
+  const index = getWorkspaceFileIndex();
+  const startBuild = (): void => {
+    void index.build({ roots: roots(), respectGitignore });
+  };
+  buildTimer = setTimeout(() => {
+    buildTimer = undefined;
+    startBuild();
+  }, 2000);
+  context.subscriptions.push({
+    dispose: () => {
+      if (buildTimer) clearTimeout(buildTimer);
+      buildTimer = undefined;
+    },
+  });
+  context.subscriptions.push({ dispose: () => index.dispose() });
   const unsubscribe = configService.subscribe(() => {
-    clearFilesCache();
+    const nextRespectGitignore = currentRespectGitignore();
+    if (nextRespectGitignore !== respectGitignore) {
+      respectGitignore = nextRespectGitignore;
+      startBuild();
+    }
     clearSlashTokenCompletionCache();
-    Log.debug("[Completions] Cache cleared due to config change");
   });
   context.subscriptions.push({ dispose: unsubscribe });
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      startBuild();
+      sourceFiles.invalidate();
+      vsCodeSymbolIndex?.invalidateWarmupCache();
+    })
+  );
   const watcher = vscode.workspace.createFileSystemWatcher("**/*");
-  const invalidate = (uri: vscode.Uri): void => {
-    const folders = vscode.workspace.workspaceFolders ?? [];
-    const relevant = folders.some((folder) => {
-      const relative = path.relative(folder.uri.fsPath, uri.fsPath);
-      return (
-        relative !== ".." &&
-        !relative.startsWith(`..${path.sep}`) &&
-        !path.isAbsolute(relative) &&
-        !isSearchPathIgnored(relative)
-      );
-    });
-    if (relevant) clearFilesCache();
-  };
+  const change =
+    (kind: WorkspaceFileChange["kind"]) =>
+    (uri: vscode.Uri): void => {
+      const folders = vscode.workspace.workspaceFolders ?? [];
+      const root = folders.find((folder) => {
+        const relative = path.relative(folder.uri.fsPath, uri.fsPath);
+        return (
+          relative !== ".." &&
+          !relative.startsWith(`..${path.sep}`) &&
+          !path.isAbsolute(relative)
+        );
+      });
+      if (!root) return;
+      const relative = path
+        .relative(root.uri.fsPath, uri.fsPath)
+        .split(path.sep)
+        .join("/");
+      void index.applyChanges([
+        { root: root.uri.fsPath, path: relative, kind },
+      ]);
+    };
   context.subscriptions.push(
     watcher,
-    watcher.onDidCreate(invalidate),
-    watcher.onDidChange(invalidate),
-    watcher.onDidDelete(invalidate)
+    watcher.onDidCreate(change(WORKSPACE_FILE_CHANGE_KINDS.CREATE)),
+    watcher.onDidChange(change(WORKSPACE_FILE_CHANGE_KINDS.CHANGE)),
+    watcher.onDidDelete(change(WORKSPACE_FILE_CHANGE_KINDS.DELETE))
   );
 }
 
@@ -153,7 +215,7 @@ export function toVSCodeCompletionItem(
 ): vscode.CompletionItem {
   const insertText = item.captureId
     ? CAPTURING_OUTPUT_PLACEHOLDER
-    : item.insertText;
+    : (item.insertText ?? item.label);
   const vscodeItem = toVSCodeWorkflowCompletionItem(
     {
       ...item,

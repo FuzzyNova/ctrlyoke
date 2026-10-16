@@ -583,6 +583,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.REQUEST_LICENSE_MACHINES, (_message, ctx) =>
       this.licenseHandlers.handleRequestLicenseMachines(ctx)
     );
+    table.set(MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE, (_message, ctx) =>
+      this.licenseHandlers.handleRequestLicenseSeatUsage(ctx)
+    );
     table.set(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, (message, ctx) =>
       this.licenseHandlers.handleDeactivateLicenseMachine(message, ctx)
     );

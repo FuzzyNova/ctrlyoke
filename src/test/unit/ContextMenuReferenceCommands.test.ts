@@ -526,6 +526,54 @@ suite("ContextMenuReferenceCommands", () => {
     assert.match(referencePath, /-1-2-[0-9a-f]{12}\.log$/);
   });
 
+  test("does not include the next line in a whole-line output selection", async () => {
+    const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-");
+    const editor = await createOutputEditor();
+    editor.selection = new vscode.Selection(
+      new vscode.Position(0, 0),
+      new vscode.Position(1, 0)
+    );
+    setActiveEditor(editor);
+    const sink = new RecordingPromptEditorInsertSink();
+
+    await createCommands(sink, workspaceRoot).addOutputSelectionToPromptEditor(
+      editor.document.uri
+    );
+
+    const reference = sink.requests[0].references[0];
+    assert.match(reference, /-1-1-[0-9a-f]{12}\.log$/);
+    const referencePath = reference.slice(1);
+    assert.strictEqual(
+      await fs.promises.readFile(
+        path.join(workspaceRoot, referencePath),
+        "utf8"
+      ),
+      "first output\n"
+    );
+  });
+
+  test("inserts a whole-line file selection with an inclusive end", async () => {
+    const workspaceRoot = createTestWorkspace();
+    const filePath = path.join(workspaceRoot, "app.ts");
+    await fs.promises.writeFile(filePath, "first\nsecond\nthird", "utf8");
+    const document = await vscode.workspace.openTextDocument(
+      vscode.Uri.file(filePath)
+    );
+    const editor = new MockOutputEditor(
+      document,
+      new vscode.Selection(new vscode.Position(0, 0), new vscode.Position(1, 0))
+    );
+    setActiveEditor(editor);
+    const sink = new RecordingPromptEditorInsertSink();
+    const commands = createCommands(sink, workspaceRoot, () => "src/app.ts");
+
+    await commands.addSelectionToPromptEditor(document.uri);
+
+    assert.deepStrictEqual(sink.requests[0].references, [
+      "#selection:src/app.ts:1-1",
+    ]);
+  });
+
   test("captures the whole active output channel from the toolbar invocation", async () => {
     const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-");
     const editor = await createOutputEditor();

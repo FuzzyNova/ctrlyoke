@@ -738,6 +738,10 @@ export function createMessageHandlers(
     useSettingsStore.getState().setLicenseMachines(message.machines ?? []);
   };
 
+  handlers[MESSAGE_TYPES.LICENSE_SEAT_USAGE_UPDATED] = (message) => {
+    useSettingsStore.getState().setLicenseSeatUsage(message.usage);
+  };
+
   handlers[MESSAGE_TYPES.LICENSE_ACTION_RESULT] = (message) => {
     useSettingsStore.getState().setLicenseActionResult({
       action: message.action,

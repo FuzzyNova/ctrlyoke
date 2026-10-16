@@ -475,6 +475,22 @@ async function main() {
     logLevel: "silent",
   });
 
+  const workspaceFileIndexWorkerCtx = await esbuild.context({
+    entryPoints: ["src/completions/workspaceFileIndexWorker.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "node22",
+    mainFields,
+    outfile: "out/workspaceFileIndexWorker.js",
+    metafile: true,
+    plugins: [nodeBundleVscodeGuardPlugin("workspaceFileIndexWorker")],
+    logLevel: "silent",
+  });
+
   // Long-output regexes run in a separate isolate. Keep this as a sibling of
   // the extension, CLI, and MCP bundles so each can resolve it from `out/`.
   const scriptRegexWorkerCtx = await esbuild.context({
@@ -527,6 +543,7 @@ async function main() {
     await mcpCtx.watch();
     await historySearchRebuildWorkerCtx.watch();
     await historySearchMatcherWorkerCtx.watch();
+    await workspaceFileIndexWorkerCtx.watch();
     await scriptRegexWorkerCtx.watch();
     await cliCtx.watch();
   } else {
@@ -537,6 +554,7 @@ async function main() {
     await mcpCtx.rebuild();
     await historySearchRebuildWorkerCtx.rebuild();
     await historySearchMatcherWorkerCtx.rebuild();
+    await workspaceFileIndexWorkerCtx.rebuild();
     await scriptRegexWorkerCtx.rebuild();
     await cliCtx.rebuild();
     await webviewScriptsCtx.dispose();
@@ -546,6 +564,7 @@ async function main() {
     await mcpCtx.dispose();
     await historySearchRebuildWorkerCtx.dispose();
     await historySearchMatcherWorkerCtx.dispose();
+    await workspaceFileIndexWorkerCtx.dispose();
     await scriptRegexWorkerCtx.dispose();
     await cliCtx.dispose();
   }

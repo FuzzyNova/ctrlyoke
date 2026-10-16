@@ -91,6 +91,24 @@ suite("CommitMessageGenerator", () => {
     });
   });
 
+  test("does not start a run when generation is already cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    let instanceCreated = false;
+    const generator = new CommitMessageGenerator({
+      createWorkflowInstance() {
+        instanceCreated = true;
+        throw new Error("A cancelled generation must not create a run");
+      },
+    });
+
+    await assert.rejects(
+      () => generator.generateMessage("diff", process.cwd(), controller.signal),
+      /Commit message generation cancelled/
+    );
+    assert.strictEqual(instanceCreated, false);
+  });
+
   test("keeps references inside a staged Markdown code block inert in the prompt", async () => {
     const cwd = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-commit-prompt-fence-")
@@ -333,13 +351,20 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
-  test("does not treat git execution failures as an empty staged diff", async () => {
-    const cwd = path.join(
-      os.tmpdir(),
-      `ctrlyoke-missing-git-dir-${Date.now()}`
-    );
-
-    await assert.rejects(new CommitMessageGenerator().getDiff(cwd));
+  test("reports a clear error when the working directory is outside a git repo", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-non-repo-"));
+    try {
+      await assert.rejects(
+        new CommitMessageGenerator().getDiff(cwd),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message === `Not a git repository: ${cwd}`
+      );
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
   });
 
   test("includes an untracked non-ASCII filename in the generated diff", async () => {

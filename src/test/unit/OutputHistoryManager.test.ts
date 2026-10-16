@@ -509,7 +509,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       "utf8"
     );
 
-    await manager.recoverInterruptedRun(workflowKey, 1);
+    await manager.recoverInterruptedRun(workflowKey, runRef, 1);
     const repaired = JSON.parse(
       await fs.readFile(
         WorkflowPaths.runFilePath(tempWorkspace, workflowKey, runRef),
@@ -519,7 +519,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(repaired._runtime?.tokenTotals?.total, 15);
     assert.strictEqual(repaired._runtime?.tokenTotals?.isFinal, true);
 
-    await manager.recoverInterruptedRun(workflowKey, 1);
+    await manager.recoverInterruptedRun(workflowKey, runRef, 1);
     const manifest = await recorder.readManifest(filePath);
     assert.strictEqual(manifest.tokenTotals?.total, 15);
   });
@@ -1409,8 +1409,8 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     );
   });
 
-  test("finalizes the newest running manifest during crash recovery", async () => {
-    const { filePath, workflowKey } = await initTestRun(
+  test("finalizes the interrupted running manifest during crash recovery", async () => {
+    const { filePath, workflowKey, runRef } = await initTestRun(
       manager,
       tempWorkspace,
       "wf-interrupted"
@@ -1429,7 +1429,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       }
     );
 
-    await manager.recoverInterruptedRun(workflowKey, 3);
+    await manager.recoverInterruptedRun(workflowKey, runRef, 3);
 
     const manifest = await recorder.readManifest(filePath);
     assert.strictEqual(manifest.executionState, EXECUTION_STATES.STOPPED);
@@ -1442,6 +1442,54 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.ok(output?.kind === OUTPUT_HISTORY_KINDS.CLI);
     assert.strictEqual(output.cliOutput.isStreaming, false);
   });
+
+  test("finalizes the exact interrupted run when a newer run exists", async () => {
+    const { filePath, workflowKey, runRef } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-older-interrupted"
+    );
+    const newerRunRef = await initAdditionalRun(
+      recorder,
+      tempWorkspace,
+      workflowKey,
+      2,
+      Date.now() + 100_000
+    );
+
+    await manager.recoverInterruptedRun(workflowKey, runRef, 2);
+
+    const interrupted = await recorder.readManifest(filePath);
+    const newer = await recorder.readManifest(
+      manager.getHistoryFilePath(workflowKey, newerRunRef)
+    );
+    assert.strictEqual(interrupted.executionState, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(typeof interrupted.completedAt, "number");
+    assert.strictEqual(newer.executionState, EXECUTION_STATES.COMPLETED);
+  });
+
+  for (const executionState of [
+    EXECUTION_STATES.PAUSING,
+    EXECUTION_STATES.CANCELLING,
+  ]) {
+    test(`finalizes a ${executionState} manifest during crash recovery`, async () => {
+      const { filePath, workflowKey, runRef } = await initTestRun(
+        manager,
+        tempWorkspace,
+        `wf-recovery-${executionState}`
+      );
+      await recorder.updateManifest(filePath, (manifest) => ({
+        ...manifest,
+        executionState,
+      }));
+
+      await manager.recoverInterruptedRun(workflowKey, runRef, 1);
+
+      const manifest = await recorder.readManifest(filePath);
+      assert.strictEqual(manifest.executionState, EXECUTION_STATES.STOPPED);
+      assert.strictEqual(typeof manifest.completedAt, "number");
+    });
+  }
 
   test("orders canonical history entries by timestamp and sequence", async () => {
     const historyInit = await initTestRun(

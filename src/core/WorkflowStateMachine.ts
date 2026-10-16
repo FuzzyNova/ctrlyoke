@@ -235,6 +235,37 @@ export class WorkflowStateMachine {
     return this.cloneAttemptState(current)!;
   }
 
+  /**
+   * Schedule an errorBehavior retry without changing the end-condition retry
+   * budget carried by the current attempt.
+   */
+  scheduleErrorRetry(
+    target: WorkflowAttemptTarget,
+    attemptIndex: number,
+    timestampMs: number = Date.now()
+  ): WorkflowAttemptState {
+    const previous = this.attempts.get(this.getAttemptKey(target));
+    const current: WorkflowAttemptState = {
+      target: { ...target },
+      attemptIndex,
+      status: WORKFLOW_ATTEMPT_STATUS.RETRYING,
+      startedAt: timestampMs,
+      retryCount: previous?.retryCount,
+      maxRetries: previous?.maxRetries,
+    };
+
+    const key = this.getAttemptKey(target);
+    this.attempts.set(key, current);
+    this.activeAttemptKeys.delete(key);
+    this.emitAttemptTransition(
+      WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY,
+      this.cloneAttemptState(current)!,
+      this.cloneAttemptState(previous),
+      timestampMs
+    );
+    return this.cloneAttemptState(current)!;
+  }
+
   completeAttempt(
     target: WorkflowAttemptTarget,
     attemptIndex: number,

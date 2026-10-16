@@ -3,13 +3,14 @@ import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
 
 /** Shared unquoted @ path body. A colon is valid only in the drive prefix. */
 export const UNQUOTED_AT_REFERENCE_PATH = String.raw`(?:[A-Za-z]:)?[^\s:"]+`;
-const UNQUOTED_AT_REFERENCE_PATH_LAZY = UNQUOTED_AT_REFERENCE_PATH.replace(
-  String.raw`[^\s:"]+`,
-  String.raw`[^\s:"]+?`
-);
+export const UNQUOTED_AT_REFERENCE_PATH_LAZY =
+  UNQUOTED_AT_REFERENCE_PATH.replace(
+    String.raw`[^\s:"]+`,
+    String.raw`[^\s:"]+?`
+  );
 
 /** End of an unquoted token, allowing runtime-stripped prose punctuation. */
-const UNQUOTED_REFERENCE_END = String.raw`(?=$|[\s:"]|[^\p{L}\p{N}/\\\s:"]+(?:[\s:"]|$)|\]\()`;
+export const UNQUOTED_REFERENCE_END = String.raw`(?=$|[\s:"]|[^\p{L}\p{N}/\\\s:"]+(?:[\s:"]|$)|\]\()`;
 
 /**
  * Build the shared inline prior-context pattern for parsing and decoration.
@@ -112,11 +113,8 @@ export interface ReferencePatterns {
  */
 export function createReferencePatterns(): ReferencePatterns {
   return {
-    // @"path with spaces/file.ts"
-    fullFileQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@"([^"]*[/.\\\\][^"]*[^/\\\\])"`,
-      "gu"
-    ),
+    // Quoting explicitly marks a file path, including root extensionless names.
+    fullFileQuoted: new RegExp(`${NOT_AFTER_BOUNDARY}@"([^"]*[^/\\\\])"`, "gu"),
     // @path/to/file.ts
     //
     // The path marker and final boundary mirror runtime file-path and punctuation rules.

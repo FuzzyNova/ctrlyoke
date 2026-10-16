@@ -336,6 +336,41 @@ suite("CtrlYokeConfigService", () => {
     );
   });
 
+  test("merges model pricing per harness and lets workspace models override user models", () => {
+    service.setUserBackend(
+      makeBackend({
+        modelPricing: {
+          "claude-cli": {
+            opus: { inputPerMTok: 10, outputPerMTok: 20 },
+            sonnet: { inputPerMTok: 3, outputPerMTok: 15 },
+          },
+          "codex-cli": {
+            "gpt-5": { inputPerMTok: 5, outputPerMTok: 15 },
+          },
+        },
+      })
+    );
+    service.setWorkspaceBackend(
+      makeBackend({
+        modelPricing: {
+          "claude-cli": {
+            sonnet: { inputPerMTok: 1, outputPerMTok: 2 },
+          },
+        },
+      })
+    );
+
+    assert.deepStrictEqual(service.getAll().modelPricing, {
+      "claude-cli": {
+        opus: { inputPerMTok: 10, outputPerMTok: 20 },
+        sonnet: { inputPerMTok: 1, outputPerMTok: 2 },
+      },
+      "codex-cli": {
+        "gpt-5": { inputPerMTok: 5, outputPerMTok: 15 },
+      },
+    });
+  });
+
   test("CLI overlay overrides workspace backend", () => {
     service.setUserBackend(
       makeBackend({ defaults: { harness: "claude-cli" } })
@@ -1159,6 +1194,36 @@ suite("FileConfigBackend", () => {
     assert.deepStrictEqual(
       JSON.parse(fs.readFileSync(configPath, "utf8")),
       original
+    );
+  });
+
+  test("clears read-only state when settings return to a supported format", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ schemaVersion: 999, futureSettings: { retained: true } }),
+      "utf8"
+    );
+    const backend = new FileConfigBackend(configPath);
+
+    backend.getAll();
+    assert.strictEqual(backend.isReadOnly, true);
+
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        ui: { showCostEstimates: false },
+      }),
+      "utf8"
+    );
+    assert.strictEqual(backend.getAll().ui?.showCostEstimates, false);
+    assert.strictEqual(backend.isReadOnly, false);
+
+    await backend.set("ui.showCostEstimates", true);
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(configPath, "utf8")).ui.showCostEstimates,
+      true
     );
   });
 

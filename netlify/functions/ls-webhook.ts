@@ -4,63 +4,89 @@
 // order_created -> create a Keygen license (idempotent on the LS order id), email
 //                  the key. Routes to the Pro or Enterprise Keygen policy based on
 //                  which LS product/variant was purchased (see KEYGEN_POLICY_BY_LS_VARIANT).
+//                  An Enterprise order without the terms-acceptance custom data
+//                  from ctrlyoke.dev/enterprise/checkout still gets its license
+//                  (the buyer has paid), but sales@ is alerted to follow up.
 // order_refunded -> on a full refund, suspend the Keygen license issued for that
 //                  order and email the buyer a refund confirmation. Partial refunds (goodwill credits, tax-only refunds) are
 //                  ignored — the buyer still holds a paid license.
-// subscription_created -> link the LS subscription id onto the license created by
-//                  order_created, so later renewal events can find it.
+// subscription_created / _updated / _cancelled / _resumed / _expired -> record the
+//                  LS subscription id, status, and renewal date on the license
+//                  created by order_created, so renewal events can find it and the
+//                  enterprise-renewal-reminder function knows which subscriptions
+//                  will actually renew. None of them suspend anything: every
+//                  subscription policy uses Restrict Access expiration, so the
+//                  license already locks itself out at term end.
 // subscription_payment_success -> on a "renewal" invoice (not "initial"/"updated"),
 //                  extend the license's expiry via Keygen's renew action.
 // subscription_payment_refunded -> on a full refund of an "initial" or "renewal"
 //                  invoice, suspend the subscription's license and email the
 //                  buyer; otherwise a refunded
 //                  renewal would leave the license extended for another year.
-// subscription_cancelled / subscription_expired -> deliberate no-op; every
-//                  subscription policy uses Restrict Access expiration, so the
-//                  license already locks itself out at term end.
 //
 // Required env vars (Netlify site settings, never committed):
-//   LEMONSQUEEZY_WEBHOOK_SECRET  - HMAC secret set when the LS webhook was created
+//   LEMONSQUEEZY_WEBHOOK_SECRET  - HMAC secret shared by the live and test LS webhooks
 //   KEYGEN_ADMIN_TOKEN           - "fuzzynova-admin" Keygen admin token (see RELEASE_CHECKLIST.md 4.2)
 //   RESEND_API_KEY               - Resend API key for sending the license-delivery email
 import * as crypto from "node:crypto";
+import {
+  KEYGEN_ENTERPRISE_POLICY_ID,
+  KEYGEN_PRO_POLICY_ID,
+} from "../../src/license/KeygenConstants";
+import {
+  ENTERPRISE_CHECKOUT_REQUIRED_FIELDS,
+  LS_PRODUCT,
+  LS_VARIANT_IDS,
+} from "../../src/license/LemonSqueezyConstants";
+import {
+  BILLING_EMAIL,
+  SALES_EMAIL,
+  SUPPORT_EMAIL,
+  escapeHtml,
+  sendEmail,
+} from "../lib/email";
+import {
+  LICENSE_METADATA_KEY,
+  findLicenseByMetadata,
+  keygenFetch,
+  metadataString,
+  updateLicenseMetadata,
+  type KeygenLicense,
+} from "../lib/keygen";
 
-// Not secret — Keygen account/policy ids and LS product/variant ids are stable
-// identifiers, not credentials. See RELEASE_CHECKLIST.md §4.1/§4.4 for where these
-// come from.
-const KEYGEN_ACCOUNT_ID = "6ed6209c-6633-4444-9d43-ab4a473e2f28";
-const KEYGEN_PRO_POLICY_ID = "da0764ce-6577-419a-862d-128efdbfc329";
-const KEYGEN_ENTERPRISE_POLICY_ID = "1700d3bb-06b7-4087-96ce-e08aa6c6a817";
-const KEYGEN_API_BASE = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}`;
-
-const RESEND_FROM = "ctrlyoke <licensing@ctrlyoke.dev>";
-const BILLING_EMAIL = "billing@ctrlyoke.dev";
-
-// LS variant ids (Settings → Products → each product's default "Default" variant).
-// Route by variant_id rather than product_id: it's present directly on both the
-// Order and Subscription webhook resources, and each product has exactly one variant.
-const LS_VARIANT_ID = {
-  PRO: 2059579,
-  ENTERPRISE: 2105478,
+const KEYGEN_POLICY_BY_PRODUCT = {
+  [LS_PRODUCT.PRO]: KEYGEN_PRO_POLICY_ID,
+  [LS_PRODUCT.ENTERPRISE]: KEYGEN_ENTERPRISE_POLICY_ID,
 } as const;
 
 // Single source of truth for "which LS purchase issues which Keygen license type".
+// Route by variant_id rather than product_id: it's present directly on both the
+// Order and Subscription webhook resources, and each product has exactly one
+// variant. Both modes are mapped so test-mode purchases keep working after launch.
 // The Enterprise policy's own 1-year duration (Expiration Basis: From Creation)
 // is what gives an Enterprise license its 1yr initial expiry — no separate expiry
 // needs to be passed at issuance here.
-const KEYGEN_POLICY_BY_LS_VARIANT: Record<number, string> = {
-  [LS_VARIANT_ID.PRO]: KEYGEN_PRO_POLICY_ID,
-  [LS_VARIANT_ID.ENTERPRISE]: KEYGEN_ENTERPRISE_POLICY_ID,
-};
+const KEYGEN_POLICY_BY_LS_VARIANT: Record<number, string> = Object.fromEntries(
+  Object.values(LS_VARIANT_IDS).flatMap((variants) =>
+    Object.entries(variants).map(([product, variantId]) => [
+      variantId,
+      KEYGEN_POLICY_BY_PRODUCT[
+        product as keyof typeof KEYGEN_POLICY_BY_PRODUCT
+      ],
+    ])
+  )
+);
 
 const LS_EVENT = {
   ORDER_CREATED: "order_created",
   ORDER_REFUNDED: "order_refunded",
   SUBSCRIPTION_CREATED: "subscription_created",
+  SUBSCRIPTION_UPDATED: "subscription_updated",
+  SUBSCRIPTION_CANCELLED: "subscription_cancelled",
+  SUBSCRIPTION_RESUMED: "subscription_resumed",
+  SUBSCRIPTION_EXPIRED: "subscription_expired",
   SUBSCRIPTION_PAYMENT_SUCCESS: "subscription_payment_success",
   SUBSCRIPTION_PAYMENT_REFUNDED: "subscription_payment_refunded",
-  SUBSCRIPTION_CANCELLED: "subscription_cancelled",
-  SUBSCRIPTION_EXPIRED: "subscription_expired",
 } as const;
 
 // LS subscription-invoice `billing_reason` values (subscription_payment_success
@@ -73,22 +99,15 @@ const LS_BILLING_REASON = {
   UPDATED: "updated",
 } as const;
 
-// Keys into the Keygen license's `metadata` bag — single-sourced so every path
-// that reads or writes metadata can never drift out of sync. Keygen's metadata
-// writes replace the whole object, so every writer must merge existing keys in.
-const LICENSE_METADATA_KEY = {
-  LS_ORDER_ID: "lsOrderId",
-  LS_SUBSCRIPTION_ID: "lsSubscriptionId",
-  LAST_RENEWED_INVOICE_ID: "lastRenewedInvoiceId",
-  REFUND_NOTIFIED_ID: "refundNotifiedId",
-  BUYER_EMAIL: "buyerEmail",
-  BUYER_NAME: "buyerName",
-} as const;
+interface LemonSqueezyMeta {
+  event_name: string;
+  test_mode?: boolean;
+  /** Checkout custom data (`checkout[custom][...]`), echoed on order and subscription events. */
+  custom_data?: Record<string, unknown>;
+}
 
 interface LemonSqueezyOrderPayload {
-  meta: {
-    event_name: typeof LS_EVENT.ORDER_CREATED | typeof LS_EVENT.ORDER_REFUNDED;
-  };
+  meta: LemonSqueezyMeta;
   data: {
     id: string;
     attributes: {
@@ -106,12 +125,7 @@ interface LemonSqueezyOrderPayload {
 }
 
 interface LemonSqueezySubscriptionPayload {
-  meta: {
-    event_name:
-      | typeof LS_EVENT.SUBSCRIPTION_CREATED
-      | typeof LS_EVENT.SUBSCRIPTION_CANCELLED
-      | typeof LS_EVENT.SUBSCRIPTION_EXPIRED;
-  };
+  meta: LemonSqueezyMeta;
   data: {
     id: string;
     attributes: {
@@ -119,16 +133,15 @@ interface LemonSqueezySubscriptionPayload {
       product_id: number;
       variant_id: number;
       status: string;
+      /** ISO-8601; null once the subscription will not renew. */
+      renews_at: string | null;
+      updated_at: string;
     };
   };
 }
 
 interface LemonSqueezySubscriptionInvoicePayload {
-  meta: {
-    event_name:
-      | typeof LS_EVENT.SUBSCRIPTION_PAYMENT_SUCCESS
-      | typeof LS_EVENT.SUBSCRIPTION_PAYMENT_REFUNDED;
-  };
+  meta: LemonSqueezyMeta;
   data: {
     id: string;
     attributes: {
@@ -139,11 +152,6 @@ interface LemonSqueezySubscriptionInvoicePayload {
       refunded: boolean;
     };
   };
-}
-
-interface KeygenLicense {
-  id: string;
-  attributes: { key: string; metadata: Record<string, unknown> };
 }
 
 function verifySignature(
@@ -162,60 +170,6 @@ function verifySignature(
     expectedBuffer.length === actualBuffer.length &&
     crypto.timingSafeEqual(expectedBuffer, actualBuffer)
   );
-}
-
-async function keygenFetch(
-  path: string,
-  init: RequestInit = {}
-): Promise<Response> {
-  return fetch(`${KEYGEN_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${process.env.KEYGEN_ADMIN_TOKEN}`,
-      "Content-Type": "application/vnd.api+json",
-      Accept: "application/vnd.api+json",
-      ...init.headers,
-    },
-  });
-}
-
-/** Idempotency / correlation lookup: find the license carrying a given metadata key/value pair. */
-async function findLicenseByMetadata(
-  metadataKey: string,
-  value: string
-): Promise<KeygenLicense | null> {
-  const query = `metadata[${metadataKey}]=${encodeURIComponent(value)}`;
-  const res = await keygenFetch(`/licenses?${query}`);
-  if (!res.ok) {
-    throw new Error(
-      `Keygen license lookup failed: ${res.status} ${await res.text()}`
-    );
-  }
-  const body = (await res.json()) as { data: KeygenLicense[] };
-  return body.data[0] ?? null;
-}
-
-/** Keygen metadata writes replace the whole object — always merge existing keys in. */
-async function updateLicenseMetadata(
-  license: KeygenLicense,
-  patch: Record<string, unknown>
-): Promise<void> {
-  const res = await keygenFetch(`/licenses/${license.id}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      data: {
-        type: "licenses",
-        attributes: {
-          metadata: { ...license.attributes.metadata, ...patch },
-        },
-      },
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `Keygen license metadata update failed: ${res.status} ${await res.text()}`
-    );
-  }
 }
 
 async function createLicense(
@@ -251,6 +205,16 @@ async function createLicense(
   return body.data;
 }
 
+/** The required Enterprise checkout fields missing (or blank) from an order's custom data. */
+function missingEnterpriseAcceptanceFields(
+  customData: Record<string, unknown> | undefined
+): string[] {
+  return ENTERPRISE_CHECKOUT_REQUIRED_FIELDS.filter((field) => {
+    const value = customData?.[field];
+    return typeof value !== "string" || !value.trim();
+  });
+}
+
 /**
  * Look up the license correlated with a fully refunded LS order/subscription
  * invoice, suspend it, and email the buyer a refund confirmation. A refund for
@@ -276,12 +240,18 @@ async function revokeRefundedLicense(
       `Keygen license suspend failed: ${res.status} ${await res.text()}`
     );
   }
-  const { metadata } = license.attributes;
-  if (metadata[LICENSE_METADATA_KEY.REFUND_NOTIFIED_ID] === refundId) return;
-  const email = metadata[LICENSE_METADATA_KEY.BUYER_EMAIL];
-  if (typeof email === "string" && email) {
-    const name = metadata[LICENSE_METADATA_KEY.BUYER_NAME];
-    await sendRefundEmail(email, typeof name === "string" ? name : "");
+  if (
+    metadataString(license, LICENSE_METADATA_KEY.REFUND_NOTIFIED_ID) ===
+    refundId
+  ) {
+    return;
+  }
+  const email = metadataString(license, LICENSE_METADATA_KEY.BUYER_EMAIL);
+  if (email) {
+    await sendRefundEmail(
+      email,
+      metadataString(license, LICENSE_METADATA_KEY.BUYER_NAME) ?? ""
+    );
   }
   await updateLicenseMetadata(license, {
     [LICENSE_METADATA_KEY.REFUND_NOTIFIED_ID]: refundId,
@@ -289,26 +259,49 @@ async function revokeRefundedLicense(
 }
 
 /**
- * LS sends subscription_created "alongside" order_created but doesn't guarantee
- * ordering, so if the license isn't there yet this throws and lets LS's webhook
- * retry catch it up — the same self-healing idempotency shape as the rest of
- * this file, not a special case.
+ * Record a subscription's id, status, and renewal date on its license. LS sends
+ * subscription events "alongside" order_created but doesn't guarantee ordering,
+ * so if the license isn't there yet this throws and lets LS's webhook retry
+ * catch it up — the same self-healing idempotency shape as the rest of this
+ * file. Events can also arrive out of order relative to each other, so an event
+ * older than the state already recorded is ignored.
  */
-async function linkSubscriptionToLicense(
-  orderId: string,
-  subscriptionId: string
+async function recordSubscriptionState(
+  payload: LemonSqueezySubscriptionPayload
 ): Promise<void> {
-  const license = await findLicenseByMetadata(
-    LICENSE_METADATA_KEY.LS_ORDER_ID,
-    orderId
-  );
+  const subscriptionId = payload.data.id;
+  const {
+    order_id: orderId,
+    status,
+    renews_at: renewsAt,
+    updated_at: updatedAt,
+  } = payload.data.attributes;
+  const license =
+    (await findLicenseByMetadata(
+      LICENSE_METADATA_KEY.LS_SUBSCRIPTION_ID,
+      subscriptionId
+    )) ??
+    (await findLicenseByMetadata(
+      LICENSE_METADATA_KEY.LS_ORDER_ID,
+      String(orderId)
+    ));
   if (!license) {
     throw new Error(
       `No Keygen license found for LS order ${orderId} (subscription ${subscriptionId})`
     );
   }
+  const recordedAt = metadataString(
+    license,
+    LICENSE_METADATA_KEY.LS_SUBSCRIPTION_UPDATED_AT
+  );
+  if (recordedAt && Date.parse(recordedAt) > Date.parse(updatedAt)) {
+    return; // a newer event already recorded this subscription's state
+  }
   await updateLicenseMetadata(license, {
     [LICENSE_METADATA_KEY.LS_SUBSCRIPTION_ID]: subscriptionId,
+    [LICENSE_METADATA_KEY.LS_SUBSCRIPTION_STATUS]: status,
+    [LICENSE_METADATA_KEY.LS_SUBSCRIPTION_RENEWS_AT]: renewsAt ?? "",
+    [LICENSE_METADATA_KEY.LS_SUBSCRIPTION_UPDATED_AT]: updatedAt,
   });
 }
 
@@ -326,9 +319,8 @@ async function renewLicenseForSubscription(
     );
   }
   if (
-    license.attributes.metadata[
-      LICENSE_METADATA_KEY.LAST_RENEWED_INVOICE_ID
-    ] === invoiceId
+    metadataString(license, LICENSE_METADATA_KEY.LAST_RENEWED_INVOICE_ID) ===
+    invoiceId
   ) {
     return; // retried webhook for a renewal invoice we already applied
   }
@@ -345,31 +337,6 @@ async function renewLicenseForSubscription(
   });
 }
 
-async function sendEmail(
-  to: string,
-  subject: string,
-  html: string,
-  replyTo?: string
-): Promise<void> {
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: RESEND_FROM,
-      to,
-      subject,
-      html,
-      ...(replyTo && { reply_to: replyTo }),
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);
-  }
-}
-
 async function sendLicenseEmail(
   email: string,
   name: string,
@@ -378,12 +345,12 @@ async function sendLicenseEmail(
   await sendEmail(
     email,
     "Your ctrlyoke license key",
-    `<p>Hi ${name || "there"},</p>
+    `<p>Hi ${escapeHtml(name) || "there"},</p>
 <p>Thanks for purchasing ctrlyoke! Your license key is:</p>
-<p style="font-size:1.2em;font-weight:bold;">${licenseKey}</p>
+<p style="font-size:1.2em;font-weight:bold;">${escapeHtml(licenseKey)}</p>
 <p>Activate it with the <strong>ctrlyoke: Activate Pro License</strong> command in VS Code
 (or <strong>ctrlyoke: Activate Offline (Air-Gapped) License</strong> if this machine has no network access).</p>
-<p>Need help? Reply to this email or reach out to support@ctrlyoke.dev.</p>`
+<p>Need help? Reply to this email or reach out to ${SUPPORT_EMAIL}.</p>`
   );
 }
 
@@ -391,11 +358,33 @@ async function sendRefundEmail(email: string, name: string): Promise<void> {
   await sendEmail(
     email,
     "Your ctrlyoke refund has been processed",
-    `<p>Hi ${name || "there"},</p>
+    `<p>Hi ${escapeHtml(name) || "there"},</p>
 <p>Your ctrlyoke refund has been processed. It can take up to 10 days to appear on your statement.</p>
 <p>The license key from this purchase has been deactivated. ctrlyoke's free features keep working as before.</p>
 <p>Questions about the refund? Reply to this email or reach out to ${BILLING_EMAIL}.</p>`,
     BILLING_EMAIL
+  );
+}
+
+/** Internal alert: an Enterprise order reached us without a complete terms-acceptance record. */
+async function sendMissingAcceptanceAlert(
+  orderId: string,
+  buyerEmail: string,
+  buyerName: string,
+  missingFields: string[],
+  testMode: boolean
+): Promise<void> {
+  await sendEmail(
+    SALES_EMAIL,
+    `${testMode ? "[TEST] " : ""}Enterprise order ${orderId} has no terms-acceptance record`,
+    `<p>Lemon Squeezy order <strong>${escapeHtml(orderId)}</strong> bought ctrlyoke Enterprise without the
+checkout data from ctrlyoke.dev/enterprise/checkout, so there is no record of the Enterprise Terms being
+accepted on behalf of a named legal entity. The license was issued and emailed as usual.</p>
+<p>Buyer: ${escapeHtml(buyerName)} &lt;${escapeHtml(buyerEmail)}&gt;<br>
+Missing fields: ${missingFields.map(escapeHtml).join(", ")}</p>
+<p>Follow up with the buyer to get the Enterprise Terms accepted (or a signed Order) and the legal
+entity's name and business address. See RELEASE_CHECKLIST.md §4.4 item 5.</p>`,
+    buyerEmail
   );
 }
 
@@ -456,6 +445,22 @@ export default async (req: Request): Promise<Response> => {
           orderId
         );
         if (!license) {
+          if (policyId === KEYGEN_ENTERPRISE_POLICY_ID) {
+            const missing = missingEnterpriseAcceptanceFields(
+              payload.meta.custom_data
+            );
+            // Sent before the license exists so a failed send is retried with
+            // the whole event; a duplicate alert is harmless, a lost one is not.
+            if (missing.length > 0) {
+              await sendMissingAcceptanceAlert(
+                orderId,
+                email,
+                name,
+                missing,
+                payload.meta.test_mode === true
+              );
+            }
+          }
           license = await createLicense(policyId, orderId, email, name);
           await sendLicenseEmail(email, name, license.attributes.key);
         }
@@ -474,10 +479,17 @@ export default async (req: Request): Promise<Response> => {
         );
         return new Response("OK", { status: 200 });
       }
-      case LS_EVENT.SUBSCRIPTION_CREATED: {
-        const payload = rawPayload as LemonSqueezySubscriptionPayload;
-        const { order_id: orderId } = payload.data.attributes;
-        await linkSubscriptionToLicense(String(orderId), payload.data.id);
+      case LS_EVENT.SUBSCRIPTION_CREATED:
+      case LS_EVENT.SUBSCRIPTION_UPDATED:
+      case LS_EVENT.SUBSCRIPTION_CANCELLED:
+      case LS_EVENT.SUBSCRIPTION_RESUMED:
+      case LS_EVENT.SUBSCRIPTION_EXPIRED: {
+        // Records state only. Cancellation and expiry deliberately do not
+        // suspend: Restrict Access expiration ends the license at term end —
+        // see RELEASE_CHECKLIST.md §4.4 item 3.
+        await recordSubscriptionState(
+          rawPayload as LemonSqueezySubscriptionPayload
+        );
         return new Response("OK", { status: 200 });
       }
       case LS_EVENT.SUBSCRIPTION_PAYMENT_SUCCESS: {
@@ -525,14 +537,6 @@ export default async (req: Request): Promise<Response> => {
         );
         return new Response("OK", { status: 200 });
       }
-      case LS_EVENT.SUBSCRIPTION_CANCELLED:
-      case LS_EVENT.SUBSCRIPTION_EXPIRED:
-        // Deliberate no-op: every subscription Keygen policy uses Restrict Access
-        // expiration, so the license already locks itself out at term end — see
-        // RELEASE_CHECKLIST.md §4.4 item 3.
-        return new Response("Ignored (handled by policy expiration)", {
-          status: 200,
-        });
       default:
         // Unsubscribed/unrecognized event — acknowledge so LS stops retrying.
         return new Response("Ignored", { status: 200 });

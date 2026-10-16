@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -7,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LicenseSection } from "@components/settings/LicenseSection";
+import { actionFeedbackDurationMs } from "@components/shared/ActionButton";
 import {
   LICENSE_ACTIONS,
   LICENSE_UI,
@@ -27,6 +29,7 @@ describe("LicenseSection", () => {
         trialEndsAt: null,
       },
       licenseMachines: [],
+      licenseSeatUsage: null,
       licenseActionResult: null,
     });
     window.vscodeApi = {
@@ -145,6 +148,98 @@ describe("LicenseSection", () => {
     });
   });
 
+  describe("machine deactivation feedback", () => {
+    const machines = ["one", "two", "three"].map((id) => ({
+      id,
+      name: `Box ${id}`,
+      platform: "linux",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      isThisMachine: false,
+    }));
+
+    function renderMachineList() {
+      useSettingsStore.setState({
+        licenseAccess: {
+          isPro: true,
+          hasRemoteAccess: true,
+          trialEndsAt: null,
+          source: LICENSE_SOURCES.ONLINE,
+          expiresAt: null,
+        },
+        licenseMachines: machines,
+      });
+      render(<LicenseSection />);
+      act(() =>
+        useSettingsStore.getState().setLicenseActionResult({
+          action: MESSAGE_TYPES.REQUEST_LICENSE_MACHINES,
+          status: "success",
+          message: "License machines loaded.",
+        })
+      );
+      return screen.getAllByRole("row").slice(1);
+    }
+
+    afterEach(() => vi.useRealTimers());
+
+    it("reports success once for the section, not on every row, then fades", () => {
+      vi.useFakeTimers();
+      const rows = renderMachineList();
+      fireEvent.click(
+        within(rows[1]).getByRole("button", { name: "Deactivate" })
+      );
+      for (const row of screen.getAllByRole("row").slice(1)) {
+        expect(within(row).getByRole("button")).toBeDisabled();
+      }
+
+      act(() => {
+        useSettingsStore
+          .getState()
+          .setLicenseMachines(machines.filter(({ id }) => id !== "two"));
+        useSettingsStore.getState().setLicenseActionResult({
+          action: MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
+          status: "success",
+          message: "License machine deactivated successfully.",
+        });
+      });
+
+      const status = screen.getAllByRole("status");
+      expect(status).toHaveLength(1);
+      expect(status[0]).toHaveTextContent("Deactivated Box two · linux.");
+      for (const row of screen.getAllByRole("row").slice(1)) {
+        expect(within(row).queryByRole("status")).toBeNull();
+        expect(within(row).getByRole("button")).toBeEnabled();
+      }
+
+      act(() =>
+        vi.advanceTimersByTime(
+          actionFeedbackDurationMs({ status: "success", message: "" })
+        )
+      );
+      expect(screen.queryByRole("status")).toBeNull();
+    });
+
+    it("shows an error only on the row that failed", () => {
+      const rows = renderMachineList();
+      fireEvent.click(
+        within(rows[2]).getByRole("button", { name: "Deactivate" })
+      );
+      act(() =>
+        useSettingsStore.getState().setLicenseActionResult({
+          action: MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
+          status: "error",
+          message: "Machine not found.",
+        })
+      );
+
+      const [first, second, third] = screen.getAllByRole("row").slice(1);
+      expect(within(third).getByRole("status")).toHaveTextContent(
+        "Machine not found."
+      );
+      expect(within(first).queryByRole("status")).toBeNull();
+      expect(within(second).queryByRole("status")).toBeNull();
+    });
+  });
+
   it("confirms before deactivating the current Pro machine", () => {
     useSettingsStore.setState({
       licenseAccess: {
@@ -210,7 +305,7 @@ describe("LicenseSection", () => {
 
     expect(
       screen.queryByRole("heading", { name: "Activated machines" })
-    ).not.toBeNull();
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -220,5 +315,69 @@ describe("LicenseSection", () => {
     expect(
       screen.getByRole("link", { name: LICENSE_UI.SUPPORT_EMAIL })
     ).toHaveAttribute("href", `mailto:${LICENSE_UI.SUPPORT_EMAIL}`);
+  });
+
+  it("shows Enterprise seat usage once the extension replies", async () => {
+    useSettingsStore.setState({
+      licenseAccess: {
+        isPro: true,
+        hasRemoteAccess: true,
+        trialEndsAt: null,
+        source: LICENSE_SOURCES.ONLINE,
+        expiresAt: null,
+        isEnterprise: true,
+      },
+    });
+    render(<LicenseSection />);
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE,
+    });
+    expect(screen.getByText("Loading seats…")).toBeInTheDocument();
+
+    useSettingsStore.setState({
+      licenseSeatUsage: { used: 1234, max: 3000 },
+      licenseActionResult: {
+        action: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE,
+        status: "success",
+        message: "License seat usage loaded.",
+      },
+    });
+
+    const seats = screen.getByRole("region", { name: "Enterprise seats" });
+    await waitFor(() =>
+      expect(
+        within(seats).getByText(/1,234 of 3,000 seats in use/)
+      ).toBeInTheDocument()
+    );
+    expect(within(seats).getByText(/1,766 remaining/)).toBeInTheDocument();
+    expect(within(seats).getByRole("meter")).toHaveAttribute(
+      "aria-valuenow",
+      "1234"
+    );
+  });
+
+  it("skips the seat lookup for an offline Enterprise license file", () => {
+    useSettingsStore.setState({
+      licenseAccess: {
+        isPro: true,
+        hasRemoteAccess: true,
+        trialEndsAt: null,
+        source: LICENSE_SOURCES.OFFLINE_FILE,
+        expiresAt: null,
+        isEnterprise: true,
+      },
+    });
+    render(<LicenseSection />);
+
+    expect(postMessage).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE,
+    });
+    expect(
+      screen.queryByRole("button", { name: "Refresh" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: LICENSE_UI.SUPPORT_EMAIL })
+    ).toBeInTheDocument();
   });
 });

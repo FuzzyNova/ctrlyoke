@@ -33,7 +33,8 @@ import {
   createGitChangeReferencePattern,
   createConditionOutputReferencePattern,
   createInlinePriorContextReferencePattern,
-  UNQUOTED_AT_REFERENCE_PATH,
+  UNQUOTED_AT_REFERENCE_PATH_LAZY,
+  UNQUOTED_REFERENCE_END,
 } from "./ReferencePatterns";
 
 export const LITERAL_FENCE_INFO = "text";
@@ -730,7 +731,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // characters. The unquoted body still permits an embedded @ so a path like
   // src/myimage@512x512.png parses as one reference, not split at the inner @.
   const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH}))`,
+    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH_LAZY}${UNQUOTED_REFERENCE_END}))`,
     "gu"
   );
   let match;
@@ -747,11 +748,13 @@ export function parseAtReferences(prompt: string): FileReference[] {
       filePath = filePath.replace(/[^\p{L}\p{N}/\\]+$/u, "");
     }
 
-    // Skip if path is empty or looks like a mention (@workspace, @user, etc.)
-    // We only want file paths (contain / or \ or .)
+    // Unquoted paths need a path marker so ordinary words (@workspace, @user,
+    // etc.) stay plain text. Quotes explicitly mark a file path, including a
+    // root-level extensionless filename such as @"Makefile".
     if (
       filePath &&
-      (filePath.includes("/") ||
+      (quotedPath !== undefined ||
+        filePath.includes("/") ||
         filePath.includes("\\") ||
         filePath.includes("."))
     ) {
