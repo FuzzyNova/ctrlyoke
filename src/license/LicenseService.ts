@@ -100,6 +100,13 @@ export interface LicenseMachineSummary {
   isThisMachine: boolean;
 }
 
+/** A license's activated machines against its machine cap. */
+export interface LicenseSeatUsage {
+  used: number;
+  /** null when the license has no machine cap. */
+  max: number | null;
+}
+
 export interface LicenseService {
   /** Verify the cached signed license file offline. Never throws; failures return free. */
   getEntitlement(): Promise<Entitlement>;
@@ -115,6 +122,8 @@ export interface LicenseService {
   getStoredLicenseKey(): Promise<string | undefined>;
 
   listMachines(key: string): Promise<LicenseMachineSummary[]>;
+  /** How many machines the license has activated, without listing them. */
+  getSeatUsage(key: string): Promise<LicenseSeatUsage>;
   deactivateMachine(key: string, machineId: string): Promise<void>;
 
   /** Activate this machine online and cache a signed license file. */
@@ -394,6 +403,20 @@ export class LicenseService implements LicenseService {
         },
       ];
     });
+  }
+
+  async getSeatUsage(key: string): Promise<LicenseSeatUsage> {
+    const { resource } = await this.validateKey(key.trim());
+    const maxMachines = asRecord(resource.attributes)?.maxMachines;
+    const machines = asRecord(asRecord(resource.relationships)?.machines);
+    const used = asRecord(machines?.meta)?.count;
+    if (typeof used !== "number") {
+      throw new Error("Keygen returned no machine count for the license");
+    }
+    return {
+      used,
+      max: typeof maxMachines === "number" ? maxMachines : null,
+    };
   }
 
   async deactivateMachine(key: string, machineId: string): Promise<void> {
@@ -735,6 +758,7 @@ export class LicenseService implements LicenseService {
   private async validateKey(key: string): Promise<{
     readonly id: string;
     readonly validationCode: string | undefined;
+    readonly resource: JsonRecord;
   }> {
     const body = await this.keygenJson("/licenses/actions/validate-key", {
       method: "POST",
@@ -761,7 +785,7 @@ export class LicenseService implements LicenseService {
     }
     assertExpectedRelationship(data, "product", [KEYGEN_PRODUCT_ID]);
     assertExpectedRelationship(data, "policy", KEYGEN_VALID_POLICY_IDS);
-    return { id, validationCode };
+    return { id, validationCode, resource: data };
   }
 
   private async activateMachine(

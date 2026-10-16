@@ -732,10 +732,12 @@ export const MESSAGE_TYPES = {
   IMPORT_LICENSE_FILE: "importLicenseFile",
   DEACTIVATE_LICENSE: "deactivateLicense",
   REQUEST_LICENSE_MACHINES: "requestLicenseMachines",
+  REQUEST_LICENSE_SEAT_USAGE: "requestLicenseSeatUsage",
   DEACTIVATE_LICENSE_MACHINE: "deactivateLicenseMachine",
 
   // Pro license management — Extension → Webview
   LICENSE_MACHINES_UPDATED: "licenseMachinesUpdated",
+  LICENSE_SEAT_USAGE_UPDATED: "licenseSeatUsageUpdated",
   LICENSE_ACTION_RESULT: "licenseActionResult",
 
   // VS Code-hosted server — Extension → Webview

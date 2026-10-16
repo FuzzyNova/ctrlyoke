@@ -13,6 +13,7 @@ import {
   type LicenseAccessState,
   type LicenseActionResultMessage,
   type LicenseMachineSummary,
+  type LicenseSeatUsage,
 } from "../types/messages";
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
@@ -233,6 +234,7 @@ interface SettingsState {
 
   // Client-scoped license-management replies consumed by the License tab.
   licenseMachines: LicenseMachineSummary[];
+  licenseSeatUsage: LicenseSeatUsage | null;
   licenseActionResult: Omit<LicenseActionResultMessage, "type"> | null;
 
   // Server URL (set when server starts, cleared when stopped)
@@ -339,6 +341,7 @@ interface SettingsActions {
   // Pro entitlement and remote-access trial state
   setLicenseAccess: (access: LicenseAccessState) => void;
   setLicenseMachines: (machines: LicenseMachineSummary[]) => void;
+  setLicenseSeatUsage: (usage: LicenseSeatUsage) => void;
   setLicenseActionResult: (
     result: Omit<LicenseActionResultMessage, "type">
   ) => void;
@@ -528,6 +531,7 @@ const initialState: SettingsState = {
   serverRunning: false,
   licenseAccess: { isPro: false, hasRemoteAccess: false, trialEndsAt: null },
   licenseMachines: [],
+  licenseSeatUsage: null,
   licenseActionResult: null,
   serverUrl: null,
   availableIps: [],
@@ -674,6 +678,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       })),
 
     setLicenseMachines: (machines) => set({ licenseMachines: machines }),
+    setLicenseSeatUsage: (usage) => set({ licenseSeatUsage: usage }),
     setLicenseActionResult: (result) => set({ licenseActionResult: result }),
     clearLicenseActionResult: () => set({ licenseActionResult: null }),
 

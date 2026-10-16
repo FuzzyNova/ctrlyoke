@@ -41,6 +41,7 @@ import {
   LicenseActivationLimitError,
   type Entitlement,
   type LicenseMachineSummary,
+  type LicenseSeatUsage,
 } from "../../license/LicenseService";
 import type { LicenseActionService } from "../../ui/LicenseSettingsHandlers";
 import { snapshotProperty } from "../helpers/propertySnapshot";
@@ -109,6 +110,11 @@ class FakeLicenseActionService implements LicenseActionService {
   listMachines(key: string): Promise<LicenseMachineSummary[]> {
     this.calls.push(`list:${key}`);
     return Promise.resolve(this.machines);
+  }
+
+  getSeatUsage(key: string): Promise<LicenseSeatUsage> {
+    this.calls.push(`seats:${key}`);
+    return Promise.resolve({ used: 42, max: 3000 });
   }
 
   deactivateMachine(key: string, machineId: string): Promise<void> {
@@ -1354,6 +1360,37 @@ suite("WebviewMessageRouter — license actions", () => {
         (message) => message.type === MESSAGE_TYPES.LICENSE_MACHINES_UPDATED
       ).length,
       2
+    );
+  });
+
+  test("replies with seat usage, never the machine list", async () => {
+    const messages: any[] = [];
+    const service = new FakeLicenseActionService();
+    const router = buildRouter(
+      undefined,
+      (message) => messages.push(message),
+      service
+    );
+
+    await router.route({ type: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE });
+
+    assert.deepStrictEqual(service.calls, ["seats:license-key"]);
+    assert.deepStrictEqual(
+      messages.find(
+        (message) => message.type === MESSAGE_TYPES.LICENSE_SEAT_USAGE_UPDATED
+      )?.usage,
+      { used: 42, max: 3000 }
+    );
+    assert.ok(
+      !messages.some(
+        (message) => message.type === MESSAGE_TYPES.LICENSE_MACHINES_UPDATED
+      )
+    );
+    assert.strictEqual(
+      messages.find(
+        (message) => message.type === MESSAGE_TYPES.LICENSE_ACTION_RESULT
+      )?.action,
+      MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE
     );
   });
 

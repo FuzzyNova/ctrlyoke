@@ -7,7 +7,10 @@ import {
   VSCODE_COMMANDS,
 } from "@root/types/DashboardConstants";
 import { LICENSE_SOURCES } from "../../../../license/LicenseService";
-import type { LicenseMachineSummary } from "@root/types/WebviewMessageTypes";
+import type {
+  LicenseMachineSummary,
+  LicenseSeatUsage,
+} from "@root/types/WebviewMessageTypes";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
 import { ActionButton, type ActionFeedback } from "../shared/ActionButton";
@@ -42,10 +45,38 @@ function machineLabel(machine: LicenseMachineSummary): string {
   );
 }
 
+function SeatUsageMeter({ usage }: { usage: LicenseSeatUsage }) {
+  const used = usage.used.toLocaleString();
+  if (usage.max === null) {
+    return <p className="text-xs text-foreground">{used} seats in use</p>;
+  }
+  const remaining = Math.max(0, usage.max - usage.used);
+  const percent = Math.min(100, (usage.used / Math.max(1, usage.max)) * 100);
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-foreground">
+        {used} of {usage.max.toLocaleString()} seats in use ·{" "}
+        {remaining.toLocaleString()} remaining
+      </p>
+      <div
+        role="meter"
+        aria-label="Seats in use"
+        aria-valuemin={0}
+        aria-valuemax={usage.max}
+        aria-valuenow={usage.used}
+        className="h-1.5 overflow-hidden rounded-sm bg-panel-border"
+      >
+        <div className="h-full bg-pro-brand" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function LicenseSection() {
   const vscode = useVsCodeApi();
   const licenseAccess = useSettingsStore((state) => state.licenseAccess);
   const machines = useSettingsStore((state) => state.licenseMachines);
+  const seatUsage = useSettingsStore((state) => state.licenseSeatUsage);
   const actionResult = useSettingsStore((state) => state.licenseActionResult);
   const clearActionResult = useSettingsStore(
     (state) => state.clearLicenseActionResult
@@ -58,6 +89,8 @@ export function LicenseSection() {
   const [feedback, setFeedback] = useState<Record<string, ActionFeedback>>({});
   const [machineError, setMachineError] = useState<string | undefined>();
   const [machineListPending, setMachineListPending] = useState(false);
+  const [seatUsagePending, setSeatUsagePending] = useState(false);
+  const [seatUsageError, setSeatUsageError] = useState<string | undefined>();
   const [activationLimit, setActivationLimit] = useState(false);
   const [confirmingDeactivation, setConfirmingDeactivation] = useState(false);
 
@@ -72,11 +105,13 @@ export function LicenseSection() {
     : licenseAccess.isPro
       ? "Pro"
       : "Free";
-  const showMachines =
-    !isEnterprise &&
-    (activationLimit ||
-      (licenseAccess.isPro &&
-        licenseAccess.source !== LICENSE_SOURCES.OFFLINE_FILE));
+  const isOnlineLicense =
+    licenseAccess.isPro &&
+    licenseAccess.source !== LICENSE_SOURCES.OFFLINE_FILE;
+  const showMachines = !isEnterprise && (activationLimit || isOnlineLicense);
+  // Enterprise keys are shared company-wide, so employees see the seat count
+  // but never the machine list (anyone could otherwise deactivate everyone).
+  const showSeatUsage = isEnterprise && isOnlineLicense;
 
   const requestMachines = useCallback(() => {
     setMachineListPending(true);
@@ -84,9 +119,19 @@ export function LicenseSection() {
     vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_LICENSE_MACHINES });
   }, [vscode]);
 
+  const requestSeatUsage = useCallback(() => {
+    setSeatUsagePending(true);
+    setSeatUsageError(undefined);
+    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE });
+  }, [vscode]);
+
   useEffect(() => {
     if (showMachines) requestMachines();
   }, [requestMachines, showMachines]);
+
+  useEffect(() => {
+    if (showSeatUsage) requestSeatUsage();
+  }, [requestSeatUsage, showSeatUsage]);
 
   useEffect(() => {
     if (!actionResult) return;
@@ -95,6 +140,14 @@ export function LicenseSection() {
       setMachineListPending(false);
       if (actionResult.status === USER_FEEDBACK_SEVERITY.ERROR)
         setMachineError(actionResult.message);
+      clearActionResult();
+      return;
+    }
+
+    if (actionResult.action === MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE) {
+      setSeatUsagePending(false);
+      if (actionResult.status === USER_FEEDBACK_SEVERITY.ERROR)
+        setSeatUsageError(actionResult.message);
       clearActionResult();
       return;
     }
@@ -461,17 +514,38 @@ export function LicenseSection() {
 
       {licenseAccess.isPro && isEnterprise && (
         <section
-          className="rounded-sm border border-panel-border bg-input-bg p-3"
-          aria-label="Enterprise machine management"
+          className="space-y-2 rounded-sm border border-panel-border bg-input-bg p-3"
+          aria-label="Enterprise seats"
         >
-          <h4 className="text-sm font-semibold text-foreground">
-            Activated machines
-          </h4>
-          <p className="mt-1 text-xs text-description-fg">
-            Enterprise licenses are shared across your company, so machine
-            activations aren't self-service here — any employee with the key
-            would otherwise be able to see and deactivate every other machine.
-            To free up a slot or increase your seat limit, email{" "}
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-foreground">Seats</h4>
+            {showSeatUsage && (
+              <button
+                type="button"
+                className="cy-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
+                onClick={requestSeatUsage}
+                disabled={seatUsagePending}
+              >
+                <Icon name="refresh" className="text-xxs" />
+                Refresh
+              </button>
+            )}
+          </div>
+          {seatUsageError && (
+            <p className="text-xs text-error-fg" role="alert">
+              {seatUsageError}
+            </p>
+          )}
+          {showSeatUsage &&
+            (seatUsagePending ? (
+              <p className="text-xs text-description-fg">Loading seats…</p>
+            ) : (
+              seatUsage && <SeatUsageMeter usage={seatUsage} />
+            ))}
+          <p className="text-xs text-description-fg">
+            Each machine that activates your company's key uses a seat until
+            it's deactivated. To free seats held by machines you no longer use,
+            or to raise your limit, email{" "}
             <a
               href={`mailto:${LICENSE_UI.SUPPORT_EMAIL}`}
               className="text-link-fg hover:underline"

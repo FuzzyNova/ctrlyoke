@@ -119,6 +119,12 @@ another machine. For an online license, the **Activated machines** list also
 lets you free a slot held by a different machine. The tier is also shown in the
 ctrlyoke item in the VS Code status bar.
 
+An Enterprise license is shared across your company, so the License tab shows
+how many of its seats are in use instead of the list of machines. Each machine
+that activates the key uses a seat until it's deactivated. To free seats held
+by machines you no longer use, or to raise your limit, email
+[support@ctrlyoke.dev](mailto:support@ctrlyoke.dev).
+
 ## Questions
 
 - **Lost your key?** Contact [support@ctrlyoke.dev](mailto:support@ctrlyoke.dev).

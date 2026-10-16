@@ -154,9 +154,13 @@ import type {
 } from "./CtrlYokeTypes";
 import type {
   LicenseMachineSummary,
+  LicenseSeatUsage,
   LicenseSource,
 } from "../license/LicenseService";
-export type { LicenseMachineSummary } from "../license/LicenseService";
+export type {
+  LicenseMachineSummary,
+  LicenseSeatUsage,
+} from "../license/LicenseService";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -503,6 +507,11 @@ export interface RequestLicenseMachinesMessage {
   type: typeof MESSAGE_TYPES.REQUEST_LICENSE_MACHINES;
 }
 
+/** Webview → Extension: request the stored license's machine count and cap. */
+export interface RequestLicenseSeatUsageMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE;
+}
+
 /** Webview → Extension: deactivate one machine attached to the stored license. */
 export interface DeactivateLicenseMachineMessage {
   type: typeof MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE;
@@ -513,6 +522,12 @@ export interface DeactivateLicenseMachineMessage {
 export interface LicenseMachinesUpdatedMessage {
   type: typeof MESSAGE_TYPES.LICENSE_MACHINES_UPDATED;
   machines: LicenseMachineSummary[];
+}
+
+/** Extension → Webview: the stored license's machine count and cap. */
+export interface LicenseSeatUsageUpdatedMessage {
+  type: typeof MESSAGE_TYPES.LICENSE_SEAT_USAGE_UPDATED;
+  usage: LicenseSeatUsage;
 }
 
 /** Extension → Webview: result of a license-management action. */
@@ -3312,6 +3327,7 @@ export type IncomingMessage =
   | WorkspaceWorktreeOwnershipMessage
   | GlobalSettingUpdatedMessage
   | LicenseMachinesUpdatedMessage
+  | LicenseSeatUsageUpdatedMessage
   | LicenseActionResultMessage
   | NotificationEventMessage
   | UserFeedbackMessage

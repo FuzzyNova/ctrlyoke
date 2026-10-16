@@ -27,6 +27,7 @@ describe("LicenseSection", () => {
         trialEndsAt: null,
       },
       licenseMachines: [],
+      licenseSeatUsage: null,
       licenseActionResult: null,
     });
     window.vscodeApi = {
@@ -210,7 +211,7 @@ describe("LicenseSection", () => {
 
     expect(
       screen.queryByRole("heading", { name: "Activated machines" })
-    ).not.toBeNull();
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -220,5 +221,69 @@ describe("LicenseSection", () => {
     expect(
       screen.getByRole("link", { name: LICENSE_UI.SUPPORT_EMAIL })
     ).toHaveAttribute("href", `mailto:${LICENSE_UI.SUPPORT_EMAIL}`);
+  });
+
+  it("shows Enterprise seat usage once the extension replies", async () => {
+    useSettingsStore.setState({
+      licenseAccess: {
+        isPro: true,
+        hasRemoteAccess: true,
+        trialEndsAt: null,
+        source: LICENSE_SOURCES.ONLINE,
+        expiresAt: null,
+        isEnterprise: true,
+      },
+    });
+    render(<LicenseSection />);
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE,
+    });
+    expect(screen.getByText("Loading seats…")).toBeInTheDocument();
+
+    useSettingsStore.setState({
+      licenseSeatUsage: { used: 1234, max: 3000 },
+      licenseActionResult: {
+        action: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE,
+        status: "success",
+        message: "License seat usage loaded.",
+      },
+    });
+
+    const seats = screen.getByRole("region", { name: "Enterprise seats" });
+    await waitFor(() =>
+      expect(
+        within(seats).getByText(/1,234 of 3,000 seats in use/)
+      ).toBeInTheDocument()
+    );
+    expect(within(seats).getByText(/1,766 remaining/)).toBeInTheDocument();
+    expect(within(seats).getByRole("meter")).toHaveAttribute(
+      "aria-valuenow",
+      "1234"
+    );
+  });
+
+  it("skips the seat lookup for an offline Enterprise license file", () => {
+    useSettingsStore.setState({
+      licenseAccess: {
+        isPro: true,
+        hasRemoteAccess: true,
+        trialEndsAt: null,
+        source: LICENSE_SOURCES.OFFLINE_FILE,
+        expiresAt: null,
+        isEnterprise: true,
+      },
+    });
+    render(<LicenseSection />);
+
+    expect(postMessage).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_LICENSE_SEAT_USAGE,
+    });
+    expect(
+      screen.queryByRole("button", { name: "Refresh" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: LICENSE_UI.SUPPORT_EMAIL })
+    ).toBeInTheDocument();
   });
 });
