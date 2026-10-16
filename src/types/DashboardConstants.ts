@@ -5181,4 +5181,7 @@ export const VSCODE_GIT_COMMANDS = {
 export const VSCODE_CONTEXT_KEYS = {
   GENERATING_COMMIT_MESSAGE: "ctrlyoke.generatingCommitMessage",
   HAS_QUEUED_STEPS: "ctrlyoke.hasQueuedSteps",
+  // True once at least one harness CLI has been detected; completes the
+  // Getting Started walkthrough's "verify a harness" step.
+  HARNESS_DETECTED: "ctrlyoke.harnessDetected",
 } as const;

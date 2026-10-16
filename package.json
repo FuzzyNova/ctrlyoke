@@ -569,9 +569,15 @@
           {
             "id": "openPanel",
             "title": "Open the ctrlyoke panel",
-            "description": "Everything happens in one panel: steps, live output, and settings.",
+            "description": "ctrlyoke runs AI coding CLIs through multi-step workflows. Everything happens in one dashboard: your steps, live output, the prompt editor and workflow settings.\n[Open ctrlyoke Panel](command:ctrlyoke.openPanel)",
             "media": {
-              "markdown": "walkthroughs/getting-started/open-panel.md"
+              "image": {
+                "dark": "images/screenshots/walkthrough-open-panel-dark-2400x1500.png",
+                "light": "images/screenshots/walkthrough-open-panel-light-2400x1500.png",
+                "hc": "images/screenshots/walkthrough-open-panel-hc-2400x1500.png",
+                "hcLight": "images/screenshots/walkthrough-open-panel-hclight-2400x1500.png"
+              },
+              "altText": "The ctrlyoke dashboard in VS Code's bottom panel after a finished run: the step list, streamed output, the prompt editor and the workflow properties."
             },
             "completionEvents": [
               "onView:ctrlyoke.dashboard"
@@ -580,17 +586,32 @@
           {
             "id": "verifyHarness",
             "title": "Install and verify a harness CLI",
-            "description": "ctrlyoke drives a CLI you install yourself — no CLI is bundled.",
+            "description": "ctrlyoke doesn't bundle an AI CLI. It drives one you install and sign in to: Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code or Antigravity. If none is found, the dashboard lists the install command for each, with a copy button.\n[Installation guide](https://ctrlyoke.dev/docs/guide/installation#install-a-harness)",
             "media": {
-              "markdown": "walkthroughs/getting-started/verify-harness.md"
-            }
+              "image": {
+                "dark": "images/screenshots/walkthrough-verify-harness-dark-2400x1380.png",
+                "light": "images/screenshots/walkthrough-verify-harness-light-2400x1380.png",
+                "hc": "images/screenshots/walkthrough-verify-harness-hc-2400x1380.png",
+                "hcLight": "images/screenshots/walkthrough-verify-harness-hclight-2400x1380.png"
+              },
+              "altText": "Two panels side by side. Left: a warning that no CLI coding agent is available, listing an install command for each of the six harnesses. Right: the harness picker open, with the detected harnesses marked available."
+            },
+            "completionEvents": [
+              "onContext:ctrlyoke.harnessDetected"
+            ]
           },
           {
             "id": "createWorkflow",
             "title": "Create a workflow from a template",
-            "description": "Templates build a multi-step workflow for you.",
+            "description": "A template builds a multi-step workflow from a few variables you fill in.\n[New Workflow from Template](command:ctrlyoke.newWorkflow)",
             "media": {
-              "markdown": "walkthroughs/getting-started/create-workflow.md"
+              "image": {
+                "dark": "images/screenshots/walkthrough-create-workflow-dark-2400x1500.png",
+                "light": "images/screenshots/walkthrough-create-workflow-light-2400x1500.png",
+                "hc": "images/screenshots/walkthrough-create-workflow-hc-2400x1500.png",
+                "hcLight": "images/screenshots/walkthrough-create-workflow-hclight-2400x1500.png"
+              },
+              "altText": "The Create Workflow from Template dialog with the Simple Feature template selected, a feature description filled in, and the workflow named Notes API."
             },
             "completionEvents": [
               "onCommand:ctrlyoke.newWorkflow"
@@ -599,9 +620,15 @@
           {
             "id": "runWorkflow",
             "title": "Run it and read the output",
-            "description": "Watch the harness work and step through the queue.",
+            "description": "**Run** sends each step to your harness, checks its end condition, then moves on to the next step. Output, tool calls and diffs stream in live.\n[Run](command:ctrlyoke.run)",
             "media": {
-              "markdown": "walkthroughs/getting-started/run-workflow.md"
+              "image": {
+                "dark": "images/screenshots/walkthrough-run-workflow-dark-1200x750.gif",
+                "light": "images/screenshots/walkthrough-run-workflow-dark-1200x750.gif",
+                "hc": "images/screenshots/walkthrough-run-workflow-dark-1200x750.gif",
+                "hcLight": "images/screenshots/walkthrough-run-workflow-dark-1200x750.gif"
+              },
+              "altText": "A short recording: Run is clicked on the Notes API workflow, the plan step streams its output, then the implement step starts and writes package.json, server.js and .gitignore."
             },
             "completionEvents": [
               "onCommand:ctrlyoke.run"
@@ -610,9 +637,15 @@
           {
             "id": "installCli",
             "title": "Optional: use the CLI outside VS Code",
-            "description": "The ctrlyoke CLI already works in VS Code terminals; install it from npm for other shells and CI.\n[Install CLI](command:ctrlyoke.installCli)",
+            "description": "The `ctrlyoke` command already works in VS Code's terminals. For other shells and CI, install the matching version from npm (needs Node.js 22.12 or later).\n[Install CLI](command:ctrlyoke.installCli)",
             "media": {
-              "markdown": "walkthroughs/getting-started/install-cli.md"
+              "image": {
+                "dark": "images/screenshots/walkthrough-install-cli-dark-2400x1500.png",
+                "light": "images/screenshots/walkthrough-install-cli-light-2400x1500.png",
+                "hc": "images/screenshots/walkthrough-install-cli-hc-2400x1500.png",
+                "hcLight": "images/screenshots/walkthrough-install-cli-hclight-2400x1500.png"
+              },
+              "altText": "VS Code's integrated terminal running ctrlyoke --version, then ctrlyoke --help, which lists the available commands."
             },
             "completionEvents": [
               "onCommand:ctrlyoke.installCli"
@@ -621,11 +654,26 @@
           {
             "id": "getHelp",
             "title": "Get help when you're stuck",
-            "description": "A built-in support agent and the docs are always available.",
+            "description": "Pick the **ctrlyoke-tech-support** agent in the Agent picker and ask it anything about the dashboard, workflow files or harnesses.\n[Open the docs](https://ctrlyoke.dev/docs)",
             "media": {
-              "markdown": "walkthroughs/getting-started/get-help.md"
-            }
+              "image": {
+                "dark": "images/screenshots/walkthrough-get-help-dark-2400x1500.png",
+                "light": "images/screenshots/walkthrough-get-help-light-2400x1500.png",
+                "hc": "images/screenshots/walkthrough-get-help-hc-2400x1500.png",
+                "hcLight": "images/screenshots/walkthrough-get-help-hclight-2400x1500.png"
+              },
+              "altText": "The Agent picker open with Ctrlyoke Tech Support highlighted, beside its answer to a question about attaching files in the prompt editor."
+            },
+            "completionEvents": [
+              "onLink:https://ctrlyoke.dev/docs"
+            ]
           }
+        ],
+        "featuredFor": [
+          "**/*.ctrlyoke.yaml",
+          "**/*.ctrlyoke.yml",
+          "**/*.ctrlyoke.json",
+          "**/*.prompt.md"
         ]
       }
     ],

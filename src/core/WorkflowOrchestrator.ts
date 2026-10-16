@@ -786,6 +786,9 @@ export class WorkflowOrchestrator {
               harnessId,
               status === HarnessStatus.Ready
             );
+            this.statusBarSink?.setHarnessDetectedContext(
+              harnessAvailability.getFirstAvailable() !== undefined
+            );
           }
           // Resolved per event: the default harness is a setting that can
           // change after construction.

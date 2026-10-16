@@ -22,8 +22,9 @@
 !images/ctrlyoke-icon-dark.svg
 !images/ctrlyoke-icon-color.png
 
-# Getting Started walkthrough step content.
-!walkthroughs/**
+# Getting Started walkthrough step media (package.json contributes.walkthroughs).
+# Allowlist, so every walkthrough image/GIF must keep the walkthrough- prefix.
+!images/screenshots/walkthrough-*
 
 # Prompt markdown injection grammar (contributes.grammars).
 !syntaxes/**

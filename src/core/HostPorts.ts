@@ -162,6 +162,7 @@ export interface StatusBarSink {
     harnessStatus?: DefaultHarnessStatus
   ): void;
   setHasQueuedStepsContext(hasQueuedSteps: boolean): void;
+  setHarnessDetectedContext(detected: boolean): void;
 }
 
 /** Host-neutral file watcher events, normalized to absolute string paths. */

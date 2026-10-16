@@ -620,6 +620,7 @@ suite("WorkflowOrchestrator active queue context key", () => {
           value: hasQueuedSteps,
         });
       },
+      setHarnessDetectedContext: () => undefined,
     };
     vscode.commands.executeCommand = (async (
       command: string,

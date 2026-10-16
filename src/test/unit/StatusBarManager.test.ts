@@ -1,7 +1,9 @@
 import { suite, test } from "mocha";
 import * as assert from "assert";
+import * as vscode from "vscode";
 import {
   STATUS_BAR_BACKGROUNDS,
+  StatusBarManager,
   buildStatusBarView,
 } from "../../ui/StatusBarManager";
 import {
@@ -10,7 +12,11 @@ import {
   type WorkflowActivitySummary,
 } from "../../core/HostPorts";
 import { HarnessStatus } from "../../core/HarnessIntegration";
-import { HARNESS_IDS, VSCODE_COMMANDS } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  VSCODE_COMMANDS,
+  VSCODE_CONTEXT_KEYS,
+} from "../../types/DashboardConstants";
 
 function live(workflowId: string, progressLabel = "3/7"): LiveWorkflowActivity {
   return { workflowId, workflowName: `Workflow ${workflowId}`, progressLabel };
@@ -99,5 +105,29 @@ suite("StatusBarManager view", () => {
         .text,
       "$(compass-dot) ctrlyoke 3/7"
     );
+  });
+});
+
+suite("StatusBarManager harness-detected context", () => {
+  test("publishes whether any harness was detected under the walkthrough's context key", () => {
+    const calls: unknown[][] = [];
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    vscode.commands.executeCommand = (async (...args: unknown[]) => {
+      calls.push(args);
+      return undefined;
+    }) as typeof vscode.commands.executeCommand;
+    const manager = new StatusBarManager({ subscriptions: [] });
+    try {
+      manager.setHarnessDetectedContext(true);
+      manager.setHarnessDetectedContext(false);
+    } finally {
+      vscode.commands.executeCommand = originalExecuteCommand;
+      manager.dispose();
+    }
+
+    assert.deepStrictEqual(calls, [
+      ["setContext", VSCODE_CONTEXT_KEYS.HARNESS_DETECTED, true],
+      ["setContext", VSCODE_CONTEXT_KEYS.HARNESS_DETECTED, false],
+    ]);
   });
 });

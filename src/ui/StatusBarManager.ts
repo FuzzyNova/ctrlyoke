@@ -167,7 +167,7 @@ export class StatusBarManager implements vscode.Disposable, StatusBarSink {
   private baseView: StatusBarView = buildStatusBarView(EMPTY_WORKFLOW_ACTIVITY);
 
   constructor(
-    context: vscode.ExtensionContext,
+    context: Pick<vscode.ExtensionContext, "subscriptions">,
     licenseService?: LicenseService
   ) {
     this.showLicense = licenseService !== undefined;
@@ -214,6 +214,14 @@ export class StatusBarManager implements vscode.Disposable, StatusBarSink {
       "setContext",
       VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS,
       hasQueuedSteps
+    );
+  }
+
+  setHarnessDetectedContext(detected: boolean): void {
+    void vscode.commands.executeCommand(
+      "setContext",
+      VSCODE_CONTEXT_KEYS.HARNESS_DETECTED,
+      detected
     );
   }
 

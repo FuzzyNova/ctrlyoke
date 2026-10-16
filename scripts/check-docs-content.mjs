@@ -9,8 +9,8 @@
 //    fragment or counter-example out.
 // 2. Internal leakage: hand-written pages must not link internal `dev/` plans,
 //    cite `ClassName.method()` internals, or mention the removed copilot-chat
-//    harness. The README, QUICK_START, CHANGELOG and walkthroughs get the same
-//    check, and the landing site's source is checked for `dev/` links.
+//    harness. The README, QUICK_START and CHANGELOG get the same check, and
+//    the landing site's source is checked for `dev/` links.
 // 3. Commands: `reference/commands.md` has a row for every contributed command
 //    (palette commands as `ctrlyoke: Title` in backticks, menu-only ones by
 //    plain title), every keybinding on its command's row, and no palette
@@ -58,12 +58,11 @@ const DEV_DOC_LEAK = {
   reason: "links an internal dev/ document",
 };
 
-/** Markdown outside docs/ that users read: the Marketplace page and walkthroughs. */
+/** Markdown outside docs/ that users read: the Marketplace page and the quick start. */
 const PUBLIC_MARKDOWN_OUTSIDE_DOCS = [
   "README.md",
   "QUICK_START.md",
   "CHANGELOG.md",
-  "walkthroughs",
 ];
 
 /** Landing-site source. Only checked for dev/ links: its code would trip the prose rules. */
