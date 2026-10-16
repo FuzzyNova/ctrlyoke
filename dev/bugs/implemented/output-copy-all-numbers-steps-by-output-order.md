@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; code reading)
 - **Area:** `src/ui/webview-react/hooks/useOutputContextMenu.tsx` (`buildCopyAllText`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

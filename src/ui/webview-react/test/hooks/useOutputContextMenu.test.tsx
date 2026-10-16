@@ -32,21 +32,30 @@ const messages = [
   makeCliMessage(2, "visible output three", 3),
 ];
 
-function TestHarness() {
+function TestHarness({
+  allMessages = messages,
+  hiddenTargetKeys = ["queue:1"],
+}: {
+  allMessages?: OutputMessage[];
+  hiddenTargetKeys?: string[];
+}) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastCliIndexPerStep = new Map(
+    allMessages.map((message, index) => [
+      `${message.target.kind}:${message.target.index}`,
+      index,
+    ])
+  );
   const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
-    allMessages: messages,
-    hiddenTargetKeys: ["queue:1"],
-    stepScrollFractions: new Map([
-      ["queue:0", 0],
-      ["queue:1", 0.5],
-      ["queue:2", 0.75],
-    ]),
-    lastCliIndexPerStep: new Map([
-      ["queue:0", 0],
-      ["queue:1", 1],
-      ["queue:2", 2],
-    ]),
+    allMessages,
+    hiddenTargetKeys,
+    stepScrollFractions: new Map(
+      allMessages.map((message, index) => [
+        `${message.target.kind}:${message.target.index}`,
+        index / Math.max(1, allMessages.length),
+      ])
+    ),
+    lastCliIndexPerStep,
     onOpenFind: vi.fn(),
   });
 
@@ -110,6 +119,44 @@ describe("useOutputContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy Full Output" }));
     expect(writeText).toHaveBeenLastCalledWith(
       expect.stringContaining("visible output one")
+    );
+  });
+
+  it("keeps the original step number when a middle step has no CLI output", () => {
+    render(
+      <TestHarness
+        allMessages={[
+          makeCliMessage(0, "output one", 1),
+          makeCliMessage(2, "output three", 2),
+        ]}
+        hiddenTargetKeys={[]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy All" }));
+
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain("=== Step 1 ===");
+    expect(copiedText).toContain("=== Step 3 ===");
+    expect(copiedText).not.toContain("=== Step 2 ===");
+  });
+
+  it("keeps real step numbers when output arrives out of order", () => {
+    render(
+      <TestHarness
+        allMessages={[
+          makeCliMessage(2, "output three", 1),
+          makeCliMessage(1, "output two", 2),
+        ]}
+        hiddenTargetKeys={[]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy All" }));
+
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toMatch(
+      /=== Step 3 ===[\s\S]*output three[\s\S]*=== Step 2 ===[\s\S]*output two/
     );
   });
 });

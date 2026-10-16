@@ -27,7 +27,6 @@ function buildCopyAllText(
   }
 
   const parts: string[] = [];
-  let queueStepNum = 1;
 
   for (const [key, target] of seen) {
     const lastCliIdx = lastCliIndexPerStep.get(key);
@@ -39,16 +38,11 @@ function buildCopyAllText(
     const output = msg.data as CliOutputType;
     const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
 
-    // Keep the original step numbering in copied headers even when an earlier
-    // step is hidden. This matches the numbering used by markdown export.
-    if (hiddenKeys.has(key)) {
-      if (!isFinalStep) queueStepNum++;
-      continue;
-    }
+    if (hiddenKeys.has(key)) continue;
 
     const header = isFinalStep
       ? formatFinalPassLabel(target.index + 1)
-      : `Step ${queueStepNum}`;
+      : `Step ${target.index + 1}`;
 
     const promptText = output.cliCommand?.trim();
     const outputText = getStepAssistantTextForCopy(output);
@@ -59,8 +53,6 @@ function buildCopyAllText(
       if (outputText) section.push(`\nOutput:\n${outputText}`);
       parts.push(section.join("\n"));
     }
-
-    if (!isFinalStep) queueStepNum++;
   }
 
   return parts.join("\n\n---\n\n");

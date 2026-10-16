@@ -62,26 +62,30 @@ function renderExportHook({
   historyOrderedEntries,
   liveEntries = liveOrderedEntries,
   steps = [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
+  initialHiddenTargetKeys = ["queue:1"],
 }: {
   isViewingHistory?: boolean;
   historyOrderedEntries?: OrderedHistoryEntry[];
   liveEntries?: OrderedHistoryEntry[];
   steps?: Array<{ prompt: string; name?: string }>;
+  initialHiddenTargetKeys?: string[];
 } = {}) {
-  return renderHook(() =>
-    useOutputExport({
-      allMessages,
-      currentStep: 3,
-      executionState: "completed",
-      fileName: "workflow",
-      finalStep: null,
-      historyOrderedEntries,
-      liveOrderedEntries: isViewingHistory ? undefined : liveEntries,
-      hiddenTargetKeys: ["queue:1"],
-      isViewingHistory,
-      steps,
-      totalSteps: 3,
-    })
+  return renderHook(
+    ({ hiddenTargetKeys }: { hiddenTargetKeys: string[] }) =>
+      useOutputExport({
+        allMessages,
+        currentStep: 3,
+        executionState: "completed",
+        fileName: "workflow",
+        finalStep: null,
+        historyOrderedEntries,
+        liveOrderedEntries: isViewingHistory ? undefined : liveEntries,
+        hiddenTargetKeys,
+        isViewingHistory,
+        steps,
+        totalSteps: 3,
+      }),
+    { initialProps: { hiddenTargetKeys: initialHiddenTargetKeys } }
   );
 }
 
@@ -99,6 +103,36 @@ describe("useOutputExport", () => {
     act(() => result.current.openModal());
 
     expect(result.current.stepRange).toBe("1,3");
+  });
+
+  it("clears the previous range after all steps are unhidden and exports every step", () => {
+    const { result, rerender } = renderExportHook();
+
+    act(() => result.current.openModal());
+    expect(result.current.stepRange).toBe("1,3");
+    act(() => result.current.closeModal());
+    rerender({ hiddenTargetKeys: [] });
+    act(() => result.current.openModal());
+
+    expect(result.current.stepRange).toBe("");
+    act(() => result.current.confirmExport());
+
+    const message = postMessage.mock.calls[0][0] as { content: string };
+    expect(message.content).toContain("output one");
+    expect(message.content).toContain("output two");
+    expect(message.content).toContain("output three");
+  });
+
+  it("refreshes the range when the hidden steps change between opens", () => {
+    const { result, rerender } = renderExportHook();
+
+    act(() => result.current.openModal());
+    expect(result.current.stepRange).toBe("1,3");
+    act(() => result.current.closeModal());
+    rerender({ hiddenTargetKeys: ["queue:0"] });
+    act(() => result.current.openModal());
+
+    expect(result.current.stepRange).toBe("2,3");
   });
 
   it("lets a widened range override the active filter", () => {

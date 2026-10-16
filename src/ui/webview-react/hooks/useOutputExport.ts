@@ -94,12 +94,10 @@ export function useOutputExport({
   );
 
   const openModal = useCallback(() => {
-    if (hiddenTargetKeys.length > 0) {
-      setStepRange(visibleStepRange);
-      setStepRangeError(false);
-    }
+    setStepRange(visibleStepRange);
+    setStepRangeError(false);
     setModalOpen(true);
-  }, [hiddenTargetKeys, visibleStepRange]);
+  }, [visibleStepRange]);
 
   const closeModal = useCallback(() => {
     setModalOpen(false);

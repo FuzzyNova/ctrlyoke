@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; reproduced with a throwaway Vitest render of the hook)
 - **Area:** `src/ui/webview-react/hooks/useOutputExport.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
