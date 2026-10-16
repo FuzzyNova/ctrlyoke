@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LICENSE_ACTIONS,
   LICENSE_UI,
@@ -13,7 +13,11 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
-import { ActionButton, type ActionFeedback } from "../shared/ActionButton";
+import {
+  ActionButton,
+  actionFeedbackDurationMs,
+  type ActionFeedback,
+} from "../shared/ActionButton";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { Button } from "../shared/Button";
 import { Modal } from "../shared/Modal";
@@ -43,6 +47,11 @@ function machineLabel(machine: LicenseMachineSummary): string {
     [machine.name, machine.platform].filter(Boolean).join(" · ") ||
     "Unknown machine"
   );
+}
+
+/** Feedback key for an error on one machine row. */
+function machineFeedbackKey(machineId: string): string {
+  return `${MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE}:${machineId}`;
 }
 
 function SeatUsageMeter({ usage }: { usage: LicenseSeatUsage }) {
@@ -85,8 +94,12 @@ export function LicenseSection() {
   const [licenseBlob, setLicenseBlob] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [pendingMachineId, setPendingMachineId] = useState<string | null>(null);
+  const [pendingMachine, setPendingMachine] =
+    useState<LicenseMachineSummary | null>(null);
   const [feedback, setFeedback] = useState<Record<string, ActionFeedback>>({});
+  const feedbackTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
   const [machineError, setMachineError] = useState<string | undefined>();
   const [machineListPending, setMachineListPending] = useState(false);
   const [seatUsagePending, setSeatUsagePending] = useState(false);
@@ -98,6 +111,37 @@ export function LicenseSection() {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(
+    () => () => {
+      for (const timer of Object.values(feedbackTimersRef.current))
+        clearTimeout(timer);
+    },
+    []
+  );
+
+  const clearFeedback = useCallback((key: string) => {
+    clearTimeout(feedbackTimersRef.current[key]);
+    delete feedbackTimersRef.current[key];
+    setFeedback((current) => {
+      if (!(key in current)) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const showFeedback = useCallback(
+    (key: string, result: ActionFeedback) => {
+      clearTimeout(feedbackTimersRef.current[key]);
+      setFeedback((current) => ({ ...current, [key]: result }));
+      feedbackTimersRef.current[key] = setTimeout(
+        () => clearFeedback(key),
+        actionFeedbackDurationMs(result)
+      );
+    },
+    [clearFeedback]
+  );
 
   const isEnterprise = licenseAccess.isEnterprise === true;
   const tierLabel = isEnterprise
@@ -161,27 +205,32 @@ export function LicenseSection() {
 
     if (actionResult.action === MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE) {
       setPendingAction(null);
-      setPendingMachineId(null);
-      setFeedback((current) => ({
-        ...current,
-        [MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE]: {
+      setPendingMachine(null);
+      // A deactivated machine drops out of the refreshed list, so success is
+      // reported once for the section; an error stays on the row it concerns.
+      if (actionResult.status === USER_FEEDBACK_SEVERITY.SUCCESS) {
+        showFeedback(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, {
+          status: actionResult.status,
+          message: pendingMachine
+            ? `Deactivated ${machineLabel(pendingMachine)}.`
+            : actionResult.message,
+        });
+      } else if (pendingMachine) {
+        showFeedback(machineFeedbackKey(pendingMachine.id), {
           status: actionResult.status,
           message: actionResult.message,
-        },
-      }));
+        });
+      }
       clearActionResult();
       return;
     }
 
     if (pendingAction !== actionResult.action) return;
     setPendingAction(null);
-    setFeedback((current) => ({
-      ...current,
-      [actionResult.action]: {
-        status: actionResult.status,
-        message: actionResult.message,
-      },
-    }));
+    showFeedback(actionResult.action, {
+      status: actionResult.status,
+      message: actionResult.message,
+    });
     if (
       actionResult.action === MESSAGE_TYPES.ACTIVATE_LICENSE_KEY &&
       actionResult.status === USER_FEEDBACK_SEVERITY.SUCCESS
@@ -196,20 +245,32 @@ export function LicenseSection() {
       setLicenseBlob("");
     }
     clearActionResult();
-  }, [actionResult, clearActionResult, pendingAction]);
+  }, [
+    actionResult,
+    clearActionResult,
+    pendingAction,
+    pendingMachine,
+    showFeedback,
+  ]);
 
   const postAction = useCallback(
     (action: string, payload: Record<string, unknown> = {}) => {
-      setFeedback((current) => {
-        if (!(action in current)) return current;
-        const next = { ...current };
-        delete next[action];
-        return next;
-      });
+      clearFeedback(action);
       setPendingAction(action);
       vscode.postMessage({ type: action, ...payload });
     },
-    [vscode]
+    [clearFeedback, vscode]
+  );
+
+  const deactivateMachine = useCallback(
+    (machine: LicenseMachineSummary) => {
+      clearFeedback(machineFeedbackKey(machine.id));
+      setPendingMachine(machine);
+      postAction(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, {
+        machineId: machine.id,
+      });
+    },
+    [clearFeedback, postAction]
   );
 
   const trialLeft = trialDaysLeft(licenseAccess.trialEndsAt, now);
@@ -451,6 +512,11 @@ export function LicenseSection() {
               {machineError}
             </p>
           )}
+          {machineFeedback && (
+            <p className="text-xs text-indicator-success" role="status">
+              {machineFeedback.message}
+            </p>
+          )}
           {machineListPending ? (
             <p className="text-xs text-description-fg">Loading machines…</p>
           ) : machines.length === 0 ? (
@@ -489,18 +555,12 @@ export function LicenseSection() {
                           label="Deactivate"
                           pendingLabel="Deactivating…"
                           icon="close"
-                          disabled={machine.isThisMachine}
-                          pending={pendingMachineId === machine.id}
-                          feedback={machineFeedback}
-                          onClick={() => {
-                            setPendingMachineId(machine.id);
-                            postAction(
-                              MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
-                              {
-                                machineId: machine.id,
-                              }
-                            );
-                          }}
+                          disabled={
+                            machine.isThisMachine || pendingMachine !== null
+                          }
+                          pending={pendingMachine?.id === machine.id}
+                          feedback={feedback[machineFeedbackKey(machine.id)]}
+                          onClick={() => deactivateMachine(machine)}
                         />
                       </td>
                     </tr>

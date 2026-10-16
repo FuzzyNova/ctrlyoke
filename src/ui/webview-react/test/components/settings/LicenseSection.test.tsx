@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -7,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LicenseSection } from "@components/settings/LicenseSection";
+import { actionFeedbackDurationMs } from "@components/shared/ActionButton";
 import {
   LICENSE_ACTIONS,
   LICENSE_UI,
@@ -143,6 +145,98 @@ describe("LicenseSection", () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
       machineId: "other",
+    });
+  });
+
+  describe("machine deactivation feedback", () => {
+    const machines = ["one", "two", "three"].map((id) => ({
+      id,
+      name: `Box ${id}`,
+      platform: "linux",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      isThisMachine: false,
+    }));
+
+    function renderMachineList() {
+      useSettingsStore.setState({
+        licenseAccess: {
+          isPro: true,
+          hasRemoteAccess: true,
+          trialEndsAt: null,
+          source: LICENSE_SOURCES.ONLINE,
+          expiresAt: null,
+        },
+        licenseMachines: machines,
+      });
+      render(<LicenseSection />);
+      act(() =>
+        useSettingsStore.getState().setLicenseActionResult({
+          action: MESSAGE_TYPES.REQUEST_LICENSE_MACHINES,
+          status: "success",
+          message: "License machines loaded.",
+        })
+      );
+      return screen.getAllByRole("row").slice(1);
+    }
+
+    afterEach(() => vi.useRealTimers());
+
+    it("reports success once for the section, not on every row, then fades", () => {
+      vi.useFakeTimers();
+      const rows = renderMachineList();
+      fireEvent.click(
+        within(rows[1]).getByRole("button", { name: "Deactivate" })
+      );
+      for (const row of screen.getAllByRole("row").slice(1)) {
+        expect(within(row).getByRole("button")).toBeDisabled();
+      }
+
+      act(() => {
+        useSettingsStore
+          .getState()
+          .setLicenseMachines(machines.filter(({ id }) => id !== "two"));
+        useSettingsStore.getState().setLicenseActionResult({
+          action: MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
+          status: "success",
+          message: "License machine deactivated successfully.",
+        });
+      });
+
+      const status = screen.getAllByRole("status");
+      expect(status).toHaveLength(1);
+      expect(status[0]).toHaveTextContent("Deactivated Box two · linux.");
+      for (const row of screen.getAllByRole("row").slice(1)) {
+        expect(within(row).queryByRole("status")).toBeNull();
+        expect(within(row).getByRole("button")).toBeEnabled();
+      }
+
+      act(() =>
+        vi.advanceTimersByTime(
+          actionFeedbackDurationMs({ status: "success", message: "" })
+        )
+      );
+      expect(screen.queryByRole("status")).toBeNull();
+    });
+
+    it("shows an error only on the row that failed", () => {
+      const rows = renderMachineList();
+      fireEvent.click(
+        within(rows[2]).getByRole("button", { name: "Deactivate" })
+      );
+      act(() =>
+        useSettingsStore.getState().setLicenseActionResult({
+          action: MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
+          status: "error",
+          message: "Machine not found.",
+        })
+      );
+
+      const [first, second, third] = screen.getAllByRole("row").slice(1);
+      expect(within(third).getByRole("status")).toHaveTextContent(
+        "Machine not found."
+      );
+      expect(within(first).queryByRole("status")).toBeNull();
+      expect(within(second).queryByRole("status")).toBeNull();
     });
   });
 
