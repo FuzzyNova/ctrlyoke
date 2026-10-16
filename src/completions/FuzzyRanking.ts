@@ -78,15 +78,31 @@ export function fuzzyMatchRanges(text: string, query: string): number[] {
  */
 const ORDER_TIEBREAK_SPAN = 1e-6;
 
-function weightedScore(scores: readonly { score: number }[]): number {
+/** Score one fuzzysort multi-key result using the shared secondary-key weight. */
+export function scoreFuzzyMatch(result: KeysResult<unknown>): number {
   let best = 0;
-  scores.forEach(({ score }, index) => {
+  result.forEach(({ score }, index) => {
     const weighted = index === 0 ? score : score * SECONDARY_KEY_WEIGHT;
     if (weighted > best) {
       best = weighted;
     }
   });
   return best;
+}
+
+/** Score one item against a query across ordered keys; the first key is primary. */
+export function scoreFuzzyQuery<T>(
+  query: string,
+  item: T,
+  keys: readonly FuzzyKey<T>[]
+): number | undefined {
+  if (!query) return undefined;
+  const result = fuzzysort.go(query, [item], {
+    keys,
+    threshold: ANY_MATCH_THRESHOLD,
+    scoreFn: scoreFuzzyMatch,
+  })[0];
+  return result ? fuzzysort.score(result) : undefined;
 }
 
 /** {@link weightedScore}, with equal scores ranked in the order of `items`. */
@@ -97,7 +113,7 @@ function orderedScoreFn<T>(
   items.forEach((item, position) => order.set(item, position));
   const step = ORDER_TIEBREAK_SPAN / Math.max(1, items.length);
   return (result) =>
-    weightedScore(result) * (1 - (order.get(result.obj) ?? 0) * step);
+    scoreFuzzyMatch(result) * (1 - (order.get(result.obj) ?? 0) * step);
 }
 
 /**

@@ -114,7 +114,9 @@ the same pipeline object directly.
 
 ## Phases
 
-### Phase 1 — Pure store and query core
+### Phase 1 — Pure store and query core (done)
+
+Deviation: none.
 
 - Add `WorkspacePathStore.ts` and `WorkspacePathQuery.ts`, plus the exported
   scorer in `FuzzyRanking.ts` (D12). Refactor `rankByFuzzyQuery` and
