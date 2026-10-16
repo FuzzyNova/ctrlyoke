@@ -468,7 +468,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
   "mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
   "model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. Use 'none' (the None option) to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to the active harness model setting.",
-  "modelPricing": "Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.",
+  "modelPricing": "Optional per-harness/per-model USD pricing overrides. User and workspace scopes merge per model, with workspace rates taking precedence for the same model. Rates are USD per one million tokens.",
   "name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text.",
   "notifications": "Notification settings.",
   "notifications.browser": "Browser notification settings.",

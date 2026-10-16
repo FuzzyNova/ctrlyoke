@@ -217,7 +217,15 @@ function deepMerge<T extends Record<string, unknown>>(
     const targetVal = result[key];
     const settingPath = prefix ? `${prefix}.${String(key)}` : String(key);
     const settingDefault = getSettingDefault(settingPath);
-    const isObjectSection = isPlainObject(settingDefault);
+    // modelPricing has freeform harness and model keys, so the schema's
+    // object defaults cannot describe its nested merge boundaries. Merge its
+    // harness tables per model; a workspace model object still replaces the
+    // corresponding user model object as one rate entry.
+    const isModelPricingHarness =
+      settingPath.startsWith(`${SETTING_PATHS.MODEL_PRICING}.`) &&
+      settingPath.split(".").length === 2;
+    const isObjectSection =
+      isPlainObject(settingDefault) || isModelPricingHarness;
     if (
       isObjectSection &&
       !isPlainObject(sourceVal) &&

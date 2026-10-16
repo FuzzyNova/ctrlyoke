@@ -132,6 +132,7 @@ export class FileConfigBackend implements ConfigBackend {
 
   private load(): PartialCtrlYokeSettings {
     this.hasInvalidContent = false;
+    this.newerSchemaVersion = undefined;
     let content: string;
     try {
       content = fs.readFileSync(this.resolvedConfigPath, "utf-8");

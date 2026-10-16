@@ -1773,6 +1773,10 @@ export interface ExternalFileRootsByScope {
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  modelPricingByScope?: Record<
+    SettingWriteScope,
+    CtrlYokeGlobalSettings["modelPricing"]
+  >;
   templateVariableDefaultsByScope?: Record<
     SettingWriteScope,
     Record<string, Record<string, string>>

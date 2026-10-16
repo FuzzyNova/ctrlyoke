@@ -36,6 +36,9 @@ built-in defaults  →  user settings.json  →  workspace settings.json  →  C
 
 - **Objects merge key by key.** A workspace file that sets only `execution.scriptTimeoutSec`
   changes that one value and keeps every other `execution` setting from your user file.
+  `modelPricing` follows the same rule: user and workspace rates combine per harness and model,
+  and a workspace rate wins when both files define the same model. The Model Pricing editor
+  shows and saves only the selected scope's rates.
 - **Arrays replace.** A list set in the workspace file replaces the user file's list as a whole;
   the two are not combined. The one exception is `permissions.trustedExternalRoots`: roots from
   both files are combined, and the workspace's roots still need your approval before ctrlyoke

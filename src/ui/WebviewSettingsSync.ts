@@ -1089,6 +1089,11 @@ export class WebviewSettingsSync {
         settings: {
           settings: allSettings,
           sources,
+          modelPricingByScope: {
+            user: configService.getScoped("modelPricing", "user") ?? {},
+            workspace:
+              configService.getScoped("modelPricing", "workspace") ?? {},
+          },
           templateVariableDefaultsByScope: {
             user:
               configService.getScoped("templates", "user")?.variableDefaults ??

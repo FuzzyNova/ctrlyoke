@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalSettingsDrawer } from "@components/layout/GlobalSettingsDrawer";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
@@ -7,7 +7,11 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { searchSettingsCatalog } from "@components/settings/settingsSearch";
 import { ALL_TABS } from "@components/settings/settingsTabs";
-import { GLOBAL_SETTINGS_TABS } from "@root/types/DashboardConstants";
+import {
+  GLOBAL_SETTINGS_TABS,
+  HARNESS_IDS,
+  MESSAGE_TYPES,
+} from "@root/types/DashboardConstants";
 
 const fullSettings: FullGlobalSettings = {
   settings: CTRLYOKE_SETTINGS_DEFAULTS,
@@ -84,6 +88,57 @@ describe("GlobalSettingsDrawer", () => {
         "These settings use a newer format. Update ctrlyoke to edit them."
       )
     ).toBeInTheDocument();
+  });
+
+  it("saves only the User model pricing map when editing the User scope", () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    useSettingsStore.setState({
+      fullGlobalSettings: {
+        ...fullSettings,
+        settings: {
+          ...fullSettings.settings,
+          modelPricing: {
+            [HARNESS_IDS.CLAUDE_CLI]: {
+              "workspace-only": { inputPerMTok: 90, outputPerMTok: 100 },
+            },
+          },
+        },
+        modelPricingByScope: {
+          user: {
+            [HARNESS_IDS.CLAUDE_CLI]: {
+              "user-model": { inputPerMTok: 1, outputPerMTok: 2 },
+            },
+          },
+          workspace: {
+            [HARNESS_IDS.CLAUDE_CLI]: {
+              "workspace-only": { inputPerMTok: 90, outputPerMTok: 100 },
+            },
+          },
+        },
+      },
+    });
+    useUiStore.setState({ globalSettingsActiveTab: GLOBAL_SETTINGS_TABS.STATS });
+
+    render(<GlobalSettingsDrawer />);
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: "Input rate for user-model" }),
+      { target: { value: "12" } }
+    );
+    fireEvent.blur(
+      screen.getByRole("spinbutton", { name: "Input rate for user-model" })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: "modelPricing",
+      value: {
+        [HARNESS_IDS.CLAUDE_CLI]: {
+          "user-model": { inputPerMTok: 12, outputPerMTok: 2 },
+        },
+      },
+      scope: "user",
+    });
   });
 
   it("opens and closes search, clears its query, and shows match badges", () => {

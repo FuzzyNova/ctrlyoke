@@ -444,7 +444,7 @@
     },
     "modelPricing": {
       "type": "object",
-      "description": "Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.",
+      "description": "Optional per-harness/per-model USD pricing overrides. User and workspace scopes merge per model, with workspace rates taking precedence for the same model. Rates are USD per one million tokens.",
       "propertyNames": {
         "$ref": "workflow.json#/$defs/harnessId"
       },

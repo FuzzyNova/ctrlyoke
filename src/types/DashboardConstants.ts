@@ -2149,6 +2149,7 @@ export const SETTING_PATHS = {
   DIAGNOSTICS_LOG_RAW_CLI_OUTPUT: "diagnostics.logRawCliOutput",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
   USAGE_TRACKING_PERCENT_DIRECTION: "usageTracking.percentDirection",
+  MODEL_PRICING: "modelPricing",
   TERMINAL_SHELL_EXECUTABLE: "terminal.shellExecutable",
   DEFAULTS_ADDITIONAL_ARGS: "defaults.additionalArgs",
   DEFAULTS_HOOKS: "defaults.hooks",

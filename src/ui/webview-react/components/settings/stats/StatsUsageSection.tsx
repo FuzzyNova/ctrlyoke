@@ -380,7 +380,7 @@ export function StatsUsageSection({
             activeScope={activeScope}
           >
             <ModelPricingEditor
-              value={settings.settings.modelPricing}
+              value={settings.modelPricingByScope?.[activeScope] ?? {}}
               onChange={(value) => onUpdate?.("modelPricing", value)}
             />
           </SettingInputRow>

@@ -1703,7 +1703,7 @@ Settings format version. Absent means format 1. ctrlyoke stamps this field when 
 - **Type:** map of map of `{ inputPerMTok, outputPerMTok, cachedInputPerMTok?, … }`
 - **Default:** `{}`
 
-Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.
+Optional per-harness/per-model USD pricing overrides. User and workspace scopes merge per model, with workspace rates taking precedence for the same model. Rates are USD per one million tokens.
 
 Fields:
 
