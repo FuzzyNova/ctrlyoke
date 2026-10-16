@@ -107,6 +107,28 @@ export class TimelineRecorder {
       .doc as WorkflowRunManifest;
   }
 
+  /** Remove a crash-torn final JSONL record before the next append. */
+  private async truncateTornEventsTail(manifestPath: string): Promise<void> {
+    const eventsPath =
+      TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
+    let content: Buffer;
+    try {
+      content = await fs.promises.readFile(eventsPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+
+    if (content.length === 0 || content[content.length - 1] === 0x0a) {
+      return;
+    }
+
+    const lastNewline = content.lastIndexOf(0x0a);
+    await fs.promises.truncate(eventsPath, lastNewline + 1);
+  }
+
   private async writeManifestDirect(
     manifestPath: string,
     manifest: WorkflowRunManifest
@@ -237,6 +259,7 @@ export class TimelineRecorder {
       withFileLock(manifestPath, async () => {
         const manifest = await this.readManifest(manifestPath);
         assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
+        await this.truncateTornEventsTail(manifestPath);
         let nextSequence = manifest.nextSequence;
 
         const events: WorkflowTimelineEvent[] = drafts.map(
@@ -297,6 +320,8 @@ export class TimelineRecorder {
         if (definitionRevision <= manifest.definitionRevision) {
           return { committed: false };
         }
+
+        await this.truncateTornEventsTail(manifestPath);
 
         const event: WorkflowTimelineEvent = {
           eventType: TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED,

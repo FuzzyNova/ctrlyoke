@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (traced through the code; `OutputHistoryManager` needs the extension host, so not run end to end)
 - **Area:** `src/core/orchestration/ExternalRunWatchCoordinator.ts`, `src/core/orchestration/OutputHistoryManager.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

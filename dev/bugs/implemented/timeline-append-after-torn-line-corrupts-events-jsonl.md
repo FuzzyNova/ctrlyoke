@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (reproduced against the compiled `out/` `TimelineRecorder` from a scratch script)
 - **Area:** `src/core/orchestration/TimelineRecorder.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

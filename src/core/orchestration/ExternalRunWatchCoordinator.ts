@@ -232,6 +232,7 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
         }
         await historyManager.recoverInterruptedRun(
           recoveredAddress.workflowKey,
+          recoveredAddress.runRef,
           stepCount
         );
       }
