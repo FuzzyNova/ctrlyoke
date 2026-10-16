@@ -28,11 +28,21 @@
  * harness CLI removed, so all six harnesses detect as missing. Harness
  * detection is a plain `<cli> --version` against the inherited PATH
  * (`CliProviderUtils.runVersionCommand`), so this reproduces a machine with no
- * CLIs installed, e.g. for the missing-harness preflight screenshots.
+ * CLIs installed, e.g. for the missing-harness preflight screenshots. A
+ * directory that also holds `node`/`git`/`code` (e.g. nvm's global bin) is
+ * replaced by a temp directory exposing only those tools.
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  linkSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnShim, spawnShimSync } from "./spawn-windows-shim.mjs";
@@ -278,6 +288,26 @@ function directoryHolds(directory, binaries) {
   );
 }
 
+/**
+ * Builds a temp directory holding only the REQUIRED_BINARIES found in
+ * `source` (hard-linked, copied when linking fails across volumes).
+ */
+function createRequiredToolsDirectory(source) {
+  const target = mkdtempSync(path.join(tmpdir(), "ctrlyoke-dev-path-"));
+  for (const binary of REQUIRED_BINARIES) {
+    for (const name of executableNames(binary)) {
+      const from = path.join(source, name);
+      if (!existsSync(from)) continue;
+      try {
+        linkSync(from, path.join(target, name));
+      } catch {
+        copyFileSync(from, path.join(target, name));
+      }
+    }
+  }
+  return target;
+}
+
 /** Removes every PATH entry that holds a harness CLI, in place. */
 function stripHarnessesFromPath(environment) {
   // A spread copy of process.env loses Windows' case-insensitive lookup, and
@@ -292,12 +322,14 @@ function stripHarnessesFromPath(environment) {
       kept.push(directory);
       continue;
     }
-    const required = directoryHolds(directory, REQUIRED_BINARIES);
-    if (required) {
-      console.error(
-        `cannot hide '${harness}': ${directory} also holds '${required}', which the dev host needs. Move the harness CLI out of that directory first.`
+    if (directoryHolds(directory, REQUIRED_BINARIES)) {
+      // A shared directory (e.g. nvm's global npm bin holds node and the
+      // harness shims): swap it for one exposing only the required tools.
+      console.log(
+        `shadowing harness PATH entry (${harness}) with required tools only: ${directory}`
       );
-      process.exit(1);
+      kept.push(createRequiredToolsDirectory(directory));
+      continue;
     }
     console.log(`hiding harness PATH entry (${harness}): ${directory}`);
   }
