@@ -184,7 +184,7 @@ export class WorkspaceInitializer {
 
   /**
    * For hosts where launching ctrlyoke is itself the opt-in (`ctrlyoke run`
-   * and `ctrlyoke serve`): initialize without asking, then log into the
+   * and `ctrlyoke server`): initialize without asking, then log into the
    * workspace. CLI logging is switched on first so the initializer's own log
    * line never reaches stdout (which `--json` owns), and again once a new
    * `.ctrlyoke/` exists so the log file opens inside it.

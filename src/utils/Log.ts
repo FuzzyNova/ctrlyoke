@@ -131,7 +131,7 @@ export class Log {
    *
    * Like {@link openLogFile}, it never creates `.ctrlyoke/` itself: in a
    * folder that has not been initialized it logs nowhere. Commands that act
-   * on the workspace (`run`, `serve`) call
+   * on the workspace (`run`, `server`) call
    * `WorkspaceInitializer.initializeIfNeeded` first, so the directory gets its
    * `.gitignore`; read-only commands (`validate`, `status`, the `trust-*`
    * reviews) leave an uninitialized folder untouched.
