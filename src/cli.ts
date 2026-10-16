@@ -15,6 +15,7 @@ import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
+import { rebaseWorkflowStepPaths } from "./core/WorkflowStepPathRebaser";
 import {
   EXECUTION_STATES,
   EXECUTION_MODES,
@@ -2032,11 +2033,16 @@ async function executeAddressedCliOperation(
   );
 
   if (operation.kind === CLI_RUN_OPERATION_KINDS.APPEND) {
+    const descriptor = await lineageRepository.readDescriptor(
+      workspaceRoot,
+      workflowKey
+    );
     const tail = await parseAppendTail(
       operation,
       options as AppendOptions,
       platform,
-      userFeedbackSink
+      userFeedbackSink,
+      descriptor.originalFile
     );
     const appended = await RunContinuationService.appendStepsToRun(
       workspaceRoot,
@@ -2134,7 +2140,8 @@ async function parseAppendTail(
   operation: Extract<CliRunOperation, { kind: "append" }>,
   options: AppendOptions,
   platform: CliAdapter,
-  userFeedbackSink: ConsoleUserFeedbackSink
+  userFeedbackSink: ConsoleUserFeedbackSink,
+  destinationDefinitionPath?: string
 ): Promise<WorkflowStep[]> {
   let steps: WorkflowStep[];
   if (options.prompt) {
@@ -2151,7 +2158,15 @@ async function parseAppendTail(
     if (!parsed.steps?.length) {
       throw new Error("Append source must contain at least one workflow step");
     }
-    steps = parsed.steps;
+    const sourcePath = resolveCliFileArgument(operation.file);
+    const workspaceRoot = platform.getWorkspaceRoot();
+    steps = workspaceRoot
+      ? await rebaseWorkflowStepPaths(parsed.steps, sourcePath, workspaceRoot, {
+          namedRoots: platform.getNamedWorkspaceRoots(),
+          trustedRoots: platform.getWorkspaceRoots(),
+          destinationDefinitionPath,
+        })
+      : parsed.steps;
   }
 
   return applyCliAppendOverrides(

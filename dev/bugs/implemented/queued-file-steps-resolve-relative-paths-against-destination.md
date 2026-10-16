@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (reproduced against the compiled `out/` build)
 - **Area:** `src/core/WorkflowInstance.ts` (`appendFromFile`), `src/core/PromptFileParser.ts`, `src/core/WorkflowExecutor.ts`, `src/core/PromptFileResolver.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -39,10 +39,11 @@ prompt text.
 
 ## Suggested Fix
 
-Before `appendSteps`, rebase relative prompt-file paths (and `./`/`../` inline
-references, plus any other step-level relative paths such as script paths) in
-the appended steps so they resolve identically from the destination — e.g. to
-workspace-relative paths. Keep this in one helper. Add a test that queues a
-file from a subfolder and resolves its prompt file correctly. (Workflow-level
-`vars` from the source file are also dropped on append; note it in the fix
-commit if left out of scope.)
+File append paths now pass through one rebasing helper before queueing. It
+rewrites standalone prompt-file references (including end-condition retry
+prompt templates) and workflow-relative inline file references to resolve
+from the destination workflow. Script paths do not use the workflow file's
+folder as their base, so they are unchanged.
+
+Workflow-level `vars` from the source file are still dropped on append; this
+remains a follow-up outside this fix.
