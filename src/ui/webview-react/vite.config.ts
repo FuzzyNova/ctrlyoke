@@ -50,6 +50,12 @@ export default defineConfig(({ mode }) => ({
   // import.meta.env.DEV is unreliable in Vite 8 build mode — use these instead.
   define: {
     __WEBVIEW_DEV_MODE__: mode !== BUILD_MODES.PRODUCTION ? "true" : "false",
+    // why-did-you-render patches React.createElement/cloneElement and breaks on
+    // React 19 internals, so it is opt-in: build with CTRLYOKE_WDYR=1.
+    __WEBVIEW_WDYR__:
+      mode !== BUILD_MODES.PRODUCTION && process.env.CTRLYOKE_WDYR === "1"
+        ? "true"
+        : "false",
     // `vite build` forces process.env.NODE_ENV='production' regardless of --mode,
     // making React use its minified build (no full error messages). Override for react-debug.
     ...(mode === "react-debug"
