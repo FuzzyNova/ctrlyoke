@@ -47,7 +47,9 @@ export async function walkSearchFiles(
   maxFiles: number,
   maxDurationMs: number,
   skipDirectories: ReadonlySet<string> = DEFAULT_SKIP_DIRECTORIES,
-  excludeCtrlYokeLogs = true
+  excludeCtrlYokeLogs = true,
+  /** Receives each directory's files as they are found, before the walk ends. */
+  onFiles?: (files: readonly string[]) => void
 ): Promise<SearchWalkResult> {
   const root = path.resolve(rootPath);
   const pending = [root];
@@ -68,6 +70,7 @@ export async function walkSearchFiles(
       continue;
     }
 
+    const firstNewFile = files.length;
     for (const entry of entries) {
       if (Date.now() - startedAt >= maxDurationMs) {
         truncated = true;
@@ -90,6 +93,9 @@ export async function walkSearchFiles(
       } else if (entry.isFile()) {
         files.push(path.relative(root, path.join(directory, entry.name)));
       }
+    }
+    if (onFiles && files.length > firstNewFile) {
+      onFiles(files.slice(firstNewFile));
     }
   }
   if (files.length >= maxFiles && next < pending.length) {

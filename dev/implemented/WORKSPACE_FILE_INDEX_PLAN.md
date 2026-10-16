@@ -2,7 +2,7 @@
 
 **Status:** Implemented.
 **Priority:** P1
-**Bug:** `dev/bugs/backlog/at-completion-misses-files-past-walk-cap.md`
+**Bug:** `dev/bugs/implemented/at-completion-misses-files-past-walk-cap.md`
 
 ## Goal
 
@@ -264,3 +264,30 @@ repeated `@` partials or status rows yet.
   (`HostedWorkspaceViewerService.discoverSearchCandidates`).
 - ripgrep or Everything as listers (D1).
 - On-disk index persistence (D21).
+
+## Review fixes (after phase 5)
+
+The orchestrator's review pass corrected these defects in the phased work:
+
+- `WorkspacePathStore.add` rebuilt every entry on each call. With one call per
+  watcher change, that cost O(changes × store size). It now appends, and
+  watcher batches apply all removals and additions in one step each
+  (`removeTrees`).
+- An aborted scan's partial survivor set was kept for narrowing, so the next
+  longer query could miss matches. Only completed scans are remembered now.
+- `suggestPaths` sorted the whole store with `localeCompare` on every call. It
+  now sorts only the matches.
+- The first build published nothing from the walk until it ended, so D20's
+  re-run showed no progress and "N so far" stayed fixed. `walkSearchFiles`
+  gained an `onFiles` callback; the first build adds the walk to the live store
+  every 250 ms and posts status from the worker. Rebuilds stay `ready` and swap.
+- The D4 fallback stopped being Git-only on its first rebuild (a `.gitignore`
+  change or the 5-minute staleness rebuild), which walked ignored trees on the
+  extension-host heap. `gitVisibleOnly` is now a pipeline option, not a
+  per-build flag.
+- The dashboard `@` loop applied a 500 ms budget even on a ready index, so a
+  slow scan sent a truncated snapshot as the final result. It now has no
+  budget; only VS Code IntelliSense keeps its 150 ms budget (D18).
+- The symbol indexes had lost the 5 s reuse they got from the old completion
+  cache, so every `#` keystroke ran `git ls-files`. `cacheSourceFiles` restores
+  a shared, invalidatable 5 s listing, and folder changes invalidate it.

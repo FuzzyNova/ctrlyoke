@@ -236,13 +236,18 @@ export class CompletionCore {
     let finishInterrupted: (() => void) | undefined;
     const interrupted = new Promise<PlainCompletionItem[]>((resolve) => {
       finishInterrupted = () => resolve(latest);
-      options.signal?.addEventListener("abort", finishInterrupted, { once: true });
+      options.signal?.addEventListener("abort", finishInterrupted, {
+        once: true,
+      });
       if (options.signal?.aborted) finishInterrupted();
       if (options.budgetMs !== undefined) {
-        timer = setTimeout(() => {
-          controller.abort();
-          finishInterrupted?.();
-        }, Math.max(0, options.budgetMs));
+        timer = setTimeout(
+          () => {
+            controller.abort();
+            finishInterrupted?.();
+          },
+          Math.max(0, options.budgetMs)
+        );
       }
     });
     function toItem(

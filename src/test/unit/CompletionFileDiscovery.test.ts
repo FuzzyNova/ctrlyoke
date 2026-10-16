@@ -4,7 +4,10 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { suite, test } from "mocha";
-import { getSourceFiles } from "../../utils/CompletionFileDiscovery";
+import {
+  cacheSourceFiles,
+  getSourceFiles,
+} from "../../utils/CompletionFileDiscovery";
 
 suite("CompletionFileDiscovery", () => {
   test("returns Git-visible paths without traversing ignored source trees", async () => {
@@ -62,5 +65,21 @@ suite("CompletionFileDiscovery", () => {
         retryDelay: 50,
       });
     }
+  });
+
+  test("cacheSourceFiles shares one listing and retries after a failure", async () => {
+    let loads = 0;
+    let fail = true;
+    const cached = cacheSourceFiles(async () => {
+      loads++;
+      if (fail) throw new Error("git failed");
+      return ["a.ts"];
+    }, 60_000);
+    await assert.rejects(cached());
+    fail = false;
+    const [first, second] = await Promise.all([cached(), cached()]);
+    assert.deepStrictEqual(first, ["a.ts"]);
+    assert.strictEqual(first, second);
+    assert.strictEqual(loads, 2);
   });
 });

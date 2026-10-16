@@ -1,49 +1,82 @@
 import { isMainThread, parentPort } from "worker_threads";
-import { WORKSPACE_FILE_INDEX_LOG_LEVELS, WORKSPACE_FILE_INDEX_MESSAGE_TYPES, WorkspaceFileIndexPipeline, type WorkspaceFileChange, type WorkspaceFileIndexBuildOptions } from "./WorkspaceFileIndex";
-import type { WorkspacePathQueryOptions } from "./WorkspacePathQuery";
+import {
+  runPipelineQuery,
+  WORKSPACE_FILE_INDEX_LOG_LEVELS,
+  WORKSPACE_FILE_INDEX_MESSAGE_TYPES,
+  WorkspaceFileIndexPipeline,
+  type WorkspaceFileIndexRequest,
+  type WorkspaceFileIndexResponse,
+} from "./WorkspaceFileIndex";
 
 const port = parentPort;
 if (!isMainThread && port) {
-  let index: WorkspaceFileIndexPipeline | undefined;
+  const post = (message: WorkspaceFileIndexResponse): void =>
+    port.postMessage(message);
+  // Roots and the gitignore mode arrive with the first build message.
+  const index = new WorkspaceFileIndexPipeline([], false, undefined, {
+    onStatus: (status) =>
+      post({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS, status }),
+  });
   const controllers = new Map<string, AbortController>();
-  port.on("message", async (message: { id: number; type: string; [key: string]: unknown }) => {
+  port.on("message", async (message: WorkspaceFileIndexRequest) => {
     try {
-      if (!index) index = new WorkspaceFileIndexPipeline([], false);
       let value: unknown;
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD) {
-        const options = message.options as WorkspaceFileIndexBuildOptions | undefined;
-        await index.build(options);
-        port.postMessage({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS, status: index.getStatus() });
-      } else if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES) {
-        await index.applyChanges(message.changes as readonly WorkspaceFileChange[]);
-        setTimeout(() => port.postMessage({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS, status: index?.getStatus() }), 225);
-      } else if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES || message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES || message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS) {
-        const queryId = message.queryId as string;
-        const controller = new AbortController();
-        controllers.set(queryId, controller);
-        const options: WorkspacePathQueryOptions = {
-          limit: message.limit as number | undefined,
-          signal: controller.signal,
-          onProgress: (progress) => port.postMessage({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS, queryId, progress }),
-        };
-        if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES) value = await index.queryFiles(message.query as string, options);
-        else if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES) value = await index.queryPromptFiles(message.query as string, options);
-        else value = await index.suggestPaths(message.query as string, message.kind as never, message.maxResults as number | undefined, options);
-        controllers.delete(queryId);
-      } else if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL) {
-        controllers.get(message.queryId as string)?.abort();
-        return;
-      } else if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE) {
-        for (const controller of controllers.values()) controller.abort();
-        controllers.clear();
-        index.dispose();
-        port.close();
-        return;
+      switch (message.type) {
+        case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD:
+          await index.build(message.options);
+          break;
+        case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES:
+          await index.applyChanges(message.changes);
+          break;
+        case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES:
+        case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES:
+        case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS: {
+          const { queryId } = message;
+          const controller = new AbortController();
+          controllers.set(queryId, controller);
+          try {
+            value = await runPipelineQuery(index, message, {
+              signal: controller.signal,
+              onProgress: (progress) =>
+                post({
+                  type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS,
+                  queryId,
+                  progress: { ...progress, results: [...progress.results] },
+                }),
+            });
+          } finally {
+            controllers.delete(queryId);
+          }
+          break;
+        }
+        case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL:
+          controllers.get(message.queryId)?.abort();
+          return;
+        case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE:
+          for (const controller of controllers.values()) controller.abort();
+          controllers.clear();
+          index.dispose();
+          port.close();
+          return;
       }
-      port.postMessage({ id: message.id, type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.RESULT, value, status: index.getStatus() });
+      post({
+        id: message.id,
+        type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.RESULT,
+        value,
+        status: index.getStatus(),
+      });
     } catch (error) {
-      port.postMessage({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG, level: WORKSPACE_FILE_INDEX_LOG_LEVELS.WARN, message: `Workspace file index operation failed: ${error instanceof Error ? error.message : String(error)}` });
-      port.postMessage({ id: message.id, type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR, message: error instanceof Error ? error.message : String(error) });
+      const text = error instanceof Error ? error.message : String(error);
+      post({
+        type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG,
+        level: WORKSPACE_FILE_INDEX_LOG_LEVELS.WARN,
+        message: `Workspace file index operation failed: ${text}`,
+      });
+      post({
+        id: message.id,
+        type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR,
+        message: text,
+      });
     }
   });
 }

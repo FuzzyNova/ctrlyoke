@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { configService } from "../config/CtrlYokeConfigService";
-import { getSourceFiles } from "../utils/CompletionFileDiscovery";
+import {
+  cacheSourceFiles,
+  getSourceFiles,
+} from "../utils/CompletionFileDiscovery";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import {
   getVsCodeNamedWorkspaceRoots,
@@ -57,22 +60,24 @@ function getWorkspaceFileIndex(): WorkspaceFileIndex {
   return workspaceFileIndex;
 }
 
+/** Git-visible files of every folder, for the symbol indexes (D16). */
+const sourceFiles = cacheSourceFiles(async (): Promise<string[]> => {
+  const results: string[] = [];
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  for (const folder of folders) {
+    const files = await getSourceFiles(folder.uri.fsPath);
+    results.push(
+      ...files.map((file) =>
+        folders.length > 1 ? `${folder.name}/${file}` : file
+      )
+    );
+  }
+  return results;
+});
+
 /** VS Code composition root for the host-neutral completion engine. */
 export function getCompletionCore(): CompletionCore {
   if (!completionCore) {
-    const sourceFiles = async (): Promise<string[]> => {
-      const results: string[] = [];
-      const folders = vscode.workspace.workspaceFolders ?? [];
-      for (const folder of folders) {
-        const files = await getSourceFiles(folder.uri.fsPath);
-        results.push(
-          ...files.map((file) =>
-            folders.length > 1 ? `${folder.name}/${file}` : file
-          )
-        );
-      }
-      return results;
-    };
     vsCodeSymbolIndex = new VsCodeSymbolIndex(sourceFiles);
     completionCore = new CompletionCore({
       isMultiRoot: isMultiRootWorkspace,
@@ -111,6 +116,7 @@ export function clearFilesCache(): void {
     roots: roots(),
     respectGitignore: ConfigurationUtils.shouldRespectGitignoreForCompletions(),
   });
+  sourceFiles.invalidate();
   vsCodeSymbolIndex?.invalidateWarmupCache();
 }
 
@@ -148,6 +154,7 @@ export function initializeCompletionHelpers(
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       startBuild();
+      sourceFiles.invalidate();
       vsCodeSymbolIndex?.invalidateWarmupCache();
     })
   );
@@ -208,7 +215,7 @@ export function toVSCodeCompletionItem(
 ): vscode.CompletionItem {
   const insertText = item.captureId
     ? CAPTURING_OUTPUT_PLACEHOLDER
-    : item.insertText ?? item.label;
+    : (item.insertText ?? item.label);
   const vscodeItem = toVSCodeWorkflowCompletionItem(
     {
       ...item,

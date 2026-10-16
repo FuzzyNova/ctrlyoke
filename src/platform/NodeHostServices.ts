@@ -28,7 +28,10 @@ import { RegexSymbolIndex } from "../completions/RegexSymbolIndex";
 import { LspSymbolIndex } from "../completions/LspSymbolIndex";
 import { FallbackSymbolIndex } from "../completions/FallbackSymbolIndex";
 import type { EditorContextSource } from "../completions/EditorContextSource";
-import { getSourceFiles } from "../utils/CompletionFileDiscovery";
+import {
+  cacheSourceFiles,
+  getSourceFiles,
+} from "../utils/CompletionFileDiscovery";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
@@ -163,7 +166,7 @@ export async function createNodeHostServices(options: {
       addCompletionChange(WORKSPACE_FILE_CHANGE_KINDS.DELETE)
     )
   );
-  const getSourceFilesForSymbols = (): Promise<string[]> => getSourceFiles(cwd);
+  const getSourceFilesForSymbols = cacheSourceFiles(() => getSourceFiles(cwd));
   const editorContext: EditorContextSource = {
     getSelections: () => [],
     getVisibleOutputChannels: () => [],

@@ -20,6 +20,8 @@ export interface WorkspacePathEntry {
 /** Ordered, in-memory projection of workspace files and their directories. */
 export class WorkspacePathStore {
   private filePaths: string[] = [];
+  private fileSet = new Set<string>();
+  private directorySet = new Set<string>();
   private pathEntries: WorkspacePathEntry[] = [];
   private currentVersion = 0;
 
@@ -36,76 +38,91 @@ export class WorkspacePathStore {
   }
 
   replaceAll(paths: readonly string[]): void {
-    this.filePaths = this.normalizeUnique(paths);
-    this.rebuildEntries();
+    this.reset();
+    this.appendNew(paths);
     this.currentVersion++;
   }
 
+  /**
+   * Append paths not already present. Existing entries keep their positions,
+   * so this costs only the new paths, not the size of the store.
+   */
   add(pathValue: string | readonly string[]): void {
-    const incoming = this.normalizeUnique(
+    const added = this.appendNew(
       typeof pathValue === "string" ? [pathValue] : pathValue
     );
-    const seen = new Set(this.filePaths);
-    const added = incoming.filter((item) => !seen.has(item));
-    if (added.length === 0) return;
-    this.filePaths = [...this.filePaths, ...added];
-    this.rebuildEntries();
-    this.currentVersion++;
+    if (added > 0) this.currentVersion++;
   }
 
   removeTree(pathValue: string): void {
-    const normalized = normalizeReferencePath(pathValue).replace(/\/+$/, "");
-    if (!normalized) return;
-    const remaining = this.filePaths.filter(
-      (item) => item !== normalized && !item.startsWith(`${normalized}/`)
-    );
+    this.removeTrees([pathValue]);
+  }
+
+  /**
+   * Remove each path and everything beneath it in one pass. Directories left
+   * without files disappear, because entries are re-derived from the files.
+   */
+  removeTrees(pathValues: readonly string[]): void {
+    const targets = pathValues
+      .map((value) => normalizeReferencePath(value).replace(/\/+$/, ""))
+      .filter(Boolean);
+    if (targets.length === 0) return;
+    const prefixes = targets.map((target) => `${target}/`);
+    const removed = (item: string): boolean =>
+      targets.includes(item) ||
+      prefixes.some((prefix) => item.startsWith(prefix));
+    const remaining = this.filePaths.filter((item) => !removed(item));
     if (remaining.length === this.filePaths.length) return;
-    this.filePaths = remaining;
-    this.rebuildEntries();
+    this.reset();
+    this.appendNew(remaining);
     this.currentVersion++;
   }
 
-  private normalizeUnique(paths: readonly string[]): string[] {
-    const seen = new Set<string>();
-    const normalized: string[] = [];
-    for (const raw of paths) {
-      const item = normalizeReferencePath(raw);
-      if (!item || item.startsWith("../") || seen.has(item)) continue;
-      seen.add(item);
-      normalized.push(item);
-    }
-    return normalized;
+  private reset(): void {
+    this.filePaths = [];
+    this.fileSet = new Set();
+    this.directorySet = new Set();
+    this.pathEntries = [];
   }
 
-  private rebuildEntries(): void {
-    const directories = new Set<string>();
-    const entries: WorkspacePathEntry[] = [];
-    const append = (
-      kind: WorkspaceFileTreeEntryKind,
-      relativePath: string
-    ): void => {
-      const name = path.posix.basename(relativePath);
-      const parent = path.posix.dirname(relativePath);
-      entries.push({
-        kind,
-        relativePath,
-        lowerPath: relativePath.toLowerCase(),
-        name,
-        lowerName: name.toLowerCase(),
-        parent,
-        lowerParent: parent.toLowerCase(),
-        position: entries.length,
-      });
-    };
-    for (const file of this.filePaths) {
+  /** Appends unseen files (and their unseen parent directories) in order. */
+  private appendNew(paths: readonly string[]): number {
+    let added = 0;
+    for (const raw of paths) {
+      const file = normalizeReferencePath(raw);
+      if (!file || file.startsWith("../") || this.fileSet.has(file)) continue;
+      this.fileSet.add(file);
+      this.filePaths.push(file);
+      // A directory is listed where its first file is rather than after them
+      // all, because store order breaks ranking ties.
       let parent = path.posix.dirname(file);
-      while (parent !== "." && parent !== "" && !directories.has(parent)) {
-        directories.add(parent);
-        append(WORKSPACE_ENTRY_KINDS.DIRECTORY, parent);
+      while (
+        parent !== "." &&
+        parent !== "" &&
+        !this.directorySet.has(parent)
+      ) {
+        this.directorySet.add(parent);
+        this.append(WORKSPACE_ENTRY_KINDS.DIRECTORY, parent);
         parent = path.posix.dirname(parent);
       }
-      append(WORKSPACE_ENTRY_KINDS.FILE, file);
+      this.append(WORKSPACE_ENTRY_KINDS.FILE, file);
+      added++;
     }
-    this.pathEntries = entries;
+    return added;
+  }
+
+  private append(kind: WorkspaceFileTreeEntryKind, relativePath: string): void {
+    const name = path.posix.basename(relativePath);
+    const parent = path.posix.dirname(relativePath);
+    this.pathEntries.push({
+      kind,
+      relativePath,
+      lowerPath: relativePath.toLowerCase(),
+      name,
+      lowerName: name.toLowerCase(),
+      parent,
+      lowerParent: parent.toLowerCase(),
+      position: this.pathEntries.length,
+    });
   }
 }

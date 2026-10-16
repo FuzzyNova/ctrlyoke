@@ -230,7 +230,10 @@ type ContextReferenceToValidate = Omit<
  */
 export class PromptEditorSupportService {
   private readonly workflowTextValidator = new PromptFileParser();
-  private readonly activeFileCompletionRequests = new Map<string, AbortController>();
+  private readonly activeFileCompletionRequests = new Map<
+    string,
+    AbortController
+  >();
   constructor(
     private readonly getWorkspaceRoot: () => string,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
@@ -341,8 +344,10 @@ export class PromptEditorSupportService {
         try {
           while (isCurrent()) {
             const pollStartedAt = Date.now();
+            // No budget: the scan streams snapshots as partials and its
+            // complete result is what may be sent as final. Only a build in
+            // progress re-runs the query (D20).
             const items = await this.completionCore?.getFileCompletions(query, {
-              budgetMs: 500,
               signal: controller.signal,
               onPartial: (partialItems) => {
                 if (!isCurrent()) return;
@@ -391,7 +396,9 @@ export class PromptEditorSupportService {
             });
           }
         } finally {
-          if (this.activeFileCompletionRequests.get(ctx.clientId) === controller) {
+          if (
+            this.activeFileCompletionRequests.get(ctx.clientId) === controller
+          ) {
             this.activeFileCompletionRequests.delete(ctx.clientId);
           }
         }
@@ -402,7 +409,10 @@ export class PromptEditorSupportService {
       this.emitCompletionsResponse(ctx, items, position, seq, false);
     } catch (error) {
       Log.trace("[Dashboard] Failed to get completions:", error);
-      if (trigger === "@" && this.activeFileCompletionRequests.has(ctx.clientId)) {
+      if (
+        trigger === "@" &&
+        this.activeFileCompletionRequests.has(ctx.clientId)
+      ) {
         return;
       }
       this.emitCompletionsResponse(ctx, [], position, seq, false);

@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { Worker } from "worker_threads";
 import {
   COMPLETION_ALL_FILES_SKIP_DIRECTORIES,
   DEFAULT_SKIP_DIRECTORIES,
@@ -9,20 +10,26 @@ import {
 } from "../utils/WorkspaceSearchFileWalker";
 import { getGitIgnoredPaths, getGitTrackedFiles } from "../utils/GitUtils";
 import {
-  WORKSPACE_FILE_INDEX_STATES,
+  USER_FEEDBACK_SEVERITY,
+  WORKSPACE_ENTRY_KINDS,
   WORKSPACE_FILE_CHANGE_KINDS,
-  type WorkspaceFileIndexState,
+  WORKSPACE_FILE_INDEX_STATES,
   type WorkspaceFileChangeKind,
+  type WorkspaceFileIndexState,
   type WorkspaceFileTreeEntryKind,
 } from "../types/DashboardConstants";
-import { WorkspacePathQuery, type WorkspacePathQueryOptions, type WorkspacePathResult } from "./WorkspacePathQuery";
+import {
+  WorkspacePathQuery,
+  type WorkspacePathQueryOptions,
+  type WorkspacePathResult,
+} from "./WorkspacePathQuery";
 import { WorkspacePathStore } from "./WorkspacePathStore";
-import { Worker } from "worker_threads";
 import { findExistingWorkerPath } from "../utils/WorkerPath";
 import { Log } from "../utils/Log";
-import { notifyUserFeedback, type UserFeedbackSink } from "../core/UserFeedbackSink";
-import { USER_FEEDBACK_SEVERITY } from "../types/DashboardConstants";
-import * as pathModule from "path";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "../core/UserFeedbackSink";
 
 export interface WorkspaceFileIndexStatus {
   readonly state: WorkspaceFileIndexState;
@@ -31,9 +38,20 @@ export interface WorkspaceFileIndexStatus {
 
 /** Host-neutral completion query port implemented by the file index. */
 export interface WorkspaceFileQueries {
-  queryFiles(query: string, options?: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]>;
-  queryPromptFiles(query: string, options?: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]>;
-  suggestPaths(typedPath: string, kind: WorkspaceFileTreeEntryKind, maxResults?: number, options?: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]>;
+  queryFiles(
+    query: string,
+    options?: WorkspacePathQueryOptions
+  ): Promise<WorkspacePathResult[]>;
+  queryPromptFiles(
+    query: string,
+    options?: WorkspacePathQueryOptions
+  ): Promise<WorkspacePathResult[]>;
+  suggestPaths(
+    typedPath: string,
+    kind: WorkspaceFileTreeEntryKind,
+    maxResults?: number,
+    options?: WorkspacePathQueryOptions
+  ): Promise<WorkspacePathResult[]>;
   getStatus(): WorkspaceFileIndexStatus;
 }
 
@@ -45,7 +63,6 @@ export interface WorkspaceFileIndexRoot {
 export interface WorkspaceFileIndexBuildOptions {
   readonly roots?: readonly WorkspaceFileIndexRoot[];
   readonly respectGitignore?: boolean;
-  readonly gitVisibleOnly?: boolean;
 }
 
 export interface WorkspaceFileChange {
@@ -56,11 +73,27 @@ export interface WorkspaceFileChange {
 
 export interface WorkspaceFileIndexDependencies {
   readonly getGitTrackedFiles: (root: string) => Promise<string[]>;
-  readonly getGitIgnoredPaths: (root: string, absolutePaths: readonly string[]) => Promise<Set<string>>;
-  readonly walkSearchFiles: (root: string, startedAt: number, maxFiles: number, maxDurationMs: number, skip: ReadonlySet<string>, excludeLogs?: boolean) => Promise<SearchWalkResult>;
-  readonly stat: (absolutePath: string) => Promise<{ isFile(): boolean; isDirectory(): boolean }>;
+  readonly getGitIgnoredPaths: (
+    root: string,
+    absolutePaths: readonly string[]
+  ) => Promise<Set<string>>;
+  readonly walkSearchFiles: (
+    root: string,
+    startedAt: number,
+    maxFiles: number,
+    maxDurationMs: number,
+    skip: ReadonlySet<string>,
+    excludeLogs?: boolean,
+    onFiles?: (files: readonly string[]) => void
+  ) => Promise<SearchWalkResult>;
+  readonly stat: (
+    absolutePath: string
+  ) => Promise<{ isFile(): boolean; isDirectory(): boolean }>;
   readonly now: () => number;
-  readonly setTimeout: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>;
+  readonly setTimeout: (
+    callback: () => void,
+    delay: number
+  ) => ReturnType<typeof setTimeout>;
   readonly clearTimeout: (timer: ReturnType<typeof setTimeout>) => void;
 }
 
@@ -74,8 +107,21 @@ const DEFAULT_DEPENDENCIES: WorkspaceFileIndexDependencies = {
   clearTimeout: (timer) => clearTimeout(timer),
 };
 
+export interface WorkspaceFileIndexPipelineOptions {
+  /**
+   * Index only the Git-visible list, never walking ignored trees. This is the
+   * in-process fallback after a worker failure, where walking would put the
+   * whole tree on the extension-host heap.
+   */
+  readonly gitVisibleOnly?: boolean;
+  /** Called whenever the state or indexed count changes. */
+  readonly onStatus?: (status: WorkspaceFileIndexStatus) => void;
+}
+
 const CHANGE_BATCH_MS = 200;
 const REBUILD_STALE_MS = 5 * 60_000;
+/** How often the initial walk publishes what it has found so far. */
+const BUILD_PROGRESS_MS = 250;
 export const FILE_INDEX_WORKER_HEAP_MB = 2048;
 export const WORKSPACE_FILE_INDEX_MESSAGE_TYPES = {
   BUILD: "build",
@@ -91,18 +137,35 @@ export const WORKSPACE_FILE_INDEX_MESSAGE_TYPES = {
   LOG: "log",
   ERROR: "error",
 } as const;
-export const WORKSPACE_FILE_INDEX_LOG_LEVELS = { INFO: "info", WARN: "warn", ERROR: "error" } as const;
-const WORKER_MEMORY_WARNING = "Workspace file index stopped at its 2 GB memory limit; ignored files may be missing from @ completions.";
+export const WORKSPACE_FILE_INDEX_LOG_LEVELS = {
+  INFO: "info",
+  WARN: "warn",
+  ERROR: "error",
+} as const;
+const WORKER_MEMORY_WARNING =
+  "Workspace file index stopped at its 2 GB memory limit; ignored files may be missing from @ completions.";
 let workerFailureWarningShown = false;
+
+function isIgnoreRuleFile(relative: string): boolean {
+  return (
+    relative === ".gitignore" ||
+    relative.endsWith("/.gitignore") ||
+    relative === ".git/info/exclude"
+  );
+}
 
 /**
  * Self-contained index pipeline. Its public methods form the message-shaped
- * API used by the worker host in the next phase.
+ * API that `workspaceFileIndexWorker` exposes; in-process mode (tests and the
+ * worker-failure fallback) calls them directly.
  */
 export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
   private store = new WorkspacePathStore();
   private query = new WorkspacePathQuery(this.store);
-  private status: WorkspaceFileIndexStatus = { state: WORKSPACE_FILE_INDEX_STATES.BUILDING, indexed: 0 };
+  private status: WorkspaceFileIndexStatus = {
+    state: WORKSPACE_FILE_INDEX_STATES.BUILDING,
+    indexed: 0,
+  };
   private lastBuildAt = 0;
   private started = false;
   private disposed = false;
@@ -114,7 +177,8 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
   constructor(
     private roots: readonly WorkspaceFileIndexRoot[],
     private respectGitignore: boolean,
-    private readonly dependencies: WorkspaceFileIndexDependencies = DEFAULT_DEPENDENCIES
+    private readonly dependencies: WorkspaceFileIndexDependencies = DEFAULT_DEPENDENCIES,
+    private readonly options: WorkspaceFileIndexPipelineOptions = {}
   ) {}
 
   /** Starts a build and resolves as soon as its Git-visible paths are queryable. */
@@ -122,24 +186,43 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     if (this.disposed) return;
     this.started = true;
     if (options.roots) this.roots = options.roots;
-    if (options.respectGitignore !== undefined) this.respectGitignore = options.respectGitignore;
+    if (options.respectGitignore !== undefined) {
+      this.respectGitignore = options.respectGitignore;
+    }
     if (this.buildPromise) {
       this.rebuildRequested = true;
       return this.buildPromise;
     }
     const initialBuild = this.lastBuildAt === 0;
-    this.status = { ...this.status, state: WORKSPACE_FILE_INDEX_STATES.BUILDING };
-    const buildRoots = this.roots;
-    const respectGitignore = this.respectGitignore;
+    // A rebuild answers from the complete previous store until it swaps, so
+    // only the first build reports "building" (and the dashboard's row).
+    if (initialBuild) {
+      this.setStatus({
+        ...this.status,
+        state: WORKSPACE_FILE_INDEX_STATES.BUILDING,
+      });
+    }
     let markGitReady!: () => void;
-    const gitReady = new Promise<void>((resolve) => { markGitReady = resolve; });
-    this.buildPromise = this.performBuild(initialBuild, markGitReady, buildRoots, respectGitignore, options.gitVisibleOnly ?? false).finally(() => {
-      this.buildPromise = undefined;
-      if (this.rebuildRequested && !this.disposed) {
-        this.rebuildRequested = false;
-        void this.build();
-      }
+    const gitReady = new Promise<void>((resolve) => {
+      markGitReady = resolve;
     });
+    this.buildPromise = this.performBuild(
+      initialBuild,
+      markGitReady,
+      this.roots,
+      this.respectGitignore
+    )
+      .catch((error: unknown) => {
+        markGitReady();
+        throw error;
+      })
+      .finally(() => {
+        this.buildPromise = undefined;
+        if (this.rebuildRequested && !this.disposed) {
+          this.rebuildRequested = false;
+          void this.build();
+        }
+      });
     return gitReady;
   }
 
@@ -153,35 +236,34 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     }, CHANGE_BATCH_MS);
   }
 
-  async queryFiles(query: string, options?: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]> {
-    await this.ensureStarted();
-    this.maybeRebuildStale();
+  async queryFiles(
+    query: string,
+    options?: WorkspacePathQueryOptions
+  ): Promise<WorkspacePathResult[]> {
+    await this.beforeQuery();
     return this.query.queryFiles(query, options);
   }
 
-  async queryPromptFiles(query: string, options?: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]> {
-    await this.ensureStarted();
-    this.maybeRebuildStale();
+  async queryPromptFiles(
+    query: string,
+    options?: WorkspacePathQueryOptions
+  ): Promise<WorkspacePathResult[]> {
+    await this.beforeQuery();
     return this.query.queryPromptFiles(query, options);
   }
 
-  async suggestPaths(typedPath: string, kind: WorkspaceFileTreeEntryKind, maxResults?: number, options?: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]> {
-    await this.ensureStarted();
-    this.maybeRebuildStale();
+  async suggestPaths(
+    typedPath: string,
+    kind: WorkspaceFileTreeEntryKind,
+    maxResults?: number,
+    options?: WorkspacePathQueryOptions
+  ): Promise<WorkspacePathResult[]> {
+    await this.beforeQuery();
     return this.query.suggestPaths(typedPath, kind, maxResults, options);
   }
 
   getStatus(): WorkspaceFileIndexStatus {
     return this.status;
-  }
-
-  markDegraded(): void {
-    this.status = { ...this.status, state: WORKSPACE_FILE_INDEX_STATES.DEGRADED };
-  }
-
-  cancel(_queryId?: string): void {
-    // The in-process adapter accepts the worker-shaped cancellation message.
-    // Query cancellation is carried by the caller's AbortSignal in this phase.
   }
 
   dispose(): void {
@@ -191,83 +273,151 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     this.pendingChanges = [];
   }
 
-  private maybeRebuildStale(): void {
-    if (this.started && !this.buildPromise && this.lastBuildAt > 0 && this.dependencies.now() - this.lastBuildAt > REBUILD_STALE_MS) {
+  private async beforeQuery(): Promise<void> {
+    if (!this.started) {
+      await this.build();
+      return;
+    }
+    // D11: a query against a stale index starts a background rebuild but is
+    // answered from the current store.
+    if (
+      !this.buildPromise &&
+      this.lastBuildAt > 0 &&
+      this.dependencies.now() - this.lastBuildAt > REBUILD_STALE_MS
+    ) {
       void this.build();
     }
   }
 
-  private async ensureStarted(): Promise<void> {
-    if (!this.started) await this.build();
+  private setStatus(status: WorkspaceFileIndexStatus): void {
+    this.status = status;
+    this.options.onStatus?.(status);
+  }
+
+  private skipDirectories(respectGitignore: boolean): ReadonlySet<string> {
+    return respectGitignore
+      ? DEFAULT_SKIP_DIRECTORIES
+      : COMPLETION_ALL_FILES_SKIP_DIRECTORIES;
   }
 
   private async performBuild(
     initialBuild: boolean,
     markGitReady: () => void,
     roots: readonly WorkspaceFileIndexRoot[],
-    respectGitignore: boolean,
-    gitVisibleOnly: boolean
+    respectGitignore: boolean
   ): Promise<void> {
     const staging = new WorkspacePathStore();
-    const skip = respectGitignore ? DEFAULT_SKIP_DIRECTORIES : COMPLETION_ALL_FILES_SKIP_DIRECTORIES;
     let gitSucceeded = true;
-    const gitByRoot = await Promise.all(roots.map(async (root) => {
-      try {
-        const paths = await this.dependencies.getGitTrackedFiles(root.path);
-        return this.prefix(root, paths, roots);
-      } catch {
-        gitSucceeded = false;
-        return [];
-      }
-    }));
-    const gitPaths = gitByRoot.flat();
+    const gitByRoot = await Promise.all(
+      roots.map(async (root) => {
+        try {
+          return this.prefix(
+            root,
+            await this.dependencies.getGitTrackedFiles(root.path),
+            roots
+          );
+        } catch {
+          gitSucceeded = false;
+          return [];
+        }
+      })
+    );
 
     if (gitSucceeded) {
-      staging.replaceAll(gitPaths);
-      if (initialBuild) this.activate(staging, WORKSPACE_FILE_INDEX_STATES.BUILDING);
-      // Git-visible paths can be queried immediately while the optional full
-      // walk continues in the background.
+      staging.replaceAll(gitByRoot.flat());
+      if (initialBuild) {
+        this.activate(staging, WORKSPACE_FILE_INDEX_STATES.BUILDING);
+      }
+      // Git-visible paths are queryable now; the walk continues behind them.
       markGitReady();
     }
 
-    let walked: string[] = [];
-    if ((!respectGitignore || !gitSucceeded) && !gitVisibleOnly) {
-      const walkedByRoot = await Promise.all(roots.map(async (root) => {
-        try {
-          const result = await this.dependencies.walkSearchFiles(
-            root.path,
-            this.dependencies.now(),
-            Number.POSITIVE_INFINITY,
-            Number.POSITIVE_INFINITY,
-            gitSucceeded ? skip : DEFAULT_SKIP_DIRECTORIES,
-            !gitSucceeded || respectGitignore
-          );
-          return this.prefix(root, result.files, roots);
-        } catch {
-          // A partial walk remains useful; the index reports degraded below.
-          return [];
-        }
-      }));
-      walked = walkedByRoot.flat();
+    const walk =
+      (!respectGitignore || !gitSucceeded) && !this.options.gitVisibleOnly;
+    if (walk) {
+      // The first build has nothing better to show, so it publishes the walk
+      // as it goes. A rebuild keeps answering from the old store and swaps.
+      const progressive = initialBuild && gitSucceeded;
+      let buffered: string[] = [];
+      let publishedAt = this.dependencies.now();
+      const publish = (): void => {
+        if (buffered.length === 0 || this.disposed) return;
+        staging.add(buffered);
+        buffered = [];
+        publishedAt = this.dependencies.now();
+        this.setStatus({ ...this.status, indexed: staging.files.length });
+      };
+      await Promise.all(
+        roots.map(async (root) => {
+          try {
+            const result = await this.dependencies.walkSearchFiles(
+              root.path,
+              this.dependencies.now(),
+              Number.POSITIVE_INFINITY,
+              Number.POSITIVE_INFINITY,
+              gitSucceeded
+                ? this.skipDirectories(respectGitignore)
+                : DEFAULT_SKIP_DIRECTORIES,
+              !gitSucceeded || respectGitignore,
+              progressive
+                ? (files) => {
+                    buffered.push(...this.prefix(root, files, roots));
+                    if (
+                      this.dependencies.now() - publishedAt >=
+                      BUILD_PROGRESS_MS
+                    ) {
+                      publish();
+                    }
+                  }
+                : undefined
+            );
+            // `add` skips paths already published progressively.
+            if (gitSucceeded)
+              staging.add(this.prefix(root, result.files, roots));
+            else buffered.push(...this.prefix(root, result.files, roots));
+          } catch {
+            // A failed walk of one root still leaves the others useful.
+          }
+        })
+      );
+      if (!gitSucceeded) {
+        staging.replaceAll(buffered);
+        buffered = [];
+      }
+      publish();
     }
 
     if (this.disposed) {
-      if (!gitSucceeded) markGitReady();
+      markGitReady();
       return;
     }
-    if (gitSucceeded) staging.add(walked);
-    else staging.replaceAll(walked);
-    this.activate(staging, gitSucceeded ? WORKSPACE_FILE_INDEX_STATES.READY : WORKSPACE_FILE_INDEX_STATES.DEGRADED);
+    this.activate(
+      staging,
+      gitSucceeded
+        ? WORKSPACE_FILE_INDEX_STATES.READY
+        : WORKSPACE_FILE_INDEX_STATES.DEGRADED
+    );
+    if (this.options.gitVisibleOnly) {
+      this.setStatus({
+        ...this.status,
+        state: WORKSPACE_FILE_INDEX_STATES.DEGRADED,
+      });
+    }
     this.lastBuildAt = this.dependencies.now();
     // Without a usable Git list, the fallback walk is the first queryable
     // snapshot, so don't release the initial request against an empty store.
-    if (!gitSucceeded) markGitReady();
+    markGitReady();
   }
 
-  private activate(store: WorkspacePathStore, state: WorkspaceFileIndexState): void {
-    this.store = store;
-    this.query = new WorkspacePathQuery(store);
-    this.status = { state, indexed: store.files.length };
+  private activate(
+    store: WorkspacePathStore,
+    state: WorkspaceFileIndexState
+  ): void {
+    if (store !== this.store) {
+      this.store = store;
+      this.query = new WorkspacePathQuery(store);
+    }
+    this.setStatus({ state, indexed: store.files.length });
   }
 
   private prefix(
@@ -283,102 +433,245 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     const changes = this.pendingChanges;
     this.pendingChanges = [];
     if (this.disposed || changes.length === 0) return;
-    const skip = this.respectGitignore ? DEFAULT_SKIP_DIRECTORIES : COMPLETION_ALL_FILES_SKIP_DIRECTORIES;
-    const accepted: Array<{ root: WorkspaceFileIndexRoot; relative: string; kind: WorkspaceFileChangeKind }> = [];
+    const skip = this.skipDirectories(this.respectGitignore);
+    const removed: string[] = [];
+    const created: Array<{ root: WorkspaceFileIndexRoot; relative: string }> =
+      [];
+    let rebuild = false;
     for (const change of changes) {
-      const root = this.roots.find((candidate) => candidate.path === change.root);
+      const root = this.roots.find(
+        (candidate) => candidate.path === change.root
+      );
       if (!root) continue;
       const relative = change.path.replace(/\\/g, "/").replace(/^\/+/, "");
-      if (relative === ".gitignore" || relative.endsWith("/.gitignore") || relative === ".git/info/exclude") {
-        void this.build();
+      if (isIgnoreRuleFile(relative)) {
+        rebuild = true;
         continue;
       }
       if (isSearchPathIgnored(relative, skip, this.respectGitignore)) continue;
-      if (change.kind !== WORKSPACE_FILE_CHANGE_KINDS.CHANGE) accepted.push({ root, relative, kind: change.kind });
-    }
-    for (const change of accepted) {
       if (change.kind === WORKSPACE_FILE_CHANGE_KINDS.DELETE) {
-        this.store.removeTree(this.prefix(change.root, [change.relative])[0]);
-        continue;
+        removed.push(this.prefix(root, [relative])[0]);
+      } else if (change.kind === WORKSPACE_FILE_CHANGE_KINDS.CREATE) {
+        created.push({ root, relative });
       }
-      const absolute = path.join(change.root.path, ...change.relative.split("/"));
+    }
+    if (rebuild) void this.build();
+
+    const added: string[] = [];
+    for (const { root, relative } of created) {
+      const absolute = path.join(root.path, ...relative.split("/"));
       try {
         const info = await this.dependencies.stat(absolute);
         let paths: string[] = [];
-        if (info.isFile()) paths = [change.relative];
+        if (info.isFile()) paths = [relative];
         else if (info.isDirectory()) {
-          const result = await this.dependencies.walkSearchFiles(absolute, this.dependencies.now(), Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, skip, this.respectGitignore);
-          paths = result.files.map((file) => `${change.relative}/${file}`);
+          const result = await this.dependencies.walkSearchFiles(
+            absolute,
+            this.dependencies.now(),
+            Number.POSITIVE_INFINITY,
+            Number.POSITIVE_INFINITY,
+            skip,
+            this.respectGitignore
+          );
+          paths = result.files.map(
+            (file) => `${relative}/${file.replace(/\\/g, "/")}`
+          );
         }
         if (this.respectGitignore && paths.length > 0) {
-          const ignored = await this.dependencies.getGitIgnoredPaths(change.root.path, paths.map((file) => path.resolve(change.root.path, file)));
-          paths = paths.filter((file) => !ignored.has(path.resolve(change.root.path, file)));
+          const absolutes = paths.map((file) => path.resolve(root.path, file));
+          const ignored = await this.dependencies.getGitIgnoredPaths(
+            root.path,
+            absolutes
+          );
+          paths = paths.filter((_, i) => !ignored.has(absolutes[i]));
         }
-        this.store.add(this.prefix(change.root, paths));
+        added.push(...this.prefix(root, paths));
       } catch {
         // Watcher races with deletion and inaccessible paths are expected.
       }
     }
-    this.status = { ...this.status, indexed: this.store.files.length };
+    if (this.disposed) return;
+    this.store.removeTrees(removed);
+    this.store.add(added);
+    this.setStatus({ ...this.status, indexed: this.store.files.length });
   }
 }
 
-type WorkerRequest = { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD; options?: WorkspaceFileIndexBuildOptions } |
-  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES; changes: readonly WorkspaceFileChange[] } |
-  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES | typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES; query: string; queryId: string; limit?: number } |
-  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS; query: string; queryId: string; kind: WorkspaceFileTreeEntryKind; maxResults?: number } |
-  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL; queryId: string } | { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE };
-type WorkerResponse = { id?: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.RESULT; value?: unknown; status?: WorkspaceFileIndexStatus } |
-  { type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS; queryId: string; progress: { scanned: number; total: number; results: WorkspacePathResult[] } } |
-  { type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS; status: WorkspaceFileIndexStatus } |
-  { type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG; level: typeof WORKSPACE_FILE_INDEX_LOG_LEVELS[keyof typeof WORKSPACE_FILE_INDEX_LOG_LEVELS]; message: string } |
-  { id?: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR; message: string };
-type WorkerRequestInput = WorkerRequest extends infer Request
-  ? Request extends WorkerRequest ? Omit<Request, "id"> : never
+type QueryMessageType =
+  | typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES
+  | typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES
+  | typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS;
+
+export type WorkspaceFileIndexRequest =
+  | {
+      id: number;
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD;
+      options?: WorkspaceFileIndexBuildOptions;
+    }
+  | {
+      id: number;
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES;
+      changes: readonly WorkspaceFileChange[];
+    }
+  | {
+      id: number;
+      type: QueryMessageType;
+      query: string;
+      queryId: string;
+      limit?: number;
+      kind?: WorkspaceFileTreeEntryKind;
+      maxResults?: number;
+    }
+  | {
+      id: number;
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL;
+      queryId: string;
+    }
+  | { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE };
+
+export type WorkspaceFileIndexResponse =
+  | {
+      id?: number;
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.RESULT;
+      value?: unknown;
+      status?: WorkspaceFileIndexStatus;
+    }
+  | {
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS;
+      queryId: string;
+      progress: {
+        scanned: number;
+        total: number;
+        results: WorkspacePathResult[];
+      };
+    }
+  | {
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS;
+      status: WorkspaceFileIndexStatus;
+    }
+  | {
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG;
+      level: (typeof WORKSPACE_FILE_INDEX_LOG_LEVELS)[keyof typeof WORKSPACE_FILE_INDEX_LOG_LEVELS];
+      message: string;
+    }
+  | {
+      id?: number;
+      type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR;
+      message: string;
+    };
+
+type WorkerRequestInput = WorkspaceFileIndexRequest extends infer Request
+  ? Request extends WorkspaceFileIndexRequest
+    ? Omit<Request, "id">
+    : never
   : never;
+
+/** Runs one query-shaped request against a pipeline (worker or in-process). */
+export function runPipelineQuery(
+  pipeline: WorkspaceFileIndexPipeline,
+  request: {
+    type: QueryMessageType;
+    query: string;
+    limit?: number;
+    kind?: WorkspaceFileTreeEntryKind;
+    maxResults?: number;
+  },
+  options: WorkspacePathQueryOptions = {}
+): Promise<WorkspacePathResult[]> {
+  const queryOptions = { ...options, limit: request.limit ?? options.limit };
+  switch (request.type) {
+    case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES:
+      return pipeline.queryFiles(request.query, queryOptions);
+    case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES:
+      return pipeline.queryPromptFiles(request.query, queryOptions);
+    case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS:
+      return pipeline.suggestPaths(
+        request.query,
+        request.kind ?? WORKSPACE_ENTRY_KINDS.FILE,
+        request.maxResults,
+        queryOptions
+      );
+  }
+}
 
 export interface WorkspaceFileIndexOptions {
   readonly workerHeapMb?: number;
   readonly userFeedbackSink?: UserFeedbackSink;
-  readonly workerFactory?: (scriptPath: string, resourceLimits: { maxOldGenerationSizeMb: number }) => Worker;
+  readonly workerFactory?: (
+    scriptPath: string,
+    resourceLimits: { maxOldGenerationSizeMb: number }
+  ) => Worker;
+}
+
+interface PendingRequest {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  request: WorkerRequestInput;
+  onProgress?: WorkspacePathQueryOptions["onProgress"];
 }
 
 /** Host transport for a per-workspace worker, with a bounded in-process fallback. */
 export class WorkspaceFileIndex implements WorkspaceFileQueries {
-  private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; request: WorkerRequestInput }>();
-  private readonly queryIds = new Map<string, number>();
+  private readonly pending = new Map<number, PendingRequest>();
+  private readonly queryRequestIds = new Map<string, number>();
   private nextId = 1;
   private worker?: Worker;
   private fallback?: WorkspaceFileIndexPipeline;
-  private status: WorkspaceFileIndexStatus = { state: WORKSPACE_FILE_INDEX_STATES.BUILDING, indexed: 0 };
+  private status: WorkspaceFileIndexStatus = {
+    state: WORKSPACE_FILE_INDEX_STATES.BUILDING,
+    indexed: 0,
+  };
   private disposed = false;
   private failureStarted = false;
   private buildStarted = false;
+  private roots: readonly WorkspaceFileIndexRoot[];
+  private respectGitignore: boolean;
 
   constructor(
-    private readonly roots: readonly WorkspaceFileIndexRoot[],
-    private readonly respectGitignore: boolean,
+    roots: readonly WorkspaceFileIndexRoot[],
+    respectGitignore: boolean,
     dependencies?: WorkspaceFileIndexDependencies,
     private readonly options: WorkspaceFileIndexOptions = {}
   ) {
+    this.roots = roots;
+    this.respectGitignore = respectGitignore;
     // Injected pipeline dependencies keep deterministic unit tests in-process.
     if (dependencies) {
-      this.fallback = new WorkspaceFileIndexPipeline(roots, respectGitignore, dependencies);
+      this.fallback = new WorkspaceFileIndexPipeline(
+        roots,
+        respectGitignore,
+        dependencies
+      );
       return;
     }
     try {
       const candidates = [
-        pathModule.join(__dirname, "..", "..", "workspaceFileIndexWorker.js"),
-        pathModule.join(__dirname, "workspaceFileIndexWorker.js"),
+        path.join(__dirname, "..", "..", "workspaceFileIndexWorker.js"),
+        path.join(__dirname, "workspaceFileIndexWorker.js"),
       ];
       const scriptPath = findExistingWorkerPath(candidates);
-      if (!scriptPath) throw new Error(`Unable to locate workspace file index worker; checked ${candidates.join(", ")}`);
-      const factory = options.workerFactory ?? ((file, resourceLimits) => new Worker(file, { resourceLimits }));
-      this.worker = factory(scriptPath, { maxOldGenerationSizeMb: options.workerHeapMb ?? FILE_INDEX_WORKER_HEAP_MB });
-      this.worker.on("message", (message: WorkerResponse) => this.onMessage(message));
-      this.worker.on("error", (error: Error & { code?: string }) => void this.fail(error));
+      if (!scriptPath) {
+        throw new Error(
+          `Unable to locate workspace file index worker; checked ${candidates.join(", ")}`
+        );
+      }
+      const factory =
+        options.workerFactory ??
+        ((file, resourceLimits) => new Worker(file, { resourceLimits }));
+      this.worker = factory(scriptPath, {
+        maxOldGenerationSizeMb:
+          options.workerHeapMb ?? FILE_INDEX_WORKER_HEAP_MB,
+      });
+      this.worker.on("message", (message: WorkspaceFileIndexResponse) =>
+        this.onMessage(message)
+      );
+      this.worker.on("error", (error: Error) => void this.fail(error));
       this.worker.on("exit", (code) => {
-        if (!this.disposed && code !== 0) void this.fail(new Error(`Workspace file index worker exited with code ${code}`));
+        if (!this.disposed && code !== 0) {
+          void this.fail(
+            new Error(`Workspace file index worker exited with code ${code}`)
+          );
+        }
       });
     } catch (error) {
       void this.fail(error);
@@ -387,141 +680,224 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
 
   async build(options: WorkspaceFileIndexBuildOptions = {}): Promise<void> {
     this.buildStarted = true;
-    if (this.fallback) { await this.fallback.build(options); this.status = this.fallback.getStatus(); return; }
-    await this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD, options: { ...options, roots: options.roots ?? this.roots, respectGitignore: options.respectGitignore ?? this.respectGitignore } });
+    if (options.roots) this.roots = options.roots;
+    if (options.respectGitignore !== undefined) {
+      this.respectGitignore = options.respectGitignore;
+    }
+    await this.request({
+      type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD,
+      options: { roots: this.roots, respectGitignore: this.respectGitignore },
+    });
   }
+
   async applyChanges(changes: readonly WorkspaceFileChange[]): Promise<void> {
-    if (this.fallback) { await this.fallback.applyChanges(changes); return; }
-    await this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES, changes });
+    await this.request({
+      type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES,
+      changes,
+    });
   }
-  async queryFiles(query: string, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
-    await this.ensureStarted();
-    if (this.fallback) return this.fallback.queryFiles(query, options);
-    return this.query(WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES, query, options);
+
+  queryFiles(
+    query: string,
+    options: WorkspacePathQueryOptions = {}
+  ): Promise<WorkspacePathResult[]> {
+    return this.runQuery(
+      { type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES, query },
+      options
+    );
   }
-  async queryPromptFiles(query: string, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
-    await this.ensureStarted();
-    if (this.fallback) return this.fallback.queryPromptFiles(query, options);
-    return this.query(WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES, query, options);
+
+  queryPromptFiles(
+    query: string,
+    options: WorkspacePathQueryOptions = {}
+  ): Promise<WorkspacePathResult[]> {
+    return this.runQuery(
+      { type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES, query },
+      options
+    );
   }
-  async suggestPaths(typedPath: string, kind: WorkspaceFileTreeEntryKind, maxResults?: number, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
-    await this.ensureStarted();
-    if (this.fallback) return this.fallback.suggestPaths(typedPath, kind, maxResults, options);
-    return this.querySuggestions(typedPath, kind, maxResults, options);
+
+  suggestPaths(
+    typedPath: string,
+    kind: WorkspaceFileTreeEntryKind,
+    maxResults?: number,
+    options: WorkspacePathQueryOptions = {}
+  ): Promise<WorkspacePathResult[]> {
+    return this.runQuery(
+      {
+        type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS,
+        query: typedPath,
+        kind,
+        maxResults,
+      },
+      options
+    );
   }
-  getStatus(): WorkspaceFileIndexStatus { return this.fallback?.getStatus() ?? this.status; }
-  private async ensureStarted(): Promise<void> {
-    if (!this.buildStarted) await this.build();
+
+  getStatus(): WorkspaceFileIndexStatus {
+    return this.fallback?.getStatus() ?? this.status;
   }
-  cancel(queryId?: string): void {
-    if (!queryId) return;
-    if (this.fallback) { this.fallback.cancel(queryId); return; }
-    const id = this.queryIds.get(queryId);
-    if (id !== undefined) this.worker?.postMessage({ id: this.nextId++, type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL, queryId } satisfies WorkerRequest);
+
+  cancel(queryId: string): void {
+    const id = this.queryRequestIds.get(queryId);
+    if (id === undefined || !this.worker) return;
+    this.worker.postMessage({
+      id: this.nextId++,
+      type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL,
+      queryId,
+    } satisfies WorkspaceFileIndexRequest);
   }
+
   dispose(): void {
     this.disposed = true;
     this.fallback?.dispose();
     const worker = this.worker;
     if (worker) {
-      worker.postMessage({ id: this.nextId++, type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE } satisfies WorkerRequest);
+      worker.postMessage({
+        id: this.nextId++,
+        type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE,
+      } satisfies WorkspaceFileIndexRequest);
       setTimeout(() => void worker.terminate(), 100);
     }
     this.worker = undefined;
-    for (const pending of this.pending.values()) pending.reject(new Error("Workspace file index disposed"));
+    for (const pending of this.pending.values()) {
+      pending.reject(new Error("Workspace file index disposed"));
+    }
     this.pending.clear();
   }
 
-  private async query(type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES | typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES, query: string, options: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]> {
+  private async runQuery(
+    request: {
+      type: QueryMessageType;
+      query: string;
+      kind?: WorkspaceFileTreeEntryKind;
+      maxResults?: number;
+    },
+    options: WorkspacePathQueryOptions
+  ): Promise<WorkspacePathResult[]> {
+    if (!this.buildStarted) await this.build();
     if (options.signal?.aborted) return [];
-    const queryId = `${this.nextId}`;
-    const request = this.request({ type, query, queryId, limit: options.limit });
-    const id = Number(queryId);
-    this.queryIds.set(queryId, id);
-    const progressListener = (message: WorkerResponse): void => {
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS && message.queryId === queryId) options.onProgress?.(message.progress);
-    };
-    this.worker?.on("message", progressListener);
-    const abort = (): void => this.cancel(queryId);
-    options.signal?.addEventListener("abort", abort, { once: true });
-    try { return await request as WorkspacePathResult[]; }
-    finally { this.worker?.off("message", progressListener); options.signal?.removeEventListener("abort", abort); this.queryIds.delete(queryId); }
-  }
-
-  private async querySuggestions(typedPath: string, kind: WorkspaceFileTreeEntryKind, maxResults: number | undefined, options: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]> {
-    if (options.signal?.aborted) return [];
-    const queryId = `${this.nextId}`;
-    const request = this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS, query: typedPath, queryId, kind, maxResults });
-    const progressListener = (message: WorkerResponse): void => {
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS && message.queryId === queryId) options.onProgress?.(message.progress);
-    };
-    this.worker?.on("message", progressListener);
-    const abort = (): void => this.cancel(queryId);
-    options.signal?.addEventListener("abort", abort, { once: true });
-    try { return await request as WorkspacePathResult[]; }
-    finally { this.worker?.off("message", progressListener); options.signal?.removeEventListener("abort", abort); this.queryIds.delete(queryId); }
-  }
-
-  private request(message: WorkerRequestInput): Promise<unknown> {
-    if (this.fallback) {
-      const pipeline = this.fallback;
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD) return pipeline.build(message.options).then(() => undefined);
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES) return pipeline.applyChanges(message.changes).then(() => undefined);
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES) return pipeline.queryFiles(message.query, { limit: message.limit });
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES) return pipeline.queryPromptFiles(message.query, { limit: message.limit });
-      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS) return pipeline.suggestPaths(message.query, message.kind, message.maxResults);
-      return Promise.resolve(undefined);
-    }
+    if (this.fallback) return runPipelineQuery(this.fallback, request, options);
     const id = this.nextId++;
+    const queryId = String(id);
+    this.queryRequestIds.set(queryId, id);
+    const abort = (): void => this.cancel(queryId);
+    options.signal?.addEventListener("abort", abort, { once: true });
+    try {
+      return (await this.request(
+        { ...request, queryId, limit: options.limit },
+        id,
+        options.onProgress
+      )) as WorkspacePathResult[];
+    } finally {
+      options.signal?.removeEventListener("abort", abort);
+      this.queryRequestIds.delete(queryId);
+    }
+  }
+
+  private request(
+    message: WorkerRequestInput,
+    id = this.nextId++,
+    onProgress?: WorkspacePathQueryOptions["onProgress"]
+  ): Promise<unknown> {
+    if (this.fallback) return this.runInProcess(this.fallback, message);
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, request: message });
-      this.worker?.postMessage({ ...message, id } as WorkerRequest);
+      this.pending.set(id, { resolve, reject, request: message, onProgress });
+      this.worker?.postMessage({ ...message, id } as WorkspaceFileIndexRequest);
     });
   }
-  private onMessage(message: WorkerResponse): void {
-    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS) { this.status = message.status; return; }
-    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG) {
-      if (message.level === WORKSPACE_FILE_INDEX_LOG_LEVELS.WARN) Log.warn(message.message);
-      else if (message.level === WORKSPACE_FILE_INDEX_LOG_LEVELS.ERROR) Log.error(message.message);
-      else Log.info(message.message);
+
+  private async runInProcess(
+    pipeline: WorkspaceFileIndexPipeline,
+    message: WorkerRequestInput
+  ): Promise<unknown> {
+    switch (message.type) {
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD:
+        return pipeline.build(message.options);
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES:
+        return pipeline.applyChanges(message.changes);
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES:
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES:
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS:
+        return runPipelineQuery(pipeline, message);
+      default:
+        return undefined;
+    }
+  }
+
+  private onMessage(message: WorkspaceFileIndexResponse): void {
+    switch (message.type) {
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS:
+        this.status = message.status;
+        return;
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG:
+        if (message.level === WORKSPACE_FILE_INDEX_LOG_LEVELS.WARN) {
+          Log.warn(message.message);
+        } else if (message.level === WORKSPACE_FILE_INDEX_LOG_LEVELS.ERROR) {
+          Log.error(message.message);
+        } else Log.info(message.message);
+        return;
+      case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS: {
+        const id = this.queryRequestIds.get(message.queryId);
+        if (id !== undefined)
+          this.pending.get(id)?.onProgress?.(message.progress);
+        return;
+      }
+    }
+    if (message.id === undefined) return;
+    const pending = this.pending.get(message.id);
+    if (!pending) return;
+    this.pending.delete(message.id);
+    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR) {
+      pending.reject(new Error(message.message));
       return;
     }
-    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS) return;
-    const pending = message.id === undefined ? undefined : this.pending.get(message.id);
-    if (!pending || message.id === undefined) return;
-    this.pending.delete(message.id);
-    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR) pending.reject(new Error(message.message));
-    else { if (message.status) this.status = message.status; pending.resolve(message.value); }
+    if (message.status) this.status = message.status;
+    pending.resolve(message.value);
   }
+
   private async fail(error: unknown): Promise<void> {
     if (this.failureStarted || this.fallback || this.disposed) return;
     this.failureStarted = true;
     this.worker?.removeAllListeners();
-    this.worker?.terminate();
+    void this.worker?.terminate();
     this.worker = undefined;
-    Log.warn(`Workspace file index worker failed${(error as NodeJS.ErrnoException)?.code === "ERR_WORKER_OUT_OF_MEMORY" ? " with ERR_WORKER_OUT_OF_MEMORY" : ""}: ${error instanceof Error ? error.message : String(error)}`);
+    const outOfMemory =
+      (error as NodeJS.ErrnoException)?.code === "ERR_WORKER_OUT_OF_MEMORY";
+    Log.warn(
+      `Workspace file index worker failed${outOfMemory ? " with ERR_WORKER_OUT_OF_MEMORY" : ""}: ${error instanceof Error ? error.message : String(error)}`
+    );
     if (!workerFailureWarningShown && this.options.userFeedbackSink) {
       workerFailureWarningShown = true;
-      notifyUserFeedback(this.options.userFeedbackSink, USER_FEEDBACK_SEVERITY.WARNING, WORKER_MEMORY_WARNING);
+      notifyUserFeedback(
+        this.options.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.WARNING,
+        WORKER_MEMORY_WARNING
+      );
     }
-    this.fallback = new WorkspaceFileIndexPipeline(this.roots, this.respectGitignore);
-    await this.fallback.build({ gitVisibleOnly: true });
-    this.fallback.markDegraded();
-    this.status = this.fallback.getStatus();
-    for (const [id, pending] of this.pending) {
-      this.pending.delete(id);
-      try {
-        const request = pending.request;
-        let value: unknown;
-        if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD) value = undefined;
-        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES) value = await this.fallback.queryFiles(request.query);
-        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES) value = await this.fallback.queryPromptFiles(request.query);
-        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS) value = await this.fallback.suggestPaths(request.query, request.kind, request.maxResults);
-        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES) value = await this.fallback.applyChanges(request.changes);
-        pending.resolve(value);
-      } catch (fallbackError) {
-        pending.reject(fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)));
-      }
+    // D4: no respawn. The in-process fallback holds only the Git-visible
+    // list, so it can never walk ignored trees onto the extension-host heap.
+    const fallback = new WorkspaceFileIndexPipeline(
+      this.roots,
+      this.respectGitignore,
+      DEFAULT_DEPENDENCIES,
+      { gitVisibleOnly: true }
+    );
+    this.fallback = fallback;
+    await fallback.build();
+    const pending = [...this.pending.values()];
+    this.pending.clear();
+    this.queryRequestIds.clear();
+    for (const entry of pending) {
+      this.runInProcess(fallback, entry.request).then(
+        entry.resolve,
+        (fallbackError: unknown) =>
+          entry.reject(
+            fallbackError instanceof Error
+              ? fallbackError
+              : new Error(String(fallbackError))
+          )
+      );
     }
   }
 }

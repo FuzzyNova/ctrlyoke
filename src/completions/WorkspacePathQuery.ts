@@ -1,8 +1,4 @@
-import {
-  fuzzyMatches,
-  scoreFuzzyQuery,
-  type FuzzyKey,
-} from "./FuzzyRanking";
+import { fuzzyMatches, scoreFuzzyQuery, type FuzzyKey } from "./FuzzyRanking";
 import {
   WorkspacePathStore,
   type WorkspacePathEntry,
@@ -43,10 +39,6 @@ interface ScoredEntry {
 }
 
 const fileKeys: readonly FuzzyKey<WorkspacePathEntry>[] = [
-  (entry) => entry.name,
-  (entry) => entry.relativePath,
-];
-const pathKeys: readonly FuzzyKey<WorkspacePathEntry>[] = [
   (entry) => entry.name,
   (entry) => entry.relativePath,
 ];
@@ -100,11 +92,17 @@ export class WorkspacePathQuery {
       return selected.slice(0, options.limit ?? PROMPT_LIMIT).map(asResult);
     }
     const rankQuery = child || filter;
-    const keys = child ? [(entry: WorkspacePathEntry) => entry.name] : pathKeys;
+    const keys = child ? [(entry: WorkspacePathEntry) => entry.name] : fileKeys;
     const candidates = child
       ? selected.filter((entry) => fuzzyMatches(entry.name, child))
       : selected;
-    return this.rankCandidates(candidates, rankQuery, keys, options, options.limit ?? PROMPT_LIMIT);
+    return this.rankCandidates(
+      candidates,
+      rankQuery,
+      keys,
+      options,
+      options.limit ?? PROMPT_LIMIT
+    );
   }
 
   async suggestPaths(
@@ -116,43 +114,47 @@ export class WorkspacePathQuery {
     const normalized = normalizeReferencePath(typedPath)
       .replace(/^\.\.?\//, "")
       .replace(/\/+$/, "");
-    const base = normalized.slice(normalized.lastIndexOf("/") + 1).toLowerCase();
+    const base = normalized
+      .slice(normalized.lastIndexOf("/") + 1)
+      .toLowerCase();
     if (!base || maxResults <= 0) return [];
     const parent = normalized.includes("/")
       ? normalized.slice(0, normalized.lastIndexOf("/"))
       : ".";
-    const candidates = this.store.entries.filter((entry) => entry.kind === kind);
-    const maxDelta = candidates.reduce(
-      (maximum, entry) => Math.max(maximum, Math.abs(entry.name.length - base.length)),
-      0
+    const entries = this.store.entries;
+    const matches: Array<{
+      entry: WorkspacePathEntry;
+      tier: number;
+      delta: number;
+    }> = [];
+    for (let start = 0; start < entries.length; start += SCAN_CHUNK_SIZE) {
+      if (options.signal?.aborted) break;
+      const end = Math.min(entries.length, start + SCAN_CHUNK_SIZE);
+      for (let i = start; i < end; i++) {
+        const entry = entries[i];
+        if (entry.kind !== kind) continue;
+        const tier = suggestionTier(entry, base, parent);
+        if (tier < 0 || entry.relativePath === normalized) continue;
+        matches.push({
+          entry,
+          tier,
+          delta: Math.abs(entry.lowerName.length - base.length),
+        });
+      }
+      if (end < entries.length) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+    // Only the (few) matches are sorted, never the whole store.
+    matches.sort(
+      (a, b) =>
+        a.tier - b.tier ||
+        a.delta - b.delta ||
+        a.entry.relativePath.localeCompare(b.entry.relativePath)
     );
-    const pathsByRank = new Map(
-      [...candidates]
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-        .map((entry, index) => [entry.relativePath, index])
-    );
-    const { entries: results } = await this.scan(candidates, options, maxResults, (entry) => {
-      const candidate = entry.lowerName;
-      const sameDir = entry.parent === parent;
-      const prefix = base.startsWith(candidate) || candidate.startsWith(base);
-      const tier =
-        sameDir && prefix
-          ? 0
-          : sameDir && fuzzyMatches(candidate, base)
-            ? 1
-            : candidate === base
-              ? 2
-              : prefix
-                ? 3
-                : -1;
-      if (tier < 0 || entry.relativePath === normalized) return undefined;
-      const delta = Math.abs(candidate.length - base.length);
-      const lexicalRank = pathsByRank.get(entry.relativePath) ?? 0;
-      const deltaFactor = candidates.length + 1;
-      const tierFactor = (maxDelta + 1) * deltaFactor;
-      return { score: -(tier * tierFactor + delta * deltaFactor + lexicalRank), entry };
-    });
-    return results.map(asResult);
+    return matches
+      .slice(0, maxResults)
+      .map(({ entry }, rank) => asResult(entry, rank));
   }
 
   private async queryFileEntries(
@@ -160,18 +162,25 @@ export class WorkspacePathQuery {
     options: WorkspacePathQueryOptions
   ): Promise<WorkspacePathResult[]> {
     const entries = this.store.entries;
-    const filter = normalizeReferencePath(query).replace(/^"/, "").toLowerCase();
+    const filter = normalizeReferencePath(query)
+      .replace(/^"/, "")
+      .toLowerCase();
     const hasPath = filter.includes("/");
     const endsInSlash = filter.endsWith("/");
     const parent = hasPath
-      ? (endsInSlash ? filter.slice(0, -1) : filter.slice(0, filter.lastIndexOf("/"))
+      ? (endsInSlash
+          ? filter.slice(0, -1)
+          : filter.slice(0, filter.lastIndexOf("/"))
         ).replace(/\/+$/, "")
       : "";
-    const child = hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
+    const child =
+      hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
     if (!hasPath && filter) {
       const source = this.narrowedPositions(filter);
       const scanned = await this.scan(
-        source.map((position) => entries[position]).filter((entry) => entry !== undefined),
+        source
+          .map((position) => entries[position])
+          .filter((entry) => entry !== undefined),
         options,
         options.limit ?? FILE_LIMIT,
         (entry) => {
@@ -180,17 +189,25 @@ export class WorkspacePathQuery {
           return score === undefined ? undefined : { score, entry };
         }
       );
-      this.rememberNarrowing(filter, scanned.survivors);
+      // An aborted scan saw only part of the store, so its survivors are not
+      // a superset of the next query's matches.
+      if (!options.signal?.aborted) {
+        this.rememberNarrowing(filter, scanned.survivors);
+      }
       return scanned.entries.map(asResult);
     }
 
     const candidates = hasPath
       ? entries.filter(
-          (entry) => entry.lowerParent === parent && (!child || fuzzyMatches(entry.name, child))
+          (entry) =>
+            entry.lowerParent === parent &&
+            (!child || fuzzyMatches(entry.name, child))
         )
       : entries;
     if (!child) return orderedResults(candidates, options.limit ?? FILE_LIMIT);
-    const narrowed = candidates.filter((entry) => fuzzyMatches(entry.name, child));
+    const narrowed = candidates.filter((entry) =>
+      fuzzyMatches(entry.name, child)
+    );
     return this.rankCandidates(
       narrowed,
       child,
@@ -224,11 +241,16 @@ export class WorkspacePathQuery {
     options: WorkspacePathQueryOptions,
     limit: number
   ): Promise<WorkspacePathResult[]> {
-    const { entries: results } = await this.scan(candidates, options, limit, (entry) => {
-      if (!subsequenceWordsMatch(entry.lowerPath, query)) return undefined;
-      const score = scoreFuzzyQuery(query, entry, keys);
-      return score === undefined ? undefined : { score, entry };
-    });
+    const { entries: results } = await this.scan(
+      candidates,
+      options,
+      limit,
+      (entry) => {
+        if (!subsequenceWordsMatch(entry.lowerPath, query)) return undefined;
+        const score = scoreFuzzyQuery(query, entry, keys);
+        return score === undefined ? undefined : { score, entry };
+      }
+    );
     return results.map(asResult);
   }
 
@@ -238,12 +260,18 @@ export class WorkspacePathQuery {
     limit: number,
     score: (entry: WorkspacePathEntry) => ScoredEntry | undefined
   ): Promise<{ entries: WorkspacePathEntry[]; survivors: number[] }> {
-    const heap = new TopKHeap(limit === 0 ? candidates.length : Math.max(0, limit));
+    const heap = new TopKHeap(
+      limit === 0 ? candidates.length : Math.max(0, limit)
+    );
     const survivors: number[] = [];
     let scanned = 0;
     let lastProgress = Date.now();
     const publish = (): void => {
-      if (!options.onProgress || Date.now() - lastProgress < PROGRESS_INTERVAL_MS) return;
+      if (
+        !options.onProgress ||
+        Date.now() - lastProgress < PROGRESS_INTERVAL_MS
+      )
+        return;
       options.onProgress({
         scanned,
         total: candidates.length,
@@ -281,11 +309,32 @@ function splitScopedQuery(filter: string): {
   const hasPath = filter.includes("/");
   const endsInSlash = filter.endsWith("/");
   const parent = hasPath
-    ? (endsInSlash ? filter.slice(0, -1) : filter.slice(0, filter.lastIndexOf("/"))
+    ? (endsInSlash
+        ? filter.slice(0, -1)
+        : filter.slice(0, filter.lastIndexOf("/"))
       ).replace(/\/+$/, "")
     : "";
-  const child = hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
+  const child =
+    hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
   return { hasPath, parent, child };
+}
+
+/**
+ * Path-suggestion tier: 0 same directory with a prefix match, 1 same
+ * directory fuzzy match, 2 exact name elsewhere, 3 prefix elsewhere, -1 none.
+ */
+function suggestionTier(
+  entry: WorkspacePathEntry,
+  base: string,
+  parent: string
+): number {
+  const candidate = entry.lowerName;
+  const sameDir = entry.parent === parent;
+  const prefix = base.startsWith(candidate) || candidate.startsWith(base);
+  if (sameDir && prefix) return 0;
+  if (sameDir && fuzzyMatches(candidate, base)) return 1;
+  if (candidate === base) return 2;
+  return prefix ? 3 : -1;
 }
 
 function subsequenceWordsMatch(lowerPath: string, query: string): boolean {
@@ -312,8 +361,12 @@ function orderedResults(
   entries: readonly WorkspacePathEntry[],
   limit: number
 ): WorkspacePathResult[] {
-  const directories = entries.filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY);
-  const files = entries.filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE);
+  const directories = entries.filter(
+    (entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+  );
+  const files = entries.filter(
+    (entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE
+  );
   return [...directories, ...files].slice(0, limit).map(asResult);
 }
 
@@ -343,7 +396,10 @@ class TopKHeap {
     while (index > 0) {
       const parent = Math.floor((index - 1) / 2);
       if (compareScored(this.values[index], this.values[parent]) >= 0) break;
-      [this.values[index], this.values[parent]] = [this.values[parent], this.values[index]];
+      [this.values[index], this.values[parent]] = [
+        this.values[parent],
+        this.values[index],
+      ];
       index = parent;
     }
   }
@@ -353,10 +409,21 @@ class TopKHeap {
       const left = index * 2 + 1;
       const right = left + 1;
       let worst = index;
-      if (left < this.values.length && compareScored(this.values[left], this.values[worst]) < 0) worst = left;
-      if (right < this.values.length && compareScored(this.values[right], this.values[worst]) < 0) worst = right;
+      if (
+        left < this.values.length &&
+        compareScored(this.values[left], this.values[worst]) < 0
+      )
+        worst = left;
+      if (
+        right < this.values.length &&
+        compareScored(this.values[right], this.values[worst]) < 0
+      )
+        worst = right;
       if (worst === index) return;
-      [this.values[index], this.values[worst]] = [this.values[worst], this.values[index]];
+      [this.values[index], this.values[worst]] = [
+        this.values[worst],
+        this.values[index],
+      ];
       index = worst;
     }
   }
