@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (confirmed by calling `findShiftedStepReferences` with each call site's options)
 - **Area:** `src/core/PromptQueue.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

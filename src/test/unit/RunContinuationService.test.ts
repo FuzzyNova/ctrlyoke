@@ -1771,6 +1771,44 @@ suite("RunContinuationService addressed step mutations", () => {
       relocation: { kind: "afterParallelGroup", groupId: "live-group" },
     });
   });
+
+  test("places next before the current step when a run is paused", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-paused-next-position-")
+    );
+    await seedRun(EXECUTION_STATES.PAUSED, 2, [
+      { prompt: "completed zero" },
+      { prompt: "completed one" },
+      { prompt: "next pending" },
+      { prompt: "later" },
+    ]);
+
+    const appended = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "inserted next" }],
+      1,
+      100,
+      new WorkflowLineageRepository(),
+      true,
+      QUEUE_POSITION.NEXT
+    );
+
+    assert.strictEqual(appended.placement.insertedIndex, 2);
+    assert.deepStrictEqual(
+      appended.workingFile.steps?.map((step) =>
+        "prompt" in step ? step.prompt : step.script
+      ),
+      [
+        "completed zero",
+        "completed one",
+        "inserted next",
+        "next pending",
+        "later",
+      ]
+    );
+  });
 });
 
 /**

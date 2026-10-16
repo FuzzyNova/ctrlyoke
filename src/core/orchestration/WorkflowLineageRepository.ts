@@ -100,7 +100,7 @@ export class WorkflowLineageRepository {
       }
 
       if (options.isSystemGenerated && !descriptor.isSystemGenerated) {
-        await this.updateDescriptor(workspaceRoot, workflowKey, (current) => ({
+        await this.updateDescriptorMetadata(workspaceRoot, workflowKey, (current) => ({
           ...current,
           isSystemGenerated: true,
         }));
@@ -571,6 +571,28 @@ export class WorkflowLineageRepository {
         ...mutate(descriptor),
         lastModifiedAt: Date.now(),
         revision: descriptor.revision + 1,
+      };
+      await this.writeDescriptorDirect(workspaceRoot, workflowKey, updated);
+      return updated;
+    });
+  }
+
+  /** Updates lineage display metadata without invalidating descriptor snapshots. */
+  async updateDescriptorMetadata(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    mutate: (descriptor: WorkflowLineageDescriptor) => WorkflowLineageDescriptor
+  ): Promise<WorkflowLineageDescriptor> {
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+    return withFileLock(descriptorPath, async () => {
+      const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      const updated: WorkflowLineageDescriptor = {
+        ...mutate(descriptor),
+        lastModifiedAt: Date.now(),
+        revision: descriptor.revision,
       };
       await this.writeDescriptorDirect(workspaceRoot, workflowKey, updated);
       return updated;

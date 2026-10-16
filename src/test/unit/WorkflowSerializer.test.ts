@@ -285,6 +285,48 @@ async function withWorkspace(
 }
 
 suite("WorkflowSerializer", () => {
+  test("toggling a favorite preserves the allocated run descriptor revision", async () => {
+    await withWorkspace("ctrlyoke-favorite-revision-", async (workspaceRoot) => {
+      const repository = new WorkflowLineageRepository();
+      const lineage = await repository.createLineage(
+        workspaceRoot,
+        "wf-favorite-revision",
+        "Favorite revision"
+      );
+      const allocation = await repository.allocateRun(
+        workspaceRoot,
+        lineage.workflowKey
+      );
+      const serializer = createWorkflowSerializer(
+        () => undefined,
+        {} as any,
+        () => undefined,
+        () => undefined,
+        fakeWorkspaceState()
+      );
+
+      await serializer.handleToggleFavorite({
+        workflowKey: lineage.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      });
+
+      const descriptor = await repository.readDescriptor(
+        workspaceRoot,
+        lineage.workflowKey
+      );
+      assert.strictEqual(descriptor.isFavorite, true);
+      assert.strictEqual(descriptor.revision, allocation.reservationDescriptorRevision);
+      await fs.writeFile(allocation.stagingRunFilePath, "{}");
+      await fs.writeFile(path.join(allocation.stagingRunDir, "manifest.json"), "{}");
+      await fs.writeFile(path.join(allocation.stagingRunDir, "events.jsonl"), "");
+      await repository.finalizeAllocatedRun(
+        workspaceRoot,
+        lineage.workflowKey,
+        allocation
+      );
+    });
+  });
+
   test("loads the template catalog without opening the new-workflow modal", async () => {
     const messages: any[] = [];
     const serializer = createWorkflowSerializer(

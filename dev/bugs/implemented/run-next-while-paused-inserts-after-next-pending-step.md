@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (traced; `resolveQueueInsertIndex` arithmetic confirmed)
 - **Area:** `src/ui/webview-react/components/editor/PromptEditor.tsx`, `src/core/WorkflowInstance.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -35,9 +35,8 @@ was missed.
 
 ## Suggested Fix
 
-In `resolveFinalAction`, return `RUN_BEFORE_CURRENT` whenever no step is in
-flight (STOPPED, PAUSED, and IDLE at any start position); keep `RUN_NEXT` only
-while a step is executing (RUNNING/PAUSING). Prefer the existing in-flight
-predicate (`isExecutionBusy`) over enumerating states. Add a webview test for
-the paused case, and check the CLI/MCP `next` position for the same mismatch
-while paused.
+`PromptEditor.resolveFinalAction` now uses `isExecutionBusy`: it returns
+`RUN_BEFORE_CURRENT` when no step is in flight and `RUN_NEXT` only while a step
+is executing. `RunContinuationService.appendStepsToRun` also places CLI/MCP
+`next` requests before `currentIndex` for paused runs, where that index already
+names the next pending step. Webview and service tests cover both paths.

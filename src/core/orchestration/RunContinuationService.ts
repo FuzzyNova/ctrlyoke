@@ -448,6 +448,12 @@ export class RunContinuationService {
         const requestedIndex =
           typeof position === "number"
             ? position
+            : position === QUEUE_POSITION.NEXT &&
+                sourceState === EXECUTION_STATES.PAUSED
+              ? Math.max(
+                  source._runtime?.currentIndex ?? sourceTopology.steps.length,
+                  immutablePrefixLength(sourceTopology.steps)
+                )
             : Math.max(
                 resolveQueueInsertIndex(
                   position,

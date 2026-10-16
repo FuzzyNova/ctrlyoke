@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (reproduced at the repository level with a scratch script against `out/`)
 - **Area:** `src/ui/WorkflowSerializer.ts`, `src/core/orchestration/WorkflowLineageRepository.ts`, `src/ui/WebviewMessageRouter.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
