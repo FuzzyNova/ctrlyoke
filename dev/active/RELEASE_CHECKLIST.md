@@ -249,14 +249,14 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
      and renewal/cancellation verification this made possible.
 
 4. **Abuse detection — machine-count alerting**
-   - [ ] Subscribe to Keygen's `machine.created` webhook (this is the first
-         _inbound_ Keygen webhook — 4.1 confirms none exist today; direction is
-         Keygen → Netlify, the reverse of the LS → Netlify → Keygen purchase flow).
-         **Remaining:** deploy the function (manual `workflow_dispatch` of
-         `deploy.yml`, since `netlify/functions/**` is outside the push filter),
-         then add a Keygen webhook endpoint (Settings → Webhooks) with URL
+   - [x] Subscribe to Keygen's `machine.created` webhook (this is the first
+         _inbound_ Keygen webhook; direction is Keygen → Netlify, the reverse of
+         the LS → Netlify → Keygen purchase flow). Done October 16, 2026: Keygen
+         webhook endpoint `a2c6f8e4-5b42-4f67-a451-6909471a1efb` posts to
          `https://ctrlyoke.dev/.netlify/functions/keygen-webhook`, subscription
-         `machine.created` only, and signature algorithm `ed25519` (the default).
+         `machine.created` only, signature algorithm `ed25519`, API version 1.8.
+         A change limited to `netlify/functions/**` is outside `deploy.yml`'s push
+         filter, so redeploy it with a manual `workflow_dispatch`.
    - [x] On receipt, compare the license's current activation count against an
          alert threshold well under the 2,000–5,000 policy cap (e.g. a few hundred)
          and notify (email/Slack) rather than block. Detection only, per the plan —
@@ -467,9 +467,14 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          Keygen license confirmed unchanged (expiry still 2028-09-08, status
          still `ACTIVE`, `Suspended: false`) — verifies the explicit no-op
          branch actually does nothing, not just that it returns 200.
-   - [ ] Confirm the machine-count alert path works end-to-end against a scratch
+   - [x] Confirm the machine-count alert path works end-to-end against a scratch
          policy temporarily capped low (a handful of test activations), before
-         relying on it at the real 2,000–5,000 threshold.
+         relying on it at the real 2,000–5,000 threshold. Verified October 16,
+         2026 in live Keygen: a scratch policy capped at 3 machines, a test
+         license on it, and 3 admin-created machines. Machines 1 and 2 were
+         delivered with 200 "no new milestone"; machine 3 returned 200 "capacity
+         alert sent" and the license metadata recorded `machineAlertMilestone: 3`.
+         The scratch license and policy were deleted afterwards.
 
 **Not a launch blocker for Phases 6–12** — this is an independent checklist
 that can land before or after the individual-Pro Marketplace publish; nothing
