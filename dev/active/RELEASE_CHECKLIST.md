@@ -355,7 +355,7 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          declarations; confirm the Article 28 agreements and transfer terms in
          place with Keygen, Netlify, and Resend; and give the attorney the three
          drafts plus the `PRIVACY.md` v1.1 changes in one review packet.
-   - [ ] **Before accepting a live Enterprise order:** make the Enterprise Terms,
+   - [x] **Before accepting a live Enterprise order:** make the Enterprise Terms,
          EULA, and Privacy Policy conspicuous at checkout with affirmative assent
          by an authorized representative on behalf of the named legal entity;
          collect that entity's legal name and business address; retain the
@@ -394,9 +394,11 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          2026:_ the deployed form sent a live order with the full acceptance record
          (5.3 step 6), and cancelling from the LS dashboard records
          `lsSubscriptionStatus: cancelled`, so the renewal reminder skips it.
-         **Still open:** walk the buyer-side cancellation path once, through the
+         _Buyer-side cancellation, October 16, 2026:_ a test-mode Enterprise
+         subscription (`2613877`, order `#4162425`) was cancelled through the
          customer portal at `ctrlyoke.lemonsqueezy.com/billing`, which the
-         renewal email links to.
+         renewal email links to. Lemon Squeezy shows it Cancelled, and its
+         `subscription_cancelled` delivery to `ls-webhook` returned 200 OK.
    - [x] **Done September 17, 2026:** attorney review of all three drafts and
          `PRIVACY.md` v1.1 complete and approved (same Phase 7 attorney who signed
          off on `LICENSE.md`/`PRIVACY.md`). `LICENSE.md` already named
