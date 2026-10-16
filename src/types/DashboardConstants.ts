@@ -4269,6 +4269,23 @@ export function isPermissionMode(value: unknown): value is PermissionMode {
   return Object.values(PERMISSION_MODES).includes(value as PermissionMode);
 }
 
+/**
+ * Whether a permission mode passes the given tool list to the harness.
+ * `allowAll` already grants every tool, so only `custom` applies the allow
+ * list; the deny list applies in both `allowAll` and `custom`. Diagnostics
+ * about a list the mode ignores would describe a rule that never runs.
+ */
+export function permissionModeAppliesToolList(
+  mode: PermissionMode,
+  list:
+    | typeof PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+    | typeof PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+): boolean {
+  return list === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+    ? mode === PERMISSION_MODES.CUSTOM
+    : mode === PERMISSION_MODES.ALLOW_ALL || mode === PERMISSION_MODES.CUSTOM;
+}
+
 // ============================================================================
 // TOOL PERMISSION CATEGORIES - Shared tool categories used by permission rules
 // ============================================================================

@@ -449,6 +449,55 @@ export function getCompatibilityDeclarationRemediation(
   return code ? getCompatibilityDiagnosticRemediation(code) : undefined;
 }
 
+/**
+ * Diagnostic code for a non-exact permission capability. Shared by the
+ * author-time analyzer and the launch-time mappers so both report the same
+ * fact with the same code and prose, which is what lets the run's status
+ * reporter dedupe them into one message.
+ */
+export function getPermissionFidelityDiagnosticCode(
+  capability: string,
+  fidelity: CapabilityFidelity,
+  caveatCode?: CompatibilityCaveatCode
+): string | undefined {
+  if (fidelity === CAPABILITY_FIDELITIES.EXACT) {
+    return undefined;
+  }
+  const partial = fidelity === CAPABILITY_FIDELITIES.PARTIAL;
+  const advisory = partial && isAdvisoryCaveat(caveatCode);
+  switch (capability) {
+    case PERMISSION_CAPABILITY_KEYS.MODE:
+      return partial
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
+        : COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED;
+    case PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS:
+      return advisory
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT
+        : partial
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
+          : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED;
+    case PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS:
+      return advisory
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_ENFORCED_WITH_CAVEAT
+        : partial
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL
+          : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED;
+    default:
+      return undefined;
+  }
+}
+
+/** Severity for a permission fidelity diagnostic: a partial fidelity with an advisory caveat is informational. */
+export function getPermissionFidelityDiagnosticSeverity(
+  fidelity: CapabilityFidelity,
+  caveatCode?: CompatibilityCaveatCode
+): CompatibilityDiagnosticSeverity {
+  return fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
+    isAdvisoryCaveat(caveatCode)
+    ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+    : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING;
+}
+
 function getDeclarationDiagnosticCode(
   domain: CapabilityDomain,
   capability: string,
@@ -461,34 +510,11 @@ function getDeclarationDiagnosticCode(
 
   switch (domain) {
     case CAPABILITY_DOMAINS.PERMISSIONS:
-      switch (capability) {
-        case PERMISSION_CAPABILITY_KEYS.MODE:
-          return fidelity === CAPABILITY_FIDELITIES.PARTIAL
-            ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
-            : COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED;
-        case PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS:
-          if (
-            fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
-            isAdvisoryCaveat(caveatCode)
-          ) {
-            return COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT;
-          }
-          return fidelity === CAPABILITY_FIDELITIES.PARTIAL
-            ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
-            : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED;
-        case PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS:
-          if (
-            fidelity === CAPABILITY_FIDELITIES.PARTIAL &&
-            isAdvisoryCaveat(caveatCode)
-          ) {
-            return COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_ENFORCED_WITH_CAVEAT;
-          }
-          return fidelity === CAPABILITY_FIDELITIES.PARTIAL
-            ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL
-            : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED;
-        default:
-          return undefined;
-      }
+      return getPermissionFidelityDiagnosticCode(
+        capability,
+        fidelity,
+        caveatCode
+      );
     case CAPABILITY_DOMAINS.MCP:
       return fidelity === CAPABILITY_FIDELITIES.PARTIAL
         ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_PARTIAL

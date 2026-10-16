@@ -11,6 +11,7 @@ import {
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
+  permissionModeAppliesToolList,
   PROMPT_INPUT_CAPABILITY_KEYS,
   STEP_TYPES,
   type HarnessId,
@@ -32,7 +33,8 @@ import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
   getCompatibilityDiagnosticRemediation,
-  isAdvisoryCaveat,
+  getPermissionFidelityDiagnosticCode,
+  getPermissionFidelityDiagnosticSeverity,
 } from "./CompatibilityTypes";
 import type { CompatibilityCaveatCode } from "./CompatibilityTypes";
 
@@ -201,13 +203,23 @@ export function analyzeCompatibility({
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS,
-        used: permissions.allowedTools.length > 0,
+        used:
+          permissions.allowedTools.length > 0 &&
+          permissionModeAppliesToolList(
+            permissions.mode,
+            PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
+          ),
         state: effective.allowedTools,
         caveatCode: declarations?.allowedTools.caveatCode,
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
-        used: permissions.deniedTools.length > 0,
+        used:
+          permissions.deniedTools.length > 0 &&
+          permissionModeAppliesToolList(
+            permissions.mode,
+            PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+          ),
         state: effective.deniedTools,
         caveatCode: declarations?.deniedTools.caveatCode,
         sourceTier,
@@ -505,41 +517,16 @@ function diagnosticsForPermissionField(
     state,
   };
 
-  if (state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
+  const fidelityCode = getPermissionFidelityDiagnosticCode(
+    key,
+    state.fidelity,
+    caveatCode
+  );
+  if (fidelityCode) {
     diagnostics.push(
       createDiagnostic(
-        key === PERMISSION_CAPABILITY_KEYS.MODE
-          ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED
-          : key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
-            ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED
-            : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED,
-        COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
-        base.harnessId,
-        base.capability,
-        base.target,
-        base.state,
-        base.sourceTier,
-        key,
-        caveatCode,
-        propertyPointer
-      )
-    );
-  } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
-    const advisory = isAdvisoryCaveat(caveatCode);
-    diagnostics.push(
-      createDiagnostic(
-        key === PERMISSION_CAPABILITY_KEYS.MODE
-          ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
-          : key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
-            ? advisory
-              ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT
-              : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
-            : advisory
-              ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_ENFORCED_WITH_CAVEAT
-              : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL,
-        advisory
-          ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
-          : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        fidelityCode,
+        getPermissionFidelityDiagnosticSeverity(state.fidelity, caveatCode),
         base.harnessId,
         base.capability,
         base.target,

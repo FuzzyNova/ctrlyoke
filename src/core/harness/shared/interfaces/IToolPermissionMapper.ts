@@ -1,9 +1,9 @@
 import {
-  CAPABILITY_FIDELITIES,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
+  permissionModeAppliesToolList,
   type HarnessId,
 } from "../../../../types/DashboardConstants";
 import type {
@@ -13,6 +13,8 @@ import type {
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
+  getPermissionFidelityDiagnosticCode,
+  getPermissionFidelityDiagnosticSeverity,
 } from "../../../../types/CompatibilityTypes";
 import type { ToolPermissionConfig } from "../../../../types/ExecutionPropertyTypes";
 import type { PreparedMutation } from "./PreparedMutation";
@@ -113,36 +115,32 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
     config: ToolPermissionConfig,
     harnessId: HarnessId
   ): CompatibilityDiagnostic[] {
-    if (
-      config.mode !== PERMISSION_MODES.ALLOW_ALL &&
-      config.mode !== PERMISSION_MODES.CUSTOM
-    ) {
-      return [];
-    }
-
     const diagnostics: CompatibilityDiagnostic[] = [];
     for (const [key, patterns] of [
       [PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS, config.allowedTools],
       [PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS, config.deniedTools],
     ] as const) {
-      if (patterns.length === 0) {
+      if (
+        patterns.length === 0 ||
+        !permissionModeAppliesToolList(config.mode, key)
+      ) {
         continue;
       }
       const declaration = this.capabilities[key];
-      if (declaration.fidelity === CAPABILITY_FIDELITIES.EXACT) {
+      const code = getPermissionFidelityDiagnosticCode(
+        key,
+        declaration.fidelity,
+        declaration.caveatCode
+      );
+      if (!code) {
         continue;
       }
-      const unsupported = key === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS;
-      const code = unsupported
-        ? declaration.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
-          ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED
-          : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
-        : declaration.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
-          ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED
-          : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL;
       diagnostics.push({
         code,
-        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        severity: getPermissionFidelityDiagnosticSeverity(
+          declaration.fidelity,
+          declaration.caveatCode
+        ),
         harnessId,
         capability: key,
         state: {
