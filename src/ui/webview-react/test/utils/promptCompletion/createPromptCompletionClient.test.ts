@@ -1,12 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import {
   createPromptCompletionClient,
   type PromptCompletionClient,
   type PromptCompletionTransport,
 } from "@utils/promptCompletion/createPromptCompletionClient";
 import { MESSAGE_TYPES } from "../../../types/messages";
+
+const { startCompletionMock } = vi.hoisted(() => ({
+  startCompletionMock: vi.fn(),
+}));
+
+vi.mock("@codemirror/autocomplete", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@codemirror/autocomplete")>()),
+  startCompletion: startCompletionMock,
+}));
 
 class RecordingTransport implements PromptCompletionTransport {
   readonly sent: Array<{ trigger: string; prefix: string; seq: number }> = [];
@@ -42,7 +52,7 @@ describe("PromptCompletionClient", () => {
 
   function makeClient(
     transport: RecordingTransport,
-    getView: () => null = () => null
+    getView: () => EditorView | null = () => null
   ): PromptCompletionClient {
     const client = createPromptCompletionClient({
       transport,
@@ -56,6 +66,7 @@ describe("PromptCompletionClient", () => {
 
   afterEach(() => {
     for (const client of clients.splice(0)) client.dispose();
+    startCompletionMock.mockClear();
   });
 
   it("posts the trigger request and resolves the source with the response", async () => {
@@ -107,6 +118,39 @@ describe("PromptCompletionClient", () => {
     expect(transport.sent).toHaveLength(1);
   });
 
+  it("refreshes an open dropdown for later partials and the final response", async () => {
+    const transport = new RecordingTransport();
+    const view = {} as EditorView;
+    const client = makeClient(transport, () => view);
+
+    const pending = client.customSource(contextFor("@src")) as unknown as Promise<{
+      options: readonly { label: string }[];
+    }>;
+    const { seq } = transport.sent[0];
+
+    respond(seq, ["first.ts"], { partial: true });
+    await expect(pending).resolves.toMatchObject({
+      options: [{ label: "first.ts" }],
+    });
+
+    respond(seq, ["second.ts"], { partial: true });
+    expect(startCompletionMock).toHaveBeenCalledTimes(1);
+    expect(startCompletionMock).toHaveBeenCalledWith(view);
+    const second = client.customSource(contextFor("@src")) as unknown as {
+      options: readonly { label: string }[];
+    };
+    expect(second.options.map((option) => option.label)).toEqual([
+      "second.ts",
+    ]);
+
+    respond(seq, ["final.ts"]);
+    expect(startCompletionMock).toHaveBeenCalledTimes(2);
+    const final = client.customSource(contextFor("@src")) as unknown as {
+      options: readonly { label: string }[];
+    };
+    expect(final.options.map((option) => option.label)).toEqual(["final.ts"]);
+  });
+
   it("cancels a source's previous request when a newer keystroke arrives", async () => {
     const transport = new RecordingTransport();
     const client = makeClient(transport);
@@ -117,6 +161,7 @@ describe("PromptCompletionClient", () => {
 
     await expect(first).resolves.toBeNull();
     // A late answer for the superseded request is discarded.
+    respond(transport.sent[0].seq, ["stale partial"], { partial: true });
     respond(transport.sent[0].seq, ["stale"]);
     respond(transport.sent[1].seq, ["fresh"]);
     const result = (await second) as { options: { label: string }[] };

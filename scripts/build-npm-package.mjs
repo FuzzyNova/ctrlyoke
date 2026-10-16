@@ -44,6 +44,7 @@ export const NPM_PACKAGE_ENTRIES = [
   "out/mcp-server.js",
   "out/historySearchRebuildWorker.js",
   "out/historySearchMatcherWorker.js",
+  "out/workspaceFileIndexWorker.js",
   "out/scriptRegexWorker.js",
   "out/templates/",
   "out/schemas/",

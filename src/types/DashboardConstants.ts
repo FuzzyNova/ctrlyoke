@@ -4638,6 +4638,26 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
 
+/** Lifecycle states exposed by the workspace file completion index. */
+export const WORKSPACE_FILE_INDEX_STATES = {
+  BUILDING: "building",
+  READY: "ready",
+  DEGRADED: "degraded",
+} as const;
+
+export type WorkspaceFileIndexState =
+  (typeof WORKSPACE_FILE_INDEX_STATES)[keyof typeof WORKSPACE_FILE_INDEX_STATES];
+
+/** Watcher events consumed by the workspace file completion index. */
+export const WORKSPACE_FILE_CHANGE_KINDS = {
+  CREATE: "create",
+  CHANGE: "change",
+  DELETE: "delete",
+} as const;
+
+export type WorkspaceFileChangeKind =
+  (typeof WORKSPACE_FILE_CHANGE_KINDS)[keyof typeof WORKSPACE_FILE_CHANGE_KINDS];
+
 /** Git ref labels rendered by the workspace commit graph. */
 export const GIT_REF_LABEL_TYPES = {
   LOCAL_BRANCH: "localBranch",

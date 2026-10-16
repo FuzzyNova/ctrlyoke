@@ -10,6 +10,7 @@ import {
   mapSymbolKindToReferenceKind,
 } from "../../completions/CompletionCore";
 import type { CompletionWorkspace } from "../../completions/CompletionCore";
+import { InMemoryWorkspaceFileQueries } from "../helpers/InMemoryWorkspaceFileQueries";
 import type { EditorContextSource } from "../../completions/EditorContextSource";
 import type { IndexedSymbol, SymbolIndex } from "../../completions/SymbolIndex";
 import { LspSymbolKind } from "../../completions/SymbolIndex";
@@ -50,7 +51,7 @@ function createCore(
   } = {}
 ): CompletionCore {
   const workspace: CompletionWorkspace = {
-    getFiles: async () => options.files ?? [],
+    files: new InMemoryWorkspaceFileQueries(options.files ?? []),
     isMultiRoot: () => options.multiRoot ?? false,
     symbols: options.symbols,
     editorContext: options.editorContext,
@@ -80,6 +81,33 @@ async function waitForCondition(
 }
 
 suite("CompletionCore", () => {
+  test("returns and cancels the latest file snapshot when its budget expires", async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const files = {
+      queryFiles: async (_query: string, options?: { signal?: AbortSignal; onProgress?: (progress: any) => void }) => {
+        receivedSignal = options?.signal;
+        options?.onProgress?.({
+          results: [{ kind: WORKSPACE_ENTRY_KINDS.FILE, relativePath: "src/Widget.ts", rank: 0 }],
+        });
+        return new Promise<any[]>((resolve) =>
+          setTimeout(() => resolve([]), 100)
+        );
+      },
+      queryPromptFiles: async () => [],
+      suggestPaths: async () => [],
+      getStatus: () => ({ state: "building", indexed: 1 }),
+    };
+    const core = new CompletionCore({ files: files as any, isMultiRoot: () => false });
+    const partials: string[][] = [];
+    const result = await core.getFileCompletions("Wid", {
+      budgetMs: 5,
+      onPartial: (items) => partials.push(items.map((item) => item.label)),
+    });
+    assert.deepStrictEqual(partials, [["Widget.ts"]]);
+    assert.deepStrictEqual(result.map((item) => item.label), ["Widget.ts"]);
+    assert.strictEqual(receivedSignal?.aborted, true);
+  });
+
   test("keeps the #sym insertion and dashboard icon kind stable", async () => {
     const core = createCore({
       symbols: {

@@ -62,7 +62,7 @@ export class LspSymbolIndex implements SymbolIndex {
 
   constructor(
     private readonly workspaceRoot: string,
-    private readonly getFiles: () => Promise<string[]>,
+    private readonly sourceFiles: () => Promise<string[]>,
     private readonly host: LspSymbolQueryHost,
     private readonly catalog: readonly LanguageServerCatalogEntry[] = LANGUAGE_SERVER_CATALOG
   ) {
@@ -80,6 +80,10 @@ export class LspSymbolIndex implements SymbolIndex {
         void this.ensureWarmup().catch(() => undefined);
       }
     });
+  }
+
+  getSourceFiles(): Promise<string[]> {
+    return this.sourceFiles();
   }
 
   isReadyForPath(viewerPath: string): boolean {
@@ -101,7 +105,7 @@ export class LspSymbolIndex implements SymbolIndex {
     signal?: AbortSignal
   ): Promise<IndexedSymbol[]> {
     if (signal?.aborted) return [];
-    const files = await this.getFiles();
+    const files = await this.getSourceFiles();
     if (!this.ready) {
       void this.ensureWarmup(files).catch(() => undefined);
       return [];
@@ -210,7 +214,7 @@ export class LspSymbolIndex implements SymbolIndex {
     if (this.warmup) return this.warmup;
     const pending = (async () => {
       const generation = this.lifecycleGeneration;
-      await this.startDetected(files ?? (await this.getFiles()));
+      await this.startDetected(files ?? (await this.getSourceFiles()));
       if (generation === this.lifecycleGeneration) this.ready = true;
     })();
     this.warmup = pending;

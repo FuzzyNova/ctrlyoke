@@ -154,16 +154,22 @@ suite("CompletionHelpers gitignore setting", () => {
 
   test("refreshes @ file completions when the setting changes", async () => {
     ConfigurationUtils.shouldRespectGitignoreForCompletions = () => true;
-    const respecting = await getCompletionCore().getFileCompletions(
-      "ignored.txt"
-    );
+    const respecting =
+      await getCompletionCore().getFileCompletions("ignored.txt");
     assert.ok(!respecting.some((item) => item.label.includes("ignored.txt")));
 
     ConfigurationUtils.shouldRespectGitignoreForCompletions = () => false;
     clearFilesCache();
-    const including = await getCompletionCore().getFileCompletions(
-      "ignored.txt"
-    );
+    let including = await getCompletionCore().getFileCompletions("ignored.txt");
+    for (
+      let attempt = 0;
+      attempt < 100 &&
+      !including.some((item) => item.label.includes("ignored.txt"));
+      attempt++
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      including = await getCompletionCore().getFileCompletions("ignored.txt");
+    }
     assert.ok(including.some((item) => item.label.includes("ignored.txt")));
   });
 });

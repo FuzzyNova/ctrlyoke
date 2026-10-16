@@ -24,7 +24,7 @@ The row above the text shows what you are editing and a few controls:
 | Token estimate             | An estimate of the tokens the step sends, including attached files and earlier output it references. It turns yellow at 50K tokens and red at 100K.                                                                                      |
 | **Convert to prompt file** | Moves the prompt text into a new `.prompt.md` file under `.ctrlyoke/prompts/`, opens it, and replaces the text with a reference to the file. When the prompt is already a file reference, the button reads **Open prompt file** instead. |
 | Execution mode             | Overrides the step's [execution mode](/guide/terminal#interactive-and-headless): **Interactive** or **Headless**. Highlighted while the step has an override.                                                                            |
-| **Respect .gitignore**     | When on (the default, `ui.respectGitignoreForCompletions`), file completions leave out git-ignored files.                                                                                                                                |
+| **Respect .gitignore**     | When on (the default, `ui.respectGitignoreForCompletions`), file completions leave out git-ignored files. When off, ignored files are indexed in the background and may take a few seconds to appear in a large workspace.               |
 
 **Reply to Step** in a step's menu starts a new prompt that resumes that step's
 session. A banner above the editor reads **Replying to _harness_ session …**

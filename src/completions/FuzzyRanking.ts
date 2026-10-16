@@ -1,4 +1,4 @@
-import fuzzysort, { type KeysResult, type SnapshotKeys } from "fuzzysort";
+import fuzzysort, { type KeysResult } from "fuzzysort";
 
 /**
  * Shared fuzzy matching/ranking for every completion source (files, symbols,
@@ -26,16 +26,6 @@ const SECONDARY_KEY_WEIGHT = 0.9;
 
 /** One searchable field of a ranked item; the first key is the primary one. */
 export type FuzzyKey<T> = (item: T) => string;
-
-/**
- * A reusable, pre-indexed set of items for repeated queries against the same
- * list (e.g. the cached workspace file list). Building one prepares every
- * target once instead of on every keystroke.
- */
-export interface FuzzyIndex<T> {
-  readonly snapshot: SnapshotKeys<T>;
-  readonly scoreFn: (result: KeysResult<T>) => number;
-}
 
 /** True when `query` fuzzily matches `candidate` (an empty query matches everything). */
 export function fuzzyMatches(candidate: string, query: string): boolean {
@@ -78,15 +68,31 @@ export function fuzzyMatchRanges(text: string, query: string): number[] {
  */
 const ORDER_TIEBREAK_SPAN = 1e-6;
 
-function weightedScore(scores: readonly { score: number }[]): number {
+/** Score one fuzzysort multi-key result using the shared secondary-key weight. */
+export function scoreFuzzyMatch(result: KeysResult<unknown>): number {
   let best = 0;
-  scores.forEach(({ score }, index) => {
+  result.forEach(({ score }, index) => {
     const weighted = index === 0 ? score : score * SECONDARY_KEY_WEIGHT;
     if (weighted > best) {
       best = weighted;
     }
   });
   return best;
+}
+
+/** Score one item against a query across ordered keys; the first key is primary. */
+export function scoreFuzzyQuery<T>(
+  query: string,
+  item: T,
+  keys: readonly FuzzyKey<T>[]
+): number | undefined {
+  if (!query) return undefined;
+  const result = fuzzysort.go(query, [item], {
+    keys,
+    threshold: ANY_MATCH_THRESHOLD,
+    scoreFn: scoreFuzzyMatch,
+  })[0];
+  return result ? fuzzysort.score(result) : undefined;
 }
 
 /** {@link weightedScore}, with equal scores ranked in the order of `items`. */
@@ -97,48 +103,12 @@ function orderedScoreFn<T>(
   items.forEach((item, position) => order.set(item, position));
   const step = ORDER_TIEBREAK_SPAN / Math.max(1, items.length);
   return (result) =>
-    weightedScore(result) * (1 - (order.get(result.obj) ?? 0) * step);
+    scoreFuzzyMatch(result) * (1 - (order.get(result.obj) ?? 0) * step);
 }
 
 /**
- * Build a {@link FuzzyIndex} over `items` for repeated {@link rankIndexByFuzzyQuery}
- * calls. `keys[0]` is the primary field; later keys are down-weighted. Equal
- * scores rank in the order of `items`.
- */
-export function buildFuzzyIndex<T>(
-  items: readonly T[],
-  keys: readonly FuzzyKey<T>[]
-): FuzzyIndex<T> {
-  return {
-    snapshot: fuzzysort.snapshot(items, { keys }),
-    scoreFn: orderedScoreFn(items),
-  };
-}
-
-/**
- * Items in `index` matching `query`, best match first. An empty query returns
- * nothing — callers own the unfiltered ordering. `limit` 0 means unlimited.
- */
-export function rankIndexByFuzzyQuery<T>(
-  query: string,
-  index: FuzzyIndex<T>,
-  limit = 0
-): T[] {
-  if (!query) {
-    return [];
-  }
-  return fuzzysort
-    .go(query, index.snapshot, {
-      threshold: ANY_MATCH_THRESHOLD,
-      limit,
-      scoreFn: index.scoreFn,
-    })
-    .map((result) => result.obj);
-}
-
-/**
- * One-shot variant of {@link rankIndexByFuzzyQuery} for lists that change on
- * every query (e.g. workspace symbols) and so gain nothing from an index.
+ * Rank a list for one query. Large, changing workspace file sets use the
+ * dedicated worker query engine instead of preparing a duplicate fuzzy index.
  * Equal scores rank in the order of `items`.
  */
 export function rankByFuzzyQuery<T>(

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-16 by the user, while testing `ui.respectGitignoreForCompletions: false`
 - **Area:** `src/utils/CompletionFileDiscovery.ts`, `src/utils/WorkspaceSearchFileWalker.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
