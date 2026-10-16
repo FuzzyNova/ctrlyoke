@@ -122,5 +122,7 @@ ctrlyoke item in the VS Code status bar.
 ## Questions
 
 - **Lost your key?** Contact [support@ctrlyoke.dev](mailto:support@ctrlyoke.dev).
-- **Need team or enterprise licensing?** Contact
-  [sales@ctrlyoke.dev](mailto:sales@ctrlyoke.dev).
+- **Need team or enterprise licensing?** Buy an Enterprise site license from the
+  [pricing page](https://ctrlyoke.dev/pricing/), or contact
+  [sales@ctrlyoke.dev](mailto:sales@ctrlyoke.dev) to pay by purchase order and
+  invoice.
