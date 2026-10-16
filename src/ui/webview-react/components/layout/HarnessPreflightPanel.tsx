@@ -34,12 +34,12 @@ export function HarnessPreflightPanel() {
     >
       <div className="flex items-center gap-2">
         <Icon name="warning" className="text-error-fg" />
-        <p className="font-medium">No AI harness CLI is available</p>
+        <p className="font-medium">No CLI coding agent is available</p>
       </div>
       <p className="mt-1 text-description-fg">
-        ctrlyoke runs an installed AI coding CLI. Install or update one of the
-        supported harnesses below, then sign in with that CLI before running a
-        workflow.
+        ctrlyoke calls a CLI coding agent you have installed. Install or update
+        one of the supported harnesses below, then sign in with that CLI before
+        running a workflow.
       </p>
       <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {HARNESS_DISPLAY_ORDER.map((harnessId) => {
@@ -60,7 +60,7 @@ export function HarnessPreflightPanel() {
                 {displayName}
               </span>
               <code
-                className="min-w-0 flex-1 truncate text-xxs text-description-fg"
+                className="min-w-0 flex-1 truncate bg-code-block text-xxs text-description-fg"
                 title={
                   isUnsupported
                     ? `${status?.version?.installedVersion} is below the supported minimum ${status?.version?.minimumVersion}. Update with: ${command}`

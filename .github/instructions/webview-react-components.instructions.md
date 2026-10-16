@@ -42,4 +42,5 @@ Most components are thin renderers over Zustand selectors and message senders. K
 <styling>
 - Use semantic Tailwind token classes from `styles/globals.css`; raw VS Code CSS vars should stay in token-definition or low-level theme code.
 - Browser-hosted and VS Code panel UIs share the same bundle, so host-specific behavior must go through the existing standalone/vscode helpers.
+- **A bare `<code>` already carries a themed background in a VS Code webview.** VS Code's injected default stylesheet gives it `textPreformat` foreground *and* background as a matched pair. Overriding only the text colour (`text-description-fg`, `text-foreground`) leaves that background in place, which is fine in the dark/light themes and unreadable in High Contrast Light (dark text on a navy fill — the harness-preflight install commands). When a `<code>` needs its own text colour, set a themed background with it (`bg-code-block`, as `MarkdownText` does for inline code).
 </styling>

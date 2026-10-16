@@ -24,7 +24,7 @@ If the CLI is missing or too old, the harness picker shows a red dot next to Cla
 tooltip gives the install command, or the update command when the installed version is below the
 minimum. An amber dot means it runs but is older than the recommended version. After installing or
 updating, click **Retry harness detection** in the harness picker. If no harness CLI is available
-at all, the dashboard shows a **No AI harness CLI is available** panel with the install command
+at all, the dashboard shows a **No CLI coding agent is available** panel with the install command
 for every harness.
 
 ## Install

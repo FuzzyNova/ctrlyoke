@@ -55,7 +55,7 @@ Any one of them is enough to get started — use the harness you already have. S
 ### When no harness is found {#missing-harness}
 
 When the dashboard starts, it checks every supported CLI on your `PATH`. If none of them is
-available, it shows **No AI harness CLI is available** just below the header, listing each harness
+available, it shows **No CLI coding agent is available** just below the header, listing each harness
 with the command that installs it on your operating system (PowerShell on Windows, a shell
 command on macOS and Linux). A long command is cut off to fit; hover it to read it in full, or
 use the copy button at the end of its row. A harness that is installed but older than the minimum
@@ -63,7 +63,7 @@ version ctrlyoke supports shows its update command instead; hover it to see the 
 minimum versions. The panel is guidance only and doesn't block the dashboard. It disappears once
 a harness is detected.
 
-![The No AI harness CLI is available panel below the dashboard header, listing all six harnesses with their Windows install commands and a copy button on each row](/screenshots/harness-preflight-missing-660x1270.png){.panel-shot}
+![The No CLI coding agent is available panel below the dashboard header, listing all six harnesses with their Windows install commands and a copy button on each row](/screenshots/harness-preflight-missing-660x1270.png){.panel-shot}
 
 Install a harness, sign in with its own CLI, then let ctrlyoke check again: reload the window, or
 click **Retry** next to the harness picker.

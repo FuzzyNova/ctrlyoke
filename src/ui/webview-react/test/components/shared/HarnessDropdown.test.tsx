@@ -305,9 +305,13 @@ describe("HarnessDropdown", () => {
     render(<HarnessPreflightPanel />);
 
     expect(
-      screen.getByText("No AI harness CLI is available")
+      screen.getByText("No CLI coding agent is available")
     ).toBeInTheDocument();
     expect(screen.getByText("Install codex-cli")).toBeInTheDocument();
+    // VS Code's default <code> background is paired with its own foreground; the
+    // command overrides the foreground, so it must also own the (themed)
+    // background or high-contrast light renders dark text on a dark fill.
+    expect(screen.getByText("Install codex-cli")).toHaveClass("bg-code-block");
     expect(
       screen.getByRole("button", {
         name: "Copy install command for Codex",
