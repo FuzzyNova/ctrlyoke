@@ -11,7 +11,10 @@ import type {
   PermissionContext,
   ToolPermissionConfig,
 } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
-import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  PERMISSION_MODES,
+} from "../../types/DashboardConstants";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -1308,6 +1311,42 @@ suite("HarnessToolPermissionMappers", () => {
           `${mode}: diagnostics`
         );
       }
+    });
+
+    test("prepare ignores the allow list in allowAll mode, which never applies it", async () => {
+      const codex = await new CodexToolPermissionMapper().prepare(
+        cfg(PERMISSION_MODES.ALLOW_ALL, ["write"], ["shell"]),
+        {}
+      );
+      assert.deepStrictEqual(
+        codex.diagnostics.map((diagnostic) => diagnostic.code),
+        [COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED]
+      );
+
+      const claude = await new ClaudeToolPermissionMapper().prepare(
+        cfg(PERMISSION_MODES.ALLOW_ALL, ["shell(git:*)"], ["shell(rm:*)"]),
+        {}
+      );
+      assert.deepStrictEqual(claude.diagnostics, []);
+    });
+
+    test("prepare reports Claude's advisory allow-list caveat with the analyzer's code and severity", async () => {
+      const claude = await new ClaudeToolPermissionMapper().prepare(
+        cfg(PERMISSION_MODES.CUSTOM, ["shell(git:*)"], []),
+        {}
+      );
+      assert.deepStrictEqual(
+        claude.diagnostics.map(({ code, severity }) => ({ code, severity })),
+        [
+          {
+            code: COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_ENFORCED_WITH_CAVEAT,
+            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+          },
+        ]
+      );
+      assert.ok(
+        !claude.diagnostics[0].message.includes("partially translated")
+      );
     });
   });
 });

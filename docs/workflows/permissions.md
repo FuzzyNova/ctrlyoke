@@ -127,8 +127,19 @@ The `ctrlyoke` CLI can override the workflow level for one run with
 
 ## How each harness applies them
 
-Not every harness can enforce individual tool patterns. Codex and Antigravity
-only have coarse modes, so their allow and deny lists are ignored.
+Each mode reads only some of the lists, whatever harness runs the step:
+
+| Mode                  | Allowed Tools | Denied Tools |
+| --------------------- | ------------- | ------------ |
+| `dangerouslyAllowAll` | ignored       | ignored      |
+| `allowAll`            | ignored       | applied      |
+| `custom`              | applied       | applied      |
+| `none`                | ignored       | ignored      |
+
+A list the mode ignores is not passed to the harness and never produces a
+compatibility warning. Not every harness can enforce individual tool patterns
+either: Codex and Antigravity only have coarse modes, so they ignore both lists
+in every mode.
 
 | Harness                                   | `dangerouslyAllowAll`                         | `allowAll`                                                                     | `custom`                                                                                                            |
 | ----------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
@@ -138,6 +149,16 @@ only have coarse modes, so their allow and deny lists are ignored.
 | [OpenCode](/harnesses/opencode-cli)       | no permission block (OpenCode's own defaults) | allow everything, plus the deny list                                           | ask for everything, allow the allow list, deny the deny list                                                        |
 | [Qwen Code](/harnesses/qwen-cli)          | `-y`                                          | `--approval-mode auto-edit` plus `--exclude-tools`                             | `--approval-mode default` with `--allowed-tools` and `--exclude-tools`                                              |
 | [Antigravity](/harnesses/antigravity-cli) | `--dangerously-skip-permissions`              | no flag (agy's own approvals); lists ignored                                   | `--sandbox`; lists ignored                                                                                          |
+
+For example, `allowAll` with [the default lists](#the-default-lists) starts
+Claude Code with:
+
+```text
+--permission-mode bypassPermissions --tools default
+--disallowedTools "Bash(rm:*)" "Bash(del:*)" "Bash(Remove-Item:*)" "Bash(rd:*)" ...
+```
+
+The deny list is translated to Claude's syntax and the allow list is left out.
 
 OpenCode receives its permissions through `OPENCODE_CONFIG_CONTENT` rather than
 flags; see [Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#opencode-cli).
@@ -157,8 +178,9 @@ enforces each list.
 
 When a workflow's steps run on different harnesses, the Permissions tab shows a
 note under each list naming the harnesses that won't enforce it. A step that
-runs on such a harness also records a compatibility warning when it starts. The
-`dangerouslyAllowAll` mode never warns, because it ignores both lists anyway.
+runs on such a harness also records a compatibility warning when it starts. A
+list the mode ignores never warns: `dangerouslyAllowAll` skips both lists, and
+`allowAll` skips the allow list.
 
 ## Trusted external folders {#trusted-external-roots}
 
