@@ -25,7 +25,10 @@ import {
   DASHBOARD_HOST_CAPABILITIES,
 } from "../../types/DashboardConstants";
 import { MCP_LIST_HARNESSES_TOOL_NAME } from "../../utils/McpToolDefinitions";
-import type { CapabilitiesFile } from "../../types/CapabilitiesTypes";
+import type {
+  CapabilitiesFile,
+  CapabilitiesModel,
+} from "../../types/CapabilitiesTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -788,6 +791,82 @@ suite("WebviewSettingsSync", () => {
         } else {
           process.env.CTRLYOKE_WORKING_FILE = originalWorkingFile;
         }
+      }
+    });
+
+    test("serializes atomic capabilities refreshes in call order", async () => {
+      const workspaceRoot = tempDir("capabilities-serialized");
+      await ensureMcpStorageInitialized(workspaceRoot);
+      const capabilitiesPath = path.join(
+        workspaceRoot,
+        CTRLYOKE_DIR,
+        CAPABILITIES_FILE
+      );
+      await fs.mkdir(path.dirname(capabilitiesPath), { recursive: true });
+      const sync = new WebviewSettingsSync(
+        () => {},
+        () => undefined,
+        undefined,
+        undefined,
+        undefined,
+        nodeSettingsHost(workspaceRoot)
+      );
+      const syncInternals = sync as unknown as {
+        writeCapabilities: (
+          workspaceRoot: string,
+          modelOptions: Record<string, CapabilitiesModel[]>
+        ) => Promise<void>;
+      };
+      const originalWriteCapabilities = syncInternals.writeCapabilities;
+      let writeCalls = 0;
+      let releaseFirstWrite!: () => void;
+      let firstWriteStarted!: () => void;
+      const firstWriteGate = new Promise<void>((resolve) => {
+        releaseFirstWrite = resolve;
+      });
+      const firstWriteEntered = new Promise<void>((resolve) => {
+        firstWriteStarted = resolve;
+      });
+      syncInternals.writeCapabilities = async (root, modelOptions) => {
+        writeCalls++;
+        if (writeCalls === 1) {
+          firstWriteStarted();
+          await firstWriteGate;
+        }
+        await originalWriteCapabilities.call(sync, root, modelOptions);
+      };
+
+      try {
+        const firstRefresh = sync.refreshCapabilitiesFile({
+          [HARNESS_IDS.CLAUDE_CLI]: [{ value: "older", label: "Older" }],
+        });
+        await firstWriteEntered;
+        const secondRefresh = sync.refreshCapabilitiesFile({
+          [HARNESS_IDS.CLAUDE_CLI]: [{ value: "newer", label: "Newer" }],
+        });
+        await Promise.resolve();
+        assert.strictEqual(writeCalls, 1);
+        releaseFirstWrite();
+        await Promise.all([firstRefresh, secondRefresh]);
+
+        assert.strictEqual(writeCalls, 2);
+        const capabilities = JSON.parse(
+          await fs.readFile(capabilitiesPath, "utf8")
+        ) as CapabilitiesFile;
+        assert.deepStrictEqual(
+          capabilities.harnesses.find(
+            (harness) => harness.id === HARNESS_IDS.CLAUDE_CLI
+          )?.models,
+          [{ value: "newer", label: "Newer" }]
+        );
+        const siblingFiles = await fs.readdir(path.dirname(capabilitiesPath));
+        assert.deepStrictEqual(
+          siblingFiles.filter((file) => file.endsWith(".tmp")),
+          []
+        );
+      } finally {
+        releaseFirstWrite();
+        syncInternals.writeCapabilities = originalWriteCapabilities;
       }
     });
   });

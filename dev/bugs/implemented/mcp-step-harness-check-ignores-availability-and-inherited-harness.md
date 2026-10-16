@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; code reading)
 - **Area:** `src/mcp-server.ts` (`validateStepHarnessAndModelCapabilities`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

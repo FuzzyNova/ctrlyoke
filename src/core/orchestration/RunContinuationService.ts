@@ -377,6 +377,7 @@ export class RunContinuationService {
     if (incomingTopology.steps.length === 0) {
       throw new Error("Append continuation requires at least one tail step");
     }
+    assertIncomingStepsHaveRequiredContent(incomingTopology.steps);
     const runFilePath = WorkflowPaths.runFilePath(
       workspaceRoot,
       workflowKey,
@@ -565,6 +566,7 @@ export class RunContinuationService {
     if (steps.length === 0) {
       throw new Error("Parallel-group join requires at least one flat step");
     }
+    assertIncomingStepsHaveRequiredContent(steps);
 
     const runFilePath = WorkflowPaths.runFilePath(
       workspaceRoot,
@@ -1372,6 +1374,14 @@ function assertStepHasRequiredContent(step: WorkflowStep): void {
   }
   if (typeof step.prompt !== "string" || step.prompt.trim().length === 0) {
     throw new Error("A prompt step must keep a non-empty prompt");
+  }
+}
+
+function assertIncomingStepsHaveRequiredContent(
+  steps: readonly WorkflowStep[]
+): void {
+  for (const step of steps) {
+    assertStepHasRequiredContent(step);
   }
 }
 

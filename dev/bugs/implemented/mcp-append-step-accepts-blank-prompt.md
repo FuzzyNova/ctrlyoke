@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; reproduced against compiled `out/`)
 - **Area:** `src/mcp-server.ts` (`handleAppendStep`), `src/core/orchestration/RunContinuationService.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

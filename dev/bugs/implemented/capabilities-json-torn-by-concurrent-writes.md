@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; found corrupt in this worktree, race reproduced)
 - **Area:** `src/ui/WebviewSettingsSync.ts` (`refreshCapabilitiesFile`, `writeCapabilities`), `src/mcp-server.ts` (`readCapabilities`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
