@@ -237,6 +237,20 @@ suite("CompletionCore", () => {
     assert.ok(items.length <= 500);
   });
 
+  test("breaks @ ranking ties by workspace file order", async () => {
+    const items = await createCore({
+      files: [
+        "zzz/visible/SKILL.md",
+        "aaa/ignored/one/SKILL.md",
+        "aaa/ignored/two/SKILL.md",
+      ],
+    }).getFileCompletions("SKILL.md");
+    assert.deepStrictEqual(
+      items.map((item) => item.detail),
+      ["zzz/visible", "aaa/ignored/one", "aaa/ignored/two"]
+    );
+  });
+
   test("ranks matching children within the typed directory", async () => {
     const items = await createCore({
       files: [

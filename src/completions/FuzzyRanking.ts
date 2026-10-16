@@ -1,4 +1,4 @@
-import fuzzysort, { type SnapshotKeys } from "fuzzysort";
+import fuzzysort, { type KeysResult, type SnapshotKeys } from "fuzzysort";
 
 /**
  * Shared fuzzy matching/ranking for every completion source (files, symbols,
@@ -34,6 +34,7 @@ export type FuzzyKey<T> = (item: T) => string;
  */
 export interface FuzzyIndex<T> {
   readonly snapshot: SnapshotKeys<T>;
+  readonly scoreFn: (result: KeysResult<T>) => number;
 }
 
 /** True when `query` fuzzily matches `candidate` (an empty query matches everything). */
@@ -67,6 +68,16 @@ export function fuzzyMatchRanges(text: string, query: string): number[] {
   return ranges;
 }
 
+/**
+ * The largest fraction an item's position may lower its score. fuzzysort
+ * orders equal scores arbitrarily, so without this an exact basename match
+ * repeated across many directories (`SKILL.md` in every downloaded VS Code
+ * build) came back in no particular order. The adjustment is multiplicative
+ * because fuzzysort drops a zero score, and far too small to reorder matches
+ * whose scores really differ.
+ */
+const ORDER_TIEBREAK_SPAN = 1e-6;
+
 function weightedScore(scores: readonly { score: number }[]): number {
   let best = 0;
   scores.forEach(({ score }, index) => {
@@ -78,15 +89,30 @@ function weightedScore(scores: readonly { score: number }[]): number {
   return best;
 }
 
+/** {@link weightedScore}, with equal scores ranked in the order of `items`. */
+function orderedScoreFn<T>(
+  items: readonly T[]
+): (result: KeysResult<T>) => number {
+  const order = new Map<T, number>();
+  items.forEach((item, position) => order.set(item, position));
+  const step = ORDER_TIEBREAK_SPAN / Math.max(1, items.length);
+  return (result) =>
+    weightedScore(result) * (1 - (order.get(result.obj) ?? 0) * step);
+}
+
 /**
  * Build a {@link FuzzyIndex} over `items` for repeated {@link rankIndexByFuzzyQuery}
- * calls. `keys[0]` is the primary field; later keys are down-weighted.
+ * calls. `keys[0]` is the primary field; later keys are down-weighted. Equal
+ * scores rank in the order of `items`.
  */
 export function buildFuzzyIndex<T>(
   items: readonly T[],
   keys: readonly FuzzyKey<T>[]
 ): FuzzyIndex<T> {
-  return { snapshot: fuzzysort.snapshot(items, { keys }) };
+  return {
+    snapshot: fuzzysort.snapshot(items, { keys }),
+    scoreFn: orderedScoreFn(items),
+  };
 }
 
 /**
@@ -105,7 +131,7 @@ export function rankIndexByFuzzyQuery<T>(
     .go(query, index.snapshot, {
       threshold: ANY_MATCH_THRESHOLD,
       limit,
-      scoreFn: weightedScore,
+      scoreFn: index.scoreFn,
     })
     .map((result) => result.obj);
 }
@@ -113,6 +139,7 @@ export function rankIndexByFuzzyQuery<T>(
 /**
  * One-shot variant of {@link rankIndexByFuzzyQuery} for lists that change on
  * every query (e.g. workspace symbols) and so gain nothing from an index.
+ * Equal scores rank in the order of `items`.
  */
 export function rankByFuzzyQuery<T>(
   query: string,
@@ -128,7 +155,7 @@ export function rankByFuzzyQuery<T>(
       keys,
       threshold: ANY_MATCH_THRESHOLD,
       limit,
-      scoreFn: weightedScore,
+      scoreFn: orderedScoreFn(items),
     })
     .map((result) => result.obj);
 }

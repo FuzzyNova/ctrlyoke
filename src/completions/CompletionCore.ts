@@ -10,7 +10,13 @@ import {
   buildSymbolReferenceValue,
   normalizeReferencePath,
 } from "./ContextReferenceBuilder";
-import { fuzzyMatches, rankByFuzzyQuery } from "./FuzzyRanking";
+import {
+  buildFuzzyIndex,
+  fuzzyMatches,
+  rankByFuzzyQuery,
+  rankIndexByFuzzyQuery,
+  type FuzzyIndex,
+} from "./FuzzyRanking";
 import { getPriorContextCompletionItems } from "./PriorContextCompletions";
 import {
   COMPLETION_ITEM_KINDS,
@@ -78,6 +84,7 @@ export interface CompletionWorkspace {
 }
 
 const SYMBOL_PREFIX_LENGTH = 3;
+const FILE_COMPLETION_LIMIT = 500;
 const PROMPT_EXTENSIONS = [".prompt.md", ".md", ".txt"];
 const GIT_CACHE_DURATION_MS = 10_000;
 interface GitCache {
@@ -167,6 +174,7 @@ export class CompletionCore {
     parent: string;
   }> = [];
   private pathsFor?: string[];
+  private pathIndex?: FuzzyIndex<(typeof this.paths)[number]>;
   private gitCache: GitCache | null = null;
   private gitSearchCache: GitSearchCache | null = null;
 
@@ -180,6 +188,7 @@ export class CompletionCore {
     this.files = [];
     this.filesAt = 0;
     this.pathsFor = undefined;
+    this.pathIndex = undefined;
   }
 
   private async pathEntries(): Promise<typeof this.paths> {
@@ -189,33 +198,44 @@ export class CompletionCore {
     if (this.pathsFor === files) return this.paths;
     const dirs = new Set<string>();
     const entries: typeof this.paths = [];
+    const add = (kind: string, relativePath: string): void => {
+      entries.push({
+        kind,
+        relativePath,
+        name: path.posix.basename(relativePath),
+        parent: path.posix.dirname(relativePath),
+      });
+    };
+    // Entries keep the order of `getFiles()`, which breaks ranking ties, so a
+    // directory is listed where its first file is rather than after them all.
     for (const raw of files) {
       const relativePath = normalizeReferencePath(raw);
       if (!relativePath || relativePath.startsWith("../")) continue;
       let parent = path.posix.dirname(relativePath);
-      while (parent !== "." && parent !== "") {
+      while (parent !== "." && parent !== "" && !dirs.has(parent)) {
         dirs.add(parent);
+        add(WORKSPACE_ENTRY_KINDS.DIRECTORY, parent);
         parent = path.posix.dirname(parent);
       }
-      entries.push({
-        kind: WORKSPACE_ENTRY_KINDS.FILE,
-        relativePath,
-        name: path.posix.basename(relativePath),
-        parent: path.posix.dirname(relativePath),
-      });
+      add(WORKSPACE_ENTRY_KINDS.FILE, relativePath);
     }
-    for (const relativePath of dirs)
-      entries.push({
-        kind: WORKSPACE_ENTRY_KINDS.DIRECTORY,
-        relativePath,
-        name: path.posix.basename(relativePath),
-        parent: path.posix.dirname(relativePath),
-      });
     this.files = files;
     this.filesAt = now;
     this.pathsFor = files;
     this.paths = entries;
+    this.pathIndex = undefined;
     return entries;
+  }
+
+  /** Every path entry, prepared once per file list for repeated queries. */
+  private pathFuzzyIndex(
+    entries: typeof this.paths
+  ): FuzzyIndex<(typeof this.paths)[number]> {
+    this.pathIndex ??= buildFuzzyIndex(entries, [
+      (entry) => entry.name,
+      (entry) => entry.relativePath,
+    ]);
+    return this.pathIndex;
   }
 
   async getFileCompletions(query: string): Promise<PlainCompletionItem[]> {
@@ -233,23 +253,33 @@ export class CompletionCore {
       : "";
     const childPrefix =
       hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
-    const candidates = entries.filter((entry) => {
-      if (!filter) return true;
-      if (!hasPath)
-        return fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter);
-      return (
-        entry.parent.toLowerCase() === parentPath &&
-        (!childPrefix || fuzzyMatches(entry.name, childPrefix))
-      );
-    });
-    const queryForRank = hasPath ? childPrefix : filter;
-    const ranked = queryForRank
-      ? rankByFuzzyQuery(queryForRank, candidates, [
-          (entry) => entry.name,
-          (entry) => entry.relativePath,
-        ])
-      : candidates;
     const outputItems = this.outputCompletions(filter);
+    const limit = Math.max(0, FILE_COMPLETION_LIMIT - outputItems.length);
+    const queryForRank = hasPath ? childPrefix : filter;
+    let ranked: typeof entries;
+    if (!hasPath && filter) {
+      // The whole workspace is the candidate set: rank it through the
+      // prepared index, keeping only the best `limit` matches.
+      ranked = rankIndexByFuzzyQuery(
+        filter,
+        this.pathFuzzyIndex(entries),
+        limit
+      );
+    } else {
+      const candidates = hasPath
+        ? entries.filter(
+            (entry) =>
+              entry.parent.toLowerCase() === parentPath &&
+              (!childPrefix || fuzzyMatches(entry.name, childPrefix))
+          )
+        : entries;
+      ranked = childPrefix
+        ? rankByFuzzyQuery(childPrefix, candidates, [
+            (entry) => entry.name,
+            (entry) => entry.relativePath,
+          ])
+        : candidates;
+    }
     const toItem = (
       entry: (typeof entries)[number],
       rank: number
@@ -276,13 +306,11 @@ export class CompletionCore {
       };
     };
     if (queryForRank) {
-      return [
-        ...outputItems,
-        ...ranked.slice(0, Math.max(0, 500 - outputItems.length)).map(toItem),
-      ].map((item, rank) =>
-        item.rank === undefined
-          ? item
-          : { ...item, rank: rank - outputItems.length }
+      return [...outputItems, ...ranked.slice(0, limit).map(toItem)].map(
+        (item, rank) =>
+          item.rank === undefined
+            ? item
+            : { ...item, rank: rank - outputItems.length }
       );
     }
     const directories = ranked
@@ -294,7 +322,7 @@ export class CompletionCore {
         .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE)
         .map((entry, rank) => toItem(entry, rank)),
     ];
-    return [...directories, ...files].slice(0, 500);
+    return [...directories, ...files].slice(0, FILE_COMPLETION_LIMIT);
   }
 
   async getPromptFileCompletions(

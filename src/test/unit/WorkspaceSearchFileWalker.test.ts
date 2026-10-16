@@ -49,6 +49,27 @@ suite("WorkspaceSearchFileWalker", () => {
     }
   });
 
+  test("walks breadth-first so a truncated walk keeps shallow files in every directory", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-search-breadth-")
+    );
+    try {
+      const deep = path.join(root, "zzz-huge", "a", "b");
+      await fs.mkdir(deep, { recursive: true });
+      await fs.mkdir(path.join(root, ".github"));
+      for (let index = 0; index < 20; index++) {
+        await fs.writeFile(path.join(deep, `noise${index}.txt`), "");
+      }
+      await fs.writeFile(path.join(root, ".github", "instructions.md"), "");
+
+      const result = await walkSearchFiles(root, Date.now(), 5, 10_000);
+      assert.strictEqual(result.truncated, true);
+      assert.ok(result.files.includes(path.join(".github", "instructions.md")));
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("shares completion exclusions for generated paths and ctrlyoke logs", () => {
     assert.strictEqual(isSearchPathIgnored("src/.git/config"), true);
     assert.strictEqual(isSearchPathIgnored("node_modules/pkg/index.js"), true);
@@ -86,7 +107,10 @@ suite("WorkspaceSearchFileWalker", () => {
         recursive: true,
       });
       await fs.mkdir(path.join(root, "dist"), { recursive: true });
-      await fs.writeFile(path.join(root, "node_modules", "pkg", "index.js"), "");
+      await fs.writeFile(
+        path.join(root, "node_modules", "pkg", "index.js"),
+        ""
+      );
       await fs.writeFile(path.join(root, "dist", "bundle.js"), "");
 
       const result = await walkSearchFiles(
