@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (confirmed with a scratch vitest)
 - **Area:** `src/completions/CompletionCore.ts`, `src/utils/FileReferenceParser.ts`, `src/utils/ReferencePatterns.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

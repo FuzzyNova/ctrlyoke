@@ -293,6 +293,19 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("parses quoted root extensionless files but leaves plain words alone", () => {
+      assert.deepStrictEqual(
+        parseAtReferences('Use @workspace or @"Makefile" here').map(
+          ({ path, isDirectory }) => ({ path, isDirectory })
+        ),
+        [{ path: "Makefile", isDirectory: false }]
+      );
+      assert.deepStrictEqual(
+        parseAllFileReferences('Use @"Makefile" here').map(({ path }) => path),
+        ["Makefile"]
+      );
+    });
+
     test("returns empty array for prompt with no references", () => {
       const refs = parseAtReferences("just some text without references");
       assert.deepStrictEqual(refs, []);

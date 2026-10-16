@@ -748,11 +748,13 @@ export function parseAtReferences(prompt: string): FileReference[] {
       filePath = filePath.replace(/[^\p{L}\p{N}/\\]+$/u, "");
     }
 
-    // Skip if path is empty or looks like a mention (@workspace, @user, etc.)
-    // We only want file paths (contain / or \ or .)
+    // Unquoted paths need a path marker so ordinary words (@workspace, @user,
+    // etc.) stay plain text. Quotes explicitly mark a file path, including a
+    // root-level extensionless filename such as @"Makefile".
     if (
       filePath &&
-      (filePath.includes("/") ||
+      (quotedPath !== undefined ||
+        filePath.includes("/") ||
         filePath.includes("\\") ||
         filePath.includes("."))
     ) {

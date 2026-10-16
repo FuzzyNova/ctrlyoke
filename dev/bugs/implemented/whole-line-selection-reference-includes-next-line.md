@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step (traced through the code)
 - **Area:** `src/platform/VsCodeEditorContextSource.ts`, `src/completions/ContextMenuReferenceCommands.ts`, `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

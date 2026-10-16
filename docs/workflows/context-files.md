@@ -12,7 +12,8 @@ ctrlyoke prompt files support structured references that help you attach the rig
 
 - `@file` attaches a full file
 - `@dir/` attaches the directory's file tree (names only, no file contents)
-- paths with spaces are quoted
+- paths with spaces are quoted; quoted paths may also name a root-level file without an
+  extension, such as `@"Makefile"`
 - an unquoted path must contain `/`, `\`, or `.`, so `@workspace` is not treated as a
   reference. An `@` in the middle of a word is not a trigger, which keeps email addresses such
   as `nathan@gmail.com` from becoming references.

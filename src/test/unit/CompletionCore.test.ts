@@ -177,6 +177,14 @@ suite("CompletionCore", () => {
     assert.ok(!labels.includes("Picker.tsx"));
   });
 
+  test("quotes root-level extensionless file completion insertions", async () => {
+    const items = await createCore({ files: ["Makefile"] }).getFileCompletions(
+      "Makef"
+    );
+    assert.strictEqual(items[0]?.label, "Makefile");
+    assert.strictEqual(items[0]?.insertText, '"Makefile"');
+  });
+
   test("lists directories before files for an unfiltered @ completion", async () => {
     const items = await createCore({
       files: ["src/z.ts", "README.md"],

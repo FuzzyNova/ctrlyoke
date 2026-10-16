@@ -12,6 +12,7 @@ import { toViewerPath } from "./WorkspaceViewerPath";
 import { VSCODE_URI_SCHEMES } from "../types/DashboardConstants";
 import { outputCaptureCache } from "../completions/OutputCaptureCache";
 import * as crypto from "crypto";
+import { getInclusiveEndLine } from "../utils/InclusiveLineRange";
 
 function viewerPath(document: vscode.TextDocument): string {
   if (document.uri.scheme === VSCODE_URI_SCHEMES.OUTPUT) {
@@ -35,7 +36,11 @@ export class VsCodeEditorContextSource implements EditorContextSource {
       if (editor.selection.isEmpty) continue;
       const file = viewerPath(editor.document);
       const startLine = editor.selection.start.line + 1;
-      const endLine = editor.selection.end.line + 1;
+      const endLine = getInclusiveEndLine(
+        editor.selection.start.line,
+        editor.selection.end.line,
+        editor.selection.end.character
+      );
       const key = `${file}:${startLine}-${endLine}`;
       if (seen.has(key)) continue;
       seen.add(key);
