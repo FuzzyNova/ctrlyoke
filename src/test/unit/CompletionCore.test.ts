@@ -10,6 +10,7 @@ import {
   mapSymbolKindToReferenceKind,
 } from "../../completions/CompletionCore";
 import type { CompletionWorkspace } from "../../completions/CompletionCore";
+import { InMemoryWorkspaceFileQueries } from "../helpers/InMemoryWorkspaceFileQueries";
 import type { EditorContextSource } from "../../completions/EditorContextSource";
 import type { IndexedSymbol, SymbolIndex } from "../../completions/SymbolIndex";
 import { LspSymbolKind } from "../../completions/SymbolIndex";
@@ -50,7 +51,7 @@ function createCore(
   } = {}
 ): CompletionCore {
   const workspace: CompletionWorkspace = {
-    getFiles: async () => options.files ?? [],
+    files: new InMemoryWorkspaceFileQueries(options.files ?? []),
     isMultiRoot: () => options.multiRoot ?? false,
     symbols: options.symbols,
     editorContext: options.editorContext,

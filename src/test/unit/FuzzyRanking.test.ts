@@ -1,10 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
-  buildFuzzyIndex,
   fuzzyMatchRanges,
   rankByFuzzyQuery,
-  rankIndexByFuzzyQuery,
 } from "../../completions/FuzzyRanking";
 
 suite("FuzzyRanking", () => {
@@ -15,7 +13,7 @@ suite("FuzzyRanking", () => {
     );
   });
 
-  test("ranks equal scores in input order, with and without an index", () => {
+  test("ranks equal scores in input order", () => {
     const items = Array.from({ length: 200 }, (_, index) => ({
       name: "SKILL.md",
       path: `${"deep/".repeat(index % 7)}${index}/SKILL.md`,
@@ -28,12 +26,6 @@ suite("FuzzyRanking", () => {
     const expected = items.slice(0, 10).map((item) => item.index);
     assert.deepStrictEqual(
       rankByFuzzyQuery("skill", items, keys, 10).map((item) => item.index),
-      expected
-    );
-    assert.deepStrictEqual(
-      rankIndexByFuzzyQuery("skill", buildFuzzyIndex(items, keys), 10).map(
-        (item) => item.index
-      ),
       expected
     );
   });

@@ -49,8 +49,12 @@ function indexedSymbol(
 export class VsCodeSymbolIndex implements SymbolIndex {
   private warmup?: Promise<void>;
   constructor(
-    private readonly getFiles: () => Promise<string[]> = async () => []
+    private readonly sourceFiles: () => Promise<string[]> = async () => []
   ) {}
+
+  getSourceFiles(): Promise<string[]> {
+    return this.sourceFiles();
+  }
 
   async workspaceSymbols(
     query: string,
@@ -97,7 +101,7 @@ export class VsCodeSymbolIndex implements SymbolIndex {
 
     let files: string[];
     try {
-      files = await this.getFiles();
+      files = await this.getSourceFiles();
     } catch (error) {
       Log.warn(
         "[Completions] Could not discover files for language-server warm-up; continuing with workspace symbols:",

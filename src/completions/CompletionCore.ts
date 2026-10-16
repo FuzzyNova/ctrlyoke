@@ -10,13 +10,7 @@ import {
   buildSymbolReferenceValue,
   normalizeReferencePath,
 } from "./ContextReferenceBuilder";
-import {
-  buildFuzzyIndex,
-  fuzzyMatches,
-  rankByFuzzyQuery,
-  rankIndexByFuzzyQuery,
-  type FuzzyIndex,
-} from "./FuzzyRanking";
+import { fuzzyMatches, rankByFuzzyQuery } from "./FuzzyRanking";
 import { getPriorContextCompletionItems } from "./PriorContextCompletions";
 import {
   COMPLETION_ITEM_KINDS,
@@ -36,6 +30,8 @@ import type {
   EditorContextSource,
   EditorSelection,
 } from "./EditorContextSource";
+import type { WorkspaceFileQueries } from "./WorkspaceFileIndex";
+import type { WorkspacePathResult } from "./WorkspacePathQuery";
 import {
   getCommitByHash,
   getRecentCommits,
@@ -76,8 +72,7 @@ export interface PlainCompletionItem {
 }
 
 export interface CompletionWorkspace {
-  /** Git-aware tracked and non-ignored untracked paths, normalized per root. */
-  getFiles(): Promise<string[]>;
+  files: WorkspaceFileQueries;
   isMultiRoot(): boolean;
   symbols?: SymbolIndex;
   editorContext?: EditorContextSource;
@@ -85,7 +80,6 @@ export interface CompletionWorkspace {
 
 const SYMBOL_PREFIX_LENGTH = 3;
 const FILE_COMPLETION_LIMIT = 500;
-const PROMPT_EXTENSIONS = [".prompt.md", ".md", ".txt"];
 const GIT_CACHE_DURATION_MS = 10_000;
 interface GitCache {
   workspaceRoot: string;
@@ -165,16 +159,6 @@ export function mapSymbolKindToReferenceKind(
 }
 
 export class CompletionCore {
-  private files: string[] = [];
-  private filesAt = 0;
-  private paths: Array<{
-    kind: string;
-    relativePath: string;
-    name: string;
-    parent: string;
-  }> = [];
-  private pathsFor?: string[];
-  private pathIndex?: FuzzyIndex<(typeof this.paths)[number]>;
   private gitCache: GitCache | null = null;
   private gitSearchCache: GitSearchCache | null = null;
 
@@ -184,133 +168,51 @@ export class CompletionCore {
     this.workspace.symbols = symbols;
   }
 
-  clearCache(): void {
-    this.files = [];
-    this.filesAt = 0;
-    this.pathsFor = undefined;
-    this.pathIndex = undefined;
-  }
-
-  private async pathEntries(): Promise<typeof this.paths> {
-    const now = Date.now();
-    if (this.files.length && now - this.filesAt < 5000) return this.paths;
-    const files = await this.workspace.getFiles();
-    if (this.pathsFor === files) return this.paths;
-    const dirs = new Set<string>();
-    const entries: typeof this.paths = [];
-    const add = (kind: string, relativePath: string): void => {
-      entries.push({
-        kind,
-        relativePath,
-        name: path.posix.basename(relativePath),
-        parent: path.posix.dirname(relativePath),
-      });
-    };
-    // Entries keep the order of `getFiles()`, which breaks ranking ties, so a
-    // directory is listed where its first file is rather than after them all.
-    for (const raw of files) {
-      const relativePath = normalizeReferencePath(raw);
-      if (!relativePath || relativePath.startsWith("../")) continue;
-      let parent = path.posix.dirname(relativePath);
-      while (parent !== "." && parent !== "" && !dirs.has(parent)) {
-        dirs.add(parent);
-        add(WORKSPACE_ENTRY_KINDS.DIRECTORY, parent);
-        parent = path.posix.dirname(parent);
-      }
-      add(WORKSPACE_ENTRY_KINDS.FILE, relativePath);
-    }
-    this.files = files;
-    this.filesAt = now;
-    this.pathsFor = files;
-    this.paths = entries;
-    this.pathIndex = undefined;
-    return entries;
-  }
-
-  /** Every path entry, prepared once per file list for repeated queries. */
-  private pathFuzzyIndex(
-    entries: typeof this.paths
-  ): FuzzyIndex<(typeof this.paths)[number]> {
-    this.pathIndex ??= buildFuzzyIndex(entries, [
-      (entry) => entry.name,
-      (entry) => entry.relativePath,
-    ]);
-    return this.pathIndex;
-  }
-
   async getFileCompletions(query: string): Promise<PlainCompletionItem[]> {
-    const entries = await this.pathEntries();
     const filter = normalizeReferencePath(query)
       .replace(/^"/, "")
       .toLowerCase();
     const hasPath = filter.includes("/");
     const endsInSlash = filter.endsWith("/");
-    const parentPath = hasPath
-      ? (endsInSlash
-          ? filter.slice(0, -1)
-          : filter.slice(0, filter.lastIndexOf("/"))
-        ).replace(/\/+$/, "")
-      : "";
     const childPrefix =
       hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
     const outputItems = this.outputCompletions(filter);
     const limit = Math.max(0, FILE_COMPLETION_LIMIT - outputItems.length);
     const queryForRank = hasPath ? childPrefix : filter;
-    let ranked: typeof entries;
-    if (!hasPath && filter) {
-      // The whole workspace is the candidate set: rank it through the
-      // prepared index, keeping only the best `limit` matches.
-      ranked = rankIndexByFuzzyQuery(
-        filter,
-        this.pathFuzzyIndex(entries),
-        limit
-      );
-    } else {
-      const candidates = hasPath
-        ? entries.filter(
-            (entry) =>
-              entry.parent.toLowerCase() === parentPath &&
-              (!childPrefix || fuzzyMatches(entry.name, childPrefix))
-          )
-        : entries;
-      ranked = childPrefix
-        ? rankByFuzzyQuery(childPrefix, candidates, [
-            (entry) => entry.name,
-            (entry) => entry.relativePath,
-          ])
-        : candidates;
-    }
+    const ranked = await this.workspace.files.queryFiles(filter, { limit });
     const toItem = (
-      entry: (typeof entries)[number],
+      entry: WorkspacePathResult,
       rank: number
     ): PlainCompletionItem => {
       const directory = entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY;
       const depth = entry.relativePath.split("/").length;
       return {
-        label: entry.name + (directory ? "/" : ""),
+        label: path.posix.basename(entry.relativePath) + (directory ? "/" : ""),
         kind: directory
           ? COMPLETION_ITEM_KINDS.FOLDER
           : COMPLETION_ITEM_KINDS.FILE,
         insertText: directory
           ? buildDirectoryReferenceValue(entry.relativePath)
           : buildFileReferenceValue(entry.relativePath),
-        detail: entry.parent === "." ? "Root directory" : entry.parent,
+        detail:
+          path.posix.dirname(entry.relativePath) === "."
+            ? "Root directory"
+            : path.posix.dirname(entry.relativePath),
         documentation: directory
           ? `**Directory structure attachment**\n\nInsert: \`${buildDirectoryReference(entry.relativePath)}\`\n\nctrlyoke will attach a file tree of this directory.\n\n_No file contents, just structure._`
           : `**Full file attachment** (CLI-native)\n\nInsert: \`${buildFileReference(entry.relativePath)}\`\n\nThe CLI will automatically attach this file's content.\n\n_For line ranges, use \`${buildSelectionReference(entry.relativePath, 10, 20)}\`_`,
         sortText: queryForRank
           ? `0_${String(rank).padStart(6, "0")}`
           : `0_${depth}_${entry.relativePath}`,
-        filterText: `${entry.name} ${entry.relativePath}`,
+        filterText: `${path.posix.basename(entry.relativePath)} ${entry.relativePath}`,
         ...(queryForRank ? { rank } : {}),
       };
     };
     if (queryForRank) {
-      return [...outputItems, ...ranked.slice(0, limit).map(toItem)].map(
-        (item, rank) =>
-          item.rank === undefined
-            ? item
-            : { ...item, rank: rank - outputItems.length }
+      return [...outputItems, ...ranked.map(toItem)].map((item, rank) =>
+        item.rank === undefined
+          ? item
+          : { ...item, rank: rank - outputItems.length }
       );
     }
     const directories = ranked
@@ -328,60 +230,35 @@ export class CompletionCore {
   async getPromptFileCompletions(
     query: string
   ): Promise<PlainCompletionItem[]> {
-    const entries = await this.pathEntries();
-    const filter = normalizeReferencePath(query)
+    const normalized = normalizeReferencePath(query)
       .replace(/^\.\.?\//, "")
-      .replace(/^\//, "")
-      .toLowerCase();
-    const hasPath = filter.includes("/");
-    const endsInSlash = filter.endsWith("/");
-    const parent = hasPath
-      ? (endsInSlash
-          ? filter.slice(0, -1)
-          : filter.slice(0, filter.lastIndexOf("/"))
-        ).replace(/\/+$/, "")
-      : "";
+      .replace(/^\//, "");
+    const hasPath = normalized.includes("/");
+    const endsInSlash = normalized.endsWith("/");
     const child =
-      hasPath && !endsInSlash ? filter.slice(filter.lastIndexOf("/") + 1) : "";
-    const selected = entries.filter(
-      (entry) =>
-        entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
-        PROMPT_EXTENSIONS.some((ext) =>
-          entry.relativePath.toLowerCase().endsWith(ext)
-        ) &&
-        (!filter ||
-          (hasPath
-            ? entry.parent.toLowerCase() === parent &&
-              (!child || fuzzyMatches(entry.name, child))
-            : fuzzyMatches(`${entry.name} ${entry.relativePath}`, filter)))
-    );
-    const shouldRank = Boolean(child || (filter && !hasPath));
-    const ranked = child
-      ? rankByFuzzyQuery(child, selected, [(e) => e.name])
-      : filter && !hasPath
-        ? rankByFuzzyQuery(filter, selected, [
-            (e) => e.name,
-            (e) => e.relativePath,
-          ])
-        : [...selected].sort((a, b) =>
-            `${a.relativePath.split("/").length}_${a.relativePath}`.localeCompare(
-              `${b.relativePath.split("/").length}_${b.relativePath}`
-            )
-          );
+      hasPath && !endsInSlash
+        ? normalized.slice(normalized.lastIndexOf("/") + 1)
+        : "";
+    const shouldRank = Boolean(child || (normalized && !hasPath));
+    const ranked = await this.workspace.files.queryPromptFiles(query, {
+      limit: 200,
+    });
     return ranked.slice(0, 200).map((entry, rank) => {
+      const name = path.posix.basename(entry.relativePath);
+      const parent = path.posix.dirname(entry.relativePath);
       const insertPath = this.workspace.isMultiRoot()
         ? entry.relativePath
         : `./${entry.relativePath}`;
       return {
-        label: entry.name,
+        label: name,
         kind: COMPLETION_ITEM_KINDS.FILE,
         insertText: insertPath,
-        detail: entry.parent === "." ? "Root" : entry.parent,
+        detail: parent === "." ? "Root" : parent,
         documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
         sortText: shouldRank
           ? String(rank).padStart(6, "0")
           : `${entry.relativePath.split("/").length}_${entry.relativePath}`,
-        filterText: `${entry.name} ${entry.relativePath}`,
+        filterText: `${name} ${entry.relativePath}`,
         ...(shouldRank ? { rank } : {}),
       };
     });
@@ -575,52 +452,13 @@ export class CompletionCore {
     kind: WorkspaceFileTreeEntryKind,
     maxResults = 3
   ): Promise<string[]> {
-    const normalized = normalizeReferencePath(typedPath)
-      .replace(/^\.\.?\//, "")
-      .replace(/\/+$/, "");
-    const base = path.posix.basename(normalized).toLowerCase();
-    if (!base) return [];
-    const parent = path.posix.dirname(normalized);
-    const directory = kind === WORKSPACE_ENTRY_KINDS.DIRECTORY;
-    const entries = (await this.pathEntries()).filter(
-      (entry) =>
-        entry.kind ===
-        (directory
-          ? WORKSPACE_ENTRY_KINDS.DIRECTORY
-          : WORKSPACE_ENTRY_KINDS.FILE)
+    return (
+      await this.workspace.files.suggestPaths(typedPath, kind, maxResults)
+    ).map((entry) =>
+      kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+        ? buildDirectoryReference(entry.relativePath)
+        : buildFileReference(entry.relativePath)
     );
-    const ranked = entries
-      .flatMap((entry) => {
-        const candidate = entry.name.toLowerCase();
-        const sameDir = entry.parent === parent;
-        const prefix = base.startsWith(candidate) || candidate.startsWith(base);
-        const tier =
-          sameDir && prefix
-            ? 0
-            : sameDir && fuzzyMatches(candidate, base)
-              ? 1
-              : candidate === base
-                ? 2
-                : prefix
-                  ? 3
-                  : -1;
-        return tier < 0 || entry.relativePath === normalized
-          ? []
-          : [{ entry, tier, delta: Math.abs(candidate.length - base.length) }];
-      })
-      .sort(
-        (a, b) =>
-          a.tier - b.tier ||
-          a.delta - b.delta ||
-          a.entry.relativePath.localeCompare(b.entry.relativePath)
-      );
-    return ranked
-      .slice(0, maxResults)
-      .map(({ entry }) =>
-        directory
-          ? buildDirectoryReference(entry.relativePath)
-          : buildFileReference(entry.relativePath)
-      );
   }
 
   private outputCompletions(query: string): PlainCompletionItem[] {

@@ -16,6 +16,7 @@ import {
 } from "../../types/DashboardConstants";
 import { pathsEqual } from "../../utils/PathCasing";
 import { CompletionCore } from "../../completions/CompletionCore";
+import { InMemoryWorkspaceFileQueries } from "../helpers/InMemoryWorkspaceFileQueries";
 import {
   symbolCompletionGolden,
   symbolCompletionGoldenResult,
@@ -176,7 +177,7 @@ suite("PromptEditorSupportService", () => {
 
   test("returns current editor selections in the panel's partial # response", async () => {
     const core = new CompletionCore({
-      getFiles: async () => [],
+      files: new InMemoryWorkspaceFileQueries(),
       isMultiRoot: () => false,
       symbols: {
         workspaceSymbols: async () => [symbolCompletionGolden],
@@ -304,7 +305,7 @@ suite("PromptEditorSupportService", () => {
     );
     let symbolQueries = 0;
     const core = new CompletionCore({
-      getFiles: async () => [],
+      files: new InMemoryWorkspaceFileQueries(),
       isMultiRoot: () => false,
       symbols: {
         workspaceSymbols: async () => {

@@ -185,11 +185,10 @@ suite("WorkspaceFileIndex", () => {
     index.dispose();
   });
 
-  test("real worker answers after a build and cancellation stops a scan", async function () {
+  test("real worker starts on the first query and cancellation stops a scan", async function () {
     const workspaceRoot = path.resolve(__dirname, "../../..");
     const index = new WorkspaceFileIndex([{ path: workspaceRoot, name: "repo" }], false);
     try {
-      await index.build();
       const files = await index.queryFiles("package");
       assert.ok(files.some((entry) => entry.relativePath === "package.json"));
       const controller = new AbortController();

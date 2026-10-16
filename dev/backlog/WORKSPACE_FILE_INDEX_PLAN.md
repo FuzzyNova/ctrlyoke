@@ -1,9 +1,8 @@
 # Workspace File Index Plan
 
-**Status:** Backlog — not started. Ready to implement: every decision below is
-settled. Work through the phases in order (1, 2a, 2b, 3, 4a, 4b, 5). Each one
-is sized for a single session, leaves the build and `npm test` green, ticks
-its heading here as `(done)`, and commits its own work.
+**Status:** Phase 3 done. Phases 4a, 4b and 5 remain. Every decision below is
+settled; each phase leaves the build and `npm test` green and commits its own
+work.
 **Priority:** P1
 **Bug:** `dev/bugs/backlog/at-completion-misses-files-past-walk-cap.md`
 
@@ -180,7 +179,9 @@ Deviation: none.
   to the Git-visible list with exactly one warning; use a tiny injected
   `resourceLimits` with the real worker. Cancel stops a scan.
 
-### Phase 3 — Wire hosts and fix the bug
+### Phase 3 — Wire hosts and fix the bug (done)
+
+Deviation: none.
 
 - `CompletionCore`: switch to the `files` port (D15), remove
   `pathEntries()`, its TTL and the prepared index, and make

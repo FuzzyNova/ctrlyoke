@@ -225,8 +225,10 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
     if (gitSucceeded) {
       staging.replaceAll(gitPaths);
       if (initialBuild) this.activate(staging, WORKSPACE_FILE_INDEX_STATES.BUILDING);
+      // Git-visible paths can be queried immediately while the optional full
+      // walk continues in the background.
+      markGitReady();
     }
-    markGitReady();
 
     let walked: string[] = [];
     if ((!respectGitignore || !gitSucceeded) && !gitVisibleOnly) {
@@ -238,7 +240,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
             Number.POSITIVE_INFINITY,
             Number.POSITIVE_INFINITY,
             gitSucceeded ? skip : DEFAULT_SKIP_DIRECTORIES,
-            true
+            !gitSucceeded || respectGitignore
           );
           return this.prefix(root, result.files, roots);
         } catch {
@@ -249,11 +251,17 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
       walked = walkedByRoot.flat();
     }
 
-    if (this.disposed) return;
+    if (this.disposed) {
+      if (!gitSucceeded) markGitReady();
+      return;
+    }
     if (gitSucceeded) staging.add(walked);
     else staging.replaceAll(walked);
     this.activate(staging, gitSucceeded ? WORKSPACE_FILE_INDEX_STATES.READY : WORKSPACE_FILE_INDEX_STATES.DEGRADED);
     this.lastBuildAt = this.dependencies.now();
+    // Without a usable Git list, the fallback walk is the first queryable
+    // snapshot, so don't release the initial request against an empty store.
+    if (!gitSucceeded) markGitReady();
   }
 
   private activate(store: WorkspacePathStore, state: WorkspaceFileIndexState): void {
@@ -285,7 +293,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
         void this.build();
         continue;
       }
-      if (isSearchPathIgnored(relative, skip, true)) continue;
+      if (isSearchPathIgnored(relative, skip, this.respectGitignore)) continue;
       if (change.kind !== WORKSPACE_FILE_CHANGE_KINDS.CHANGE) accepted.push({ root, relative, kind: change.kind });
     }
     for (const change of accepted) {
@@ -299,7 +307,7 @@ export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
         let paths: string[] = [];
         if (info.isFile()) paths = [change.relative];
         else if (info.isDirectory()) {
-          const result = await this.dependencies.walkSearchFiles(absolute, this.dependencies.now(), Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, skip, true);
+          const result = await this.dependencies.walkSearchFiles(absolute, this.dependencies.now(), Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, skip, this.respectGitignore);
           paths = result.files.map((file) => `${change.relative}/${file}`);
         }
         if (this.respectGitignore && paths.length > 0) {
@@ -345,6 +353,7 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
   private status: WorkspaceFileIndexStatus = { state: WORKSPACE_FILE_INDEX_STATES.BUILDING, indexed: 0 };
   private disposed = false;
   private failureStarted = false;
+  private buildStarted = false;
 
   constructor(
     private readonly roots: readonly WorkspaceFileIndexRoot[],
@@ -377,6 +386,7 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
   }
 
   async build(options: WorkspaceFileIndexBuildOptions = {}): Promise<void> {
+    this.buildStarted = true;
     if (this.fallback) { await this.fallback.build(options); this.status = this.fallback.getStatus(); return; }
     await this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD, options: { ...options, roots: options.roots ?? this.roots, respectGitignore: options.respectGitignore ?? this.respectGitignore } });
   }
@@ -385,18 +395,24 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     await this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES, changes });
   }
   async queryFiles(query: string, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
+    await this.ensureStarted();
     if (this.fallback) return this.fallback.queryFiles(query, options);
     return this.query(WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES, query, options);
   }
   async queryPromptFiles(query: string, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
+    await this.ensureStarted();
     if (this.fallback) return this.fallback.queryPromptFiles(query, options);
     return this.query(WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES, query, options);
   }
   async suggestPaths(typedPath: string, kind: WorkspaceFileTreeEntryKind, maxResults?: number, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
+    await this.ensureStarted();
     if (this.fallback) return this.fallback.suggestPaths(typedPath, kind, maxResults, options);
     return this.querySuggestions(typedPath, kind, maxResults, options);
   }
   getStatus(): WorkspaceFileIndexStatus { return this.fallback?.getStatus() ?? this.status; }
+  private async ensureStarted(): Promise<void> {
+    if (!this.buildStarted) await this.build();
+  }
   cancel(queryId?: string): void {
     if (!queryId) return;
     if (this.fallback) { this.fallback.cancel(queryId); return; }

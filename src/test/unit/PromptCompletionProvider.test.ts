@@ -68,6 +68,7 @@ suite("PromptCompletionProvider", () => {
       configurable: true,
       value: [{ uri: vscode.Uri.file(root), name: "workspace", index: 0 }],
     });
+    clearFilesCache();
     const fileUri = vscode.Uri.file(path.join(root, "my dir", "a.md"));
     Object.defineProperty(vscode.workspace, "findFiles", {
       configurable: true,
