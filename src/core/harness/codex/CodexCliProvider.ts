@@ -30,6 +30,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { moveGreedyOptionArgsAfterPrompt } from "../shared/CliArgumentUtils";
 import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -707,7 +708,7 @@ export class CodexCliProvider implements ICliProvider {
    * Build CLI arguments for headless mode
    *
    * Codex expects: codex exec [OPTIONS] [PROMPT]
-   * The prompt argument must come LAST after all flags/options.
+   * The prompt precedes --image because exec parses it as a greedy array.
    *
    * Handles both direct prompts and file references (e.g., ".ctrlyoke/temp/prompt.md")
    *
@@ -716,7 +717,7 @@ export class CodexCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return [...baseArgs, prompt];
+    return moveGreedyOptionArgsAfterPrompt(baseArgs, prompt, "--image");
   }
 
   /**

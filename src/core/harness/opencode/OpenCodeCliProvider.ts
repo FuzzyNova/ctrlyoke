@@ -20,6 +20,7 @@ import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { moveGreedyOptionArgsAfterPrompt } from "../shared/CliArgumentUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
@@ -462,14 +463,14 @@ export class OpenCodeCliProvider implements ICliProvider {
    *
    * opencode run "prompt" --format json -m model [-s sessionId]
    *
-   * The prompt is passed as a positional argument at the end.
+   * The prompt precedes --file because OpenCode parses file as a greedy array.
    *
    * @param baseArgs Base arguments array (already includes "run", "--format", "json", "-m", model)
    * @param prompt Prompt text or file reference
    * @returns Complete arguments array with prompt appended
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return [...baseArgs, prompt];
+    return moveGreedyOptionArgsAfterPrompt(baseArgs, prompt, "--file");
   }
 
   /**

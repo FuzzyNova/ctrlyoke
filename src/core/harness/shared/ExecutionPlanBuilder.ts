@@ -7,7 +7,10 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import type { WorkflowStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { ToolPermissionConfig } from "../../../types/ExecutionPropertyTypes";
-import { mergeServerDeniedTools } from "../../../types/ToolPermissionUtils";
+import {
+  mergeServerDeniedTools,
+  normalizeClaudeMcpServerId,
+} from "../../../types/ToolPermissionUtils";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
@@ -283,7 +286,10 @@ export class ExecutionPlanBuilder {
     const effectiveToolPermissions = translatesServerDenials
       ? mergeServerDeniedTools(
           session.resolvedProperties?.toolPermissions,
-          session.resolvedProperties?.mcpServers
+          session.resolvedProperties?.mcpServers,
+          this.deps.provider.config.harnessId === HARNESS_IDS.CLAUDE_CLI
+            ? normalizeClaudeMcpServerId
+            : undefined
         )
       : session.resolvedProperties?.toolPermissions;
     const permissionContext: PermissionContext = {

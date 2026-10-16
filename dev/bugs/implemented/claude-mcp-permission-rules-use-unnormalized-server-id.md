@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; read from the installed Claude CLI bundle, not run)
 - **Area:** `src/core/harness/claude/ClaudeCliProvider.ts`, `src/types/ToolPermissionUtils.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

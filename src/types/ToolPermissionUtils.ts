@@ -13,7 +13,8 @@ import type { ToolPermissionConfig } from "./ExecutionPropertyTypes";
  */
 export function mergeServerDeniedTools(
   toolPermissions: ToolPermissionConfig | null | undefined,
-  mcpServers: readonly (string | McpServerConfig)[] | null | undefined
+  mcpServers: readonly (string | McpServerConfig)[] | null | undefined,
+  normalizeServerId: (serverId: string) => string = (serverId) => serverId
 ): ToolPermissionConfig | null | undefined {
   if (!mcpServers) {
     return toolPermissions;
@@ -21,7 +22,9 @@ export function mergeServerDeniedTools(
 
   const serverDeniedTools = mcpServers.flatMap((server) =>
     typeof server === "object" && server !== null && server.deniedTools?.length
-      ? server.deniedTools.map((tool) => `mcp__${server.id}__${tool}`)
+      ? server.deniedTools.map(
+          (tool) => `mcp__${normalizeServerId(server.id)}__${tool}`
+        )
       : []
   );
   if (serverDeniedTools.length === 0) {
@@ -40,4 +43,9 @@ export function mergeServerDeniedTools(
     ...base,
     deniedTools: [...base.deniedTools, ...serverDeniedTools],
   };
+}
+
+/** Match Claude Code's MCP server name normalization for permission rules. */
+export function normalizeClaudeMcpServerId(serverId: string): string {
+  return serverId.replace(/[^a-zA-Z0-9_-]/g, "_");
 }

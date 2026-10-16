@@ -31,6 +31,7 @@ import {
   CliProviderUtils,
   hasCtrlYokeServer,
 } from "../shared/CliProviderUtils";
+import { normalizeClaudeMcpServerId } from "../../../types/ToolPermissionUtils";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
@@ -332,14 +333,19 @@ export class ClaudeCliProvider implements ICliProvider {
         if (typeof server === "object" && server.autoApprove) {
           if (server.autoApprove === true) {
             // Approve all tools from this server
-            args.push("--allowed-tools", `mcp__${server.id}`);
+            const normalizedServerId = normalizeClaudeMcpServerId(server.id);
+            args.push("--allowed-tools", `mcp__${normalizedServerId}`);
             Log.debug(
               `[ClaudeCliProvider] Auto-approved all tools from MCP server: ${server.id}`
             );
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
             for (const pattern of server.autoApprove) {
-              args.push("--allowed-tools", `mcp__${server.id}__${pattern}`);
+              const normalizedServerId = normalizeClaudeMcpServerId(server.id);
+              args.push(
+                "--allowed-tools",
+                `mcp__${normalizedServerId}__${pattern}`
+              );
             }
             Log.debug(
               `[ClaudeCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`

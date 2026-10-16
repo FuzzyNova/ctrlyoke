@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; argv parse reproduced with OpenCode's option definitions)
 - **Area:** `src/core/harness/opencode/OpenCodeCliProvider.ts` (`buildImageAttachmentArgs`, `buildHeadlessArgs`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -33,5 +33,7 @@ which parsed correctly in the same probe. If prompt-first is awkward in the shar
 OpenCode's `buildHeadlessArgs` move the `--file` pairs after the prompt. Update the test at
 `ExecutionPlanBuilder.test.ts:155` to assert that the prompt comes before the first `--file`.
 
-Codex's `--image` (`CodexCliProvider.ts:769`) may have the same problem when permission mode is
-`none`. That hasn't been verified against Codex's clap definition. Check it while fixing this.
+Codex has the same issue: its `codex exec --help` arity is `-i, --image <FILE>...`, and OpenAI's
+[Codex CLI issue #30106](https://github.com/openai/codex/issues/30106) documents the prompt being
+consumed by this variadic option and the prompt-first ordering that works. Codex headless argv now
+places the prompt before `--image` as well.
