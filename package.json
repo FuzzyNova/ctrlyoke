@@ -769,6 +769,7 @@
     "build:landing": "npm --prefix landing ci && npm --prefix landing run build",
     "build:docs": "npm run docs:build && node scripts/merge-docs-into-landing.mjs && node scripts/publish-schemas-to-landing.mjs",
     "vscode:prepublish": "npm run build:prod",
+    "vscode:uninstall": "node ./out/vscode-uninstall.js",
     "build:prod": "npm run build:extension && npm run build:webview",
     "build:extension": "npm run typecheck:extension && node scripts/strip-dev-commands.mjs && node esbuild.js --production && node scripts/assert-no-copilot-runtime.mjs",
     "build:webview": "npm run generate-custom-icons && npm run typecheck:webview && vite build --config src/ui/webview-react/vite.config.ts --mode production",

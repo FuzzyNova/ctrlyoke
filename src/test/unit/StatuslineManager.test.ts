@@ -319,5 +319,101 @@ suite("StatuslineManager", () => {
 
       assert.strictEqual(await launcherExists(), true);
     });
+
+    async function writeHarnessSettings(
+      settingsPath: string,
+      contents: unknown
+    ): Promise<void> {
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      await fs.writeFile(
+        settingsPath,
+        typeof contents === "string" ? contents : JSON.stringify(contents)
+      );
+    }
+
+    async function launcherCommand(
+      root: string,
+      harnessId: typeof HARNESS_IDS.CLAUDE_CLI | typeof HARNESS_IDS.COPILOT_CLI
+    ): Promise<{ type: string; command: string }> {
+      const scriptPath =
+        await StatuslineManager.forHarness(harnessId).resolveScriptPath(root);
+      assert.ok(scriptPath?.startsWith(statuslineLauncherDirectory()));
+      return { type: "command", command: `node "${scriptPath}"` };
+    }
+
+    test("removeFromAllHarnesses hands each statusline back even with tracking enabled", async () => {
+      const root = await packageRoot("pkg");
+      const claudePath = path.join(tempHome, ".claude", "settings.json");
+      const copilotPath = path.join(tempHome, ".copilot", "settings.json");
+      const qwenPath = path.join(tempHome, ".qwen", "settings.json");
+      await writeHarnessSettings(claudePath, {
+        model: "opus",
+        statusLine: await launcherCommand(root, HARNESS_IDS.CLAUDE_CLI),
+      });
+      await writeHarnessSettings(copilotPath, {
+        statusLine: await launcherCommand(root, HARNESS_IDS.COPILOT_CLI),
+      });
+      const userReplaced = {
+        ui: { statusLine: { type: "command", command: "my-own" } },
+      };
+      await writeHarnessSettings(qwenPath, userReplaced);
+      userSettings = {
+        statusLine: {
+          byHarness: {
+            "claude-cli": {
+              enabled: true,
+              customCommand: "my-statusline",
+              useCtrlyokeStyle: false,
+            } as StatusLineHarnessSettings,
+          },
+        },
+      };
+
+      const result = await StatuslineManager.removeFromAllHarnesses(tempHome);
+
+      assert.deepStrictEqual(result, {
+        restored: [HARNESS_IDS.CLAUDE_CLI, HARNESS_IDS.COPILOT_CLI],
+        failed: [],
+        launcherRemoved: true,
+      });
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(claudePath, "utf8")),
+        {
+          model: "opus",
+          statusLine: { type: "command", command: "my-statusline" },
+        }
+      );
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(copilotPath, "utf8")),
+        {}
+      );
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(qwenPath, "utf8")),
+        userReplaced
+      );
+      assert.strictEqual(await launcherExists(), false);
+    });
+
+    test("removeFromAllHarnesses keeps the launcher when a harness config cannot be updated", async () => {
+      const root = await packageRoot("pkg");
+      await writeHarnessSettings(
+        path.join(tempHome, ".claude", "settings.json"),
+        "{ not json"
+      );
+      await writeHarnessSettings(
+        path.join(tempHome, ".copilot", "settings.json"),
+        { statusLine: await launcherCommand(root, HARNESS_IDS.COPILOT_CLI) }
+      );
+
+      const result = await StatuslineManager.removeFromAllHarnesses(tempHome);
+
+      assert.deepStrictEqual(result.restored, [HARNESS_IDS.COPILOT_CLI]);
+      assert.deepStrictEqual(
+        result.failed.map((failure) => failure.harnessId),
+        [HARNESS_IDS.CLAUDE_CLI]
+      );
+      assert.strictEqual(result.launcherRemoved, false);
+      assert.strictEqual(await launcherExists(), true);
+    });
   });
 });

@@ -7,6 +7,7 @@ import {
   compareVersions,
   countLiveInstallationRoots,
   findOlderCli,
+  forgetInstallation,
   INSTALLATION_KINDS,
   installationsFilePath,
   markNoticeShown,
@@ -176,6 +177,45 @@ suite("CtrlyokeInstallations", () => {
       packageRoot: npmCli,
     });
     assert.strictEqual(await countLiveInstallationRoots(), 2);
+  });
+
+  test("forgetInstallation drops every record for the root and returns the others", async () => {
+    const extension = await packageRoot("extension", {
+      engines: { vscode: "^1.106.0" },
+    });
+    const npmCli = await packageRoot("npm-cli");
+    for (const kind of [
+      INSTALLATION_KINDS.VSCODE_EXTENSION,
+      INSTALLATION_KINDS.CLI,
+    ]) {
+      await recordInstallation({
+        kind,
+        version: "0.2.0",
+        packageRoot: extension,
+      });
+    }
+    await recordInstallation({
+      kind: INSTALLATION_KINDS.CLI,
+      version: "0.1.0",
+      packageRoot: npmCli,
+    });
+
+    const { others } = await forgetInstallation(extension);
+
+    assert.deepStrictEqual(
+      others.map((record) => record.packageRoot),
+      [npmCli]
+    );
+    assert.deepStrictEqual(
+      (await readLiveInstallations()).map((record) => record.packageRoot),
+      [npmCli]
+    );
+  });
+
+  test("forgetInstallation without a registry finds no others", async () => {
+    const npmCli = await packageRoot("npm-cli");
+
+    assert.deepStrictEqual(await forgetInstallation(npmCli), { others: [] });
   });
 
   test("ignores installations not seen for 30 days", async () => {

@@ -12,6 +12,7 @@ ctrlyoke continue --workflow <key-or-name> --run <ref|runId> [options]
 ctrlyoke validate <file> [--harness <id> | --all-installed-harnesses] [--strict [policy]] [--json]
 ctrlyoke commit [--model <model>] [--hint <text>] [--print-only] [--all] [--yes] [--cwd <path>]
 ctrlyoke about [--json]
+ctrlyoke uninstall [--json]
 ctrlyoke trust-external-roots [--yes] [--cwd <path>]
 ctrlyoke trust-workflow-external-roots <file> [--yes] [--cwd <path>]
 ctrlyoke trust-secret-grants <file> [--yes] [--cwd <path>]
@@ -392,6 +393,33 @@ ctrlyoke about --json
 Use it to tell which copy a shell is running when the extension and an npm
 install are both present. `--json` prints one JSON object with a
 `schemaVersion` field.
+
+## `ctrlyoke uninstall`
+
+Take ctrlyoke's status line out of your harness settings before you remove the
+npm package. npm runs no cleanup of its own when it uninstalls a package, so run
+this first:
+
+```bash
+ctrlyoke uninstall
+npm uninstall -g ctrlyoke
+```
+
+Each harness gets back the status line command it had before ctrlyoke, or loses
+the setting if it had none, and the scripts in `~/.ctrlyoke/bin/` are deleted.
+A status line you changed yourself after ctrlyoke installed its own is left
+alone.
+
+If another ctrlyoke installation is still in use, such as the VS Code
+extension, the command lists it and changes nothing: that installation still
+needs the status line, and it removes it when it is uninstalled itself.
+
+Your settings and run history are kept. The command exits `2` if a harness
+settings file can't be updated (for example, it isn't valid JSON); fix that
+file and run it again. From VS Code's integrated terminal, `ctrlyoke` is the copy
+bundled with the extension, and this command refuses to run there; uninstall the
+extension instead. `--json` prints one JSON object with a `schemaVersion` field.
+See [Uninstall](/guide/installation#uninstall).
 
 ## `ctrlyoke trust-workflow-external-roots`
 

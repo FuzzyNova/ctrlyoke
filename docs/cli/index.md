@@ -59,7 +59,9 @@ behind:
   using the same schema can reuse the index.
 - Harness statuslines run from a shared copy of ctrlyoke's statusline scripts
   in `~/.ctrlyoke/bin/`, which the newest installed version keeps up to date.
-  Updating or removing either copy does not break your statusline.
+  Updating or removing either copy does not break your statusline. Uninstalling
+  one copy leaves the statusline in place for the other; it is removed only when
+  the last copy goes (see [Uninstall](/guide/installation#uninstall)).
 
 Run `ctrlyoke about` to see which copy a shell is running, where it is
 installed, and which other ctrlyoke installations this machine has used.

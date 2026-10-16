@@ -677,7 +677,11 @@ suite("SourceAuditCounters", () => {
     );
   });
 
-  for (const entry of ["src/cli.ts", "src/mcp-server.ts"]) {
+  for (const entry of [
+    "src/cli.ts",
+    "src/mcp-server.ts",
+    "src/vscode-uninstall.ts",
+  ]) {
     test(`${entry} never loads vscode at runtime`, function () {
       // Shares the parsed-source cache with the orchestrator graph test, but
       // also walks installed package JavaScript.

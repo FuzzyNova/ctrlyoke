@@ -24,6 +24,7 @@ import {
   SETTINGS_JSON_INSTALL_KIND_WRITTEN,
   STATUS_LINE_SETTING_KEY,
   type SettingsJsonPersistentValueInstallResult,
+  type SettingsJsonPersistentValueUninstall,
 } from "./SettingsJsonMcpTracker";
 
 const QWEN_STATUS_LINE_SETTING_KEY = "ui.statusLine";
@@ -42,6 +43,19 @@ export interface StatuslineInstallResult {
    * notify again for this result.
    */
   readonly alreadyCtrlyoke?: boolean;
+}
+
+export interface StatuslineRemovalFailure {
+  readonly harnessId: StatusLineHarnessId;
+  readonly message: string;
+}
+
+export interface StatuslineRemovalResult {
+  /** Harnesses whose config changed: the user's command restored, or the key removed. */
+  readonly restored: readonly StatusLineHarnessId[];
+  /** Harnesses whose config could not be updated (e.g. unparseable JSON). */
+  readonly failed: readonly StatuslineRemovalFailure[];
+  readonly launcherRemoved: boolean;
 }
 
 export interface StatuslineManagerLike {
@@ -249,47 +263,106 @@ export class StatuslineManager implements StatuslineManagerLike {
    * {@link releaseLauncherIfUnused} keeps while it does.
    */
   async uninstall(workspaceRoot: string, restoreCustomCommand: boolean) {
-    const { customCommand } = this.getSettings();
     await this.definition.tracker.uninstallPersistentValue(
       workspaceRoot,
       this.getPersistentValueKey(),
-      restoreCustomCommand && customCommand.length > 0
-        ? {
-            action: "restore",
-            value: { type: "command", command: customCommand },
-          }
-        : { action: "delete" }
+      this.uninstallOperation(restoreCustomCommand)
     );
     await StatuslineManager.releaseLauncherIfUnused(workspaceRoot);
+  }
+
+  /**
+   * Take ctrlyoke's statusline out of every harness config and delete the
+   * shared launcher because the last ctrlyoke package is being uninstalled.
+   * The caller establishes that no other installation still uses them.
+   *
+   * Each harness gets the user's captured command back, or loses the key.
+   * Tracking settings in `~/.ctrlyoke/settings.json` are kept, so reinstalling
+   * ctrlyoke picks up where it left off. A harness whose statusline is no
+   * longer ctrlyoke's own command is left alone: the user replaced it.
+   */
+  static async removeFromAllHarnesses(
+    workspaceRoot: string
+  ): Promise<StatuslineRemovalResult> {
+    const restored: StatusLineHarnessId[] = [];
+    const failed: StatuslineRemovalFailure[] = [];
+    for (const provider of Object.values(STATUS_LINE_HARNESS_IDS)) {
+      const manager = this.forProvider(provider);
+      try {
+        if (
+          await manager.definition.tracker.uninstallPersistentValue(
+            workspaceRoot,
+            manager.getPersistentValueKey(),
+            manager.uninstallOperation(true),
+            (value, hadKey) => {
+              const command = manager.extractCommand(value, hadKey);
+              return (
+                command !== undefined &&
+                manager.isCtrlyokeStatuslineCommand(command)
+              );
+            }
+          )
+        ) {
+          restored.push(provider);
+        }
+      } catch (error) {
+        failed.push({
+          harnessId: provider,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const launcherRemoved = await this.releaseLauncherIfUnused(workspaceRoot, {
+      packageRemoved: true,
+    });
+    return { restored, failed, launcherRemoved };
   }
 
   /**
    * Remove the shared `~/.ctrlyoke/bin` launcher once nothing can use it
    * (CLI_DISTRIBUTION_PLAN.md §3.4 rule 6): every provider has tracking
    * disabled, no harness config still runs a launcher script, and no other
-   * ctrlyoke installation is recorded as live. Best effort; never throws.
+   * ctrlyoke installation is recorded as live. When the package itself is
+   * being removed, tracking settings no longer matter: nothing is left to act
+   * on them. True when it was removed. Best effort; never throws.
    */
   private static async releaseLauncherIfUnused(
-    workspaceRoot: string
-  ): Promise<void> {
+    workspaceRoot: string,
+    { packageRemoved = false }: { packageRemoved?: boolean } = {}
+  ): Promise<boolean> {
     try {
       const launcherDirectory = statuslineLauncherDirectory();
       for (const provider of Object.values(STATUS_LINE_HARNESS_IDS)) {
         const manager = this.forProvider(provider);
         if (
-          manager.getSettings().enabled ||
+          (!packageRemoved && manager.getSettings().enabled) ||
           (await manager.runsScriptFrom(workspaceRoot, launcherDirectory))
         ) {
-          return;
+          return false;
         }
       }
       if ((await countLiveInstallationRoots()) > 1) {
-        return;
+        return false;
       }
       await removeStatuslineLauncher();
+      return true;
     } catch {
       // Leaving the launcher in place is always safe.
+      return false;
     }
+  }
+
+  /** Restore the captured custom command when asked and present, else delete the key. */
+  private uninstallOperation(
+    restoreCustomCommand: boolean
+  ): SettingsJsonPersistentValueUninstall {
+    const { customCommand } = this.getSettings();
+    return restoreCustomCommand && customCommand.length > 0
+      ? {
+          action: "restore",
+          value: { type: "command", command: customCommand },
+        }
+      : { action: "delete" };
   }
 
   /** True when this provider's configured statusline runs a script in `directory`. */

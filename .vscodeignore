@@ -43,6 +43,8 @@
 !out/historySearchMatcherWorker.js
 !out/workspaceFileIndexWorker.js
 !out/scriptRegexWorker.js
+# package.json's vscode:uninstall hook; VSIX only, since npm has no such hook.
+!out/vscode-uninstall.js
 
 # Runtime assets copied by the production build.
 !out/templates/**

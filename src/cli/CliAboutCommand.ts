@@ -77,7 +77,7 @@ const DISTRIBUTION_LABELS: Record<CliDistribution, string> = {
   [CLI_DISTRIBUTIONS.VSCODE_EXTENSION]: "bundled with the VS Code extension",
 };
 
-const KIND_LABELS: Record<InstallationKind, string> = {
+export const INSTALLATION_KIND_LABELS: Record<InstallationKind, string> = {
   [INSTALLATION_KINDS.CLI]: "CLI",
   [INSTALLATION_KINDS.VSCODE_EXTENSION]: "VS Code extension",
 };
@@ -94,7 +94,7 @@ export function formatCliAboutInfo(info: CliAboutInfo): string {
     lines.push("", "Other installations on this machine:");
     for (const other of info.otherInstallations) {
       lines.push(
-        `  ${KIND_LABELS[other.kind]} ${other.version}  ${other.packageRoot}  (last used ${other.lastSeen})`
+        `  ${INSTALLATION_KIND_LABELS[other.kind]} ${other.version}  ${other.packageRoot}  (last used ${other.lastSeen})`
       );
     }
   }

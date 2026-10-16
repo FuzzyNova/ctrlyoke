@@ -94,6 +94,7 @@ import {
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
 import { aboutCommand } from "./cli/CliAboutCommand";
+import { uninstallCommand } from "./cli/CliUninstallCommand";
 import {
   commitGeneratedChanges,
   generateCommitMessageForChanges,
@@ -510,6 +511,22 @@ program
       resolvePackageRootFromEntry(__filename),
       options,
       (message) => console.log(message)
+    );
+  });
+
+program
+  .command("uninstall")
+  .description(
+    "Remove ctrlyoke's statusline from your harness settings before `npm uninstall -g ctrlyoke`"
+  )
+  .option("--json", "Emit one versioned JSON result line")
+  .action(async (options: { json?: boolean }) => {
+    configService.setUserBackend(createUserConfigBackend());
+    process.exitCode = await uninstallCommand(
+      resolvePackageRootFromEntry(__filename),
+      options,
+      (message) => console.log(message),
+      (message) => console.error(chalk.yellow(message))
     );
   });
 

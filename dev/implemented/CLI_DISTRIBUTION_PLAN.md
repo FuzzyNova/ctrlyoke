@@ -364,6 +364,13 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    tracking disabled, no harness config still runs a launcher script, and `installations.json`
    records no other live installation (`countLiveInstallationRoots() <= 1`).
 
+   **Package removal added 2026-10-16.** Disabling tracking was the only teardown path, so
+   uninstalling either copy left the statusline in harness config. The extension now runs
+   `out/vscode-uninstall.js` as its `vscode:uninstall` hook, and npm users run `ctrlyoke uninstall`
+   (npm has no uninstall hook). Both call `uninstallPackageIntegration`, which forgets the package's
+   `installations.json` records and restores every harness's statusline and deletes the launcher
+   only when no other live installation remains.
+
 ## 4. Docs and checklist follow-ups
 
 - `docs/cli/index.md` and `docs/guide/installation.md`:

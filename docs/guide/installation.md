@@ -132,3 +132,47 @@ npm install -g ctrlyoke@<extension version>
 you to review and run. For a one-off run, `npx ctrlyoke@<version> …` works without installing.
 
 See [CLI overview](/cli/) for how the two copies coexist, and [CLI in CI](/cli/ci) for pipelines.
+
+## Uninstall {#uninstall}
+
+Almost everything ctrlyoke writes outside your workspaces is removed when the run that wrote it
+ends. The exception is the [status line](/guide/usage-and-stats#status-line): ctrlyoke points the
+global settings of Claude Code, Copilot, Qwen Code and Antigravity at scripts it keeps in
+`~/.ctrlyoke/bin/`, and that stays in place between runs (see
+[Files ctrlyoke writes](/harnesses/files-ctrlyoke-writes#status-line)).
+
+Uninstalling ctrlyoke takes this back out. Each harness gets back the status line command it had
+before ctrlyoke, or loses the setting if it had none, and `~/.ctrlyoke/bin/` is deleted. A status
+line you changed yourself after ctrlyoke installed its own is left alone.
+
+The VS Code extension and the npm CLI share the status line, so it is removed only when the last
+ctrlyoke installation goes. If you uninstall the extension but keep the npm CLI, or the other way
+round, the status line stays for the copy you kept. It is removed when that copy is uninstalled
+too, whichever order you do it in.
+
+### The VS Code extension
+
+Uninstall ctrlyoke from the Extensions view, then restart VS Code. VS Code finishes removing an
+extension the next time it starts, and that is when ctrlyoke's cleanup runs.
+
+### The npm CLI
+
+npm runs no cleanup when it removes a package, so run
+[`ctrlyoke uninstall`](/cli/ctrlyoke#ctrlyoke-uninstall) first:
+
+```bash
+ctrlyoke uninstall
+npm uninstall -g ctrlyoke
+```
+
+### What is kept
+
+Uninstalling leaves your data, so reinstalling picks up where you left off:
+
+- `~/.ctrlyoke/`, with your user settings, run history and trust decisions (or the folder
+  `CTRLYOKE_HOME` points to)
+- each workspace's `.ctrlyoke/` folder
+- [managed secrets](/workflows/secrets), which live in your operating system's credential store.
+  Remove them with `ctrlyoke secret rm <NAME>` before uninstalling.
+
+Delete those folders yourself to remove everything.

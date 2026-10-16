@@ -440,6 +440,25 @@ async function main() {
     },
   });
 
+  // VS Code runs package.json's `vscode:uninstall` script as plain Node after
+  // the extension is removed; it ships in the VSIX only (npm has no such hook).
+  const vscodeUninstallCtx = await esbuild.context({
+    entryPoints: ["src/vscode-uninstall.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "node22",
+    mainFields,
+    outfile: "out/vscode-uninstall.js",
+    metafile: true,
+    plugins: [nodeBundleVscodeGuardPlugin("vscode-uninstall")],
+    logLevel: "silent",
+    define: defineConstants,
+  });
+
   // Build the history-index rebuild worker as its own Node bundle. It runs in
   // a separate V8 isolate and cannot resolve VS Code's injected module, so it
   // uses the same standalone vscode shim as the CLI and MCP binaries.
@@ -541,6 +560,7 @@ async function main() {
     await statuslineFormatCtx.watch();
     await formatMigrationsCtx.watch();
     await mcpCtx.watch();
+    await vscodeUninstallCtx.watch();
     await historySearchRebuildWorkerCtx.watch();
     await historySearchMatcherWorkerCtx.watch();
     await workspaceFileIndexWorkerCtx.watch();
@@ -552,6 +572,7 @@ async function main() {
     await statuslineFormatCtx.rebuild();
     await formatMigrationsCtx.rebuild();
     await mcpCtx.rebuild();
+    await vscodeUninstallCtx.rebuild();
     await historySearchRebuildWorkerCtx.rebuild();
     await historySearchMatcherWorkerCtx.rebuild();
     await workspaceFileIndexWorkerCtx.rebuild();
@@ -562,6 +583,7 @@ async function main() {
     await statuslineFormatCtx.dispose();
     await formatMigrationsCtx.dispose();
     await mcpCtx.dispose();
+    await vscodeUninstallCtx.dispose();
     await historySearchRebuildWorkerCtx.dispose();
     await historySearchMatcherWorkerCtx.dispose();
     await workspaceFileIndexWorkerCtx.dispose();

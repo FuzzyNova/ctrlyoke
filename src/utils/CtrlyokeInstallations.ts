@@ -235,6 +235,46 @@ export async function recordInstallation(
 }
 
 /**
+ * Remove every record for `packageRoot` (the extension and the CLI bundled in
+ * it share one) because that package is being uninstalled, and return the
+ * other live installations, newest first. Never throws; on a registry failure
+ * the others are still read so the caller can decide what is safe to remove.
+ */
+export async function forgetInstallation(
+  packageRoot: string,
+  now: number = Date.now()
+): Promise<RecordInstallationResult> {
+  const filePath = installationsFilePath();
+  const selfRoot = foldPathForCompare(path.resolve(packageRoot));
+  const isOther = (record: InstallationRecord) =>
+    foldPathForCompare(path.resolve(record.packageRoot)) !== selfRoot;
+  const othersOf = (file: InstallationsFile) => ({
+    others: Object.values(file.installations)
+      .filter((record) => isOther(record) && isLive(record, now))
+      .sort((a, b) => compareVersions(b.version, a.version)),
+  });
+  try {
+    return await withFileLock(filePath, async () => {
+      const file = await readFile(filePath);
+      if (!file.newerSchema && fs.existsSync(filePath)) {
+        const installations = Object.fromEntries(
+          Object.entries(file.installations).filter(([, record]) =>
+            isOther(record)
+          )
+        );
+        await writeFileAtomic(
+          filePath,
+          JSON.stringify({ ...file, installations }, null, 2)
+        );
+      }
+      return othersOf(file);
+    });
+  } catch {
+    return othersOf(await readFile(filePath));
+  }
+}
+
+/**
  * The CLI's view: the newest extension recorded that is newer than this CLI,
  * unless that pair was already warned about.
  */

@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -41,6 +42,76 @@ test(".vscodeignore ships the CLI bundle and every launcher shim", () => {
       `.vscodeignore must include !${required}`
     );
   }
+});
+
+function vscodeUninstallBundle() {
+  const script = JSON.parse(
+    fs.readFileSync(path.join(ROOT_DIR, "package.json"), "utf8")
+  ).scripts["vscode:uninstall"];
+  // VS Code runs only `node <script>` hooks, resolved from the extension folder.
+  const match = /^node \.\/(out\/[\w.-]+\.js)$/.exec(script ?? "");
+  assert.ok(match, `unexpected vscode:uninstall script: ${script}`);
+  return match[1];
+}
+
+test("the vscode:uninstall hook runs a bundle the VSIX ships", () => {
+  const bundle = vscodeUninstallBundle();
+  assert.ok(
+    vscodeignoreNegations().has(bundle),
+    `.vscodeignore must include !${bundle}`
+  );
+});
+
+test("the vscode:uninstall hook hands the statusline back", (t) => {
+  const bundle = path.join(ROOT_DIR, vscodeUninstallBundle());
+  if (!fs.existsSync(bundle)) {
+    t.skip(`${path.relative(ROOT_DIR, bundle)} not built`);
+    return;
+  }
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "vscode-uninstall-"));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const claudeSettings = path.join(home, ".claude", "settings.json");
+  fs.mkdirSync(path.dirname(claudeSettings), { recursive: true });
+  const launcherScript = path.join(
+    home,
+    ".ctrlyoke",
+    "bin",
+    "ctrlyoke-claude-statusline.js"
+  );
+  fs.writeFileSync(
+    claudeSettings,
+    JSON.stringify({
+      model: "opus",
+      statusLine: { type: "command", command: `node "${launcherScript}"` },
+    })
+  );
+  fs.mkdirSync(path.join(home, ".ctrlyoke"), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, ".ctrlyoke", "settings.json"),
+    JSON.stringify({
+      statusLine: {
+        byHarness: { "claude-cli": { customCommand: "my-statusline" } },
+      },
+    })
+  );
+
+  const result = spawnSync(process.execPath, [bundle], {
+    cwd: ROOT_DIR,
+    encoding: "utf8",
+    windowsHide: true,
+    env: {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      CTRLYOKE_HOME: path.join(home, "state"),
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(claudeSettings, "utf8")), {
+    model: "opus",
+    statusLine: { type: "command", command: "my-statusline" },
+  });
 });
 
 test("each shim launches its sibling bundle", () => {

@@ -45,6 +45,8 @@ Unlike everything else on this page, this is a lasting change, not a per-run one
   [`statusLine.byHarness.<harness>.enabled`](/reference/settings#statusline) to `false`). ctrlyoke
   then puts your original command back, or removes the key if there was none. `~/.ctrlyoke/bin/`
   is removed once no harness and no other ctrlyoke installation uses it.
+- Uninstalling ctrlyoke does the same for every harness once the last ctrlyoke installation is
+  gone. See [Uninstall](/guide/installation#uninstall).
 
 ## Per harness
 

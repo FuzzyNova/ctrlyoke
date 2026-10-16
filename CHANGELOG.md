@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Uninstalling ctrlyoke now removes its status line from the global settings of Claude Code,
+  Copilot, Qwen Code and Antigravity, restoring any command you had before, and deletes
+  `~/.ctrlyoke/bin/`. The extension does this when VS Code restarts after you uninstall it; for
+  the npm CLI, run the new `ctrlyoke uninstall` before `npm uninstall -g ctrlyoke`. While another
+  ctrlyoke installation is still in use, the status line is left for it.
 - The `ctrlyoke` CLI ships inside the extension and is on `PATH` in VS Code's integrated
   terminals and in the harness processes ctrlyoke starts. For other shells and CI it is also
   published to npm as `ctrlyoke` at the same version; **ctrlyoke: Install CLI for Use Outside VS

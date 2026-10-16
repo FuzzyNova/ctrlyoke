@@ -76,7 +76,7 @@ export type SettingsJsonPersistentValueInstallResult =
       readonly hadKey: boolean;
     };
 
-export type SettingsJsonPersistentValueAlreadyInstalled = (
+export type SettingsJsonPersistentValueMatcher = (
   currentValue: unknown,
   hadKey: boolean
 ) => boolean;
@@ -521,8 +521,10 @@ export class SettingsJsonMcpTracker {
     const registrations = [...this.workflowServers.entries()].filter(
       ([, state]) => state.workflowKey === workflowKey
     );
-    for (const [workflowPathKey, { settingsPath, serverNames }] of
-      registrations) {
+    for (const [
+      workflowPathKey,
+      { settingsPath, serverNames },
+    ] of registrations) {
       this.workflowServers.delete(workflowPathKey);
       const pathRefCounts = this.refCounts.get(settingsPath);
 
@@ -617,7 +619,7 @@ export class SettingsJsonMcpTracker {
     key: SettingsJsonPersistentValueKey,
     value: unknown,
     capture?: SettingsJsonPersistentValueCapture,
-    alreadyInstalled?: SettingsJsonPersistentValueAlreadyInstalled
+    alreadyInstalled?: SettingsJsonPersistentValueMatcher
   ): Promise<SettingsJsonPersistentValueInstallResult> {
     const settingsPath = this.getProjectConfigPath(workspaceRoot);
 
@@ -675,34 +677,41 @@ export class SettingsJsonMcpTracker {
 
   /**
    * Restore or delete the persistent statusLine value while holding the
-   * settings-file mutation lock.
+   * settings-file mutation lock. With `onlyWhen`, the current value is checked
+   * under the same lock and left alone unless it matches. True when the file
+   * was rewritten.
    */
   async uninstallPersistentValue(
     workspaceRoot: string,
     key: SettingsJsonPersistentValueKey,
-    operation: SettingsJsonPersistentValueUninstall
-  ): Promise<void> {
+    operation: SettingsJsonPersistentValueUninstall,
+    onlyWhen?: SettingsJsonPersistentValueMatcher
+  ): Promise<boolean> {
     const settingsPath = this.getProjectConfigPath(workspaceRoot);
 
-    await this.withMutationLock(settingsPath, async () => {
+    return this.withMutationLock(settingsPath, async () => {
       const settings = await this.readProjectConfig(settingsPath);
       const existing = getAtPath(settings, key);
       const hadKey = existing.hadKey;
 
+      if (onlyWhen?.(this.cloneJson(existing.value), hadKey) === false) {
+        return false;
+      }
       if (operation.action === "restore") {
         if (hadKey && this.jsonEquals(existing.value, operation.value)) {
-          return;
+          return false;
         }
         setAtPath(settings, key, this.cloneJson(operation.value));
       } else {
         if (!hadKey) {
-          return;
+          return false;
         }
         deleteAtPath(settings, key);
       }
 
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
       await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
+      return true;
     });
   }
 
