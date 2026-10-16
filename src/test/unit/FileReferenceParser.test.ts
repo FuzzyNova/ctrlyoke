@@ -312,6 +312,19 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[0].isDirectory, false);
     });
 
+    test("ends @ references before Markdown link destinations", () => {
+      assert.deepStrictEqual(
+        parseAtReferences("[@src/a.ts](src/a.ts)").map((ref) => ref.path),
+        ["src/a.ts"]
+      );
+      assert.deepStrictEqual(
+        parseAtReferences("[x @src/b.ts](https://example.com)").map(
+          (ref) => ref.path
+        ),
+        ["src/b.ts"]
+      );
+    });
+
     test("parses an at-reference path containing a hash", () => {
       const refs = parseAtReferences("see @src/C#/a.cs");
       assert.strictEqual(refs.length, 1);

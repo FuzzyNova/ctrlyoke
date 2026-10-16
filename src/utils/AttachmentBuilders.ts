@@ -129,9 +129,9 @@ export async function buildDirectoryAttachmentXml(
     Log.warn(
       `[AttachmentBuilders] Security: Directory reference "${dirPath}" resolves outside the workspace and was blocked`
     );
-    return `<attachment id="directory:${normalizedPath}">
-Directory reference is outside the workspace and was blocked: ${normalizedPath}
-</attachment>`;
+    throw new Error(
+      `Directory reference is outside the workspace and was blocked: ${normalizedPath}`
+    );
   }
 
   // Check if directory exists
@@ -142,9 +142,7 @@ Directory reference is outside the workspace and was blocked: ${normalizedPath}
     }
   } catch (error) {
     Log.warn(`[AttachmentBuilders] Directory not found: ${dirPath}`, error);
-    return `<attachment id="directory:${normalizedPath}">
-Directory not found: ${normalizedPath}
-</attachment>`;
+    throw new Error(`Directory not found: ${normalizedPath}`);
   }
 
   // Build tree

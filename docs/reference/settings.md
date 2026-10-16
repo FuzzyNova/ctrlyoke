@@ -727,7 +727,7 @@ Automatically delete categorized prompt temp files after execution. Set to false
 - **Type:** `"warn" | "fail"`
 - **Default:** `"warn"`
 
-How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~&lt;hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference.
+How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/@dir/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~&lt;hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference.
 
 ### `execution.maxPromptTimeoutSec` {#execution-maxprompttimeoutsec}
 

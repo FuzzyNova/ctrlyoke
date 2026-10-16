@@ -1046,6 +1046,29 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.strictEqual(result.excerptBlocks, "");
     });
 
+    test("reports missing and out-of-root @dir/ references as skipped", async () => {
+      const root = freshWorkspace();
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        sourceDefinitionDir: root,
+      });
+
+      const missing = await expander.expandContextSplit("@nope/");
+      assert.strictEqual(missing.skippedReferences.length, 1);
+      assert.strictEqual(missing.skippedReferences[0].ref, "nope/");
+      assert.match(missing.skippedReferences[0].reason, /Directory not found/u);
+      assert.strictEqual(missing.excerptBlocks, "");
+
+      const outside = await expander.expandContextSplit("@../outside/");
+      assert.strictEqual(outside.skippedReferences.length, 1);
+      assert.strictEqual(outside.skippedReferences[0].ref, "../outside/");
+      assert.match(
+        outside.skippedReferences[0].reason,
+        /outside the workspace and was blocked/u
+      );
+      assert.strictEqual(outside.excerptBlocks, "");
+    });
+
     test("blocks a #selection: range ref that escapes the workspace via '..'", async () => {
       const root = freshWorkspace();
       outsideDir = makeTempDir("cy-ctx-outside-");
@@ -1334,7 +1357,12 @@ suite("ContextExpander.expandContextSplit", () => {
       });
       const result = await expander.expandContextSplit(`@"${externalRoot}/"`);
 
-      assert.ok(result.excerptBlocks.includes("blocked"));
+      assert.strictEqual(result.excerptBlocks, "");
+      assert.strictEqual(result.skippedReferences.length, 1);
+      assert.match(
+        result.skippedReferences[0].reason,
+        /outside the workspace and was blocked/u
+      );
     });
 
     test("uses only the approved roots declared by the current workflow", async () => {

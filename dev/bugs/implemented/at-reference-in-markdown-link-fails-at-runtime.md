@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; reproduced against compiled `out/`)
 - **Area:** `src/utils/FileReferenceParser.ts` (`parseAtReferences`), `src/utils/ReferencePatterns.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
