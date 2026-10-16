@@ -204,11 +204,9 @@ export class PromptCompletionClient {
   }
 
   /**
-   * Handle a host response. Some triggers (currently `#`) answer progressively:
-   * a `partial` response carries the instant items (e.g. the current editor
-   * selection) and resolves the pending CodeMirror promise so the dropdown
-   * appears immediately; the final response, arriving after that promise
-   * settled, is cached and applied by re-triggering the source.
+   * Handle a host response. Progressive responses resolve the original
+   * CodeMirror promise immediately. Later partials and the final response are
+   * cached and applied by re-triggering the source while the dropdown is open.
    */
   handleResponse(
     items: ExtensionCompletionItem[],
@@ -236,6 +234,18 @@ export class PromptCompletionClient {
       if (entry.resolve) {
         entry.resolve(result);
         entry.resolve = null;
+        return;
+      }
+
+      // The original promise already opened the dropdown. Refresh its contents
+      // without ending the request; more partials and the final may follow.
+      this.cache = {
+        key: completionCacheKey(entry.request.trigger, entry.request.query),
+        result,
+      };
+      const view = this.options.getView();
+      if (view) {
+        startCompletion(view);
       }
       return;
     }
@@ -249,8 +259,8 @@ export class PromptCompletionClient {
     }
 
     // A partial already resolved the promise and the dropdown is open. Cache
-    // the full result and re-trigger completion so the source can serve it
-    // from cache without another round trip.
+    // the result and re-trigger completion so the source can serve it from
+    // cache without another round trip.
     this.forget(seq);
     this.cache = {
       key: completionCacheKey(entry.request.trigger, entry.request.query),

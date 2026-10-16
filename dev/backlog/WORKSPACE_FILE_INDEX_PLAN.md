@@ -1,6 +1,6 @@
 # Workspace File Index Plan
 
-**Status:** Phase 3 done. Phases 4a, 4b and 5 remain. Every decision below is
+**Status:** Phases 1–4a done. Phases 4b and 5 remain. Every decision below is
 settled; each phase leaves the build and `npm test` green and commits its own
 work.
 **Priority:** P1
@@ -210,7 +210,7 @@ Deviation: none.
 - `git mv` `dev/bugs/backlog/at-completion-misses-files-past-walk-cap.md`
   to `dev/bugs/implemented/`, with `**Resolution:** fixed in this commit`.
 
-### Phase 4a — Webview client contract
+### Phase 4a — Webview client contract (done)
 
 Land this first: it is safe on its own, because the host does not send
 repeated `@` partials or status rows yet.

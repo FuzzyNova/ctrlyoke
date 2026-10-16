@@ -30,6 +30,8 @@ export interface ExtensionCompletionItem {
   filterText?: string;
   /** Fuzzy relevance rank from the extension (see PlainCompletionItem.rank). */
   rank?: number;
+  /** Informational row that must not insert text when selected. */
+  status?: boolean;
   /**
    * Explicit codicon name overriding the kind-derived icon below (see
    * PlainCompletionItem.icon in CompletionCore.ts for why this exists —
@@ -171,6 +173,17 @@ export function buildCodeMirrorCompletionResult(
       useFilterTextForMatching && item.filterText
         ? item.filterText
         : item.label;
+    if (item.status) {
+      return {
+        label: matchLabel,
+        displayLabel: matchLabel === item.label ? undefined : item.label,
+        type,
+        detail: item.detail,
+        boost,
+        apply: () => {},
+      };
+    }
+
     const rawApplyText = item.insertText || item.label;
     // The slash is already present in the document at `from`. Extension-side
     // slash completions use the complete token as their insertText so the
