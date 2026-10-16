@@ -1469,6 +1469,40 @@ suite("HostedWorkspaceViewerService", function () {
       assert.deepStrictEqual(result, expected);
     });
 
+    test("uses the workspace root as state root when the repository is its parent", async () => {
+      const repoRoot = createWorkspace();
+      const workspaceRoot = path.join(repoRoot, "packages", "foo");
+      fs.mkdirSync(workspaceRoot, { recursive: true });
+      runGit(repoRoot, "init");
+      let generationRoots: { cwd: string; stateRoot?: string } | undefined;
+
+      CommitMessageGenerator.prototype.getDiff = async () => ({
+        diff: "diff --git a/a b/a",
+        staged: true,
+        truncated: false,
+        commands: ["git diff --cached"],
+        includesUntrackedFiles: false,
+      });
+      CommitMessageGenerator.prototype.generateMessage = async (
+        _diff,
+        cwd,
+        _token,
+        _instructions,
+        stateRoot
+      ) => {
+        generationRoots = { cwd, stateRoot };
+        return { message: "feat: add thing", prompt: "" };
+      };
+
+      const svc = new HostedWorkspaceViewerService(workspaceRoot);
+      await svc.generateCommitMessage();
+
+      assert.deepStrictEqual(generationRoots, {
+        cwd: repoRoot,
+        stateRoot: workspaceRoot,
+      });
+    });
+
     test("returns truncated=true when diff was truncated", async () => {
       const root = createWorkspace();
       CommitMessageGenerator.prototype.getDiff = async () => ({

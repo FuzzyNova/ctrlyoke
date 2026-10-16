@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by bug-hunt final step (claude-cli)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`, `src/git/CommitMessageGenerator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

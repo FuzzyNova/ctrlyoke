@@ -2034,7 +2034,8 @@ export class HostedWorkspaceViewerService {
         diffResult.diff,
         repoRoot,
         undefined,
-        instructions
+        instructions,
+        this.workspaceRoot
       );
 
     commitMessageGenerationTracker.setLastRecord({

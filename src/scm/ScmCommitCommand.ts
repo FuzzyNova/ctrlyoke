@@ -97,6 +97,13 @@ export class ScmCommitCommand {
             const existingText = inputBox?.value.trim() || undefined;
 
             const diffResult = await this.generator.getDiff(cwd);
+            if (
+              token.isCancellationRequested ||
+              abortController.signal.aborted
+            ) {
+              return;
+            }
+
             if (!diffResult) {
               void vscode.window.showInformationMessage(
                 "ctrlyoke: No changes detected. Stage or modify files first."

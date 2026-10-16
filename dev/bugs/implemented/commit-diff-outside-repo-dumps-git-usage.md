@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by bug-hunt final step (claude-cli)
 - **Area:** `src/git/CommitMessageGenerator.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
