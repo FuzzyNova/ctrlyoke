@@ -264,14 +264,22 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          already exists today; no new admin tooling required. _Built October 16,
          2026:_ `netlify/functions/keygen-webhook.ts` verifies the Ed25519
          `Keygen-Signature`, reads the license's live machine count, and emails
-         `support@ctrlyoke.dev` each time the count crosses another 10% of the
-         license's cap (300, 600, … for Enterprise's 3,000). The level it has
-         alerted for is stored as `machineAlertLevel` in the license metadata, so
-         retries and replays don't alert twice. Pro licenses are skipped because
-         Keygen already enforces their strict 10-machine cap. Verified locally
-         with a scratch harness that signs requests like Keygen and mocks the
-         Keygen and Resend calls. It has not been tested against live Keygen yet;
-         see item 7.
+         `support@ctrlyoke.dev` at five milestones. **Fit checks** at 50, 250,
+         and 1,000 machines ask whether the count fits the buyer's company and
+         how fast it got there. A reseller profits from about 76 seats, so abuse
+         shows up in the low hundreds. **Capacity** alerts at 80% and 95% of the
+         cap (2,400 and 2,850) prompt an offer to raise it before a legitimate
+         customer is blocked. Each email includes the LS order id (for the
+         company's legal name) and the time since purchase. The highest
+         milestone alerted is stored as `machineAlertMilestone` in the license
+         metadata, so retries and replays don't alert twice. Pro licenses are
+         skipped because Keygen already enforces their strict 10-machine cap.
+         Verified locally with a scratch harness that signs requests like Keygen
+         and mocks the Keygen and Resend calls. It has not been tested against
+         live Keygen yet; see item 7. **Caveat:** neither policy requires
+         heartbeats, so the count is "machines ever activated", not "machines in
+         use". See `dev/backlog/CTRLYOKE_ACCOUNTS_PLAN.md` ("Last seen and
+         heartbeats").
    - [x] **Hid self-service "Activated Machines" management for Enterprise**
          (September 11, 2026) — the shared, floating Enterprise key means any
          employee who activates it can otherwise see and deactivate every
@@ -284,6 +292,13 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          raising an org's cap above 3,000 stays a manual Keygen-dashboard
          action by us — same as this item's alerting response, and consistent
          with the deliberately-manual PO fallback in item 6 below.
+   - [x] **Enterprise seat count** (October 16, 2026): the License tab now
+         shows Enterprise users "N of 3,000 seats in use · M remaining" with a
+         meter, read from the license's machine count via
+         `LicenseService.getSeatUsage()`, plus the email for freeing seats or
+         raising the limit. The machine list itself stays hidden. A
+         self-service portal for license admins is backlog:
+         `dev/backlog/CTRLYOKE_ACCOUNTS_PLAN.md`.
 
 5. **Self-serve legal — click-through Terms + DPA + trust page**
    ✅ **second-pass attorney-review drafts completed September 8, 2026**, all three as standalone

@@ -316,6 +316,9 @@ The pricing page, LS checkout link, and customer portal live on `ctrlyoke.dev` (
 
 ## Phase 2 — Accounts & Sign-In (later)
 
+> Continued in [`../backlog/CTRLYOKE_ACCOUNTS_PLAN.md`](../backlog/CTRLYOKE_ACCOUNTS_PLAN.md)
+> (license portal, heartbeats, workspace directory).
+
 Triggered when the **hosted dashboard becomes a paid cloud product** (server identity genuinely required):
 
 - Add `activateWithSignIn()` using the **VS Code authentication provider** API + an **OAuth 2.0 device-code** flow.
