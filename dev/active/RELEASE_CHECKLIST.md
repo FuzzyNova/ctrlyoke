@@ -350,11 +350,18 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          each active Enterprise subscription's buyer 30 days before `renews_at`.
          It skips cancelled subscriptions, using status the webhook now records
          from `subscription_created`/`_updated`/`_cancelled`/`_resumed`/`_expired`.
-         **Still open:** deploy, then run a test-mode checkout through the form
-         (with `astro dev`, which uses the test-mode checkout links) to confirm
-         the custom data reaches the order and the webhook. Also confirm the
-         reminder function appears under Netlify → Functions as scheduled, and
-         check the legal links and the cancellation path in live mode.
+         _Verified October 16, 2026_ (deployed at `406aec7f5`): a test-mode
+         purchase through the form under `astro dev` produced LS order `9774752`.
+         Its `order_created` payload carried all 8 custom-data fields, and both
+         `order_created` and `subscription_created` returned 200. That created
+         Keygen license `55c6df67` on the Enterprise policy, expiring in 1 year,
+         whose metadata holds only buyer name/email, the order and subscription
+         ids, and the subscription status/`renews_at`. Netlify → Functions lists
+         `enterprise-renewal-reminder` as **Scheduled** (daily, 15:00 UTC). The
+         LS checkout pre-fills the email from `checkout[email]`, but the
+         cardholder name (which becomes the order's `user_name`) comes from the
+         buyer's own LS session if they have one. **Still open:** check the
+         legal links and the cancellation path in a live-mode checkout.
    - [x] **Done September 17, 2026:** attorney review of all three drafts and
          `PRIVACY.md` v1.1 complete and approved (same Phase 7 attorney who signed
          off on `LICENSE.md`/`PRIVACY.md`). `LICENSE.md` already named
