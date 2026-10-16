@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by Claude Code (bug-hunt final step; code reading, not yet reproduced over HTTP)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`safeResolve`, `resolveOwnedUserSettingsFile`, `deleteEntry`, `resolveTransferPaths`)
-- **Severity:** medium (security: escapes workspace containment)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

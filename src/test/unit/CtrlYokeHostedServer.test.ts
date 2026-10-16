@@ -539,6 +539,39 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
     });
   });
 
+  test("returns 400 for a body-less viewer mutation POST", async () => {
+    await withServer(async (_root, port, token) => {
+      const response = await new Promise<{
+        statusCode: number | undefined;
+        body: string;
+      }>((resolve, reject) => {
+        const request = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port,
+            path: `/api/workspace-viewer/copy?token=${encodeURIComponent(token)}`,
+            method: "POST",
+          },
+          (res) => {
+            let body = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk: string) => {
+              body += chunk;
+            });
+            res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+          }
+        );
+        request.on("error", reject);
+        request.end();
+      });
+
+      assert.strictEqual(response.statusCode, 400);
+      assert.deepStrictEqual(JSON.parse(response.body), {
+        error: "sourcePath and destDir are required",
+      });
+    });
+  });
+
   test("ordinary files still round-trip through GET and PUT", async () => {
     await withServer(async (root, port, token) => {
       const diskPath = path.join(root, "notes.txt");

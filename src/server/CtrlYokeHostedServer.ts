@@ -610,8 +610,49 @@ export class CtrlYokeHostedServer
           : defaultJsonParser;
       parser(req, res, next);
     });
+    this.app.use((req, _res, next) => {
+      // Express 5 leaves req.body undefined when no JSON body was parsed.
+      // Routes can then validate a consistent empty object before accessing
+      // any fields.
+      req.body ??= {};
+      next();
+    });
     installSecretRedactionMiddleware(this.app);
     this.setupRoutes();
+    this.app.use(
+      (
+        error: unknown,
+        _req: express.Request,
+        res: express.Response,
+        next: express.NextFunction
+      ) => {
+        if (res.headersSent) {
+          next(error);
+          return;
+        }
+        const status =
+          typeof error === "object" && error !== null && "status" in error
+            ? (error as { status?: unknown }).status
+            : undefined;
+        const statusCode =
+          typeof status === "number" && status >= 400 && status < 600
+            ? status
+            : 500;
+        if (statusCode >= 500) {
+          Log.error(
+            `[CtrlYokeHostedServer] Unhandled request error: ${String(error)}`
+          );
+        }
+        res.status(statusCode).json({
+          error:
+            statusCode >= 500
+              ? "Internal server error"
+              : error instanceof Error
+                ? error.message
+                : "Request failed",
+        });
+      }
+    );
     this.setupWebSocket();
     this.unregisterMemoryContext = registerMemoryContext("hosted", () =>
       this.hostedMemoryContext()

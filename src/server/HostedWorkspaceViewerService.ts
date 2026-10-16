@@ -438,7 +438,7 @@ export class HostedWorkspaceViewerService {
   }
 
   resolveWorkspacePath(requestedPath: string): string | undefined {
-    return this.safeResolve(requestedPath) ?? undefined;
+    return this.safeResolveForSettingsEdit(requestedPath) ?? undefined;
   }
 
   /**
@@ -623,7 +623,8 @@ export class HostedWorkspaceViewerService {
    * path the client constructs itself); a subsequent save/refresh instead
    * sends back whatever `relativePath()` produced when the file was first
    * read (an absolute path, or one with `../` segments in single-root mode),
-   * which is matched here by resolved identity against the real file.
+   * which is matched here by resolved identity against the real file. Keep
+   * this exception limited to reading, saving, and watching the editor file.
    */
   private resolveOwnedUserSettingsFile(requestedPath: string): string | null {
     const userSettingsPath = configService.getUserFilePath();
@@ -649,9 +650,6 @@ export class HostedWorkspaceViewerService {
     requestedPath: string,
     options: { preserveLexicalPath?: boolean } = {}
   ): string | null {
-    const ownedUserSettingsPath =
-      this.resolveOwnedUserSettingsFile(requestedPath);
-    if (ownedUserSettingsPath) return ownedUserSettingsPath;
     return safeResolveWorkspacePath(
       requestedPath,
       {
@@ -660,6 +658,16 @@ export class HostedWorkspaceViewerService {
         trustedRoots: this.trustedRoots,
       },
       options
+    );
+  }
+
+  private safeResolveForSettingsEdit(
+    requestedPath: string,
+    options: { preserveLexicalPath?: boolean } = {}
+  ): string | null {
+    return (
+      this.resolveOwnedUserSettingsFile(requestedPath) ??
+      this.safeResolve(requestedPath, options)
     );
   }
 
@@ -1300,7 +1308,7 @@ export class HostedWorkspaceViewerService {
   // ── File read ────────────────────────────────────────────────────────────
 
   async readFile(requestedPath: string): Promise<WorkspaceFileResponse> {
-    const resolved = this.safeResolve(requestedPath);
+    const resolved = this.safeResolveForSettingsEdit(requestedPath);
     if (!resolved) {
       return this.rejectedFileResponse(requestedPath, "Path not allowed");
     }
@@ -1400,7 +1408,7 @@ export class HostedWorkspaceViewerService {
   // ── File save ────────────────────────────────────────────────────────────
 
   async saveFile(req: WorkspaceFileSaveRequest): Promise<number> {
-    const resolved = this.safeResolve(req.path);
+    const resolved = this.safeResolveForSettingsEdit(req.path);
     if (!resolved) {
       throw new Error("Path not allowed");
     }
