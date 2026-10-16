@@ -11,6 +11,14 @@ export const KEYGEN_VALID_POLICY_IDS = [
   KEYGEN_ENTERPRISE_POLICY_ID,
 ] as const;
 
+/**
+ * The Keygen account's Ed25519 verification key. It verifies license files in
+ * the extension and webhook signatures in the Netlify functions. It is public
+ * and safe to ship.
+ */
+export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
+  "4cf46fe061bf97080094f14430fa2a1563f1b245cd600ccb99039bfff43836fa";
+
 export const KEYGEN_API_BASE_URL = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}`;
 
 /** The extension's short fallback TTL for a checked-out license file. */

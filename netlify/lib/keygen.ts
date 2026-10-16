@@ -19,6 +19,7 @@ export const LICENSE_METADATA_KEY = {
   LAST_RENEWED_INVOICE_ID: "lastRenewedInvoiceId",
   REFUND_NOTIFIED_ID: "refundNotifiedId",
   RENEWAL_NOTICE_SENT_FOR: "renewalNoticeSentFor",
+  MACHINE_ALERT_LEVEL: "machineAlertLevel",
   BUYER_EMAIL: "buyerEmail",
   BUYER_NAME: "buyerName",
 } as const;
@@ -30,7 +31,13 @@ export interface KeygenLicense {
     expiry: string | null;
     status: string;
     suspended: boolean;
+    /** Inherited from the policy unless overridden; null means no limit. */
+    maxMachines: number | null;
     metadata: Record<string, unknown>;
+  };
+  relationships: {
+    policy: { data: { id: string } | null };
+    machines: { meta?: { count?: number } };
   };
 }
 
@@ -70,6 +77,17 @@ export async function findLicenseByMetadata(
   }
   const body = (await res.json()) as { data: KeygenLicense[] };
   return body.data[0] ?? null;
+}
+
+export async function getLicense(licenseId: string): Promise<KeygenLicense> {
+  const res = await keygenFetch(`/licenses/${encodeURIComponent(licenseId)}`);
+  if (!res.ok) {
+    throw new Error(
+      `Keygen license fetch failed: ${res.status} ${await res.text()}`
+    );
+  }
+  const body = (await res.json()) as { data: KeygenLicense };
+  return body.data;
 }
 
 const KEYGEN_PAGE_SIZE = 100;

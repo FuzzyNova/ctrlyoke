@@ -252,11 +252,26 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
    - [ ] Subscribe to Keygen's `machine.created` webhook (this is the first
          _inbound_ Keygen webhook — 4.1 confirms none exist today; direction is
          Keygen → Netlify, the reverse of the LS → Netlify → Keygen purchase flow).
-   - [ ] On receipt, compare the license's current activation count against an
+         **Remaining:** deploy the function (manual `workflow_dispatch` of
+         `deploy.yml`, since `netlify/functions/**` is outside the push filter),
+         then add a Keygen webhook endpoint (Settings → Webhooks) with URL
+         `https://ctrlyoke.dev/.netlify/functions/keygen-webhook`, subscription
+         `machine.created` only, and signature algorithm `ed25519` (the default).
+   - [x] On receipt, compare the license's current activation count against an
          alert threshold well under the 2,000–5,000 policy cap (e.g. a few hundred)
          and notify (email/Slack) rather than block. Detection only, per the plan —
          response stays the manual Keygen-dashboard suspend/reissue action that
-         already exists today; no new admin tooling required.
+         already exists today; no new admin tooling required. _Built October 16,
+         2026:_ `netlify/functions/keygen-webhook.ts` verifies the Ed25519
+         `Keygen-Signature`, reads the license's live machine count, and emails
+         `support@ctrlyoke.dev` each time the count crosses another 10% of the
+         license's cap (300, 600, … for Enterprise's 3,000). The level it has
+         alerted for is stored as `machineAlertLevel` in the license metadata, so
+         retries and replays don't alert twice. Pro licenses are skipped because
+         Keygen already enforces their strict 10-machine cap. Verified locally
+         with a scratch harness that signs requests like Keygen and mocks the
+         Keygen and Resend calls. It has not been tested against live Keygen yet;
+         see item 7.
    - [x] **Hid self-service "Activated Machines" management for Enterprise**
          (September 11, 2026) — the shared, floating Enterprise key means any
          employee who activates it can otherwise see and deactivate every

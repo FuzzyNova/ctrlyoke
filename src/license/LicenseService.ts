@@ -1,6 +1,7 @@
 import { createHash, randomUUID, webcrypto } from "node:crypto";
 import {
   CHECKOUT_ELIGIBLE_VALIDATION_CODES,
+  KEYGEN_ACCOUNT_PUBLIC_KEY_HEX,
   KEYGEN_API_BASE_URL,
   KEYGEN_ENTERPRISE_POLICY_ID,
   KEYGEN_PRODUCT_ID,
@@ -17,6 +18,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 export {
   CHECKOUT_ELIGIBLE_VALIDATION_CODES,
   KEYGEN_ACCOUNT_ID,
+  KEYGEN_ACCOUNT_PUBLIC_KEY_HEX,
   KEYGEN_API_BASE_URL,
   KEYGEN_ENTERPRISE_POLICY_ID,
   KEYGEN_PRODUCT_ID,
@@ -45,10 +47,6 @@ export const LICENSE_ID_SECRET_KEY = "ctrlyoke.pro.license-id";
 export const LICENSE_MACHINE_ID_SECRET_KEY = "ctrlyoke.pro.machine-id";
 export const LICENSE_MACHINE_FINGERPRINT_SECRET_KEY =
   "ctrlyoke.pro.machine-fingerprint";
-
-/** The Keygen account verification key. This is public and safe to ship. */
-export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
-  "4cf46fe061bf97080094f14430fa2a1563f1b245cd600ccb99039bfff43836fa";
 
 export const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 export const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
