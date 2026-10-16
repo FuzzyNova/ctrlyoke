@@ -348,8 +348,9 @@ async function sendLicenseEmail(
     `<p>Hi ${escapeHtml(name) || "there"},</p>
 <p>Thanks for purchasing ctrlyoke! Your license key is:</p>
 <p style="font-size:1.2em;font-weight:bold;">${escapeHtml(licenseKey)}</p>
-<p>Activate it with the <strong>ctrlyoke: Activate Pro License</strong> command in VS Code
-(or <strong>ctrlyoke: Activate Offline (Air-Gapped) License</strong> if this machine has no network access).</p>
+<p>To activate it, open the ctrlyoke dashboard (in VS Code, or the page <code>ctrlyoke server</code> opens),
+go to <strong>Settings → License</strong>, and paste the key under <strong>Activate with license key</strong>.
+For a machine with no network access, use the <a href="https://ctrlyoke.dev/license/offline/">offline license file generator</a>.</p>
 <p>Need help? Reply to this email or reach out to ${SUPPORT_EMAIL}.</p>`
   );
 }

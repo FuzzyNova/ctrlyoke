@@ -73,12 +73,17 @@ files. After checkout, your license key arrives in a separate email.
 This is the normal flow for a connected machine:
 
 1. Purchase Pro, or retrieve the Keygen license key from your purchase email.
-2. Open the VS Code Command Palette (`Ctrl/Cmd+Shift+P`).
-3. Run **`ctrlyoke: Activate Pro License`**. This opens the **License** tab of
-   the dashboard's Settings.
+2. Open the ctrlyoke dashboard: the ctrlyoke panel in VS Code, or the page
+   [`ctrlyoke server`](/cli/server) opens in your browser.
+3. Go to **Settings → License**.
 4. Paste the key into **Activate with license key** and click **Activate**.
 5. Confirm the success message. Pro unlocks immediately; no restart is
    required.
+
+The license is stored in the computer's credential store, so one activation
+covers both the VS Code extension and the [CLI](/cli/) on that computer. Only
+`ctrlyoke server` uses Pro (for remote access); `ctrlyoke run` and the other
+CLI commands need no license.
 
 If the key is already active on its maximum number of machines, the License tab
 lists the **Activated machines** so you can deactivate one you no longer use
@@ -97,12 +102,10 @@ Use this flow when the development machine cannot reach the internet:
    instead obtain the signed license file from your organization's Keygen administrator.
 2. Transfer the file to the air-gapped machine using your approved removable
    media process.
-3. In VS Code, open the Command Palette and run
-   **`ctrlyoke: Activate Offline (Air-Gapped) License`**, then choose the
-   signed license file in the file picker. Alternatively, open the **License**
-   settings tab and paste the complete file text (starting with
-   `-----BEGIN LICENSE FILE-----`) under **Import offline license file**, then
-   click **Import license file**.
+3. Open the ctrlyoke dashboard and go to **Settings → License**. Paste the
+   complete file text (starting with `-----BEGIN LICENSE FILE-----`) under
+   **Import offline license file**, then click **Import license file**. In VS
+   Code you can instead click **Browse for license file…** and choose the file.
 4. Confirm the success notification.
 
 The file's Ed25519 signature is checked locally against the embedded Keygen
