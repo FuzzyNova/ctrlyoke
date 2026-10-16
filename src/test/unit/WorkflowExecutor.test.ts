@@ -1001,6 +1001,90 @@ suite("WorkflowExecutor condition shell reporting", () => {
     );
   });
 
+  test("keeps an errorBehavior harness retry separate from the end-condition retry budget", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    let sendCount = 0;
+    integration.onSend = async () => {
+      sendCount += 1;
+      if (sendCount === 1) {
+        integration.harnessErrorFailure = true;
+        return { success: false };
+      }
+      integration.harnessErrorFailure = false;
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "initial",
+      "initial",
+      "retry",
+    ]);
+  });
+
+  test("keeps an errorBehavior condition-script retry separate from the end-condition retry budget", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      makeEvaluationResult({
+        passed: false,
+        errored: true,
+        error: "condition script failed",
+        exitCode: 1,
+      }),
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "initial",
+      "initial",
+      "retry",
+    ]);
+  });
+
   test("allows the default error retry for an end-condition error on retry 2", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
@@ -1996,6 +2080,133 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         retryDelay: 100,
       });
     }
+  });
+
+  test("failFast cancellation of a pre-condition cancels the gated member", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-precondition-fail-fast-")
+    );
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, new MockHarnessIntegration(undefined, false)],
+      [1, new MockHarnessIntegration(undefined, false)],
+    ]);
+    const runners = new Map<number, ScriptProcessRunner>();
+    const context = makeParallelContext(integrations);
+    context.executionWorkspace = createNoWorktreeExecutionWorkspace(
+      new MockPlatform(root)
+    );
+    context.workspaceFolderPath = root;
+    context.dynamicQueueConfig.maxParallelSteps = 2;
+    context.getScriptProcessRunner = (target) => {
+      if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
+        throw new Error("Expected queue script target");
+      }
+      let runner = runners.get(target.stepIndex);
+      if (!runner) {
+        runner = new ScriptProcessRunner(root);
+        runners.set(target.stepIndex, runner);
+      }
+      return runner;
+    };
+    context.cancelTarget = async (target) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await runners.get(target.stepIndex)?.cancel();
+      }
+    };
+    context.releaseTargetResources = async (target) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        runners.get(target.stepIndex)?.dispose();
+      }
+    };
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "gated",
+          preCondition: {
+            script: `node -e "setTimeout(() => process.exit(0), 120000)"`,
+          },
+        },
+        {
+          type: "script",
+          script: `node -e "setTimeout(() => process.exit(3), 300)"`,
+        },
+      ],
+      parallelGroups: [
+        {
+          id: "precondition-cancel",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ],
+    });
+
+    try {
+      await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+      assert.deepStrictEqual(
+        queue.getState().results.map((result) => result.status),
+        [STEP_STATUS.CANCELLED, STEP_STATUS.FAILED]
+      );
+      assert.strictEqual(queue.getState().results[0].preCondition, undefined);
+      assert.strictEqual(
+        queue.getRuntimeStateMachine().getAttempt({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex: 0,
+        })?.status,
+        WORKFLOW_ATTEMPT_STATUS.CANCELLED
+      );
+    } finally {
+      for (const runner of runners.values()) runner.dispose();
+      await fs.rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 20,
+        retryDelay: 100,
+      });
+    }
+  });
+
+  test("cancellation of an end-condition script cancels the step without a verdict", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new FixedEvaluationEvaluator(
+      new MockPlatform(),
+      makeEvaluationResult({ cancelled: true, exitCode: undefined })
+    );
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, ["initial"]);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.CANCELLED
+    );
+    assert.strictEqual(queue.getState().results[0].endCondition, undefined);
+    assert.strictEqual(
+      queue.getRuntimeStateMachine().getAttempt({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 0,
+      })?.status,
+      WORKFLOW_ATTEMPT_STATUS.CANCELLED
+    );
   });
 
   test("fail-after-settle drains waiting members before failing the workflow", async () => {

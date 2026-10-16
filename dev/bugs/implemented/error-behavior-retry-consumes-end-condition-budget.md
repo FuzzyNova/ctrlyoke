@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/WorkflowExecutor.ts`, `src/core/WorkflowStateMachine.ts`, `src/core/PromptQueue.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
