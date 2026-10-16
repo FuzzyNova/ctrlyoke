@@ -7,6 +7,7 @@ import { suite, test, setup, teardown } from "mocha";
 import {
   gitRefExists,
   getGitIgnoredFiles,
+  getGitIgnoredPaths,
   parseGitWorktreePorcelain,
   listWorktrees,
   currentBranch,
@@ -83,6 +84,19 @@ suite("GitUtils.gitRefExists", function () {
       exists: false,
       message: "git diff not found",
     });
+  });
+
+  test("checks ignored paths in one NUL-safe batch, including names with spaces", async () => {
+    await fs.writeFile(path.join(workspaceRoot, ".gitignore"), "ignored files/\n", "utf8");
+    await writeWorkspaceFile("ignored files/first file.txt", "ignored\n");
+    await writeWorkspaceFile("visible file.txt", "visible\n");
+
+    const ignored = await getGitIgnoredPaths(workspaceRoot, [
+      path.join(workspaceRoot, "ignored files/first file.txt"),
+      path.join(workspaceRoot, "visible file.txt"),
+    ]);
+
+    assert.deepStrictEqual([...ignored], [path.resolve(workspaceRoot, "ignored files/first file.txt")]);
   });
 
   test("reports the diff pseudo-ref as present when the tree is dirty", async () => {

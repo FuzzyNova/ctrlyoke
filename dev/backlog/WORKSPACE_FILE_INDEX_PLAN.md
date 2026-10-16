@@ -133,7 +133,10 @@ Deviation: none.
   - abort stops early;
   - `removeTree` drops nested paths and orphaned directories.
 
-### Phase 2a — Index service, in-process
+### Phase 2a — Index service, in-process (done)
+
+Deviation: none. The existing NUL-safe `getGitIgnoredPaths()` helper is reused
+for change batches.
 
 - Add `WorkspaceFileIndex.ts` with the build pipeline (D5, D6), change
   batching (D8, D10), rebuild and swap (D11), and the
