@@ -19,7 +19,7 @@ export const LICENSE_METADATA_KEY = {
   LAST_RENEWED_INVOICE_ID: "lastRenewedInvoiceId",
   REFUND_NOTIFIED_ID: "refundNotifiedId",
   RENEWAL_NOTICE_SENT_FOR: "renewalNoticeSentFor",
-  MACHINE_ALERT_LEVEL: "machineAlertLevel",
+  MACHINE_ALERT_MILESTONE: "machineAlertMilestone",
   BUYER_EMAIL: "buyerEmail",
   BUYER_NAME: "buyerName",
 } as const;
@@ -31,6 +31,8 @@ export interface KeygenLicense {
     expiry: string | null;
     status: string;
     suspended: boolean;
+    /** ISO-8601 issue time. */
+    created: string;
     /** Inherited from the policy unless overridden; null means no limit. */
     maxMachines: number | null;
     metadata: Record<string, unknown>;
