@@ -17,6 +17,12 @@ import {
 } from "../types/DashboardConstants";
 import { WorkspacePathQuery, type WorkspacePathQueryOptions, type WorkspacePathResult } from "./WorkspacePathQuery";
 import { WorkspacePathStore } from "./WorkspacePathStore";
+import { Worker } from "worker_threads";
+import { findExistingWorkerPath } from "../utils/WorkerPath";
+import { Log } from "../utils/Log";
+import { notifyUserFeedback, type UserFeedbackSink } from "../core/UserFeedbackSink";
+import { USER_FEEDBACK_SEVERITY } from "../types/DashboardConstants";
+import * as pathModule from "path";
 
 export interface WorkspaceFileIndexStatus {
   readonly state: WorkspaceFileIndexState;
@@ -39,6 +45,7 @@ export interface WorkspaceFileIndexRoot {
 export interface WorkspaceFileIndexBuildOptions {
   readonly roots?: readonly WorkspaceFileIndexRoot[];
   readonly respectGitignore?: boolean;
+  readonly gitVisibleOnly?: boolean;
 }
 
 export interface WorkspaceFileChange {
@@ -69,12 +76,30 @@ const DEFAULT_DEPENDENCIES: WorkspaceFileIndexDependencies = {
 
 const CHANGE_BATCH_MS = 200;
 const REBUILD_STALE_MS = 5 * 60_000;
+export const FILE_INDEX_WORKER_HEAP_MB = 2048;
+export const WORKSPACE_FILE_INDEX_MESSAGE_TYPES = {
+  BUILD: "build",
+  APPLY_CHANGES: "applyChanges",
+  QUERY_FILES: "queryFiles",
+  QUERY_PROMPT_FILES: "queryPromptFiles",
+  SUGGEST_PATHS: "suggestPaths",
+  CANCEL: "cancel",
+  DISPOSE: "dispose",
+  RESULT: "result",
+  PROGRESS: "progress",
+  STATUS: "status",
+  LOG: "log",
+  ERROR: "error",
+} as const;
+export const WORKSPACE_FILE_INDEX_LOG_LEVELS = { INFO: "info", WARN: "warn", ERROR: "error" } as const;
+const WORKER_MEMORY_WARNING = "Workspace file index stopped at its 2 GB memory limit; ignored files may be missing from @ completions.";
+let workerFailureWarningShown = false;
 
 /**
  * Self-contained index pipeline. Its public methods form the message-shaped
  * API used by the worker host in the next phase.
  */
-export class WorkspaceFileIndex implements WorkspaceFileQueries {
+export class WorkspaceFileIndexPipeline implements WorkspaceFileQueries {
   private store = new WorkspacePathStore();
   private query = new WorkspacePathQuery(this.store);
   private status: WorkspaceFileIndexStatus = { state: WORKSPACE_FILE_INDEX_STATES.BUILDING, indexed: 0 };
@@ -108,7 +133,7 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     const respectGitignore = this.respectGitignore;
     let markGitReady!: () => void;
     const gitReady = new Promise<void>((resolve) => { markGitReady = resolve; });
-    this.buildPromise = this.performBuild(initialBuild, markGitReady, buildRoots, respectGitignore).finally(() => {
+    this.buildPromise = this.performBuild(initialBuild, markGitReady, buildRoots, respectGitignore, options.gitVisibleOnly ?? false).finally(() => {
       this.buildPromise = undefined;
       if (this.rebuildRequested && !this.disposed) {
         this.rebuildRequested = false;
@@ -150,6 +175,10 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     return this.status;
   }
 
+  markDegraded(): void {
+    this.status = { ...this.status, state: WORKSPACE_FILE_INDEX_STATES.DEGRADED };
+  }
+
   cancel(_queryId?: string): void {
     // The in-process adapter accepts the worker-shaped cancellation message.
     // Query cancellation is carried by the caller's AbortSignal in this phase.
@@ -176,7 +205,8 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     initialBuild: boolean,
     markGitReady: () => void,
     roots: readonly WorkspaceFileIndexRoot[],
-    respectGitignore: boolean
+    respectGitignore: boolean,
+    gitVisibleOnly: boolean
   ): Promise<void> {
     const staging = new WorkspacePathStore();
     const skip = respectGitignore ? DEFAULT_SKIP_DIRECTORIES : COMPLETION_ALL_FILES_SKIP_DIRECTORIES;
@@ -199,7 +229,7 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     markGitReady();
 
     let walked: string[] = [];
-    if (!respectGitignore || !gitSucceeded) {
+    if ((!respectGitignore || !gitSucceeded) && !gitVisibleOnly) {
       const walkedByRoot = await Promise.all(roots.map(async (root) => {
         try {
           const result = await this.dependencies.walkSearchFiles(
@@ -282,5 +312,200 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
       }
     }
     this.status = { ...this.status, indexed: this.store.files.length };
+  }
+}
+
+type WorkerRequest = { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD; options?: WorkspaceFileIndexBuildOptions } |
+  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES; changes: readonly WorkspaceFileChange[] } |
+  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES | typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES; query: string; queryId: string; limit?: number } |
+  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS; query: string; queryId: string; kind: WorkspaceFileTreeEntryKind; maxResults?: number } |
+  { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL; queryId: string } | { id: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE };
+type WorkerResponse = { id?: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.RESULT; value?: unknown; status?: WorkspaceFileIndexStatus } |
+  { type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS; queryId: string; progress: { scanned: number; total: number; results: WorkspacePathResult[] } } |
+  { type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS; status: WorkspaceFileIndexStatus } |
+  { type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG; level: typeof WORKSPACE_FILE_INDEX_LOG_LEVELS[keyof typeof WORKSPACE_FILE_INDEX_LOG_LEVELS]; message: string } |
+  { id?: number; type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR; message: string };
+type WorkerRequestInput = WorkerRequest extends infer Request
+  ? Request extends WorkerRequest ? Omit<Request, "id"> : never
+  : never;
+
+export interface WorkspaceFileIndexOptions {
+  readonly workerHeapMb?: number;
+  readonly userFeedbackSink?: UserFeedbackSink;
+  readonly workerFactory?: (scriptPath: string, resourceLimits: { maxOldGenerationSizeMb: number }) => Worker;
+}
+
+/** Host transport for a per-workspace worker, with a bounded in-process fallback. */
+export class WorkspaceFileIndex implements WorkspaceFileQueries {
+  private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; request: WorkerRequestInput }>();
+  private readonly queryIds = new Map<string, number>();
+  private nextId = 1;
+  private worker?: Worker;
+  private fallback?: WorkspaceFileIndexPipeline;
+  private status: WorkspaceFileIndexStatus = { state: WORKSPACE_FILE_INDEX_STATES.BUILDING, indexed: 0 };
+  private disposed = false;
+  private failureStarted = false;
+
+  constructor(
+    private readonly roots: readonly WorkspaceFileIndexRoot[],
+    private readonly respectGitignore: boolean,
+    dependencies?: WorkspaceFileIndexDependencies,
+    private readonly options: WorkspaceFileIndexOptions = {}
+  ) {
+    // Injected pipeline dependencies keep deterministic unit tests in-process.
+    if (dependencies) {
+      this.fallback = new WorkspaceFileIndexPipeline(roots, respectGitignore, dependencies);
+      return;
+    }
+    try {
+      const candidates = [
+        pathModule.join(__dirname, "..", "..", "workspaceFileIndexWorker.js"),
+        pathModule.join(__dirname, "workspaceFileIndexWorker.js"),
+      ];
+      const scriptPath = findExistingWorkerPath(candidates);
+      if (!scriptPath) throw new Error(`Unable to locate workspace file index worker; checked ${candidates.join(", ")}`);
+      const factory = options.workerFactory ?? ((file, resourceLimits) => new Worker(file, { resourceLimits }));
+      this.worker = factory(scriptPath, { maxOldGenerationSizeMb: options.workerHeapMb ?? FILE_INDEX_WORKER_HEAP_MB });
+      this.worker.on("message", (message: WorkerResponse) => this.onMessage(message));
+      this.worker.on("error", (error: Error & { code?: string }) => void this.fail(error));
+      this.worker.on("exit", (code) => {
+        if (!this.disposed && code !== 0) void this.fail(new Error(`Workspace file index worker exited with code ${code}`));
+      });
+    } catch (error) {
+      void this.fail(error);
+    }
+  }
+
+  async build(options: WorkspaceFileIndexBuildOptions = {}): Promise<void> {
+    if (this.fallback) { await this.fallback.build(options); this.status = this.fallback.getStatus(); return; }
+    await this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD, options: { ...options, roots: options.roots ?? this.roots, respectGitignore: options.respectGitignore ?? this.respectGitignore } });
+  }
+  async applyChanges(changes: readonly WorkspaceFileChange[]): Promise<void> {
+    if (this.fallback) { await this.fallback.applyChanges(changes); return; }
+    await this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES, changes });
+  }
+  async queryFiles(query: string, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
+    if (this.fallback) return this.fallback.queryFiles(query, options);
+    return this.query(WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES, query, options);
+  }
+  async queryPromptFiles(query: string, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
+    if (this.fallback) return this.fallback.queryPromptFiles(query, options);
+    return this.query(WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES, query, options);
+  }
+  async suggestPaths(typedPath: string, kind: WorkspaceFileTreeEntryKind, maxResults?: number, options: WorkspacePathQueryOptions = {}): Promise<WorkspacePathResult[]> {
+    if (this.fallback) return this.fallback.suggestPaths(typedPath, kind, maxResults, options);
+    return this.querySuggestions(typedPath, kind, maxResults, options);
+  }
+  getStatus(): WorkspaceFileIndexStatus { return this.fallback?.getStatus() ?? this.status; }
+  cancel(queryId?: string): void {
+    if (!queryId) return;
+    if (this.fallback) { this.fallback.cancel(queryId); return; }
+    const id = this.queryIds.get(queryId);
+    if (id !== undefined) this.worker?.postMessage({ id: this.nextId++, type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.CANCEL, queryId } satisfies WorkerRequest);
+  }
+  dispose(): void {
+    this.disposed = true;
+    this.fallback?.dispose();
+    const worker = this.worker;
+    if (worker) {
+      worker.postMessage({ id: this.nextId++, type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.DISPOSE } satisfies WorkerRequest);
+      setTimeout(() => void worker.terminate(), 100);
+    }
+    this.worker = undefined;
+    for (const pending of this.pending.values()) pending.reject(new Error("Workspace file index disposed"));
+    this.pending.clear();
+  }
+
+  private async query(type: typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES | typeof WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES, query: string, options: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]> {
+    if (options.signal?.aborted) return [];
+    const queryId = `${this.nextId}`;
+    const request = this.request({ type, query, queryId, limit: options.limit });
+    const id = Number(queryId);
+    this.queryIds.set(queryId, id);
+    const progressListener = (message: WorkerResponse): void => {
+      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS && message.queryId === queryId) options.onProgress?.(message.progress);
+    };
+    this.worker?.on("message", progressListener);
+    const abort = (): void => this.cancel(queryId);
+    options.signal?.addEventListener("abort", abort, { once: true });
+    try { return await request as WorkspacePathResult[]; }
+    finally { this.worker?.off("message", progressListener); options.signal?.removeEventListener("abort", abort); this.queryIds.delete(queryId); }
+  }
+
+  private async querySuggestions(typedPath: string, kind: WorkspaceFileTreeEntryKind, maxResults: number | undefined, options: WorkspacePathQueryOptions): Promise<WorkspacePathResult[]> {
+    if (options.signal?.aborted) return [];
+    const queryId = `${this.nextId}`;
+    const request = this.request({ type: WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS, query: typedPath, queryId, kind, maxResults });
+    const progressListener = (message: WorkerResponse): void => {
+      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS && message.queryId === queryId) options.onProgress?.(message.progress);
+    };
+    this.worker?.on("message", progressListener);
+    const abort = (): void => this.cancel(queryId);
+    options.signal?.addEventListener("abort", abort, { once: true });
+    try { return await request as WorkspacePathResult[]; }
+    finally { this.worker?.off("message", progressListener); options.signal?.removeEventListener("abort", abort); this.queryIds.delete(queryId); }
+  }
+
+  private request(message: WorkerRequestInput): Promise<unknown> {
+    if (this.fallback) {
+      const pipeline = this.fallback;
+      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD) return pipeline.build(message.options).then(() => undefined);
+      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES) return pipeline.applyChanges(message.changes).then(() => undefined);
+      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES) return pipeline.queryFiles(message.query, { limit: message.limit });
+      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES) return pipeline.queryPromptFiles(message.query, { limit: message.limit });
+      if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS) return pipeline.suggestPaths(message.query, message.kind, message.maxResults);
+      return Promise.resolve(undefined);
+    }
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject, request: message });
+      this.worker?.postMessage({ ...message, id } as WorkerRequest);
+    });
+  }
+  private onMessage(message: WorkerResponse): void {
+    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.STATUS) { this.status = message.status; return; }
+    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.LOG) {
+      if (message.level === WORKSPACE_FILE_INDEX_LOG_LEVELS.WARN) Log.warn(message.message);
+      else if (message.level === WORKSPACE_FILE_INDEX_LOG_LEVELS.ERROR) Log.error(message.message);
+      else Log.info(message.message);
+      return;
+    }
+    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.PROGRESS) return;
+    const pending = message.id === undefined ? undefined : this.pending.get(message.id);
+    if (!pending || message.id === undefined) return;
+    this.pending.delete(message.id);
+    if (message.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.ERROR) pending.reject(new Error(message.message));
+    else { if (message.status) this.status = message.status; pending.resolve(message.value); }
+  }
+  private async fail(error: unknown): Promise<void> {
+    if (this.failureStarted || this.fallback || this.disposed) return;
+    this.failureStarted = true;
+    this.worker?.removeAllListeners();
+    this.worker?.terminate();
+    this.worker = undefined;
+    Log.warn(`Workspace file index worker failed${(error as NodeJS.ErrnoException)?.code === "ERR_WORKER_OUT_OF_MEMORY" ? " with ERR_WORKER_OUT_OF_MEMORY" : ""}: ${error instanceof Error ? error.message : String(error)}`);
+    if (!workerFailureWarningShown && this.options.userFeedbackSink) {
+      workerFailureWarningShown = true;
+      notifyUserFeedback(this.options.userFeedbackSink, USER_FEEDBACK_SEVERITY.WARNING, WORKER_MEMORY_WARNING);
+    }
+    this.fallback = new WorkspaceFileIndexPipeline(this.roots, this.respectGitignore);
+    await this.fallback.build({ gitVisibleOnly: true });
+    this.fallback.markDegraded();
+    this.status = this.fallback.getStatus();
+    for (const [id, pending] of this.pending) {
+      this.pending.delete(id);
+      try {
+        const request = pending.request;
+        let value: unknown;
+        if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.BUILD) value = undefined;
+        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES) value = await this.fallback.queryFiles(request.query);
+        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_PROMPT_FILES) value = await this.fallback.queryPromptFiles(request.query);
+        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.SUGGEST_PATHS) value = await this.fallback.suggestPaths(request.query, request.kind, request.maxResults);
+        else if (request.type === WORKSPACE_FILE_INDEX_MESSAGE_TYPES.APPLY_CHANGES) value = await this.fallback.applyChanges(request.changes);
+        pending.resolve(value);
+      } catch (fallbackError) {
+        pending.reject(fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)));
+      }
+    }
   }
 }

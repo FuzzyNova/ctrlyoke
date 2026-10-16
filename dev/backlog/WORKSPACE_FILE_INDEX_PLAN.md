@@ -161,7 +161,9 @@ for change batches.
   - a `.gitignore` change triggers a rebuild, as does a query when the last
     full build is over 5 minutes old.
 
-### Phase 2b — Worker and fallback
+### Phase 2b — Worker and fallback (done)
+
+Deviation: none.
 
 - Add `workspaceFileIndexWorker.ts`, which hosts the Phase 2a pipeline, and the
   worker transport in `WorkspaceFileIndex.ts` (D3, D4, D17): progress posts,

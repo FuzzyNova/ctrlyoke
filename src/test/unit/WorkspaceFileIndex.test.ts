@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   WorkspaceFileIndex,
@@ -182,5 +183,38 @@ suite("WorkspaceFileIndex", () => {
     }
     assert.ok(replacementReady, `replacement build did not finish; status=${JSON.stringify(index.getStatus())}`);
     index.dispose();
+  });
+
+  test("real worker answers after a build and cancellation stops a scan", async function () {
+    const workspaceRoot = path.resolve(__dirname, "../../..");
+    const index = new WorkspaceFileIndex([{ path: workspaceRoot, name: "repo" }], false);
+    try {
+      await index.build();
+      const files = await index.queryFiles("package");
+      assert.ok(files.some((entry) => entry.relativePath === "package.json"));
+      const controller = new AbortController();
+      const scan = index.queryFiles("a", { limit: 200_000, signal: controller.signal });
+      controller.abort();
+      const partial = await scan;
+      assert.ok(partial.length < index.getStatus().indexed, "cancel should stop the worker before the full scan completes");
+    } finally { index.dispose(); }
+  });
+
+  test("falls back to Git-visible paths after real worker OOM and warns once", async function () {
+    const workspaceRoot = path.resolve(__dirname, "../../..");
+    const feedback: string[] = [];
+    const index = new WorkspaceFileIndex([{ path: workspaceRoot, name: "repo" }], false, undefined, {
+      workerHeapMb: 8,
+      userFeedbackSink: { notify: (message) => feedback.push(message.message) },
+    });
+    try {
+      try { await index.build(); } catch { /* worker startup can fail before fallback is ready */ }
+      for (let attempt = 0; attempt < 100 && index.getStatus().state !== WORKSPACE_FILE_INDEX_STATES.DEGRADED; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(index.getStatus().state, WORKSPACE_FILE_INDEX_STATES.DEGRADED);
+      assert.ok((await index.queryFiles("package")).some((entry) => entry.relativePath === "package.json"));
+      assert.deepStrictEqual(feedback, ["Workspace file index stopped at its 2 GB memory limit; ignored files may be missing from @ completions."]);
+    } finally { index.dispose(); }
   });
 });
