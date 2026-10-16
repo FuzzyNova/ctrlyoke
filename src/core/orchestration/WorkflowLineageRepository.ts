@@ -100,10 +100,14 @@ export class WorkflowLineageRepository {
       }
 
       if (options.isSystemGenerated && !descriptor.isSystemGenerated) {
-        await this.updateDescriptorMetadata(workspaceRoot, workflowKey, (current) => ({
-          ...current,
-          isSystemGenerated: true,
-        }));
+        await this.updateDescriptorMetadata(
+          workspaceRoot,
+          workflowKey,
+          (current) => ({
+            ...current,
+            isSystemGenerated: true,
+          })
+        );
       }
 
       await fs.promises.mkdir(

@@ -126,10 +126,34 @@ suite("TimelineRecorder", () => {
       streamed.push(event);
     }
     const manifest = await recorder.readManifest(manifestPath);
-    assert.deepStrictEqual(events.map((event) => event.sequence), [1, 2]);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
     assert.deepStrictEqual(streamed, events);
     assert.strictEqual(manifest.eventCount, 2);
     assert.strictEqual(manifest.nextSequence, 3);
+  });
+
+  test("truncates a torn final line longer than one tail-scan chunk", async () => {
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "durable"),
+    ]);
+    const eventsPath = path.join(tempDir, "events.jsonl");
+    await fs.appendFile(
+      eventsPath,
+      `{"eventType":"partial","text":"${"x".repeat(200 * 1024)}`
+    );
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(120, "after recovery"),
+    ]);
+
+    const events = await recorder.readEvents(manifestPath);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
   });
 
   test("truncates a torn final line before committing a definition revision", async () => {
@@ -156,7 +180,10 @@ suite("TimelineRecorder", () => {
       streamed.push(event);
     }
     const manifest = await recorder.readManifest(manifestPath);
-    assert.deepStrictEqual(events.map((event) => event.sequence), [1, 2]);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2]
+    );
     assert.deepStrictEqual(streamed, events);
     assert.strictEqual(
       events[1]?.eventType,

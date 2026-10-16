@@ -7,6 +7,10 @@ import {
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
 import { PromptFileResolver } from "./PromptFileResolver";
+import {
+  quoteReferenceField,
+  quoteReferencePath,
+} from "../completions/ContextReferenceBuilder";
 
 /**
  * Rebase source-file-relative paths before steps are moved into another
@@ -86,9 +90,18 @@ export async function rebaseWorkflowStepPaths(
           );
           const pathOffset = token.indexOf(reference.path);
           if (pathOffset < 0) continue;
+          // A bare `./Makefile` stops parsing once it loses its `./` marker, and
+          // an absolute fallback may add a drive colon or spaces, so re-quote
+          // an originally unquoted path with its reference kind's rule.
+          const wasQuoted = token[pathOffset - 1] === '"';
+          const rebasedPath = wasQuoted
+            ? replacement
+            : token.startsWith("@")
+              ? quoteReferencePath(replacement)
+              : quoteReferenceField(replacement);
           const rebasedToken =
             token.slice(0, pathOffset) +
-            replacement +
+            rebasedPath +
             token.slice(pathOffset + reference.path.length);
           rebasedText =
             rebasedText.slice(0, reference.startOffset) +

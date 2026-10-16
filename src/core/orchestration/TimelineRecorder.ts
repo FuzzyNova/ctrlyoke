@@ -27,6 +27,7 @@ import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
   static readonly EVENTS_FILE_NAME = TIMELINE_STORAGE_FILES.EVENTS;
+  private static readonly TAIL_SCAN_CHUNK_BYTES = 64 * 1024;
   private static readonly manifestOperationQueues = new Map<
     string,
     Promise<void>
@@ -107,13 +108,17 @@ export class TimelineRecorder {
       .doc as WorkflowRunManifest;
   }
 
-  /** Remove a crash-torn final JSONL record before the next append. */
+  /**
+   * Remove a crash-torn final JSONL record before the next append. Runs on every
+   * append, so it reads backwards from the end in fixed-size chunks rather than
+   * loading the whole (potentially very large) events file.
+   */
   private async truncateTornEventsTail(manifestPath: string): Promise<void> {
     const eventsPath =
       TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
-    let content: Buffer;
+    let handle: fs.promises.FileHandle;
     try {
-      content = await fs.promises.readFile(eventsPath);
+      handle = await fs.promises.open(eventsPath, "r+");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return;
@@ -121,12 +126,34 @@ export class TimelineRecorder {
       throw error;
     }
 
-    if (content.length === 0 || content[content.length - 1] === 0x0a) {
-      return;
+    try {
+      const { size } = await handle.stat();
+      const chunk = Buffer.alloc(
+        Math.min(TimelineRecorder.TAIL_SCAN_CHUNK_BYTES, Math.max(size, 1))
+      );
+      let end = size;
+      let isFinalByte = true;
+      while (end > 0) {
+        const start = Math.max(0, end - chunk.length);
+        const length = end - start;
+        await handle.read(chunk, 0, length, start);
+        const lastNewline = chunk.subarray(0, length).lastIndexOf(0x0a);
+        if (isFinalByte && lastNewline === length - 1) {
+          return;
+        }
+        isFinalByte = false;
+        if (lastNewline !== -1) {
+          await handle.truncate(start + lastNewline + 1);
+          return;
+        }
+        end = start;
+      }
+      if (size > 0) {
+        await handle.truncate(0);
+      }
+    } finally {
+      await handle.close();
     }
-
-    const lastNewline = content.lastIndexOf(0x0a);
-    await fs.promises.truncate(eventsPath, lastNewline + 1);
   }
 
   private async writeManifestDirect(

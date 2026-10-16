@@ -445,18 +445,19 @@ export class RunContinuationService {
           steps: identifiedTail.map(stripViewOnlyWorkflowStepFields),
           parallelGroups: incomingTopology.parallelGroups,
         };
+        // A paused run's currentIndex already names the next pending step (pause
+        // lands on a step boundary), so `next` means "before current" there.
+        const effectivePosition =
+          position === QUEUE_POSITION.NEXT &&
+          sourceState === EXECUTION_STATES.PAUSED
+            ? QUEUE_POSITION.BEFORE_CURRENT
+            : position;
         const requestedIndex =
-          typeof position === "number"
-            ? position
-            : position === QUEUE_POSITION.NEXT &&
-                sourceState === EXECUTION_STATES.PAUSED
-              ? Math.max(
-                  source._runtime?.currentIndex ?? sourceTopology.steps.length,
-                  immutablePrefixLength(sourceTopology.steps)
-                )
+          typeof effectivePosition === "number"
+            ? effectivePosition
             : Math.max(
                 resolveQueueInsertIndex(
-                  position,
+                  effectivePosition,
                   source._runtime?.currentIndex ?? sourceTopology.steps.length,
                   sourceTopology.steps.length,
                   sourceTopology.parallelGroups
