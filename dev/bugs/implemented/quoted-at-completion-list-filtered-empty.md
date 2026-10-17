@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by claude-cli bug-hunt final step. Confirmed 2026-10-16 in a live VS Code host by the developer.
 - **Area:** `src/completions/PromptCompletionProvider.ts`, `src/completions/CompletionCore.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

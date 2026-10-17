@@ -123,10 +123,14 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     // Don't provide completions if there's a space after trigger
     // (except for @ inside a quoted path: @"path with spaces/...")
+    const atQuery =
+      triggerChar === "@" && escape && afterTrigger.startsWith('\\"')
+        ? afterTrigger.slice(1)
+        : afterTrigger;
     const isInsideQuotedPath =
       triggerChar === "@" &&
-      afterTrigger.startsWith('"') &&
-      !afterTrigger.slice(1).includes('"');
+      atQuery.startsWith('"') &&
+      !atQuery.slice(1).includes('"');
     if (afterTrigger.includes(" ") && !isInsideQuotedPath) {
       return undefined;
     }
@@ -165,12 +169,18 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     escape: InsertTextEscape | undefined,
     token: vscode.CancellationToken
   ): Promise<vscode.CompletionList> {
+    const escapedQuoteOpener = Boolean(escape && filterText.startsWith('\\"'));
+    const query = escapedQuoteOpener ? filterText.slice(1) : filterText;
+    const typedQuotePrefix = escapedQuoteOpener ? '\\"' : '"';
+    const hasQuotedPrefix = query.startsWith('"');
     // Use shared helper to get plain completions
     const controller = new AbortController();
-    const cancellation = token.onCancellationRequested(() => controller.abort());
+    const cancellation = token.onCancellationRequested(() =>
+      controller.abort()
+    );
     let plainItems: PlainCompletionItem[];
     try {
-      plainItems = await getCompletionCore().getFileCompletions(filterText, {
+      plainItems = await getCompletionCore().getFileCompletions(query, {
         budgetMs: 150,
         signal: controller.signal,
       });
@@ -180,9 +190,15 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("@");
-    const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "@", range, escape)
-    );
+    const items = plainItems.map((item) => {
+      const vscodeItem = toVSCodeCompletionItem(item, "@", range, escape);
+      // VS Code filters against the text covered by the range (after `@`).
+      // Keep the typed quote opener in filterText for both files and folders.
+      if (hasQuotedPrefix) {
+        vscodeItem.filterText = `${typedQuotePrefix}${item.filterText ?? item.label}`;
+      }
+      return vscodeItem;
+    });
 
     return new vscode.CompletionList(items, true);
   }
