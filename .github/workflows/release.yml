@@ -6,7 +6,9 @@ name: Release
 # GitHub Release with the matching CHANGELOG.md section attached.
 #
 # Requires a VSCE_PAT repo secret (the Azure DevOps PAT with Marketplace
-# "Manage" scope -- see RELEASE_CHECKLIST.md Phase 9).
+# "Manage" scope -- see RELEASE_CHECKLIST.md Phase 9) and a
+# TELEMETRY_CONNECTION_STRING repo secret (the prod Application Insights
+# connection string from the local .env).
 #
 # Also stages the `ctrlyoke` npm CLI package at the same version
 # (dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.2). That uses npm trusted publishing
@@ -47,6 +49,10 @@ jobs:
 
       - name: Package extension
         run: npm run package
+        env:
+          # Compiled into the production bundle by esbuild.js; without it the
+          # published VSIX ships with telemetry disabled.
+          TELEMETRY_CONNECTION_STRING: ${{ secrets.TELEMETRY_CONNECTION_STRING }}
 
       - name: Build npm CLI package
         run: node scripts/build-npm-package.mjs

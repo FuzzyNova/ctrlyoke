@@ -679,7 +679,7 @@ _Checked 2026-10-16 against a local `npm run package` of `0.2.0` (334 files, 20.
 - [x] `.ctrlyoke/`, `.agents/`, local logs, prompts, test logs, dev-only files **not** included. A _local_ package also picks up stale `tsc` output and `.map` files under `out/server/` (about 860 KB) through the `!out/server/**` line in `.vscodeignore`. `release.yml` packages from a clean `npm ci` checkout, so the published VSIX doesn't contain them.
 - [x] Generated VSIX version matches `package.json` (`0.2.0`; `release.yml` enforces tag == version via `scripts/verify-release-tag.mjs`).
 - [x] `npm audit --omit=dev` — 0 vulnerabilities (2026-10-16).
-- **Telemetry is off in CI-built packages.** `esbuild.js` reads `TELEMETRY_CONNECTION_STRING` from a local `.env`, and `release.yml` has no `.env` or secret for it, so the VSIX that `release.yml` publishes compiles telemetry out. That keeps EU/UK telemetry off until the Phase 7 DataRep gate clears. To ship telemetry later, add a repo secret and write it into `.env` in `release.yml`.
+- [x] **Telemetry is compiled into CI-built packages** (fixed 2026-10-16). Until then `esbuild.js` read `TELEMETRY_CONNECTION_STRING` only from a local `.env`, so the VSIX that `release.yml` published had telemetry compiled out. `esbuild.js` now prefers the process environment, and `release.yml`'s Package step passes the `TELEMETRY_CONNECTION_STRING` repo secret (uploaded from the local `.env` with `gh secret set`). Checked with `.env` moved aside: a production build contains the instrumentation key only when the variable is set. Rotating the Application Insights connection string means updating both `.env` and the secret. The DataRep appointment (Phase 7) should be in effect before a telemetry-enabled release reaches EU/EEA/UK users.
 
 **Also still open from the original plan, unrelated to licensing:**
 
@@ -1042,8 +1042,8 @@ accounts, so the effective control is account hardening, not redaction:
       public docs. The Microsoft/Azure DevOps account's passkey-unavailable
       fallback (lost device) is "email a code to `admin@fuzzno.com`" — confirmed
       September 7, 2026 that `admin@fuzzno.com` is not a separate legacy inbox
-      but the business admin address on the same Google Workspace (Fuzzy Nova,
-      the DBA `ctrlyoke` ships under) that already hosts `support@ctrlyoke.dev`
+      but the business admin address on the same Google Workspace (Fuzzy Nova
+      LLC, the company that publishes ctrlyoke) that already hosts `support@ctrlyoke.dev`
       and the other `@ctrlyoke.dev` aliases covered by the Google Workspace MFA
       item above — same 2FA-enforced workspace, not a separate weak point. The
       recovery fallback is a standard email-a-code flow, not SMS or a guessable

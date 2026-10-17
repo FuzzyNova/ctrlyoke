@@ -33,7 +33,16 @@ function loadDotEnv(envPath) {
   return result;
 }
 
-const dotEnv = loadDotEnv(path.join(__dirname, ".env"));
+// Process environment wins over .env so CI (release.yml) can inject the
+// connection string from a repo secret without writing a .env file.
+const dotEnv = {
+  ...loadDotEnv(path.join(__dirname, ".env")),
+  ...Object.fromEntries(
+    ["TELEMETRY_CONNECTION_STRING", "TELEMETRY_CONNECTION_STRING_DEV"]
+      .filter((key) => process.env[key])
+      .map((key) => [key, process.env[key].trim()])
+  ),
+};
 // In dev builds, use the isolated dev Application Insights resource so dev
 // noise never lands in the prod telemetry stream (see TELEMETRY_PLAN.md).
 const telemetryConnectionString = production
