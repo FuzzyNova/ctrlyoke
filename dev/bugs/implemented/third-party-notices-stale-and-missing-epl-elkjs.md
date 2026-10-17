@@ -42,3 +42,7 @@ additions happened after the July audit, and nothing checks the file against `pa
 - Add the MPL-2.0 source URL for `@resvg/resvg-wasm`, since its VSIX copy ships no LICENSE file.
 - Consider a `check:*` script that fails when production deps drift from the notices table.
 - Rebuild the VSIX after regenerating. The current `0.2.0` package carries the stale copy.
+
+## Resolution
+
+**Resolution:** fixed in this commit. The production notices were regenerated with license texts and package attributions, EPL-2.0 elkjs was disclosed, the MPL-2.0 source was added for @resvg/resvg-wasm, and the packaged VSIX was rebuilt and inspected.

@@ -108,8 +108,8 @@ exercise the `format:check` gate that item 7 adds, so item 3 is effectively owne
 
 ## Before tagging v0.2.0
 
-- [ ] **8. Regenerate `THIRD_PARTY_NOTICES.md` (HIGH).** Bug:
-      [`third-party-notices-stale-and-missing-epl-elkjs.md`](../bugs/backlog/third-party-notices-stale-and-missing-epl-elkjs.md).
+- [x] **8. Regenerate `THIRD_PARTY_NOTICES.md` (HIGH).** Bug:
+      [`third-party-notices-stale-and-missing-epl-elkjs.md`](../bugs/implemented/third-party-notices-stale-and-missing-epl-elkjs.md).
       EPL-2.0 elkjs (via mermaid) ships in the VSIX without being disclosed. Eight direct runtime
       deps are missing, versions are stale and licence texts are absent. Rebuild the VSIX after.
       Default: **disclose** elkjs, rather than stripping the ELK layout engine out of mermaid,
