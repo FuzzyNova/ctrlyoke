@@ -22,9 +22,10 @@ their own privacy policies.
 
 Only the **VS Code extension** sends telemetry, through Microsoft's `@vscode/extension-telemetry`
 library. It contains operational data: which harness and execution mode ran, counts and durations,
-feature flags, outcome and error type names, and the extension, VS Code and OS versions. The
-library adds a pseudonymous VS Code machine ID and a per-launch session ID. The Privacy Policy
-lists every category.
+feature flags, outcome and error type names, and the extension, VS Code and OS versions. When
+the extension hits an unexpected error, VS Code also reports its message and stack trace, with
+file paths and other personal-looking values redacted. The library adds pseudonymous VS Code
+machine and device IDs and a per-launch session ID. The Privacy Policy lists every category.
 
 **To turn it off**, set VS Code's `telemetry.telemetryLevel` to `off`. ctrlyoke follows that
 setting; there is no separate ctrlyoke switch.

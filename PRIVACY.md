@@ -2,9 +2,9 @@
 
 **Controller:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code extension and companion CLI / MCP server binaries
-**Effective Date:** September 17, 2026
-**Last Updated:** September 17, 2026
-**Version:** 1.4
+**Effective Date:** October 16, 2026
+**Last Updated:** October 16, 2026
+**Version:** 1.5
 
 ## 1. Scope
 
@@ -40,11 +40,12 @@ Telemetry may include:
 - counts and durations
 - boolean feature flags
 - outcome and error type names
+- for unexpected errors in the extension, the error message and stack trace, after VS Code's telemetry redaction removes file paths and other values that look like personal data or secrets
 - extension name and version
 - VS Code version, commit, product, and UI kind
 - operating system, platform version, and processor architecture
 - remote-environment type, such as local, SSH, container, or WSL
-- a pseudonymous VS Code machine identifier and a per-launch VS Code session identifier, attached by the telemetry library
+- pseudonymous VS Code machine and device identifiers and a per-launch VS Code session identifier, attached by the telemetry library
 - source IP address processed by Azure during ingestion and approximate geographic location derived from it
 
 We use this information for product analytics, reliability, debugging, and feature planning. Telemetry is processed through **Microsoft Azure Application Insights**.
@@ -114,14 +115,14 @@ Where applicable law requires a legal basis for processing, we rely on one or mo
 
 We use trusted vendors to help operate ctrlyoke. Depending on the service and processing purpose, a provider may act as our processor or as an independent controller under its own terms:
 
-| Provider                             | Purpose                                           | Data categories                                                                                                                                                                   |
-| ------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Microsoft Azure Application Insights | Telemetry processing                              | Telemetry events; pseudonymous machine and per-launch session identifiers; software, OS, device, and remote-environment metadata; source IP during ingestion and derived location |
-| Keygen LLC                           | License issuance and verification                 | Name and email in license metadata; license key/status; machine identifier and operating system platform; IP address and request metadata during online license operations        |
-| Lemon Squeezy                        | Payments, authorized reseller, merchant of record | Name, email address, billing country, payment and order metadata; Enterprise legal-entity and terms-acceptance data where supported                                               |
-| Plus Five Five, Inc. (Resend)        | Transactional email and license-key delivery      | Recipient name and email address, license key, message content, delivery metadata                                                                                                 |
-| Netlify, Inc.                        | Website and serverless-function hosting           | Purchase/license provisioning data processed by the webhook; server logs, IP addresses, request metadata                                                                          |
-| Google Workspace                     | Business and support email                        | Email addresses and message content                                                                                                                                               |
+| Provider                             | Purpose                                           | Data categories                                                                                                                                                                                                       |
+| ------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Microsoft Azure Application Insights | Telemetry processing                              | Telemetry events and redacted error reports; pseudonymous machine, device, and per-launch session identifiers; software, OS, device, and remote-environment metadata; source IP during ingestion and derived location |
+| Keygen LLC                           | License issuance and verification                 | Name and email in license metadata; license key/status; machine identifier and operating system platform; IP address and request metadata during online license operations                                            |
+| Lemon Squeezy                        | Payments, authorized reseller, merchant of record | Name, email address, billing country, payment and order metadata; Enterprise legal-entity and terms-acceptance data where supported                                                                                   |
+| Plus Five Five, Inc. (Resend)        | Transactional email and license-key delivery      | Recipient name and email address, license key, message content, delivery metadata                                                                                                                                     |
+| Netlify, Inc.                        | Website and serverless-function hosting           | Purchase/license provisioning data processed by the webhook; server logs, IP addresses, request metadata                                                                                                              |
+| Google Workspace                     | Business and support email                        | Email addresses and message content                                                                                                                                                                                   |
 
 We may also disclose information:
 

@@ -1,6 +1,6 @@
 # Trust & Security
 
-**Last updated:** September 17, 2026
+**Last updated:** October 16, 2026
 
 ctrlyoke is built by **Fuzzy Nova LLC**, a Texas limited liability company, and is designed local-first. This page explains what that means in practice, what data we do and don't handle, who we rely on to run the business, and how to reach us. It's meant to let your security or legal team review ctrlyoke without a call — if you need something this page doesn't answer, email `security@ctrlyoke.dev` or `privacy@ctrlyoke.dev`.
 
@@ -30,7 +30,7 @@ A small, deliberately limited set of operational data keeps licensing, billing, 
 - **Purchase and billing** — your name, email, billing country, and order metadata, handled by our merchant of record, Lemon Squeezy. For Enterprise purchases, this also includes the Customer's legal entity name and business address and a record of the terms accepted at checkout. We never see or store full card numbers.
 - **Transactional license email** — your name, email address, license key, activation instructions, and delivery metadata, processed by Resend to deliver the license credential after purchase.
 - **Support and sales email** — whatever you send us at `support@`, `sales@`, `billing@`, `security@`, or `privacy@ctrlyoke.dev`.
-- **Operational telemetry** — counts, durations, feature flags, and error/outcome types; pseudonymous VS Code machine and per-launch session identifiers; and standard software, OS, architecture, UI, and remote-environment metadata. Azure also processes the source IP during ingestion and derives approximate location. This data is sent only if VS Code's own telemetry setting allows it. No workspace content ever flows through this channel.
+- **Operational telemetry** — counts, durations, feature flags, and error/outcome types; messages and stack traces from unexpected extension errors, with file paths and other personal-looking values redacted by VS Code; pseudonymous VS Code machine, device, and per-launch session identifiers; and standard software, OS, architecture, UI, and remote-environment metadata. Azure also processes the source IP during ingestion and derives approximate location. This data is sent only if VS Code's own telemetry setting allows it. No workspace content ever flows through this channel.
 - **Website and provisioning logs** — Netlify may process standard request, security, and serverless-function logs to host the website and the purchase-to-license provisioning webhook.
 
 Full detail, including legal bases and retention periods, is in our [Privacy Policy](https://ctrlyoke.dev/privacy).
