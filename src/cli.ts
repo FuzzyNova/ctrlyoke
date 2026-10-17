@@ -192,6 +192,14 @@ import {
   setSecretCommand,
   trustSecretGrantsCommand,
 } from "./cli/SecretCommands";
+import { registerLicenseCommands } from "./cli/LicenseCommandDefinitions";
+import {
+  activateLicenseCommand,
+  createCliLicenseCommandDependencies,
+  deactivateLicenseCommand,
+  licenseStatusCommand,
+  type LicenseCommandDependencies,
+} from "./cli/LicenseCommands";
 import {
   findUnapprovedStepSecretGrants,
   formatAppendedUnapprovedSecretGrantsWarning,
@@ -476,6 +484,21 @@ registerSecretCommands(program, {
           createSecretCommandIo()
         );
       })()
+    ),
+});
+
+registerLicenseCommands(program, {
+  status: (options) =>
+    runLicenseCommand((dependencies) =>
+      licenseStatusCommand(options, dependencies, createSecretCommandIo())
+    ),
+  activate: (options) =>
+    runLicenseCommand((dependencies) =>
+      activateLicenseCommand(options, dependencies, createSecretCommandIo())
+    ),
+  deactivate: (options) =>
+    runLicenseCommand((dependencies) =>
+      deactivateLicenseCommand(options, dependencies, createSecretCommandIo())
     ),
 });
 
@@ -1581,6 +1604,16 @@ async function prepareStepCommand(
   return createStepCommandContext(
     workspace.workspaceRoot,
     cliRunnerHostIdentity
+  );
+}
+
+/** Runs a `license` command on the shared secret store, then releases it. */
+function runLicenseCommand(
+  command: (dependencies: LicenseCommandDependencies) => Promise<void>
+): Promise<void> {
+  const dependencies = createCliLicenseCommandDependencies();
+  return handleSecretCommand(
+    command(dependencies).finally(() => dependencies.dispose())
   );
 }
 

@@ -32,6 +32,9 @@ ctrlyoke secret set <NAME> [--stdin] [--scope user|workspace] [--cwd <path>]
 ctrlyoke secret list [--cwd <path>]
 ctrlyoke secret rm <NAME> [--yes] [--scope user|workspace] [--cwd <path>]
 ctrlyoke secret check <file> [--cwd <path>]
+ctrlyoke license status [--json]
+ctrlyoke license activate [--stdin]
+ctrlyoke license deactivate [--yes]
 ctrlyoke server [--cwd <path>] [--port <n>] [--strict-port] [--bind <addr>] [--https] [--cert <path>] [--key <path>] [--theme <mode>] [--open] [--regenerate-token] [--verbose]
 ```
 
@@ -512,6 +515,30 @@ any missing values are also present, both problems are shown and the command
 exits `2`. Unlike `run`, which only warns about a missing secret unless
 `execution.contextResolutionFailure` is `fail`, `secret check` always fails on
 one.
+
+## `ctrlyoke license`
+
+Manages this machine's [ctrlyoke Pro](/pro/) license from a terminal, which is
+the easiest way to activate a headless server or a container (for example with
+`docker exec`). It uses the same store as `ctrlyoke server` and the VS Code
+extension, so an activation here is the one the server sees.
+
+- `license status` prints the tier, license ID, source, expiry, and where the
+  license is stored. It never prints the key. `--json` emits one versioned
+  JSON line.
+- `license activate` reads the key from a hidden TTY prompt, or from stdin with
+  `--stdin`; like `secret set`, it never accepts the key as an argument, where
+  it would show in the process list and shell history. Activation registers
+  this machine with Keygen, exactly as the dashboard's License tab does.
+- `license deactivate` releases this machine's activation and removes the
+  stored license. It asks for confirmation unless you pass `--yes`.
+
+```bash
+ctrlyoke license activate --stdin < /run/secrets/ctrlyoke-license
+ctrlyoke license status
+```
+
+Failures exit with code `2`.
 
 ## `ctrlyoke history prune`
 

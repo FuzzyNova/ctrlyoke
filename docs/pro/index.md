@@ -82,8 +82,9 @@ This is the normal flow for a connected machine:
 
 The license is stored in the computer's credential store, so one activation
 covers both the VS Code extension and the [CLI](/cli/) on that computer. In a
-container or on a headless server, activate `ctrlyoke server` at startup with a
-key file instead; see
+container or on a headless server, activate from a terminal with
+[`ctrlyoke license activate`](/cli/ctrlyoke#ctrlyoke-license), or have
+`ctrlyoke server` activate a key file at startup; see
 [Activate a license at startup](/cli/server#activate-a-license-at-startup). Only
 `ctrlyoke server` uses Pro (for remote access); `ctrlyoke run` and the other
 CLI commands need no license.

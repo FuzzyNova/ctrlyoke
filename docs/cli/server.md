@@ -98,7 +98,9 @@ container is the one the server resolves.
 
 On Docker's default bridge network every browser is a remote client, and
 remote access needs Pro, so a fresh container cannot be activated from its own
-dashboard. Give the server the license key instead:
+dashboard. Activate it with
+[`ctrlyoke license activate`](/cli/ctrlyoke#ctrlyoke-license) from a shell in
+the container, or give the server the license key at startup:
 
 | Variable                    | Effect                                                                                                                                      |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
