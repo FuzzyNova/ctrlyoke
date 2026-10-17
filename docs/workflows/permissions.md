@@ -189,6 +189,13 @@ ctrlyoke only reads files inside the workspace. A
 or a file link in the output, that points outside the workspace is blocked
 unless its folder is a **trusted external root**.
 
+This check follows symbolic links and Windows junctions before deciding where a
+reference points. So `@link/file.md`, `@link/`, `#selection` and `#sym` are
+blocked when `link` resolves outside the workspace, unless the resolved target
+is under an approved trusted external root. Links that resolve back inside the
+workspace continue to work. To allow a deliberate link to another folder, add
+its target folder to `permissions.trustedExternalRoots`.
+
 An approved root also reaches the harness. Copilot CLI, Claude Code, Codex and
 Antigravity each receive it as `--add-dir`, so the agent can read and edit
 files there. OpenCode and Qwen Code have no such option and don't receive it.

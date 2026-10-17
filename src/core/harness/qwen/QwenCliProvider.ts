@@ -8,6 +8,8 @@ import {
   HOOK_EVENT_NAMES,
   MODEL_OPTION_VALUES,
   STATUS_LINE_HARNESS_IDS,
+  TEMP_FILE_CATEGORIES,
+  type TempFileCategory,
 } from "../../../types/DashboardConstants";
 import {
   INotificationMonitor,
@@ -841,13 +843,34 @@ export class QwenCliProvider implements ICliProvider {
   /**
    * Format a file path reference for Qwen Code CLI
    *
-   * Qwen accepts @path format for file references (same as Copilot).
+   * Qwen accepts @path format, but spaces must be escaped on POSIX. The shared
+   * formatter supplies quote-wrapped paths containing spaces; Qwen converts
+   * those according to its platform parser behavior.
    *
-   * @param relativeFilePath Relative file path
+   * @param quotedFilePath Path supplied by the shared formatter
    * @returns Formatted file reference (e.g., "@path")
    */
-  formatFileReference(relativeFilePath: string): string {
-    return `@${relativeFilePath}`;
+  formatFileReference(
+    quotedFilePath: string,
+    options?: { tempFileCategory?: TempFileCategory }
+  ): string {
+    if (quotedFilePath.includes(" ") && process.platform === "win32") {
+      if (
+        options?.tempFileCategory === TEMP_FILE_CATEGORIES.PROMPT ||
+        options?.tempFileCategory === TEMP_FILE_CATEGORIES.AGENT ||
+        options?.tempFileCategory === TEMP_FILE_CATEGORIES.SKILLS
+      ) {
+        return `Read the file at ${quotedFilePath} and follow its instructions.`;
+      }
+      return quotedFilePath;
+    }
+
+    if (quotedFilePath.includes(" ")) {
+      const unquotedPath = quotedFilePath.replace(/^"(.*)"$/u, "$1");
+      return `@${unquotedPath.replace(/ /gu, "\\ ")}`;
+    }
+
+    return `@${quotedFilePath}`;
   }
 
   /**

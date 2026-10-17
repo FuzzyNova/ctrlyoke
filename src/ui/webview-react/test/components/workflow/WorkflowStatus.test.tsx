@@ -4,7 +4,7 @@
  * WorkflowStatus depends on workflowStore, uiStore, settingsStore and vscodeApi.
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render,
   screen,
@@ -65,6 +65,10 @@ beforeEach(() => {
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
   ).postMessage = postMessageSpy;
   postMessageSpy.mockClear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function setRecentWorkflows(
@@ -1761,15 +1765,19 @@ describe("WorkflowStatus — run navigation panel", () => {
       screen.getByRole("button", { name: "Back to workflow list" })
     ).toBeInTheDocument();
 
-    await user.click(dropdownTrigger);
+    // Fake only the exit fallback timer from here on, and trigger the exit
+    // synchronously: RTL's async act wrapper waits on a real setTimeout(0).
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.click(dropdownTrigger);
     expect(
       document.querySelector(".animate-slide-out-right")
     ).toBeInTheDocument();
-    await waitFor(() => {
-      expect(
-        document.querySelector(".animate-slide-out-right")
-      ).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(321);
     });
+    expect(
+      document.querySelector(".animate-slide-out-right")
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
   });
 
@@ -1812,7 +1820,8 @@ describe("WorkflowStatus — run navigation panel", () => {
     const backButton = screen.getByRole("button", {
       name: "Back to workflow list",
     });
-    await user.click(backButton);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.click(backButton);
 
     const departingPanel = backButton.closest(".animate-slide-out-right");
     expect(departingPanel).toBeInTheDocument();
@@ -1820,11 +1829,12 @@ describe("WorkflowStatus — run navigation panel", () => {
     // wait for the exit animation before remounting.
     expect(screen.getByText("Other Workflow")).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(
-        document.querySelector(".animate-slide-out-right")
-      ).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(321);
     });
+    expect(
+      document.querySelector(".animate-slide-out-right")
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
     expect(screen.getByText("Other Workflow")).toBeInTheDocument();
   });
@@ -1861,15 +1871,19 @@ describe("WorkflowStatus — run navigation panel", () => {
       screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
     );
 
-    await user.keyboard("{Escape}");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    });
     const departingPanel = document.querySelector(".animate-slide-out-right");
     expect(departingPanel).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(
-        document.querySelector(".animate-slide-out-right")
-      ).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(321);
     });
+    expect(
+      document.querySelector(".animate-slide-out-right")
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Multi-run Workflow")).toBeInTheDocument();
   });
 

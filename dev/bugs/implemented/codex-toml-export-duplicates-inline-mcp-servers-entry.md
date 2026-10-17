@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by the bug drain 3 review (follow-up to `c07b600e0`)
 - **Area:** `src/utils/HarnessMcpExporter.ts`, `src/utils/McpDiscoveryUtils.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

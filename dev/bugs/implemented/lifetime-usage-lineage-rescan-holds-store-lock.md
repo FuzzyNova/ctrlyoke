@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by the bug drain 3 review (follow-up to `983ae53a8`)
 - **Area:** `src/core/harness/shared/usage/LifetimeUsageStore.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

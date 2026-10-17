@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import * as path from "path";
 import { Log } from "./Log";
-import { isPathWithinAnyDirectory } from "./PathSecurity";
+import { RealpathContainmentChecker } from "./PathSecurity";
 import {
   resolveReferencePath,
   type ResolverWorkspaceFolder,
@@ -105,7 +105,8 @@ export async function buildDirectoryAttachmentXml(
   additionalTrustedRoots: string[] = [],
   namedRoots: ResolverWorkspaceFolder[] = [],
   effectiveAbsolute: boolean = false,
-  sourceDefinitionDir?: string
+  sourceDefinitionDir?: string,
+  containmentChecker?: RealpathContainmentChecker
 ): Promise<string> {
   // Remove trailing slash for consistent path handling
   const normalizedPath = dirPath.replace(/[/\\]+$/, "");
@@ -121,22 +122,26 @@ export async function buildDirectoryAttachmentXml(
     resolvedRoot,
     ...additionalTrustedRoots.map((root) => path.resolve(root)),
   ];
+  const checker =
+    containmentChecker ?? new RealpathContainmentChecker(trustedRoots);
 
   // @dir/ references come from prompt/workflow file content, which may not
   // have been authored by the person running it — reject traversal outside
   // every trusted root rather than listing an arbitrary directory on disk.
-  if (!isPathWithinAnyDirectory(absolutePath, trustedRoots)) {
+  const containment = await checker.check(absolutePath);
+  if (!containment.allowed) {
     Log.warn(
-      `[AttachmentBuilders] Security: Directory reference "${dirPath}" resolves outside the workspace and was blocked`
+      `[AttachmentBuilders] Security: Directory reference "${dirPath}" resolves outside the workspace and was blocked: "${containment.resolvedPath}"`
     );
     throw new Error(
-      `Directory reference is outside the workspace and was blocked: ${normalizedPath}`
+      `Directory reference resolves outside the workspace and was blocked: "${containment.resolvedPath}". Add the target folder to permissions.trustedExternalRoots to allow it`
     );
   }
+  const authorizedPath = containment.resolvedPath;
 
   // Check if directory exists
   try {
-    const stat = await fs.stat(absolutePath);
+    const stat = await fs.stat(authorizedPath);
     if (!stat.isDirectory()) {
       throw new Error("Path is not a directory");
     }
@@ -146,10 +151,10 @@ export async function buildDirectoryAttachmentXml(
   }
 
   // Build tree
-  const tree = await buildDirectoryTree(absolutePath);
+  const tree = await buildDirectoryTree(authorizedPath);
   const fileCount = (tree.match(/\n/g) || []).length;
 
-  const displayPath = effectiveAbsolute ? absolutePath : normalizedPath;
+  const displayPath = effectiveAbsolute ? authorizedPath : normalizedPath;
 
   return `<attachment id="directory:${normalizedPath}">
 Directory structure: ${displayPath}/ (${fileCount} items)

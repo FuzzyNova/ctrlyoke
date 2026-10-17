@@ -25,6 +25,7 @@ import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type {
   HarnessId,
   HeadlessSourceMode,
+  TempFileCategory,
 } from "../../../../types/DashboardConstants";
 import type { HarnessCapabilityFacts } from "../../../../types/CompatibilityTypes";
 import type { CliEvent } from "../../../../types/CliOutputTypes";
@@ -293,12 +294,16 @@ export interface ICliProvider {
 
   /**
    * Format a file path reference for this CLI.
-   * Default (when not implemented): "@path" — most CLIs accept @ as a file attachment prefix.
-   * Override only when the CLI uses a different convention (e.g., Codex uses no prefix).
-   * @param relativeFilePath Relative file path
+   * The shared formatter quote-wraps paths with spaces before calling this
+   * hook. The default is `@path` or `@"path with spaces"`.
+   * Override when the CLI needs different quoting or a different prefix.
+   * @param quotedFilePath Path formatted by the shared CLI integration
    * @returns Formatted file reference (e.g., "@path" or "path")
    */
-  formatFileReference?(relativeFilePath: string): string;
+  formatFileReference?(
+    quotedFilePath: string,
+    options?: { tempFileCategory?: TempFileCategory }
+  ): string;
 
   /**
    * Build native CLI arguments for resolved image attachments. Providers that

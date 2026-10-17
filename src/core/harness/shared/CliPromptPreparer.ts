@@ -112,7 +112,11 @@ export interface CliPromptPreparerDeps {
   getWorkspaceRoot: () => string | undefined;
   getTempFileSplitConfig: () => SplitConfig | undefined;
   formatDirectFileRef: (absolutePath: string) => string;
-  formatTempFileRef: (tempMgr: TempFileManager, absolutePath: string) => string;
+  formatTempFileRef: (
+    tempMgr: TempFileManager,
+    absolutePath: string,
+    category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES]
+  ) => string;
   formatCategorizedReferences: (
     agentRefs: string[],
     skillRefs: string[],
@@ -652,8 +656,10 @@ export class CliPromptPreparer {
     // workflow and step.
     const planId = TempFileManager.createPlanId();
 
-    const formatTempRef = (plannedPath: string): string =>
-      this.deps.formatTempFileRef(tempMgr, plannedPath);
+    const formatTempRef = (
+      plannedPath: string,
+      category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES]
+    ): string => this.deps.formatTempFileRef(tempMgr, plannedPath, category);
 
     const addChunkFiles = (
       category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES],
@@ -685,7 +691,7 @@ export class CliPromptPreparer {
           partNumber,
           planId
         );
-        const reference = formatTempRef(plannedPath);
+        const reference = formatTempRef(plannedPath, category);
         plannedFiles.push({
           path: plannedPath,
           category,
@@ -838,7 +844,7 @@ export class CliPromptPreparer {
         partNumber,
         planId
       );
-      const reference = formatTempRef(promptPath);
+      const reference = formatTempRef(promptPath, TEMP_FILE_CATEGORIES.PROMPT);
       promptPaths.push(promptPath);
       plannedFiles.push({
         path: promptPath,

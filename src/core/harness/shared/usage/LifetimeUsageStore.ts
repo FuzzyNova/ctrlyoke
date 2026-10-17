@@ -683,78 +683,131 @@ export class LifetimeUsageStore {
     const cacheKey = `${normalized.workflowKey}/${normalized.runRef}`;
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     try {
-      await withFileLock(this.filePath, async () => {
-        const data = await this.readOrReset(now);
-        const existingLineage = data.lineages[normalized.workflowKey];
-        if (!existingLineage) {
-          const lineage = createLineage(normalized);
-          data.lineages[normalized.workflowKey] = lineage;
-          addRunToStore(data, normalized, 1);
-          this.remember(cacheKey, normalized);
-        } else if (
-          normalized.runRef < existingLineage.countedFrom ||
-          normalized.runRef > existingLineage.countedThrough
+      let forceRescan = false;
+      for (;;) {
+        const decision = await withFileLock(this.filePath, async () => {
+          const data = await this.readOrReset(now);
+          const lineage = data.lineages[normalized.workflowKey];
+          return {
+            signature: JSON.stringify(lineage),
+            lineage: lineage ? { ...lineage } : undefined,
+            rescan:
+              forceRescan ||
+              (!!lineage &&
+                (normalized.runRef < lineage.countedFrom ||
+                  (normalized.runRef > lineage.countedThrough &&
+                    lineage.backfillComplete === false) ||
+                  (normalized.runRef >= lineage.countedFrom &&
+                    normalized.runRef <= lineage.countedThrough &&
+                    (() => {
+                      const previous =
+                        this.recentContributionCache.get(cacheKey);
+                      return (
+                        !previous ||
+                        !directReplacementSafe(previous, normalized)
+                      );
+                    })()))),
+          };
+        });
+
+        let rescan = decision.rescan;
+        if (
+          decision.lineage &&
+          !rescan &&
+          normalized.runRef > decision.lineage.countedThrough
         ) {
-          if (normalized.runRef < existingLineage.countedFrom) {
-            const rescanned = await this.scanLineage(normalized.workflowKey);
-            this.replaceLineage(data, normalized.workflowKey, rescanned);
-          } else if (existingLineage.backfillComplete === false) {
-            const rescanned = await this.scanLineage(normalized.workflowKey);
-            this.replaceLineage(data, normalized.workflowKey, rescanned);
-            const rebuilt = data.lineages[normalized.workflowKey];
-            if (rebuilt) {
-              rebuilt.backfillComplete = false;
-              delete rebuilt.dirMtimeMs;
+          const refs = await this.listLineageRunRefs(normalized.workflowKey);
+          rescan = refs.some(
+            (runRef) =>
+              runRef > decision.lineage!.countedThrough &&
+              runRef < normalized.runRef
+          );
+        }
+        if (rescan) {
+          await this.rescanLineageWithLock(
+            normalized.workflowKey,
+            now,
+            decision.signature,
+            (data) => {
+              if (decision.lineage?.backfillComplete === false) {
+                const rebuilt = data.lineages[normalized.workflowKey];
+                if (rebuilt) {
+                  rebuilt.backfillComplete = false;
+                  delete rebuilt.dirMtimeMs;
+                }
+              }
             }
-          } else {
+          );
+          this.remember(cacheKey, normalized);
+          return;
+        }
+
+        const applied = await withFileLock(this.filePath, async () => {
+          const data = await this.readOrReset(now);
+          const existingLineage = data.lineages[normalized.workflowKey];
+          if (JSON.stringify(existingLineage) !== decision.signature)
+            return false;
+          if (!existingLineage) {
+            const lineage = createLineage(normalized);
+            data.lineages[normalized.workflowKey] = lineage;
+            addRunToStore(data, normalized, 1);
+            this.remember(cacheKey, normalized);
+          } else if (
+            normalized.runRef < existingLineage.countedFrom ||
+            normalized.runRef > existingLineage.countedThrough
+          ) {
             applyRunToLineage(existingLineage, normalized, 1);
             existingLineage.countedThrough = normalized.runRef;
             addRunToStore(data, normalized, 1);
-          }
-          this.remember(cacheKey, normalized);
-        } else {
-          const previous = this.recentContributionCache.get(cacheKey);
-          if (previous && directReplacementSafe(previous, normalized)) {
-            addByHarness(existingLineage.byHarness, previous.byHarness, -1);
-            addByHarness(existingLineage.byHarness, normalized.byHarness, 1);
-            existingLineage.subtotal = aggregateByHarness(
-              existingLineage.byHarness
-            );
-            existingLineage.activeExecutionMs = Math.max(
-              0,
-              existingLineage.activeExecutionMs -
-                numeric(previous.activeExecutionMs) +
-                numeric(normalized.activeExecutionMs)
-            );
-            if (previous.executionState !== normalized.executionState) {
-              const previousOutcome = outcomeForState(previous.executionState);
-              const nextOutcome = outcomeForState(normalized.executionState);
-              if (previousOutcome) existingLineage.outcomes[previousOutcome]--;
-              if (nextOutcome) existingLineage.outcomes[nextOutcome]++;
-            }
-            addByHarness(data.byHarness, previous.byHarness, -1);
-            addByHarness(data.byHarness, normalized.byHarness, 1);
-            data.totals = aggregateByHarness(data.byHarness);
-            data.totalActiveExecutionMs = Math.max(
-              0,
-              data.totalActiveExecutionMs -
-                numeric(previous.activeExecutionMs) +
-                numeric(normalized.activeExecutionMs)
-            );
-            const previousOutcome = outcomeForState(previous.executionState);
-            const nextOutcome = outcomeForState(normalized.executionState);
-            if (previousOutcome) data.outcomes[previousOutcome]--;
-            if (nextOutcome) data.outcomes[nextOutcome]++;
             this.remember(cacheKey, normalized);
           } else {
-            const rescanned = await this.scanLineage(normalized.workflowKey);
-            this.replaceLineage(data, normalized.workflowKey, rescanned);
-            this.remember(cacheKey, normalized);
+            const previous = this.recentContributionCache.get(cacheKey);
+            if (previous && directReplacementSafe(previous, normalized)) {
+              addByHarness(existingLineage.byHarness, previous.byHarness, -1);
+              addByHarness(existingLineage.byHarness, normalized.byHarness, 1);
+              existingLineage.subtotal = aggregateByHarness(
+                existingLineage.byHarness
+              );
+              existingLineage.activeExecutionMs = Math.max(
+                0,
+                existingLineage.activeExecutionMs -
+                  numeric(previous.activeExecutionMs) +
+                  numeric(normalized.activeExecutionMs)
+              );
+              if (previous.executionState !== normalized.executionState) {
+                const previousOutcome = outcomeForState(
+                  previous.executionState
+                );
+                const nextOutcome = outcomeForState(normalized.executionState);
+                if (previousOutcome)
+                  existingLineage.outcomes[previousOutcome]--;
+                if (nextOutcome) existingLineage.outcomes[nextOutcome]++;
+              }
+              addByHarness(data.byHarness, previous.byHarness, -1);
+              addByHarness(data.byHarness, normalized.byHarness, 1);
+              data.totals = aggregateByHarness(data.byHarness);
+              data.totalActiveExecutionMs = Math.max(
+                0,
+                data.totalActiveExecutionMs -
+                  numeric(previous.activeExecutionMs) +
+                  numeric(normalized.activeExecutionMs)
+              );
+              const previousOutcome = outcomeForState(previous.executionState);
+              const nextOutcome = outcomeForState(normalized.executionState);
+              if (previousOutcome) data.outcomes[previousOutcome]--;
+              if (nextOutcome) data.outcomes[nextOutcome]++;
+              this.remember(cacheKey, normalized);
+            } else {
+              return false;
+            }
           }
-        }
-        data.updatedAt = now;
-        await this.writeAtomic(data);
-      });
+          data.updatedAt = now;
+          await this.writeAtomic(data);
+          return true;
+        });
+        if (applied) return;
+        forceRescan = true;
+      }
     } catch (error) {
       const wrapped = new Error(LIFETIME_USAGE_ERROR_CODES.WRITE_FAILED);
       wrapped.cause = error;
@@ -788,24 +841,14 @@ export class LifetimeUsageStore {
       ])
     );
     try {
-      await withFileLock(this.filePath, async () => {
+      const rebuildNeeded = await withFileLock(this.filePath, async () => {
         const data = await this.readOrReset(now);
         let lineage = data.lineages[batch.workflowKey];
         if (
           lineage &&
           batch.runRefs.some((runRef) => runRef < lineage!.countedFrom)
         ) {
-          const rescanned = await this.scanLineage(batch.workflowKey);
-          this.replaceLineage(data, batch.workflowKey, rescanned);
-          lineage = data.lineages[batch.workflowKey];
-          if (lineage) {
-            lineage.backfillComplete = false;
-            if (batch.dirMtimeMs === undefined) delete lineage.dirMtimeMs;
-            else lineage.dirMtimeMs = batch.dirMtimeMs;
-          }
-          data.updatedAt = now;
-          await this.writeAtomic(data);
-          return;
+          return true;
         }
         for (const runRef of batch.runRefs) {
           if (
@@ -850,7 +893,22 @@ export class LifetimeUsageStore {
         }
         data.updatedAt = now;
         await this.writeAtomic(data);
+        return false;
       });
+      if (rebuildNeeded) {
+        await this.rescanLineageWithLock(
+          batch.workflowKey,
+          now,
+          undefined,
+          (data) => {
+            const lineage = data.lineages[batch.workflowKey];
+            if (!lineage) return;
+            lineage.backfillComplete = false;
+            if (batch.dirMtimeMs === undefined) delete lineage.dirMtimeMs;
+            else lineage.dirMtimeMs = batch.dirMtimeMs;
+          }
+        );
+      }
     } catch (error) {
       const wrapped = new Error(LIFETIME_USAGE_ERROR_CODES.WRITE_FAILED);
       wrapped.cause = error;
@@ -865,13 +923,7 @@ export class LifetimeUsageStore {
   ): Promise<void> {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     try {
-      await withFileLock(this.filePath, async () => {
-        const data = await this.readOrReset(now);
-        const rescanned = await this.scanLineage(workflowKey);
-        this.replaceLineage(data, workflowKey, rescanned);
-        data.updatedAt = now;
-        await this.writeAtomic(data);
-      });
+      await this.rescanLineageWithLock(workflowKey, now);
     } catch (error) {
       const wrapped = new Error(LIFETIME_USAGE_ERROR_CODES.WRITE_FAILED);
       wrapped.cause = error;
@@ -937,7 +989,9 @@ export class LifetimeUsageStore {
     recomputeGrandTotals(data);
   }
 
-  private async scanLineage(workflowKey: WorkflowKey): Promise<ScannedLineage> {
+  protected async scanLineage(
+    workflowKey: WorkflowKey
+  ): Promise<ScannedLineage> {
     const directory = lineageDir(this.workspaceRoot, workflowKey);
     let entries: Dirent[];
     try {
@@ -1001,6 +1055,58 @@ export class LifetimeUsageStore {
           : {}),
       },
     };
+  }
+
+  private async listLineageRunRefs(
+    workflowKey: WorkflowKey
+  ): Promise<RunRef[]> {
+    try {
+      const entries = await fs.readdir(
+        lineageDir(this.workspaceRoot, workflowKey),
+        {
+          withFileTypes: true,
+        }
+      );
+      return entries
+        .filter(isRunDirEntry)
+        .map((entry) => entry.name as RunRef)
+        .sort((left, right) => left.localeCompare(right));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Scan manifests without the store lock, then replace the lineage under it. */
+  private async rescanLineageWithLock(
+    workflowKey: WorkflowKey,
+    now: number,
+    expectedSignature?: string,
+    afterReplace?: (data: LifetimeUsageStoreData) => void
+  ): Promise<void> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    let signature = expectedSignature;
+    if (signature === undefined) {
+      signature = await withFileLock(this.filePath, async () => {
+        const data = await this.readOrReset(now);
+        return JSON.stringify(data.lineages[workflowKey]);
+      });
+    }
+
+    for (;;) {
+      const scanned = await this.scanLineage(workflowKey);
+      const result = await withFileLock(this.filePath, async () => {
+        const data = await this.readOrReset(now);
+        const currentSignature = JSON.stringify(data.lineages[workflowKey]);
+        if (currentSignature !== signature) return { retry: currentSignature };
+        this.replaceLineage(data, workflowKey, scanned);
+        afterReplace?.(data);
+        data.updatedAt = now;
+        await this.writeAtomic(data);
+        return { retry: undefined };
+      });
+      if (result.retry === undefined) return;
+      signature = result.retry;
+    }
   }
 
   /**

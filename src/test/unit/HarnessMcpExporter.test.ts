@@ -463,6 +463,74 @@ suite("HarnessMcpExporter", () => {
     assert.ok(text.includes('headers = { "Authorization" = "Bearer token" }'));
   });
 
+  test("replaces bare mcp_servers inline and dotted assignments only", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const config = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.mkdir(path.dirname(config), { recursive: true });
+    const unrelated = [
+      "# keep this comment",
+      "[mcp_servers]",
+      'keep = { command = "keep", args = ["keep.js"] }',
+      '"my server" = {',
+      '  command = "old",',
+      '  args = ["old.js", "[bracket].js"],',
+      '  env = { TOKEN = "old" },',
+      "}",
+      'dotted.command = "old-dotted"',
+      'dotted.args = ["old-dotted.js"]',
+      "[other]",
+      'value = "preserve"',
+      "",
+    ].join("\n");
+    await fs.writeFile(config, unrelated, "utf8");
+
+    await exporter.export(
+      [
+        { id: "my server", command: "node", args: ["new.js"] },
+        { id: "dotted", command: "node", args: ["dotted.js"] },
+      ],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const text = await fs.readFile(config, "utf8");
+    assert.ok(text.includes('keep = { command = "keep", args = ["keep.js"] }'));
+    assert.ok(text.includes("# keep this comment\n[mcp_servers]"));
+    assert.ok(text.includes('[other]\nvalue = "preserve"'));
+    assert.strictEqual(
+      (text.match(/\[mcp_servers\."my server"\]/g) ?? []).length,
+      1
+    );
+    assert.strictEqual(
+      (text.match(/\[mcp_servers\."dotted"\]/g) ?? []).length,
+      1
+    );
+    assert.ok(!text.includes('"my server" = {'));
+    assert.ok(!text.includes("dotted.command ="));
+  });
+
+  test("removes bare mcp_servers assignments and counts the server", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const config = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.mkdir(path.dirname(config), { recursive: true });
+    await fs.writeFile(
+      config,
+      '[mcp_servers]\nremove = {\n command = "node",\n args = ["remove.js"],\n}\nkeep = { command = "node" }\n[other]\nvalue = "stay"\n',
+      "utf8"
+    );
+
+    const result = await exporter.remove(
+      ["remove"],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+    const text = await fs.readFile(config, "utf8");
+    assert.strictEqual(result.removedCount, 1);
+    assert.ok(!text.includes("remove = {"));
+    assert.ok(text.includes('keep = { command = "node" }'));
+    assert.ok(text.includes('[other]\nvalue = "stay"'));
+  });
+
   test("does not replace config directories when an edit read fails", async () => {
     const exporter = new HarnessMcpExporter(workspaceRoot);
     const target = path.join(workspaceRoot, ".mcp.json");

@@ -30,6 +30,7 @@ import {
 import { detectFormattingOptions } from "./WorkflowSourceEditor";
 import { readFileForEdit, writeTextFileAtomic } from "./AtomicFileUtils";
 import {
+  findTomlMcpServerAssignments,
   findTomlTableHeaderLines,
   getTomlMcpServerSectionId,
   parseTomlTableHeader,
@@ -346,37 +347,10 @@ async function writeCodexTomlFile(
   }
 
   const targetIds = new Set(blocks.keys());
-  const lines = existingText.split(/\r?\n/);
-  const sectionStartIndices = findTomlTableHeaderLines(lines);
-
-  const keptSegments: string[] = [];
-  let cursor = 0;
-
-  for (let index = 0; index < sectionStartIndices.length; index += 1) {
-    const start = sectionStartIndices[index]!;
-    const end =
-      index + 1 < sectionStartIndices.length
-        ? sectionStartIndices[index + 1]!
-        : lines.length;
-
-    if (start > cursor) {
-      keptSegments.push(lines.slice(cursor, start).join("\n"));
-    }
-
-    const blockLines = lines.slice(start, end);
-    const blockId = tomlServerIdAtLine(blockLines[0] ?? "");
-    if (!(blockId && targetIds.has(blockId))) {
-      keptSegments.push(blockLines.join("\n"));
-    }
-
-    cursor = end;
-  }
-
-  if (cursor < lines.length) {
-    keptSegments.push(lines.slice(cursor).join("\n"));
-  }
-
-  let nextText = keptSegments.join("\n").trimEnd();
+  let nextText = removeCodexTomlDefinitions(
+    existingText,
+    targetIds
+  ).text.trimEnd();
   const renderedBlocks = [...blocks.values()];
   if (renderedBlocks.length > 0) {
     nextText = nextText.length > 0 ? `${nextText}\n\n` : "";
@@ -399,46 +373,56 @@ async function removeCodexTomlServers(
 ): Promise<HarnessMcpDeleteResult> {
   const existingText = await readFileForEdit(filePath, "");
   const targetIds = new Set(ids);
-  const lines = existingText.split(/\r?\n/);
-  const sectionStartIndices = findTomlTableHeaderLines(lines);
-
-  const keptSegments: string[] = [];
-  let cursor = 0;
-  let removedCount = 0;
-
-  for (let index = 0; index < sectionStartIndices.length; index += 1) {
-    const start = sectionStartIndices[index]!;
-    const end =
-      index + 1 < sectionStartIndices.length
-        ? sectionStartIndices[index + 1]!
-        : lines.length;
-
-    if (start > cursor) {
-      keptSegments.push(lines.slice(cursor, start).join("\n"));
-    }
-
-    const blockLines = lines.slice(start, end);
-    const blockId = tomlServerIdAtLine(blockLines[0] ?? "");
-    if (blockId && targetIds.has(blockId)) {
-      removedCount += 1;
-    } else {
-      keptSegments.push(blockLines.join("\n"));
-    }
-
-    cursor = end;
-  }
-
-  if (cursor < lines.length) {
-    keptSegments.push(lines.slice(cursor).join("\n"));
-  }
-
-  const nextText = keptSegments.join("\n").trimEnd();
+  const { text: nextText, removedCount } = removeCodexTomlDefinitions(
+    existingText,
+    targetIds
+  );
   await writeTextFileAtomic(
     filePath,
     nextText.length > 0 ? `${nextText}\n` : ""
   );
 
   return { filePath, removedCount };
+}
+
+function removeCodexTomlDefinitions(
+  text: string,
+  targetIds: ReadonlySet<string>
+): { text: string; removedCount: number } {
+  const lines = text.split(/\r?\n/);
+  const removedLines = new Set<number>();
+  const removedIds = new Set<string>();
+  const headers = findTomlTableHeaderLines(lines);
+
+  for (let index = 0; index < headers.length; index += 1) {
+    const start = headers[index]!;
+    const end = headers[index + 1] ?? lines.length;
+    const id = tomlServerIdAtLine(lines[start] ?? "");
+    if (id && targetIds.has(id)) {
+      for (let line = start; line < end; line += 1) removedLines.add(line);
+      removedIds.add(id);
+    }
+  }
+
+  for (const assignment of findTomlMcpServerAssignments(lines)) {
+    if (!targetIds.has(assignment.id)) continue;
+    for (
+      let line = assignment.startLine;
+      line <= assignment.endLine;
+      line += 1
+    ) {
+      removedLines.add(line);
+    }
+    removedIds.add(assignment.id);
+  }
+
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  return {
+    text: lines
+      .filter((_line, index) => !removedLines.has(index))
+      .join(newline),
+    removedCount: removedIds.size,
+  };
 }
 
 export class HarnessMcpExporter {

@@ -126,6 +126,104 @@ suite("ContextExpander.expandContextSplit", () => {
     assert.ok(far.skippedReferences[0].reason.includes("excerpt size limit"));
   });
 
+  test("blocks file, directory, selection, and symbol references through an outside link", async () => {
+    const root = freshWorkspace();
+    const outside = freshTemporaryRoot("linked-outside");
+    fs.writeFileSync(path.join(outside, "secret.ts"), "class Secret {}\n");
+    const link = path.join(root, "link");
+    fs.symlinkSync(
+      outside,
+      link,
+      process.platform === "win32" ? "junction" : "dir"
+    );
+
+    for (const reference of [
+      "@link/secret.ts",
+      "@link/",
+      "#selection:link/secret.ts:1-1",
+      "#sym:link/secret.ts:Secret:1-1",
+    ]) {
+      const result = await new ContextExpander({
+        workspaceRoot: root,
+      }).expandContextSplit(reference);
+      assert.deepStrictEqual(result.directFileRefs, [], reference);
+      assert.strictEqual(result.excerptBlocks, "", reference);
+      assert.strictEqual(result.skippedReferences.length, 1, reference);
+      assert.ok(
+        result.skippedReferences[0].reason.includes(fs.realpathSync(outside)),
+        result.skippedReferences[0].reason
+      );
+      assert.ok(
+        result.skippedReferences[0].reason.includes("trustedExternalRoots"),
+        result.skippedReferences[0].reason
+      );
+    }
+  });
+
+  test("allows references through an outside link when its target is trusted", async () => {
+    const root = freshWorkspace();
+    const outside = freshTemporaryRoot("linked-trusted");
+    fs.writeFileSync(path.join(outside, "secret.ts"), "class Secret {}\n");
+    fs.symlinkSync(
+      outside,
+      path.join(root, "link"),
+      process.platform === "win32" ? "junction" : "dir"
+    );
+
+    for (const reference of [
+      "@link/secret.ts",
+      "@link/",
+      "#selection:link/secret.ts:1-1",
+      "#sym:link/secret.ts:Secret:1-1",
+    ]) {
+      const result = await new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [outside],
+      }).expandContextSplit(reference);
+      assert.deepStrictEqual(result.skippedReferences, [], reference);
+      if (reference.startsWith("@link/secret")) {
+        assert.strictEqual(result.directFileRefs.length, 1);
+        assert.strictEqual(
+          fs.realpathSync(result.directFileRefs[0]),
+          fs.realpathSync(path.join(outside, "secret.ts"))
+        );
+      } else {
+        assert.ok(result.excerptBlocks.length > 0, reference);
+      }
+    }
+  });
+
+  test("allows links resolving to another location inside the workspace", async () => {
+    const root = freshWorkspace();
+    fs.mkdirSync(path.join(root, "internal"));
+    fs.writeFileSync(
+      path.join(root, "internal", "secret.ts"),
+      "class Secret {}\n"
+    );
+    fs.symlinkSync(
+      path.join(root, "internal"),
+      path.join(root, "link"),
+      process.platform === "win32" ? "junction" : "dir"
+    );
+
+    for (const reference of [
+      "@link/secret.ts",
+      "@link/",
+      "#selection:link/secret.ts:1-1",
+      "#sym:link/secret.ts:Secret:1-1",
+    ]) {
+      const result = await new ContextExpander({
+        workspaceRoot: root,
+      }).expandContextSplit(reference);
+      assert.deepStrictEqual(result.skippedReferences, [], reference);
+      if (reference.startsWith("@link/secret")) {
+        assert.strictEqual(result.directFileRefs.length, 1, reference);
+      } else {
+        assert.ok(result.excerptBlocks.length > 0, reference);
+      }
+    }
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   suite("no references", () => {
     test("returns empty result for prompt with no @-references", async () => {

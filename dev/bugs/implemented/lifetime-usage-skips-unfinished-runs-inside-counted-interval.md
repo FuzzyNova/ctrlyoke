@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-15 by the bug drain 3 review (follow-up to `983ae53a8`)
 - **Area:** `src/core/harness/shared/usage/LifetimeUsageStore.ts`, `src/core/harness/shared/usage/WorkspaceStatsService.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

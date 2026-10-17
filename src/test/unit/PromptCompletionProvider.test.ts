@@ -33,6 +33,10 @@ suite("PromptCompletionProvider", () => {
     vscode.window,
     "visibleTextEditors"
   );
+  const restoreActiveTextEditor = snapshotProperty(
+    vscode.window,
+    "activeTextEditor"
+  );
   const restoreWorkspaceFolders = snapshotProperty(
     vscode.workspace,
     "workspaceFolders"
@@ -50,6 +54,7 @@ suite("PromptCompletionProvider", () => {
       value: originalAsRelativePath,
     });
     restoreVisibleTextEditors();
+    restoreActiveTextEditor();
     restoreWorkspaceFolders();
     Object.defineProperty(vscode.commands, "executeCommand", {
       configurable: true,
@@ -170,6 +175,115 @@ suite("PromptCompletionProvider", () => {
           'sym.string:\\"my dir/a.md\\":\\"Heading Name\\":3-3'
       ),
       "symbol completion should escape path and name quotes for JSON"
+    );
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  test("quoted @ path completions filter on the typed quote in markdown and JSON", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "completion-provider-quoted-at-")
+    );
+    const filePath = path.join(root, "dir", "docs", "guide.md");
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, "guide");
+    const fileUri = vscode.Uri.file(filePath);
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      value: [{ uri: vscode.Uri.file(root), name: "workspace", index: 0 }],
+    });
+    // Rebuild after setting the root: the first query during a rebuild reads
+    // the old root's store until the replacement index is ready.
+    clearFilesCache();
+    Object.defineProperty(vscode.workspace, "findFiles", {
+      configurable: true,
+      value: async () => [fileUri],
+    });
+    Object.defineProperty(vscode.workspace, "asRelativePath", {
+      configurable: true,
+      value: (uri: vscode.Uri) =>
+        path.relative(root, uri.fsPath).replace(/\\/g, "/"),
+    });
+
+    const checkPrefix = async (
+      fileName: string,
+      languageId: string,
+      text: string,
+      typedPrefix: string
+    ) => {
+      const document = new PromptDocumentStub(
+        path.join(root, fileName),
+        languageId,
+        text
+      );
+      const position = document.positionAt(
+        text.length - (languageId === "json" ? 2 : 0)
+      );
+      const editor = {
+        document: document.asDocument(),
+        selection: new vscode.Selection(position, position),
+      };
+      Object.defineProperty(vscode.window, "activeTextEditor", {
+        configurable: true,
+        value: editor,
+      });
+      const provider = new PromptCompletionProvider();
+      let list = await provider.provideCompletionItems(
+        document.asDocument(),
+        position,
+        new MockCancellationToken(),
+        {
+          triggerKind: vscode.CompletionTriggerKind.Invoke,
+          triggerCharacter: undefined,
+        }
+      );
+      const hasExpectedItem = () =>
+        list?.items.some(
+          (item) => item.label === "docs/" || item.label === "guide.md"
+        );
+      // The first `@` query may run against the previous workspace root while
+      // clearFilesCache's background index rebuild is still in progress.
+      const deadline = Date.now() + 10_000;
+      while (!hasExpectedItem() && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        list = await provider.provideCompletionItems(
+          document.asDocument(),
+          position,
+          new MockCancellationToken(),
+          {
+            triggerKind: vscode.CompletionTriggerKind.Invoke,
+            triggerCharacter: undefined,
+          }
+        );
+      }
+      assert.ok(list);
+      const matches = list.items.filter(
+        (item) => item.label === "docs/" || item.label === "guide.md"
+      );
+      assert.ok(
+        matches.length > 0,
+        `expected matching directory/file items for ${fileName}; got ${JSON.stringify(list.items.map((item) => item.label))}`
+      );
+      for (const item of matches) {
+        assert.ok(
+          item.filterText?.startsWith(typedPrefix),
+          `${item.label} filterText should start with ${JSON.stringify(typedPrefix)}`
+        );
+        assert.deepStrictEqual(
+          item.range && "start" in item.range
+            ? [item.range.start.character, item.range.end.character]
+            : undefined,
+          [text.lastIndexOf("@") + 1, position.character],
+          "the replacement range starts after @ and includes the typed quote"
+        );
+      }
+    };
+
+    await checkPrefix("p.prompt.md", "markdown", '@"dir/d', '"');
+    await checkPrefix(
+      "w.ctrlyoke.json",
+      "json",
+      String.raw`{"prompt":"@\"dir/d"}`,
+      '\\"'
     );
     await fs.rm(root, { recursive: true, force: true });
   });

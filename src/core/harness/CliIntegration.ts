@@ -45,6 +45,7 @@ import {
   HARNESS_IDS,
   HOOK_EVENT_ORDER,
   PRIOR_CONTEXT_KEYWORDS,
+  TEMP_FILE_CATEGORIES,
   USER_FEEDBACK_SEVERITY,
   type TerminalEndReason,
 } from "../../types/DashboardConstants";
@@ -466,8 +467,14 @@ export class CliIntegration extends HarnessIntegration {
    * override for a harness-specific prefix (e.g. Codex drops the `@`).
    * Single source for every `@`-ref formatting decision in this class.
    */
-  private formatFileReferenceToken(quoted: string): string {
-    return this.provider.formatFileReference?.(quoted) ?? `@${quoted}`;
+  private formatFileReferenceToken(
+    quoted: string,
+    tempFileCategory?: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES]
+  ): string {
+    return (
+      this.provider.formatFileReference?.(quoted, { tempFileCategory }) ??
+      `@${quoted}`
+    );
   }
 
   /**
@@ -493,13 +500,14 @@ export class CliIntegration extends HarnessIntegration {
    */
   private formatTempFileRef(
     tempMgr: TempFileManager,
-    absolutePath: string
+    absolutePath: string,
+    category: (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES]
   ): string {
     const refPath = this.getEffectiveAbsolute()
       ? absolutePath
       : tempMgr.getRelativePath(absolutePath);
     const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;
-    return this.formatFileReferenceToken(quoted);
+    return this.formatFileReferenceToken(quoted, category);
   }
 
   /**
@@ -950,8 +958,8 @@ export class CliIntegration extends HarnessIntegration {
       getTempFileSplitConfig: () => this.getTempFileSplitConfig(),
       formatDirectFileRef: (absolutePath) =>
         this.formatDirectFileRef(absolutePath),
-      formatTempFileRef: (tempMgr, absolutePath) =>
-        this.formatTempFileRef(tempMgr, absolutePath),
+      formatTempFileRef: (tempMgr, absolutePath, category) =>
+        this.formatTempFileRef(tempMgr, absolutePath, category),
       formatCategorizedReferences: (
         agentRefs,
         skillRefs,

@@ -183,6 +183,69 @@ suite("LifetimeUsageStore", () => {
     assert.strictEqual(data.totals.attemptCount, 201);
   });
 
+  test("rescans an unfinished run between completed runs", async () => {
+    const firstRef = formatRunRef(baseTime);
+    const unfinishedRef = formatRunRef(baseTime + 1000);
+    const lastRef = formatRunRef(baseTime + 2000);
+    await writeManifest(firstRef, 4);
+    await store.upsertRunContribution(contribution(firstRef, 4));
+    await fs.mkdir(runDir(workspaceRoot, workflowKey, unfinishedRef), {
+      recursive: true,
+    });
+    await writeManifest(lastRef, 6);
+    await store.upsertRunContribution(contribution(lastRef, 6));
+
+    const data = await store.read(baseTime + 1);
+    assert.strictEqual(data.runCount, 2);
+    assert.strictEqual(data.skippedRunCount, 1);
+    assert.strictEqual(data.lineages[workflowKey].skippedRunCount, 1);
+    assert.strictEqual(data.totals.total, 10);
+  });
+
+  test("does not hold the store lock during a rescan and preserves concurrent upserts", async () => {
+    const firstRef = formatRunRef(baseTime);
+    const secondRef = formatRunRef(baseTime + 1000);
+    await writeManifest(firstRef, 3);
+    await store.upsertRunContribution(contribution(firstRef, 3));
+    await writeManifest(secondRef, 7);
+
+    let scanFinished: (() => void) | undefined;
+    let allowScanToReturn: (() => void) | undefined;
+    const scanReady = new Promise<void>((resolve) => {
+      scanFinished = resolve;
+    });
+    const resumeScan = new Promise<void>((resolve) => {
+      allowScanToReturn = resolve;
+    });
+    class SlowScanStore extends LifetimeUsageStore {
+      private pauseNextScan = true;
+
+      override async scanLineage(workflowKey: WorkflowKey) {
+        const result = await super.scanLineage(workflowKey);
+        if (this.pauseNextScan) {
+          this.pauseNextScan = false;
+          scanFinished?.();
+          await resumeScan;
+        }
+        return result;
+      }
+    }
+
+    const slowStore = new SlowScanStore(workspaceRoot);
+    const rebuilding = slowStore.rebuildLineage(workflowKey, baseTime + 2);
+    await scanReady;
+    await slowStore.upsertRunContribution(
+      contribution(secondRef, 7),
+      baseTime + 3
+    );
+    allowScanToReturn?.();
+    await rebuilding;
+
+    const data = await slowStore.read(baseTime + 4);
+    assert.strictEqual(data.runCount, 2);
+    assert.strictEqual(data.totals.total, 10);
+  });
+
   test("quarantines corrupt data and returns an empty store", async () => {
     await fs.mkdir(path.dirname(store.getPath()), { recursive: true });
     await fs.writeFile(store.getPath(), "not-json", "utf8");

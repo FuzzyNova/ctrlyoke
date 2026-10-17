@@ -325,6 +325,108 @@ args = ["C:\\new\\server.js"]
     assert.deepStrictEqual(entry?.env, { API_KEY: "abc" });
   });
 
+  test("discovers bare mcp_servers inline tables and dotted keys", async () => {
+    const configPath = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.writeFile(
+      configPath,
+      [
+        "[mcp_servers]",
+        'inline = { command = "node", args = ["server.js", "[quoted].js"], env = { TOKEN = "abc" } }',
+        'remote.command = "ignored"',
+        'remote.url = "https://example.test/mcp"',
+        'remote.transport = "streamable-http"',
+        'remote.headers.Authorization = "Bearer token"',
+        '"my server".command = "npx"',
+        '"my server".args = [',
+        '  "-y",',
+        '  "server-package",',
+        "]",
+        '"my server".env.API_KEY = "secret"',
+      ].join("\n"),
+      "utf-8"
+    );
+
+    const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+    const codexSource = getMcpLocalSource(
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+    const inline = result.servers.find(
+      (server) => server.source === codexSource && server.id === "inline"
+    );
+    const remote = result.servers.find(
+      (server) => server.source === codexSource && server.id === "remote"
+    );
+    const quoted = result.servers.find(
+      (server) => server.source === codexSource && server.id === "my server"
+    );
+    assert.deepStrictEqual(
+      { command: inline?.command, args: inline?.args, env: inline?.env },
+      {
+        command: "node",
+        args: ["server.js", "[quoted].js"],
+        env: { TOKEN: "abc" },
+      }
+    );
+    assert.deepStrictEqual(
+      {
+        command: remote?.command,
+        url: remote?.url,
+        transport: remote?.transport,
+        headers: remote?.headers,
+      },
+      {
+        command: "ignored",
+        url: "https://example.test/mcp",
+        transport: "streamable-http",
+        headers: { Authorization: "Bearer token" },
+      }
+    );
+    assert.deepStrictEqual(
+      { command: quoted?.command, args: quoted?.args, env: quoted?.env },
+      {
+        command: "npx",
+        args: ["-y", "server-package"],
+        env: { API_KEY: "secret" },
+      }
+    );
+  });
+
+  test("discovers bare mcp_servers entries with trailing comments and literal strings", async () => {
+    const configPath = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.writeFile(
+      configPath,
+      [
+        "[mcp_servers]",
+        "inline = { command = 'node', args = ['a.js'] } # local server",
+        'dotted.command = "npx" # comment',
+        "dotted.args = [",
+        '  "-y", # flag',
+        '  "pkg#1",',
+        "]",
+      ].join("\n"),
+      "utf-8"
+    );
+
+    const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+    const codexSource = getMcpLocalSource(
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+    const find = (id: string) =>
+      result.servers.find(
+        (server) => server.source === codexSource && server.id === id
+      );
+    assert.deepStrictEqual(
+      { command: find("inline")?.command, args: find("inline")?.args },
+      { command: "node", args: ["a.js"] }
+    );
+    assert.deepStrictEqual(
+      { command: find("dotted")?.command, args: find("dotted")?.args },
+      { command: "npx", args: ["-y", "pkg#1"] }
+    );
+  });
+
   test("discovers VS Code MCP servers from JSONC with trailing commas", async () => {
     const configPath = path.join(workspaceRoot, ".vscode", "mcp.json");
     await fs.mkdir(path.dirname(configPath), { recursive: true });

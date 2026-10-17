@@ -18,6 +18,7 @@ import {
 import {
   isPathWithinAnyDirectory,
   isPathWithinDirectory,
+  RealpathContainmentChecker,
 } from "./PathSecurity";
 import {
   resolveReferencePath,
@@ -136,6 +137,8 @@ export class ContextExpander {
   // multi-root `.code-workspace`, which VS Code does not require to be
   // descendants of the primary root).
   private trustedRoots: string[];
+  private readonly referenceContainmentChecker: RealpathContainmentChecker;
+  private readonly sourceRuntimeContainmentChecker?: RealpathContainmentChecker;
   // Named roots (folder name → path) for folder-name-prefixed multi-root refs
   // (`root2/src/index.ts`), e.g. every folder of a `.code-workspace`.
   private namedRoots: ResolverWorkspaceFolder[];
@@ -176,6 +179,12 @@ export class ContextExpander {
         )
       )
     );
+    this.referenceContainmentChecker = new RealpathContainmentChecker(
+      this.trustedRoots
+    );
+    this.sourceRuntimeContainmentChecker = sourceCheckoutRoot
+      ? new RealpathContainmentChecker([sourceCheckoutRoot])
+      : undefined;
     this.namedRoots = namedRoots;
     this.effectiveAbsolute = effectiveAbsolute;
     this.allowWorkflowRelativeReferences = allowWorkflowRelativeReferences;
@@ -278,7 +287,7 @@ export class ContextExpander {
     }
     try {
       await this.prepareSourceRuntimeResolutions([ref]);
-      const absolutePath = this.resolveWorkspacePath(ref.path);
+      const absolutePath = await this.resolveWorkspacePath(ref.path);
       await fs.promises.access(absolutePath);
       return estimateImageTokens(absolutePath);
     } catch {
@@ -307,7 +316,7 @@ export class ContextExpander {
     }
     try {
       await this.prepareSourceRuntimeResolutions([ref]);
-      const absolutePath = this.resolveWorkspacePath(ref.path);
+      const absolutePath = await this.resolveWorkspacePath(ref.path);
       return await estimateFileTokens(absolutePath);
     } catch {
       // Unreadable / out-of-workspace — let the normal path handle (and log) it.
@@ -326,7 +335,9 @@ export class ContextExpander {
     if (!ref) return null;
     try {
       await this.prepareSourceRuntimeResolutions([ref]);
-      const stat = await fs.promises.stat(this.resolveWorkspacePath(ref.path));
+      const stat = await fs.promises.stat(
+        await this.resolveWorkspacePath(ref.path)
+      );
       return stat.size > MAX_CONTENT_SIZE
         ? estimateFileTokensFromSize(stat.size, stat.mtimeMs)
         : null;
@@ -395,7 +406,7 @@ export class ContextExpander {
 
         let attachmentId: string;
         try {
-          attachmentId = this.getAttachmentId(ref);
+          attachmentId = await this.getAttachmentId(ref);
         } catch (err) {
           const reason = getErrorMessage(err);
           Log.warn(
@@ -420,7 +431,8 @@ export class ContextExpander {
             this.trustedRoots,
             this.namedRoots,
             this.effectiveAbsolute,
-            this.sourceDefinitionDir
+            this.sourceDefinitionDir,
+            this.referenceContainmentChecker
           ).catch((err) => {
             Log.warn(
               `[ContextExpander] Failed directory attachment ${ref.path}:`,
@@ -466,9 +478,12 @@ export class ContextExpander {
           // source-only runtime artifact instead names its post-copy
           // destination; the actual copy is deferred to CliPromptPreparer.
           try {
-            const sourceRuntimePath = this.sourceRuntimeResolutions.get(
-              ref.path
-            )?.absolutePath;
+            const resolvedReference = await this.resolveReference(ref.path);
+            const sourceRuntimePath =
+              resolvedReference.base ===
+              CONTEXT_REFERENCE_BASES.SOURCE_RUNTIME_STORE
+                ? resolvedReference.absolutePath
+                : undefined;
             if (sourceRuntimePath) {
               const sourceStat = await fs.promises.stat(sourceRuntimePath);
               if (!sourceStat.isFile()) {
@@ -495,7 +510,7 @@ export class ContextExpander {
                 destinationPath,
               });
             } else {
-              const absolutePath = this.resolveWorkspacePath(ref.path);
+              const absolutePath = await this.resolveWorkspacePath(ref.path);
               await fs.promises.access(absolutePath);
               directFileRefs.push(absolutePath);
               if (isImageRefPath(ref.path)) {
@@ -633,7 +648,7 @@ export class ContextExpander {
     let resolution: ReferencePathResolution;
     let absolutePath: string;
     try {
-      resolution = this.resolveReference(ref.path);
+      resolution = await this.resolveReference(ref.path);
       absolutePath = resolution.absolutePath;
       await fs.promises.access(absolutePath);
     } catch (err) {
@@ -902,14 +917,14 @@ export class ContextExpander {
    * Generate unique attachment ID for deduplication
    * MUST match the attachment ID format used in buildAttachmentXml
    */
-  private getAttachmentId(ref: FileReference): string {
+  private async getAttachmentId(ref: FileReference): Promise<string> {
     if (ref.isDirectory) {
       // Match format in buildDirectoryAttachmentXml
       const normalizedPath = ref.path.replace(/[\/\\]+$/, "");
       return `directory:${normalizedPath}`;
     }
 
-    const resolvedPath = this.resolveReference(ref.path).absolutePath;
+    const resolvedPath = (await this.resolveReference(ref.path)).absolutePath;
 
     if (ref.symbolName && hasLineRange(ref)) {
       // Symbol with line range - use path + lines for uniqueness
@@ -934,7 +949,7 @@ export class ContextExpander {
     ref: FileReference
   ): Promise<string> {
     // Generate attachment ID for deduplication
-    const attachmentId = this.getAttachmentId(ref);
+    const attachmentId = await this.getAttachmentId(ref);
 
     // Skip if already attached
     if (this.attachmentIds.has(attachmentId)) {
@@ -955,7 +970,8 @@ export class ContextExpander {
         this.trustedRoots,
         this.namedRoots,
         this.effectiveAbsolute,
-        this.sourceDefinitionDir
+        this.sourceDefinitionDir,
+        this.referenceContainmentChecker
       );
     } else {
       // File reference (full file, line range, or symbol)
@@ -986,7 +1002,7 @@ export class ContextExpander {
     endLine?: number,
     symbolName?: string
   ): Promise<string> {
-    const resolution = this.resolveReference(filePath);
+    const resolution = await this.resolveReference(filePath);
     const absolutePath = resolution.absolutePath;
     const language =
       path.extname(filePath).toLowerCase().slice(1) || "plaintext";
@@ -1107,15 +1123,17 @@ ${content}
    * Resolve relative path to absolute workspace path
    * Uses Node.js path.resolve for cross-platform compatibility
    */
-  private resolveWorkspacePath(relativePath: string): string {
-    return this.resolveReference(relativePath).absolutePath;
+  private async resolveWorkspacePath(relativePath: string): Promise<string> {
+    return (await this.resolveReference(relativePath)).absolutePath;
   }
 
   /**
    * Resolve a reference and apply the workspace containment policy.
    * Resolution selects the lexical base; it does not authorize the result.
    */
-  private resolveReference(relativePath: string): ReferencePathResolution {
+  private async resolveReference(
+    relativePath: string
+  ): Promise<ReferencePathResolution> {
     if (!this.workspaceRoot) {
       throw new Error("No workspace folder open");
     }
@@ -1138,7 +1156,22 @@ ${content}
     const sourceRuntimeResolution =
       this.sourceRuntimeResolutions.get(relativePath);
     if (sourceRuntimeResolution) {
-      return sourceRuntimeResolution;
+      const containmentChecker = this.sourceRuntimeContainmentChecker;
+      if (!containmentChecker) {
+        throw new Error("Source runtime references require a source checkout");
+      }
+      const containment = await containmentChecker.check(
+        sourceRuntimeResolution.absolutePath
+      );
+      if (!containment.allowed) {
+        throw new Error(
+          `Reference "${relativePath}" resolves outside the workspace and was blocked: "${containment.resolvedPath}". Add the target folder to permissions.trustedExternalRoots to allow it`
+        );
+      }
+      return {
+        ...sourceRuntimeResolution,
+        absolutePath: containment.resolvedPath,
+      };
     }
     const resolved = resolution.absolutePath;
 
@@ -1148,12 +1181,16 @@ ${content}
     // imported workflows), so this boundary must be enforced regardless of
     // intent. `trustedRoots` includes every open workspace folder, not just
     // the primary root, so multi-root `.code-workspace` references work.
-    if (!isPathWithinAnyDirectory(resolved, this.trustedRoots)) {
+    const containment = await this.referenceContainmentChecker.check(resolved);
+    if (!containment.allowed) {
       throw new Error(
-        `Reference "${relativePath}" resolves outside the workspace and was blocked`
+        `Reference "${relativePath}" resolves outside the workspace and was blocked: "${containment.resolvedPath}". Add the target folder to permissions.trustedExternalRoots to allow it`
       );
     }
 
-    return resolution;
+    return {
+      ...resolution,
+      absolutePath: containment.resolvedPath,
+    };
   }
 }

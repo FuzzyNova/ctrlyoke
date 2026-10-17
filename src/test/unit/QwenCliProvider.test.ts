@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
+import { TEMP_FILE_CATEGORIES } from "../../types/DashboardConstants";
 import { SettingsJsonHooksTracker } from "../../core/harness/shared/SettingsJsonHooksTracker";
 import { QwenTrustedHooksTracker } from "../../core/harness/shared/QwenTrustedHooksTracker";
 import { Log } from "../../utils/Log";
@@ -31,6 +32,69 @@ function parseMcpConfig(args: string[]): Record<string, unknown> {
 // ============================================================================
 
 suite("QwenCliProvider", () => {
+  test("formats file references with spaces for the current platform", () => {
+    const provider = new QwenCliProvider();
+    const originalPlatform = Object.getOwnPropertyDescriptor(
+      process,
+      "platform"
+    );
+
+    try {
+      Object.defineProperty(process, "platform", { value: "linux" });
+      assert.strictEqual(
+        provider.formatFileReference('"docs/Design Notes.md"'),
+        "@docs/Design\\ Notes.md"
+      );
+      assert.strictEqual(
+        provider.formatFileReference("docs/readme.md"),
+        "@docs/readme.md"
+      );
+
+      Object.defineProperty(process, "platform", { value: "win32" });
+      assert.strictEqual(
+        provider.formatFileReference('"docs/Design Notes.md"'),
+        '"docs/Design Notes.md"'
+      );
+      assert.strictEqual(
+        provider.formatFileReference(
+          '"C:/Users/test/workspace root/.ctrlyoke/temp/prompt.md"',
+          {
+            tempFileCategory: TEMP_FILE_CATEGORIES.PROMPT,
+          }
+        ),
+        'Read the file at "C:/Users/test/workspace root/.ctrlyoke/temp/prompt.md" and follow its instructions.'
+      );
+      assert.strictEqual(
+        provider.formatFileReference(
+          '"C:/Users/test/workspace root/.ctrlyoke/temp/agent.md"',
+          {
+            tempFileCategory: TEMP_FILE_CATEGORIES.AGENT,
+          }
+        ),
+        'Read the file at "C:/Users/test/workspace root/.ctrlyoke/temp/agent.md" and follow its instructions.'
+      );
+      assert.strictEqual(
+        provider.formatFileReference(
+          '"C:/Users/test/workspace root/.ctrlyoke/temp/skills.md"',
+          {
+            tempFileCategory: TEMP_FILE_CATEGORIES.SKILLS,
+          }
+        ),
+        'Read the file at "C:/Users/test/workspace root/.ctrlyoke/temp/skills.md" and follow its instructions.'
+      );
+      assert.strictEqual(
+        provider.formatFileReference("docs/readme.md", {
+          tempFileCategory: TEMP_FILE_CATEGORIES.PROMPT,
+        }),
+        "@docs/readme.md"
+      );
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    }
+  });
+
   test("converts user hook timeout seconds to native milliseconds", () => {
     const provider = new QwenCliProvider();
     const hooks = (provider as any).buildUserHooksSection([

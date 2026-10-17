@@ -2111,6 +2111,15 @@ suite("CliIntegration", () => {
       assert.strictEqual(result, `@${path.join("src", "a.ts")}`);
     });
 
+    test("default provider keeps quoted at references for paths with spaces", () => {
+      const integration = integrationWithPlatform(new MockVsCodePlatform());
+      const absolutePath = path.join(process.cwd(), "src", "Design Notes.ts");
+
+      const result = (integration as any).formatDirectFileRef(absolutePath);
+
+      assert.strictEqual(result, `@"${path.join("src", "Design Notes.ts")}"`);
+    });
+
     test("single-root, setting on: renders absolute", () => {
       configService.setCliOverlay({
         ui: { useAbsolutePathReferences: true },
